@@ -350,9 +350,10 @@ describe('AppointmentPostOpPanel', () => {
     mockedDeliver.mockResolvedValue(created({ delivery: deliverySummary({ id: 'del-9' }) }));
     renderPanel();
     await userEvent.click(await screen.findByRole('button', { name: 'Imprimir' }));
-    await waitFor(() => expect(toast.success).toHaveBeenCalled());
-    const [, opts] = (toast.success as jest.Mock).mock.calls[0];
-    opts.action.onClick();
+    // En el panel, no en un toast (la hoja modal deja inertes los toasts).
+    const status = await screen.findByText(/El navegador bloqueó la pestaña/);
+    expect(status.closest('[role="status"]')).not.toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Abrir para imprimir' }));
     expect(open).toHaveBeenLastCalledWith(
       '/print/patients/pat-1/indicaciones/del-9',
       '_blank',
@@ -368,17 +369,14 @@ describe('AppointmentPostOpPanel', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Abrir WhatsApp' }));
     await waitFor(() => expect(win.close).toHaveBeenCalled());
     expect(win.location.href).toBe('');
-    expect(toast.error).toHaveBeenCalledWith(
-      expect.stringMatching(/conexión/),
-      expect.objectContaining({ action: expect.objectContaining({ label: 'Reintentar' }) }),
-    );
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(await screen.findByRole('alert')).toHaveTextContent(/conexión/);
 
     // El reintento repite la misma entrega.
     mockedDeliver.mockResolvedValueOnce(
       created({ whatsapp: { phone: '584145550101', text: 'Hola' } }),
     );
-    const [, opts] = (toast.error as jest.Mock).mock.calls[0];
-    await act(async () => opts.action.onClick());
+    await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
     await waitFor(() => expect(mockedDeliver).toHaveBeenCalledTimes(2));
     expect(mockedDeliver).toHaveBeenLastCalledWith(
       'tok',
@@ -421,11 +419,10 @@ describe('AppointmentPostOpPanel', () => {
     mockedDeliver.mockRejectedValueOnce(new NetworkError(new TypeError('fetch failed')));
     renderPanel();
     await userEvent.click(await screen.findByRole('button', { name: 'Imprimir' }));
-    await waitFor(() => expect(toast.error).toHaveBeenCalled());
-    const [, opts] = (toast.error as jest.Mock).mock.calls[0];
+    const retry = await screen.findByRole('button', { name: 'Reintentar' });
     let finish!: (value: PostOpDeliveryCreated) => void;
     mockedDeliver.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
-    act(() => { opts.action.onClick(); opts.action.onClick(); });
+    act(() => { retry.click(); retry.click(); });
     // La segunda pulsación no hace nada: ni otra pestaña ni otra comprobación.
     expect(open).toHaveBeenCalledTimes(2);
     await waitFor(() => expect(mockedDeliver).toHaveBeenCalledTimes(2));
@@ -442,9 +439,9 @@ describe('AppointmentPostOpPanel', () => {
       mockedDeliver.mockRejectedValueOnce(new ApiError(status, serverMessage));
       renderPanel();
       await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
-      await waitFor(() => expect(toast.error).toHaveBeenCalled());
-      const [, opts] = (toast.error as jest.Mock).mock.calls[0];
-      expect(opts.action).toBeUndefined();
+      expect(await screen.findByRole('alert')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
+      expect(toast.error).not.toHaveBeenCalled();
     });
 
     it('un 502 sí lo ofrece; antes de repetir relee la lista y, si la entrega ya está, no hace el POST', async () => {
@@ -461,23 +458,15 @@ describe('AppointmentPostOpPanel', () => {
       mockedDeliver.mockRejectedValueOnce(new ApiError(502, 'Bad Gateway'));
       renderPanel();
       await userEvent.click(await screen.findByRole('button', { name: 'Imprimir' }));
-      await waitFor(() => expect(toast.error).toHaveBeenCalled());
-      const [, opts] = (toast.error as jest.Mock).mock.calls[0];
-      expect(opts.action).toEqual(expect.objectContaining({ label: 'Reintentar' }));
+      const retry = await screen.findByRole('button', { name: 'Reintentar' });
       expect(win.close).toHaveBeenCalledTimes(1);
 
-      await act(async () => opts.action.onClick());
-      await waitFor(() =>
-        expect(toast.info).toHaveBeenCalledWith(
-          expect.stringMatching(/ya había quedado registrada/),
-          expect.objectContaining({ action: expect.objectContaining({ label: 'Abrir para imprimir' }) }),
-        ),
-      );
+      await userEvent.click(retry);
+      expect(await screen.findByText(/ya había quedado registrada/)).toBeInTheDocument();
       expect(mockedDeliver).toHaveBeenCalledTimes(1);
       // L4: se puede abrir la vista imprimible de la entrega que ya estaba.
       const openSpy = jest.spyOn(window, 'open').mockReturnValue(null);
-      const [, infoOpts] = (toast.info as jest.Mock).mock.calls[0];
-      infoOpts.action.onClick();
+      await userEvent.click(screen.getByRole('button', { name: 'Abrir para imprimir' }));
       expect(openSpy).toHaveBeenLastCalledWith(
         '/print/patients/pat-1/indicaciones/del-landed',
         '_blank',
@@ -495,9 +484,7 @@ describe('AppointmentPostOpPanel', () => {
         .mockResolvedValueOnce(created({ sentTo: 'a***@correo.com' }));
       renderPanel();
       await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
-      await waitFor(() => expect(toast.error).toHaveBeenCalled());
-      const [, opts] = (toast.error as jest.Mock).mock.calls[0];
-      await act(async () => opts.action.onClick());
+      await userEvent.click(await screen.findByRole('button', { name: 'Reintentar' }));
       await waitFor(() => expect(mockedDeliver).toHaveBeenCalledTimes(2));
       expect(mockedGet.mock.calls.length).toBeGreaterThanOrEqual(2);
       await waitFor(() =>
@@ -510,16 +497,13 @@ describe('AppointmentPostOpPanel', () => {
       mockedDeliver.mockRejectedValueOnce(new ApiError(502, 'Bad Gateway'));
       renderPanel();
       await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
-      await waitFor(() => expect(toast.error).toHaveBeenCalled());
-      const [, first] = (toast.error as jest.Mock).mock.calls[0];
+      const first = await screen.findByRole('button', { name: 'Reintentar' });
       mockedGet.mockRejectedValueOnce(new NetworkError(new TypeError('fetch failed')));
-      await act(async () => first.action.onClick());
-      await waitFor(() =>
-        expect(toast.error).toHaveBeenCalledWith(
-          expect.stringMatching(/comprobar si la entrega ya quedó registrada/),
-          expect.objectContaining({ action: expect.objectContaining({ label: 'Reintentar' }) }),
-        ),
-      );
+      await userEvent.click(first);
+      expect(await screen.findByText(/comprobar si la entrega ya quedó registrada/)).toBeInTheDocument();
+      // Sigue habiendo UN solo aviso, con «Reintentar» (de la comprobación).
+      expect(screen.getAllByRole('alert')).toHaveLength(1);
+      expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
       expect(mockedDeliver).toHaveBeenCalledTimes(1);
     });
   });
@@ -642,30 +626,53 @@ describe('AppointmentPostOpPanel: fix round 1 de DX-250', () => {
       .mockRejectedValueOnce(new ApiError(409, 'Conflicto', { code: 'OTRO' }));
     renderPanel();
     await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
-    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
-    expect((toast.error as jest.Mock).mock.calls[0][1].action).toEqual(
-      expect.objectContaining({ label: 'Reintentar' }),
+    expect(await screen.findByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar por email' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument(),
     );
-    await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
-    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(2));
-    expect((toast.error as jest.Mock).mock.calls[1][1].action).toBeUndefined();
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
   });
 
-  it('el toast de error de la entrega sale UNA vez por fallo: ni los renders ni las recargas lo vuelven a lanzar', async () => {
+  it('el fallo de la entrega se dice UNA vez, en el panel: un aviso, sin toast; los renders y las recargas no lo repiten', async () => {
     mockedGet.mockResolvedValue(suggestions());
     mockedDeliver.mockRejectedValueOnce(new ApiError(502, 'Bad Gateway'));
     const view = renderPanel();
     await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
-    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
-    // Re-renders y una recarga de la lista (clave de recarga) no lo repiten.
-    view.rerender(<AppointmentPostOpPanel clock={CLOCK} token="tok" appointmentId="appt-1" />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos entregar las indicaciones.');
     view.rerender(<AppointmentPostOpPanel clock={CLOCK} token="tok" appointmentId="appt-1" />);
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Reintentar' })).toHaveLength(1);
+    expect(toast.error).not.toHaveBeenCalled();
     expect(mockedDeliver).toHaveBeenCalledTimes(1);
-    // El id del toast deduplica por mensaje: un segundo fallo igual lo actualiza, no lo apila.
-    const [, opts] = (toast.error as jest.Mock).mock.calls[0];
-    expect(opts.id).toBe(`error:${(toast.error as jest.Mock).mock.calls[0][0]}`);
+  });
+
+  it('al reintentar con éxito desde el aviso, desaparece y el foco vuelve al panel (no se pierde en <body>)', async () => {
+    mockedGet.mockResolvedValue(suggestions());
+    mockedDeliver
+      .mockRejectedValueOnce(new ApiError(502, 'Bad Gateway'))
+      .mockResolvedValueOnce(created({ sentTo: 'a***@correo.com' }));
+    renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+    const retry = await screen.findByRole('button', { name: 'Reintentar' });
+    await userEvent.click(retry);
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+    expect(screen.getByRole('region', { name: 'Indicaciones' })).toHaveFocus();
+  });
+
+  it('si el reintento vuelve a fallar, el mismo botón sigue en pantalla con el foco', async () => {
+    mockedGet.mockResolvedValue(suggestions());
+    mockedDeliver.mockRejectedValue(new ApiError(502, 'Bad Gateway'));
+    renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+    const retry = await screen.findByRole('button', { name: 'Reintentar' });
+    retry.focus();
+    await userEvent.click(retry);
+    await waitFor(() => expect(mockedDeliver).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole('button', { name: 'Reintentar' })).toBe(retry);
+    expect(retry).toHaveFocus();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
   });
 
   describe('solo lectura (cita cancelada o no-show)', () => {

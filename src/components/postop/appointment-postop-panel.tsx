@@ -17,7 +17,7 @@ import {
   type PostOpTemplateSummary,
 } from '@/lib/postop/postop-api';
 import { SectionError } from '@/components/errors/section-error';
-import { notifyError } from '@/components/errors/notify';
+import { InlineError } from '@/components/errors/inline-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -120,21 +120,33 @@ function newIdempotencyKey(): string {
   return `${hex(8)}-${hex(4)}-4${hex(3)}-${'89ab'[Math.floor(Math.random() * 4)]}${hex(3)}-${hex(12)}`;
 }
 
+/**
+ * Aviso EN el panel (la hoja modal de la cita deja inertes los toasts, que no
+ * se pueden alcanzar ni con el ratón ni con el teclado): un error con su
+ * «Reintentar», o una información con la acción que ofrece.
+ */
+interface Feedback {
+  tone: 'error' | 'info';
+  message: string;
+  action?: { label: string; onClick: () => void };
+}
+
+/** Abre la pestaña ya registrada la entrega; si el navegador la bloqueó, deja el enlace en el panel. */
 function finishInTab(
   win: Window | null,
   href: string,
   messages: { opened: string; blocked: string; action: string },
+  setFeedback: (feedback: Feedback) => void,
 ) {
   if (win) {
     win.location.href = href;
     toast.success(messages.opened);
     return;
   }
-  toast.success(messages.blocked, {
-    action: {
-      label: messages.action,
-      onClick: () => window.open(href, '_blank', 'noopener,noreferrer'),
-    },
+  setFeedback({
+    tone: 'info',
+    message: messages.blocked,
+    action: { label: messages.action, onClick: () => window.open(href, '_blank', 'noopener,noreferrer') },
   });
 }
 
@@ -170,6 +182,17 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock, readOnly =
   // Cada clic en «Copiar enlace» remonta el texto del aviso: se anuncia otra vez.
   const [copyCount, setCopyCount] = useState(0);
   const linkInputRef = useRef<HTMLInputElement>(null);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
+  // Al reintentar desde el aviso, el botón desaparece si sale bien: el foco vuelve al panel.
+  const refocusRef = useRef(false);
+  const sectionRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (feedback === null && refocusRef.current) {
+      refocusRef.current = false;
+      sectionRef.current?.focus();
+    }
+  }, [feedback]);
 
   useEffect(() => {
     dataRef.current = data;
@@ -216,6 +239,9 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock, readOnly =
     const win = channel === 'EMAIL' ? null : window.open('', '_blank');
     if (win) win.opener = null;
     setBusy(channel);
+    // Un clic nuevo borra el aviso anterior; un reintento lo conserva (y con él
+    // el foco en su botón) hasta saber cómo acaba.
+    if (!attempt.recheck) setFeedback(null);
     try {
       if (attempt.recheck) {
         let fresh: PostOpSuggestions;
@@ -224,8 +250,10 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock, readOnly =
         } catch {
           win?.close();
           // Sin la lista no se sabe si ya está: se reintenta la comprobación.
-          notifyError(copy.recheckError, {
-            onRetry: () => void deliver(templateId, channel, attempt),
+          setFeedback({
+            tone: 'error',
+            message: copy.recheckError,
+            action: { label: copy.retry, onClick: () => retryFromFeedback(templateId, channel, attempt) },
           });
           return;
         }
@@ -236,14 +264,14 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock, readOnly =
         );
         if (landed) {
           win?.close();
+          setFeedback(null);
           if (channel === 'PRINT') {
             // La pestaña ya se cerró: se ofrece abrir la vista imprimible.
             const href = postOpPrintHref(landed.patientId, landed.id);
-            toast.info(copy.alreadyRecorded, {
-              action: {
-                label: copy.openPrint,
-                onClick: () => window.open(href, '_blank', 'noopener,noreferrer'),
-              },
+            setFeedback({
+              tone: 'info',
+              message: copy.alreadyRecorded,
+              action: { label: copy.openPrint, onClick: () => window.open(href, '_blank', 'noopener,noreferrer') },
             });
           } else {
             toast.info(
@@ -258,6 +286,7 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock, readOnly =
         }
       }
       const result = await deliverPostOp(token, appointmentId, { templateId, channel }, attempt.key);
+      setFeedback(null);
       if (channel === 'EMAIL' && result.publicUrl === null && !result.emailQueued) {
         // Una repetición (`publicUrl` null): este clic no sabe cómo acabó el
         // email. No se abre la alerta de «no salió»: habla la lista releída.
@@ -277,13 +306,13 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock, readOnly =
           opened: copy.printed,
           blocked: copy.printBlocked,
           action: copy.openPrint,
-        });
+        }, setFeedback);
       } else if (result.whatsapp) {
         finishInTab(win, whatsAppUrl(result.whatsapp.phone, result.whatsapp.text), {
           opened: copy.whatsappRecorded,
           blocked: copy.whatsappBlockedPopup,
           action: copy.openWhatsApp,
-        });
+        }, setFeedback);
       } else {
         // WhatsApp sin mensaje: la API devolvió la entrega ya registrada por
         // una repetición (su enlace no se puede recuperar).
@@ -300,20 +329,35 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock, readOnly =
       setReloadKey((k) => k + 1);
     } catch (err) {
       win?.close();
-      // Escalón 3: el panel sigue igual. Un 4xx (422 sin canal, 429 de cuota…)
+      // El fallo se dice en el panel, junto a los botones (no en un toast: la
+      // hoja modal lo deja inalcanzable). Un 4xx (422 sin canal, 429 de cuota…)
       // vuelve a fallar igual: sin «Reintentar». Un 5xx o la red, sí.
       const message = apiErrorMessage(err, { fallback: copy.deliverError });
-      if (canRetryDeliver(err)) {
-        notifyError(message, {
-          onRetry: () => void deliver(templateId, channel, { ...attempt, recheck: true }),
-        });
-      } else {
-        notifyError(message);
-      }
+      setFeedback({
+        tone: 'error',
+        message,
+        ...(canRetryDeliver(err)
+          ? {
+              action: {
+                label: copy.retry,
+                onClick: () => retryFromFeedback(templateId, channel, { ...attempt, recheck: true }),
+              },
+            }
+          : {}),
+      });
     } finally {
       deliveringRef.current = false;
       setBusy(null);
     }
+  }
+
+  function retryFromFeedback(
+    templateId: string,
+    channel: PostOpChannel,
+    attempt: { knownIds: ReadonlySet<string>; recheck: boolean; key: string },
+  ) {
+    refocusRef.current = true;
+    void deliver(templateId, channel, attempt);
   }
 
   async function copyLink(url: string) {
@@ -538,6 +582,31 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock, readOnly =
           </p>
         )}
 
+        {feedback && (
+          feedback.tone === 'error' ? (
+            <div className="flex flex-col items-start gap-2">
+              <InlineError variant="summary" className="w-full">
+                {feedback.message}
+              </InlineError>
+              {feedback.action && (
+                // Sin `loading`/`disabled`: el botón conserva el foco mientras se reintenta.
+                <Button type="button" variant="secondary" onClick={feedback.action.onClick}>
+                  {feedback.action.label}
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div role="status" className="flex flex-col items-start gap-2 rounded-lg border border-border bg-surface-sunken p-3 text-sm text-ink">
+              <p>{feedback.message}</p>
+              {feedback.action && (
+                <Button type="button" variant="secondary" onClick={feedback.action.onClick}>
+                  {feedback.action.label}
+                </Button>
+              )}
+            </div>
+          )
+        )}
+
         {notQueued && (
           <div className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning-subtle p-3 text-warning-text">
             <div role="alert" className="flex flex-col gap-1">
@@ -594,7 +663,12 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock, readOnly =
   if (readOnly && (!data || data.deliveries.length === 0)) return null;
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3 border-t border-border-subtle pt-4">
+    <section
+      ref={sectionRef}
+      tabIndex={-1}
+      aria-labelledby={headingId}
+      className="flex flex-col gap-3 border-t border-border-subtle pt-4 focus:outline-none"
+    >
       <h3 id={headingId} className="t-title text-ink">
         {copy.heading}
       </h3>

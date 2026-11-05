@@ -410,15 +410,14 @@ for (const viewport of VIEWPORTS) {
       });
     });
     await panel.getByRole('button', { name: 'Enviar por email' }).click();
-    const retry = page.locator('[data-sonner-toast]').getByRole('button', { name: 'Reintentar' });
-    await expect(retry).toBeVisible({ timeout: 10_000 });
-    // El toast de sonner no llega a estar «estable» para Playwright mientras la
-    // hoja modal de la cita sigue abierta (CI 42025021435: 330 reintentos de la
-    // comprobación de accionabilidad). Se comprueba que es UN solo aviso con su
-    // acción y se dispara el clic sobre el botón, que es lo que ejecuta el
-    // `onClick` de la acción.
-    await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'No pudimos entregar' })).toHaveCount(1);
-    await retry.dispatchEvent('click');
+    // El fallo se dice EN el panel (la hoja modal deja inertes los toasts): un
+    // aviso con su «Reintentar», que se pulsa como cualquier botón.
+    await expect(panel.getByRole('alert').filter({ hasText: 'No pudimos entregar' })).toHaveCount(1, {
+      timeout: 10_000,
+    });
+    const retry = panel.getByRole('button', { name: 'Reintentar' });
+    await expect(retry).toBeVisible();
+    await retry.click();
     await expect(panel.getByText('El email no salió')).toBeVisible({ timeout: 10_000 });
     await page.unroute(deliveriesRoute);
     const linkField = panel.getByLabel('Enlace público de las indicaciones');
