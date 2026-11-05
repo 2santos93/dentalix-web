@@ -66,6 +66,8 @@ for (const person of [dentist, assistant]) {
     await loginAs(page, origin, person.email, password);
     await page.goto(`${origin}/catalog`);
     const main = page.locator('main');
+    // La clínica nace con su catálogo por defecto, paginado: se busca por nombre.
+    await main.getByRole('searchbox', { name: 'Buscar por nombre, código o categoría' }).fill(`Limpieza ${person.role}`);
     await expect(main.getByText(`Limpieza ${person.role}`).first()).toBeVisible({ timeout: 15_000 });
     await expect(main.getByRole('button', { name: 'Agregar ítem' })).toHaveCount(0);
     await expect(main.getByRole('button', { name: /Acciones de/ })).toHaveCount(0);
