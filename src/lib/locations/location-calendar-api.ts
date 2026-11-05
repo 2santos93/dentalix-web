@@ -29,6 +29,15 @@ function fileForm(file: File): FormData {
   return form;
 }
 
+/** DX-358: `GET /locations/:id/holiday`: el festivo de ese día en la sede, para avisar al agendar. */
+export function getHolidayOnDay(
+  token: string,
+  locationId: string,
+  date: string,
+): Promise<{ date: string; name: string | null }> {
+  return apiFetch(`${base(locationId)}/holiday?date=${encodeURIComponent(date)}`, { token });
+}
+
 /** `GET /locations/:id/calendar`: días hábiles y festivos vivos, ya ordenados. */
 export function getLocationCalendar(token: string, locationId: string): Promise<LocationCalendar> {
   return apiFetch<LocationCalendar>(`${base(locationId)}/calendar`, { token });

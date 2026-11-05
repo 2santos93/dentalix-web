@@ -27,7 +27,9 @@ import {
   timeToMinutes,
   type BusinessHours,
 } from '@/lib/locations/schedule-api';
-import { sedeMinuteRanges, useSedeClock } from '@/lib/locations/sede-clock';
+import { screenLocation, sedeMinuteRanges, useSedeClock } from '@/lib/locations/sede-clock';
+import { useLocationsState } from '@/lib/locations/use-locations-state';
+import { HolidayNotice } from './holiday-notice';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { civilWeekday, isCivilDay } from '@/lib/time/civil-day';
@@ -285,6 +287,13 @@ export function AppointmentForm({
   // DX-378: la fecha y las horas son las del reloj de la sede de la cita (la
   // indicada o la de la pantalla), nunca las del navegador.
   const sede = useSedeClock(token, locationId);
+  // DX-358: sin sede activa, la de la pantalla (la misma que da el reloj), no «ninguna».
+  const locationsState = useLocationsState(token);
+  const holidayLocationId =
+    locationId ??
+    (locationsState.status === 'ready'
+      ? screenLocation(locationsState.locations, locationsState.activeLocationId)?.id
+      : null);
   const clock = sede.status === 'ready' ? sede.clock : null;
   const today = clock ? sedeToday(clock.timeZone) : undefined;
 
@@ -868,6 +877,7 @@ export function AppointmentForm({
               {copy.hoursUnavailable}
             </p>
           )}
+          <HolidayNotice token={token} locationId={holidayLocationId} date={date} />
         </div>
         <div className="flex flex-col gap-1">
           <label id={fieldLabelId('appointment-start-time')} htmlFor="appointment-start-time" className="text-sm font-medium text-ink">
