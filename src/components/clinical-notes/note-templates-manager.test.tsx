@@ -152,6 +152,7 @@ describe('NoteTemplatesManager (DX-170)', () => {
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
     const [, , input] = mockedUpdate.mock.calls[0];
     expect(input.prompts?.[1]).toEqual({
+      id: 'p-mat',
       label: 'Material',
       type: 'MULTI',
       options: ['Ionómero', 'Adhesivo universal'],
@@ -194,6 +195,94 @@ describe('NoteTemplatesManager (DX-170)', () => {
     expect(await within(table).findByText('Desactivada')).toBeInTheDocument();
     await user.click(within(table).getByRole('button', { name: 'Acciones de Resina' }));
     expect(await screen.findByRole('menuitem', { name: 'Activar' })).toBeInTheDocument();
+  });
+
+  describe('plantilla cambiada por otro ADMIN (409, DX-231)', () => {
+    const staleError = () => {
+      const { ApiError } = jest.requireActual('../../lib/api/client');
+      return new ApiError(409, 'La plantilla cambió, recárgala', {
+        code: 'NOTE_TEMPLATE_STALE',
+      });
+    };
+
+    async function openEditor(user: ReturnType<typeof userEvent.setup>) {
+      renderManager();
+      const table = await screen.findByRole('table', { name: /plantillas de evolución/i });
+      await user.click(within(table).getByRole('button', { name: 'Acciones de Resina' }));
+      await user.click(await screen.findByRole('menuitem', { name: 'Editar' }));
+      return screen.findByRole('dialog');
+    }
+
+    it('guarda con la versión leída y con el id de cada pregunta que ya existía', async () => {
+      mockedList.mockResolvedValue([resinTemplate]);
+      mockedUpdate.mockResolvedValue({ ...resinTemplate, version: 2 });
+      const user = userEvent.setup();
+      const dialog = await openEditor(user);
+      await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+      await waitFor(() => expect(mockedUpdate).toHaveBeenCalled());
+      const [, id, input] = mockedUpdate.mock.calls[0];
+      expect(id).toBe('tpl-resina');
+      expect(input.version).toBe(1);
+      expect(input.prompts?.map((p) => p.id)).toEqual(['p-sup', 'p-mat', 'p-obs']);
+    });
+
+    it('un 409 se explica en español con «Recargar»; Recargar trae la versión guardada y el siguiente guardado usa su versión', async () => {
+      const fresh = {
+        ...resinTemplate,
+        name: 'Resina compuesta',
+        version: 2,
+        prompts: [{ ...resinTemplate.prompts[0], label: 'Cara' }, ...resinTemplate.prompts.slice(1)],
+        body: resinTemplate.body.replace('{{Superficie}}', '{{Cara}}'),
+      };
+      mockedList.mockResolvedValueOnce([resinTemplate]).mockResolvedValue([fresh]);
+      mockedUpdate.mockRejectedValueOnce(staleError()).mockResolvedValueOnce({ ...fresh, version: 3 });
+      const user = userEvent.setup();
+      const dialog = await openEditor(user);
+      await user.clear(within(dialog).getByLabelText('Nombre'));
+      await user.type(within(dialog).getByLabelText('Nombre'), 'Mi edición');
+      await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+        /la plantilla cambió mientras la editabas/i,
+      );
+      expect(dialog).toBeInTheDocument();
+      await user.click(within(dialog).getByRole('button', { name: 'Recargar' }));
+
+      await waitFor(() =>
+        expect(within(dialog).getByLabelText('Nombre')).toHaveValue('Resina compuesta'),
+      );
+      expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+      await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+      await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(2));
+      expect(mockedUpdate.mock.calls[1][2].version).toBe(2);
+      // La lista de fondo ya muestra la versión guardada.
+      expect(await screen.findByText('Resina compuesta')).toBeInTheDocument();
+    });
+
+    it('si Recargar falla, lo dice en el modal y deja volver a intentarlo', async () => {
+      const { ApiError } = jest.requireActual('../../lib/api/client');
+      mockedList.mockResolvedValueOnce([resinTemplate]).mockRejectedValueOnce(new ApiError(500, 'boom'));
+      mockedUpdate.mockRejectedValueOnce(staleError());
+      const user = userEvent.setup();
+      const dialog = await openEditor(user);
+      await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+      await user.click(await within(dialog).findByRole('button', { name: 'Recargar' }));
+      expect(await within(dialog).findByText(/no pudimos recargar la plantilla/i)).toBeInTheDocument();
+      expect(within(dialog).getByRole('button', { name: 'Recargar' })).toBeInTheDocument();
+    });
+
+    it('un 409 por nombre repetido no ofrece «Recargar»', async () => {
+      const { ApiError } = jest.requireActual('../../lib/api/client');
+      mockedList.mockResolvedValue([resinTemplate]);
+      mockedUpdate.mockRejectedValue(
+        new ApiError(409, 'Ya existe una plantilla de evolución con ese nombre.'),
+      );
+      const user = userEvent.setup();
+      const dialog = await openEditor(user);
+      await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+      expect(await within(dialog).findByText(/ya existe una plantilla/i)).toBeInTheDocument();
+      expect(within(dialog).queryByRole('button', { name: 'Recargar' })).not.toBeInTheDocument();
+    });
   });
 
   it('sin permiso (no ADMIN) no pide nada y lo explica', () => {

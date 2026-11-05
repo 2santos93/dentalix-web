@@ -259,6 +259,7 @@ export function NoteTemplatesManager({ token, allowed }: NoteTemplatesManagerPro
         template={editing}
         categories={categories}
         onSaved={upsert}
+        onReloaded={upsert}
       />
     </div>
   );
