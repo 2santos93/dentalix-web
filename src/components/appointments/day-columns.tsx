@@ -704,7 +704,7 @@ export function DayColumns({
                             // cuando el tipo tiene el color de la clínica.
                             'flex h-full w-full flex-col items-start gap-0.5 px-2 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-current',
                             hasMedicalAlert ? 'pr-[4.5rem]' : 'pr-8',
-                            flowAction && (hasMedicalAlert ? '@[11rem]:pr-[6.25rem]' : '@[11rem]:pr-16 max-sm:pr-[5.5rem]'),
+                            flowAction && (hasMedicalAlert ? '@[16rem]:pr-[6.25rem]' : '@[11rem]:pr-16 max-sm:pr-[5.5rem]'),
                           )}
                         >
                           {/* La hora y el nombre no se encogen: en una cita corta
@@ -753,17 +753,21 @@ export function DayColumns({
                         <MedicalAlertIndicator
                           flags={a.medicalAlerts}
                           patientName={patient}
-                          className={cn('absolute right-11 top-0.5 z-10', flowAction && '@[11rem]:right-[4.75rem]')}
+                          className={cn('absolute right-11 top-0.5 z-10', flowAction && '@[16rem]:right-[4.75rem]')}
                         />
                       ) : null}
                       {flowAction ? (
                         // DX-237: sin arrastre desde aquí; ni desde su diálogo de
                         // salida, que por React también burbujea a la tarjeta. En una
-                        // tarjeta estrecha o de menos de 25 min, solo en el detalle.
+                        // tarjeta estrecha o de menos de 25 min, solo en el detalle. Con
+                        // alerta médica pide más ancho: su zona de 44 px taparía el centro.
                         <div
                           data-no-drag
                           onPointerDown={(e) => e.stopPropagation()}
-                          className="absolute right-8 top-1 z-10 hidden @[11rem]:block max-sm:right-[3.25rem]"
+                          className={cn(
+                            'absolute right-8 top-1 z-10 hidden max-sm:right-[3.25rem]',
+                            hasMedicalAlert ? '@[16rem]:block' : '@[11rem]:block',
+                          )}
                         >
                           {flowAction}
                         </div>
