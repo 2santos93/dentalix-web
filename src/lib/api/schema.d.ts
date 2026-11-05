@@ -29352,7 +29352,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description `code: SPLIT_PAYMENT_BALANCE_UNAVAILABLE` (DX-463): sin `confirmCreditBalance`, no se pudo leer lo pendiente del plan (fallo de lectura o proveedor de tasas fuera de plazo), así que no se puede comprobar si el total lo supera. No se registra nada: se repite la petición (misma clave) en un momento. */
+            /** @description `code: SPLIT_PAYMENT_BALANCE_UNAVAILABLE` (DX-463): sin `confirmCreditBalance`, no se pudo leer lo pendiente del plan ANTES de la transacción (fallo de lectura o proveedor de tasas fuera de plazo), así que no se puede comprobar si el total lo supera. No se registra nada: se repite la petición (misma clave) en un momento. Un abono del plan «sin tasa» no lo provoca: el excedente se comprueba contra lo conocido. */
             503: {
                 headers: {
                     [name: string]: unknown;
