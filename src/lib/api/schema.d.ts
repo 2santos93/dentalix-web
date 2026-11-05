@@ -2074,6 +2074,22 @@ export interface paths {
         patch: operations["AppointmentsController_update"];
         trace?: never;
     };
+    "/api/v1/appointments/{id}/checkout-checklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AppointmentsController_getCheckoutChecklist"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/appointments/{id}/plan-items/{planItemId}/claim": {
         parameters: {
             query?: never;
@@ -11134,9 +11150,7 @@ export interface components {
             /** @description Dio de baja los recordatorios: tener el dato no basta. */
             remindersOptedOut: boolean;
             /** @description Saldo vencido (`hasOverdue`, `overdueDays`, `amounts`); null si el rol no cobra. */
-            balance: {
-                [key: string]: unknown;
-            } | null;
+            balance: Record<string, never> | null;
         };
         UpdateAppointmentDto: {
             /** @description Ítems aceptados del mismo paciente para esta cita (DX-256). [] desvincula al editar. */
@@ -11599,26 +11613,6 @@ export interface components {
             timeZone: string | null;
             ranges: components["schemas"]["WeeklyRangeDto"][];
         };
-        ProviderScheduleDto: {
-            affectedAppointments?: components["schemas"]["ScheduleAffectedAppointmentsDto"];
-            /** Format: uuid */
-            providerId: string;
-            /** @description false = sin horario configurado: se le puede citar en cualquier horario de la sede (sin restricción). */
-            configured: boolean;
-            locations: components["schemas"]["ProviderLocationScheduleDto"][];
-        };
-        ProviderLocationScheduleInputDto: {
-            /** Format: uuid */
-            locationId: string;
-            /** @description Tramos de la semana en esta sede; como mucho 7 por día. Vacío = no trabaja en esta sede (no se guarda). */
-            ranges: components["schemas"]["WeeklyRangeDto"][];
-        };
-        ReplaceProviderScheduleDto: {
-            /** @description El horario COMPLETO del profesional, todas sus sedes. Las sedes que no vengan (o vengan sin tramos) dejan de tener horario suyo. Lista vacía = sin horario: se le puede citar en cualquier horario de la sede. */
-            locations: components["schemas"]["ProviderLocationScheduleInputDto"][];
-            /** @description DX-267: guardar aunque deje citas fuera. Sin esto, 409 con el recuento y una muestra. Las citas no se mueven. */
-            confirmAffected?: boolean;
-        };
         ScheduleAffectedAppointmentDto: {
             /** Format: uuid */
             id: string;
@@ -11633,6 +11627,26 @@ export interface components {
         ScheduleAffectedAppointmentsDto: {
             total: number;
             sample: components["schemas"]["ScheduleAffectedAppointmentDto"][];
+        };
+        ProviderScheduleDto: {
+            /** Format: uuid */
+            providerId: string;
+            /** @description false = sin horario configurado: se le puede citar en cualquier horario de la sede (sin restricción). */
+            configured: boolean;
+            locations: components["schemas"]["ProviderLocationScheduleDto"][];
+            affectedAppointments?: components["schemas"]["ScheduleAffectedAppointmentsDto"];
+        };
+        ProviderLocationScheduleInputDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @description Tramos de la semana en esta sede; como mucho 7 por día. Vacío = no trabaja en esta sede (no se guarda). */
+            ranges: components["schemas"]["WeeklyRangeDto"][];
+        };
+        ReplaceProviderScheduleDto: {
+            /** @description El horario COMPLETO del profesional, todas sus sedes. Las sedes que no vengan (o vengan sin tramos) dejan de tener horario suyo. Lista vacía = sin horario: se le puede citar en cualquier horario de la sede. */
+            locations: components["schemas"]["ProviderLocationScheduleInputDto"][];
+            /** @description DX-267: guardar aunque deje citas fuera. Sin esto, 409 con el recuento y una muestra. Las citas no se mueven. */
+            confirmAffected?: boolean;
         };
         MinuteRangeDto: {
             /**
@@ -11678,7 +11692,6 @@ export interface components {
             confirmAffected?: boolean;
         };
         SetProviderOverrideResultDto: {
-            affectedAppointments?: components["schemas"]["ScheduleAffectedAppointmentsDto"];
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -11695,6 +11708,7 @@ export interface components {
             note: string | null;
             /** @description Había otra excepción para esa sede y fecha y se reemplazó. */
             replaced: boolean;
+            affectedAppointments?: components["schemas"]["ScheduleAffectedAppointmentsDto"];
         };
         RosterLocationDto: {
             /** Format: uuid */
@@ -24195,7 +24209,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Ya existe una plantilla con ese nombre */
+            /** @description Ya existe una plantilla con ese nombre, o `version` ya no es la actual (`code` NOTE_TEMPLATE_STALE: «La plantilla cambió, recárgala») */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -25479,6 +25493,35 @@ export interface operations {
             };
             /** @description Fuera del horario de atención de la sede de la cita */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AppointmentsController_getCheckoutChecklist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description DX-202: lo que recepción comprueba al despedir al paciente. El saldo solo para los roles de cobro. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckoutChecklistDto"];
+                };
+            };
+            /** @description Cita no encontrada en esta clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

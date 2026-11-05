@@ -10,6 +10,7 @@ import type { components } from '@/lib/api/schema';
 export type LocationCalendar = components['schemas']['LocationCalendarDto'];
 export type LocationHoliday = components['schemas']['LocationHolidayDto'];
 export type HolidayImportResult = components['schemas']['HolidayImportResultDto'];
+export type HolidayOnDay = components['schemas']['HolidayOnDayDto'];
 export type HolidayImportRow = components['schemas']['HolidayImportRowDto'];
 
 type HolidayInput = { date: string; name: string; recurring: boolean };
@@ -34,8 +35,8 @@ export function getHolidayOnDay(
   token: string,
   locationId: string,
   date: string,
-): Promise<{ date: string; name: string | null }> {
-  return apiFetch(`${base(locationId)}/holiday?date=${encodeURIComponent(date)}`, { token });
+): Promise<HolidayOnDay> {
+  return apiFetch<HolidayOnDay>(`${base(locationId)}/holiday?date=${encodeURIComponent(date)}`, { token });
 }
 
 /** `GET /locations/:id/calendar`: días hábiles y festivos vivos, ya ordenados. */
