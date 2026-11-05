@@ -1,28 +1,21 @@
-"use client";
-import * as React from "react";
-import { useEffect, useId, useState } from "react";
-import { Check, Loader2, Search, X } from "lucide-react";
-import { apiErrorMessage } from "@/lib/api/error-message";
-import { getTokenRole } from "@/lib/auth/token-role";
-import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
-import {
-  listPatients,
-  type DocType,
-  type Patient,
-} from "@/lib/patients/patients-api";
+'use client';
+import * as React from 'react';
+import { useEffect, useId, useState } from 'react';
+import { Check, Loader2, Search, X } from 'lucide-react';
+import { apiErrorMessage } from '@/lib/api/error-message';
+import { getTokenRole } from '@/lib/auth/token-role';
+import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
+import { listPatients, type DocType, type Patient } from '@/lib/patients/patients-api';
 import {
   DOC_TYPES,
   docTypeOptionLabel,
   documentText,
   dtoDocTypeName,
   normalizeDocTypeLabel,
-} from "@/lib/patients/doc-type";
-import {
-  DocTypeLabelField,
-  docTypeLabelFieldError,
-} from "./doc-type-label-field";
-import { useDocumentTypeNames } from "@/lib/patients/use-document-type-names";
-import { isEmailAddress } from "@/lib/format/email";
+} from '@/lib/patients/doc-type';
+import { DocTypeLabelField, docTypeLabelFieldError } from './doc-type-label-field';
+import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
+import { isEmailAddress } from '@/lib/format/email';
 import {
   createResponsibleParty,
   RELATIONSHIP_LABELS,
@@ -30,54 +23,50 @@ import {
   updateResponsibleParty,
   type ResponsibleParty,
   type ResponsibleRelationship,
-} from "@/lib/patients/responsible-parties-api";
-import { FormModal } from "@/components/shared/form-modal";
-import { FormField, fieldErrorId } from "@/components/shared/form-field";
-import { FieldError } from "@/components/errors/field-error";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/native-select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { RadioGroup, RadioOption } from "@/components/ui/radio-group";
+} from '@/lib/patients/responsible-parties-api';
+import { FormModal } from '@/components/shared/form-modal';
+import { FormField, fieldErrorId } from '@/components/shared/form-field';
+import { FieldError } from '@/components/errors/field-error';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioOption } from '@/components/ui/radio-group';
 
 export const responsibleDialogCopy = {
-  createTitle: "Añadir responsable",
-  editTitle: "Editar responsable",
+  createTitle: 'Añadir responsable',
+  editTitle: 'Editar responsable',
   description:
-    "Quién paga o recibe los avisos de este paciente. Sus datos se usan solo para el cobro y los avisos, con la autorización del paciente.",
-  kindLegend: "¿Quién es?",
-  kindPatient: "Un paciente de la clínica",
-  kindContact: "Un contacto nuevo (sin ficha)",
-  searchLabel: "Buscar paciente",
-  searchPlaceholder: "Nombre o documento",
-  searchHint: "Escribe al menos 2 letras o el documento.",
-  searching: "Buscando…",
-  noMatch: "Ningún paciente coincide. Puedes añadirlo como contacto nuevo.",
-  searchError: "Búsqueda no disponible",
-  change: "Cambiar",
-  pickRequired: "Elige el paciente responsable.",
-  fullName: "Nombre completo",
-  nameRequired: "Escribe el nombre del responsable.",
-  docType: "Tipo de documento",
-  docTypeNone: "Sin documento",
-  docNumber: "Número de documento",
-  docNumberHidden: "Documento registrado (solo administración y recepción)",
-  email: "Email",
-  emailHint:
-    "A él le llegan los avisos del paciente si es menor o no tiene email.",
-  emailInvalid: "Revisa el email: le falta algo (p. ej. nombre@dominio.com).",
-  phone: "Teléfono",
-  relationship: "Parentesco",
-  isPayer: "Pagador principal",
-  isPayerHint:
-    "Solo uno por paciente. Su estado de cuenta familiar suma los saldos de los pacientes de los que es pagador.",
-  receivesNotices: "Recibe los avisos",
-  receivesNoticesHint:
-    "Recordatorios de cita, recibos y estado de cuenta de un menor o de un paciente sin email.",
-  patientFieldsNote:
-    "Su nombre, documento, email y teléfono se cambian en su propia ficha.",
-  saveError: "No pudimos guardar el responsable.",
-  add: "Añadir",
+    'Quién paga o recibe los avisos de este paciente. Sus datos se usan solo para el cobro y los avisos, con la autorización del paciente.',
+  kindLegend: '¿Quién es?',
+  kindPatient: 'Un paciente de la clínica',
+  kindContact: 'Un contacto nuevo (sin ficha)',
+  searchLabel: 'Buscar paciente',
+  searchPlaceholder: 'Nombre o documento',
+  searchHint: 'Escribe al menos 2 letras o el documento.',
+  searching: 'Buscando…',
+  noMatch: 'Ningún paciente coincide. Puedes añadirlo como contacto nuevo.',
+  searchError: 'Búsqueda no disponible',
+  change: 'Cambiar',
+  pickRequired: 'Elige el paciente responsable.',
+  fullName: 'Nombre completo',
+  nameRequired: 'Escribe el nombre del responsable.',
+  docType: 'Tipo de documento',
+  docTypeNone: 'Sin documento',
+  docNumber: 'Número de documento',
+  docNumberHidden: 'El documento lo gestionan administración y recepción.',
+  email: 'Email',
+  emailHint: 'A él le llegan los avisos del paciente si es menor o no tiene email.',
+  emailInvalid: 'Revisa el email: le falta algo (p. ej. nombre@dominio.com).',
+  phone: 'Teléfono',
+  relationship: 'Parentesco',
+  isPayer: 'Pagador principal',
+  isPayerHint: 'Solo uno por paciente. Su estado de cuenta familiar suma los saldos de los pacientes de los que es pagador.',
+  receivesNotices: 'Recibe los avisos',
+  receivesNoticesHint: 'Recordatorios de cita, recibos y estado de cuenta de un menor o de un paciente sin email.',
+  patientFieldsNote: 'Su nombre, documento, email y teléfono se cambian en su propia ficha.',
+  saveError: 'No pudimos guardar el responsable.',
+  add: 'Añadir',
 };
 const copy = responsibleDialogCopy;
 
@@ -85,19 +74,13 @@ const SEARCH_DEBOUNCE_MS = 300;
 const SEARCH_PAGE_SIZE = 8;
 
 interface Draft {
-  kind: "PATIENT" | "CONTACT";
+  kind: 'PATIENT' | 'CONTACT';
   patient: Pick<
     Patient,
-    | "id"
-    | "firstName"
-    | "lastName"
-    | "docType"
-    | "docTypeLabel"
-    | "docTypeName"
-    | "docNumber"
+    'id' | 'firstName' | 'lastName' | 'docType' | 'docTypeLabel' | 'docTypeName' | 'docNumber'
   > | null;
   fullName: string;
-  docType: DocType | "";
+  docType: DocType | '';
   /** R7: solo con tipo; un responsable paciente no lleva etiqueta. */
   docTypeLabel: string;
   docNumber: string;
@@ -110,24 +93,22 @@ interface Draft {
 
 function draftFrom(party: ResponsibleParty | null): Draft {
   return {
-    kind: party?.kind ?? "PATIENT",
+    kind: party?.kind ?? 'PATIENT',
     patient: party?.responsiblePatient ?? null,
-    fullName: party?.kind === "CONTACT" ? party.fullName : "",
-    docType: party?.kind === "CONTACT" ? (party.docType ?? "") : "",
-    docTypeLabel: party?.kind === "CONTACT" ? (party.docTypeLabel ?? "") : "",
-    docNumber: party?.kind === "CONTACT" ? (party.docNumber ?? "") : "",
-    email: party?.kind === "CONTACT" ? (party.email ?? "") : "",
-    phone: party?.kind === "CONTACT" ? (party.phone ?? "") : "",
-    relationship: party?.relationship ?? "MOTHER",
+    fullName: party?.kind === 'CONTACT' ? party.fullName : '',
+    docType: party?.kind === 'CONTACT' ? (party.docType ?? '') : '',
+    docTypeLabel: party?.kind === 'CONTACT' ? (party.docTypeLabel ?? '') : '',
+    docNumber: party?.kind === 'CONTACT' ? (party.docNumber ?? '') : '',
+    email: party?.kind === 'CONTACT' ? (party.email ?? '') : '',
+    phone: party?.kind === 'CONTACT' ? (party.phone ?? '') : '',
+    relationship: party?.relationship ?? 'MOTHER',
     isPayer: party?.isPayer ?? false,
     receivesNotices: party?.receivesNotices ?? true,
   };
 }
 
 /** «{nombre visible} {número}» del DTO; sin número, solo el nombre. */
-function docLabel(
-  p: Pick<Patient, "docType" | "docTypeLabel" | "docTypeName" | "docNumber">,
-): string {
+function docLabel(p: Pick<Patient, 'docType' | 'docTypeLabel' | 'docTypeName' | 'docNumber'>): string {
   const name = dtoDocTypeName(p);
   return documentText(name, p.docNumber) ?? name;
 }
@@ -160,12 +141,10 @@ export function ResponsiblePartyDialog({
   const ids = useId();
   const editing = party !== null;
   // SEC-044: la API no entrega el documento al personal clínico ni acepta que lo escriba.
-  const docHidden = ["DENTIST", "ASSISTANT"].includes(
-    getTokenRole(token) ?? "",
-  );
+  const docHidden = ['DENTIST', 'ASSISTANT'].includes(getTokenRole(token) ?? '');
   const [draft, setDraft] = useState<Draft>(() => draftFrom(party));
   const docTypeNames = useDocumentTypeNames(token);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query.trim(), SEARCH_DEBOUNCE_MS);
   const [results, setResults] = useState<Patient[]>([]);
   const [searching, setSearching] = useState(false);
@@ -179,7 +158,7 @@ export function ResponsiblePartyDialog({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const searchActive = !editing && draft.kind === "PATIENT" && !draft.patient;
+  const searchActive = !editing && draft.kind === 'PATIENT' && !draft.patient;
   const searchable = debouncedQuery.length >= 2;
 
   useEffect(() => {
@@ -188,10 +167,7 @@ export function ResponsiblePartyDialog({
     async function search() {
       setSearching(true);
       try {
-        const res = await listPatients(token, {
-          query: debouncedQuery,
-          pageSize: SEARCH_PAGE_SIZE,
-        });
+        const res = await listPatients(token, { query: debouncedQuery, pageSize: SEARCH_PAGE_SIZE });
         if (cancelled) return;
         setResults(res.items.filter((p) => p.id !== patientId));
         setSearchFailed(false);
@@ -214,29 +190,23 @@ export function ResponsiblePartyDialog({
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!editing && draft.kind === "PATIENT" && !draft.patient) {
+    if (!editing && draft.kind === 'PATIENT' && !draft.patient) {
       setFieldError(copy.pickRequired);
       return;
     }
-    if (draft.kind === "CONTACT" && !draft.fullName.trim()) {
+    if (draft.kind === 'CONTACT' && !draft.fullName.trim()) {
       setFieldError(copy.nameRequired);
       return;
     }
     // La regla de `@IsEmail()` de la API (el navegador acepta «ana@x»); el
     // contacto viaja entero, así que se mira siempre.
-    if (
-      draft.kind === "CONTACT" &&
-      draft.email.trim() &&
-      !isEmailAddress(draft.email.trim())
-    ) {
+    if (draft.kind === 'CONTACT' && draft.email.trim() && !isEmailAddress(draft.email.trim())) {
       setEmailError(copy.emailInvalid);
       emailRef.current?.focus();
       return;
     }
     const labelFieldError =
-      draft.kind === "CONTACT" && draft.docType
-        ? docTypeLabelFieldError(draft.docTypeLabel)
-        : null;
+      draft.kind === 'CONTACT' && draft.docType ? docTypeLabelFieldError(draft.docTypeLabel) : null;
     if (labelFieldError) {
       setLabelError(labelFieldError);
       labelRef.current?.focus();
@@ -250,15 +220,13 @@ export function ResponsiblePartyDialog({
       receivesNotices: draft.receivesNotices,
     };
     const contact =
-      draft.kind === "CONTACT"
+      draft.kind === 'CONTACT'
         ? {
             fullName: draft.fullName.trim(),
             docType: draft.docType || null,
             // Pre-flight I1: el contacto viaja entero, así que la etiqueta
             // también (la actual, o null); omitirla no la conservaría.
-            docTypeLabel: draft.docType
-              ? normalizeDocTypeLabel(draft.docTypeLabel)
-              : null,
+            docTypeLabel: draft.docType ? normalizeDocTypeLabel(draft.docTypeLabel) : null,
             ...(docHidden ? {} : { docNumber: draft.docNumber.trim() || null }),
             email: draft.email.trim() || null,
             phone: draft.phone.trim() || null,
@@ -266,13 +234,10 @@ export function ResponsiblePartyDialog({
         : {};
     try {
       const saved = editing
-        ? await updateResponsibleParty(token, patientId, party.id, {
-            ...flags,
-            ...contact,
-          })
+        ? await updateResponsibleParty(token, patientId, party.id, { ...flags, ...contact })
         : await createResponsibleParty(token, patientId, {
             ...flags,
-            ...(draft.kind === "PATIENT" && draft.patient
+            ...(draft.kind === 'PATIENT' && draft.patient
               ? { responsiblePatientId: draft.patient.id }
               : contact),
           });
@@ -306,7 +271,7 @@ export function ResponsiblePartyDialog({
           id={`${ids}-kind`}
           legend={copy.kindLegend}
           value={draft.kind}
-          onValueChange={(value) => set("kind", value as typeof draft.kind)}
+          onValueChange={(value) => set('kind', value as typeof draft.kind)}
           optionsClassName="gap-1 sm:flex-row sm:gap-6"
         >
           <RadioOption value="PATIENT" label={copy.kindPatient} />
@@ -314,24 +279,19 @@ export function ResponsiblePartyDialog({
         </RadioGroup>
       ) : null}
 
-      {draft.kind === "PATIENT" ? (
+      {draft.kind === 'PATIENT' ? (
         draft.patient ? (
           <div
             role="status"
             className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3 py-2"
           >
             <div className="flex min-w-0 items-center gap-2">
-              <Check
-                aria-hidden
-                className="size-4 shrink-0 text-primary-text"
-              />
+              <Check aria-hidden className="size-4 shrink-0 text-primary-text" />
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-ink">
                   {draft.patient.firstName} {draft.patient.lastName}
                 </p>
-                <p className="truncate text-xs text-muted tabular-nums">
-                  {docLabel(draft.patient)}
-                </p>
+                <p className="truncate text-xs text-muted tabular-nums">{docLabel(draft.patient)}</p>
               </div>
             </div>
             {!editing ? (
@@ -341,8 +301,8 @@ export function ResponsiblePartyDialog({
                 size="sm"
                 className="shrink-0 gap-1.5"
                 onClick={() => {
-                  set("patient", null);
-                  setQuery("");
+                  set('patient', null);
+                  setQuery('');
                 }}
               >
                 <X aria-hidden className="size-3.5" /> {copy.change}
@@ -350,11 +310,7 @@ export function ResponsiblePartyDialog({
             ) : null}
           </div>
         ) : (
-          <FormField
-            htmlFor={searchId}
-            label={copy.searchLabel}
-            error={fieldError}
-          >
+          <FormField htmlFor={searchId} label={copy.searchLabel} error={fieldError}>
             <div className="relative">
               <Search
                 aria-hidden
@@ -372,16 +328,11 @@ export function ResponsiblePartyDialog({
                   setFieldError(null);
                 }}
                 aria-invalid={fieldError ? true : undefined}
-                aria-describedby={
-                  fieldError ? fieldErrorId(searchId) : undefined
-                }
+                aria-describedby={fieldError ? fieldErrorId(searchId) : undefined}
                 className="pl-9"
               />
               {searching ? (
-                <Loader2
-                  aria-hidden
-                  className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted"
-                />
+                <Loader2 aria-hidden className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted" />
               ) : null}
             </div>
             {searchFailed ? (
@@ -409,15 +360,13 @@ export function ResponsiblePartyDialog({
                   <li key={p.id}>
                     <button
                       type="button"
-                      onClick={() => set("patient", p)}
+                      onClick={() => set('patient', p)}
                       className="flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                     >
                       <span className="truncate text-sm text-ink">
                         {p.firstName} {p.lastName}
                       </span>
-                      <span className="shrink-0 text-xs text-muted tabular-nums">
-                        {docLabel(p)}
-                      </span>
+                      <span className="shrink-0 text-xs text-muted tabular-nums">{docLabel(p)}</span>
                     </button>
                   </li>
                 ))}
@@ -433,7 +382,7 @@ export function ResponsiblePartyDialog({
               value={draft.fullName}
               maxLength={200}
               autoComplete="off"
-              onChange={(e) => set("fullName", e.target.value)}
+              onChange={(e) => set('fullName', e.target.value)}
               aria-invalid={fieldError ? true : undefined}
               aria-describedby={fieldError ? fieldErrorId(nameId) : undefined}
             />
@@ -444,17 +393,12 @@ export function ResponsiblePartyDialog({
                 id={`${ids}-doctype`}
                 value={draft.docType}
                 onChange={(e) => {
-                  const next = e.target.value as DocType | "";
+                  const next = e.target.value as DocType | '';
                   const seeded = draftFrom(party);
-                  set("docType", next);
+                  set('docType', next);
                   // La etiqueta de un tipo no vale para otro (R7); volver al
                   // tipo guardado recupera la suya, no la borra.
-                  set(
-                    "docTypeLabel",
-                    next !== "" && next === seeded.docType
-                      ? seeded.docTypeLabel
-                      : "",
-                  );
+                  set('docTypeLabel', next !== '' && next === seeded.docType ? seeded.docTypeLabel : '');
                   setLabelError(null);
                 }}
               >
@@ -467,11 +411,7 @@ export function ResponsiblePartyDialog({
               </NativeSelect>
             </FormField>
             {docHidden ? (
-              editing ? (
-                <p className="text-sm text-text-muted sm:self-end">
-                  {copy.docNumberHidden}
-                </p>
-              ) : null
+              editing ? <p className="text-sm text-text-muted sm:self-end">{copy.docNumberHidden}</p> : null
             ) : (
               <FormField htmlFor={`${ids}-docnumber`} label={copy.docNumber}>
                 <Input
@@ -479,7 +419,7 @@ export function ResponsiblePartyDialog({
                   value={draft.docNumber}
                   maxLength={60}
                   autoComplete="off"
-                  onChange={(e) => set("docNumber", e.target.value)}
+                  onChange={(e) => set('docNumber', e.target.value)}
                 />
               </FormField>
             )}
@@ -489,7 +429,7 @@ export function ResponsiblePartyDialog({
                 inputRef={labelRef}
                 value={draft.docTypeLabel}
                 onChange={(value) => {
-                  set("docTypeLabel", value);
+                  set('docTypeLabel', value);
                   setLabelError(null);
                 }}
                 error={labelError}
@@ -512,15 +452,11 @@ export function ResponsiblePartyDialog({
                 maxLength={254}
                 autoComplete="off"
                 onChange={(e) => {
-                  set("email", e.target.value);
+                  set('email', e.target.value);
                   setEmailError(null);
                 }}
                 aria-invalid={emailError ? true : undefined}
-                aria-describedby={
-                  emailError
-                    ? fieldErrorId(`${ids}-email`)
-                    : `${ids}-email-hint`
-                }
+                aria-describedby={emailError ? fieldErrorId(`${ids}-email`) : `${ids}-email-hint`}
               />
             </FormField>
             <FormField htmlFor={`${ids}-phone`} label={copy.phone}>
@@ -531,13 +467,13 @@ export function ResponsiblePartyDialog({
                 value={draft.phone}
                 maxLength={40}
                 autoComplete="off"
-                onChange={(e) => set("phone", e.target.value)}
+                onChange={(e) => set('phone', e.target.value)}
               />
             </FormField>
           </div>
         </>
       )}
-      {editing && draft.kind === "PATIENT" ? (
+      {editing && draft.kind === 'PATIENT' ? (
         <p className="text-xs text-muted">{copy.patientFieldsNote}</p>
       ) : null}
 
@@ -545,9 +481,7 @@ export function ResponsiblePartyDialog({
         <NativeSelect
           id={`${ids}-relationship`}
           value={draft.relationship}
-          onChange={(e) =>
-            set("relationship", e.target.value as ResponsibleRelationship)
-          }
+          onChange={(e) => set('relationship', e.target.value as ResponsibleRelationship)}
         >
           {RELATIONSHIPS.map((r) => (
             <option key={r} value={r}>
@@ -559,8 +493,8 @@ export function ResponsiblePartyDialog({
 
       {(
         [
-          ["isPayer", copy.isPayer, copy.isPayerHint],
-          ["receivesNotices", copy.receivesNotices, copy.receivesNoticesHint],
+          ['isPayer', copy.isPayer, copy.isPayerHint],
+          ['receivesNotices', copy.receivesNotices, copy.receivesNoticesHint],
         ] as const
       ).map(([key, label, hint]) => (
         <Checkbox
