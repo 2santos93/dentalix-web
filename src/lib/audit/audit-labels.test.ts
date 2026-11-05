@@ -873,15 +873,7 @@ describe('paymentAllocationDetail (DX-399)', () => {
         ES_VE,
       ),
     ).toBe('Imputación devuelta al reparto automático · antes: 1 ítem · EUR 25,50 → después: lo reparte el sistema');
-    expect(
-      detail(
-        {
-          reason: 'PAYMENT_REALLOCATED',
-          allocation: { currency: 'EUR', mode: 'AUTO', before: [{ itemId: ITEM_A, amount: 25.5 }], after: [] },
-        },
-        ES_VE,
-      ),
-    ).toBe('Imputación devuelta al reparto automático · antes: 1 ítem · EUR 25,50 → después: lo reparte el sistema');
+
   });
 
   it('sin el formato de la sede no inventa otro: «—»', () => {

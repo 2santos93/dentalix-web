@@ -29,6 +29,8 @@ const DATA: PaymentAllocations = {
   manual: false,
   allocated: 0,
   unallocated: 120,
+  creditOut: 0,
+  onAccount: 120,
   version: 'a'.repeat(64),
   allocations: [],
   items: [],

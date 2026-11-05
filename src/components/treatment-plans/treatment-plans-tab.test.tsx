@@ -3034,6 +3034,8 @@ describe('TreatmentPlansTab', () => {
         manual: false,
         allocated: 30000,
         unallocated: 20000,
+        creditOut: 0,
+        onAccount: 20000,
         version: 'a'.repeat(64),
         allocations: [{ treatmentPlanItemId: item2.id, amount: 30000, source: 'AUTO' }],
         items: [
@@ -3090,6 +3092,8 @@ describe('TreatmentPlansTab', () => {
         manual: false,
         allocated: 50000,
         unallocated: 0,
+        creditOut: 0,
+        onAccount: 0,
         version: 'a'.repeat(64),
         allocations: [{ treatmentPlanItemId: item2.id, amount: 50000, source: 'AUTO' as const }],
         items: [

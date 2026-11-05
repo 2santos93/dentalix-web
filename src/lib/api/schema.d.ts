@@ -3952,7 +3952,7 @@ export interface paths {
         };
         /**
          * Cobrado sin imputar / a cuenta, por abono
-         * @description Abonos vivos a un plan que se cobra (ni cancelado ni rechazado) de pacientes vivos, con base en la moneda del plan, cuyo día civil (en la zona de la sede del abono) cae en el período y cuya sede ve quien consulta (DX-089). `allocated` es la suma de sus imputaciones vivas y `unallocated` la base menos lo imputado (> 0), en la moneda del plan (el abono convertido con la tasa de su día; los totales van por moneda y no se suman entre monedas): son las cifras de GET /payments/:id/allocations, MENOS lo que el plan ya devolvió o traspasó de su saldo a favor (DX-253): ese dinero se descuenta por plan de los abonos más recientes primero (LIFO), nunca por debajo de 0, y el abono que queda en 0 desaparece. Los abonos en otra moneda sin tasa para su día (sin base) no se pueden imputar: se cuentan en `paymentsWithoutRateCount`. Sin datos clínicos.
+         * @description Abonos vivos a un plan que se cobra (ni cancelado ni rechazado) de pacientes vivos, con base en la moneda del plan, cuyo día civil (en la zona de la sede del abono) cae en el período y cuya sede ve quien consulta (DX-089). `allocated` es la suma de sus imputaciones vivas y `unallocated` la base menos lo imputado (> 0), en la moneda del plan (el abono convertido con la tasa de su día; los totales van por moneda y no se suman entre monedas): son las cifras de GET /payments/:id/allocations, MENOS lo que el plan ya devolvió o traspasó de su saldo a favor (DX-253): ese dinero se descuenta por plan de los abonos más recientes primero (LIFO) y solo de los registrados ANTES de la devolución o el traspaso, nunca por debajo de 0, y el abono que queda en 0 desaparece. El saldo a favor RECIBIDO por un traspaso no es un abono: aparece en Cartera › Saldo a favor, no aquí. Los abonos en otra moneda sin tasa para su día (sin base) no se pueden imputar: se cuentan en `paymentsWithoutRateCount`. Sin datos clínicos.
          */
         get: operations["UnallocatedPaymentsController_list"];
         put?: never;
@@ -3972,7 +3972,7 @@ export interface paths {
         };
         /**
          * Cobrado sin imputar / a cuenta en CSV (mismos filtros, sin paginar)
-         * @description Abonos vivos a un plan que se cobra (ni cancelado ni rechazado) de pacientes vivos, con base en la moneda del plan, cuyo día civil (en la zona de la sede del abono) cae en el período y cuya sede ve quien consulta (DX-089). `allocated` es la suma de sus imputaciones vivas y `unallocated` la base menos lo imputado (> 0), en la moneda del plan (el abono convertido con la tasa de su día; los totales van por moneda y no se suman entre monedas): son las cifras de GET /payments/:id/allocations, MENOS lo que el plan ya devolvió o traspasó de su saldo a favor (DX-253): ese dinero se descuenta por plan de los abonos más recientes primero (LIFO), nunca por debajo de 0, y el abono que queda en 0 desaparece. Los abonos en otra moneda sin tasa para su día (sin base) no se pueden imputar: se cuentan en `paymentsWithoutRateCount`. Sin datos clínicos. Las mismas filas que la pantalla, todas, con el período y la sede en la cabecera y los totales por moneda al final; UTF-8 con BOM; celdas protegidas contra fórmulas. Cada descarga deja un evento EXPORT en la auditoría.
+         * @description Abonos vivos a un plan que se cobra (ni cancelado ni rechazado) de pacientes vivos, con base en la moneda del plan, cuyo día civil (en la zona de la sede del abono) cae en el período y cuya sede ve quien consulta (DX-089). `allocated` es la suma de sus imputaciones vivas y `unallocated` la base menos lo imputado (> 0), en la moneda del plan (el abono convertido con la tasa de su día; los totales van por moneda y no se suman entre monedas): son las cifras de GET /payments/:id/allocations, MENOS lo que el plan ya devolvió o traspasó de su saldo a favor (DX-253): ese dinero se descuenta por plan de los abonos más recientes primero (LIFO) y solo de los registrados ANTES de la devolución o el traspaso, nunca por debajo de 0, y el abono que queda en 0 desaparece. El saldo a favor RECIBIDO por un traspaso no es un abono: aparece en Cartera › Saldo a favor, no aquí. Los abonos en otra moneda sin tasa para su día (sin base) no se pueden imputar: se cuentan en `paymentsWithoutRateCount`. Sin datos clínicos. Las mismas filas que la pantalla, todas, con el período y la sede en la cabecera y los totales por moneda al final; UTF-8 con BOM; celdas protegidas contra fórmulas. Cada descarga deja un evento EXPORT en la auditoría.
          */
         get: operations["UnallocatedPaymentsController_csv"];
         put?: never;
@@ -13962,6 +13962,16 @@ export interface components {
             allocated: number;
             /** @example 20 */
             unallocated: number | null;
+            /**
+             * @description De lo sin imputar a ítems, lo que el plan ya devolvió o traspasó de su saldo a favor (DX-253) y se atribuye a este abono: las salidas solo restan de abonos registrados antes que ellas, empezando por el más reciente. 0 si no hay
+             * @example 20
+             */
+            creditOut: number;
+            /**
+             * @description A cuenta neto: `unallocated − creditOut`. Es la cifra que da el informe «Cobrado sin imputar» para este abono (y la que no aparece si es 0). null sin tasa
+             * @example 10
+             */
+            onAccount: number | null;
             /** @description Versión de la imputación: se reenvía como expectedVersion */
             version: string;
             allocations: components["schemas"]["PaymentAllocationLineDto"][];
@@ -14036,6 +14046,16 @@ export interface components {
             allocated: number;
             /** @example 20 */
             unallocated: number | null;
+            /**
+             * @description De lo sin imputar a ítems, lo que el plan ya devolvió o traspasó de su saldo a favor (DX-253) y se atribuye a este abono: las salidas solo restan de abonos registrados antes que ellas, empezando por el más reciente. 0 si no hay
+             * @example 20
+             */
+            creditOut: number;
+            /**
+             * @description A cuenta neto: `unallocated − creditOut`. Es la cifra que da el informe «Cobrado sin imputar» para este abono (y la que no aparece si es 0). null sin tasa
+             * @example 10
+             */
+            onAccount: number | null;
             /** @description Versión de la imputación: se reenvía como expectedVersion */
             version: string;
             allocations: components["schemas"]["PaymentAllocationLineDto"][];
@@ -15427,7 +15447,7 @@ export interface components {
              */
             allocated: number;
             /**
-             * @description Lo que queda a cuenta: el abono en la moneda del plan menos lo imputado y menos lo que el plan ya devolvió o traspasó de su saldo a favor (DX-253; se descuenta de los abonos más recientes primero, nunca por debajo de 0); siempre > 0. Un abono que queda en 0 no sale
+             * @description Lo que queda a cuenta: el abono en la moneda del plan menos lo imputado y menos lo que el plan ya devolvió o traspasó de su saldo a favor (DX-253; se descuenta de los abonos más recientes primero y solo de los registrados antes de la salida, nunca por debajo de 0); siempre > 0. Un abono que queda en 0 no sale. El saldo a favor recibido por traspaso no es un abono: está en Cartera › Saldo a favor
              * @example 30
              */
             unallocated: number;

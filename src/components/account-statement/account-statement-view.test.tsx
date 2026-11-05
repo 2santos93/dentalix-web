@@ -295,6 +295,8 @@ it('«Ver imputación» (DX-399): los abonos a un plan vivo la ofrecen, el anula
     manual: true,
     allocated: 150000,
     unallocated: 50000,
+    creditOut: 0,
+    onAccount: 50000,
     version: 'a'.repeat(64),
     allocations: [{ treatmentPlanItemId: 'item-1', amount: 150000, source: 'MANUAL' }],
     items: [
@@ -643,6 +645,8 @@ describe('cobrado por ítem de cada plan (DX-051)', () => {
     paymentsWithoutRate: [],
     allocated: 1200000,
     unallocated: 0,
+    creditOut: 0,
+    onAccount: 0,
     unconvertedPaymentsCount: 0,
     rateProviderTimedOut: false,
     manualPaymentIds: [],

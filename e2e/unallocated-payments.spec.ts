@@ -193,11 +193,11 @@ for (const viewport of VIEWPORTS) {
       [ids.betoPayment, 'Beto'],
     ] as const) {
       const res = await page.request.get(`${API_URL}/payments/${paymentId}/allocations`, { headers });
-      const detail = (await res.json()) as { allocated: number; unallocated: number };
+      const detail = (await res.json()) as { allocated: number; onAccount: number };
       await openReport(page, viewport.width);
       const row = rowsOf(page, viewport.width, REPORT_LIST).filter({ hasText: `${name} Cuenta${suffix}` });
       await expect(row).toContainText(money(detail.allocated));
-      await expect(row).toContainText(money(detail.unallocated));
+      await expect(row).toContainText(money(detail.onAccount));
     }
   });
 

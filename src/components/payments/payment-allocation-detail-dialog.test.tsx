@@ -45,6 +45,8 @@ const AUTO: PaymentAllocations = {
   manual: false,
   allocated: 100,
   unallocated: 30,
+  creditOut: 0,
+  onAccount: 30,
   version: 'a'.repeat(64),
   allocations: [{ treatmentPlanItemId: 'item-1', amount: 100, source: 'AUTO' }],
   items: [item('item-1', 'Resina', '11'), item('item-2', 'Limpieza', '26')],
@@ -93,6 +95,34 @@ describe('PaymentAllocationDetailDialog (DX-399)', () => {
     expect(within(dialog).getByText(`NOR-000123 · ${money(130, 'USD')} · ${STAMP_FORMATS.caracas.civilDate('2026-10-20')}`)).toBeInTheDocument();
   });
 
+  it('con una devolución: sin imputar a ítems, de ello devuelto y a cuenta neto (la cifra del informe)', async () => {
+    mockedGet.mockResolvedValue({ ...AUTO, creditOut: 20, onAccount: 10 });
+    renderDialog();
+    const dialog = await screen.findByRole('dialog', { name: 'Imputación del abono' });
+    const list = await within(dialog).findByRole('table', { name: 'Ítems a los que se imputó el abono' });
+    expect(flat(within(list).getByRole('row', { name: /A cuenta/ }).textContent)).toContain(money(10, 'USD'));
+    const summary = within(dialog).getByLabelText('Resumen de la imputación');
+    expect(flat(summary.textContent)).toContain(money(30, 'USD'));
+    expect(within(summary).getByText('De ello, devuelto o traspasado')).toBeInTheDocument();
+    expect(flat(summary.textContent)).toContain(money(20, 'USD'));
+  });
+
+  it('sin devolución no hay línea «devuelto o traspasado»', async () => {
+    renderDialog();
+    const dialog = await screen.findByRole('dialog', { name: 'Imputación del abono' });
+    await within(dialog).findByText('Automática (más antiguo primero)');
+    expect(within(dialog).queryByText('De ello, devuelto o traspasado')).not.toBeInTheDocument();
+    expect(within(dialog).getByText('Sin imputar a ítems')).toBeInTheDocument();
+  });
+
+  it('devuelto del todo: no queda fila «A cuenta»', async () => {
+    mockedGet.mockResolvedValue({ ...AUTO, creditOut: 30, onAccount: 0 });
+    renderDialog();
+    const dialog = await screen.findByRole('dialog', { name: 'Imputación del abono' });
+    const list = await within(dialog).findByRole('table', { name: 'Ítems a los que se imputó el abono' });
+    expect(within(list).queryByRole('row', { name: /A cuenta/ })).not.toBeInTheDocument();
+  });
+
   it('un abono fijado a mano dice «Manual»', async () => {
     mockedGet.mockResolvedValue({ ...AUTO, manual: true });
     renderDialog();
@@ -102,7 +132,7 @@ describe('PaymentAllocationDetailDialog (DX-399)', () => {
   });
 
   it('totalmente imputado: sin fila «A cuenta», con A cuenta en 0', async () => {
-    mockedGet.mockResolvedValue({ ...AUTO, paymentAmount: 100, planAmount: 100, allocated: 100, unallocated: 0 });
+    mockedGet.mockResolvedValue({ ...AUTO, paymentAmount: 100, planAmount: 100, allocated: 100, unallocated: 0, onAccount: 0 });
     renderDialog();
     const dialog = await screen.findByRole('dialog', { name: 'Imputación del abono' });
     const list = await within(dialog).findByRole('table', { name: 'Ítems a los que se imputó el abono' });
@@ -111,7 +141,7 @@ describe('PaymentAllocationDetailDialog (DX-399)', () => {
   });
 
   it('sin ninguna línea: todo queda «A cuenta»', async () => {
-    mockedGet.mockResolvedValue({ ...AUTO, allocations: [], allocated: 0, unallocated: 130 });
+    mockedGet.mockResolvedValue({ ...AUTO, allocations: [], allocated: 0, unallocated: 130, onAccount: 130 });
     renderDialog();
     const dialog = await screen.findByRole('dialog', { name: 'Imputación del abono' });
     const list = await within(dialog).findByRole('table', { name: 'Ítems a los que se imputó el abono' });
@@ -127,6 +157,8 @@ describe('PaymentAllocationDetailDialog (DX-399)', () => {
       planAmount: 3.3,
       allocated: 3.3,
       unallocated: 0,
+      creditOut: 0,
+      onAccount: 0,
     });
     renderDialog();
     const dialog = await screen.findByRole('dialog', { name: 'Imputación del abono' });
@@ -138,7 +170,7 @@ describe('PaymentAllocationDetailDialog (DX-399)', () => {
   });
 
   it('con la sede del abono en Berlín el importe sale con su formato, no con el de Caracas', async () => {
-    mockedGet.mockResolvedValue({ ...AUTO, locationId: STAMP_SEDES.berlin.id, paymentAmount: 1234.5, planAmount: 1234.5, allocated: 1234.5, unallocated: 0, allocations: [{ treatmentPlanItemId: 'item-1', amount: 1234.5, source: 'AUTO' }] });
+    mockedGet.mockResolvedValue({ ...AUTO, locationId: STAMP_SEDES.berlin.id, paymentAmount: 1234.5, planAmount: 1234.5, allocated: 1234.5, unallocated: 0, onAccount: 0, allocations: [{ treatmentPlanItemId: 'item-1', amount: 1234.5, source: 'AUTO' }] });
     renderDialog();
     const dialog = await screen.findByRole('dialog', { name: 'Imputación del abono' });
     const list = await within(dialog).findByRole('table', { name: 'Ítems a los que se imputó el abono' });
@@ -146,7 +178,7 @@ describe('PaymentAllocationDetailDialog (DX-399)', () => {
   });
 
   it('sin tasa para el día: lo dice y no inventa un reparto', async () => {
-    mockedGet.mockResolvedValue({ ...AUTO, planAmount: null, allocated: 0, unallocated: null, allocations: [] });
+    mockedGet.mockResolvedValue({ ...AUTO, planAmount: null, allocated: 0, unallocated: null, onAccount: null, allocations: [] });
     renderDialog();
     expect(
       await screen.findByText('No hay tasa de cambio para la fecha de este abono: todavía no se imputa a ningún ítem.'),
@@ -154,7 +186,7 @@ describe('PaymentAllocationDetailDialog (DX-399)', () => {
   });
 
   it('plan cancelado: explica que sus abonos no se imputan', async () => {
-    mockedGet.mockResolvedValue({ ...AUTO, planStatus: 'CANCELLED', allocations: [], items: [], allocated: 0, unallocated: 130 });
+    mockedGet.mockResolvedValue({ ...AUTO, planStatus: 'CANCELLED', allocations: [], items: [], allocated: 0, unallocated: 130, onAccount: 130 });
     renderDialog();
     expect(await screen.findByText(/El plan está «Cancelado»: sus abonos no se imputan a ítems\./)).toBeInTheDocument();
   });
@@ -198,8 +230,8 @@ describe('allocationRows', () => {
       ['Resina', 100],
       ['A cuenta', 30],
     ]);
-    expect(allocationRows({ ...AUTO, unallocated: 0 }).map((r) => r.procedure)).toEqual(['Resina']);
-    expect(allocationRows({ ...AUTO, unallocated: null }).map((r) => r.procedure)).toEqual(['Resina']);
+    expect(allocationRows({ ...AUTO, unallocated: 0, onAccount: 0 }).map((r) => r.procedure)).toEqual(['Resina']);
+    expect(allocationRows({ ...AUTO, unallocated: null, onAccount: null }).map((r) => r.procedure)).toEqual(['Resina']);
   });
 
   it('una línea en un ítem que ya no es imputable conserva su importe', () => {

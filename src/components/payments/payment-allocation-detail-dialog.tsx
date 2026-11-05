@@ -33,6 +33,8 @@ const copy = {
   summary: 'Resumen de la imputación',
   payment: 'Abono',
   allocated: 'Imputado',
+  unallocatedToItems: 'Sin imputar a ítems',
+  creditOut: 'De ello, devuelto o traspasado',
   rule: 'Regla',
   converted: (amount: string, date: string) => `Convertido de ${amount} con la tasa del ${date}.`,
   noRate: 'No hay tasa de cambio para la fecha de este abono: todavía no se imputa a ningún ítem.',
@@ -76,13 +78,14 @@ export function allocationRows(data: PaymentAllocations): LineRow[] {
       amount: line.amount,
     };
   });
-  if (data.unallocated !== null && data.unallocated > 0) {
+  // A cuenta NETO de lo devuelto o traspasado (la cifra del informe «Cobrado sin imputar»).
+  if (data.onAccount !== null && data.onAccount > 0) {
     rows.push({
       id: 'on-account',
       itemId: null,
       procedure: allocationCopy.onAccount,
       tooth: null,
-      amount: data.unallocated,
+      amount: data.onAccount,
     });
   }
   return rows;
@@ -254,8 +257,16 @@ function Body({
                     <DescriptionItem label={copy.allocated} numeric>
                       {money(data.allocated, data.planCurrency)}
                     </DescriptionItem>
-                    <DescriptionItem label={allocationCopy.onAccount} numeric valueClassName="font-semibold">
+                    <DescriptionItem label={copy.unallocatedToItems} numeric>
                       {money(data.unallocated ?? 0, data.planCurrency)}
+                    </DescriptionItem>
+                    {data.creditOut > 0 ? (
+                      <DescriptionItem label={copy.creditOut} numeric>
+                        {money(data.creditOut, data.planCurrency)}
+                      </DescriptionItem>
+                    ) : null}
+                    <DescriptionItem label={allocationCopy.onAccount} numeric valueClassName="font-semibold">
+                      {money(data.onAccount ?? 0, data.planCurrency)}
                     </DescriptionItem>
                   </DescriptionList>
                 </>

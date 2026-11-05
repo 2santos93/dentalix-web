@@ -38,7 +38,7 @@ import { unallocatedRowKey, useUnallocatedPayments } from './use-unallocated-pay
 
 export const unallocatedCopy = {
   scope:
-    'Abonos con algo sin imputar a ítems del plan, descontado lo que ya se devolvió o traspasó de su saldo a favor (de los abonos más recientes primero) · importes en la moneda del plan (el abono convertido con la tasa de su día); los totales no se suman entre monedas',
+    'Abonos con algo sin imputar a ítems del plan, descontado lo que ya se devolvió o traspasó de su saldo a favor (de los abonos más recientes primero) · importes en la moneda del plan (el abono convertido con la tasa de su día); los totales no se suman entre monedas. El saldo a favor recibido por un traspaso no es un abono: está en Cartera › Saldo a favor',
   period: 'Período',
   from: 'Desde',
   to: 'Hasta',
