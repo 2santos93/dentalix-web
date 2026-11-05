@@ -177,6 +177,11 @@ function SignedPdfStatusLine({
   return null;
 }
 
+/** DX-441: los presupuestos enviados a aceptar viven en el panel del plan, no aquí. */
+function consentsOnly(rows: SignatureRequest[]): SignatureRequest[] {
+  return rows.filter((r) => r.type === 'CONSENT');
+}
+
 interface PatientSignatureRequestsSectionProps {
   token: string;
   patientId: string;
@@ -222,7 +227,7 @@ export function PatientSignatureRequestsSection({
     listSignatureRequests(token, patientId)
       .then((data) => {
         if (cancelled) return;
-        setRows(data);
+        setRows(consentsOnly(data));
         setError(null);
       })
       .catch((err: unknown) => {
@@ -253,7 +258,7 @@ export function PatientSignatureRequestsSection({
       polls += 1;
       listSignatureRequests(token, patientId)
         .then((data) => {
-          if (!cancelled) setRows(data);
+          if (!cancelled) setRows(consentsOnly(data));
         })
         .catch(() => {
           // Silencioso: la lista que se ve sigue valiendo; se reintenta al siguiente tick.
