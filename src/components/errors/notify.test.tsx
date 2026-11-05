@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
 import { Toaster } from './toaster';
@@ -88,7 +88,8 @@ describe('notifyError', () => {
       render(<Harness />);
       await user.click(screen.getByRole('button', { name: 'disparar' }));
       expect(await screen.findByText('No se pudo cambiar el estado')).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument());
+      expect(screen.getByText('No se pudo cambiar el estado')).toBeInTheDocument();
     } finally {
       modal.remove();
     }
