@@ -3281,6 +3281,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payments/proofs/upload-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Autorización para subir el comprobante de un cobro al almacén
+         * @description POST prefirmado de pocos minutos para UN fichero (JPG, PNG, WebP o PDF de 1 B a 10 MB) con el SHA-256 declarado. El navegador envía `target.fields` y el fichero (campo `file`, al final) a `target.url` y después entrega el `uploadId` al registrar el abono (`proofUploadId`). El almacén es privado: el comprobante solo se ve con una URL firmada de corta vida.
+         */
+        post: operations["PaymentsController_proofUploadUrl"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/{id}/proof/url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** URL firmada (5 min) para ver o descargar el comprobante del cobro */
+        get: operations["PaymentsController_proofUrl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payments": {
         parameters: {
             query?: never;
@@ -4753,6 +4790,23 @@ export interface paths {
         };
         /** Días hábiles y festivos vivos de la sede */
         get: operations["LocationCalendarController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{id}/holiday": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** DX-358: ¿es festivo ese día en la sede? Solo para avisar al agendar */
+        get: operations["LocationCalendarController_holidayOnDay"];
         put?: never;
         post?: never;
         delete?: never;
@@ -11622,6 +11676,11 @@ export interface components {
          */
         PaymentMethodKind: "CASH" | "CARD" | "TRANSFER" | "DIGITAL" | "OTHER";
         /**
+         * @description DX-389 «Pide comprobante»: NONE no lo admite, OPTIONAL lo admite y REQUIRED lo exige al registrar el abono.
+         * @enum {string}
+         */
+        PaymentProofPolicy: "NONE" | "OPTIONAL" | "REQUIRED";
+        /**
          * @description Medio inicial equivalente a este método antiguo; null si lo creó la clínica.
          * @enum {string}
          */
@@ -11665,6 +11724,8 @@ export interface components {
             active: boolean;
             /** @description Si el abono con este medio exige la referencia del pago. */
             requiresReference: boolean;
+            /** @description DX-389 «Pide comprobante»: NONE no lo admite, OPTIONAL lo admite y REQUIRED lo exige al registrar el abono. */
+            proofPolicy: components["schemas"]["PaymentProofPolicy"];
             /** @description Medio inicial equivalente a este método antiguo; null si lo creó la clínica. */
             legacyMethod: components["schemas"]["PaymentMethod"] | null;
             /** @description DX-516: sus ajustes (activos o no; hasta 5 activos). Vacío por defecto. */
@@ -11682,6 +11743,8 @@ export interface components {
             active?: boolean;
             /** @description Sin indicarlo, no pide referencia. */
             requiresReference?: boolean;
+            /** @description Sin indicarlo, NONE (no pide comprobante). */
+            proofPolicy?: components["schemas"]["PaymentProofPolicy"];
         };
         UpdatePaymentMethodDto: {
             /** @example Pago móvil */
@@ -11691,6 +11754,8 @@ export interface components {
             active?: boolean;
             /** @description Sin indicarlo, no pide referencia. */
             requiresReference?: boolean;
+            /** @description Sin indicarlo, NONE (no pide comprobante). */
+            proofPolicy?: components["schemas"]["PaymentProofPolicy"];
         };
         CreatePaymentAdjustmentDto: {
             type: components["schemas"]["PaymentAdjustmentType"];
@@ -13109,6 +13174,49 @@ export interface components {
             /** @example Caries de la dentina */
             labelEs: string;
         };
+        CreatePaymentProofUploadDto: {
+            /** @example captura-pago-movil.png */
+            name?: string;
+            /** @example image/png */
+            mimeType?: string;
+            /** @description Tamaño en bytes (1 B – 10 MB) */
+            size: number;
+            /** @description SHA-256 del contenido en hex. El almacén rechaza un contenido con otra huella. */
+            sha256: string;
+        };
+        PaymentProofTargetDto: {
+            /** @enum {string} */
+            method: "POST";
+            /** @description Adónde se envía el formulario: el bucket (S3) o la API (disco, en desarrollo) */
+            url: string;
+            /** @description Campos del formulario, en este orden y ANTES del fichero, que va al final en el campo `file` */
+            fields: {
+                [key: string]: string;
+            };
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        PaymentProofUploadDto: {
+            /**
+             * Format: uuid
+             * @description Se entrega al registrar el abono (`proofUploadId`), en su cuerpo.
+             */
+            uploadId: string;
+            target: components["schemas"]["PaymentProofTargetDto"];
+            /** @description Tamaño máximo en bytes */
+            maxBytes: number;
+        };
+        PaymentProofUrlDto: {
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @enum {string} */
+            disposition: "inline" | "attachment";
+            /** @enum {string} */
+            mime: "application/pdf" | "image/jpeg" | "image/png" | "image/webp";
+            /** @description Nombre original, solo para mostrar. */
+            name: string;
+        };
         CashPaymentMethodRefDto: {
             /** Format: uuid */
             id: string;
@@ -13228,6 +13336,8 @@ export interface components {
              * @example PRI-000123
              */
             receiptNumber: string | null;
+            /** @description DX-389: el abono tiene comprobante del cobro. Se ve con `GET /payments/:id/proof/url`. */
+            hasProof: boolean;
             /** @description DX-516: ajustes por medio de pago congelados en el abono (vacío sin ajustes). */
             adjustments: components["schemas"]["PaymentAdjustmentLineDto"][];
             /**
@@ -13357,6 +13467,11 @@ export interface components {
             reference?: string;
             /** @description Motivo para confirmar una referencia repetida tras el 409. Se guarda en el abono; la auditoría registra la confirmación y los abonos repetidos. Más de 300 caracteres: 400 en español. */
             duplicateReferenceReason?: string;
+            /**
+             * Format: uuid
+             * @description DX-389: el `uploadId` de `POST /payments/proofs/upload-url` (el comprobante ya subido al almacén). Si el medio «Pide comprobante» = REQUIRED y no llega: 400; si es NONE y llega: 400. Se comprueba (tamaño, huella y tipo por contenido: JPG, PNG, WebP o PDF de hasta 10 MB) al registrar el abono.
+             */
+            proofUploadId?: string;
             notes?: string;
         };
         FrozenExchangeRateDto: {
@@ -13465,6 +13580,8 @@ export interface components {
              * @example 103
              */
             collectedAmount: number;
+            /** @description DX-389: el abono tiene comprobante del cobro. La clave del almacén no sale nunca: se ve con `GET /payments/:id/proof/url`. */
+            hasProof: boolean;
         };
         SplitPaymentLineDto: {
             /** @example 50 */
@@ -13480,6 +13597,11 @@ export interface components {
             reference?: string;
             /** @description Motivo para confirmar la referencia repetida de esta línea. */
             duplicateReferenceReason?: string;
+            /**
+             * Format: uuid
+             * @description DX-389: el `uploadId` del comprobante de ESTA línea (cada línea, el suyo). Mismas reglas que en el abono suelto.
+             */
+            proofUploadId?: string;
         };
         RecordSplitPaymentDto: {
             /**
@@ -14538,6 +14660,8 @@ export interface components {
              * @example PRI-000123
              */
             receiptNumber: string | null;
+            /** @description DX-389: el abono tiene comprobante del cobro (la captura del pago móvil o de la transferencia). Se ve con `GET /payments/:id/proof/url` (solo ADMIN y recepción). */
+            hasProof: boolean;
             location: components["schemas"]["AccountStatementLocationRefDto"];
             /**
              * Format: uuid
@@ -16808,6 +16932,12 @@ export interface components {
             workingWeekdays: number[];
             /** @description Festivos vivos: los recurrentes por (mes, día), luego los puntuales por fecha */
             holidays: components["schemas"]["LocationHolidayDto"][];
+        };
+        HolidayOnDayDto: {
+            /** @example 2026-12-25 */
+            date: string;
+            /** @description Nombre del festivo de la sede ese día; null si no lo es. */
+            name: string | null;
         };
         SetWorkingWeekdaysDto: {
             /**
@@ -28691,6 +28821,87 @@ export interface operations {
             };
         };
     };
+    PaymentsController_proofUploadUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePaymentProofUploadDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentProofUploadDto"];
+                };
+            };
+            /** @description Tamaño (más de 10 MB), huella o tipo declarado no válidos, o archivo vacío */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN y recepción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentsController_proofUrl: {
+        parameters: {
+            query?: {
+                disposition?: "inline" | "attachment";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentProofUrlDto"];
+                };
+            };
+            /** @description Solo ADMIN y recepción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Abono no encontrado en esta clínica o sin comprobante */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PaymentsController_listCash: {
         parameters: {
             query: {
@@ -32494,6 +32705,43 @@ export interface operations {
             };
             /** @description Solo un administrador de la clínica puede ver o cambiar el calendario de la sede. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede inexistente, de otra clínica o retirada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LocationCalendarController_holidayOnDay: {
+        parameters: {
+            query: {
+                date: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolidayOnDayDto"];
+                };
+            };
+            /** @description El identificador de la sede no es válido. */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

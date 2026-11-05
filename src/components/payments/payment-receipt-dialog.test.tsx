@@ -6,11 +6,16 @@ import { getPaymentReceipt, sendPaymentReceipt } from '@/lib/payments/payment-re
 import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
 import { ApiError } from '@/lib/api/client';
 import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
+import { getPaymentProofUrl } from '@/lib/payments/payment-proof-api';
 
 jest.mock('../../lib/payments/payment-receipts-api', () => ({
   ...jest.requireActual('../../lib/payments/payment-receipts-api'),
   getPaymentReceipt: jest.fn(),
   sendPaymentReceipt: jest.fn(),
+}));
+jest.mock('../../lib/payments/payment-proof-api', () => ({
+  ...jest.requireActual('../../lib/payments/payment-proof-api'),
+  getPaymentProofUrl: jest.fn(),
 }));
 jest.mock('sonner', () => ({
   toast: { success: jest.fn(), error: jest.fn() },
@@ -18,10 +23,12 @@ jest.mock('sonner', () => ({
 
 const mockedGet = getPaymentReceipt as jest.MockedFunction<typeof getPaymentReceipt>;
 const mockedSend = sendPaymentReceipt as jest.MockedFunction<typeof sendPaymentReceipt>;
+const mockedProofUrl = getPaymentProofUrl as jest.MockedFunction<typeof getPaymentProofUrl>;
 
 beforeEach(() => {
   mockedGet.mockReset();
   mockedSend.mockReset();
+  mockedProofUrl.mockReset();
   (toast.success as jest.Mock).mockReset();
   (toast.error as jest.Mock).mockReset();
 });
@@ -145,4 +152,31 @@ it('DX-414: el pie del recibo (Cerrar, Enviar, imprimir) mide 44 px a 390 px', a
   expect(footer.className).toContain('max-sm:[&>*]:min-h-11');
   // Cerrar, Enviar y las dos impresiones cuelgan del mismo pie.
   expect(within(footer).getAllByRole('button').length + within(footer).getAllByRole('link').length).toBe(4);
+});
+
+// DX-389: el recibo de un abono con comprobante ofrece «Ver comprobante».
+describe('comprobante del cobro (DX-389)', () => {
+  it('con comprobante, el botón abre el visor con la URL firmada', async () => {
+    mockedGet.mockResolvedValue(paymentReceiptFixture());
+    mockedProofUrl.mockResolvedValue({
+      url: 'https://files.test/p.png?sig=1',
+      expiresAt: '2026-11-05T00:05:00.000Z',
+      disposition: 'inline',
+      mime: 'image/png',
+      name: 'captura.png',
+    });
+    render(<PaymentReceiptDialog token="tok" paymentId="pay-1" hasProof onOpenChange={() => undefined} />);
+    await screen.findByTestId('receipt-document');
+    await userEvent.click(screen.getByRole('button', { name: 'Ver comprobante' }));
+    expect(await screen.findByRole('img', { name: 'captura.png' })).toHaveAttribute('src', 'https://files.test/p.png?sig=1');
+    expect(mockedProofUrl).toHaveBeenCalledTimes(1);
+    expect(mockedProofUrl).toHaveBeenCalledWith('tok', 'pay-1', 'inline');
+  });
+
+  it('sin comprobante no hay botón', async () => {
+    mockedGet.mockResolvedValue(paymentReceiptFixture());
+    render(<PaymentReceiptDialog token="tok" paymentId="pay-1" onOpenChange={() => undefined} />);
+    await screen.findByTestId('receipt-document');
+    expect(screen.queryByRole('button', { name: 'Ver comprobante' })).not.toBeInTheDocument();
+  });
 });

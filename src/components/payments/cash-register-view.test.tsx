@@ -80,6 +80,7 @@ function clinicMethod(overrides: Partial<ClinicPaymentMethod>): ClinicPaymentMet
     kind: 'OTHER',
     active: true,
     requiresReference: false,
+    proofPolicy: 'NONE' as const,
     legacyMethod: null,
     adjustments: [],
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -122,6 +123,7 @@ const anaCash: CashPayment = {
   receiptNumber: null,
   adjustments: [],
   collectedAmount: 150000.5,
+  hasProof: false,
 };
 const betoCard: CashPayment = {
   ...anaCash,
@@ -234,6 +236,7 @@ it('arqueo ciego (SEC-043): la fila de una caja abierta sale sin importe, con su
     amount: null,
     currency: null,
     collectedAmount: null,
+    hasProof: false,
     notes: null,
     adjustments: [],
     amountHidden: true,
@@ -293,6 +296,7 @@ it('DX-516: sin ajustes no hay bloque nuevo; con ellos, lo cobrado por fila y en
     ...betoCard,
     amount: 100,
     collectedAmount: 103,
+    hasProof: false,
     adjustments: [
       {
         type: 'TAX' as const,
@@ -773,6 +777,7 @@ describe('anular desde la caja (DX-057)', () => {
       amount: null,
       currency: null,
       collectedAmount: null,
+      hasProof: false,
       notes: null,
       adjustments: [],
       amountHidden: true,
@@ -1110,6 +1115,7 @@ describe('cada abono con el formato de su sede, también en «Todas las sedes» 
     amount: 1234.5,
     currency: 'EUR',
     collectedAmount: 1234.5,
+    hasProof: false,
     paidOn: '2026-10-20',
     registeredOn: '2026-10-12',
     registeredToday: false,
@@ -1122,6 +1128,7 @@ describe('cada abono con el formato de su sede, también en «Todas las sedes» 
     amount: 1234.5,
     currency: 'USD',
     collectedAmount: 1234.5,
+    hasProof: false,
     paidOn: '2026-10-20',
     registeredOn: '2026-10-12',
     registeredToday: false,
@@ -1134,6 +1141,7 @@ describe('cada abono con el formato de su sede, también en «Todas las sedes» 
     amount: 1234.5,
     currency: 'VES',
     collectedAmount: 1234.5,
+    hasProof: false,
     paidOn: '2026-10-20',
     registeredOn: '2026-10-12',
     registeredToday: false,
@@ -1200,6 +1208,7 @@ describe('anular un abono de otra sede en «Todas las sedes» (DX-354b, E1)', ()
     amount: 120,
     currency: 'EUR',
     collectedAmount: 120,
+    hasProof: false,
     paidOn: '2026-10-20',
     registeredOn: '2026-10-20',
     location: { id: 'sede-berlin', name: 'Berlín' },
@@ -1237,4 +1246,16 @@ describe('anular un abono de otra sede en «Todas las sedes» (DX-354b, E1)', ()
     const dialog = await screen.findByRole('dialog', { name: /anular este abono/i });
     expect(dialog.textContent).not.toMatch(/120/);
   });
+});
+
+it('DX-389: «Ver comprobante» solo en el abono que lo tiene', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue(response({ items: [{ ...anaCash, hasProof: true }, betoCard] }));
+  render(<CashRegisterView token="tok" />);
+  const table = await screen.findByRole('table', { name: /abonos/i });
+  expect(await rowMenuItems(user, within(table).getByRole('row', { name: /ana gómez/i }))).toContain('Ver comprobante');
+  await user.keyboard('{Escape}');
+  expect(await rowMenuItems(user, within(table).getByRole('row', { name: /beto ruiz/i }))).not.toContain(
+    'Ver comprobante',
+  );
 });

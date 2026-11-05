@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import {
   SPLIT_MAX_LINES,
@@ -14,7 +14,12 @@ import {
 import { ApiError } from '@/lib/api/api-error';
 import { Button } from '@/components/ui/button';
 import type { AccountStatementOpeningBalance } from '@/lib/account-statement/account-statement-api';
+import { PAYMENT_PROOF_REJECTED } from '@/lib/payments/payment-proof-api';
 import { recordPaymentErrorMessage } from '@/lib/payments/payment-errors';
+import { PAYMENT_PROOF_RULES, requestPaymentProofUpload } from '@/lib/payments/payment-proof-api';
+import type { SingleFileUploadRequest } from '@/lib/files/upload-single-file';
+import { useSingleFileUpload } from '@/components/shared/single-file-field';
+import { PaymentProofField, paymentProofFieldCopy } from './payment-proof-field';
 import { statementCopy } from '@/lib/account-statement/presentation';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
@@ -85,6 +90,13 @@ export const recordPaymentCopy = {
   recordedSplit: (total: string, count: number, date: string, plan: string, receipt: string | null) =>
     `Cobro registrado: ${total} en ${count} formas de pago · ${date} · ${plan}${receipt ? ` · recibo ${receipt}` : ''}.`,
   split: splitPaymentCopy,
+  // DX-389: comprobante del cobro.
+  proofRejected:
+    'El comprobante no es una imagen JPG, PNG o WebP ni un PDF válido. Elige otro archivo.',
+  proofFailed: 'El comprobante no se subió. Reintenta la subida o quítalo.',
+  // Con un medio que exige comprobante, el cobro dividido no lo admite (solo el abono suelto).
+  splitProofRequired:
+    'Este medio exige el comprobante del cobro: regístralo como un abono suelto o elige otro medio.',
 };
 const copy = recordPaymentCopy;
 
@@ -182,6 +194,13 @@ export function RecordPaymentModal({
   // DX-390: las formas de pago 2.ª a 5.ª del cobro dividido, con los mismos
   // medios que la primera.
   const split = useSplitLines(methodFields.methods);
+  // DX-389: el comprobante del cobro (subida directa al almacén privado).
+  const requestProofTicket = useCallback(
+    (request: SingleFileUploadRequest) => requestPaymentProofUpload(token, request),
+    [token],
+  );
+  const proofUpload = useSingleFileUpload(PAYMENT_PROOF_RULES, requestProofTicket);
+  const [proofError, setProofError] = useState<string | null>(null);
   const [confirmCredit, setConfirmCredit] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   // Tras un 409 de «lo pendiente cambió» se vuelve a leer el saldo del plan.
@@ -236,6 +255,8 @@ export function RecordPaymentModal({
       setDateError(null);
       methodFields.reset();
       split.reset();
+      proofUpload.clear();
+      setProofError(null);
       setConfirmCredit(false);
       setConfirmError(null);
     }
@@ -259,6 +280,14 @@ export function RecordPaymentModal({
   // DX-390: con varias formas de pago (solo a un plan), el total y lo
   // pendiente en la moneda del plan.
   const isSplit = plan !== null && split.lines.length > 0;
+  // DX-389: el comprobante aparece según el medio (obligatorio u optativo) y solo
+  // en el abono suelto; el cobro dividido no lo admite por línea (ver `submitSplit`).
+  const proofPolicy = methodFields.selected?.proofPolicy ?? 'NONE';
+  const proofShown = !isSplit && proofPolicy !== 'NONE';
+  const clearProof = proofUpload.clear;
+  useEffect(() => {
+    if (!proofShown) clearProof();
+  }, [proofShown, clearProof]);
   const lineCurrency = (c: string) => c || plan?.currency || '';
   const splitOtherCurrency =
     isSplit && plan !== null && split.lines.some((l) => lineCurrency(l.currency) !== plan.currency);
@@ -344,6 +373,13 @@ export function RecordPaymentModal({
     if (!methodFields.validate({ requireMethod: true })) return;
     for (const line of split.lines) {
       if (!split.fields(line).validate({ requireMethod: true })) return;
+    }
+    // DX-389: el comprobante obligatorio solo se adjunta en el abono suelto.
+    for (const fields of [methodFields, ...split.lines.map((l) => split.fields(l))]) {
+      if (fields.selected?.proofPolicy === 'REQUIRED') {
+        fields.markMethod(copy.splitProofRequired);
+        return;
+      }
     }
     // La misma regla que la API (400): dos líneas con el mismo medio y la
     // misma referencia. Se marca en la segunda, antes de enviar.
@@ -480,13 +516,33 @@ export function RecordPaymentModal({
     // DX-395: la referencia o el motivo que faltan se marcan en su campo,
     // que recibe el foco.
     if (!methodFields.validate()) return;
+    // DX-389: el comprobante, según lo que pide el medio. Una subida a medias o
+    // fallida no se descarta en silencio: el error va junto al campo.
+    if (proofShown) {
+      const missing =
+        proofUpload.busy
+          ? paymentProofFieldCopy.waiting
+          : proofUpload.state.status === 'error' && proofUpload.state.file
+            ? copy.proofFailed
+            : proofPolicy === 'REQUIRED' && !proofUpload.uploadId
+              ? paymentProofFieldCopy.missing
+              : null;
+      if (missing) {
+        setProofError(missing);
+        document.getElementById('rp-proof-group')?.querySelector<HTMLElement>('button')?.focus();
+        return;
+      }
+    }
+    setProofError(null);
     setSubmitting(true);
     try {
+      const proofUploadId = proofShown ? proofUpload.uploadId : undefined;
       const body = {
         amount,
         currency,
         paidAt,
         ...methodFields.body(),
+        ...(proofUploadId ? { proofUploadId } : {}),
       };
       const key = keyFor([
         opening ? `ob:${opening.id}` : (plan as NonNullable<typeof plan>).id,
@@ -495,6 +551,7 @@ export function RecordPaymentModal({
         paidAt,
         body.paymentMethodId ?? null,
         body.reference ?? null,
+        proofUploadId ?? null,
       ]);
       const saved = opening
         ? await recordOpeningBalancePayment(token, opening.id, body, key)
@@ -521,6 +578,12 @@ export function RecordPaymentModal({
       // La clave NO cambia: el reintento de este mismo abono la reusa y el
       // servidor lo deduplica en vez de cobrar dos veces.
       if (methodFields.catchDuplicate(err)) return;
+      // DX-389: la API borró un comprobante que no es lo que dice ser: se elige otro.
+      if (err instanceof ApiError && err.code === PAYMENT_PROOF_REJECTED) {
+        proofUpload.clear();
+        setProofError(copy.proofRejected);
+        return;
+      }
       setError(recordPaymentErrorMessage(err));
     } finally {
       setSubmitting(false);
@@ -540,7 +603,7 @@ export function RecordPaymentModal({
           : copy.submit
       }
       submitting={submitting}
-      submitDisabled={plan === null && opening === null}
+      submitDisabled={(plan === null && opening === null) || proofUpload.busy}
       error={error}
       size="lg"
       touchTargets
@@ -679,6 +742,19 @@ export function RecordPaymentModal({
                   </FormField>
                 </div>
                 <PaymentReferenceFields fields={methodFields} idPrefix="rp" disabled={submitting} />
+                {/* DX-389: el comprobante del cobro, si el medio lo admite o lo exige. */}
+                {proofShown ? (
+                  <PaymentProofField
+                    id="rp-proof"
+                    policy={proofPolicy}
+                    upload={proofUpload}
+                    error={
+                      proofUpload.state.status === 'idle' || proofUpload.state.status === 'error' ? proofError : null
+                    }
+                    disabled={submitting}
+                    fmt={fmt}
+                  />
+                ) : null}
                 {/* DX-516: los ajustes del medio sobre este importe y lo que se cobra. */}
                 <PaymentAdjustmentsPreview
                   id="rp-adjustments"

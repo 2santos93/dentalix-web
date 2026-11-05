@@ -8,6 +8,17 @@ export type PaymentMethodKind = ClinicPaymentMethod['kind'];
 export type CreatePaymentMethodInput = components['schemas']['CreatePaymentMethodDto'];
 export type UpdatePaymentMethodInput = components['schemas']['UpdatePaymentMethodDto'];
 
+/** DX-389: «Pide comprobante» del medio: no lo admite, lo admite o lo exige. */
+export type PaymentProofPolicy = ClinicPaymentMethod['proofPolicy'];
+
+export const PAYMENT_PROOF_POLICY_OPTIONS: PaymentProofPolicy[] = ['NONE', 'OPTIONAL', 'REQUIRED'];
+
+export const PAYMENT_PROOF_POLICY_LABELS: Record<PaymentProofPolicy, string> = {
+  NONE: 'No',
+  OPTIONAL: 'Opcional',
+  REQUIRED: 'Obligatorio',
+};
+
 /** Código estable del 409 de referencia repetida al registrar un abono. */
 export const PAYMENT_REFERENCE_DUPLICATE = 'PAYMENT_REFERENCE_DUPLICATE';
 
