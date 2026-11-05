@@ -45,7 +45,12 @@ async function seedPatient(
 
 async function openByShortcut(page: Page) {
   await page.goto(`${origin}/dashboard`);
-  await expect(page.getByRole('main')).toBeVisible();
+  // Señal determinista: el botón del encabezado solo se pinta cuando el atajo
+  // ya está registrado (sin esperas fijas).
+  await expect(page.locator('aside').getByRole('button', { name: '¿Quién llama?' })).toHaveAttribute(
+    'aria-keyshortcuts',
+    'Alt+Shift+Q',
+  );
   await page.keyboard.press('Alt+Shift+KeyQ');
   const dialog = page.getByRole('dialog', { name: '¿Quién llama?' });
   await expect(dialog).toBeVisible();

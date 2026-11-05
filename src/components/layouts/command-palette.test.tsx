@@ -83,3 +83,20 @@ describe('CommandPalette con cambios sin guardar', () => {
     draft.unmount();
   });
 });
+
+describe('CommandPalette: «¿Quién llama?» (DX-224)', () => {
+  it('la acción abre «¿Quién llama?» y cierra la paleta (en el raíl no hay botón)', async () => {
+    const user = userEvent.setup();
+    const onOpenCaller = jest.fn();
+    const onOpenChange = jest.fn();
+    render(<CommandPalette open onOpenChange={onOpenChange} token="t" role="RECEPTION" onOpenCaller={onOpenCaller} />);
+    await user.click(screen.getByRole('option', { name: /¿Quién llama\?/ }));
+    expect(onOpenCaller).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('sin el callback no ofrece la acción', () => {
+    render(<CommandPalette open onOpenChange={jest.fn()} token="t" role="ADMIN" />);
+    expect(screen.queryByRole('option', { name: /¿Quién llama\?/ })).not.toBeInTheDocument();
+  });
+});
