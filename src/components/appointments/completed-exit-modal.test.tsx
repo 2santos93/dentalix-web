@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import * as React from 'react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CompletedExitModal } from './completed-exit-modal';
 import { updateAppointment } from '@/lib/appointments/appointments-api';
@@ -30,6 +31,27 @@ const reason = () => screen.getByLabelText('Motivo');
 const submit = () => screen.getByRole('button', { name: 'Sacar de «Completada»' });
 
 describe('CompletedExitModal (DX-273)', () => {
+  it('DX-299: al cerrarse con Esc llama a onCloseAutoFocus y no envía nada', async () => {
+    const onCloseAutoFocus = jest.fn();
+    function Host() {
+      const [open, setOpen] = React.useState(true);
+      return (
+        <CompletedExitModal
+          open={open}
+          onOpenChange={setOpen}
+          token="tok"
+          appointmentId="a-1"
+          to="CANCELLED"
+          onDone={jest.fn()}
+          onCloseAutoFocus={onCloseAutoFocus}
+        />
+      );
+    }
+    render(<Host />);
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(onCloseAutoFocus).toHaveBeenCalled());
+  });
+
   beforeEach(() => mockedUpdate.mockReset());
 
   it('explica qué pasa con el intervalo y pide el destino', () => {

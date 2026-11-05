@@ -31,6 +31,8 @@ export const completedExitCopy = {
 
 
 interface CompletedExitModalProps {
+  /** DX-299: a dónde vuelve el foco al cerrarse. */
+  onCloseAutoFocus?: (event: Event) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   token: string;
@@ -51,6 +53,7 @@ export function CompletedExitModal({
   appointmentId,
   to,
   onDone,
+  onCloseAutoFocus,
 }: CompletedExitModalProps) {
   const id = useId();
   const hintId = `${id}-hint`;
@@ -90,6 +93,7 @@ export function CompletedExitModal({
       submitLabel={completedExitCopy.submit}
       submitting={submitting}
       error={error}
+      onCloseAutoFocus={onCloseAutoFocus}
     >
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={id}>{completedExitCopy.reason}</Label>
