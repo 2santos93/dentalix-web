@@ -119,6 +119,7 @@ const anaCash: CashPayment = {
   openingBalance: null,
   splitId: null,
   splitLines: null,
+  receiptNumber: null,
   adjustments: [],
   collectedAmount: 150000.5,
 };
@@ -693,6 +694,23 @@ describe('anular desde la caja (DX-057)', () => {
     expect(await rowMenuItems(user, ana)).toEqual(['Recibo', 'Factura externa', 'Anular']);
     const beto = within(table).getByRole('row', { name: /beto ruiz/i });
     expect(await rowMenuItems(user, beto)).toEqual(['Recibo', 'Factura externa']);
+  });
+
+  it('DX-414: las líneas de un cobro dividido llevan el distintivo con el recibo único', async () => {
+    mockedList.mockResolvedValue(
+      response({
+        items: [
+          { ...anaCash, id: 'pay-1', splitId: 'pay-1', splitLines: 3, receiptNumber: 'PRI-000007' },
+          { ...anaCash, id: 'pay-x', splitId: null, splitLines: null, receiptNumber: 'PRI-000008' },
+          { ...anaCash, id: 'pay-2', splitId: 'pay-1', splitLines: 3, receiptNumber: 'PRI-000007' },
+        ],
+        total: 3,
+      }),
+    );
+    render(<CashRegisterView token="tok" />);
+    const table = await screen.findByRole('table', { name: /abonos/i });
+    expect(within(table).getAllByText('Cobro dividido · 3 formas · PRI-000007')).toHaveLength(2);
+    expect(within(table).queryByText(/PRI-000008/)).not.toBeInTheDocument();
   });
 
   it('revisión DX-390: una forma de pago de un cobro dividido avisa que se anula el cobro entero', async () => {

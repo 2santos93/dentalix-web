@@ -105,3 +105,12 @@ it('DX-354: muestra el importe con el código ISO y la fecha de la sede', () => 
   setup({ subject });
   expect(screen.getByText(/USD.1,234\.50 · 07\/15\/2027 · Ana/)).toBeInTheDocument();
 });
+
+describe('VoidPaymentModal en móvil (DX-414)', () => {
+  it('los botones del modal de anular miden 44 px a 390 px (touchTargets)', () => {
+    setup();
+    expect(screen.getByRole('dialog', { name: /anular este abono/i }).className).toContain(
+      'max-sm:[&_button]:min-h-11',
+    );
+  });
+});

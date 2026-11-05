@@ -183,7 +183,7 @@ function ReceiptBody({
       <div className="overflow-hidden rounded-lg border border-border">
         <PaymentReceiptDocument receipt={receipt} />
       </div>
-      <DialogFooter className="print:hidden">
+      <DialogFooter className="print:hidden max-sm:[&>*]:min-h-11">
         <Button type="button" variant="ghost" onClick={onClose}>
           {copy.close}
         </Button>
