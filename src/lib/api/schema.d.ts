@@ -892,7 +892,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Responsables del paciente y de quién es responsable (DX-203) */
+        /**
+         * Responsables del paciente y de quién es responsable (DX-203)
+         * @description SEC-044: DENTIST y ASSISTANT reciben `docNumber` del responsable en null (contacto y paciente responsable); ADMIN y RECEPTION, completo. Cada lectura deja un evento de auditoría VIEW (motivo RESPONSIBLE_PARTIES) en la ficha del paciente.
+         */
         get: operations["PatientResponsiblePartiesController_list"];
         put?: never;
         /**

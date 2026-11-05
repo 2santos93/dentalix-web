@@ -573,4 +573,38 @@ describe('PatientResponsiblePartiesSection (DX-203)', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     await waitFor(() => expect(remove).toHaveFocus());
   });
+
+  describe('SEC-044: el documento no se ofrece al personal clínico', () => {
+    const jwt = (role: string) => `h.${btoa(JSON.stringify({ sub: 'u', tenantId: 't', role }))}.s`;
+    const contact: ResponsibleParty = {
+      ...motherParty,
+      id: 'c1',
+      kind: 'CONTACT',
+      responsiblePatient: null,
+      fullName: 'Luis Ortiz',
+      docNumber: null,
+      isPayer: false,
+    };
+
+    it.each(['DENTIST', 'ASSISTANT'])('%s: sin campo de número, aviso de solo lectura y no lo envía', async (role) => {
+      mockedGet.mockResolvedValue(data({ parties: [contact] }));
+      mockedUpdate.mockResolvedValue(contact);
+      const user = setupUser();
+      render(<PatientResponsiblePartiesSection token={jwt(role)} patientId="son" />);
+      await partyAction(user, 'Luis Ortiz', 'Editar');
+      expect(screen.queryByLabelText('Número de documento')).not.toBeInTheDocument();
+      expect(screen.getByText('El documento lo gestionan administración y recepción.')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Guardar' }));
+      await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+      expect(mockedUpdate.mock.calls[0][3]).not.toHaveProperty('docNumber');
+    });
+
+    it('ADMIN conserva el campo editable', async () => {
+      mockedGet.mockResolvedValue(data({ parties: [{ ...contact, docNumber: '79345999' }] }));
+      const user = setupUser();
+      render(<PatientResponsiblePartiesSection token={jwt('ADMIN')} patientId="son" />);
+      await partyAction(user, 'Luis Ortiz', 'Editar');
+      expect(screen.getByLabelText('Número de documento')).toHaveValue('79345999');
+    });
+  });
 });
