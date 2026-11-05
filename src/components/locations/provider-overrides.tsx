@@ -24,6 +24,11 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { TimeField } from '@/components/ui/date-field';
 import { FormField } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
+import {
+  AffectedAppointmentsDialog,
+  affectedFromError,
+  type AffectedAppointments,
+} from '@/components/locations/affected-appointments-dialog';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 
 const copy = {
@@ -87,6 +92,7 @@ export function ProviderOverrides({
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [affected, setAffected] = useState<AffectedAppointments | null>(null);
 
   const [removing, setRemoving] = useState<ProviderOverride | null>(null);
   const [removePending, setRemovePending] = useState(false);
@@ -104,6 +110,10 @@ export function ProviderOverrides({
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    await saveOverride(false);
+  }
+
+  async function saveOverride(confirmAffected: boolean) {
     if (!date) {
       setError(copy.missingDate);
       return;
@@ -121,7 +131,9 @@ export function ProviderOverrides({
         date,
         ranges: checked.ranges,
         note: note.trim() === '' ? null : note.trim(),
+        ...(confirmAffected ? { confirmAffected } : {}),
       });
+      setAffected(null);
       const { replaced, ...override } = saved;
       onChange(
         [...overrides.filter((o) => o.id !== override.id && !(o.locationId === override.locationId && o.date === override.date)), override].sort(
@@ -131,7 +143,12 @@ export function ProviderOverrides({
       toast.success(replaced ? copy.replaced : copy.saved);
       setOpen(false);
     } catch (err) {
-      setError(apiErrorMessage(err, copy.saveError));
+      const outside = affectedFromError(err);
+      if (outside) setAffected(outside);
+      else {
+        setAffected(null);
+        setError(apiErrorMessage(err, copy.saveError));
+      }
     } finally {
       setSaving(false);
     }
@@ -210,6 +227,14 @@ export function ProviderOverrides({
           })}
         </ul>
       )}
+
+      <AffectedAppointmentsDialog
+        token={token}
+        affected={affected}
+        confirming={saving}
+        onConfirm={() => void saveOverride(true)}
+        onCancel={() => setAffected(null)}
+      />
 
       <FormModal
         open={open}

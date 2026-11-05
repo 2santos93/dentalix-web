@@ -3,6 +3,11 @@ import * as React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import {
+  AffectedAppointmentsDialog,
+  affectedFromError,
+  type AffectedAppointments,
+} from '@/components/locations/affected-appointments-dialog';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import {
   getProviderSchedule,
@@ -189,6 +194,7 @@ function ProviderScheduleDetail({
   const [reloadKey, setReloadKey] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [affected, setAffected] = useState<AffectedAppointments | null>(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -222,6 +228,10 @@ function ProviderScheduleDetail({
 
   async function save(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    await saveSchedule(false);
+  }
+
+  async function saveSchedule(confirmAffected: boolean) {
     if (!draft) return;
     setSaved(false);
     const result = buildSchedulePayload(draft, locationNames);
@@ -232,13 +242,22 @@ function ProviderScheduleDetail({
     setSaveError(null);
     setSaving(true);
     try {
-      const updated = await replaceProviderSchedule(token, providerId, result.payload);
+      const updated = await replaceProviderSchedule(token, providerId, {
+        ...result.payload,
+        ...(confirmAffected ? { confirmAffected } : {}),
+      });
+      setAffected(null);
       setDraft(toScheduleDraft(updated, locationIds));
       setConfigured(updated.configured);
       setSaved(true);
       toast.success(copy.saved);
     } catch (err) {
-      setSaveError(apiErrorMessage(err, copy.saveError));
+      const outside = affectedFromError(err);
+      if (outside) setAffected(outside);
+      else {
+        setAffected(null);
+        setSaveError(apiErrorMessage(err, copy.saveError));
+      }
     } finally {
       setSaving(false);
     }
@@ -281,6 +300,14 @@ function ProviderScheduleDetail({
           </Button>
         ) : null}
       </form>
+
+      <AffectedAppointmentsDialog
+        token={token}
+        affected={affected}
+        confirming={saving}
+        onConfirm={() => void saveSchedule(true)}
+        onCancel={() => setAffected(null)}
+      />
 
       <ProviderOverrides
         token={token}
