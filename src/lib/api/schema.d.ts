@@ -13864,7 +13864,7 @@ export interface components {
              */
             allocated: number;
             /**
-             * @description Cobrado (con base) que aún no está imputado a ningún ítem
+             * @description Cobrado (con base) sin imputar a ningún ítem, NETO de lo devuelto o traspasado del saldo a favor que se atribuye a los abonos (DX-399-ter, también en un plan cancelado o rechazado): la suma de `onAccount` de `GET /payments/:id/allocations` de los abonos del plan y, si el plan se cobra, lo que da el informe «Cobrado sin imputar»
              * @example 30
              */
             unallocated: number;
@@ -14234,7 +14234,7 @@ export interface components {
             /** @example 20 */
             unallocated: number | null;
             /**
-             * @description De lo sin imputar a ítems, lo que el plan ya devolvió o traspasó de su saldo a favor (DX-253) y se atribuye a este abono: las salidas solo restan de abonos registrados antes que ellas, empezando por el más reciente. 0 si no hay
+             * @description De lo sin imputar a ítems, lo que el plan ya devolvió o traspasó de su saldo a favor (DX-253) y se atribuye a este abono. Cada salida gasta primero lo que el plan recibió por traspaso (DX-399-ter, llegara antes o después) y solo el resto resta de abonos registrados antes que ella, empezando por el más reciente. 0 si no hay
              * @example 20
              */
             creditOut: number;
@@ -14318,7 +14318,7 @@ export interface components {
             /** @example 20 */
             unallocated: number | null;
             /**
-             * @description De lo sin imputar a ítems, lo que el plan ya devolvió o traspasó de su saldo a favor (DX-253) y se atribuye a este abono: las salidas solo restan de abonos registrados antes que ellas, empezando por el más reciente. 0 si no hay
+             * @description De lo sin imputar a ítems, lo que el plan ya devolvió o traspasó de su saldo a favor (DX-253) y se atribuye a este abono. Cada salida gasta primero lo que el plan recibió por traspaso (DX-399-ter, llegara antes o después) y solo el resto resta de abonos registrados antes que ella, empezando por el más reciente. 0 si no hay
              * @example 20
              */
             creditOut: number;
