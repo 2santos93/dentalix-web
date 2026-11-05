@@ -33,6 +33,7 @@ function documentFixture(overrides: Partial<PostOpDeliveryDocument> = {}): PostO
     sentToResponsible: false,
     firstOpenedAt: null,
     linkExpiresAt: null,
+    emailStatus: null,
     renderedText: 'Hola Ana:\n\nMuerde la gasa 30 minutos.\nLlama al 601 555 0000.',
     clinic: { name: 'Clínica Sonrisas', logoUrl: 'https://cdn.example.com/logo.png', primaryColor: '#0f766e' },
     locationName: 'Sede Norte',

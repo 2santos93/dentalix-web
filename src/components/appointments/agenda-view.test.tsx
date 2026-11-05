@@ -1048,8 +1048,9 @@ describe('AgendaView', () => {
   // DX-222: «Indicaciones» en el detalle de la cita, para cualquier rol de la clínica.
   it('el detalle de la cita monta el panel «Indicaciones» de esa cita', async () => {
     const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'RECEPTION' }))}.s`;
-    const future = new Date(Date.now() + 3 * 24 * 3600_000);
-    const day = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-${String(future.getDate()).padStart(2, '0')}`;
+    // DX-250: solo se ofrecen en una cita de hoy o de un día pasado.
+    const past = new Date(Date.now() - 3 * 24 * 3600_000);
+    const day = `${past.getFullYear()}-${String(past.getMonth() + 1).padStart(2, '0')}-${String(past.getDate()).padStart(2, '0')}`;
     const start = new Date(`${day}T09:00:00`).toISOString();
     const end = new Date(`${day}T09:30:00`).toISOString();
     mockedListStaff.mockResolvedValue(staff);
@@ -1075,6 +1076,35 @@ describe('AgendaView', () => {
     );
     expect(duplicateKeys).toEqual([]);
     consoleError.mockRestore();
+  });
+
+  // DX-250: ni se monta el panel ni se pide su lista en una cita que no se atendió o aún no llega.
+  it.each([
+    ['CANCELLED', -3],
+    ['NO_SHOW', -3],
+    ['SCHEDULED', 3],
+  ] as const)('una cita %s (%i días): el detalle no monta «Indicaciones» ni pide GET …/post-op-instructions', async (status, offset) => {
+    const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'RECEPTION' }))}.s`;
+    const when = new Date(Date.now() + offset * 24 * 3600_000);
+    const day = `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, '0')}-${String(when.getDate()).padStart(2, '0')}`;
+    const start = new Date(`${day}T09:00:00`).toISOString();
+    const end = new Date(`${day}T09:30:00`).toISOString();
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockResolvedValue([appointment({ id: 'apt-x', start, end, status })]);
+    (getAppointmentPostOp as jest.Mock).mockClear();
+    const user = userEvent.setup();
+
+    await renderAgenda(<AgendaView token={receptionToken} />);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await goToDate(user, day);
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
+    await user.click(detail);
+
+    // El resto del detalle sí está (recordatorios), el panel no.
+    expect(await screen.findByRole('heading', { name: 'Recordatorios por email' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Indicaciones' })).not.toBeInTheDocument();
+    expect(getAppointmentPostOp).not.toHaveBeenCalled();
   });
 
   // DX-121: vista Día en columnas por profesional.

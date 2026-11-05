@@ -5,6 +5,7 @@ import { mkdir, readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { disableBusinessHours } from './support/business-hours';
+import { axeInBothThemes } from './support/axe';
 import { expectNoHorizontalScroll } from './support/layout';
 import { MAIL_DIR } from './support/mail';
 import { atSede, sedeDate, sedeDayFromToday } from './support/clock';
@@ -18,7 +19,7 @@ import { E2E_BROWSER_LOCALE } from './support/regional';
  *   1. Ajustes › Sedes: el ADMIN pone el teléfono de la sede.
  *   2. Ajustes › Indicaciones: estado vacío; crea «POI-EXO» vinculada al tipo
  *      de cita «Cirugía oral».
- *   3. Agenda → detalle de una cita de hoy (mañana cerca de medianoche) de ese tipo: el panel
+ *   3. Agenda → detalle de una cita de hoy de ese tipo: el panel
  *      «Indicaciones» propone POI-EXO. «Imprimir» abre la vista imprimible
  *      (con `window.print` interceptado), «Enviar por email» confirma el
  *      destinatario y «Abrir WhatsApp» abre `wa.me` con un texto SIN el
@@ -60,18 +61,20 @@ const hhmm = (d: Date) =>
   }).format(d);
 
 /**
- * Cita de 30 min HOY en la sede, en la primera media hora en punto que empiece
- * dentro de al menos 15 min. Cerca de medianoche ya no cabe hoy: entonces va
- * mañana a las 10:00 (la entrega de indicaciones no depende de la fecha).
+ * Cita HOY en la sede, de 30 min en la primera media hora en punto que empiece
+ * dentro de al menos 15 min. DX-250: las indicaciones no se ofrecen en una cita
+ * de un día aún por llegar, así que cerca de medianoche no vale mañana: la cita
+ * empieza dentro de 2 min y se acorta para acabar antes de la medianoche de la
+ * sede (solo falla en los últimos minutos del día).
  */
 function appointmentSlot(): { start: Date; end: Date; day: string; label: string } {
+  const day = sedeDate(new Date());
   let start = new Date(Math.ceil((Date.now() + 15 * 60_000) / HALF_HOUR) * HALF_HOUR);
-  let day = sedeDate(new Date());
-  if (sedeDate(new Date(start.getTime() + HALF_HOUR - 1)) !== day) {
-    day = sedeDayFromToday(1);
-    start = atSede(day, '10:00');
+  let end = new Date(start.getTime() + HALF_HOUR);
+  if (sedeDate(new Date(end.getTime() - 1)) !== day) {
+    start = new Date(Math.ceil((Date.now() + 2 * 60_000) / 60_000) * 60_000);
+    end = new Date(Math.min(start.getTime() + HALF_HOUR, atSede(sedeDayFromToday(1), '00:00').getTime() - 60_000));
   }
-  const end = new Date(start.getTime() + HALF_HOUR);
   return { start, end, day, label: `${hhmm(start)}–${hhmm(end)}` };
 }
 
@@ -219,6 +222,14 @@ for (const viewport of VIEWPORTS) {
     await expect(page.getByText('1 tipo de cita').locator('visible=true').first()).toBeVisible();
     await expectNoHorizontalScroll(page);
     await shoot(page, `settings-lista-${vw}`);
+    // DX-250: axe sin violaciones serias ni críticas en Ajustes › Indicaciones, en claro y oscuro.
+    {
+      const found = await axeInBothThemes(page, page.locator('main'));
+      for (const scheme of ['light', 'dark'] as const) {
+        const blocking = found[scheme].filter((v) => v.impact === 'serious' || v.impact === 'critical');
+        expect(blocking, `axe (${scheme}) en Ajustes › Indicaciones a ${vw} px`).toEqual([]);
+      }
+    }
 
     // --- 3. Paciente y cita de hoy por API; panel en el detalle -----------------
     const patientEmail = `paciente.postop.${tag}@example.com`;
@@ -258,6 +269,18 @@ for (const viewport of VIEWPORTS) {
     await panel.scrollIntoViewIfNeeded();
     await expectNoHorizontalScroll(page);
     await shoot(page, `panel-cita-${vw}`);
+    // DX-250: antes de enviar, el destino enmascarado bajo «Enviar por email».
+    await expect(panel.getByText(/^Se enviará a .+@example\.com\.$/)).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Enviar por email' })).toHaveAccessibleDescription(
+      /Se enviará a .+@example\.com\./,
+    );
+    {
+      const found = await axeInBothThemes(page, panel);
+      for (const scheme of ['light', 'dark'] as const) {
+        const blocking = found[scheme].filter((v) => v.impact === 'serious' || v.impact === 'critical');
+        expect(blocking, `axe (${scheme}) en el panel de la cita a ${vw} px`).toEqual([]);
+      }
+    }
 
     // DX-246: el refetch tras entregar puede fallar sin perder el panel.
     await page.route('**/appointments/*/post-op-instructions', (route) =>
@@ -356,6 +379,14 @@ for (const viewport of VIEWPORTS) {
     await expect(publicPage.locator('body')).not.toContainText(patient.id);
     await expectNoHorizontalScroll(publicPage);
     if (vw === 390) await shootPlain(publicPage, 'publica-390');
+    // DX-250: axe (incluido el contraste del teléfono) en claro y oscuro con la marca de la clínica.
+    {
+      const found = await axeInBothThemes(publicPage, publicPage.locator('main'));
+      for (const scheme of ['light', 'dark'] as const) {
+        const blocking = found[scheme].filter((v) => v.impact === 'serious' || v.impact === 'critical');
+        expect(blocking, `axe (${scheme}) en la página pública a 390 px`).toEqual([]);
+      }
+    }
 
     await publicPage.goto(`${new URL(publicUrl).origin}/indicaciones/${'x'.repeat(43)}`);
     await expect(publicPage.getByText('Enlace no válido')).toBeVisible({ timeout: 15_000 });
@@ -390,7 +421,7 @@ for (const viewport of VIEWPORTS) {
       await expect(deliveries.getByText(new RegExp(`\\b${channel}\\b`)).first()).toBeVisible();
     }
     // La apertura del enlace público quedó registrada en la entrega de WhatsApp.
-    await expect(deliveries.getByText('Abierto')).toHaveCount(1);
+    await expect(deliveries.getByText(/^Abierto el \d{2}\/\d{2}\/\d{4}/)).toHaveCount(1);
     await expect(deliveries.getByText(ownerName).first()).toBeVisible();
     await deliveries.scrollIntoViewIfNeeded();
     await expectNoHorizontalScroll(page);

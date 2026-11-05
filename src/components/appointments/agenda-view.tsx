@@ -69,7 +69,7 @@ import { CancellationFeePanel } from '@/components/appointments/cancellation-fee
 import { AppointmentRemindersPanel } from '@/components/reminders/appointment-reminders-panel';
 import { AppointmentPostOpPanel } from '@/components/postop/appointment-postop-panel';
 import { AnamnesisLinkPanel } from '@/components/anamnesis/anamnesis-link-panel';
-import { canDeliverPostOp } from '@/lib/postop/postop-api';
+import { canDeliverPostOp, canOfferPostOp } from '@/lib/postop/postop-api';
 import { NewEvolutionModal } from '@/components/clinical-notes/new-evolution-modal';
 import { canRegisterEvolution } from '@/lib/clinical-notes/evolution-access';
 import { ScheduleBlockDialog } from '@/components/appointments/schedule-block-dialog';
@@ -1883,8 +1883,11 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 {/* DX-222: indicaciones postoperatorias de la cita (propuesta y entrega).
                     La `key` lleva prefijo: es hermano del panel de confirmación,
                     que ya usa el id de la cita, y dos hermanos con la misma key
-                    se duplican al re-renderizar. */}
-                {canDeliverPostOp(role) ? (
+                    se duplican al re-renderizar.
+                    DX-250: no en una cita cancelada, un no-show ni de un día que
+                    aún no llega (ni se pide su lista). */}
+                {canDeliverPostOp(role) &&
+                canOfferPostOp(liveDetailAppointment, clock.of(liveDetailAppointment.locationId)) ? (
                   <AppointmentPostOpPanel
                     key={`postop-${liveDetailAppointment.id}`}
                     token={token}

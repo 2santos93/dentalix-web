@@ -2,9 +2,13 @@
  * Mockea el `fetch` base (mismo enfoque que consents-api.test.ts) y comprueba
  * rutas, métodos, query y cabeceras que arma cada llamada.
  */
+import { ApiError, NetworkError } from '@/lib/api/api-error';
+import type { SedeClock } from '@/lib/locations/sede-clock';
 import {
   POSTOP_VARIABLES,
   canDeliverPostOp,
+  canOfferPostOp,
+  canRetryDeliver,
   canManagePostOpTemplates,
   createPostOpTemplate,
   deliverPostOp,
@@ -145,5 +149,47 @@ describe('postop-api', () => {
     ]);
     expect(unknownVariables('sin variables')).toEqual([]);
     expect(unknownVariables('{{paciente2}} {{paciente}}')).toEqual(['paciente2']);
+  });
+});
+
+// DX-250
+describe('canOfferPostOp', () => {
+  // Caracas es UTC−4: 21/10 02:30Z sigue siendo el 20/10 en la sede.
+  const caracas = { timeZone: 'America/Caracas' } as SedeClock;
+  const now = new Date('2026-10-20T15:00:00.000Z');
+
+  it.each(['CANCELLED', 'NO_SHOW'] as const)('una cita %s nunca', (status) => {
+    expect(canOfferPostOp({ status, start: '2026-10-20T14:00:00.000Z' }, caracas, now)).toBe(false);
+  });
+
+  it.each(['SCHEDULED', 'CONFIRMED', 'ARRIVED', 'IN_CHAIR', 'READY_FOR_CHECKOUT', 'COMPLETED'] as const)(
+    'una cita %s de hoy o de un día pasado sí',
+    (status) => {
+      expect(canOfferPostOp({ status, start: '2026-10-20T14:00:00.000Z' }, caracas, now)).toBe(true);
+      // Más tarde hoy (en la sede) también.
+      expect(canOfferPostOp({ status, start: '2026-10-21T02:30:00.000Z' }, caracas, now)).toBe(true);
+      expect(canOfferPostOp({ status, start: '2026-10-01T14:00:00.000Z' }, caracas, now)).toBe(true);
+    },
+  );
+
+  it('un día civil posterior en la zona de la sede no, aunque en UTC sea hoy', () => {
+    // 21/10 04:30Z = 21/10 00:30 en Caracas: mañana.
+    expect(canOfferPostOp({ status: 'SCHEDULED', start: '2026-10-21T04:30:00.000Z' }, caracas, now)).toBe(false);
+    expect(canOfferPostOp({ status: 'SCHEDULED', start: '2026-10-25T14:00:00.000Z' }, caracas, now)).toBe(false);
+  });
+
+  it('sin reloj de la sede no se sabe el día: solo descarta por el estado', () => {
+    expect(canOfferPostOp({ status: 'SCHEDULED', start: '2030-01-01T10:00:00.000Z' }, null, now)).toBe(true);
+    expect(canOfferPostOp({ status: 'CANCELLED', start: '2030-01-01T10:00:00.000Z' }, null, now)).toBe(false);
+  });
+});
+
+describe('canRetryDeliver', () => {
+  it('sin red, tiempo agotado o 5xx sí; un 4xx no', () => {
+    expect(canRetryDeliver(new NetworkError(new TypeError('x')))).toBe(true);
+    expect(canRetryDeliver(new DOMException('tarda', 'TimeoutError'))).toBe(true);
+    for (const status of [500, 502, 503, 504]) expect(canRetryDeliver(new ApiError(status, 'x'))).toBe(true);
+    for (const status of [400, 403, 404, 409, 422, 429]) expect(canRetryDeliver(new ApiError(status, 'x'))).toBe(false);
+    expect(canRetryDeliver(new Error('x'))).toBe(false);
   });
 });

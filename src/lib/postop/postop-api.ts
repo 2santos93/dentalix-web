@@ -1,4 +1,8 @@
 import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
+import { ApiError, NetworkError } from '@/lib/api/api-error';
+import type { AppointmentStatus } from '@/lib/appointments/appointments-api';
+import type { SedeClock } from '@/lib/locations/sede-clock';
+import { wallDay } from '@/lib/time/wall-clock';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 export { whatsAppUrl } from '@/lib/appointments/confirmation-message';
@@ -52,6 +56,35 @@ export function canManagePostOpTemplates(role: ClinicRole | null): boolean {
 /** Entregar indicaciones: los cuatro roles. `null` (sin sesión legible) no. */
 export function canDeliverPostOp(role: ClinicRole | null): boolean {
   return role !== null;
+}
+
+/**
+ * DX-250: ¿se ofrecen las indicaciones en el detalle de esta cita? No en una
+ * cancelada ni en un no-show, ni en una de un día civil (en la zona de la
+ * sede) que aún no llega: ahí no se monta el panel ni se pide su lista. Sin
+ * reloj de la sede no se puede saber el día: se ofrece (la API rechaza igual
+ * una entrega de una cita futura).
+ */
+export function canOfferPostOp(
+  appointment: { status: AppointmentStatus; start: string },
+  clock: SedeClock | null,
+  now: Date = new Date(),
+): boolean {
+  if (appointment.status === 'CANCELLED' || appointment.status === 'NO_SHOW') return false;
+  if (!clock) return true;
+  return wallDay(appointment.start, clock.timeZone) <= wallDay(now, clock.timeZone);
+}
+
+/**
+ * DX-250: ¿tiene sentido «Reintentar» tras este fallo al entregar? Solo si
+ * el servidor pudo no haber llegado a responder: sin conexión, tiempo agotado
+ * o un 5xx (p. ej. el 502 de un balanceador). Un 4xx (422 sin canal o dado de
+ * baja, 429 de cuota de email…) vuelve a fallar igual.
+ */
+export function canRetryDeliver(err: unknown): boolean {
+  if (err instanceof NetworkError) return true;
+  if (err instanceof ApiError) return err.status >= 500;
+  return err instanceof DOMException && err.name === 'TimeoutError';
 }
 
 /** `GET /post-op-templates` — `active` filtra; sin él, todas. */

@@ -2,7 +2,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
 import { AppointmentPostOpPanel } from './appointment-postop-panel';
-import { NetworkError } from '@/lib/api/api-error';
+import { ApiError, NetworkError } from '@/lib/api/api-error';
 import {
   deliverPostOp,
   getAppointmentPostOp,
@@ -60,6 +60,7 @@ function deliverySummary(overrides: Partial<PostOpDeliverySummary> = {}): PostOp
     sentToResponsible: false,
     firstOpenedAt: null,
     linkExpiresAt: null,
+    emailStatus: null,
     ...overrides,
   };
 }
@@ -100,7 +101,8 @@ describe('AppointmentPostOpPanel', () => {
     const first = await within(region).findByRole('radio', { name: /Tras una extracción/ });
     expect(first).toBeChecked();
     expect(within(region).getByRole('radio', { name: /Tras un blanqueamiento/ })).not.toBeChecked();
-    expect(within(region).queryByRole('combobox')).not.toBeInTheDocument();
+    // DX-250: las demás indicaciones siguen a mano aunque haya sugeridas.
+    expect(within(region).getByRole('combobox', { name: /otras indicaciones/i })).toHaveValue('');
     expect(mockedGet).toHaveBeenCalledWith('tok', 'appt-1');
     for (const name of ['Imprimir', 'Enviar por email', 'Abrir WhatsApp']) {
       expect(within(region).getByRole('button', { name })).toBeEnabled();
@@ -183,24 +185,111 @@ describe('AppointmentPostOpPanel', () => {
     );
   });
 
-  it('email registrado pero no encolado: avisa y ofrece las otras vías, y refresca', async () => {
+  it('email registrado pero no encolado: aviso persistente con el enlace y «Copiar enlace», que anuncia «Copiado»', async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     mockedGet.mockResolvedValue(suggestions());
     mockedDeliver.mockResolvedValueOnce(
       created({
-        delivery: deliverySummary({ channel: 'EMAIL' }),
-        sentTo: 'a***@correo.com',
+        delivery: deliverySummary({ channel: 'EMAIL', emailStatus: 'NOT_SENT' }),
+        publicUrl: 'https://demo.dentalix.app/indicaciones/tok_abc',
+        sentTo: null,
         emailQueued: false,
       }),
     );
     renderPanel();
     await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
-    await waitFor(() =>
-      expect(toast.warning).toHaveBeenCalledWith(
-        'La entrega quedó registrada, pero el email no se pudo encolar. Comparte el enlace o usa WhatsApp.',
-      ),
-    );
+
+    const notice = await screen.findByText('El email no salió');
+    expect(notice.closest('[role="alert"]')).toHaveTextContent(/Email · no enviado/);
+    // No es un toast que se va: sigue en el panel.
+    expect(toast.warning).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
+    const field = screen.getByLabelText('Enlace público de las indicaciones');
+    expect(field).toHaveValue('https://demo.dentalix.app/indicaciones/tok_abc');
+    expect(field).toHaveAttribute('readonly');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Copiar enlace' }));
+    expect(await screen.findByText('Copiado')).toBeInTheDocument();
+    expect(screen.getByText('Copiado')).toHaveAttribute('role', 'status');
+    expect(writeText).toHaveBeenCalledWith('https://demo.dentalix.app/indicaciones/tok_abc');
+
+    // La recarga de la lista no lo borra; solo «Entendido».
     await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('El email no salió')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Entendido' }));
+    expect(screen.queryByText('El email no salió')).not.toBeInTheDocument();
+  });
+
+  it('si el portapapeles falla, lo dice y deja el enlace seleccionado', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: jest.fn().mockRejectedValue(new Error('denegado')) },
+      configurable: true,
+    });
+    mockedGet.mockResolvedValue(suggestions());
+    mockedDeliver.mockResolvedValueOnce(
+      created({
+        delivery: deliverySummary({ channel: 'EMAIL', emailStatus: 'NOT_SENT' }),
+        publicUrl: 'https://demo.dentalix.app/indicaciones/tok_abc',
+        emailQueued: false,
+      }),
+    );
+    renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Copiar enlace' }));
+    expect(await screen.findByText(/No pudimos copiar automáticamente/)).toBeInTheDocument();
+  });
+
+  it('con sugeridas y otras, se puede elegir una de las otras y se entrega con su templateId', async () => {
+    mockedGet.mockResolvedValue(suggestions());
+    mockedDeliver.mockResolvedValue(created({ sentTo: 'a***@correo.com' }));
+    renderPanel();
+    const select = await screen.findByRole('combobox', { name: /otras indicaciones/i });
+    await userEvent.selectOptions(select, ENDO.id);
+    // La sugerida deja de estar marcada: la elección manual gana.
+    expect(screen.getByRole('radio', { name: /Tras una extracción/ })).not.toBeChecked();
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar por email' }));
+    await waitFor(() =>
+      expect(mockedDeliver).toHaveBeenCalledWith('tok', 'appt-1', {
+        templateId: ENDO.id,
+        channel: 'EMAIL',
+      }),
+    );
+    // Volver a una sugerida suelta la otra.
+    await userEvent.click(await screen.findByRole('radio', { name: /Tras un blanqueamiento/ }));
+    expect(screen.getByRole('combobox', { name: /otras indicaciones/i })).toHaveValue('');
+    expect(screen.getByRole('radio', { name: /Tras un blanqueamiento/ })).toBeChecked();
+  });
+
+  it('antes de enviar, bajo «Enviar por email» se lee el destino enmascarado y si va al responsable', async () => {
+    mockedGet.mockResolvedValue(suggestions());
+    const first = renderPanel();
+    const button = await screen.findByRole('button', { name: 'Enviar por email' });
+    expect(screen.getByText('Se enviará a a***@correo.com.')).toBeInTheDocument();
+    expect(button).toHaveAccessibleDescription('Se enviará a a***@correo.com.');
+    first.unmount();
+
+    mockedGet.mockResolvedValue(
+      suggestions({
+        email: { allowed: true, reason: null, toMasked: 'm***@correo.com', toResponsible: true },
+      }),
+    );
+    renderPanel();
+    expect(
+      await screen.findByText('Se enviará a m***@correo.com (responsable del paciente).'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enviar por email' })).toHaveAccessibleDescription(
+      'Se enviará a m***@correo.com (responsable del paciente).',
+    );
+  });
+
+  it('una entrega EMAIL cuyo email no salió se lee «Email · no enviado» en la lista de la cita', async () => {
+    mockedGet.mockResolvedValue(
+      suggestions({ deliveries: [deliverySummary({ channel: 'EMAIL', emailStatus: 'NOT_SENT' })] }),
+    );
+    renderPanel();
+    const list = await screen.findByRole('list', { name: 'Entregadas en esta cita' });
+    expect(list).toHaveTextContent(/EXO v2 · Email · no enviado · /);
   });
 
   it('«Abrir WhatsApp» registra la entrega PRIMERO y abre wa.me con el texto de la API', async () => {
@@ -327,9 +416,88 @@ describe('AppointmentPostOpPanel', () => {
     let finish!: (value: PostOpDeliveryCreated) => void;
     mockedDeliver.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
     act(() => { opts.action.onClick(); opts.action.onClick(); });
-    expect(mockedDeliver).toHaveBeenCalledTimes(2);
+    // La segunda pulsación no hace nada: ni otra pestaña ni otra comprobación.
     expect(open).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(mockedDeliver).toHaveBeenCalledTimes(2));
+    expect(mockedGet).toHaveBeenCalledTimes(2);
     await act(async () => finish(created()));
+  });
+
+  describe('reintentar la entrega (DX-250)', () => {
+    it.each([
+      [422, 'El paciente no tiene email ni un responsable que reciba avisos'],
+      [429, 'Demasiados emails seguidos a esta clínica. Espera un momento'],
+    ])('un %s no ofrece «Reintentar»', async (status, serverMessage) => {
+      mockedGet.mockResolvedValue(suggestions());
+      mockedDeliver.mockRejectedValueOnce(new ApiError(status, serverMessage));
+      renderPanel();
+      await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+      await waitFor(() => expect(toast.error).toHaveBeenCalled());
+      const [, opts] = (toast.error as jest.Mock).mock.calls[0];
+      expect(opts.action).toBeUndefined();
+    });
+
+    it('un 502 sí lo ofrece; antes de repetir relee la lista y, si la entrega ya está, no hace el POST', async () => {
+      const { win } = fakeWindow();
+      const landed = deliverySummary({
+        id: 'del-landed',
+        channel: 'PRINT',
+        templateId: EXTRACTION.id,
+      });
+      mockedGet
+        .mockResolvedValueOnce(suggestions())
+        // La relectura: el POST sí llegó a registrarse.
+        .mockResolvedValueOnce(suggestions({ deliveries: [landed] }));
+      mockedDeliver.mockRejectedValueOnce(new ApiError(502, 'Bad Gateway'));
+      renderPanel();
+      await userEvent.click(await screen.findByRole('button', { name: 'Imprimir' }));
+      await waitFor(() => expect(toast.error).toHaveBeenCalled());
+      const [, opts] = (toast.error as jest.Mock).mock.calls[0];
+      expect(opts.action).toEqual(expect.objectContaining({ label: 'Reintentar' }));
+      expect(win.close).toHaveBeenCalledTimes(1);
+
+      await act(async () => opts.action.onClick());
+      await waitFor(() => expect(toast.info).toHaveBeenCalledWith(expect.stringMatching(/ya había quedado registrada/)));
+      expect(mockedDeliver).toHaveBeenCalledTimes(1);
+      // La lista se pinta con la entrega ya registrada.
+      expect(await screen.findByRole('list', { name: 'Entregadas en esta cita' })).toHaveTextContent('EXO v2 · Impresas');
+    });
+
+    it('un 502 y la relectura sin la entrega: ahora sí repite el POST, una sola vez', async () => {
+      fakeWindow();
+      mockedGet.mockResolvedValue(suggestions());
+      mockedDeliver
+        .mockRejectedValueOnce(new ApiError(502, 'Bad Gateway'))
+        .mockResolvedValueOnce(created({ sentTo: 'a***@correo.com' }));
+      renderPanel();
+      await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+      await waitFor(() => expect(toast.error).toHaveBeenCalled());
+      const [, opts] = (toast.error as jest.Mock).mock.calls[0];
+      await act(async () => opts.action.onClick());
+      await waitFor(() => expect(mockedDeliver).toHaveBeenCalledTimes(2));
+      expect(mockedGet.mock.calls.length).toBeGreaterThanOrEqual(2);
+      await waitFor(() =>
+        expect(toast.success).toHaveBeenCalledWith('Indicaciones enviadas a a***@correo.com.'),
+      );
+    });
+
+    it('si la relectura falla, no repite el POST: reintenta la comprobación', async () => {
+      mockedGet.mockResolvedValueOnce(suggestions());
+      mockedDeliver.mockRejectedValueOnce(new ApiError(502, 'Bad Gateway'));
+      renderPanel();
+      await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+      await waitFor(() => expect(toast.error).toHaveBeenCalled());
+      const [, first] = (toast.error as jest.Mock).mock.calls[0];
+      mockedGet.mockRejectedValueOnce(new NetworkError(new TypeError('fetch failed')));
+      await act(async () => first.action.onClick());
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith(
+          expect.stringMatching(/comprobar si la entrega ya quedó registrada/),
+          expect.objectContaining({ action: expect.objectContaining({ label: 'Reintentar' }) }),
+        ),
+      );
+      expect(mockedDeliver).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('una recarga fallida conserva selección, datos y entrega nueva con aviso recuperable', async () => {
