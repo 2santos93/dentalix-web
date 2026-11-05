@@ -5,6 +5,7 @@ import { Lock, Pencil, Percent, Plus, Power, PowerOff, Wallet } from 'lucide-rea
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   PAYMENT_METHOD_KIND_LABELS,
+  PAYMENT_PROOF_POLICY_LABELS,
   listPaymentMethods,
   updatePaymentAdjustment,
   updatePaymentMethod,
@@ -42,6 +43,9 @@ export const paymentMethodsCopy = {
   colReference: 'Referencia',
   colStatus: 'Estado',
   requiresReference: 'Pide referencia',
+  // DX-389: «Pide comprobante» del cobro.
+  colProof: 'Comprobante',
+  proofNone: 'No lo pide',
   noReference: 'Opcional',
   active: 'Activo',
   inactive: 'Inactivo',
@@ -267,6 +271,16 @@ export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerP
     { id: 'name', header: copy.colName, mobile: 'primary', cell: (m) => <span className="font-medium text-ink">{m.name}</span> },
     { id: 'kind', header: copy.colKind, cell: (m) => PAYMENT_METHOD_KIND_LABELS[m.kind] },
     { id: 'reference', header: copy.colReference, cell: reference },
+    {
+      id: 'proof',
+      header: copy.colProof,
+      cell: (m) =>
+        m.proofPolicy === 'NONE' ? (
+          <span className="text-muted">{copy.proofNone}</span>
+        ) : (
+          PAYMENT_PROOF_POLICY_LABELS[m.proofPolicy]
+        ),
+    },
     {
       id: 'adjustments',
       header: copy.colAdjustments,

@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { regionalFormat } from '@/lib/format/regional-format';
 import type { Payment } from '@/lib/payments/payments-api';
 import { PlanPaymentsList } from './plan-payments-list';
@@ -128,5 +129,47 @@ describe('PlanPaymentsList: día de la tasa congelada (DX-384)', () => {
     );
     expect(screen.getAllByText(/Tasa congelada: .* · manual · 31\/10\/2026/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/tasa del/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * DX-389: «Ver comprobante» en el «⋯» del abono, solo si lo tiene y solo si la
+ * pantalla lo permite (ADMIN y recepción: sin `onViewProof`, no hay acción).
+ */
+describe('PlanPaymentsList: comprobante del cobro (DX-389)', () => {
+  function renderList(payments: Payment[], onViewProof?: (p: Payment) => void) {
+    return render(
+      <PlanPaymentsList
+        payments={payments}
+        voidingPaymentId={null}
+        onVoid={jest.fn()}
+        onReceipt={jest.fn()}
+        onViewProof={onViewProof}
+        fmt={fmt}
+      />,
+    );
+  }
+  const menuOf = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getAllByRole('button', { name: /^Acciones de abono/ })[0]);
+    return screen.findAllByRole('menuitem');
+  };
+
+  it('un abono con comprobante ofrece «Ver comprobante» y lo abre con su id', async () => {
+    const user = userEvent.setup();
+    const onViewProof = jest.fn();
+    renderList([payment({ hasProof: true, exchangeRateStatus: 'NOT_NEEDED' })], onViewProof);
+    const items = await menuOf(user);
+    expect(items.map((i) => i.textContent)).toContain('Ver comprobante');
+    await user.click(screen.getByRole('menuitem', { name: 'Ver comprobante' }));
+    expect(onViewProof).toHaveBeenCalledWith(expect.objectContaining({ id: 'pay-1' }));
+  });
+
+  it('sin comprobante, o sin permiso, no hay acción', async () => {
+    const user = userEvent.setup();
+    const first = renderList([payment({ hasProof: false, exchangeRateStatus: 'NOT_NEEDED' })], jest.fn());
+    expect((await menuOf(user)).map((i) => i.textContent)).not.toContain('Ver comprobante');
+    first.unmount();
+    renderList([payment({ hasProof: true, exchangeRateStatus: 'NOT_NEEDED' })]);
+    expect((await menuOf(user)).map((i) => i.textContent)).not.toContain('Ver comprobante');
   });
 });

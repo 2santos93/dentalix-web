@@ -33,6 +33,7 @@ const cash: ClinicPaymentMethod = {
   kind: 'CASH',
   active: true,
   requiresReference: false,
+  proofPolicy: 'NONE' as const,
   legacyMethod: 'CASH',
   adjustments: [],
   createdAt: '2026-10-01T00:00:00.000Z',
@@ -79,6 +80,7 @@ describe('PaymentMethodsManager (DX-377)', () => {
       name: 'Pago móvil',
       kind: 'DIGITAL',
       requiresReference: true,
+      proofPolicy: 'NONE' as const,
       legacyMethod: null,
     });
     render(<PaymentMethodsManager token="tok" allowed />);
@@ -93,9 +95,52 @@ describe('PaymentMethodsManager (DX-377)', () => {
         name: 'Pago móvil',
         kind: 'DIGITAL',
         requiresReference: true,
+        proofPolicy: 'NONE' as const,
       }),
     );
     expect((await screen.findAllByText('Pago móvil')).length).toBeGreaterThan(0);
+  });
+
+  it('DX-389: el medio muestra «Pide comprobante» y el alta lo manda (No / Opcional / Obligatorio)', async () => {
+    const user = setupUser();
+    mockedList.mockResolvedValue([
+      cash,
+      { ...cash, id: 'pm-mobile', name: 'Pago móvil', legacyMethod: null, proofPolicy: 'REQUIRED' as const },
+    ]);
+    mockedCreate.mockResolvedValue({ ...cash, id: 'pm-zelle', name: 'Zelle', legacyMethod: null, proofPolicy: 'OPTIONAL' as const });
+    render(<PaymentMethodsManager token="tok" allowed />);
+    const table = await screen.findByRole('table', { name: 'Medios de pago' });
+    const mobileRow = within(table).getAllByText('Pago móvil')[0].closest('tr') as HTMLElement;
+    expect(within(mobileRow).getByText('Obligatorio')).toBeInTheDocument();
+    const cashRow = within(table).getAllByText('Efectivo')[0].closest('tr') as HTMLElement;
+    expect(within(cashRow).getByText('No lo pide')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Nuevo medio' }));
+    const dialog = await screen.findByRole('dialog');
+    const policy = within(dialog).getByLabelText('Pide comprobante');
+    expect(policy).toHaveValue('NONE');
+    expect(within(policy).getAllByRole('option').map((o) => o.textContent)).toEqual(['No', 'Opcional', 'Obligatorio']);
+    await user.type(within(dialog).getByLabelText('Nombre'), 'Zelle');
+    await user.selectOptions(policy, 'Opcional');
+    await user.click(within(dialog).getByRole('button', { name: 'Crear medio' }));
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith('tok', expect.objectContaining({ name: 'Zelle', proofPolicy: 'OPTIONAL' })),
+    );
+  });
+
+  it('DX-389: al editar un medio se cambia «Pide comprobante»', async () => {
+    const user = setupUser();
+    mockedUpdate.mockResolvedValue({ ...cash, proofPolicy: 'REQUIRED' as const });
+    render(<PaymentMethodsManager token="tok" allowed />);
+    await screen.findByRole('table', { name: 'Medios de pago' });
+    await user.click(screen.getByRole('button', { name: 'Acciones de Efectivo' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Editar' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.selectOptions(within(dialog).getByLabelText('Pide comprobante'), 'Obligatorio');
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith('tok', 'pm-cash', expect.objectContaining({ proofPolicy: 'REQUIRED' })),
+    );
   });
 
   it('desactiva un medio', async () => {

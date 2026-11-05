@@ -48,6 +48,7 @@ import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
+import { paymentProofViewerCopy, usePaymentProofViewer } from '@/components/payments/payment-proof-viewer';
 import { useVoidPayment, voidPaymentSubject } from '@/components/payments/use-void-payment';
 import {
   ExternalInvoiceModal,
@@ -245,6 +246,8 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
   const voiding = useVoidPayment(token, () => setReloadKey((k) => k + 1), fmt);
   // Recibo de caja (DX-136): ver, reimprimir o enviar el de cualquier fila.
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
+  // DX-389: «Ver comprobante» del abono (la caja es de ADMIN y recepción).
+  const proofViewer = usePaymentProofViewer(token);
 
   const rangeFrom = range?.from;
   const rangeTo = range?.to;
@@ -628,6 +631,9 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                 getRowLabel={(payment) => copy.rowLabel(payment.patient.fullName)}
                 rowActions={(payment) => [
                   { label: copy.receiptAction, onSelect: () => setReceiptPaymentId(payment.id) },
+                  ...(payment.hasProof
+                    ? [{ label: paymentProofViewerCopy.action, onSelect: () => proofViewer.open(payment.id) }]
+                    : []),
                   {
                     label: externalInvoiceCopy.action,
                     onSelect: () =>
@@ -678,9 +684,12 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
         ) : null}
       </div>
 
+      {proofViewer.dialog}
+
       <PaymentReceiptDialog
         token={token}
         paymentId={receiptPaymentId}
+        hasProof={data?.items.find((p) => p.id === receiptPaymentId)?.hasProof ?? false}
         onOpenChange={(open) => {
           if (!open) setReceiptPaymentId(null);
         }}

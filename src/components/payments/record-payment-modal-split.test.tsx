@@ -58,6 +58,7 @@ const METHODS = [
     kind: 'CASH' as const,
     active: true,
     requiresReference: false,
+    proofPolicy: 'NONE' as const,
     legacyMethod: 'CASH' as const,
     adjustments: [],
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -69,6 +70,7 @@ const METHODS = [
     kind: 'TRANSFER' as const,
     active: true,
     requiresReference: true,
+    proofPolicy: 'NONE' as const,
     legacyMethod: 'TRANSFER' as const,
     adjustments: [],
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -137,6 +139,7 @@ function savedSplit(): SplitPayment {
     exchangeRateStatus: 'NOT_NEEDED' as const,
     adjustments: [],
     collectedAmount: amount,
+    hasProof: false,
   });
   return {
     id: 'pay-1',

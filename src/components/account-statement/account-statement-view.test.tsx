@@ -517,6 +517,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
       exchangeRateStatus: 'NOT_NEEDED',
       adjustments: [],
       collectedAmount: 50000,
+      hasProof: false,
     });
     const user = userEvent.setup();
     const onChanged = jest.fn();
@@ -989,5 +990,36 @@ describe('saldo a favor en el estado de cuenta (DX-432)', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Traspasos y devoluciones' })).toHaveFocus());
     // El historial se pidió de nuevo.
     expect((getCreditMovements as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+// DX-389: «Ver comprobante» en el movimiento que lo tiene, solo ADMIN y recepción.
+describe('comprobante del cobro (DX-389)', () => {
+  function withProof() {
+    const base = accountStatementFixture();
+    return accountStatementFixture({
+      movements: base.movements.map((m, i) => (i === 1 ? { ...m, hasProof: true } : m)),
+    });
+  }
+
+  it.each(['ADMIN', 'RECEPTION'])('%s ve «Ver comprobante» solo en el movimiento que lo tiene', async (role) => {
+    const user = userEvent.setup();
+    mockedGet.mockResolvedValue(withProof());
+    render(<AccountStatementView token={tokenForRole(role)} patientId="pat-1" />);
+    const table = await screen.findByRole('table', { name: /movimientos/i });
+    const rows = within(table).getAllByRole('row');
+    expect(await rowMenu(user, rows[2])).toContain('Ver comprobante');
+    await user.keyboard('{Escape}');
+    expect(await rowMenu(user, rows[1])).not.toContain('Ver comprobante');
+  });
+
+  it('un rol sin cobros no lo ve aunque el movimiento lo tenga', async () => {
+    const user = userEvent.setup();
+    mockedGet.mockResolvedValue(withProof());
+    render(<AccountStatementView token={tokenForRole('DENTIST')} patientId="pat-1" />);
+    const table = await screen.findByRole('table', { name: /movimientos/i });
+    const rows = within(table).getAllByRole('row');
+    const buttons = within(rows[2]).queryAllByRole('button', { name: /^acciones de abono de/i });
+    if (buttons.length > 0) expect(await rowMenu(user, rows[2])).not.toContain('Ver comprobante');
   });
 });

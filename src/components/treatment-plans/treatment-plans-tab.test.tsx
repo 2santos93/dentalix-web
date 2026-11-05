@@ -314,6 +314,7 @@ const payment1: Payment = {
   ...PAYMENT_IN_PLAN_CURRENCY,
   adjustments: [],
   collectedAmount: 50000,
+  hasProof: false,
 };
 
 const balance1: PlanBalance = {
@@ -799,6 +800,7 @@ describe('TreatmentPlansTab', () => {
         exchangeRateStatus: 'FROZEN',
         adjustments: [],
         collectedAmount: 200000,
+        hasProof: false,
         frozenRate: {
           currency: 'USD',
           fromPerBase: 4000,
@@ -816,6 +818,7 @@ describe('TreatmentPlansTab', () => {
         exchangeRateStatus: 'MISSING',
         adjustments: [],
         collectedAmount: 365,
+        hasProof: false,
       },
     ]);
 

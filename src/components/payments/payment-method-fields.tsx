@@ -96,6 +96,8 @@ export interface PaymentMethodFieldsState {
    * la misma en dos formas de pago del cobro), con el foco en ella.
    */
   markReference: (message: string) => void;
+  /** DX-389: marca el medio con un error que se ve antes de enviar, con el foco en él. */
+  markMethod: (message: string) => void;
   /** Lo que se añade al cuerpo del abono. */
   body: () => MethodBody;
   /** `true` si el error es el 409 de referencia repetida (ya avisado). */
@@ -201,6 +203,7 @@ export function methodFieldsOf(
       return true;
     },
     markReference: (message) => update((s) => withFocus({ ...s, referenceError: message }, 'reference')),
+    markMethod: (message) => update((s) => withFocus({ ...s, methodError: message }, 'method')),
     body: () => {
       const trimmed = state.reference.trim();
       const reason = state.duplicateReason.trim();
