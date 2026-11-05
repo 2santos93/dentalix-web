@@ -528,7 +528,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   const [cancelling, setCancelling] = useState<Appointment | null>(null);
   // El selector de estado desde el que se abrió: al cerrar el diálogo el foco
   // vuelve ahí (Radix lo devolvería a la opción de la lista, que ya no existe).
-  const cancelReturnFocus = useRef<HTMLElement | null>(null);
+  const statusReturnFocus = useRef<HTMLElement | null>(null);
 
   // Fetch active staff once (retriable) — feeds the provider selector.
   useEffect(() => {
@@ -1051,6 +1051,15 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
    * otherwise the select would briefly re-enable showing the stale
    * pre-change status (review fix).
    */
+  /** DX-299: los diálogos que abre el selector de estado le devuelven el foco al cerrarse. */
+  function restoreStatusFocus(event: Event) {
+    const trigger = statusReturnFocus.current;
+    statusReturnFocus.current = null;
+    if (!trigger?.isConnected) return;
+    event.preventDefault();
+    trigger.focus();
+  }
+
   async function handleStatusChange(
     id: string,
     status: AppointmentStatus,
@@ -1061,12 +1070,13 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
     // DX-279: cancelar va por el modal de origen y motivo (también desde
     // «Completada», que pide además el motivo de esa salida).
     if (status === 'CANCELLED' && before && before.status !== 'CANCELLED') {
-      cancelReturnFocus.current = trigger ?? null;
+      statusReturnFocus.current = trigger ?? null;
       setCancelling(before);
       return;
     }
     // DX-273: la salida de «Completada» va por el modal del motivo.
     if (before?.status === 'COMPLETED' && status !== 'COMPLETED') {
+      statusReturnFocus.current = trigger ?? null;
       setCompletedExit({ id, to: status });
       return;
     }
@@ -1605,6 +1615,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
             token={token}
             appointmentId={completedExit.id}
             to={completedExit.to}
+            onCloseAutoFocus={restoreStatusFocus}
             onDone={(result) => void handleCompletedExitDone(result)}
           />
         ) : null}
@@ -1619,13 +1630,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
             appointmentId={cancelling.id}
             patientName={patientLabel(cancelling)}
             fromStatus={cancelling.status}
-            onCloseAutoFocus={(event) => {
-              const trigger = cancelReturnFocus.current;
-              cancelReturnFocus.current = null;
-              if (!trigger?.isConnected) return;
-              event.preventDefault();
-              trigger.focus();
-            }}
+            onCloseAutoFocus={restoreStatusFocus}
             onDone={() => void handleCancelled(cancelling)}
           />
         ) : null}

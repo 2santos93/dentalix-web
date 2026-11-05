@@ -36,7 +36,7 @@ const copy = {
   reasonFallback: '—',
   heading: 'Agenda del día',
   /** Nombre accesible del selector de estado (más el estado actual), filled in with the row's time range — e.g. "Estado de la cita de 09:00–09:30". */
-  statusSelectLabel: (timeRange: string) => `Estado de la cita de ${timeRange}`,
+  statusSelectLabel: (timeRange: string, patient: string) => `Estado de la cita de ${timeRange} de ${patient}`,
   updatingStatus: 'Actualizando…',
   detail: 'Detalle',
   /** `aria-label` del botón de detalle de una fila, p. ej. "Detalle de la cita de 09:00–09:30". */
@@ -116,6 +116,8 @@ function DetailButton({
 }
 
 interface StatusSelectProps {
+  /** DX-299: dos citas a la misma hora se distinguen por el paciente. */
+  patient: string;
   appointment: Appointment;
   timeRange: string;
   onStatusChange: (
@@ -135,12 +137,12 @@ interface StatusSelectProps {
  * aplica con Enter o con un clic/toque en una opción. Rendered once per row
  * per responsive variant when `onStatusChange` is passed to `DayAgenda`.
  */
-function StatusSelect({ appointment, timeRange, onStatusChange, updating, role }: StatusSelectProps) {
+function StatusSelect({ appointment, timeRange, patient, onStatusChange, updating, role }: StatusSelectProps) {
   return (
     <span className="inline-flex items-center gap-2">
       <AppointmentStatusSelect
         variant="chip"
-        label={copy.statusSelectLabel(timeRange)}
+        label={copy.statusSelectLabel(timeRange, patient)}
         data-testid="appointment-status-select"
         value={appointment.status}
         options={statusOptionsFor(appointment.status, role)}
@@ -301,6 +303,7 @@ export function DayAgenda({
                   <td className="px-4 py-3">
                     {onStatusChange ? (
                       <StatusSelect
+                        patient={patientLabel(appointment, patientNames)}
                         appointment={appointment}
                         timeRange={timeRange}
                         onStatusChange={onStatusChange}
@@ -372,6 +375,7 @@ export function DayAgenda({
                 <div className="mt-3 flex items-center justify-between gap-2">
                   {onStatusChange ? (
                     <StatusSelect
+                      patient={patientLabel(appointment, patientNames)}
                       appointment={appointment}
                       timeRange={timeRange}
                       onStatusChange={onStatusChange}
