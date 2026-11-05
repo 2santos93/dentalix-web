@@ -414,7 +414,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [initialItemId, openedInitial, token]);
+  }, [canWrite, initialItemId, openedInitial, token]);
 
   // Builds the shared payload from the current form fields. Empty optional
   // fields are omitted (so a blank price/category doesn't send anything) — a
