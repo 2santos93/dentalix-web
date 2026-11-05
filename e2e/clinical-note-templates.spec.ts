@@ -205,7 +205,9 @@ for (const viewport of VIEWPORTS) {
     });
 
     await page.goto(`${origin}/settings/plantillas-de-evolucion`);
-    await page.getByRole('button', { name: 'Endodoncia' }).click();
+    // Por el «⋯» de la fila: el botón de la fila y «Acciones de Endodoncia» comparten subcadena.
+    await page.getByRole('button', { name: 'Acciones de Endodoncia' }).click();
+    await page.getByRole('menuitem', { name: 'Editar' }).click();
     const form = page.getByRole('dialog', { name: 'Editar plantilla de evolución' });
     await form.getByLabel('Nombre').fill('Mi edición');
 
