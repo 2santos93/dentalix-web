@@ -35,6 +35,8 @@ ENV NODE_ENV=production \
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
+# SEC-062: quita `x-middleware-rewrite` (la URL interna de la API) de las respuestas.
+COPY scripts/docker/strip-middleware-rewrite.cjs ./strip-middleware-rewrite.cjs
 USER node
 EXPOSE 3001
-CMD ["node", "server.js"]
+CMD ["node", "--require", "./strip-middleware-rewrite.cjs", "server.js"]

@@ -25,9 +25,12 @@ export const API_BODY_TOO_LARGE = {
  * reescritura externa igual que un rewrite (mismo proxy, `X-Forwarded-Host`
  * con el host de la clínica, tope de cuerpo `proxyClientMaxBodySize`).
  * Ojo: en una reescritura externa Next devuelve al navegador la cabecera
- * `x-middleware-rewrite` con el destino, o sea, con `API_URL`. Si la API
- * interna no debe ser conocida, el ingress tiene que quitar esa cabecera de
- * las respuestas (runbook de despliegue).
+ * `x-middleware-rewrite` con el destino, o sea, con `API_URL`. Next la fija
+ * después de este proxy, así que aquí no se puede quitar: lo hace la imagen
+ * (SEC-062, `scripts/docker/strip-middleware-rewrite.cjs`, precargado con
+ * `node --require` en el CMD del Dockerfile) y lo comprueba la prueba de humo
+ * (`scripts/docker-smoke/web.sh`). Fuera de la imagen (`next dev`, `next
+ * start`) la cabecera sigue saliendo.
  *
  * DX-259 (OPS-038): una petición con más cuerpo del que Next copia
  * (`API_PROXY_MAX_BODY_BYTES`, 1 MB) se rechaza antes con 413, por su
