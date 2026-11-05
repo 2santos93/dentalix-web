@@ -2,7 +2,9 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { getTokenRole } from '@/lib/auth/token-role';
 import {
+  canWriteCatalog,
   listCatalogDirectory,
   listCatalogItems,
   createCatalogItem,
@@ -99,6 +101,7 @@ const copy = {
   empty: 'El catálogo todavía está vacío.',
   emptyHint:
     'Agrega tu primer procedimiento para poder usarlo en los planes de tratamiento.',
+  emptyHintReadOnly: 'Lo prepara el administrador de la clínica.',
   searchLabel: 'Buscar por nombre, código o categoría',
   searchPlaceholder: 'Buscar…',
   filterKindLabel: 'Filtrar por tipo',
@@ -204,6 +207,8 @@ interface CatalogViewProps {
  * history in `ToothRecord` / plan items that reference it is preserved.
  */
 export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
+  // DX-064: Odontólogo y Asistente leen el catálogo; escribir es de ADMIN, como en la API.
+  const canWrite = canWriteCatalog(getTokenRole(token));
   const stamp = useSedeStamp(token);
   // Moneda base de la clínica (la común de sus sedes activas, GLOBAL-G1). Con
   // sedes en monedas distintas, el importe va sin símbolo. Si las sedes no
@@ -393,7 +398,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
   // DX-212: `/catalog?item=<id>` abre ese ítem en edición una vez cargado.
   const [openedInitial, setOpenedInitial] = useState(false);
   useEffect(() => {
-    if (!initialItemId || openedInitial || !token) return;
+    if (!initialItemId || openedInitial || !token || !canWrite) return;
     let cancelled = false;
     listCatalogItems(token)
       .then((all) => {
@@ -409,7 +414,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [initialItemId, openedInitial, token]);
+  }, [canWrite, initialItemId, openedInitial, token]);
 
   // Builds the shared payload from the current form fields. Empty optional
   // fields are omitted (so a blank price/category doesn't send anything) — a
@@ -584,9 +589,11 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
           value={searchInput}
           onChange={setSearchInput}
           action={
-            <Button type="button" onClick={openCreate}>
-              <Plus /> {copy.addToggle}
-            </Button>
+            canWrite ? (
+              <Button type="button" onClick={openCreate}>
+                <Plus /> {copy.addToggle}
+              </Button>
+            ) : undefined
           }
         >
           <NativeSelect
@@ -760,7 +767,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
           // que solo esa ofrece limpiar los filtros.
           isEmpty={items.length === 0}
           emptyTitle={isFiltering ? copy.noMatches : copy.empty}
-          emptyDescription={isFiltering ? copy.noMatchesHint : copy.emptyHint}
+          emptyDescription={isFiltering ? copy.noMatchesHint : canWrite ? copy.emptyHint : copy.emptyHintReadOnly}
           emptyAction={
             isFiltering ? (
               <Button
@@ -780,7 +787,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
             rows={items}
             columns={columns}
             getRowKey={(item) => item.id}
-            onRowClick={openEdit}
+            onRowClick={canWrite ? openEdit : undefined}
             leading={(item) => (
               <span
                 aria-hidden
@@ -788,7 +795,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
                 style={{ backgroundColor: item.color }}
               />
             )}
-            rowActions={rowActions}
+            rowActions={canWrite ? rowActions : undefined}
             getRowLabel={(item) => item.labelEs}
           />
         </AsyncSection>
