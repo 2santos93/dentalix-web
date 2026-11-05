@@ -740,6 +740,16 @@ screen it opens; a group with no visible entries disappears.
   «Mi día» → `/dashboard#pendientes`: the «Pendientes» block of Inicio, every role, never a
   sidebar entry of its own), *Acciones* (Nueva cita, Nuevo paciente). Combobox/listbox ARIA with `aria-activedescendant`; arrows, Ctrl+Home/End,
   Enter. Accent-insensitive matching. Full-screen on phones.
+- **«¿Quién llama?»** (DX-224; Alt+Shift+Q anywhere, `code` not `key` because Option rewrites the
+  character on macOS; the second button under the sidebar search, the phone-bar button): a
+  `Dialog` (full-screen under 640px) with one phone field. Any format; under 7 digits the
+  `InlineError` «Escribe el número completo» sits by the field and nothing is sent. A paste of a
+  full number searches at once. Results are one 12px-radius row per patient (name, «Alerta clínica»
+  badge only when the API sent `hasCriticalAlert` — RECEPTION never gets the key —, the
+  «Saldo vencido» chip, next appointment and last visit painted with THEIR sede's clock, pending
+  balance by ISO code for ADMIN/RECEPTION only) with «Nueva cita» and «Abrir ficha». None:
+  «Ningún paciente con ese número» + «Crear paciente» (the phone travels in memory, never in the
+  URL). A failed search is rung 1 (`SectionError` + «Reintentar»), and a failed retry stays there.
 - **System chrome:** `viewport-fit=cover` and a `theme-color` per scheme set to the canvas
   token (light `#F7F9FC`, dark `#0B0F14`) — never the accent.
 
