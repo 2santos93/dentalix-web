@@ -78,5 +78,6 @@ describe('CheckoutDialog (DX-202)', () => {
     await userEvent.click(await screen.findByRole('button', { name: checkoutCopy.submitWithPending(3) }));
     await waitFor(() => expect(screen.getByRole('button', { name: checkoutCopy.submitWithPending(3) })).toBeEnabled());
     expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.getByText(checkoutCopy.completeError)).toBeInTheDocument();
   });
 });

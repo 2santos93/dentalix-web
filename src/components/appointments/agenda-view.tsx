@@ -126,6 +126,7 @@ import {
 } from '@/components/ui/dialog';
 import { FormField } from '@/components/shared/form-field';
 import { FieldError } from '@/components/errors/field-error';
+import { InlineError } from '@/components/errors/inline-error';
 import { SectionError } from '@/components/errors/section-error';
 import { notifyError } from '@/components/errors/notify';
 import { toast } from 'sonner';
@@ -153,6 +154,7 @@ import { addCivilDays, civilWeekStart, wallDay, wallDayRange, wallWeekRange } fr
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
+  detailRetry: 'Reintentar',
   // DX-170: evolución ligada a la cita, desde su tarjeta.
   registerEvolution: 'Registrar evolución',
   evolutionSaved: (patient: string) => `Evolución registrada en la ficha de ${patient}.`,
@@ -529,6 +531,8 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   // El selector de estado desde el que se abrió: al cerrar el diálogo el foco
   // vuelve ahí (Radix lo devolvería a la opción de la lista, que ya no existe).
   const statusReturnFocus = useRef<HTMLElement | null>(null);
+  // DX-538: el fallo de una acción del detalle, dentro del detalle.
+  const [detailError, setDetailError] = useState<{ message: string; retry: () => Promise<void> } | null>(null);
 
   // Fetch active staff once (retriable) — feeds the provider selector.
   useEffect(() => {
@@ -1069,6 +1073,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
     trigger?: HTMLElement | null,
   ) {
     if (!token) return;
+    setDetailError(null);
     const before = appointments.find((a) => a.id === id);
     // DX-279: cancelar va por el modal de origen y motivo (también desde
     // «Completada», que pide además el motivo de esa salida).
@@ -1101,9 +1106,11 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
         });
         return;
       }
-      notifyError(apiErrorMessage(err, copy.genericStatusChangeError), {
-        onRetry: () => handleStatusChange(id, status),
-      });
+      const message = apiErrorMessage(err, copy.genericStatusChangeError);
+      const retry = () => handleStatusChange(id, status, trigger);
+      // DX-538: con el detalle abierto, el aviso con botón no se podría pulsar.
+      if (detailAppointment?.id === id) setDetailError({ message, retry });
+      else notifyError(message, { onRetry: retry });
     } finally {
       setUpdatingId(null);
     }
@@ -1164,14 +1171,16 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   /** DX-210: marcar o desmarcar «Adelantar si hay hueco» desde el detalle. */
   async function handleWantsEarlierChange(id: string, wantsEarlier: boolean) {
     if (!token) return;
+    setDetailError(null);
     setUpdatingId(id);
     try {
       await updateAppointment(token, id, { wantsEarlier });
       await refreshAppointmentsInPlace();
     } catch (err) {
-      notifyError(apiErrorMessage(err, copy.wantsEarlierError), {
-        onRetry: () => handleWantsEarlierChange(id, wantsEarlier),
-      });
+      const message = apiErrorMessage(err, copy.wantsEarlierError);
+      const retry = () => handleWantsEarlierChange(id, wantsEarlier);
+      if (detailAppointment?.id === id) setDetailError({ message, retry });
+      else notifyError(message, { onRetry: retry });
     } finally {
       setUpdatingId(null);
     }
@@ -1799,6 +1808,14 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                     }}
                   />
                 </FormField>
+                {detailError ? (
+                  <div className="flex flex-col items-start gap-2">
+                    <InlineError variant="summary">{detailError.message}</InlineError>
+                    <Button type="button" variant="secondary" size="sm" onClick={() => void detailError.retry()}>
+                      {copy.detailRetry}
+                    </Button>
+                  </div>
+                ) : null}
                 {renderFlowActions(liveDetailAppointment, '')}
                 {canChangeWantsEarlier(role) &&
                 (liveDetailAppointment.status === 'SCHEDULED' ||

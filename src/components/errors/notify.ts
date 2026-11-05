@@ -41,7 +41,10 @@ const WITH_ACTION_DURATION = Infinity;
  * que quien sondea lo cierre (`toast.dismiss`) cuando el fallo se resuelve.
  */
 export function notifyError(message: string, opts: NotifyErrorOptions = {}): string {
-  const { onRetry, retryLabel = notifyCopy.retry } = opts;
+  const { retryLabel = notifyCopy.retry } = opts;
+  // DX-538: con un modal abierto lo de fuera es inerte: el botón del aviso no se
+  // podría pulsar. Sin botón muerto; quien abre el modal da su error dentro.
+  const onRetry = modalIsOpen() ? undefined : opts.onRetry;
   const id = `error:${message}`;
   toast.error(message, {
     id,
@@ -49,6 +52,11 @@ export function notifyError(message: string, opts: NotifyErrorOptions = {}): str
     duration: onRetry ? WITH_ACTION_DURATION : undefined,
   });
   return id;
+}
+
+/** ¿Hay un diálogo o una ficha modal de Radix abiertos? */
+function modalIsOpen(): boolean {
+  return typeof document !== 'undefined' && document.querySelector('[role="dialog"][data-state="open"]') !== null;
 }
 
 /** Un éxito corriente se lee y se va; 10 s dan para leerlo con calma. */
