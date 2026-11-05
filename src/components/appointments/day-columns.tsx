@@ -668,7 +668,9 @@ export function DayColumns({
                             .join(' · ')}
                           onClick={() => handleCardClick(a)}
                           className={cn(
-                            'flex h-full w-full flex-col items-start gap-0.5 px-2 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
+                            // DX-180: el anillo es de la tinta de la tarjeta: `ring-primary` desaparecía
+                            // cuando el tipo tiene el color de la clínica.
+                            'flex h-full w-full flex-col items-start gap-0.5 px-2 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-current',
                             hasMedicalAlert ? 'pr-[4.5rem]' : 'pr-8',
                           )}
                         >
@@ -745,7 +747,7 @@ export function DayColumns({
                           aria-label={copy.moveToFor(patient)}
                           title={copy.moveTo}
                           onClick={() => onMoveRequest(a)}
-                          className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-md bg-surface/90 text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
+                          className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-md bg-surface/90 text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-current"
                         >
                           <MoveRight className="size-4" aria-hidden />
                         </button>
