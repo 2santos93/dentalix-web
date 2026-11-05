@@ -4798,6 +4798,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/locations/{id}/holiday": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** DX-358: ¿es festivo ese día en la sede? Solo para avisar al agendar */
+        get: operations["LocationCalendarController_holidayOnDay"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/locations/{id}/calendar/working-weekdays": {
         parameters: {
             query?: never;
@@ -16915,6 +16932,12 @@ export interface components {
             workingWeekdays: number[];
             /** @description Festivos vivos: los recurrentes por (mes, día), luego los puntuales por fecha */
             holidays: components["schemas"]["LocationHolidayDto"][];
+        };
+        HolidayOnDayDto: {
+            /** @example 2026-12-25 */
+            date: string;
+            /** @description Nombre del festivo de la sede ese día; null si no lo es. */
+            name: string | null;
         };
         SetWorkingWeekdaysDto: {
             /**
@@ -32682,6 +32705,43 @@ export interface operations {
             };
             /** @description Solo un administrador de la clínica puede ver o cambiar el calendario de la sede. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede inexistente, de otra clínica o retirada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LocationCalendarController_holidayOnDay: {
+        parameters: {
+            query: {
+                date: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolidayOnDayDto"];
+                };
+            };
+            /** @description El identificador de la sede no es válido. */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
