@@ -10,7 +10,7 @@
     "test": "jest",
     "check:country-assumptions": "jest --ci src/architecture/no-country-assumptions.test.ts",
     "test:watch": "jest --watch",
-    "codegen": "openapi-typescript http://localhost:3000/docs-json -o src/lib/api/schema.d.ts",
+    "codegen": "openapi-typescript http://127.0.0.1:3002/docs-json -o src/lib/api/schema.d.ts",
     "test:e2e": "E2E_RUN_SUFFIX=$(node -p 'Date.now()') playwright test"
   },
   "dependencies": {

@@ -40,6 +40,41 @@ la imagen) la web no arranca sin una `API_URL` http(s) válida.
 Imagen de producción: `Dockerfile` (`output: 'standalone'`); runbook en
 `dentalix-docs/docs/operacion/despliegue.md`.
 
+## Regenerar el esquema de la API
+
+`src/lib/api/schema.d.ts` lo genera `openapi-typescript` a partir del OpenAPI de
+`dentalix-api`; no se edita a mano. Tras un cambio de contrato en la API:
+
+```bash
+# En dentalix-api (rama o main que quieras reflejar): puerto 3002, nunca el 3000
+PORT=3002 npm run start:dev        # o `npm run build && PORT=3002 npm run start:prod`
+
+# En dentalix-web
+npm run codegen                    # http://127.0.0.1:3002/docs-json -> src/lib/api/schema.d.ts
+npx tsc --noEmit                   # lo que rompa se adapta en la web: manda el contrato
+```
+
+Para los tipos hay que usar `components['schemas'][...]`, no copias a mano.
+
+La API debe correr con un `NODE_ENV` distinto de `production` o con
+`SWAGGER_ENABLED=true`; si no, `/docs-json` no existe.
+
+### Guarda en CI y orden de merge
+
+La CI (`E2E`, paso «Esquema de la API al día», `scripts/e2e-ci.sh schema`)
+levanta la API del `api_ref` y falla, con el diff, si el esquema commiteado
+difiere. En `push` y `pull_request` el `api_ref` es siempre `main`: solo
+`workflow_dispatch` permite elegir otra rama. Por eso:
+
+- Orden de merge: primero la API, después la web. El PR web con un esquema
+  generado desde una rama de la API sin mergear sale rojo hasta que esa API
+  esté en `main`; para validarlo antes, lanza el workflow a mano con
+  `api_ref` = la rama de la API.
+- Un merge en la API que cambie el contrato pone en rojo `main` de la web (y
+  los PR abiertos) aunque la web no cambie, hasta que alguien regenere el
+  esquema con los pasos de arriba (API de `main` en :3002, `npm run codegen`) y
+  lo commitee. El fallo llega unos 20 minutos después de arrancar, tras el build.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

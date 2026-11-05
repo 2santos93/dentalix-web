@@ -17,7 +17,7 @@ const list = (over: Partial<CheckoutChecklist> = {}): CheckoutChecklist => ({
   hasPhone: true,
   hasEmail: false,
   remindersOptedOut: false,
-  balance: { hasOverdue: true },
+  balance: { hasOverdue: true, overdueDays: 30 },
   ...over,
 });
 
