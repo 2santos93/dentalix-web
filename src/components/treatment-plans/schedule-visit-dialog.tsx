@@ -1,9 +1,9 @@
 "use client";
 import * as React from "react";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { getPatient, type Patient } from "@/lib/patients/patients-api";
 import { listStaff, type StaffMember } from "@/lib/appointments/staff-api";
-import { listLocations } from "@/lib/locations/locations-api";
+import { useSessionLocations } from "@/lib/locations/session-locations";
 import { getActiveLocationId } from "@/lib/locations/location-store";
 import { findOpenings, type Opening } from "@/lib/appointments/waitlist-api";
 import type { PlanVisit } from "@/lib/treatment-plans/plan-visits-api";
@@ -27,6 +27,16 @@ import { civilDateLabel } from "@/lib/format/date";
 import { sedeTimeRange, useSedeClock } from "@/lib/locations/sede-clock";
 import { addCivilDays, wallDay, wallMinuteOfDay } from "@/lib/time/wall-clock";
 
+/** DX-283: el catálogo no tiene duración por procedimiento: la del hueco se elige. */
+const SLOT_DURATIONS = [30, 45, 60, 90, 120];
+
+/** «36 · Endodoncia molar». Un cargo administrativo no es de ningún diente. */
+function visitItemLabel(item: PlanVisit["planItems"][number]): string {
+  return item.toothNumber
+    ? `${item.toothNumber} · ${item.procedureName}`
+    : item.procedureName;
+}
+
 /**
  * «Agendar visita»: los huecos, la fecha mínima y la hora que se propone
  * van en el reloj de la sede de la visita (DX-378), nunca en el del navegador.
@@ -47,13 +57,15 @@ export function ScheduleVisitDialog({
   onCreated: () => void;
 }) {
   const [patient, setPatient] = useState<Patient | null>(null);
-  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [allStaff, setAllStaff] = useState<StaffMember[]>([]);
+  const requestLocations = useSessionLocations(token);
   const [site, setSite] = useState(locationId ?? getActiveLocationId() ?? "");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [selected, setSelected] = useState(visit.planItemIds);
-  const [provider, setProvider] = useState("");
+  const [chosenProvider, setChosenProvider] = useState("");
+  const [duration, setDuration] = useState(30);
   const [openings, setOpenings] = useState<Opening[] | null>(null);
   const [searching, setSearching] = useState(false);
   const searchVersion = useRef(0);
@@ -63,29 +75,31 @@ export function ScheduleVisitDialog({
   const clock = sede.status === "ready" ? sede.clock : null;
   const minimumDay =
     visit.minimumDay ?? (clock ? wallDay(visit.minimumDate, clock.timeZone) : null);
+  // Quién atiende en la sede se deriva: fijar la sede no vuelve a pedir nada.
+  const staff = useMemo(
+    () =>
+      allStaff.filter(
+        (p) =>
+          (p.role === "DENTIST" || p.role === "ADMIN") &&
+          (p.locationIds === null || p.locationIds.includes(site)),
+      ),
+    [allStaff, site],
+  );
+  const provider = staff.some((p) => p.userId === chosenProvider)
+    ? chosenProvider
+    : (staff[0]?.userId ?? "");
   useEffect(() => {
     let cancelled = false;
     Promise.all([
       getPatient(token, patientId),
       listStaff(token),
-      listLocations(token),
+      requestLocations(),
     ])
       .then(([p, providers, locations]) => {
         if (cancelled) return;
         setPatient(p);
-        const attending = providers.filter(
-          (p) =>
-            (p.role === "DENTIST" || p.role === "ADMIN") &&
-            (p.locationIds === null ||
-              p.locationIds.includes(site || locations[0]?.id || "")),
-        );
-        setStaff(attending);
-        setProvider((previous) =>
-          attending.some((p) => p.userId === previous)
-            ? previous
-            : (attending[0]?.userId ?? ""),
-        );
-        if (!site) setSite(locations[0]?.id ?? "");
+        setAllStaff(providers);
+        setSite((current) => current || (locations?.[0]?.id ?? ""));
         setError(null);
       })
       .catch(() => {
@@ -97,14 +111,22 @@ export function ScheduleVisitDialog({
     return () => {
       cancelled = true;
     };
-  }, [token, patientId, reload, site]);
-  function changeProvider(value: string) {
+  }, [token, patientId, reload, requestLocations]);
+  /** Los huecos encontrados ya no valen: otra búsqueda. */
+  function resetSearch() {
     searchVersion.current += 1;
-    setProvider(value);
     setOpenings(null);
     setSlot(null);
     setSearchError(null);
     setSearching(false);
+  }
+  function changeProvider(value: string) {
+    setChosenProvider(value);
+    resetSearch();
+  }
+  function changeDuration(value: number) {
+    setDuration(value);
+    resetSearch();
   }
   async function search() {
     if (!minimumDay) return;
@@ -117,7 +139,7 @@ export function ScheduleVisitDialog({
         locationId: site,
         from: minimumDay,
         to: addCivilDays(minimumDay, 14),
-        durationMinutes: 30,
+        durationMinutes: duration,
         patientId,
       });
       if (version === searchVersion.current) setOpenings(result.openings);
@@ -171,20 +193,20 @@ export function ScheduleVisitDialog({
                 <legend className="t-label mb-1 text-ink">
                   Tratamientos de la visita
                 </legend>
-                {visit.planItemIds.map((id, index) => (
+                {visit.planItems.map((item) => (
                   <Checkbox
-                    key={id}
+                    key={item.id}
                     name="planItemIds"
-                    value={id}
-                    checked={selected.includes(id)}
+                    value={item.id}
+                    checked={selected.includes(item.id)}
                     onChange={(e) =>
                       setSelected((prev) =>
                         e.target.checked
-                          ? [...prev, id]
-                          : prev.filter((i) => i !== id),
+                          ? [...prev, item.id]
+                          : prev.filter((i) => i !== item.id),
                       )
                     }
-                    label={`Tratamiento ${index + 1} de la visita ${visit.number}`}
+                    label={visitItemLabel(item)}
                   />
                 ))}
               </fieldset>
@@ -198,6 +220,19 @@ export function ScheduleVisitDialog({
                     {staff.map((s) => (
                       <option key={s.userId} value={s.userId}>
                         {s.fullName}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </label>
+                <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+                  Duración del hueco
+                  <NativeSelect
+                    value={duration}
+                    onChange={(e) => changeDuration(Number(e.target.value))}
+                  >
+                    {SLOT_DURATIONS.map((minutes) => (
+                      <option key={minutes} value={minutes}>
+                        {minutes} min
                       </option>
                     ))}
                   </NativeSelect>

@@ -12144,6 +12144,7 @@ export interface components {
             minimumDate: string;
             minimumDay: string;
             planItemIds: string[];
+            planItems: components["schemas"]["PlanVisitItemDetailDto"][];
         };
         UnscheduledPlansPageDto: {
             items: components["schemas"]["UnscheduledPlanDto"][];
@@ -12175,6 +12176,14 @@ export interface components {
              */
             minimumDay: string;
             planItemIds: string[];
+            planItems: components["schemas"]["PlanVisitItemDetailDto"][];
+        };
+        PlanVisitItemDetailDto: {
+            /** Format: uuid */
+            id: string;
+            toothNumber: string;
+            surfaces: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
+            procedureName: string;
         };
         PlanVisitsDto: {
             /** Format: uuid */
