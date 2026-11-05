@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { LinkIcon, Phone, TimerOff } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { getPublicPostOp, markPublicPostOpOpened, type PublicPostOp } from '@/lib/postop/postop-api';
-import { PublicNotice as Notice, publicBrandStyle } from '@/components/shared/public-page';
+import { PublicNotice as Notice } from '@/components/shared/public-page';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { ClinicBrand } from '@/components/brand/clinic-brand';
@@ -73,8 +73,14 @@ export function PublicPostOpView({ linkToken }: { linkToken: string }) {
 
   const clinic = state.kind === 'ready' ? state.data.clinic : null;
 
+  // DX-250: sin `publicBrandStyle`. Esa familia es solo la CLARA y, puesta en
+  // línea sobre este contenedor, gana a la del tema oscuro que el layout raíz
+  // inyecta en `:root`/`.dark` (la herencia pierde frente a una declaración
+  // propia): en oscuro, el teléfono salía con el color de texto del tema claro
+  // sobre el lienzo oscuro. El layout ya deriva la familia de la clínica del
+  // host, en claro y en oscuro, con contraste AA garantizado.
   return (
-    <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-canvas">
+    <div className="flex min-h-dvh flex-col bg-canvas">
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
         {state.kind === 'loading' && (
           <div role="status" className="flex flex-col gap-4">

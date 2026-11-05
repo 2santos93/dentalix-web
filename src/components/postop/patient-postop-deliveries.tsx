@@ -35,7 +35,12 @@ const copy = {
     EMAIL: 'Email',
     WHATSAPP_LINK: 'WhatsApp',
   } satisfies Record<PostOpChannel, string>,
+  // DX-250: la historia clínica no afirma un email que no salió.
+  emailNotSent: 'Email · no enviado',
+  emailQueued: 'Email · en cola',
   opened: 'Abierto',
+  // La fecha va en texto visible, no solo en un `title` (no se ve en el móvil).
+  openedOn: (when: string) => `Abierto el ${when}`,
   openedAt: (when: string) => `El paciente abrió el enlace el ${when}`,
   print: 'Ver e imprimir',
   printHint: (title: string) => `${title} (se abre en otra pestaña)`,
@@ -57,13 +62,20 @@ function ListSkeleton() {
 
 function OpenedBadge({ at, stamp }: { at: string | null; stamp: SedePainters }) {
   if (!at) return null;
-  // Sin formato de sede, la insignia no lleva título (no se anuncia «—»).
+  // Sin formato de sede no hay fecha que pintar (no se anuncia «—»): solo «Abierto».
   const when = stamp.maybe.dateTime(at);
   return (
     <Badge variant="success" title={when ? copy.openedAt(when) : undefined}>
-      {copy.opened}
+      {when ? copy.openedOn(when) : copy.opened}
     </Badge>
   );
+}
+
+/** El canal tal como se lee: un email que no salió lo dice. */
+function channelText(d: PostOpDeliverySummary): string {
+  if (d.channel === 'EMAIL' && d.emailStatus === 'NOT_SENT') return copy.emailNotSent;
+  if (d.channel === 'EMAIL' && d.emailStatus === 'QUEUED') return copy.emailQueued;
+  return copy.channel[d.channel];
 }
 
 /**
@@ -141,14 +153,14 @@ export function PatientPostOpDeliveries({ token, patientId }: PatientPostOpDeliv
       header: copy.colChannel,
       cell: (d) => (
         <span className="flex flex-wrap items-center gap-2">
-          <span>{copy.channel[d.channel]}</span>
+          <span>{channelText(d)}</span>
           <OpenedBadge at={d.firstOpenedAt} stamp={stamp} />
         </span>
       ),
       // En la tarjeta, la versión va con el canal (en la tabla, bajo el título).
       mobileCell: (d) => (
         <>
-          <span>{version(d)}</span> · {copy.channel[d.channel]} <OpenedBadge at={d.firstOpenedAt} stamp={stamp} />
+          <span>{version(d)}</span> · {channelText(d)} <OpenedBadge at={d.firstOpenedAt} stamp={stamp} />
         </>
       ),
     },

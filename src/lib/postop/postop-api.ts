@@ -1,4 +1,8 @@
 import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
+import { ApiError, NetworkError } from '@/lib/api/api-error';
+import type { AppointmentStatus } from '@/lib/appointments/appointments-api';
+import type { SedeClock } from '@/lib/locations/sede-clock';
+import { wallDay } from '@/lib/time/wall-clock';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 export { whatsAppUrl } from '@/lib/appointments/confirmation-message';
@@ -52,6 +56,47 @@ export function canManagePostOpTemplates(role: ClinicRole | null): boolean {
 /** Entregar indicaciones: los cuatro roles. `null` (sin sesión legible) no. */
 export function canDeliverPostOp(role: ClinicRole | null): boolean {
   return role !== null;
+}
+
+/** Citas que ya se atienden o se atendieron: su fecha no las hace «futuras». */
+const ATTENDED: ReadonlySet<AppointmentStatus> = new Set([
+  'COMPLETED',
+  'ARRIVED',
+  'IN_CHAIR',
+  'READY_FOR_CHECKOUT',
+]);
+
+/**
+ * DX-250: qué se ofrece de las indicaciones en el detalle de una cita.
+ * - `none`: nada (ni se monta el panel ni se pide su lista): una cita de un
+ *   día civil (en la zona de la sede) que aún no llega y no se atiende.
+ * - `readonly`: cancelada o no-show. No se entrega nada, pero lo que ya se
+ *   entregó antes de cancelarse se sigue viendo (sin acciones).
+ * - `full`: el panel completo.
+ * Sin reloj de la sede no se puede saber el día: se ofrece (la API rechaza
+ * igual una entrega de una cita futura).
+ */
+export function postOpPanelMode(
+  appointment: { status: AppointmentStatus; start: string },
+  clock: SedeClock | null,
+  now: Date = new Date(),
+): 'full' | 'readonly' | 'none' {
+  if (appointment.status === 'CANCELLED' || appointment.status === 'NO_SHOW') return 'readonly';
+  if (!clock || ATTENDED.has(appointment.status)) return 'full';
+  return wallDay(appointment.start, clock.timeZone) <= wallDay(now, clock.timeZone) ? 'full' : 'none';
+}
+
+/**
+ * DX-250: ¿tiene sentido «Reintentar» tras este fallo al entregar? Solo si
+ * el servidor pudo no haber llegado a responder: sin conexión, tiempo agotado
+ * o un 5xx (p. ej. el 502 de un balanceador). Un 4xx (422 sin canal o dado de
+ * baja, 429 de cuota de email…) vuelve a fallar igual.
+ */
+export function canRetryDeliver(err: unknown): boolean {
+  if (err instanceof NetworkError) return true;
+  // 409 de la API: la repetición llegó mientras la primera aún registraba el email.
+  if (err instanceof ApiError) return err.status >= 500 || err.code === 'POSTOP_DELIVERY_IN_PROGRESS';
+  return err instanceof DOMException && err.name === 'TimeoutError';
 }
 
 /** `GET /post-op-templates` — `active` filtra; sin él, todas. */
@@ -110,11 +155,17 @@ export async function deliverPostOp(
   token: string,
   appointmentId: string,
   input: DeliverPostOpInput,
+  /**
+   * DX-250: `Idempotency-Key` (UUID) generado una vez por clic y reutilizado
+   * en los reintentos: la API devuelve la entrega ya registrada, sin `publicUrl`.
+   */
+  idempotencyKey?: string,
 ): Promise<PostOpDeliveryCreated> {
   return apiFetch<PostOpDeliveryCreated>(`${appointmentPostOpPath(appointmentId)}/deliveries`, {
     method: 'POST',
     body: input,
     token,
+    ...(idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : {}),
   });
 }
 

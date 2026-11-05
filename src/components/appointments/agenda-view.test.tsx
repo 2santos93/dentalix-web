@@ -13,7 +13,7 @@ import { listStaff } from '@/lib/appointments/staff-api';
 import { listPatients } from '@/lib/patients/patients-api';
 import { createConfirmationLink } from '@/lib/appointments/confirmations-api';
 import { getAppointmentReminders } from '@/lib/reminders/reminders-api';
-import { getAppointmentPostOp } from '@/lib/postop/postop-api';
+import { deliverPostOp, getAppointmentPostOp } from '@/lib/postop/postop-api';
 import { deleteScheduleBlock, listScheduleBlocks } from '@/lib/appointments/schedule-blocks-api';
 import { listWaitlist, scheduleFromWaitlist } from '@/lib/appointments/waitlist-api';
 import { listLocations } from '@/lib/locations/locations-api';
@@ -1048,8 +1048,9 @@ describe('AgendaView', () => {
   // DX-222: «Indicaciones» en el detalle de la cita, para cualquier rol de la clínica.
   it('el detalle de la cita monta el panel «Indicaciones» de esa cita', async () => {
     const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'RECEPTION' }))}.s`;
-    const future = new Date(Date.now() + 3 * 24 * 3600_000);
-    const day = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-${String(future.getDate()).padStart(2, '0')}`;
+    // DX-250: solo se ofrecen en una cita de hoy o de un día pasado.
+    const past = new Date(Date.now() - 3 * 24 * 3600_000);
+    const day = `${past.getFullYear()}-${String(past.getMonth() + 1).padStart(2, '0')}-${String(past.getDate()).padStart(2, '0')}`;
     const start = new Date(`${day}T09:00:00`).toISOString();
     const end = new Date(`${day}T09:30:00`).toISOString();
     mockedListStaff.mockResolvedValue(staff);
@@ -1075,6 +1076,71 @@ describe('AgendaView', () => {
     );
     expect(duplicateKeys).toEqual([]);
     consoleError.mockRestore();
+  });
+
+  // DX-250: una cita de un día que aún no llega: ni se monta el panel ni se pide su lista.
+  it('una cita SCHEDULED de un día posterior: el detalle no monta «Indicaciones» ni pide GET …/post-op-instructions', async () => {
+    const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'RECEPTION' }))}.s`;
+    const when = new Date(Date.now() + 3 * 24 * 3600_000);
+    const day = `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, '0')}-${String(when.getDate()).padStart(2, '0')}`;
+    const start = new Date(`${day}T09:00:00`).toISOString();
+    const end = new Date(`${day}T09:30:00`).toISOString();
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockResolvedValue([appointment({ id: 'apt-x', start, end, status: 'SCHEDULED' })]);
+    (getAppointmentPostOp as jest.Mock).mockClear();
+    const user = userEvent.setup();
+
+    await renderAgenda(<AgendaView token={receptionToken} />);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await goToDate(user, day);
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
+    await user.click(detail);
+
+    expect(await screen.findByRole('heading', { name: 'Recordatorios por email' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Indicaciones' })).not.toBeInTheDocument();
+    expect(getAppointmentPostOp).not.toHaveBeenCalled();
+  });
+
+  // DX-250 (L5): cancelada o no-show — lo ya entregado se sigue viendo, sin acciones.
+  it.each(['CANCELLED', 'NO_SHOW'] as const)('una cita %s con entregas anteriores: las lista sin botones de entrega', async (status) => {
+    const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'RECEPTION' }))}.s`;
+    const past = new Date(Date.now() - 3 * 24 * 3600_000);
+    const day = `${past.getFullYear()}-${String(past.getMonth() + 1).padStart(2, '0')}-${String(past.getDate()).padStart(2, '0')}`;
+    const start = new Date(`${day}T09:00:00`).toISOString();
+    const end = new Date(`${day}T09:30:00`).toISOString();
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockResolvedValue([appointment({ id: 'apt-x', start, end, status })]);
+    (getAppointmentPostOp as jest.Mock).mockResolvedValueOnce({
+      patientId: 'p1',
+      suggested: [],
+      others: [],
+      email: { allowed: true, reason: null, toMasked: 'a***@correo.com', toResponsible: false },
+      whatsapp: { phone: null, reason: null },
+      locationPhone: null,
+      deliveries: [
+        {
+          id: 'del-1', patientId: 'p1', appointmentId: 'apt-x', templateId: 't', templateCode: 'EXO',
+          templateTitle: 'Tras una extracción', templateVersion: 1, channel: 'PRINT',
+          deliveredAt: '2026-03-01T10:00:00.000Z', deliveredByName: 'Laura', recipientMasked: null,
+          sentToResponsible: false, firstOpenedAt: null, linkExpiresAt: null, emailStatus: null,
+        },
+      ],
+    });
+    const user = userEvent.setup();
+
+    await renderAgenda(<AgendaView token={receptionToken} />);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await goToDate(user, day);
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
+    await user.click(detail);
+
+    const region = await screen.findByRole('region', { name: 'Indicaciones' });
+    expect(within(region).getByRole('list', { name: 'Entregadas en esta cita' })).toHaveTextContent('EXO v1');
+    expect(within(region).queryByRole('button')).not.toBeInTheDocument();
+    expect(within(region).queryByRole('radio')).not.toBeInTheDocument();
+    expect(deliverPostOp).not.toHaveBeenCalled();
   });
 
   // DX-121: vista Día en columnas por profesional.

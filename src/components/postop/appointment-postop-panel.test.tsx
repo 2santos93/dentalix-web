@@ -2,7 +2,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
 import { AppointmentPostOpPanel } from './appointment-postop-panel';
-import { NetworkError } from '@/lib/api/api-error';
+import { ApiError, NetworkError } from '@/lib/api/api-error';
 import {
   deliverPostOp,
   getAppointmentPostOp,
@@ -60,6 +60,7 @@ function deliverySummary(overrides: Partial<PostOpDeliverySummary> = {}): PostOp
     sentToResponsible: false,
     firstOpenedAt: null,
     linkExpiresAt: null,
+    emailStatus: null,
     ...overrides,
   };
 }
@@ -100,7 +101,8 @@ describe('AppointmentPostOpPanel', () => {
     const first = await within(region).findByRole('radio', { name: /Tras una extracción/ });
     expect(first).toBeChecked();
     expect(within(region).getByRole('radio', { name: /Tras un blanqueamiento/ })).not.toBeChecked();
-    expect(within(region).queryByRole('combobox')).not.toBeInTheDocument();
+    // DX-250: las demás indicaciones siguen a mano aunque haya sugeridas.
+    expect(within(region).getByRole('combobox', { name: /otras indicaciones/i })).toHaveValue('');
     expect(mockedGet).toHaveBeenCalledWith('tok', 'appt-1');
     for (const name of ['Imprimir', 'Enviar por email', 'Abrir WhatsApp']) {
       expect(within(region).getByRole('button', { name })).toBeEnabled();
@@ -124,7 +126,7 @@ describe('AppointmentPostOpPanel', () => {
       expect(mockedDeliver).toHaveBeenCalledWith('tok', 'appt-1', {
         templateId: ENDO.id,
         channel: 'EMAIL',
-      }),
+      }, expect.any(String)),
     );
   });
 
@@ -169,38 +171,129 @@ describe('AppointmentPostOpPanel', () => {
     const button = await screen.findByRole('button', { name: 'Enviar por email' });
     await userEvent.click(button);
     await waitFor(() =>
-      expect(toast.success).toHaveBeenCalledWith('Indicaciones enviadas a a***@correo.com.'),
+      expect(toast.success).toHaveBeenCalledWith('Entrega registrada; el email a a***@correo.com está en cola.'),
     );
     expect(mockedDeliver).toHaveBeenCalledWith('tok', 'appt-1', {
       templateId: EXTRACTION.id,
       channel: 'EMAIL',
-    });
+    }, expect.any(String));
     await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
     await waitFor(() =>
       expect(toast.success).toHaveBeenCalledWith(
-        'Indicaciones enviadas al responsable del paciente (m***@correo.com).',
+        'Entrega registrada; el email al responsable del paciente (m***@correo.com) está en cola.',
       ),
     );
   });
 
-  it('email registrado pero no encolado: avisa y ofrece las otras vías, y refresca', async () => {
+  it('email registrado pero no encolado: aviso persistente con el enlace y «Copiar enlace», que anuncia «Copiado»', async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     mockedGet.mockResolvedValue(suggestions());
     mockedDeliver.mockResolvedValueOnce(
       created({
-        delivery: deliverySummary({ channel: 'EMAIL' }),
-        sentTo: 'a***@correo.com',
+        delivery: deliverySummary({ channel: 'EMAIL', emailStatus: 'NOT_SENT' }),
+        publicUrl: 'https://demo.dentalix.app/indicaciones/tok_abc',
+        sentTo: null,
         emailQueued: false,
       }),
     );
     renderPanel();
     await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
-    await waitFor(() =>
-      expect(toast.warning).toHaveBeenCalledWith(
-        'La entrega quedó registrada, pero el email no se pudo encolar. Comparte el enlace o usa WhatsApp.',
-      ),
-    );
+
+    const notice = await screen.findByText('El email no salió');
+    expect(notice.closest('[role="alert"]')).toHaveTextContent(/Email · no enviado/);
+    // No es un toast que se va: sigue en el panel.
+    expect(toast.warning).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
+    const field = screen.getByLabelText('Enlace público de las indicaciones');
+    expect(field).toHaveValue('https://demo.dentalix.app/indicaciones/tok_abc');
+    expect(field).toHaveAttribute('readonly');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Copiar enlace' }));
+    expect(await screen.findByText('Copiado')).toBeInTheDocument();
+    expect(screen.getByText('Copiado').closest('[role="status"]')).not.toBeNull();
+    // L3: cada clic vuelve a anunciar «Copiado» (el texto se remonta).
+    const first = screen.getByText('Copiado');
+    await userEvent.click(screen.getByRole('button', { name: 'Copiar enlace' }));
+    await waitFor(() => expect(screen.getByText('Copiado')).not.toBe(first));
+    expect(writeText).toHaveBeenCalledWith('https://demo.dentalix.app/indicaciones/tok_abc');
+
+    // La recarga de la lista no lo borra; solo «Entendido».
     await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('El email no salió')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Entendido' }));
+    expect(screen.queryByText('El email no salió')).not.toBeInTheDocument();
+  });
+
+  it('si el portapapeles falla, lo dice y deja el enlace seleccionado', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: jest.fn().mockRejectedValue(new Error('denegado')) },
+      configurable: true,
+    });
+    mockedGet.mockResolvedValue(suggestions());
+    mockedDeliver.mockResolvedValueOnce(
+      created({
+        delivery: deliverySummary({ channel: 'EMAIL', emailStatus: 'NOT_SENT' }),
+        publicUrl: 'https://demo.dentalix.app/indicaciones/tok_abc',
+        emailQueued: false,
+      }),
+    );
+    renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Copiar enlace' }));
+    expect(await screen.findByText(/No pudimos copiar automáticamente/)).toBeInTheDocument();
+  });
+
+  it('con sugeridas y otras, se puede elegir una de las otras y se entrega con su templateId', async () => {
+    mockedGet.mockResolvedValue(suggestions());
+    mockedDeliver.mockResolvedValue(created({ sentTo: 'a***@correo.com' }));
+    renderPanel();
+    const select = await screen.findByRole('combobox', { name: /otras indicaciones/i });
+    await userEvent.selectOptions(select, ENDO.id);
+    // La sugerida deja de estar marcada: la elección manual gana.
+    expect(screen.getByRole('radio', { name: /Tras una extracción/ })).not.toBeChecked();
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar por email' }));
+    await waitFor(() =>
+      expect(mockedDeliver).toHaveBeenCalledWith('tok', 'appt-1', {
+        templateId: ENDO.id,
+        channel: 'EMAIL',
+      }, expect.any(String)),
+    );
+    // Volver a una sugerida suelta la otra.
+    await userEvent.click(await screen.findByRole('radio', { name: /Tras un blanqueamiento/ }));
+    expect(screen.getByRole('combobox', { name: /otras indicaciones/i })).toHaveValue('');
+    expect(screen.getByRole('radio', { name: /Tras un blanqueamiento/ })).toBeChecked();
+  });
+
+  it('antes de enviar, bajo «Enviar por email» se lee el destino enmascarado y si va al responsable', async () => {
+    mockedGet.mockResolvedValue(suggestions());
+    const first = renderPanel();
+    const button = await screen.findByRole('button', { name: 'Enviar por email' });
+    expect(screen.getByText('Se enviará a a***@correo.com.')).toBeInTheDocument();
+    expect(button).toHaveAccessibleDescription('Se enviará a a***@correo.com.');
+    first.unmount();
+
+    mockedGet.mockResolvedValue(
+      suggestions({
+        email: { allowed: true, reason: null, toMasked: 'm***@correo.com', toResponsible: true },
+      }),
+    );
+    renderPanel();
+    expect(
+      await screen.findByText('Se enviará a m***@correo.com (responsable del paciente).'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enviar por email' })).toHaveAccessibleDescription(
+      'Se enviará a m***@correo.com (responsable del paciente).',
+    );
+  });
+
+  it('una entrega EMAIL cuyo email no salió se lee «Email · no enviado» en la lista de la cita', async () => {
+    mockedGet.mockResolvedValue(
+      suggestions({ deliveries: [deliverySummary({ channel: 'EMAIL', emailStatus: 'NOT_SENT' })] }),
+    );
+    renderPanel();
+    const list = await screen.findByRole('list', { name: 'Entregadas en esta cita' });
+    expect(list).toHaveTextContent(/EXO v2 · Email · no enviado · /);
   });
 
   it('«Abrir WhatsApp» registra la entrega PRIMERO y abre wa.me con el texto de la API', async () => {
@@ -229,7 +322,7 @@ describe('AppointmentPostOpPanel', () => {
     expect(mockedDeliver).toHaveBeenCalledWith('tok', 'appt-1', {
       templateId: EXTRACTION.id,
       channel: 'WHATSAPP_LINK',
-    });
+    }, expect.any(String));
     const href = win.location.href;
     expect(href.startsWith('https://wa.me/584145550101?text=')).toBe(true);
     const text = decodeURIComponent(href.split('?text=')[1]);
@@ -248,7 +341,7 @@ describe('AppointmentPostOpPanel', () => {
     expect(mockedDeliver).toHaveBeenCalledWith('tok', 'appt-1', {
       templateId: EXTRACTION.id,
       channel: 'PRINT',
-    });
+    }, expect.any(String));
   });
 
   it('con el bloqueador de ventanas: registra y deja «Abrir» en el aviso', async () => {
@@ -257,9 +350,10 @@ describe('AppointmentPostOpPanel', () => {
     mockedDeliver.mockResolvedValue(created({ delivery: deliverySummary({ id: 'del-9' }) }));
     renderPanel();
     await userEvent.click(await screen.findByRole('button', { name: 'Imprimir' }));
-    await waitFor(() => expect(toast.success).toHaveBeenCalled());
-    const [, opts] = (toast.success as jest.Mock).mock.calls[0];
-    opts.action.onClick();
+    // En el panel, no en un toast (la hoja modal deja inertes los toasts).
+    const status = await screen.findByText(/El navegador bloqueó la pestaña/);
+    expect(status.closest('[role="status"]')).not.toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Abrir para imprimir' }));
     expect(open).toHaveBeenLastCalledWith(
       '/print/patients/pat-1/indicaciones/del-9',
       '_blank',
@@ -275,22 +369,25 @@ describe('AppointmentPostOpPanel', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Abrir WhatsApp' }));
     await waitFor(() => expect(win.close).toHaveBeenCalled());
     expect(win.location.href).toBe('');
-    expect(toast.error).toHaveBeenCalledWith(
-      expect.stringMatching(/conexión/),
-      expect.objectContaining({ action: expect.objectContaining({ label: 'Reintentar' }) }),
-    );
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(await screen.findByRole('alert')).toHaveTextContent(/conexión/);
 
     // El reintento repite la misma entrega.
     mockedDeliver.mockResolvedValueOnce(
       created({ whatsapp: { phone: '584145550101', text: 'Hola' } }),
     );
-    const [, opts] = (toast.error as jest.Mock).mock.calls[0];
-    await act(async () => opts.action.onClick());
+    await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
     await waitFor(() => expect(mockedDeliver).toHaveBeenCalledTimes(2));
-    expect(mockedDeliver).toHaveBeenLastCalledWith('tok', 'appt-1', {
-      templateId: EXTRACTION.id,
-      channel: 'WHATSAPP_LINK',
-    });
+    expect(mockedDeliver).toHaveBeenLastCalledWith(
+      'tok',
+      'appt-1',
+      { templateId: EXTRACTION.id, channel: 'WHATSAPP_LINK' },
+      expect.any(String),
+    );
+    // M1: el reintento reutiliza la MISMA Idempotency-Key del clic.
+    const keys = mockedDeliver.mock.calls.map((c) => c[3]);
+    expect(keys[0]).toBeTruthy();
+    expect(keys[1]).toBe(keys[0]);
   });
 
   it('tras entregar, la lista «Entregadas en esta cita» se refresca', async () => {
@@ -322,14 +419,93 @@ describe('AppointmentPostOpPanel', () => {
     mockedDeliver.mockRejectedValueOnce(new NetworkError(new TypeError('fetch failed')));
     renderPanel();
     await userEvent.click(await screen.findByRole('button', { name: 'Imprimir' }));
-    await waitFor(() => expect(toast.error).toHaveBeenCalled());
-    const [, opts] = (toast.error as jest.Mock).mock.calls[0];
+    const retry = await screen.findByRole('button', { name: 'Reintentar' });
     let finish!: (value: PostOpDeliveryCreated) => void;
     mockedDeliver.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
-    act(() => { opts.action.onClick(); opts.action.onClick(); });
-    expect(mockedDeliver).toHaveBeenCalledTimes(2);
+    act(() => { retry.click(); retry.click(); });
+    // La segunda pulsación no hace nada: ni otra pestaña ni otra comprobación.
     expect(open).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(mockedDeliver).toHaveBeenCalledTimes(2));
+    expect(mockedGet).toHaveBeenCalledTimes(2);
     await act(async () => finish(created()));
+  });
+
+  describe('reintentar la entrega (DX-250)', () => {
+    it.each([
+      [422, 'El paciente no tiene email ni un responsable que reciba avisos'],
+      [429, 'Demasiados emails seguidos a esta clínica. Espera un momento'],
+    ])('un %s no ofrece «Reintentar»', async (status, serverMessage) => {
+      mockedGet.mockResolvedValue(suggestions());
+      mockedDeliver.mockRejectedValueOnce(new ApiError(status, serverMessage));
+      renderPanel();
+      await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+      expect(await screen.findByRole('alert')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('un 502 sí lo ofrece; antes de repetir relee la lista y, si la entrega ya está, no hace el POST', async () => {
+      const { win } = fakeWindow();
+      const landed = deliverySummary({
+        id: 'del-landed',
+        channel: 'PRINT',
+        templateId: EXTRACTION.id,
+      });
+      mockedGet
+        .mockResolvedValueOnce(suggestions())
+        // La relectura: el POST sí llegó a registrarse.
+        .mockResolvedValueOnce(suggestions({ deliveries: [landed] }));
+      mockedDeliver.mockRejectedValueOnce(new ApiError(502, 'Bad Gateway'));
+      renderPanel();
+      await userEvent.click(await screen.findByRole('button', { name: 'Imprimir' }));
+      const retry = await screen.findByRole('button', { name: 'Reintentar' });
+      expect(win.close).toHaveBeenCalledTimes(1);
+
+      await userEvent.click(retry);
+      expect(await screen.findByText(/ya había quedado registrada/)).toBeInTheDocument();
+      expect(mockedDeliver).toHaveBeenCalledTimes(1);
+      // L4: se puede abrir la vista imprimible de la entrega que ya estaba.
+      const openSpy = jest.spyOn(window, 'open').mockReturnValue(null);
+      await userEvent.click(screen.getByRole('button', { name: 'Abrir para imprimir' }));
+      expect(openSpy).toHaveBeenLastCalledWith(
+        '/print/patients/pat-1/indicaciones/del-landed',
+        '_blank',
+        'noopener,noreferrer',
+      );
+      // La lista se pinta con la entrega ya registrada.
+      expect(await screen.findByRole('list', { name: 'Entregadas en esta cita' })).toHaveTextContent('EXO v2 · Impresas');
+    });
+
+    it('un 502 y la relectura sin la entrega: ahora sí repite el POST, una sola vez', async () => {
+      fakeWindow();
+      mockedGet.mockResolvedValue(suggestions());
+      mockedDeliver
+        .mockRejectedValueOnce(new ApiError(502, 'Bad Gateway'))
+        .mockResolvedValueOnce(created({ sentTo: 'a***@correo.com' }));
+      renderPanel();
+      await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+      await userEvent.click(await screen.findByRole('button', { name: 'Reintentar' }));
+      await waitFor(() => expect(mockedDeliver).toHaveBeenCalledTimes(2));
+      expect(mockedGet.mock.calls.length).toBeGreaterThanOrEqual(2);
+      await waitFor(() =>
+        expect(toast.success).toHaveBeenCalledWith('Entrega registrada; el email a a***@correo.com está en cola.'),
+      );
+    });
+
+    it('si la relectura falla, no repite el POST: reintenta la comprobación', async () => {
+      mockedGet.mockResolvedValueOnce(suggestions());
+      mockedDeliver.mockRejectedValueOnce(new ApiError(502, 'Bad Gateway'));
+      renderPanel();
+      await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+      const first = await screen.findByRole('button', { name: 'Reintentar' });
+      mockedGet.mockRejectedValueOnce(new NetworkError(new TypeError('fetch failed')));
+      await userEvent.click(first);
+      expect(await screen.findByText(/comprobar si la entrega ya quedó registrada/)).toBeInTheDocument();
+      // Sigue habiendo UN solo aviso, con «Reintentar» (de la comprobación).
+      expect(screen.getAllByRole('alert')).toHaveLength(1);
+      expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+      expect(mockedDeliver).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('una recarga fallida conserva selección, datos y entrega nueva con aviso recuperable', async () => {
@@ -367,4 +543,159 @@ describe('AppointmentPostOpPanel', () => {
     panels.forEach((p, i) => expect(within(p).getByRole('heading', { name: 'Indicaciones' }).id).toBe(ids[i]));
   });
 
+});
+
+describe('AppointmentPostOpPanel: fix round 1 de DX-250', () => {
+  it('«Email · en cola» mientras el outbox no lo despacha; SENT se lee «Email»', async () => {
+    mockedGet.mockResolvedValue(
+      suggestions({
+        deliveries: [
+          deliverySummary({ id: 'q', channel: 'EMAIL', emailStatus: 'QUEUED' }),
+          deliverySummary({ id: 's', channel: 'EMAIL', emailStatus: 'SENT' }),
+          deliverySummary({ id: 'u', channel: 'EMAIL', emailStatus: null }),
+        ],
+      }),
+    );
+    renderPanel();
+    const items = within(await screen.findByRole('list', { name: 'Entregadas en esta cita' })).getAllByRole('listitem');
+    expect(items[0]).toHaveTextContent('EXO v2 · Email · en cola · ');
+    expect(items[1]).toHaveTextContent(/EXO v2 · Email · \d/);
+    expect(items[2]).toHaveTextContent(/EXO v2 · Email · \d/);
+  });
+
+  it('el aviso tras enviar dice «registrada» y «en cola», no «enviadas»', async () => {
+    mockedGet.mockResolvedValue(suggestions());
+    mockedDeliver.mockResolvedValue(created({ sentTo: 'a***@correo.com' }));
+    renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));
+    const [message] = (toast.success as jest.Mock).mock.calls[0];
+    expect(message).toMatch(/registrada.*en cola/);
+    expect(message).not.toMatch(/enviadas/);
+  });
+
+  it('cada clic manda su propia Idempotency-Key (UUID)', async () => {
+    mockedGet.mockResolvedValue(suggestions());
+    mockedDeliver.mockResolvedValue(created({ sentTo: 'a***@correo.com' }));
+    renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+    await waitFor(() => expect(mockedDeliver).toHaveBeenCalledTimes(1));
+    await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+    await waitFor(() => expect(mockedDeliver).toHaveBeenCalledTimes(2));
+    const [k1, k2] = mockedDeliver.mock.calls.map((c) => c[3]);
+    expect(k1).toMatch(/^[0-9a-f-]{36}$/);
+    expect(k2).toMatch(/^[0-9a-f-]{36}$/);
+    expect(k2).not.toBe(k1);
+  });
+
+  it('una repetición de WhatsApp (sin enlace) lo explica en vez de cerrar la pestaña en silencio', async () => {
+    const { win } = fakeWindow();
+    mockedGet.mockResolvedValue(suggestions());
+    mockedDeliver.mockResolvedValue(created({ delivery: deliverySummary({ channel: 'WHATSAPP_LINK' }), whatsapp: null }));
+    renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: 'Abrir WhatsApp' }));
+    await waitFor(() => expect(win.close).toHaveBeenCalled());
+    expect(toast.info).toHaveBeenCalledWith(expect.stringMatching(/enlace no se puede recuperar/));
+  });
+
+  it('una repetición de EMAIL sin enlace y sin cola NO abre la alerta «no salió»: aviso informativo y relee la lista', async () => {
+    mockedGet.mockResolvedValue(suggestions());
+    mockedDeliver.mockResolvedValue(
+      created({
+        delivery: deliverySummary({ channel: 'EMAIL', emailStatus: 'NOT_SENT' }),
+        publicUrl: null,
+        sentTo: null,
+        emailQueued: false,
+      }),
+    );
+    renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+    await waitFor(() => expect(toast.info).toHaveBeenCalledWith(expect.stringMatching(/ya estaba registrada/)));
+    expect(screen.queryByText('El email no salió')).not.toBeInTheDocument();
+    await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
+  });
+
+  it('un 409 «se está registrando» de la API sí ofrece «Reintentar»; un 409 sin ese código no', async () => {
+    mockedGet.mockResolvedValue(suggestions());
+    mockedDeliver
+      .mockRejectedValueOnce(
+        new ApiError(409, 'La entrega se está registrando; espera unos segundos y vuelve a consultar', {
+          code: 'POSTOP_DELIVERY_IN_PROGRESS',
+        }),
+      )
+      .mockRejectedValueOnce(new ApiError(409, 'Conflicto', { code: 'OTRO' }));
+    renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+    expect(await screen.findByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar por email' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument(),
+    );
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  it('el fallo de la entrega se dice UNA vez, en el panel: un aviso, sin toast; los renders y las recargas no lo repiten', async () => {
+    mockedGet.mockResolvedValue(suggestions());
+    mockedDeliver.mockRejectedValueOnce(new ApiError(502, 'Bad Gateway'));
+    const view = renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos entregar las indicaciones.');
+    view.rerender(<AppointmentPostOpPanel clock={CLOCK} token="tok" appointmentId="appt-1" />);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Reintentar' })).toHaveLength(1);
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(mockedDeliver).toHaveBeenCalledTimes(1);
+  });
+
+  it('al reintentar con éxito desde el aviso, desaparece y el foco vuelve al panel (no se pierde en <body>)', async () => {
+    mockedGet.mockResolvedValue(suggestions());
+    mockedDeliver
+      .mockRejectedValueOnce(new ApiError(502, 'Bad Gateway'))
+      .mockResolvedValueOnce(created({ sentTo: 'a***@correo.com' }));
+    renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+    const retry = await screen.findByRole('button', { name: 'Reintentar' });
+    await userEvent.click(retry);
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+    expect(screen.getByRole('region', { name: 'Indicaciones' })).toHaveFocus();
+  });
+
+  it('si el reintento vuelve a fallar, el mismo botón sigue en pantalla con el foco', async () => {
+    mockedGet.mockResolvedValue(suggestions());
+    mockedDeliver.mockRejectedValue(new ApiError(502, 'Bad Gateway'));
+    renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+    const retry = await screen.findByRole('button', { name: 'Reintentar' });
+    retry.focus();
+    await userEvent.click(retry);
+    await waitFor(() => expect(mockedDeliver).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole('button', { name: 'Reintentar' })).toBe(retry);
+    expect(retry).toHaveFocus();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+  });
+
+  describe('solo lectura (cita cancelada o no-show)', () => {
+    it('muestra las entregas anteriores sin selector ni botones', async () => {
+      mockedGet.mockResolvedValue(
+        suggestions({ deliveries: [deliverySummary({ channel: 'EMAIL', emailStatus: 'NOT_SENT' })] }),
+      );
+      render(<AppointmentPostOpPanel clock={CLOCK} token="tok" appointmentId="appt-1" readOnly />);
+      const list = await screen.findByRole('list', { name: 'Entregadas en esta cita' });
+      expect(list).toHaveTextContent('Email · no enviado');
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+      expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+      expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+      expect(mockedDeliver).not.toHaveBeenCalled();
+    });
+
+    it('sin entregas anteriores no pinta nada', async () => {
+      mockedGet.mockResolvedValue(suggestions());
+      const { container } = render(
+        <AppointmentPostOpPanel clock={CLOCK} token="tok" appointmentId="appt-1" readOnly />,
+      );
+      await waitFor(() => expect(mockedGet).toHaveBeenCalled());
+      expect(container).toBeEmptyDOMElement();
+    });
+  });
 });

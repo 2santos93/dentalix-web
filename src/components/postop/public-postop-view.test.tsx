@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PublicPostOpView } from './public-postop-view';
 import { ApiError } from '@/lib/api/api-error';
+import { accentFamily, accentStyleSheet, ratio } from '@/lib/color/accent';
 import {
   getPublicPostOp,
   markPublicPostOpOpened,
@@ -105,4 +108,48 @@ describe('PublicPostOpView', () => {
     expect(await screen.findByText(/Muerde la gasa/)).toBeInTheDocument();
     expect(mockedGet).toHaveBeenCalledTimes(2);
   });
+});
+
+// DX-250: el teléfono (`text-primary-text`) sobre el lienzo da >= 4,5:1 en claro y
+// en oscuro con cualquier color de marca. El layout raíz deriva las dos familias
+// del host (`:root` y `.dark`, con !important); la página no debe pisarlas con la
+// familia clara en línea, que en oscuro dejaba el texto del tema claro sobre el lienzo oscuro.
+describe('PublicPostOpView: contraste del teléfono (DX-250)', () => {
+  // Los lienzos salen de los tokens reales (`tokens.css`: el bloque base y `.dark`).
+  const tokens = readFileSync(join(process.cwd(), 'src/styles/tokens.css'), 'utf8');
+  const tokenIn = (block: 'light' | 'dark', name: string): string => {
+    const start = block === 'dark' ? tokens.indexOf('\n.dark {') : 0;
+    const end = block === 'dark' ? tokens.length : tokens.indexOf('\n.dark {');
+    const match = new RegExp(`--color-${name}:\\s*(#[0-9A-Fa-f]{6})`).exec(tokens.slice(start, end));
+    if (!match) throw new Error(`token --color-${name} (${block}) no encontrado`);
+    return match[1];
+  };
+  const CANVAS = { light: tokenIn('light', 'canvas'), dark: tokenIn('dark', 'canvas') };
+  const SURFACE = { light: tokenIn('light', 'surface'), dark: tokenIn('dark', 'surface') };
+
+  it.each(['#0E7490', '#38BDF8', '#1E3A8A'])('con la marca %s, el color del teléfono pasa 4,5:1 en cada tema', (brand) => {
+    const family = accentFamily(brand)!;
+    for (const theme of ['light', 'dark'] as const) {
+      expect(ratio(family[theme].primaryText, CANVAS[theme])).toBeGreaterThanOrEqual(4.5);
+      expect(ratio(family[theme].primaryText, SURFACE[theme])).toBeGreaterThanOrEqual(4.5);
+    }
+    // Y las dos familias llegan al documento por la hoja del layout raíz.
+    const sheet = accentStyleSheet(brand)!;
+    expect(sheet).toContain(`:root{`);
+    expect(sheet).toContain(`.dark{`);
+    expect(sheet).toContain(`--color-primary-text:${family.dark.primaryText} !important`);
+  });
+
+  it.each(['#0E7490', '#38BDF8', '#1E3A8A'])(
+    'con la marca %s la página no fija en línea la familia clara: el tema decide',
+    async (brand) => {
+      mockedGet.mockResolvedValue(
+        publicFixture({ clinic: { name: 'Clínica Sonrisas', logoUrl: null, primaryColor: brand } }),
+      );
+      const { container } = render(<PublicPostOpView linkToken="tok-1" />);
+      const phone = await screen.findByRole('link', { name: /601 555 0000/ });
+      expect(phone).toHaveClass('text-primary-text');
+      expect((container.firstElementChild as HTMLElement).getAttribute('style')).toBeNull();
+    },
+  );
 });
