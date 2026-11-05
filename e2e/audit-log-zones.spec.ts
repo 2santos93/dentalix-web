@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext, type Page } from './support/test';
+import { test, expect, type APIRequestContext, type Page, type Response } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { apiPost, createLocationViaApi, registerClinicViaApi, type ApiSession } from './support/api';
@@ -109,6 +109,32 @@ async function auditEvents(request: APIRequestContext): Promise<ApiAuditEvent[]>
   return ((await res.json()) as { items: ApiAuditEvent[] }).items;
 }
 
+/**
+ * DX-452: la respuesta real de la API a una carga de la lista de auditoría
+ * (`GET /audit-events`), no un tiempo fijo. Un 401 es el token que la web
+ * renueva y reintenta: se espera a la siguiente. Si la lista falla (4xx/5xx),
+ * el test dice el estado y el cuerpo en vez de agotar el tiempo de la tabla.
+ */
+const AUDIT_LIST_TIMEOUT_MS = 30_000;
+async function auditListLoaded(
+  page: Page,
+  action: () => Promise<unknown>,
+  { resourceType }: { resourceType?: string } = {},
+): Promise<void> {
+  const [res] = await Promise.all([
+    page.waitForResponse(
+      (r: Response) =>
+        r.request().method() === 'GET' &&
+        new URL(r.url()).pathname.endsWith('/audit-events') &&
+        (resourceType === undefined || new URL(r.url()).searchParams.get('resourceType') === resourceType) &&
+        r.status() !== 401,
+      { timeout: AUDIT_LIST_TIMEOUT_MS },
+    ),
+    action(),
+  ]);
+  expect(res.ok(), `GET /audit-events respondió ${res.status()}: ${await res.text()}`).toBeTruthy();
+}
+
 async function shoot(page: Page, name: string, width: number): Promise<void> {
   if (!QA_DIR) return;
   mkdirSync(QA_DIR, { recursive: true });
@@ -166,9 +192,17 @@ test.beforeAll(async ({ request }) => {
 test('cada hora dice su zona, la lista se lee cronológica y el filtro por día usa la misma zona', async ({ page }) => {
   test.setTimeout(150_000);
   await loginAs(page, origin, adminEmail, password);
+  // DX-452: `loginAs` vuelve en cuanto la URL sale de /login. Se espera a que
+  // la navegación del cliente a /patients esté hecha (el login terminó de
+  // entrar) antes del primer `goto`. Es una guarda acotada: en el primer
+  // intento fallido de la run 41182668318 la captura muestra /login y no se
+  // reprodujo la causa; si la sesión se pierde, el test lo dice (ver abajo) en
+  // vez de agotar el tiempo de la tabla.
+  await page.waitForURL(/\/patients$/);
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await page.goto(`${origin}/settings/auditoria`);
+    await auditListLoaded(page, () => page.goto(`${origin}/settings/auditoria`));
+    expect(page.url(), 'sesión perdida: la página volvió a /login').not.toMatch(/\/login/);
     // El registro (DataList): tabla desde 640 px; en el teléfono, tarjetas.
     const phone = viewport.width < 640;
     const table = phone
@@ -192,7 +226,9 @@ test('cada hora dice su zona, la lista se lee cronológica y el filtro por día 
     expect([...instants].sort().reverse()).toEqual(instants);
 
     // Solo las consultas de la historia clínica: una por sede.
-    await page.getByLabel('Recurso').selectOption({ label: 'Historia clínica' });
+    await auditListLoaded(page, () => page.getByLabel('Recurso').selectOption({ label: 'Historia clínica' }), {
+      resourceType: 'MEDICAL_HISTORY',
+    });
     await expect(rows).toHaveCount(SEDES.length, { timeout: 10_000 });
     for (const sede of SEDES) {
       const iso = viewedAt[sede.name]!;
@@ -233,7 +269,9 @@ test('cada hora dice su zona, la lista se lee cronológica y el filtro por día 
         exact: true,
       }),
     ).toBeVisible({ timeout: 10_000 });
-    await page.getByLabel('Recurso').selectOption({ label: 'Historia clínica' });
+    await auditListLoaded(page, () => page.getByLabel('Recurso').selectOption({ label: 'Historia clínica' }), {
+      resourceType: 'MEDICAL_HISTORY',
+    });
     await expect(rows).toHaveCount(SEDES.length, { timeout: 10_000 });
     for (const sede of SEDES) {
       const iso = viewedAt[sede.name]!;

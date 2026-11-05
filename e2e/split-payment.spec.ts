@@ -2,7 +2,7 @@ import { test, expect, type APIRequestContext, type Page } from './support/test'
 import { randomUUID } from 'node:crypto';
 import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
-import { expectTouchTarget } from './support/touch-targets';
+import { expectTouchTarget, TOUCH_TARGET_PX, touchPx } from './support/touch-targets';
 import { dataList, dataListRows } from './support/data-list';
 import { DEMO_CURRENCY } from './support/demo';
 
@@ -204,8 +204,8 @@ for (const viewport of [
       ];
       for (const control of footerControls) {
         await expect
-          .poll(async () => (await control.boundingBox())?.height ?? 0, { message: 'pie del recibo: 44 px' })
-          .toBeGreaterThanOrEqual(44);
+          .poll(async () => touchPx((await control.boundingBox())?.height ?? 0), { message: 'pie del recibo: 44 px' })
+          .toBeGreaterThanOrEqual(TOUCH_TARGET_PX);
       }
       await page.keyboard.press('Escape');
       await expect(receiptDialog).toBeHidden();
