@@ -1,3 +1,4 @@
+import { appointmentTypeTextColor, contrastRatio } from '@/lib/color/contrast';
 import { auditRenderedControls } from '@/lib/test/rendered-a11y';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -153,6 +154,17 @@ describe('DayColumns (DX-121)', () => {
       expect(card.getAttribute('style') ?? '').not.toMatch(/background-color/);
     },
   );
+
+  it('DX-180: el anillo de foco es de la tinta de la tarjeta y da 3:1 sobre sus colores', () => {
+    renderColumns();
+    const [card] = screen.getAllByTestId('day-column-appointment');
+    const button = within(card).getAllByRole('button')[0];
+    expect(button.className).toContain('focus-visible:ring-current');
+    expect(button.className).not.toContain('ring-primary');
+    for (const color of ['#0E7490', '#15803D', '#7C3AED', '#BE123C', '#38BDF8', '#FDE047']) {
+      expect(contrastRatio(appointmentTypeTextColor(color), color)!).toBeGreaterThanOrEqual(3);
+    }
+  });
 
   it('un color que no es #RRGGBB nunca llega al estilo (cae al neutro)', () => {
     renderColumns({

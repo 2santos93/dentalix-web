@@ -27,6 +27,7 @@ import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { SectionError } from '@/components/errors/section-error';
 import { cn } from '@/lib/utils';
+import { telHref } from '@/lib/receivables/presentation';
 
 // Copy as constants (i18n-ready, es-first).
 export const waitlistCopy = {
@@ -218,9 +219,9 @@ export function WaitlistPanel({
                     {entry.note ? <p className="text-ink">{entry.note}</p> : null}
                     {entry.patientPhone ? (
                       <a
-                        href={`tel:${entry.patientPhone}`}
+                        href={telHref(entry.patientPhone)}
                         aria-label={waitlistCopy.call(entry.patientPhone)}
-                        className="inline-flex items-center gap-1 self-start rounded text-primary-text underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
+                        className="inline-flex min-h-6 items-center gap-1 self-start rounded text-primary-text max-sm:min-h-11 underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                       >
                         <Phone className="size-3.5" aria-hidden />
                         <span className="tabular-nums">{entry.patientPhone}</span>

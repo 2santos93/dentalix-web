@@ -40,6 +40,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { endSentence } from '@/lib/format/text';
+import { telHref } from '@/lib/receivables/presentation';
 
 // Copy as constants (i18n-ready, es-first).
 export const fillOpeningCopy = {
@@ -627,7 +628,7 @@ function CandidateRow({
             ) : null}
             {!canWhatsApp && c.phone ? (
               <a
-                href={`tel:${c.phone}`}
+                href={telHref(c.phone)}
                 aria-label={fillOpeningCopy.callFor(name, c.phone)}
                 className={buttonVariants({ variant: 'secondary', size: 'sm' })}
               >

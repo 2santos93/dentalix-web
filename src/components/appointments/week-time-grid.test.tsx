@@ -107,6 +107,74 @@ it('clicking an empty slot calls onSelectSlot with that day and time', async () 
   expect(onSelectSlot).toHaveBeenCalledWith('2026-03-09', '09:00');
 });
 
+describe('DX-180: la rejilla de huecos con teclado', () => {
+  const grid = (props: Partial<React.ComponentProps<typeof WeekTimeGrid>> = {}) => {
+    const onSelectSlot = jest.fn();
+    render(
+      <WeekTimeGrid clock={CLOCK}
+        appointments={[]} weekStart={WEEK_START}
+        onSelectDay={noop} onSelectSlot={onSelectSlot} onSelectAppointment={noop}
+        {...props}
+      />,
+    );
+    return onSelectSlot;
+  };
+  const tabbableSlots = () =>
+    screen.getAllByRole('button', { name: /^Crear cita/ }).filter((b) => b.tabIndex === 0);
+
+  it('los 336 huecos son UNA parada de tabulador; flechas, Inicio y Fin se mueven y Enter crea', async () => {
+    const onSelectSlot = grid();
+    expect(screen.getAllByRole('button', { name: /^Crear cita/ })).toHaveLength(336);
+    expect(tabbableSlots()).toHaveLength(1);
+    const first = tabbableSlots()[0];
+    expect(first).toHaveAttribute('data-testid', 'week-grid-slot-2026-03-09-07:00');
+
+    first.focus();
+    await userEvent.keyboard('{ArrowDown}{ArrowRight}');
+    expect(document.activeElement).toHaveAttribute('data-testid', 'week-grid-slot-2026-03-10-07:30');
+    expect(tabbableSlots()).toEqual([document.activeElement]);
+    await userEvent.keyboard('{Enter}');
+    expect(onSelectSlot).toHaveBeenCalledWith('2026-03-10', '07:30');
+
+    await userEvent.keyboard('{Home}');
+    expect(document.activeElement).toHaveAttribute('data-testid', 'week-grid-slot-2026-03-10-00:00');
+    await userEvent.keyboard('{ArrowUp}');
+    expect(document.activeElement).toHaveAttribute('data-testid', 'week-grid-slot-2026-03-10-00:00');
+    await userEvent.keyboard('{End}');
+    expect(document.activeElement).toHaveAttribute('data-testid', 'week-grid-slot-2026-03-10-23:30');
+  });
+
+  it('anuncia el hueco con la fecha larga y el bloqueo que no admite citas', () => {
+    grid({
+      blocks: [
+        {
+          id: 'b1',
+          providerId: null,
+          locationId: null,
+          start: new Date('2026-03-09T09:00:00.000Z').toISOString(),
+          end: new Date('2026-03-09T10:00:00.000Z').toISOString(),
+          kind: 'OTHER',
+          allowsBooking: false,
+          note: 'Fumigación',
+        },
+      ] as never,
+    });
+    const free = screen.getByTestId('week-grid-slot-2026-03-09-07:00').getAttribute('aria-label');
+    expect(free).toMatch(/^Crear cita el .*9 de marzo a las /);
+    expect(free).not.toContain('bloqueado');
+    const blockedSlots = screen
+      .getAllByRole('button', { name: /^Crear cita/ })
+      .filter((b) => b.getAttribute('aria-label')?.includes('bloqueado:'));
+    expect(blockedSlots.length).toBeGreaterThan(0);
+    expect(blockedSlots[0].getAttribute('aria-label')).toContain('Fumigación');
+  });
+
+  it('el marco es una región con nombre', () => {
+    grid();
+    expect(screen.getByRole('region', { name: 'Agenda de la semana' })).toBeInTheDocument();
+  });
+});
+
 it('renders an appointment block and calls onSelectAppointment on click', async () => {
   const onSelectAppointment = jest.fn();
   const apt = appointment({ id: 'apt-1', start: '2026-03-09T09:00:00.000Z', end: '2026-03-09T10:00:00.000Z' });

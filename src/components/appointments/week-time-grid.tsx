@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { AttendanceBadge } from '@/components/appointments/attendance-badge';
 import { OverbookedChip } from '@/components/appointments/overbooked-chip';
 import type { Appointment } from '@/lib/appointments/appointments-api';
@@ -32,10 +32,12 @@ import { CoverageMarker } from '@/components/patients/coverage-chip';
 import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
 import { medicalAlertSeverity } from '@/lib/clinical/medical-alerts';
 import { chairDisplayName } from '@/lib/chairs/chair-columns';
+import { cn } from '@/lib/utils';
 
 const copy = {
   heading: 'Agenda de la semana',
-  createSlotLabel: (date: string, time: string) => `Crear cita ${date} ${time}`,
+  createSlotLabel: (date: string, time: string, blocked: string | null) =>
+    `Crear cita el ${date} a las ${time}${blocked ? ` · bloqueado: ${blocked}` : ''}`,
   blockAria: (label: string) => `Bloqueo: ${label}`,
 };
 
@@ -139,23 +141,72 @@ export function WeekTimeGrid({
   const laneCount = Math.max(1, ...dayLayouts.flatMap((day) => day.map((item) => item.laneCount)));
   const gutter = clock.fmt.hourCycle === 'h12' ? '5.5rem' : '4rem';
   const scrollRef = useRef<HTMLDivElement>(null);
+  const firstStartMin = appointments.length
+    ? Math.min(...appointments.map((a) => wallMinuteOfDay(a.start, timeZone)))
+    : 7 * 60;
 
   // Auto-scroll: a la primera cita de la semana, o a las 07:00 si no hay.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const firstStartMin = appointments.length
-      ? Math.min(
-          ...appointments.map((a) => wallMinuteOfDay(a.start, timeZone)),
-        )
-      : 7 * 60;
     el.scrollTop = (firstStartMin / SLOT_MINUTES) * ROW_HEIGHT_PX;
-  }, [appointments, weekStart, timeZone]);
+  }, [firstStartMin, weekStart]);
+
+  // DX-180: el marco solo es una parada de tabulador y lleva sombras si desborda.
+  const [overflowsX, setOverflowsX] = useState(false);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const measure = () => setOverflowsX(el.scrollWidth > el.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // DX-180: la rejilla de huecos es UNA parada de tabulador (antes, 336 botones):
+  // las flechas se mueven entre horas y días; Inicio y Fin, al principio y al final del día.
+  const [cursor, setCursor] = useState<{ day: number; slot: number } | null>(null);
+  const activeCell = cursor ?? { day: 0, slot: Math.floor(firstStartMin / SLOT_MINUTES) };
+
+  function moveCursor(event: KeyboardEvent<HTMLButtonElement>, day: number, slot: number) {
+    const next = {
+      ArrowUp: { day, slot: Math.max(0, slot - 1) },
+      ArrowDown: { day, slot: Math.min(SLOTS_PER_DAY - 1, slot + 1) },
+      ArrowLeft: { day: Math.max(0, day - 1), slot },
+      ArrowRight: { day: Math.min(dates.length - 1, day + 1), slot },
+      Home: { day, slot: 0 },
+      End: { day, slot: SLOTS_PER_DAY - 1 },
+    }[event.key];
+    if (!next) return;
+    event.preventDefault();
+    setCursor(next);
+    scrollRef.current
+      ?.querySelector<HTMLButtonElement>(`[data-testid="week-grid-slot-${dates[next.day]}-${slotTime(next.slot)}"]`)
+      ?.focus();
+  }
+
+  /** El bloqueo sin citas que cubre el hueco, si lo hay, para anunciarlo. */
+  function blockedLabel(date: string, slot: number): string | null {
+    const minute = slot * SLOT_MINUTES;
+    const block = blocks.find((b) => {
+      if (b.allowsBooking || (b.providerId !== null && b.providerId !== selectedProviderId)) return false;
+      const band = blockBandForDay(b, date, WHOLE_DAY, timeZone);
+      return band !== null && minute >= band.start && minute < band.end;
+    });
+    return block ? labelOf(block) : null;
+  }
 
   return (
     <div
+      role="region"
       aria-label={copy.heading}
-      className="max-h-[70vh] overflow-auto rounded-lg border border-border bg-surface"
+      tabIndex={overflowsX ? 0 : undefined}
+      className={cn(
+        'max-h-[70vh] overflow-auto rounded-lg border border-border bg-surface',
+        overflowsX &&
+          'scroll-x-shadows focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text',
+      )}
       ref={scrollRef}
     >
       {/* Cada carril mantiene espacio para paciente y estado; el scroll pertenece a la rejilla. */}
@@ -223,10 +274,17 @@ export function WeekTimeGrid({
                 key={i}
                 type="button"
                 data-testid={`week-grid-slot-${date}-${slotTime(i)}`}
+                tabIndex={activeCell.day === dayIndex && activeCell.slot === i ? 0 : -1}
                 onClick={() => onSelectSlot(date, slotTime(i))}
-                className="block w-full border-b border-border/40 hover:bg-primary-subtle"
+                onKeyDown={(event) => moveCursor(event, dayIndex, i)}
+                onFocus={() => setCursor({ day: dayIndex, slot: i })}
+                className="block w-full scroll-mt-16 scroll-ml-20 border-b border-border/40 hover:bg-primary-subtle focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary-text"
                 style={{ height: ROW_HEIGHT_PX }}
-                aria-label={copy.createSlotLabel(date, sedeMinute(i * SLOT_MINUTES, clock.fmt))}
+                aria-label={copy.createSlotLabel(
+                  clock.fmt.civilLongDate(date, { year: false }).replace(/,/g, ''),
+                  sedeMinute(i * SLOT_MINUTES, clock.fmt),
+                  blockedLabel(date, i),
+                )}
               />
             ))}
             {blocks

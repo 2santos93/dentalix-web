@@ -28,6 +28,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { Pagination } from '@/components/shared/pagination';
 import { ResultCount } from '@/components/shared/list-toolbar';
 import { RejectPlanModal } from './reject-plan-modal';
+import { telHref } from '@/lib/receivables/presentation';
 
 export const pendingFollowUpCopy = {
   scopeAll: 'Todas las sedes',
@@ -78,11 +79,6 @@ const AGE_OPTIONS = [7, 15, 30, 60] as const;
 
 interface PendingFollowUpViewProps {
   token: string;
-}
-
-/** `tel:` sin espacios ni guiones (el `+` se conserva). */
-function telHref(phone: string): string {
-  return `tel:${phone.replace(/[^\d+]/g, '')}`;
 }
 
 /**
