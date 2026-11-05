@@ -23,14 +23,23 @@ on:
         description: Veces que se repite cada test (--repeat-each, entero; 1 = una)
         required: false
         default: '1'
+      # DX-494 (TST-061): relanzar la E2E de un merge web que quedó bloqueado
+      # por la API (ver «Relanzar la E2E de un merge web bloqueado» en el
+      # README). Es el sha de dentalix-web a probar; sin él, el de la ref
+      # desde la que se lanza el workflow.
+      web_sha:
+        description: Commit (sha) de dentalix-web a probar; vacío = el de la ref del run
+        required: false
+        default: ''
 
-# En una rama o un PR, un push nuevo cancela la ejecución anterior. En main
-# no (DX-292, TST-033): cada merge tiene su E2E completa. Su grupo es propio
-# de cada run, porque en un grupo compartido GitHub cancela la run que espera
-# turno cuando llega otra, aunque no haya `cancel-in-progress`.
+# Solo un push nuevo a un PR cancela la ejecución anterior del PR. Ni en main
+# ni en un lanzamiento manual (DX-292, TST-033; DX-494, TST-061): cada merge
+# tiene su E2E completa y un relanzamiento no cancela a otro. Su grupo es
+# propio de cada run, porque en un grupo compartido GitHub cancela la run que
+# espera turno cuando llega otra, aunque no haya `cancel-in-progress`.
 concurrency:
-  group: e2e-${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: e2e-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -82,12 +91,19 @@ jobs:
     steps:
       # Los dos repos, hermanos en el workspace: la API no queda dentro del
       # árbol de la web (el `next build` no debe ver su código).
+      # DX-494: `web_sha` (solo workflow_dispatch) prueba ese commit de la web
+      # en vez del de la ref del run; el workflow y `scripts/e2e-ci.sh` que
+      # corren son los de ese commit.
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.web_sha || github.sha }}
           path: dentalix-web
           persist-credentials: false
 
+      # El `id` da el sha EXACTO de la API probada (`outputs.commit`): si el
+      # paso «API» falla, el resumen dice contra qué commit (DX-494).
       - name: Checkout de dentalix-api
+        id: api-checkout
         uses: actions/checkout@v4
         with:
           repository: 2santos93/dentalix-api
@@ -119,6 +135,7 @@ jobs:
         run: scripts/e2e-ci.sh db
 
       - name: API (build y start:prod)
+        id: api
         timeout-minutes: 5
         run: scripts/e2e-ci.sh api
 
@@ -199,3 +216,32 @@ jobs:
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14
+
+      # DX-494 (TST-061): si la API no compila ni arranca, el fallo no es de la
+      # web y no se prueba nada de ella. Este paso final lo deja dicho en el
+      # resumen del job y en una anotación, y falla con el mismo mensaje para
+      # que la run se distinga a simple vista de un fallo de Playwright; no
+      # oculta el fallo del paso «API» (sigue rojo y sus logs, intactos). Para
+      # volver a probar el merge cuando la API esté verde, ver el README
+      # («Relanzar la E2E de un merge web bloqueado»). El sha llega por `env`.
+      - name: Bloqueado por la API (dentalix-api)
+        if: always() && steps.api.outcome == 'failure'
+        timeout-minutes: 1
+        env:
+          API_SHA: ${{ steps.api-checkout.outputs.commit }}
+          API_REF: ${{ inputs.api_ref || 'main' }}
+          WEB_SHA: ${{ inputs.web_sha || github.sha }}
+        # En línea y no en scripts/e2e-ci.sh: con `web_sha` el script es el de
+        # un commit viejo, que no tendría esta fase.
+        run: |
+          msg="bloqueado por dentalix-api@${API_SHA:-desconocido} (api_ref: ${API_REF}); web probada: ${WEB_SHA}"
+          {
+            echo "## Bloqueado por la API, no por la web"
+            echo
+            echo "**${msg}**"
+            echo
+            echo "El paso «API (build y start:prod)» falló: Playwright no se ejecutó."
+            echo "Cuando la API vuelva a verde, relanza esta E2E: README, «Relanzar la E2E de un merge web bloqueado»."
+          } >> "${GITHUB_STEP_SUMMARY}"
+          echo "::error title=Bloqueado por la API::${msg}"
+          exit 1

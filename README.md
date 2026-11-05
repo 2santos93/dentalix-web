@@ -75,6 +75,31 @@ difiere. En `push` y `pull_request` el `api_ref` es siempre `main`: solo
   esquema con los pasos de arriba (API de `main` en :3002, `npm run codegen`) y
   lo commitee. El fallo llega unos 20 minutos después de arrancar, tras el build.
 
+### Relanzar la E2E de un merge web bloqueado
+
+Si el paso «API (build y start:prod)» de la E2E de `main` falla, el job termina
+con el paso final «Bloqueado por la API (dentalix-api)» y el resumen del job dice
+`bloqueado por dentalix-api@<sha>`: la web no se probó (no hubo Playwright), pero
+el fallo es de la API, no de la web. Los push a `main` no cancelan la CI ni la
+E2E de otro (cada merge tiene la suya).
+
+Cuando la API vuelva a verde, relanza la E2E de cada merge bloqueado con
+`workflow_dispatch` y el sha de la web (input `web_sha`; `api_ref` por defecto es
+`main`). No hace falta ningún secreto nuevo, solo `gh` con permiso sobre el repo:
+
+```bash
+# un merge
+scripts/e2e-relaunch.sh <sha-de-la-web>
+# varios, del más viejo al más nuevo
+scripts/e2e-relaunch.sh <sha1> <sha2> <sha3>
+# lo que hace por debajo
+gh workflow run e2e.yml --repo 2santos93/dentalix-web --ref main -f web_sha=<sha> -f api_ref=main
+```
+
+Para saber cuáles quedaron bloqueados: `gh run list --repo 2santos93/dentalix-web
+--workflow e2e.yml --branch main --status failure` y abrir el resumen de cada una.
+El run relanzado queda en la lista de `E2E` con el sha en su resumen.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

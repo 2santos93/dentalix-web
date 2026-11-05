@@ -5,10 +5,13 @@ on:
     branches: [main]
   pull_request:
 
-# Un push nuevo a la misma rama/PR cancela la ejecución anterior.
+# Solo un push nuevo a un PR cancela la ejecución anterior del PR. En main no
+# (DX-494, TST-061): cada merge tiene su CI completa. Su grupo lleva el sha
+# del push, porque en un grupo compartido GitHub cancela la run que espera
+# turno cuando llega otra, aunque no haya `cancel-in-progress`.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
