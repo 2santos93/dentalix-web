@@ -4,10 +4,10 @@
 // es la URL interna de la API (`API_URL`). Es una cabecera que Next fija DESPUÉS
 // del proxy (router-server → res.setHeader), así que proxy.ts no puede quitarla
 // y la respuesta no pasa por ningún route handler. La imagen de producción
-// precarga este fichero (`node --require`) y las respuestas HTTP del proceso
+// precarga este fichero (NODE_OPTIONS) y las respuestas HTTP del proceso
 // dejan de poder llevarla: Next no la lee de vuelta de la respuesta (decide con
 // los valores que devuelve, no con la cabecera ya escrita).
-//   CMD ["node", "--require", "./strip-middleware-rewrite.cjs", "server.js"]
+//   ENV NODE_OPTIONS="--require /app/strip-middleware-rewrite.cjs"
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- precarga CommonJS, sin build
 const http = require('node:http');
 

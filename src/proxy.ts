@@ -28,7 +28,7 @@ export const API_BODY_TOO_LARGE = {
  * `x-middleware-rewrite` con el destino, o sea, con `API_URL`. Next la fija
  * después de este proxy, así que aquí no se puede quitar: lo hace la imagen
  * (SEC-062, `scripts/docker/strip-middleware-rewrite.cjs`, precargado con
- * `node --require` en el CMD del Dockerfile) y lo comprueba la prueba de humo
+ * `NODE_OPTIONS=--require` en el Dockerfile) y lo comprueba la prueba de humo
  * (`scripts/docker-smoke/web.sh`). Fuera de la imagen (`next dev`, `next
  * start`) la cabecera sigue saliendo.
  *

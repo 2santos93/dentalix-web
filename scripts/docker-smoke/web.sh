@@ -71,7 +71,11 @@ check_api() {
       fail "[$label] ${path_} expone x-middleware-rewrite: $(grep -i '^x-middleware-rewrite:' <<<"$headers")"
     fi
     grep -qi '^HTTP/[0-9.]* 200' <<<"$headers" || fail "[$label] ${path_} no respondió 200"
-    grep -q "127.0.0.1:${api_port}" <<<"$headers" && fail "[$label] ${path_} deja ver la URL interna de la API en las cabeceras"
+    # Solo en la respuesta del proxy: la CSP de las páginas lleva el origen de la
+    # API en `img-src` a propósito (csp.ts), así que /login no se mira aquí.
+    if [[ "$path_" == /api/v1/* ]] && grep -q "127.0.0.1:${api_port}" <<<"$headers"; then
+      fail "[$label] ${path_} deja ver la URL interna de la API en las cabeceras"
+    fi
   done
   echo "[$label] sin x-middleware-rewrite en /api/v1 ni en /login"
 
