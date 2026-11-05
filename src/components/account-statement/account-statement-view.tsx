@@ -56,6 +56,7 @@ import {
   voidPaymentSubject,
   type VoidPaymentTarget,
 } from '@/components/payments/use-void-payment';
+import { SplitPaymentBadge, splitPaymentLabel } from '@/components/payments/split-payment-badge';
 import { RecordPaymentModal } from '@/components/payments/record-payment-modal';
 import { StatementPaymentPlanModal } from './statement-payment-plan-modal';
 import { PlanItemsBalance } from './plan-items-balance';
@@ -66,7 +67,13 @@ import { getTokenRole } from '@/lib/auth/token-role';
 import { cn } from '@/lib/utils';
 import { CreditBalanceSection } from '@/components/patient-credit/credit-balance-section';
 import { CreditRefundDialog } from '@/components/patient-credit/credit-refund-dialog';
-import { canMoveCredit, type CreditRefund } from '@/lib/patient-credit/patient-credit-api';
+import {
+  RECEPTION_CAP_ZERO_MESSAGE,
+  canMoveCredit,
+  getCreditPolicy,
+  type CreditRefund,
+} from '@/lib/patient-credit/patient-credit-api';
+import { CREDIT_MOVEMENTS_HEADING_ID, CreditMovementsSection } from '@/components/patient-credit/credit-movements-section';
 
 // Copy como constantes (i18n-ready), igual que el resto de vistas.
 const copy = {
@@ -181,7 +188,36 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
   // Saldo a favor (DX-253): traspaso y devolución (con su comprobante).
   const canCredit = canMoveCredit(getTokenRole(token));
-  const [issuedRefund, setIssuedRefund] = useState<CreditRefund | null>(null);
+  // `reprint`: el comprobante viene del historial (DX-432), no de una devolución recién hecha.
+  const [issuedRefund, setIssuedRefund] = useState<{ refund: CreditRefund; reprint: boolean } | null>(null);
+  // DX-432: recepción con el tope de la clínica en 0 no puede mover saldo; se le dice antes del 403.
+  // Si el tope no se lee, no se bloquea nada: la API sigue siendo la autoridad.
+  const [receptionCapZero, setReceptionCapZero] = useState(false);
+  const role = getTokenRole(token);
+  useEffect(() => {
+    if (role !== 'RECEPTION') return;
+    let cancelled = false;
+    getCreditPolicy(token)
+      .then((policy) => {
+        if (!cancelled) setReceptionCapZero(policy.receptionMaxAmount === 0);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [token, role]);
+  // DX-432: tras un traspaso correcto el foco vuelve al historial cuando la recarga termina
+  // (la fila de donde salió la acción ya no existe).
+  const focusHistoryAfterLoad = React.useRef(false);
+  function focusHistory(): boolean {
+    const heading = document.getElementById(CREDIT_MOVEMENTS_HEADING_ID);
+    heading?.focus();
+    return heading !== null;
+  }
+  function transferred(notice: string) {
+    focusHistoryAfterLoad.current = true;
+    charged(notice);
+  }
 
   function openCharge(kind: 'payment' | 'payment-plan') {
     setChargeModal(kind);
@@ -220,6 +256,11 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
     };
   }, [token, patientId, reloadKey]);
 
+  useEffect(() => {
+    if (loading || !data || !focusHistoryAfterLoad.current) return;
+    if (focusHistory()) focusHistoryAfterLoad.current = false;
+  }, [loading, data]);
+
   const empty = data ? isEmptyStatement(data) : false;
   const showPrint = !loading && !error && data !== null && !empty;
   // Cobrar no depende de que haya movimientos (un paciente nuevo con su primer
@@ -251,7 +292,7 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
                 <Button
                   type="button"
                   variant={owes ? 'default' : 'secondary'}
-                  className="w-full sm:w-auto"
+                  className="w-full max-sm:min-h-11 sm:w-auto"
                   onClick={() => openCharge('payment')}
                 >
                   <HandCoins aria-hidden />
@@ -260,7 +301,7 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
                 <Button
                   type="button"
                   variant="secondary"
-                  className="w-full sm:w-auto"
+                  className="w-full max-sm:min-h-11 sm:w-auto"
                   onClick={() => openCharge('payment-plan')}
                 >
                   <CalendarClock aria-hidden />
@@ -269,7 +310,7 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
               </>
             ) : null}
             {showPrint ? (
-              <Button asChild variant="secondary" className="w-full sm:w-auto">
+              <Button asChild variant="secondary" className="w-full max-sm:min-h-11 sm:w-auto">
                 <a href={accountStatementPrintHref(patientId)} target="_blank" rel="noopener">
                   <Printer aria-hidden />
                   {copy.print}
@@ -307,9 +348,12 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
               onReceipt={setReceiptPaymentId}
               canCredit={canCredit}
               onRetry={() => setReloadKey((k) => k + 1)}
-              onTransferred={charged}
+              actBlockedReason={receptionCapZero ? RECEPTION_CAP_ZERO_MESSAGE : null}
+              onOpenReceipt={(refund) => setIssuedRefund({ refund, reprint: true })}
+              patientId={patientId}
+              onTransferred={transferred}
               onRefunded={(refund) => {
-                setIssuedRefund(refund);
+                setIssuedRefund({ refund, reprint: false });
                 setReloadKey((k) => k + 1);
                 onChanged?.();
               }}
@@ -346,9 +390,17 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
 
       <CreditRefundDialog
         token={token}
-        refund={issuedRefund}
+        refund={issuedRefund?.refund ?? null}
+        reprint={issuedRefund?.reprint ?? false}
         onOpenChange={(open) => {
           if (!open) setIssuedRefund(null);
+        }}
+        onCloseAutoFocus={(event) => {
+          // Un comprobante recién emitido: su origen (el «⋯» del saldo) ya no está; el foco va al
+          // historial, donde la devolución acaba de aparecer. Una reimpresión vuelve a su fila.
+          if (issuedRefund?.reprint !== false) return;
+          event.preventDefault();
+          if (!focusHistory()) focusHistoryAfterLoad.current = true;
         }}
       />
 
@@ -388,6 +440,9 @@ function StatementBody({
   onVoid,
   onReceipt,
   canCredit,
+  actBlockedReason,
+  patientId,
+  onOpenReceipt,
   onRetry,
   onTransferred,
   onRefunded,
@@ -399,6 +454,11 @@ function StatementBody({
   onReceipt: (paymentId: string) => void;
   /** DX-253: ADMIN y recepción ven «Aplicar a otro plan» y «Devolver». */
   canCredit: boolean;
+  /** DX-432: por qué las acciones del saldo a favor no se pueden ahora (tope de recepción en 0). */
+  actBlockedReason: string | null;
+  patientId: string;
+  /** DX-432: reimprime el comprobante de una devolución del historial. */
+  onOpenReceipt: (refund: CreditRefund) => void;
   /** DX-472: vuelve a pedir el estado de cuenta. */
   onRetry: () => void;
   onTransferred: (notice: string) => void;
@@ -442,9 +502,15 @@ function StatementBody({
         statement={statement}
         planName={planName}
         canAct={canCredit}
+        actBlockedReason={actBlockedReason}
         onTransferred={onTransferred}
         onRefunded={onRefunded}
       />
+
+      {/* DX-432: el historial del saldo a favor, aunque hoy sea 0. Solo quien mueve saldo lo ve. */}
+      {canCredit ? (
+        <CreditMovementsSection token={token} patientId={patientId} planName={planName} onOpenReceipt={onOpenReceipt} />
+      ) : null}
 
       {statement.openingBalances.length > 0 ? (
         <SubSection title={statementCopy.openingHeading}>
@@ -605,6 +671,8 @@ function StatementBody({
                         {movementReferenceLabel(m)}
                       </span>
                     ) : null}
+                    {/* DX-414: las líneas de un cobro dividido, juntas por su recibo único. */}
+                    <SplitPaymentBadge splitLines={m.splitLines} receiptNumber={m.receiptNumber} />
                     {/* DX-515: la factura fiscal emitida fuera. */}
                     {movementInvoiceLabel(m) ? (
                       <span className="t-caption mt-1 block break-all font-mono text-muted">
@@ -615,7 +683,12 @@ function StatementBody({
                   </>
                 ),
                 mobileCell: (m) =>
-                  [m.method ? movementMediumName(m) : methodLabel(null), movementReferenceLabel(m), movementInvoiceLabel(m)]
+                  [
+                    m.method ? movementMediumName(m) : methodLabel(null),
+                    movementReferenceLabel(m),
+                    movementInvoiceLabel(m),
+                    splitPaymentLabel(m),
+                  ]
                     .filter(Boolean)
                     .join(' · '),
               },
@@ -650,6 +723,8 @@ function StatementBody({
                       label: copy.voidAction,
                       destructive: true,
                       separatorBefore: true,
+                      // DX-432: un abono de referencia de una devolución no se anula: se explica.
+                      ...(m.voidBlockedReason ? { disabledReason: m.voidBlockedReason } : {}),
                       onSelect: () =>
                         onVoid({
                           id: m.id,

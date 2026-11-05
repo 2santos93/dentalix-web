@@ -474,4 +474,30 @@ describe('DX-354: el formato de la sede del turno', () => {
     expect(text).not.toMatch(/\d[.,]\d{2}/);
     expect(text).not.toContain('US$');
   });
+
+  it('DX-432: cada devolución de saldo a favor en efectivo sale como «Devolución DEV-…», con su importe en «Salidas»', () => {
+    render(
+      <CashSessionReport
+        session={cashSessionFixture({
+          creditRefunds: [
+            {
+              id: 'r-1',
+              number: 'DEV-NOR-000001',
+              amount: 5_000,
+              currency: 'USD',
+              reason: 'Se muda',
+              createdAt: '2026-10-17T18:00:00.000Z',
+              createdBy: { id: 'u-recep', fullName: 'Paola Martínez' },
+              patient: { id: 'pat-1', fullName: 'Ana Gómez' },
+            },
+          ],
+        })}
+      />,
+    );
+    const table = screen.getByRole('table', { name: 'Devoluciones de saldo a favor' });
+    const row = within(table).getAllByRole('row')[1];
+    expect(row).toHaveTextContent('Devolución DEV-NOR-000001');
+    expect(row).toHaveTextContent('Ana Gómez');
+    expect(row).toHaveTextContent(/5\.?000,00/);
+  });
 });

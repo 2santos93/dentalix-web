@@ -25,6 +25,8 @@ import { CreditRefundDocument } from './credit-refund-document';
 const copy = {
   title: 'Devolución registrada',
   description: 'Imprime el comprobante y pide al paciente que lo firme.',
+  reprintTitle: 'Comprobante de devolución',
+  reprintDescription: 'Vuelve a imprimir el comprobante de esta devolución; el original no cambia.',
   close: 'Cerrar',
   printA4: 'Imprimir A4',
   printRoll: 'Tirilla 80 mm',
@@ -36,11 +38,17 @@ const copy = {
 export function CreditRefundDialog({
   token,
   refund: issued,
+  reprint = false,
   onOpenChange,
+  onCloseAutoFocus,
 }: {
   token: string;
   refund: CreditRefund | null;
+  /** DX-432: reimpresión desde el historial (otro título; el foco vuelve a la fila). */
+  reprint?: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Adónde vuelve el foco al cerrar (`preventDefault` + `focus()`); sin él, a quien lo abrió. */
+  onCloseAutoFocus?: (event: Event) => void;
 }) {
   // DX-354: «Reintentar» del aviso de la sede vuelve a leer el comprobante,
   // que trae el formato de la sede con sus valores de hoy.
@@ -58,10 +66,10 @@ export function CreditRefundDialog({
   return (
     <Dialog open={refund !== null} onOpenChange={onOpenChange}>
       {refund ? (
-        <DialogContent className="max-w-3xl gap-3 p-4 sm:p-6">
+        <DialogContent className="max-w-3xl gap-3 p-4 sm:p-6" onCloseAutoFocus={onCloseAutoFocus}>
           <DialogHeader>
-            <DialogTitle>{copy.title}</DialogTitle>
-            <DialogDescription>{copy.description}</DialogDescription>
+            <DialogTitle>{reprint ? copy.reprintTitle : copy.title}</DialogTitle>
+            <DialogDescription>{reprint ? copy.reprintDescription : copy.description}</DialogDescription>
           </DialogHeader>
           <DocumentFormatNote locationId={refund.locationId} onRetry={() => void retryFormat()} active={documentFormat(refund.regional) === null} />
           <div className="overflow-hidden rounded-lg border border-border">

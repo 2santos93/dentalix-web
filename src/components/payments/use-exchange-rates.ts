@@ -25,13 +25,24 @@ export type ExchangeRatesState =
  * Solo se piden con `date` y mientras `active`; cambiar el día las vuelve a
  * pedir (cuando el día deja de cambiar) y una respuesta de otro día que llega
  * tarde se descarta.
+ *
+ * DX-384: `currencies` son las monedas con que se va a convertir (la del abono y
+ * la del plan): con tasa manual y sin la de ese día, la API da la última
+ * registrada dentro del plazo de la clínica y su fecha (`rateDate`), la misma
+ * que congelará el abono.
  */
-export function useExchangeRates(token: string, date: string, active: boolean): ExchangeRatesState {
+export function useExchangeRates(
+  token: string,
+  date: string,
+  active: boolean,
+  currencies: readonly string[] = [],
+): ExchangeRatesState {
   const [result, setResult] = useState<
     { key: string; rates: ExchangeRates } | { key: string; failed: 'error' | 'unavailable' } | null
   >(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const key = `${date}|${reloadKey}`;
+  const currencyKey = [...new Set(currencies)].sort().join(',');
+  const key = `${date}|${currencyKey}|${reloadKey}`;
   const enabled = active && date !== '';
 
   useEffect(() => {
@@ -41,7 +52,7 @@ export function useExchangeRates(token: string, date: string, active: boolean): 
     // (0002-…, 0020-…): solo se pide el día en el que la fecha se queda quieta,
     // así no se consulta (ni se le pide al proveedor) cada uno de ellos.
     const timer = setTimeout(() => {
-      getExchangeRates(token, date).then(
+      (currencyKey === '' ? getExchangeRates(token, date) : getExchangeRates(token, date, currencyKey.split(','))).then(
         (rates) => {
           if (!cancelled) setResult({ key, rates });
         },
@@ -55,7 +66,7 @@ export function useExchangeRates(token: string, date: string, active: boolean): 
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [token, date, enabled, key]);
+  }, [token, date, currencyKey, enabled, key]);
 
   if (!enabled) return { status: 'idle' };
   if (!result || result.key !== key) return { status: 'loading' };

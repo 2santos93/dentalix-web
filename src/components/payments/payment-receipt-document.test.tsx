@@ -203,7 +203,13 @@ describe('DX-376: abono en otra moneda', () => {
   };
   const FROZEN: PaymentReceipt['exchangeRate'] = {
     status: 'FROZEN',
-    rate: { currency: 'USD', fromPerBase: 36.5, toPerBase: 1, source: 'MANUAL', date: '2026-10-29' },
+    rate: {
+      currency: 'USD',
+      fromPerBase: 36.5,
+      toPerBase: 1,
+      source: 'MANUAL',
+      date: '2026-10-17',
+    },
     equivalentAmount: 50,
   };
 
@@ -213,19 +219,37 @@ describe('DX-376: abono en otra moneda', () => {
     expect(doc).toContain('1825,00 VES');
     expect(doc).toContain('Equivalente en USD');
     expect(doc).toContain('50,00 USD');
-    expect(doc).toContain('Tasa aplicada: 1 USD = 36,50 VES (manual, 29/10/2026)');
+    expect(doc).toContain('Tasa aplicada: 1 USD = 36,50 VES (manual, 17/10/2026)');
   });
 
   it('la tasa sale de la congelada del abono: con otra tasa congelada imprime otra (reimprimir no la recalcula)', () => {
     const other: PaymentReceipt['exchangeRate'] = {
       status: 'FROZEN',
-      rate: { currency: 'USD', fromPerBase: 40, toPerBase: 1, source: 'AUTOMATIC', date: '2026-10-30' },
+      rate: {
+        currency: 'USD',
+        fromPerBase: 40,
+        toPerBase: 1,
+        source: 'AUTOMATIC',
+        date: '2026-10-17',
+      },
       equivalentAmount: 45.63,
     };
     render(<PaymentReceiptDocument receipt={inVes(other)} />);
     const doc = text(screen.getByTestId('receipt-document'));
-    expect(doc).toContain('Tasa aplicada: 1 USD = 40,00 VES (automática, 30/10/2026)');
+    expect(doc).toContain('Tasa aplicada: 1 USD = 40,00 VES (automática, 17/10/2026)');
     expect(doc).toContain('45,63 USD');
+  });
+
+  // DX-384: la clínica no registró la tasa del día del abono y se usó la última, de un día anterior.
+  it('si la tasa es de un día anterior al del abono dice «tasa del …» en el formato de la sede', () => {
+    const earlier: PaymentReceipt['exchangeRate'] = {
+      ...FROZEN,
+      rate: { ...FROZEN.rate!, date: '2026-10-16' },
+    };
+    render(<PaymentReceiptDocument receipt={inVes(earlier)} />);
+    const doc = text(screen.getByTestId('receipt-document'));
+    expect(doc).toContain('Tasa aplicada: 1 USD = 36,50 VES (manual, tasa del 16/10/2026)');
+    expect(doc).toContain('Fecha del abono17/10/2026');
   });
 
   it('un abono «sin tasa» lo dice en lugar de la tasa y el equivalente', () => {

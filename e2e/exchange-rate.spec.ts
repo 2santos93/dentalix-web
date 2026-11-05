@@ -23,6 +23,10 @@ import { API_URL } from './support/urls';
  *  4. RECEPCIÓN no ve la entrada y por URL ve el aviso de permisos.
  *  5. 390 px sin desplazamiento lateral y el modal dentro de la pantalla; axe
  *     en claro y oscuro.
+ *  6. DX-384: el ADMIN cambia «Usar la última tasa registrada hasta N días»
+ *     (3 por defecto, 0 = solo la del mismo día): un valor fuera de 0–30 da el
+ *     error en español junto al campo, uno válido se guarda y lo devuelve la
+ *     API; el modal cabe a 390 y 1440 px.
  *
  * Capturas a 390 y 1440 px, claro y oscuro, en E2E_QA_DIR si está definido.
  */
@@ -143,7 +147,7 @@ test('the ADMIN sees the entry and a new clinic starts automatic with no manual 
 
 test('the ADMIN switches to manual, registers today’s rate and the day’s rates read it', async ({ page, request }) => {
   await openPage(page, adminEmail);
-  await page.getByRole('button', { name: 'Cambiar' }).click();
+  await page.getByRole('button', { name: 'Cambiar', exact: true }).click();
   const sourceDialog = page.getByRole('dialog', { name: 'Cambiar de dónde sale la tasa' });
   await sourceDialog.getByRole('radio', { name: /Manual/ }).check();
   await shoot(page, 'dx374-modal-fuente', sourceDialog);
@@ -167,7 +171,55 @@ test('the ADMIN switches to manual, registers today’s rate and the day’s rat
 
   const res = await request.get(`${API_URL}/exchange/rates?date=${sedeToday()}`, { headers: admin.headers });
   expect(res.ok()).toBeTruthy();
-  expect(await res.json()).toEqual({ base: 'USD', source: 'MANUAL', rates: { [CURRENCY]: 0.91 } });
+  expect(await res.json()).toEqual({
+    base: 'USD',
+    source: 'MANUAL',
+    rates: { [CURRENCY]: 0.91 },
+    rateDate: sedeToday(),
+  });
+});
+
+test('the ADMIN changes how many days the latest registered rate is used, with the error beside the field', async ({
+  page,
+  request,
+}) => {
+  await openPage(page, adminEmail);
+  // 3 días por defecto.
+  await expect(page.getByTestId('exchange-rate-max-age')).toHaveText('Usar la última tasa registrada hasta 3 días');
+  await page.getByRole('button', { name: 'Cambiar el plazo de la última tasa registrada' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Cuántos días vale la última tasa' });
+  const field = dialog.getByLabel('Usar la última tasa registrada hasta N días');
+  await expect(field).toHaveValue('3');
+  await expect(dialog.getByText('0 = solo la tasa del mismo día')).toBeVisible();
+
+  // Fuera de 0–30: el error en español va junto al campo y no cierra el modal.
+  await field.fill('31');
+  await dialog.getByRole('button', { name: 'Guardar' }).click();
+  await expect(dialog.getByText('Escribe un número entero de días entre 0 y 30.')).toBeVisible();
+  await expect(field).toHaveAttribute('aria-invalid', 'true');
+  await expect(dialog).toBeVisible();
+  await shoot(page, 'dx384-modal-plazo-error', dialog);
+  for (const viewport of VIEWPORTS) {
+    await page.setViewportSize(viewport);
+    await expectDialogInsideViewport(page, dialog);
+  }
+  await page.setViewportSize(VIEWPORTS[0]);
+
+  // 0 = solo la tasa del mismo día: se guarda y la API lo devuelve.
+  await field.fill('0');
+  await dialog.getByRole('button', { name: 'Guardar' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByTestId('exchange-rate-max-age')).toHaveText('Usar solo la tasa del mismo día');
+  await expect(page.getByText('Plazo de la última tasa guardado.')).toBeVisible();
+  const saved = await request.get(`${API_URL}/exchange/settings`, { headers: admin.headers });
+  expect(await saved.json()).toMatchObject({ manualRateMaxAgeDays: 0 });
+  await shoot(page, 'dx384-plazo');
+
+  // De vuelta a 3 días (lo que espera el resto de la corrida).
+  await page.getByRole('button', { name: 'Cambiar el plazo de la última tasa registrada' }).click();
+  await field.fill('3');
+  await dialog.getByRole('button', { name: 'Guardar' }).click();
+  await expect(page.getByTestId('exchange-rate-max-age')).toHaveText('Usar la última tasa registrada hasta 3 días');
 });
 
 test('registering the same currency twice the same day keeps the modal open with the Spanish 409', async ({ page }) => {
@@ -192,6 +244,7 @@ test('reception does not see the entry and gets the permission notice by URL', a
 test('the screen fits 390 px and has no axe violations in light and dark', async ({ page }) => {
   await openPage(page, adminEmail);
   await expect(page.getByRole('table', { name: 'Tasas manuales' })).toBeVisible();
+  await expect(page.getByTestId('exchange-rate-max-age')).toBeVisible();
   await page.setViewportSize(VIEWPORTS[1]);
   await expectNoHorizontalScroll(page);
   const violations = await axeInBothThemes(page, page.locator('main'));

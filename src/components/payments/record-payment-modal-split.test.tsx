@@ -151,11 +151,14 @@ beforeEach(() => {
   jest.clearAllMocks();
   (listLocations as jest.Mock).mockResolvedValue([clinicLocation()]);
   (listBillablePlans as jest.Mock).mockResolvedValue([vesPlan]);
-  (getExchangeRates as jest.Mock).mockResolvedValue({
-    base: 'USD',
-    source: 'AUTOMATIC',
-    rates: { VES: 4000 },
-  });
+  (getExchangeRates as jest.Mock).mockImplementation((_token: string, date: string) =>
+    Promise.resolve({
+      base: 'USD',
+      source: 'AUTOMATIC',
+      rates: { VES: 4000 },
+      rateDate: date,
+    }),
+  );
   (getPlanBalance as jest.Mock).mockResolvedValue(vesBalance(1800000));
   mockedMethods.mockResolvedValue(METHODS);
   mockedSplit.mockResolvedValue(savedSplit());

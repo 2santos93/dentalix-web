@@ -160,6 +160,31 @@ describe('CashShiftsView (DX-027)', () => {
     expect(within(rows[2]).queryByText('Sin justificar')).not.toBeInTheDocument();
   });
 
+  it('DX-432: «Salidas del turno» cuenta también las devoluciones de saldo a favor en efectivo', async () => {
+    mockedCurrent.mockResolvedValue({
+      locationId: 'loc-1',
+      settings,
+      session: cashSessionFixture({
+        outflows: [outflow],
+        creditRefunds: [
+          {
+            id: 'r-1',
+            number: 'DEV-NOR-000001',
+            amount: 5_000,
+            currency: 'USD',
+            reason: 'Se muda',
+            createdAt: '2026-10-17T18:00:00.000Z',
+            createdBy: { id: 'u-recep', fullName: 'Paola Martínez' },
+            patient: { id: 'pat-1', fullName: 'Ana Gómez' },
+          },
+        ],
+      }),
+    });
+    mockedList.mockResolvedValue(page([]));
+    render(<CashShiftsView token={token} />);
+    expect(await screen.findByText('Salidas del turno: 2')).toBeInTheDocument();
+  });
+
   it('arqueo ciego: no enseña lo esperado', async () => {
     mockedCurrent.mockResolvedValue({
       locationId: 'loc-1',
