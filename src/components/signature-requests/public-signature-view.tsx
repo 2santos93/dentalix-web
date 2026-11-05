@@ -18,6 +18,7 @@ import {
   type PublicSignatureDocument,
   type PublicSignedCopy,
 } from '@/lib/signature-requests/signature-requests-api';
+import { cn } from '@/lib/utils';
 import { PublicNotice as Notice, publicBrandStyle } from '@/components/shared/public-page';
 import { PublicBudgetSummary } from './public-budget';
 import { SignaturePad } from '@/components/shared/signature-pad';
@@ -251,6 +252,22 @@ export function PublicSignatureView({ linkToken }: { linkToken: string }) {
   );
 }
 
+/**
+ * DX-441: el título del paso. Al llegar a él recibe el foco, para que el teclado
+ * siga por aquí y el lector de pantalla lo anuncie: antes se quedaba en `<body>`.
+ */
+function StepHeading({ className, children }: { className: string; children: React.ReactNode }) {
+  const ref = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    ref.current?.focus();
+  }, []);
+  return (
+    <h1 ref={ref} tabIndex={-1} className={cn(className, 'outline-none')}>
+      {children}
+    </h1>
+  );
+}
+
 function IntroStep({
   data,
   clock,
@@ -373,7 +390,7 @@ function CodeStep({
 
   return (
     <form onSubmit={(e) => void verify(e)} noValidate className="flex flex-col gap-4">
-      <h1 className="t-display text-ink">{isBudget(data.type) ? copy.budgetTitle : copy.title}</h1>
+      <StepHeading className="t-display text-ink">{isBudget(data.type) ? copy.budgetTitle : copy.title}</StepHeading>
       {info ? (
         <p role="status" className="text-sm text-muted">
           {info}
@@ -487,6 +504,15 @@ function DocumentStep({
     if (doc.signerDocumentRequired && signerDocument.trim() === '') next.document = copy.signerDocumentRequired;
     if (!signature) next.signature = copy.signatureRequired;
     setErrors(next);
+    // DX-441: el foco va al primer campo con error.
+    const firstInvalid = next.read
+      ? `${ids}-read`
+      : next.document
+        ? `${ids}-doc`
+        : next.signature
+          ? `${ids}-signature`
+          : null;
+    if (firstInvalid) document.getElementById(firstInvalid)?.focus();
     if (Object.keys(next).length > 0 || !signature) return;
     setSubmitting(true);
     setSubmitError(null);
@@ -512,7 +538,7 @@ function DocumentStep({
         aria-label={doc.budget ? copy.budgetRegion : copy.documentRegion}
         className="rounded-xl border border-border bg-white px-4 py-5 text-[#111827]"
       >
-        <h1 className="text-lg font-semibold">{doc.title}</h1>
+        <StepHeading className="text-lg font-semibold">{doc.title}</StepHeading>
         {doc.budget ? (
           <>
             <div className="mt-3">
@@ -558,6 +584,7 @@ function DocumentStep({
             onChange={(e) => setSignerDocument(e.target.value)}
             maxLength={60}
             autoComplete="off"
+            className="max-sm:min-h-11"
           />
         </FormField>
       ) : null}
@@ -572,8 +599,10 @@ function DocumentStep({
           }}
           disabled={submitting}
           height={180}
+          canvasId={`${ids}-signature`}
+          errorId={errors.signature ? `${ids}-signature-error` : undefined}
         />
-        {errors.signature ? <InlineError>{errors.signature}</InlineError> : null}
+        {errors.signature ? <InlineError id={`${ids}-signature-error`}>{errors.signature}</InlineError> : null}
       </div>
 
       {submitError ? <InlineError variant="summary">{submitError}</InlineError> : null}
@@ -608,7 +637,7 @@ function DoneStep({
         >
           <CheckCircle2 className="size-5" />
         </span>
-        <h1 className="t-title text-ink">{budget ? copy.budgetDoneTitle : copy.doneTitle}</h1>
+        <StepHeading className="t-title text-ink">{budget ? copy.budgetDoneTitle : copy.doneTitle}</StepHeading>
         <p className="max-w-sm text-sm text-muted">
           {budget ? copy.budgetDoneMessage(signed.clinic.name) : copy.doneMessage(signed.clinic.name)}
         </p>
