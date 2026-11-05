@@ -53,6 +53,8 @@ const DATA: PaymentAllocations = {
   manual: true,
   allocated: 60,
   unallocated: 48.5,
+  creditOut: 0,
+  onAccount: 48.5,
   version: VERSION,
   allocations: [{ treatmentPlanItemId: 'item-2', amount: 60, source: 'MANUAL' }],
   items: [

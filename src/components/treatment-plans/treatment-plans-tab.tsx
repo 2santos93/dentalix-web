@@ -52,6 +52,7 @@ import { ExternalInvoiceModal, type ExternalInvoiceTarget } from '@/components/p
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { voidPaymentErrorMessage } from '@/components/payments/use-void-payment';
 import { ReallocatePaymentModal } from '@/components/payments/reallocate-payment-modal';
+import { PaymentAllocationDetailDialog } from '@/components/payments/payment-allocation-detail-dialog';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
@@ -270,6 +271,8 @@ export function TreatmentPlansTab({
   // diálogo y su bandera de apertura. El diálogo pide el recibo a la API (su
   // foto inmutable), así que aquí no hace falta nada más del paciente.
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
+  // DX-399: el abono cuya imputación se está mirando (solo lectura).
+  const [viewAllocationPaymentId, setViewAllocationPaymentId] = useState<string | null>(null);
   // DX-515: el abono cuyo nº de factura fiscal externa se anota.
   const [invoiceTarget, setInvoiceTarget] = useState<ExternalInvoiceTarget | null>(null);
 
@@ -1279,6 +1282,7 @@ export function TreatmentPlansTab({
                           billable={billable}
                           manualPaymentIds={manualPaymentIds}
                           onAllocate={role === 'ADMIN' && billable ? openAllocation : undefined}
+                          onViewAllocation={role === 'ADMIN' ? setViewAllocationPaymentId : undefined}
                           fmt={sedeFmt}
                           onExternalInvoice={(p) =>
                             setInvoiceTarget({
@@ -1470,6 +1474,15 @@ export function TreatmentPlansTab({
         onConfirm={handleRemoveItem}
         confirming={updatingItemId !== null && updatingItemId === itemToRemove}
         error={removeItemError}
+      />
+
+      <PaymentAllocationDetailDialog
+        token={token}
+        paymentId={viewAllocationPaymentId}
+        onOpenChange={(open) => {
+          if (!open) setViewAllocationPaymentId(null);
+        }}
+        onChange={role === 'ADMIN' && billable ? openAllocation : undefined}
       />
 
       {allocation ? (

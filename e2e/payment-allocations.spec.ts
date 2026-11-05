@@ -159,7 +159,7 @@ async function openPayments(panel: Locator) {
 async function openAllocation(page: Page, panel: Locator): Promise<Locator> {
   // UX v2: Recibo, Imputación y Anular viven en el «⋯» de la fila del abono.
   await panel.getByRole('button', { name: /^Acciones de abono/ }).first().click();
-  await page.getByRole('menuitem', { name: 'Imputación' }).click();
+  await page.getByRole('menuitem', { name: 'Imputación', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Imputar abono' });
   await expect(dialog.getByText(`Disponible para imputar: ${money(180)}`)).toBeVisible({ timeout: 15_000 });
   return dialog;
@@ -187,8 +187,8 @@ async function receptionSees(browser: Browser, origin: string, viewport: { width
       await expect(row.locator('td[data-label="Cobrado"]')).toHaveText(sedeUsd(paid));
     }
     // Solo lectura: recepción no imputa ni ve el plan clínico.
-    await expect(page.getByRole('button', { name: 'Imputación' })).toHaveCount(0);
-    await expect(page.getByRole('menuitem', { name: 'Imputación' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Imputación', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('menuitem', { name: 'Imputación', exact: true })).toHaveCount(0);
     await expect(page.getByRole('tab', { name: 'Plan de tratamiento' })).toHaveCount(0);
     await expectNoHorizontalScroll(page);
   } finally {
@@ -471,7 +471,7 @@ test('DX-051 axe: ítems del plan, «Ver por ítem» y el modal «Imputar abono�
       await expect(other.getByText('1 abono sin tasa')).toBeVisible();
       await openPayments(other);
       await other.getByRole('button', { name: /^Acciones de abono/ }).first().click();
-      await page.getByRole('menuitem', { name: 'Imputación' }).click();
+      await page.getByRole('menuitem', { name: 'Imputación', exact: true }).click();
       dialog = page.getByRole('dialog', { name: 'Imputar abono' });
       await expect(
         dialog.getByText('No hay tasa de cambio para la fecha de este abono: todavía no se puede imputar.'),

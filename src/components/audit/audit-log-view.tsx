@@ -38,6 +38,7 @@ import {
   receiptDetail,
   exchangeRateBackupDetail,
   exchangeRateDetail,
+  paymentAllocationDetail,
   locationCalendarDetail,
   patientFlowDetail,
   importBatchDetail,
@@ -569,6 +570,7 @@ function eventDetail(
     receiptDetail(event.metadata) ??
     exchangeRateBackupDetail(event.metadata) ??
     exchangeRateDetail(event.metadata, clock?.fmt ?? null) ??
+    paymentAllocationDetail(event.metadata, clock?.fmt ?? null) ??
     anamnesisDetail(event.metadata) ??
     signatureRequestDetail(event.metadata)
   );

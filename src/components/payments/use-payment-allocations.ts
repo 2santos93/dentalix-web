@@ -38,6 +38,8 @@ export function usePaymentAllocations(token: string, paymentId: string) {
   const [data, setData] = useState<PaymentAllocations | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // DX-399: el estado HTTP del fallo de carga (un 409 de saldo migrado no es algo que reintentar).
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<AllocationSaveError | null>(null);
@@ -64,10 +66,12 @@ export function usePaymentAllocations(token: string, paymentId: string) {
         lastDataRef.current = next;
         setData(next);
         setError(null);
+        setErrorStatus(null);
       } catch (err) {
         if (cancelled) return;
         setData(null);
         setError(apiErrorMessage(err, copy.loadError));
+        setErrorStatus(err instanceof ApiError ? err.status : null);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -101,5 +105,5 @@ export function usePaymentAllocations(token: string, paymentId: string) {
     }
   }
 
-  return { data, loading, error, reload, save, saving, saveError };
+  return { data, loading, error, errorStatus, reload, save, saving, saveError };
 }
