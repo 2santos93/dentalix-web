@@ -1,6 +1,6 @@
 import { test, expect } from './support/test';
 import { randomUUID } from 'node:crypto';
-import { addStaffViaApi, registerClinicViaApi, type ApiSession } from './support/api';
+import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
 import { expectNoHorizontalScroll } from './support/layout';
 import { tenantOrigin } from './support/urls';
@@ -13,6 +13,8 @@ const origin = tenantOrigin(subdomain);
 const password = 'Password123!';
 const admin = { fullName: 'Ana Titular', email: `ana.permisos.${suffix}@example.com` };
 const reception = { fullName: 'Rosa Recepción', email: `rosa.permisos.${suffix}@example.com` };
+const dentist = { fullName: 'Luis Odontólogo', role: 'DENTIST', email: `luis.permisos.${suffix}@example.com` };
+const assistant = { fullName: 'Marta Asistente', role: 'ASSISTANT', email: `marta.permisos.${suffix}@example.com` };
 let session: ApiSession;
 
 test.describe.configure({ mode: 'serial' });
@@ -26,6 +28,8 @@ test.beforeAll(async ({ request }) => {
     password,
   });
   await addStaffViaApi(request, session, { ...reception, role: 'RECEPTION', password });
+  await addStaffViaApi(request, session, { ...dentist, password });
+  await addStaffViaApi(request, session, { ...assistant, password });
 });
 
 for (const { width, height } of [
@@ -43,6 +47,31 @@ for (const { width, height } of [
       await expect(page.locator('main').getByRole('button', { name: /Añadir|Invitar|Nuevo/ })).toHaveCount(0);
       await expectNoHorizontalScroll(page);
     }
+  });
+}
+
+// DX-064: Odontólogo y Asistente leen el catálogo, sin acciones que la API les rechace.
+for (const person of [dentist, assistant]) {
+  test(`${person.fullName} lee Catálogo sin acciones de escritura ni 403`, async ({ page, request }) => {
+    await apiPost(request, session, '/catalog/items', {
+      code: `e2e-${person.role}-${suffix}`.slice(0, 30),
+      kind: 'PROCEDURE',
+      labelEs: `Limpieza ${person.role}`,
+      color: '#3366CC',
+    });
+    const denied: string[] = [];
+    page.on('response', (r) => {
+      if (r.status() === 403) denied.push(r.url());
+    });
+    await loginAs(page, origin, person.email, password);
+    await page.goto(`${origin}/catalog`);
+    const main = page.locator('main');
+    await expect(main.getByText(`Limpieza ${person.role}`).first()).toBeVisible({ timeout: 15_000 });
+    await expect(main.getByRole('button', { name: 'Agregar ítem' })).toHaveCount(0);
+    await expect(main.getByRole('button', { name: /Acciones de/ })).toHaveCount(0);
+    await main.getByText(`Limpieza ${person.role}`).first().click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(denied).toEqual([]);
   });
 }
 

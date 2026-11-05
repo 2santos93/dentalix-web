@@ -1,4 +1,10 @@
 import { apiFetch } from '@/lib/api/client';
+import type { ClinicRole } from '@/lib/me/me-api';
+
+/** Crear, editar y desactivar ítems: solo ADMIN (`CATALOG_WRITE_ROLES` en la API). */
+export function canWriteCatalog(role: ClinicRole | null): boolean {
+  return role === 'ADMIN';
+}
 
 /**
  * `GET /catalog/items` returns a plain TS interface on the backend
