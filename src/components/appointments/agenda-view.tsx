@@ -955,9 +955,12 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
         setMovingAppointment(appointment);
         return;
       }
-      notifyError(apiErrorMessage(err, copy.genericMoveError), {
-        onRetry: () => handleDrop(appointment, target),
-      });
+      // DX-133: un 4xx (solape, fuera de horario) repetiría el mismo rechazo: sin «Reintentar».
+      const rejected = err instanceof ApiError && err.status >= 400 && err.status < 500;
+      notifyError(
+        apiErrorMessage(err, copy.genericMoveError),
+        rejected ? undefined : { onRetry: () => handleDrop(appointment, target) },
+      );
     } finally {
       setMovePendingId(null);
     }
