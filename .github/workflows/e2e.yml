@@ -13,6 +13,16 @@ on:
         description: Rama, tag o commit de dentalix-api contra el que probar
         required: false
         default: main
+      # DX-413: para repetir un test (p. ej. 10 veces seguidas) sin la suite
+      # entera. Opcionales: sin ellos, la suite completa de siempre.
+      grep:
+        description: Filtro de Playwright (--grep) para correr solo los tests que lo cumplan
+        required: false
+        default: ''
+      repeat_each:
+        description: Veces que se repite cada test (--repeat-each, entero; 1 = una)
+        required: false
+        default: '1'
 
 # En una rama o un PR, un push nuevo cancela la ejecución anterior. En main
 # no (DX-292, TST-033): cada merge tiene su E2E completa. Su grupo es propio
@@ -35,7 +45,9 @@ jobs:
     # rojo no se vería. Pasos: ~3 min de checkout y Node + 1 (referencias
     # compartidas con la API) + 10 + 5 + 5 + 8 + 35 + 2 + 2 + 5 = 76
     # (Playwright: ~17–20 min la suite entera).
-    timeout-minutes: 80
+    # DX-413: un run de repetición (repeat_each > 1, solo workflow_dispatch)
+    # corre muchas veces los mismos tests y sin reintentos: tope de 4 h.
+    timeout-minutes: ${{ (inputs.repeat_each != '' && inputs.repeat_each != '1') && 240 || 80 }}
     services:
       postgres:
         image: postgres:16
@@ -114,10 +126,39 @@ jobs:
         timeout-minutes: 8
         run: scripts/e2e-ci.sh web
 
+      # DX-413: `grep` y `repeat_each` (solo en workflow_dispatch) se pasan a
+      # Playwright únicamente si se dieron; por defecto, la suite completa. La
+      # guardia de saltados/flaky de abajo no cambia: lee el informe de lo que
+      # corrió, así que un run filtrado no falla por tests no ejecutados.
+      # Un run filtrado o repetido va SIN reintentos (`--retries 0`): una
+      # repetición que falla es un fallo, no un flaky que el reintento de CI
+      # esconde, así que «10 seguidas» en verde significa 10 pasadas a la
+      # primera (0 flaky y 0 fallidos en el resumen). Entran por `env`, no por
+      # interpolación en el script. Con repeat_each > 1 el tope del job sube
+      # (4 h; Playwright 200 min): un test de 4 min × 20 repeticiones cabe.
       - name: Playwright
         id: playwright
-        timeout-minutes: 50
-        run: scripts/e2e-ci.sh test
+        timeout-minutes: ${{ (inputs.repeat_each != '' && inputs.repeat_each != '1') && 200 || 50 }}
+        env:
+          E2E_GREP: ${{ inputs.grep }}
+          E2E_REPEAT_EACH: ${{ inputs.repeat_each }}
+        run: |
+          args=()
+          if [[ -n "${E2E_GREP}" ]]; then
+            args+=(--grep "${E2E_GREP}")
+          fi
+          if [[ -n "${E2E_REPEAT_EACH}" && "${E2E_REPEAT_EACH}" != "1" ]]; then
+            if ! [[ "${E2E_REPEAT_EACH}" =~ ^[1-9][0-9]{0,2}$ ]]; then
+              echo "::error::repeat_each debe ser un entero positivo de hasta 3 cifras"
+              exit 1
+            fi
+            args+=(--repeat-each "${E2E_REPEAT_EACH}")
+          fi
+          # Filtrado o repetido: sin reintentos (ver arriba).
+          if [[ ${#args[@]} -gt 0 ]]; then
+            args+=(--retries 0)
+          fi
+          scripts/e2e-ci.sh test ${args[@]+"${args[@]}"}
 
       # DX-252 (TST-030): la E2E no sale verde con tests sin ejecutar. Falla,
       # nombrando cada test, si el informe tiene «skipped» fuera de la lista
