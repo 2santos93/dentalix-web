@@ -8740,7 +8740,7 @@ export interface components {
             payerId: string;
             kind: components["schemas"]["AgreementKind"];
             /** @description Obligatorio con PERCENT_DISCOUNT; no va con PRICE_LIST. */
-            percent?: number;
+            percent?: number | null;
             /** @description { "<categoría del catálogo>": <0–100> }, hasta 50 categorías de 80 caracteres. Solo PERCENT_DISCOUNT. */
             percentByCategory?: {
                 [key: string]: number;
