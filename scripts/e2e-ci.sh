@@ -307,14 +307,20 @@ phase_schema() {
     endgroup
     return 1
   fi
-  if ! diff -u --label "src/lib/api/schema.d.ts (commiteado)" --label "generado desde la API" \
-    "$WEB_DIR/src/lib/api/schema.d.ts" "$generated" > "$LOG_DIR/schema.diff"; then
+  local rc=0
+  diff -u --label "src/lib/api/schema.d.ts (commiteado)" --label "generado desde la API" \
+    "$WEB_DIR/src/lib/api/schema.d.ts" "$generated" > "$LOG_DIR/schema.diff" || rc=$?
+  if [[ "$rc" -eq 0 ]]; then
+    echo "El esquema commiteado coincide con la API."
+  elif [[ "$rc" -eq 1 ]]; then
     status=1
     head -n 200 "$LOG_DIR/schema.diff"
+    echo "Diff completo: $LOG_DIR/schema.diff (en la CI, dentro del artefacto «playwright-...» en .e2e/logs/schema.diff)." >&2
     echo "::error file=src/lib/api/schema.d.ts::El esquema commiteado no coincide con la API (rama o ref: la de dentalix-api de este run). Regenéralo y commitéalo: arranca esa API en el puerto 3002 y ejecuta 'npm run codegen' en la web (README, «Regenerar el esquema de la API»)."
     echo "Regenerar: levantar dentalix-api en :3002 y, en dentalix-web, 'npm run codegen'." >&2
   else
-    echo "El esquema commiteado coincide con la API."
+    status=1
+    echo "::error::No se pudo comparar el esquema: diff terminó con código $rc al leer src/lib/api/schema.d.ts o el generado ($generated). No es un desfase del contrato." >&2
   fi
   rm -f "$generated"
   endgroup
