@@ -49,6 +49,7 @@ test.use({ timezoneId: ZONE });
 let session: ApiSession;
 /** La franja de HOY de las dos citas (23:55–23:59 de la sede). */
 let slot: SedeSlot;
+let carlaId: string;
 
 /** El reloj del navegador, fijo a las 23:30 de hoy en la sede (y corriendo desde ahí). */
 async function lateEvening(page: Page) {
@@ -80,9 +81,12 @@ test.beforeAll(async ({ request }) => {
   const idOf = (fullName: string) => members.find((m) => m.fullName === fullName)!.userId;
 
   slot = lastSlotToday('23:55', '23:59', ZONE);
-  for (const [i, [name, providerId]] of ([
-    ['Ana', idOf(dentist.fullName)],
-    ['Berta', idOf(dentist2.fullName)],
+  // DX-237: la de Carla dura 30 min: en una tarjeta más corta no cabe el botón.
+  const longSlot = lastSlotToday('23:20', '23:50', ZONE);
+  for (const [i, [name, providerId, booked]] of ([
+    ['Ana', idOf(dentist.fullName), slot],
+    ['Berta', idOf(dentist2.fullName), slot],
+    ['Carla', idOf(dentist2.fullName), longSlot],
   ] as const).entries()) {
     const patient = await apiPost<{ id: string }>(request, session, '/patients', {
       firstName: name,
@@ -91,13 +95,14 @@ test.beforeAll(async ({ request }) => {
       docNumber: `FLU${i}${suffix}`.slice(0, 20),
       sex: 'F',
     });
-    await apiPost(request, session, '/appointments', {
+    const appointment = await apiPost<{ id: string }>(request, session, '/appointments', {
       patientId: patient.id,
       providerId,
-      start: slot.start.toISOString(),
-      end: slot.end.toISOString(),
+      start: booked.start.toISOString(),
+      end: booked.end.toISOString(),
       reason: 'Endodoncia',
     });
+    if (name === 'Carla') carlaId = appointment.id;
   }
 });
 
@@ -105,6 +110,12 @@ async function openTodayList(page: Page) {
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
   await page.getByRole('button', { name: 'Lista', exact: true }).click();
+}
+
+async function openTodayColumns(page: Page) {
+  await page.goto(`${origin}/agenda`);
+  await page.getByRole('button', { name: 'Día', exact: true }).click();
+  await page.getByRole('button', { name: 'Columnas', exact: true }).click();
 }
 
 test('1440 px: llegó → en sillón → listo para cobrar → completada', async ({ page, browser }) => {
@@ -252,6 +263,59 @@ function moveQaAppointmentToToday(id: string, start: Date, end: Date): void {
     `UPDATE appointments SET start = '${start.toISOString()}', "end" = '${end.toISOString()}' WHERE id = '${id}'`,
   ]);
 }
+
+test('DX-237: el paso del flujo en la tarjeta de columnas, según el rol y de quién es la cita', async ({
+  page,
+  browser,
+  request,
+}) => {
+  await lateEvening(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await loginAs(page, origin, reception.email, password);
+  await openTodayColumns(page);
+  const carla = `Carla ${last}`;
+  await page.getByRole('button', { name: `Llegó: ${carla}` }).click();
+  await expect(page.getByText(`${carla} llegó.`)).toBeVisible();
+
+  // Lina no es su odontóloga: ve la tarjeta, sin «En sillón».
+  const lina = await browser.newPage({ viewport: { width: 1440, height: 900 }, timezoneId: ZONE, locale: E2E_BROWSER_LOCALE });
+  await lateEvening(lina);
+  await loginAs(lina, origin, dentist.email, password);
+  await openTodayColumns(lina);
+  await expect(lina.getByTestId('day-column-appointment').filter({ hasText: carla })).toBeVisible();
+  await expect(lina.getByRole('button', { name: `En sillón: ${carla}` })).toHaveCount(0);
+  await lina.close();
+
+  // Marta sí, en el teléfono: el botón y la X de la ficha, con 44 px de zona táctil.
+  const marta = await browser.newPage({ viewport: { width: 390, height: 844 }, timezoneId: ZONE, locale: E2E_BROWSER_LOCALE });
+  await lateEvening(marta);
+  await loginAs(marta, origin, dentist2.email, password);
+  await openTodayColumns(marta);
+  await marta.getByRole('button', { name: dentist2.fullName, exact: true }).click();
+  const seat = marta.getByRole('button', { name: `En sillón: ${carla}` });
+  const zone = await seat.evaluate((el) => {
+    const after = getComputedStyle(el, '::after');
+    const { height } = el.getBoundingClientRect();
+    return height - parseFloat(after.top) - parseFloat(after.bottom);
+  });
+  expect(zone).toBeGreaterThanOrEqual(44);
+  await seat.click();
+  await expect(marta.getByText(`${carla} pasó al sillón.`)).toBeVisible();
+
+  await marta.getByTestId('day-column-appointment').filter({ hasText: carla }).getByRole('button', { name: /Carla/ }).first().click();
+  const close = marta.getByRole('dialog').getByRole('button', { name: 'Cerrar' }).first();
+  await expect(close).toBeVisible();
+  expect((await close.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  await expect.poll(() => marta.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await marta.close();
+
+  // Sale de la clínica: la QA de DX-242 cuenta quién sigue dentro.
+  const done = await request.patch(`${API_URL}/appointments/${carlaId}`, {
+    headers: session.headers,
+    data: { status: 'COMPLETED' },
+  });
+  expect(done.ok()).toBeTruthy();
+});
 
 test('DX-242: prepara ocho estados reales para QA de accesibilidad', async ({request}) => {
   test.skip(!process.env.E2E_DATABASE_URL, QA_DB_SKIP);

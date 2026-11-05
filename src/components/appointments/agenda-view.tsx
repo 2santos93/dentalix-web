@@ -865,7 +865,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   }
 
   /** Botones rápidos del flujo de una cita de la agenda (DX-200). */
-  function renderFlowActions(appointment: Appointment, className = 'mt-2') {
+  function renderFlowActions(appointment: Appointment, className = 'mt-2', compact = false) {
     return (
       <PatientFlowActions
         appointmentId={appointment.id}
@@ -875,6 +875,8 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
         patientName={patientLabel(appointment)}
         runner={flow}
         className={className}
+        ownAppointment={appointment.providerId === userId}
+        compact={compact}
       />
     );
   }
@@ -1567,6 +1569,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 canMove={canMove}
                 onSelectAppointment={openAppointmentDetail}
                 onMoveRequest={requestMove}
+                renderFlowAction={(a) => renderFlowActions(a, '', true)}
                 onDrop={(a, target) => void handleDrop(a, target)}
                 onNewAppointment={handleNewFromChair}
                 pendingId={movePendingId}
@@ -1595,6 +1598,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 canMove={canMove}
                 onSelectAppointment={openAppointmentDetail}
                 onMoveRequest={requestMove}
+                renderFlowAction={(a) => renderFlowActions(a, '', true)}
                 onDrop={(a, target) => void handleDrop(a, target)}
                 onNewAppointment={handleNewFromColumn}
                 pendingId={movePendingId}

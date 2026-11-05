@@ -264,6 +264,12 @@ describe('DayColumns (DX-121)', () => {
     expect(onRetry).toHaveBeenCalled();
   });
 
+  it('DX-237: el paso del flujo va en la tarjeta y no inicia el arrastre', () => {
+    renderColumns({ renderFlowAction: () => <button type="button">Llegó</button> });
+    const [step] = screen.getAllByRole('button', { name: 'Llegó' });
+    expect(step.closest('[data-no-drag]')).not.toBeNull();
+  });
+
   it('DX-133: la columna vacía no tapa los huecos, y solo su botón recibe toques', () => {
     renderColumns({ appointments: [] });
     const button = screen.getAllByRole('button', { name: /Nueva cita/ })[0];

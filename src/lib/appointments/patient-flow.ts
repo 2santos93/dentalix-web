@@ -75,10 +75,12 @@ export function flowActions(
   status: AppointmentStatus,
   role: ClinicRole | null,
   isToday: boolean,
+  /** DX-237: el odontólogo solo sienta o deja listas sus propias citas. */
+  ownAppointment = true,
 ): FlowAction[] {
   if (role === null) return [];
   const frontDesk = FRONT_DESK.includes(role);
-  const chairside = CHAIRSIDE.includes(role);
+  const chairside = CHAIRSIDE.includes(role) && (role !== 'DENTIST' || ownAppointment);
   switch (status) {
     case 'SCHEDULED':
     case 'CONFIRMED':

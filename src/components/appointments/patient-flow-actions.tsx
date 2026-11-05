@@ -274,6 +274,10 @@ interface PatientFlowActionsProps {
   patientName: string;
   runner: PatientFlowRunner;
   className?: string;
+  /** DX-237: es del profesional que la mira; el odontólogo solo actúa en las suyas. */
+  ownAppointment?: boolean;
+  /** DX-237: solo el siguiente paso y como icono, para las tarjetas de columnas. */
+  compact?: boolean;
 }
 
 /**
@@ -289,8 +293,11 @@ export function PatientFlowActions({
   patientName,
   runner,
   className,
+  ownAppointment = true,
+  compact = false,
 }: PatientFlowActionsProps) {
-  const actions = flowActions(status, role, isToday);
+  const allActions = flowActions(status, role, isToday, ownAppointment);
+  const actions = compact ? allActions.slice(0, 1) : allActions;
   const groupRef = useRef<HTMLDivElement>(null);
   // Se pulsó un paso aquí: al cambiar los botones (el pulsado desaparece) el
   // foco iría al <body>; se lleva al primer botón del grupo (WCAG 2.4.3).
@@ -321,8 +328,10 @@ export function PatientFlowActions({
           <Button
             key={action}
             type="button"
-            size="sm"
+            size={compact ? 'icon-sm' : 'sm'}
             variant={action === 'UNDO_ARRIVAL' ? 'ghost' : 'secondary'}
+            aria-label={compact ? `${FLOW_ACTION_LABELS[action]}: ${patientName}` : undefined}
+            title={compact ? FLOW_ACTION_LABELS[action] : undefined}
             loading={pending}
             onClick={() => {
               clicked.current = true;
@@ -331,10 +340,14 @@ export function PatientFlowActions({
               else void runner.run(appointmentId, action, patientName);
             }}
             data-flow-action={action}
-            className="h-11 sm:h-9"
+            className={
+              compact
+                ? "relative size-7 bg-surface text-primary-text shadow-sm pointer-coarse:size-7 max-sm:after:absolute max-sm:after:-inset-2 max-sm:after:content-['']"
+                : 'h-11 sm:h-9'
+            }
           >
             <Icon aria-hidden />
-            {FLOW_ACTION_LABELS[action]}
+            {compact ? null : FLOW_ACTION_LABELS[action]}
           </Button>
         );
       })}
