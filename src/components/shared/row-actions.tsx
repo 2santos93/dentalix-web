@@ -119,7 +119,7 @@ export function RowActions({
                 aria-disabled="true"
                 aria-labelledby={`${reasonId}-label-${i}`}
                 aria-describedby={`${reasonId}-${i}`}
-                className="items-start data-[highlighted]:bg-transparent"
+                className="items-start"
                 onSelect={(event) => event.preventDefault()}
               >
                 {action.icon}
