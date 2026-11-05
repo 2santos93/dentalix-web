@@ -87,6 +87,17 @@ for (const { width, height } of [
   });
 }
 
+test('DX-065: la primera parada es «Saltar al contenido» y lleva al contenido', async ({ page }) => {
+  await loginAs(page, origin, admin.email, password);
+  await page.goto(`${origin}/agenda`);
+  await page.keyboard.press('Tab');
+  const skip = page.getByRole('link', { name: 'Saltar al contenido' });
+  await expect(skip).toBeFocused();
+  await expect(skip).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main#contenido')).toBeFocused();
+});
+
 test('Semana: con flechas y Enter se abre la cita nueva en el hueco elegido, sin ratón', async ({ page }) => {
   await loginAs(page, origin, admin.email, password);
   await openWeek(page);

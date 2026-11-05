@@ -60,6 +60,15 @@ describe('AppShell', () => {
     jest.mocked(getWorkQueuesSummary).mockResolvedValue({ generatedAt: '', items: [] });
   });
 
+  it('DX-065: «Saltar al contenido» es la primera parada y lleva al contenido', async () => {
+    render(<AppShell><h1>Synthetic</h1></AppShell>);
+    await userEvent.tab();
+    const skip = screen.getByRole('link', { name: 'Saltar al contenido' });
+    expect(skip).toHaveFocus();
+    expect(skip).toHaveAttribute('href', '#contenido');
+    expect(screen.getByRole('main')).toHaveAttribute('id', 'contenido');
+  });
+
   it('DX-297 separates the visible anamnesis label and badge in expanded and rail navigation', async () => {
     mockAccessToken = tokenForRole('ADMIN');
     jest.mocked(getWorkQueuesSummary).mockResolvedValue({

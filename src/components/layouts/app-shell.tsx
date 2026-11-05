@@ -36,6 +36,7 @@ import { CallerLookupDialog } from '@/components/caller-lookup/caller-lookup-dia
 import { TABLET_QUERY, useMediaQuery, useVirtualKeyboardOpen } from './use-shell-media';
 
 const copy = {
+  skipToContent: 'Saltar al contenido',
   collapse: 'Colapsar menú',
   expand: 'Expandir menú',
   search: 'Buscar',
@@ -231,6 +232,13 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
     // Y nada de `flex-1` aquí: siendo hijo flex de <body> (flex-col),
     // `flex: 1 1 0%` haría que mandara el crecimiento y no `h-[100dvh]`.
     <div className="flex h-[100dvh] min-h-0">
+      {/* DX-065: primera parada de tabulador: evita recorrer el menú en cada pantalla. */}
+      <a
+        href="#contenido"
+        className="sr-only rounded-lg bg-surface px-4 py-3 text-sm font-medium text-ink shadow-sm focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-50 focus:outline-2 focus:outline-primary-text"
+      >
+        {copy.skipToContent}
+      </a>
       <aside
         className={cn(
           'hidden shrink-0 flex-col border-r border-border bg-surface transition-[width] duration-200 md:flex',
@@ -443,7 +451,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
             `relative` no es decorativo: sin él, un descendiente `absolute` sin
             ancestro posicionado toma como bloque contenedor el documento y lo
             estira (el `sr-only` de `Pagination`). */}
-        <main className="relative flex min-h-0 flex-1 flex-col overflow-y-auto bg-canvas px-4 py-6 md:px-8 md:py-8">
+        <main id="contenido" tabIndex={-1} className="relative flex min-h-0 flex-1 flex-col overflow-y-auto bg-canvas px-4 py-6 outline-none md:px-8 md:py-8">
           <div className="mx-auto w-full max-w-6xl">{children}</div>
         </main>
 
