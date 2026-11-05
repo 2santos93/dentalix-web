@@ -117,6 +117,8 @@ interface DayColumnsProps {
   onDrop: (appointment: Appointment, target: MoveTarget) => void;
   /** «Nueva cita» de una columna, o clic en un hueco libre (con su hora). */
   onNewAppointment: (providerId: string, startTime?: string) => void;
+  /** DX-237: el siguiente paso del flujo en la tarjeta; lo decide el rol. */
+  renderFlowAction?: (appointment: Appointment) => React.ReactNode;
   /** Cita con un movimiento en curso (se marca `aria-busy`). */
   pendingId?: string | null;
   /** DX-122: bloqueos de agenda del día (de profesional o de toda la sede). */
@@ -211,6 +213,7 @@ export function DayColumns({
   appointments,
   hours,
   loading,
+  renderFlowAction,
   error,
   onRetry,
   canMove,
@@ -649,6 +652,7 @@ export function DayColumns({
                   const wantsEarlier = a.wantsEarlier && !inactive;
                   // DX-247: también en las citas de 15 min (24 px de alto).
                   const hasMedicalAlert = medicalAlertSeverity(a.medicalAlerts) !== null;
+                  const flowAction = end - start >= 25 ? renderFlowAction?.(a) : null;
                   return (
                     <div
                       key={a.id}
@@ -657,6 +661,7 @@ export function DayColumns({
                       aria-busy={pendingId === a.id || undefined}
                       onPointerDown={(e) => startDrag(e, a)}
                       className={cn(
+                        '@container',
                         // Sin overflow-hidden aquí: lo lleva el contenido de
                         // dentro. Así la zona táctil de 44 px del icono de
                         // alerta (DX-247) no se recorta en las citas de 15 min.
@@ -699,6 +704,7 @@ export function DayColumns({
                             // cuando el tipo tiene el color de la clínica.
                             'flex h-full w-full flex-col items-start gap-0.5 px-2 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-current',
                             hasMedicalAlert ? 'pr-[4.5rem]' : 'pr-8',
+                            flowAction && (hasMedicalAlert ? '@[11rem]:pr-[6.25rem]' : '@[11rem]:pr-16 max-sm:pr-[5.5rem]'),
                           )}
                         >
                           {/* La hora y el nombre no se encogen: en una cita corta
@@ -747,8 +753,20 @@ export function DayColumns({
                         <MedicalAlertIndicator
                           flags={a.medicalAlerts}
                           patientName={patient}
-                          className="absolute right-11 top-0.5 z-10"
+                          className={cn('absolute right-11 top-0.5 z-10', flowAction && '@[11rem]:right-[4.75rem]')}
                         />
+                      ) : null}
+                      {flowAction ? (
+                        // DX-237: sin arrastre desde aquí; ni desde su diálogo de
+                        // salida, que por React también burbujea a la tarjeta. En una
+                        // tarjeta estrecha o de menos de 25 min, solo en el detalle.
+                        <div
+                          data-no-drag
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className="absolute right-8 top-1 z-10 hidden @[11rem]:block max-sm:right-[3.25rem]"
+                        >
+                          {flowAction}
+                        </div>
                       ) : null}
                       {fills && a.status === 'CANCELLED' && new Date(a.end) > now ? (
                         <button
