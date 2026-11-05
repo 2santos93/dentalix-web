@@ -54,6 +54,7 @@ beforeEach(() => {
         minimumDay: "2027-01-01",
         minDaysAfterPrevious: 0,
         planItemIds: ["a"],
+        planItems: [],
       },
       {
         number: 2,
@@ -62,6 +63,7 @@ beforeEach(() => {
         minimumDay: "2027-04-01",
         minDaysAfterPrevious: 90,
         planItemIds: ["b"],
+        planItems: [],
       },
     ],
   });

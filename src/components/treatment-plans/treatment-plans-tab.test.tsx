@@ -3255,6 +3255,7 @@ describe('TreatmentPlansTab · una primaria por estado del plan (D2)', () => {
           minimumDate: '2026-01-10T00:00:00.000Z',
           minimumDay: '2026-01-10',
           planItemIds: accepted.map((i) => i.id),
+          planItems: [],
         },
       ],
     });

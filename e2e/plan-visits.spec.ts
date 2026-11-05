@@ -376,6 +376,10 @@ for (const width of [390, 1440])
           .getByRole("group", { name: "Tratamientos de la visita" })
           .getByRole("checkbox"),
       ).toHaveCount(2);
+      // DX-283: cada tratamiento dice su diente y su procedimiento.
+      await expect(
+        dialog.getByRole("group", { name: "Tratamientos de la visita" }).getByText(/^\d+ · Corona /),
+      ).toHaveCount(2);
       for (const check of await dialog
         .getByRole("group", { name: "Tratamientos de la visita" })
         .getByRole("checkbox")
@@ -503,8 +507,9 @@ for (const width of [390, 1440])
       await expect(
         page.getByRole("region", { name: "Plan por visitas" }),
       ).toHaveCount(0);
-      await page.goto(origin + "/presupuestos");
-      await page.getByRole("tab", { name: "Aceptado sin agendar" }).click();
+      // DX-283: la pestaña se puede enlazar.
+      await page.goto(origin + "/presupuestos?tab=aceptado");
+      await expect(page.getByRole("tab", { name: "Aceptado sin agendar" })).toHaveAttribute("aria-selected", "true");
       const list = page.getByRole("region", {
         name: "Tratamiento aceptado sin agendar",
       });

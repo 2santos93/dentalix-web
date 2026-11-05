@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuthStore } from "@/lib/auth/auth-store";
 import { UnscheduledPlansView } from "@/components/treatment-plans/unscheduled-plans-view";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,9 +22,23 @@ const copy = {
   tabsLabel: "Seguimiento de presupuestos",
 };
 
+/** `useSearchParams` exige un límite de Suspense. */
 export default function PresupuestosPage() {
+  return (
+    <Suspense fallback={null}>
+      <PresupuestosRoute />
+    </Suspense>
+  );
+}
+
+function PresupuestosRoute() {
   const router = useRouter();
-  const [tab, setTab] = useState("presented");
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // DX-283: la pestaña va en la URL (`?tab=aceptado`), para enlazarla y volver a ella.
+  const tab = searchParams.get("tab") === "aceptado" ? "accepted" : "presented";
+  const setTab = (next: string) =>
+    router.replace(next === "accepted" ? `${pathname}?tab=aceptado` : pathname, { scroll: false });
   const accessToken = useAuthStore((s) => s.accessToken);
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
 
