@@ -213,7 +213,7 @@ describe('UnallocatedPaymentsView (DX-399)', () => {
   it('avisa de los abonos sin tasa, que no están en la lista', async () => {
     mockedGet.mockResolvedValue(page([row()], { paymentsWithoutRateCount: 2 }));
     render(<UnallocatedPaymentsView token="tok" />);
-    expect(await screen.findByText(/No están en la lista: falta la tasa de cambio de su día/)).toBeInTheDocument();
+    expect(await screen.findByText(/No están en la lista: es un abono en otra moneda que la del plan y falta la tasa de cambio de su día/)).toBeInTheDocument();
   });
 
   it('exporta el CSV con los mismos filtros y avisa del resultado', async () => {

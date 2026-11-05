@@ -37,7 +37,8 @@ import { ResultCount } from '@/components/shared/list-toolbar';
 import { unallocatedRowKey, useUnallocatedPayments } from './use-unallocated-payments';
 
 export const unallocatedCopy = {
-  scope: 'Abonos que todavía no cubren ningún ítem del plan · imputado y sin imputar en la moneda del plan, sin convertir',
+  scope:
+    'Abonos con algo sin imputar a ítems del plan, descontado lo que ya se devolvió o traspasó de su saldo a favor (de los abonos más recientes primero) · importes en la moneda del plan (el abono convertido con la tasa de su día); los totales no se suman entre monedas',
   period: 'Período',
   from: 'Desde',
   to: 'Hasta',
@@ -60,6 +61,7 @@ export const unallocatedCopy = {
   colPayment: 'Importe del abono',
   colAllocated: 'Imputado',
   colUnallocated: 'Sin imputar',
+  mobileUnallocated: (amount: string) => `Sin imputar ${amount}`,
   mobilePayment: (amount: string) => `Abono ${amount}`,
   mobileAllocated: (amount: string) => `Imputado ${amount}`,
   loadMore: 'Cargar más',
@@ -67,7 +69,7 @@ export const unallocatedCopy = {
   shown: (shown: number, total: number) => `Se muestran ${shown} de ${total}.`,
   added: (n: number) => (n === 1 ? 'Se añadió 1 abono a la lista.' : `Se añadieron ${n} abonos a la lista.`),
   withoutRateBody:
-    'No están en la lista: falta la tasa de cambio de su día, así que todavía no se pueden imputar. El estado de cuenta de cada paciente dice cuáles son.',
+    'No están en la lista: es un abono en otra moneda que la del plan y falta la tasa de cambio de su día, así que todavía no se puede imputar. El estado de cuenta de cada paciente dice cuáles son.',
   providerDetail: (n: number) =>
     n === 1
       ? 'La lista todavía no cuenta 1 abono en otra moneda.'
@@ -133,6 +135,11 @@ function useColumns(stamp: ReturnType<typeof useSedeStamp>): DataListColumn<Unal
           {stamp.money(r.unallocated, r.planCurrency, r.location.id)}
         </span>
       ),
+      // En la tarjeta de 390 px la cifra clave dice qué es.
+      mobileCell: (r) => {
+        const fmt = stamp.fmtOf(r.location.id);
+        return fmt ? unallocatedCopy.mobileUnallocated(moneyWithCode(r.unallocated, r.planCurrency, fmt)) : null;
+      },
     },
   ];
 }

@@ -243,6 +243,12 @@ for (const viewport of VIEWPORTS) {
     page,
   }) => {
     await page.setViewportSize(viewport);
+    await loginAs(page, origin, admin.email, password);
+    // La carga por defecto (Este mes) termina ANTES de poner el fallo: así el 500 es
+    // exactamente para la petición del período elegido después.
+    const firstLoad = page.waitForResponse(REPORT_URL);
+    await page.goto(`${origin}/reportes?tab=sin-imputar`);
+    await firstLoad;
     let failures = 1;
     await page.route(REPORT_URL, async (route) => {
       if (failures > 0) {
@@ -252,8 +258,6 @@ for (const viewport of VIEWPORTS) {
       }
       await route.continue();
     });
-    await loginAs(page, origin, admin.email, password);
-    await page.goto(`${origin}/reportes?tab=sin-imputar`);
     await page.getByLabel('Período', { exact: true }).selectOption({ label: 'Últimos 30 días' });
     await expect(page.getByText('No pudimos cargar lo cobrado sin imputar.')).toBeVisible({ timeout: 15_000 });
     await page.getByRole('button', { name: 'Reintentar' }).click();

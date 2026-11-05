@@ -852,7 +852,12 @@ export function paymentAllocationDetail(metadata: AuditMetadata, fmt: RegionalFo
   const allocation = metadata.allocation;
   if (metadata.reason !== 'PAYMENT_REALLOCATED' || !allocation) return null;
   const what = allocation.mode === 'MANUAL' ? 'Imputación fijada a mano' : 'Imputación devuelta al reparto automático';
-  return `${what} · antes: ${allocationSide(allocation.before, allocation.currency, fmt)} → después: ${allocationSide(allocation.after, allocation.currency, fmt)}`;
+  // En AUTO el reparto lo hace el sistema después de guardar: el evento no inventa un «después».
+  const after =
+    allocation.mode === 'AUTO' && allocation.after.length === 0
+      ? 'lo reparte el sistema'
+      : allocationSide(allocation.after, allocation.currency, fmt);
+  return `${what} · antes: ${allocationSide(allocation.before, allocation.currency, fmt)} → después: ${after}`;
 }
 
 /** DX-316: qué cambió en el calendario de una sede, o null si el evento no es de él. */

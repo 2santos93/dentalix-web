@@ -26,7 +26,7 @@ const copy = {
   title: 'Reportes',
   description: 'Cómo van tus sedes: producción, cobros, citas y ocupación, y qué procedimientos sostienen la clínica.',
   descriptionOwn: 'Tu producción: qué procedimientos realizaste y a qué honorario frente al de catálogo.',
-  descriptionCollections: 'Los abonos que todavía no cubren ningún ítem del plan: cuánto está imputado y cuánto queda a cuenta.',
+  descriptionCollections: 'Los abonos con algo sin imputar a ítems del plan: cuánto está imputado y cuánto queda a cuenta, descontado lo ya devuelto o traspasado.',
 };
 
 /** `useSearchParams` exige un límite de Suspense (como la Caja). */
