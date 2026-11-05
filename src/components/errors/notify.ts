@@ -31,6 +31,9 @@ interface NotifyErrorOptions {
  */
 const WITH_ACTION_DURATION = Infinity;
 
+/** Margen para que quien cierra un modal y avisa a la vez termine de cerrarlo. */
+const MODAL_SETTLE_MS = 250;
+
 /**
  * Escalón 3 de la escalera de errores: el fallo NO bloquea la pantalla (un
  * refresh en segundo plano, una acción de fila). El contenido sigue visible y
@@ -43,12 +46,28 @@ const WITH_ACTION_DURATION = Infinity;
 export function notifyError(message: string, opts: NotifyErrorOptions = {}): string {
   const { onRetry, retryLabel = notifyCopy.retry } = opts;
   const id = `error:${message}`;
-  toast.error(message, {
-    id,
-    action: onRetry ? { label: retryLabel, onClick: onRetry } : undefined,
-    duration: onRetry ? WITH_ACTION_DURATION : undefined,
-  });
+  const show = (retry: (() => void) | undefined) =>
+    toast.error(message, {
+      id,
+      action: retry ? { label: retryLabel, onClick: retry } : undefined,
+      duration: retry ? WITH_ACTION_DURATION : undefined,
+    });
+  show(onRetry);
+  // DX-538: con un modal abierto lo de fuera es inerte: el botón del aviso no se
+  // podría pulsar. Se quita si el modal sigue ahí: quien lo cierra y avisa en el
+  // mismo manejador aún lo tiene en el DOM en este instante, y ese sí lo conserva.
+  // Quien deja el modal abierto da su error dentro.
+  if (onRetry) {
+    setTimeout(() => {
+      if (modalIsOpen()) show(undefined);
+    }, MODAL_SETTLE_MS);
+  }
   return id;
+}
+
+/** ¿Hay un diálogo o una ficha modal de Radix abiertos? */
+function modalIsOpen(): boolean {
+  return typeof document !== 'undefined' && document.querySelector('[role="dialog"][data-state="open"]') !== null;
 }
 
 /** Un éxito corriente se lee y se va; 10 s dan para leerlo con calma. */

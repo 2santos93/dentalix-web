@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
 import { Toaster } from './toaster';
@@ -76,6 +76,23 @@ describe('notifyError', () => {
 
   it('devuelve el id del aviso para poder cerrarlo cuando el fallo se resuelve', () => {
     expect(notifyError('Fallo de prueba')).toBe('error:Fallo de prueba');
+  });
+
+  it('DX-538: con un modal abierto no ofrece un botón que no se podría pulsar', async () => {
+    const user = userEvent.setup();
+    const modal = document.createElement('div');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('data-state', 'open');
+    document.body.append(modal);
+    try {
+      render(<Harness />);
+      await user.click(screen.getByRole('button', { name: 'disparar' }));
+      expect(await screen.findByText('No se pudo cambiar el estado')).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument());
+      expect(screen.getByText('No se pudo cambiar el estado')).toBeInTheDocument();
+    } finally {
+      modal.remove();
+    }
   });
 });
 

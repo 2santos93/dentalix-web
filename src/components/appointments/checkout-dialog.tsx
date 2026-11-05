@@ -19,6 +19,7 @@ export const checkoutCopy = {
   submit: 'Completar la cita',
   submitWithPending: (count: number) => `Completar con ${count} pendiente${count === 1 ? '' : 's'}`,
   loadError: 'No pudimos comprobar la salida del paciente.',
+  completeError: 'No pudimos completar la cita. Intenta de nuevo.',
   remindersOff: 'Dio de baja los recordatorios.',
   open: 'Abrir ficha',
   items: {
@@ -50,6 +51,7 @@ export function CheckoutDialog({
   const [list, setList] = useState<CheckoutChecklist | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     getCheckoutChecklist(token, appointmentId).then(
@@ -73,9 +75,12 @@ export function CheckoutDialog({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
+    setSubmitError(null);
     const done = await onComplete(pending);
     setSubmitting(false);
     if (done) onOpenChange(false);
+    // DX-538: el botón del aviso no se puede pulsar con el diálogo abierto: se reintenta desde aquí.
+    else setSubmitError(checkoutCopy.completeError);
   }
 
   return (
@@ -87,6 +92,7 @@ export function CheckoutDialog({
       onSubmit={handleSubmit}
       submitLabel={pending.length > 0 ? checkoutCopy.submitWithPending(pending.length) : checkoutCopy.submit}
       submitting={submitting}
+      error={submitError}
     >
       {error && !list ? (
         <SectionError description={error} onRetry={load} />

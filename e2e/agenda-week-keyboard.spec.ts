@@ -2,6 +2,7 @@ import { test, expect, type Page } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
+import { chooseAppointmentStatus } from './support/appointment-status';
 import { axeInBothThemes } from './support/axe';
 import { atSede, sedeDayFromToday } from './support/clock';
 import { fillDate } from './support/dates';
@@ -97,6 +98,43 @@ test('DX-065: la primera parada es «Saltar al contenido» y lleva al contenido'
   await page.keyboard.press('Enter');
   await expect(page.locator('main#contenido')).toBeFocused();
 });
+
+for (const { width, height } of [
+  { width: 1440, height: 900 },
+  { width: 390, height: 844 },
+]) {
+  test(`DX-538: el fallo al cambiar el estado desde el detalle se reintenta dentro del detalle (${width} px)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height });
+    await loginAs(page, origin, admin.email, password);
+    await openWeek(page);
+    await page.getByTestId('week-grid-appointment').first().click();
+    const detail = page.getByRole('dialog');
+    await expect(detail).toBeVisible();
+    let failed = 0;
+    await page.route(/\/appointments\/[^/?]+$/, async (route) => {
+      if (route.request().method() === 'PATCH' && failed === 0) {
+        failed += 1;
+        await route.fulfill({ status: 500, contentType: 'application/json', body: '{"statusCode":500}' });
+        return;
+      }
+      await route.continue();
+    });
+    const status = detail.getByRole('combobox').first();
+    const before = (await status.textContent()) ?? '';
+    const target = before.includes('Confirmada') ? 'Agendada' : 'Confirmada';
+    await chooseAppointmentStatus(status, target);
+    const retry = detail.getByRole('button', { name: 'Reintentar' });
+    await expect(retry).toBeVisible({ timeout: 10_000 });
+    // El aviso flotante no lleva un botón que no se podría pulsar.
+    await expect(page.locator('[data-sonner-toast]').getByRole('button', { name: 'Reintentar' })).toHaveCount(0);
+    await retry.click();
+    await expect(retry).toHaveCount(0, { timeout: 10_000 });
+    await expect(status).toHaveText(target, { timeout: 10_000 });
+    expect(failed).toBe(1);
+  });
+}
 
 test('Semana: con flechas y Enter se abre la cita nueva en el hueco elegido, sin ratón', async ({ page }) => {
   await loginAs(page, origin, admin.email, password);
