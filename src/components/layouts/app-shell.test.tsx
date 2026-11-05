@@ -1,5 +1,5 @@
 import { auditRenderedControls } from '@/lib/test/rendered-a11y';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppShell } from './app-shell';
 import { getInClinic } from '@/lib/appointments/patient-flow';
@@ -223,6 +223,44 @@ describe('AppShell', () => {
     expect(
       screen.getAllByRole('button', { name: /ana gómez|cuenta/i }).length,
     ).toBeGreaterThanOrEqual(2);
+  });
+
+  it('DX-224: «¿Quién llama?» tiene botón en la cabecera y se abre con Alt+Mayús+Q', async () => {
+    mockAccessToken = tokenForRole('RECEPTION');
+    const user = userEvent.setup();
+    render(
+      <AppShell>
+        <p>contenido</p>
+      </AppShell>,
+    );
+    // Barra lateral y barra superior del teléfono: un botón en cada una.
+    const buttons = await screen.findAllByRole('button', { name: /¿quién llama\?/i });
+    expect(buttons.length).toBeGreaterThanOrEqual(2);
+    expect(buttons[0]).toHaveAttribute('aria-keyshortcuts', 'Alt+Shift+Q');
+
+    await user.click(buttons[0]);
+    expect(await screen.findByRole('dialog', { name: '¿Quién llama?' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    // El atajo: Alt+Mayús+Q (`code`, no `key`: con Option, macOS cambia el carácter).
+    fireEvent.keyDown(document.body, { altKey: true, shiftKey: true, code: 'KeyQ', key: 'Œ' });
+    expect(await screen.findByRole('dialog', { name: '¿Quién llama?' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Número de teléfono')).toHaveFocus();
+  });
+
+  it('DX-224: Ctrl+Q, Alt+Q y Alt+Mayús+⌘+Q no abren «¿Quién llama?»', async () => {
+    mockAccessToken = tokenForRole('ADMIN');
+    render(
+      <AppShell>
+        <p>contenido</p>
+      </AppShell>,
+    );
+    await screen.findAllByRole('button', { name: /¿quién llama\?/i });
+    fireEvent.keyDown(document.body, { ctrlKey: true, code: 'KeyQ', key: 'q' });
+    fireEvent.keyDown(document.body, { altKey: true, code: 'KeyQ', key: 'q' });
+    fireEvent.keyDown(document.body, { altKey: true, shiftKey: true, metaKey: true, code: 'KeyQ', key: 'q' });
+    expect(screen.queryByRole('dialog', { name: '¿Quién llama?' })).not.toBeInTheDocument();
   });
 
   it('includes an Inventario nav link pointing to /inventory', async () => {

@@ -5,6 +5,7 @@ import { createPatient, type Patient } from '@/lib/patients/patients-api';
 import { getPrivacyPolicies } from '@/lib/data-consents/data-consents-api';
 import { getDocumentTypeNames } from '@/lib/patients/document-type-names-api';
 import { policiesFixture, policyFixture } from '@/lib/test/data-consents';
+import { clearPrefillPhone, peekPrefillPhone, setPrefillPhone } from '@/lib/patients/prefill-phone';
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
@@ -92,6 +93,17 @@ describe('PatientCreateWizard', () => {
     expect(input).toMatchObject({ firstName: 'Ana', lastName: 'García', docType: 'NATIONAL_ID' });
     expect(input).not.toHaveProperty('medicalHistory');
     expect(input).not.toHaveProperty('dataConsents');
+  });
+
+  it('DX-224: «Crear paciente» de «¿Quién llama?» trae el teléfono escrito, y se olvida al salir', async () => {
+    setPrefillPhone('  0412 5559999 ');
+    const { unmount } = render(<PatientCreateWizard token="tok" canWriteClinicalHistory />);
+    expect(screen.getByLabelText(/^teléfono/i)).toHaveValue('0412 5559999');
+    unmount();
+    expect(peekPrefillPhone()).toBe('');
+    render(<PatientCreateWizard token="tok" canWriteClinicalHistory />);
+    expect(screen.getByLabelText(/^teléfono/i)).toHaveValue('');
+    clearPrefillPhone();
   });
 
   it('renders the wizard steps and the basic-info fields on step 1', () => {

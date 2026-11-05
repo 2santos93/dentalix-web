@@ -25,6 +25,7 @@ import { DOC_TYPES, docTypeOptionLabel, normalizeDocTypeLabel } from '@/lib/pati
 import { isEmailAddress } from '@/lib/format/email';
 import { DocTypeLabelField, docTypeLabelFieldError } from './doc-type-label-field';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
+import { clearPrefillPhone, peekPrefillPhone } from '@/lib/patients/prefill-phone';
 import type { ClinicalHistoryValue } from '@/lib/clinical/clinical-types';
 import { ConditionSummaryText } from '@/components/clinical/condition-summary';
 import {
@@ -166,7 +167,9 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
   const { timeZone } = useDateLocale();
   const todayIso = React.useMemo(() => todayDate(timeZone).toString(), [timeZone]);
   const [sex, setSex] = useState<Sex>('UNSPECIFIED');
-  const [phone, setPhone] = useState('');
+  // DX-224: «Crear paciente» de «¿Quién llama?» trae el número escrito.
+  const [phone, setPhone] = useState(() => peekPrefillPhone());
+  React.useEffect(() => clearPrefillPhone, []);
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');

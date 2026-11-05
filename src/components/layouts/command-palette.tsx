@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { hasUnsavedChanges, requestNavigation } from '@/components/settings/unsaved-changes';
-import { CalendarPlus, CornerDownLeft, ListTodo, PhoneCall, Search, UserPlus, UserRound } from 'lucide-react';
+import { CalendarPlus, CornerDownLeft, ListTodo, Phone, PhoneCall, Search, UserPlus, UserRound } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
@@ -34,6 +34,7 @@ const copy = {
   noResults: (q: string) => `Nada coincide con «${q}».`,
   newAppointment: 'Nueva cita',
   newPatient: 'Nuevo paciente',
+  caller: '¿Quién llama?',
   noDocument: 'Sin documento',
   settingsHint: 'Ajustes',
   // DX-503: «Mi día» es el bloque «Pendientes» de Inicio (sin entrada propia
@@ -74,11 +75,14 @@ export function CommandPalette({
   onOpenChange,
   token,
   role,
+  onOpenCaller,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   token: string | null;
   role: ClinicRole | null;
+  /** DX-224: abre «¿Quién llama?» (en el raíl no hay botón; Alt+Mayús+Q también). */
+  onOpenCaller?: () => void;
 }) {
   const router = useRouter();
   const [query, setQuery] = React.useState('');
@@ -221,10 +225,25 @@ export function CommandPalette({
         },
       },
       { id: 'action-new-patient', group: 'actions', label: copy.newPatient, icon: UserPlus, run: () => go('/patients/new') },
+      ...(onOpenCaller
+        ? [
+            {
+              id: 'action-caller',
+              group: 'actions' as const,
+              label: copy.caller,
+              icon: Phone,
+              run: () => {
+                skipBack();
+                onOpenChange(false);
+                onOpenCaller();
+              },
+            },
+          ]
+        : []),
     ];
     for (const a of actions) if (matches(a.label)) result.push(a);
     return result;
-  }, [query, searchable, patients, role, go, onOpenChange, skipBack]);
+  }, [query, searchable, patients, role, go, onOpenChange, skipBack, onOpenCaller]);
 
   const activeIndex = options.length === 0 ? -1 : Math.min(active, options.length - 1);
   const activeOption = activeIndex >= 0 ? options[activeIndex] : undefined;
