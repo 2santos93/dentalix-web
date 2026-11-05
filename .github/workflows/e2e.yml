@@ -43,7 +43,7 @@ jobs:
     # Si un paso se pasa, falla ESE paso (la run queda `failure`) y el informe
     # se sube igual; si se pasara el job, GitHub la marcaría `cancelled` y el
     # rojo no se vería. Pasos: ~3 min de checkout y Node + 1 (referencias
-    # compartidas con la API) + 10 + 5 + 5 + 8 + 35 + 2 + 2 + 5 = 76
+    # compartidas con la API) + 10 + 5 + 5 + 2 + 8 + 35 + 2 + 2 + 5 = 78
     # (Playwright: ~17–20 min la suite entera).
     # DX-413: un run de repetición (repeat_each > 1, solo workflow_dispatch)
     # corre muchas veces los mismos tests y sin reintentos: tope de 4 h.
@@ -121,6 +121,13 @@ jobs:
       - name: API (build y start:prod)
         timeout-minutes: 5
         run: scripts/e2e-ci.sh api
+
+      # DX-537: el esquema de tipos de la API (src/lib/api/schema.d.ts) tiene
+      # que ser el de la API contra la que corre este run (`api_ref`). Si
+      # difiere, falla con el diff y el comando para regenerarlo.
+      - name: Esquema de la API al día (schema.d.ts)
+        timeout-minutes: 2
+        run: scripts/e2e-ci.sh schema
 
       - name: Web (next build y next start)
         timeout-minutes: 8

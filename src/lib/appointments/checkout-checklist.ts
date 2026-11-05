@@ -1,7 +1,15 @@
 import { apiFetch } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 
-export type CheckoutChecklist = components['schemas']['CheckoutChecklistDto'];
+/**
+ * DX-537: la API publica `balance` como objeto sin forma (`type: Object` en el
+ * DTO, y el esquema lo da como `Record<string, never>`). Su descripción y la
+ * lista de la agenda dicen que es el saldo vencido de siempre
+ * (`OverdueBalanceDto`): se tipa así aquí hasta que la API lo publique bien.
+ */
+export type CheckoutChecklist = Omit<components['schemas']['CheckoutChecklistDto'], 'balance'> & {
+  balance: components['schemas']['OverdueBalanceDto'] | null;
+};
 export type CheckoutItem = 'NEXT_VISIT' | 'PAYMENT' | 'PHONE' | 'EMAIL';
 
 /** `GET /appointments/:id/checkout-checklist` (DX-202). */

@@ -40,6 +40,26 @@ la imagen) la web no arranca sin una `API_URL` http(s) válida.
 Imagen de producción: `Dockerfile` (`output: 'standalone'`); runbook en
 `dentalix-docs/docs/operacion/despliegue.md`.
 
+## Regenerar el esquema de la API
+
+`src/lib/api/schema.d.ts` lo genera `openapi-typescript` a partir del OpenAPI de
+`dentalix-api`; no se edita a mano. Tras un cambio de contrato en la API:
+
+```bash
+# En dentalix-api (rama o main que quieras reflejar): puerto 3002, nunca el 3000
+PORT=3002 npm run start:dev        # o `npm run build && PORT=3002 npm run start:prod`
+
+# En dentalix-web
+npm run codegen                    # http://127.0.0.1:3002/docs-json -> src/lib/api/schema.d.ts
+npx tsc --noEmit                   # lo que rompa se adapta en la web: manda el contrato
+```
+
+Para los tipos hay que usar `components['schemas'][...]`, no copias a mano. La CI
+(`E2E`, paso «Esquema de la API al día», `scripts/e2e-ci.sh schema`) levanta la
+API del `api_ref` del run y falla, con el diff, si el esquema commiteado
+difiere. Una rama web que necesita un contrato aún no mergeado se prueba con
+`api_ref` = la rama de la API y commitea el esquema generado desde ella.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

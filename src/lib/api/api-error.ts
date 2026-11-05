@@ -1,3 +1,5 @@
+import type { components } from './schema';
+
 /**
  * Error de una respuesta no-2xx de la API.
  *
@@ -15,10 +17,7 @@ export interface ExistingPatientRef {
 }
 
 /** Las citas que nombra un 409 `SCHEDULE_AFFECTS_APPOINTMENTS` (DX-267). */
-export interface AffectedAppointmentsRef {
-  total: number;
-  sample: { id: string; locationId: string; start: string; end: string; patientName: string }[];
-}
+export type AffectedAppointmentsRef = components['schemas']['ScheduleAffectedAppointmentsDto'];
 
 export class ApiError extends Error {
   /**
