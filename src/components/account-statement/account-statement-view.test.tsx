@@ -802,11 +802,10 @@ describe('saldo a favor en el estado de cuenta (DX-432)', () => {
     await screen.findByTestId('credit-balance');
     await waitFor(() => expect(getCreditPolicy).toHaveBeenCalled());
     const trigger = within(screen.getByTestId('credit-balance')).getByRole('button', { name: /^Acciones de/ });
-    await waitFor(async () => {
-      await user.click(trigger);
-      const items = await screen.findAllByRole('menuitem');
-      expect(items[0]).toHaveAttribute('aria-disabled', 'true');
-    });
+    // Un solo clic; el menú abierto se repinta cuando llega el tope (solo aserciones en waitFor).
+    await user.click(trigger);
+    const items = await screen.findAllByRole('menuitem');
+    await waitFor(() => expect(items[0]).toHaveAttribute('aria-disabled', 'true'));
     expect(screen.getAllByText(/Recepción no puede traspasar ni devolver saldo a favor/).length).toBeGreaterThanOrEqual(2);
   });
 

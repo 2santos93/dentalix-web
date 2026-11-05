@@ -112,16 +112,21 @@ export function RowActions({
           <React.Fragment key={action.label}>
             {action.separatorBefore && i > 0 ? <DropdownMenuSeparator /> : null}
             {action.disabledReason ? (
+              // El nombre es solo la etiqueta (aria-labelledby); el porqué es la
+              // descripción: ni una cosa dos veces ni el nombre largo. Sin color
+              // destructivo ni opacidad global: la explicación se lee con AA.
               <DropdownMenuItem
                 aria-disabled="true"
+                aria-labelledby={`${reasonId}-label-${i}`}
                 aria-describedby={`${reasonId}-${i}`}
-                destructive={action.destructive}
-                className="items-start opacity-70"
+                className="items-start data-[highlighted]:bg-transparent"
                 onSelect={(event) => event.preventDefault()}
               >
                 {action.icon}
                 <span className="flex min-w-0 flex-col gap-0.5">
-                  <span>{action.label}</span>
+                  <span id={`${reasonId}-label-${i}`} className="opacity-70">
+                    {action.label}
+                  </span>
                   <span id={`${reasonId}-${i}`} className="t-caption max-w-64 whitespace-normal text-muted">
                     {action.disabledReason}
                   </span>

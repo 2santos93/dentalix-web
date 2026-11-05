@@ -17,7 +17,7 @@ export const creditPolicyCopy = {
   support:
     'Cuánto puede mover recepción del saldo a favor de un paciente (aplicarlo a otro plan o devolverlo). Cada cambio queda en la auditoría.',
   label: 'Tope de recepción por día (en cada moneda)',
-  hint: '0 = recepción no puede traspasar ni devolver; el administrador siempre puede.',
+  hint: '0 = recepción no puede traspasar ni devolver; el administrador siempre puede. Un traspaso se compara con el tope en cada operación; una devolución, con lo ya devuelto ese día.',
   saved: 'Tope de recepción guardado.',
   saveAria: 'Guardar el tope de recepción',
   loadError: 'No pudimos cargar el tope de recepción.',

@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext } from './support/test';
+import { test, expect, type APIRequestContext, type Locator } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
@@ -95,10 +95,33 @@ test.beforeAll(async ({ request }) => {
   await seed(request);
 });
 
-for (const viewport of [
+const VIEWPORTS = [
   { width: 1440, height: 900 },
   { width: 390, height: 844 },
-]) {
+];
+
+/**
+ * `DataList` pinta una tabla (role table/row) desde 640 px y, por debajo, una
+ * lista de tarjetas (role list/listitem): el mismo nombre accesible en las dos.
+ */
+function dataItems(scope: Locator, name: string | RegExp, width: number): Locator {
+  return width < 640
+    ? scope.getByRole('list', { name }).getByRole('listitem')
+    : scope.getByRole('table', { name }).getByRole('row');
+}
+
+async function putCap(request: APIRequestContext, receptionMaxAmount: number) {
+  const res = await request.put(`${API_URL}/patient-credit/policy`, { headers: session.headers, data: { receptionMaxAmount } });
+  expect(res.ok(), `PUT policy falló: ${await res.text()}`).toBeTruthy();
+}
+
+async function capOnServer(request: APIRequestContext): Promise<number> {
+  const res = await request.get(`${API_URL}/patient-credit/policy`, { headers: session.headers });
+  expect(res.ok()).toBeTruthy();
+  return ((await res.json()) as { receptionMaxAmount: number }).receptionMaxAmount;
+}
+
+for (const viewport of VIEWPORTS) {
   test(`historial, reimpresión y «Anular» explicado (${viewport.width} px)`, async ({ page, context }) => {
     await page.setViewportSize(viewport);
     await context.addInitScript(() => {
@@ -110,12 +133,13 @@ for (const viewport of [
     const panel = page.locator('#tabpanel-account-statement');
     const history = panel.getByTestId('credit-movements');
     await expect(history.getByRole('heading', { name: 'Traspasos y devoluciones' })).toBeVisible({ timeout: 10_000 });
-    const row = history.getByRole('row').filter({ hasText: 'DEV-' });
+    const row = dataItems(history, 'Traspasos y devoluciones', viewport.width).filter({ hasText: 'DEV-' });
+    await expect(row).toHaveCount(1);
     await expect(row).toContainText(money(40));
     await expect(row).toContainText('El paciente se muda de ciudad');
     await expectNoHorizontalScroll(page);
 
-    // Reimprimir: el comprobante vuelve a abrirse y el foco regresa a la fila.
+    // Reimprimir: el comprobante vuelve a abrirse y el foco regresa al «⋯» de la fila.
     const trigger = row.getByRole('button', { name: /^Acciones de/ });
     if (viewport.width === 390) await expectTouchTarget(trigger, { width: true, label: '«⋯» del historial' });
     await trigger.click();
@@ -125,40 +149,57 @@ for (const viewport of [
     await expectNoHorizontalScroll(page);
     await receipt.getByRole('button', { name: 'Cerrar' }).first().click();
     await expect(receipt).toBeHidden();
+    await expect(trigger).toBeFocused();
 
     // El abono de referencia de la devolución no se anula: «Anular» deshabilitado y explicado.
-    const movements = panel.getByRole('table', { name: /movimientos/i });
-    await movements.getByRole('button', { name: /^Acciones de abono/ }).first().click();
-    const anular = page.getByRole('menuitem', { name: /Anular/ });
+    const movement = dataItems(panel, 'Movimientos (abonos)', viewport.width).filter({ hasText: money(300) });
+    await movement.getByRole('button', { name: /^Acciones de abono/ }).click();
+    const anular = page.getByRole('menuitem', { name: 'Anular' });
     await expect(anular).toHaveAttribute('aria-disabled', 'true');
-    await expect(anular).toContainText('es referencia de la devolución DEV-');
+    await expect(anular).toHaveAccessibleDescription(/es referencia de la devolución DEV-/);
     await page.keyboard.press('Escape');
   });
+
+  test(`el administrador cambia el tope en Ajustes › Caja (${viewport.width} px)`, async ({ page, request }) => {
+    await page.setViewportSize(viewport);
+    await putCap(request, 0);
+    await loginAs(page, origin, admin.email, password);
+    await page.goto(`${origin}/settings/caja`);
+    const cap = page.getByLabel(CAP_LABEL);
+    await expect(cap).toBeVisible({ timeout: 10_000 });
+    await expect(cap).toHaveAccessibleDescription(/0 = recepción no puede traspasar ni devolver; el administrador siempre puede\./);
+    await expect(cap).toHaveValue('0');
+    if (viewport.width === 390) await expectTouchTarget(cap, { label: 'campo del tope' });
+    const bar = page.getByRole('region', { name: 'Cambios sin guardar' });
+    const save = page.getByRole('button', { name: 'Guardar el tope de recepción' });
+    await cap.fill('25');
+    await save.click();
+    // La barra desaparece al guardar; lo guardado se comprueba en el servidor, no en el aviso.
+    await expect(bar).toBeHidden();
+    expect(await capOnServer(request)).toBe(25);
+    await expectNoHorizontalScroll(page);
+    await page.reload();
+    await expect(page.getByLabel(CAP_LABEL)).toHaveValue('25');
+    await page.getByLabel(CAP_LABEL).fill('0');
+    await save.click();
+    await expect(bar).toBeHidden();
+    expect(await capOnServer(request)).toBe(0);
+  });
+
+  test(`recepción con el tope en 0 ve «Aplicar» y «Devolver» deshabilitadas (${viewport.width} px)`, async ({ page, request }) => {
+    await page.setViewportSize(viewport);
+    await putCap(request, 0);
+    await loginAs(page, origin, reception.email, password);
+    await page.goto(`${origin}/patients/${patientId}`);
+    await openPatientTab(page, 'Estado de cuenta');
+    const credit = page.locator('#tabpanel-account-statement').getByTestId('credit-balance');
+    await expect(credit).toBeVisible({ timeout: 10_000 });
+    await credit.getByRole('button', { name: /^Acciones de/ }).click();
+    for (const name of [/Aplicar a otro plan/, /Devolver/]) {
+      const item = page.getByRole('menuitem', { name });
+      await expect(item).toHaveAttribute('aria-disabled', 'true');
+      await expect(item).toHaveAccessibleDescription(/Recepción no puede traspasar ni devolver saldo a favor/);
+    }
+    await expectNoHorizontalScroll(page);
+  });
 }
-
-test('el administrador cambia el tope en Ajustes › Caja y recepción con tope 0 ve las acciones deshabilitadas', async ({ page }) => {
-  await loginAs(page, origin, admin.email, password);
-  await page.goto(`${origin}/settings/caja`);
-  const cap = page.getByLabel(CAP_LABEL);
-  await expect(cap).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText('0 = recepción no puede traspasar ni devolver; el administrador siempre puede.')).toBeVisible();
-  await expect(cap).toHaveValue('0');
-  await cap.fill('25');
-  await page.getByRole('button', { name: 'Guardar el tope de recepción' }).click();
-  await expect(page.getByText('Tope de recepción guardado.')).toBeVisible();
-  await expectNoHorizontalScroll(page);
-  await cap.fill('0');
-  await page.getByRole('button', { name: 'Guardar el tope de recepción' }).click();
-  await expect(page.getByText('Tope de recepción guardado.')).toBeVisible();
-
-  // Recepción con el tope en 0: la sección no deja mover saldo y dice por qué.
-  await page.context().clearCookies();
-  await loginAs(page, origin, reception.email, password);
-  await page.goto(`${origin}/patients/${patientId}`);
-  await openPatientTab(page, 'Estado de cuenta');
-  const credit = page.locator('#tabpanel-account-statement').getByTestId('credit-balance');
-  await credit.getByRole('button', { name: /^Acciones de/ }).click();
-  const devolver = page.getByRole('menuitem', { name: /Devolver/ });
-  await expect(devolver).toHaveAttribute('aria-disabled', 'true');
-  await expect(devolver).toContainText('Recepción no puede traspasar ni devolver saldo a favor');
-});

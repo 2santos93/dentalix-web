@@ -135,7 +135,7 @@ describe('RowActions', () => {
     );
 
     await user.click(screen.getByRole('button', { name: /acciones de x/i }));
-    const item = await screen.findByRole('menuitem', { name: /Anular/ });
+    const item = await screen.findByRole('menuitem', { name: 'Anular' });
     // No se rinde como «disabled» de Radix (saldría del orden de foco): aria-disabled y descripción.
     expect(item).toHaveAttribute('aria-disabled', 'true');
     expect(item).not.toHaveAttribute('data-disabled');
