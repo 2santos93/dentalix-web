@@ -76,6 +76,8 @@ const FIELD_LABELS: Record<string, string> = {
   fixedCurrency: "Moneda del importe fijo",
   // DX-330: plazo de conservación de la historia clínica.
   clinicalRecordRetentionYears: "Plazo de conservación de la historia clínica",
+  // DX-384: hasta cuántos días vale la última tasa manual registrada.
+  manualRateMaxAgeDays: "Días de validez de la última tasa manual",
   // DX-517: «VES=Bs.», una moneda por elemento.
   currencyTexts: "Texto de las monedas",
   // DX-019: datos de la clínica.
@@ -95,6 +97,7 @@ const FIELD_UNITS: Record<string, string> = {
   durationMinutes: "min",
   leadHours: "h",
   clinicalRecordRetentionYears: "años",
+  manualRateMaxAgeDays: "días",
 };
 
 const DOMAIN_STATUS_LABELS: Record<string, string> = {

@@ -29,6 +29,20 @@ export function saveExchangeRateSettings(token: string, source: ExchangeRateSour
   });
 }
 
+/**
+ * DX-384: hasta cuántos días de antigüedad puede tener la última tasa manual
+ * que se usa cuando no hay la del día del abono. Los mismos límites que la API.
+ */
+export const MANUAL_RATE_MAX_AGE = { min: 0, max: 30, default: 3 } as const;
+
+export function saveManualRateMaxAgeDays(token: string, days: number): Promise<ExchangeRateSettings> {
+  return apiFetch<ExchangeRateSettings>('/exchange/settings', {
+    method: 'PUT',
+    body: { manualRateMaxAgeDays: days },
+    token,
+  });
+}
+
 /** Las últimas tasas manuales de la clínica: día más reciente primero. */
 export function listManualExchangeRates(token: string, limit = MANUAL_RATES_SHOWN): Promise<ManualExchangeRate[]> {
   const search = new URLSearchParams({ limit: String(limit) });
@@ -66,6 +80,25 @@ export const RATE_INPUT_COPY = {
   tooManyDecimals: 'La tasa admite hasta 8 decimales.',
   tooLarge: 'La tasa tiene que ser menor que 10.000.000.',
 };
+
+export const MAX_AGE_INPUT_COPY = {
+  missing: 'Escribe cuántos días.',
+  invalid: `Escribe un número entero de días entre ${MANUAL_RATE_MAX_AGE.min} y ${MANUAL_RATE_MAX_AGE.max}.`,
+};
+
+export type MaxAgeInputResult = { ok: true; value: number } | { ok: false; error: string };
+
+/** Lee el plazo tal como se escribe: un entero de 0 a 30. */
+export function parseMaxAgeInput(text: string): MaxAgeInputResult {
+  const trimmed = text.trim();
+  if (trimmed === '') return { ok: false, error: MAX_AGE_INPUT_COPY.missing };
+  if (!/^\d{1,2}$/.test(trimmed)) return { ok: false, error: MAX_AGE_INPUT_COPY.invalid };
+  const value = Number(trimmed);
+  if (value < MANUAL_RATE_MAX_AGE.min || value > MANUAL_RATE_MAX_AGE.max) {
+    return { ok: false, error: MAX_AGE_INPUT_COPY.invalid };
+  }
+  return { ok: true, value };
+}
 
 const RATE_RE = /^(\d{1,7})(?:[.,](\d{1,8}))?$/;
 

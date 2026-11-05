@@ -5,7 +5,7 @@ import { moneyWithCode } from '@/lib/format/sede-number';
 import { NO_CURRENCY_TEXTS, type CurrencyTexts } from '@/lib/format/currency-text';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
-import { paymentRateCopy, ratePairLabel } from '@/lib/payments/payment-rate';
+import { paymentRateCopy, ratePairLabel, rateDayLabel } from '@/lib/payments/payment-rate';
 import type { PaymentReceipt, ReceiptPrintFormat } from '@/lib/payments/payment-receipts-api';
 import {
   PAYMENT_ADJUSTMENT_TYPE_LABELS,
@@ -308,7 +308,7 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
                     ? copy.rateApplied(
                         ratePairLabel(payment.currency, frozen.rate, money),
                         paymentRateCopy.source[frozen.rate.source],
-                        civilDate(frozen.rate.date),
+                        rateDayLabel(frozen.rate.date, payment.paidOn, civilDate),
                       )
                     : copy.rateMissing}
                 </dd>

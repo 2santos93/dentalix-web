@@ -1,9 +1,13 @@
 import { regionalFormat } from '@/lib/format/regional-format';
-import { convertWithRate, frozenRateLabel, paymentRateCopy, quoteFromRates } from './payment-rate';
+import { convertWithRate, frozenRateLabel, paymentRateCopy, quoteFromRates, rateDayLabel } from './payment-rate';
 import type { Payment } from './payments-api';
 
-const frozen = (over: Partial<NonNullable<Payment['frozenRate']>> = {}): Pick<Payment, 'currency' | 'frozenRate'> => ({
+const frozen = (
+  over: Partial<NonNullable<Payment['frozenRate']>> = {},
+  paidOn = '2026-10-30',
+): Pick<Payment, 'currency' | 'frozenRate' | 'paidOn'> => ({
   currency: 'GBP',
+  paidOn,
   frozenRate: {
     currency: 'USD',
     fromPerBase: 4000,
@@ -26,16 +30,20 @@ describe('frozenRateLabel (DX-375)', () => {
 
   it('al revés cuando el abono está en la moneda mayor', () => {
     expect(
-      frozenRateLabel({
-        currency: 'USD',
-        frozenRate: {
-          currency: 'GBP',
-          fromPerBase: 1,
-          toPerBase: 4100,
-          source: 'MANUAL',
-          date: '2026-10-30',
+      frozenRateLabel(
+        {
+          currency: 'USD',
+          paidOn: '2026-10-30',
+          frozenRate: {
+            currency: 'GBP',
+            fromPerBase: 1,
+            toPerBase: 4100,
+            source: 'MANUAL',
+            date: '2026-10-30',
+          },
         },
-      }, ES_CO)?.replace(/\s/g, ' '),
+        ES_CO,
+      )?.replace(/\s/g, ' '),
     ).toBe('Tasa congelada: 1 USD = GBP 4.100,00 · manual · 30/10/2026');
   });
 
@@ -45,8 +53,21 @@ describe('frozenRateLabel (DX-375)', () => {
     );
   });
 
+  // DX-384: la última tasa registrada, de un día anterior al del abono.
+  it('si la tasa es de un día anterior al del abono dice «tasa del …» en el formato de la sede', () => {
+    expect(
+      frozenRateLabel(frozen({ source: 'MANUAL', date: '2026-10-30' }, '2026-10-31'), ES_CO)?.replace(/\s/g, ' '),
+    ).toBe('Tasa congelada: 1 USD = GBP 4.000,00 · manual · tasa del 30/10/2026');
+    expect(
+      frozenRateLabel(
+        frozen({ date: '2026-10-30' }, '2026-10-31'),
+        regionalFormat({ locale: 'de-DE', hourCycle: 'h23' }),
+      )?.replace(/\s/g, ' '),
+    ).toContain('· tasa del 30.10.2026');
+  });
+
   it('sin tasa congelada no hay etiqueta', () => {
-    expect(frozenRateLabel({ currency: 'GBP', frozenRate: null }, ES_CO)).toBeNull();
+    expect(frozenRateLabel({ currency: 'GBP', paidOn: '2026-10-30', frozenRate: null }, ES_CO)).toBeNull();
   });
 
   it('con el formato de otra sede y siempre el código ISO, nunca un símbolo (DX-378)', () => {
@@ -89,5 +110,17 @@ describe('quoteFromRates (DX-376: la misma tasa que congela la API)', () => {
   it('una moneda ausente, o una tasa que redondea a 0 con 8 decimales, es «sin tasa» (como la API)', () => {
     expect(quoteFromRates(day({ GBP: 4000 }), 'VES', 'USD')).toBeNull();
     expect(quoteFromRates(day({ XYZ: 0.000000001 }), 'XYZ', 'USD')).toBeNull();
+  });
+});
+
+describe('rateDayLabel (DX-384)', () => {
+  const day = (d: string) => d.split('-').reverse().join('/');
+
+  it('el día de la tasa tal cual cuando es el del abono', () => {
+    expect(rateDayLabel('2026-10-31', '2026-10-31', day)).toBe('31/10/2026');
+  });
+
+  it('«tasa del …» cuando la tasa es de otro día', () => {
+    expect(rateDayLabel('2026-10-30', '2026-10-31', day)).toBe('tasa del 30/10/2026');
   });
 });

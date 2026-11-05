@@ -9,8 +9,10 @@ import {
   getExchangeRateSettings,
   listManualExchangeRates,
   parseRateInput,
+  parseMaxAgeInput,
   registerManualExchangeRate,
   saveExchangeRateSettings,
+  saveManualRateMaxAgeDays,
   type ExchangeRateSettings,
   type ExchangeRateSource,
   type ManualExchangeRate,
@@ -43,7 +45,7 @@ export const exchangeRateCopy = {
   sourceHints: {
     AUTOMATIC: 'La tasa del día la da un proveedor de tasas de cambio. Es la opción con la que empieza toda clínica.',
     MANUAL:
-      'Desde el día en que se elige, la clínica registra cada día la tasa de cada moneda. Un día sin tasa registrada, los abonos en esa moneda quedan sin tasa: no se usa la de otro día. Los días anteriores siguen con la tasa automática; si un abono de un día anterior se quedó sin ella, la tasa manual que registres para ese día le sirve de respaldo.',
+      'Desde el día en que se elige, la clínica registra cada día la tasa de cada moneda. Un día sin tasa registrada se usa la última registrada, hasta el plazo de abajo; pasado el plazo, los abonos en esa moneda quedan sin tasa. Los días anteriores siguen con la tasa automática; si un abono de un día anterior se quedó sin ella, la tasa manual que registres para ese día le sirve de respaldo.',
   } satisfies Record<ExchangeRateSource, string>,
   /** Con la fecha en el formato de la sede; sin formato, sin fecha (R11). */
   manualSince: (date: string | null) => (date ? `Manual desde el ${date}` : 'Manual'),
@@ -55,6 +57,24 @@ export const exchangeRateCopy = {
   save: 'Guardar',
   sourceSaved: 'Fuente de la tasa guardada.',
   sourceSaveError: 'No pudimos guardar la fuente de la tasa. Intenta de nuevo.',
+  // DX-384: la última tasa registrada sustituye a la del día hasta N días.
+  maxAge: {
+    /** El valor de la fila: «Usar la última tasa registrada hasta 3 días». */
+    value: (days: number) =>
+      days === 0
+        ? 'Usar solo la tasa del mismo día'
+        : `Usar la última tasa registrada hasta ${days} ${days === 1 ? 'día' : 'días'}`,
+    description:
+      'Con la fuente manual, un día sin tasa usa la última registrada que no sea más antigua que este plazo. Cada abono conserva la tasa y la fecha que usó, aunque después registres la del día. Pasado el plazo, queda sin tasa.',
+    dialogTitle: 'Cuántos días vale la última tasa',
+    dialogDescription:
+      'Cuando un día no tiene tasa registrada, los abonos usan la última registrada con fecha anterior, siempre que no sea más antigua que este plazo. Cada abono conserva la tasa con su fecha. El cambio queda en la auditoría.',
+    field: 'Usar la última tasa registrada hasta N días',
+    hint: '0 = solo la tasa del mismo día',
+    changeLabel: 'Cambiar el plazo de la última tasa registrada',
+    saved: 'Plazo de la última tasa guardado.',
+    saveError: 'No pudimos guardar el plazo de la tasa. Intenta de nuevo.',
+  },
   ratesHeading: 'Tasas manuales',
   /** Una sola línea (critique-settings: dos párrafos se leían como añadido). */
   ratesHint: {
@@ -168,6 +188,8 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
   const [reloadKey, setReloadKey] = useState(0);
   const [sourceKey, setSourceKey] = useState<number | null>(null);
   const [sourceOpen, setSourceOpen] = useState(false);
+  const [maxAgeKey, setMaxAgeKey] = useState<number | null>(null);
+  const [maxAgeOpen, setMaxAgeOpen] = useState(false);
   const [rateKey, setRateKey] = useState<number | null>(null);
   const [rateOpen, setRateOpen] = useState(false);
   const [correcting, setCorrecting] = useState<{
@@ -345,6 +367,25 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
               </Button>
             }
           />
+          <SettingRow
+            label={<span data-testid="exchange-rate-max-age">{copy.maxAge.value(state.manualRateMaxAgeDays)}</span>}
+            description={copy.maxAge.description}
+            action={
+              <Button
+                type="button"
+                variant="secondary"
+                className="shrink-0 max-sm:w-full"
+                aria-label={copy.maxAge.changeLabel}
+                onClick={() => {
+                  setNotice('');
+                  setMaxAgeKey((k) => (k ?? 0) + 1);
+                  setMaxAgeOpen(true);
+                }}
+              >
+                {copy.change}
+              </Button>
+            }
+          />
         </SettingRows>
         <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
@@ -389,6 +430,19 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
             setState((prev) => (prev ? { ...prev, ...saved } : prev));
             setVersion((v) => v + 1);
             setNotice(copy.sourceSaved);
+          }}
+        />
+      ) : null}
+      {maxAgeKey !== null ? (
+        <MaxAgeModal
+          key={`max-age-${maxAgeKey}`}
+          open={maxAgeOpen}
+          onOpenChange={setMaxAgeOpen}
+          token={token}
+          current={state.manualRateMaxAgeDays}
+          onSaved={(saved) => {
+            setState((prev) => (prev ? { ...prev, ...saved } : prev));
+            setNotice(copy.maxAge.saved);
           }}
         />
       ) : null}
@@ -610,6 +664,101 @@ function SourceModal({ open, onOpenChange, token, current, onSaved }: SourceModa
           />
         ))}
       </RadioGroup>
+    </FormModal>
+  );
+}
+
+const MAX_AGE_INPUT_ID = 'manual-rate-max-age';
+
+interface MaxAgeModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  token: string;
+  current: number;
+  onSaved: (settings: ExchangeRateSettings) => void;
+}
+
+/**
+ * DX-384: cambia hasta cuántos días de antigüedad puede tener la última tasa
+ * registrada que sustituye a la de un día sin tasa (0 a 30; 0 = solo la del
+ * mismo día). El error, en español, va junto al campo (también el 400 de la
+ * API); cualquier otro fallo, arriba del modal. El padre lo monta con una
+ * `key` por apertura.
+ */
+function MaxAgeModal({ open, onOpenChange, token, current, onSaved }: MaxAgeModalProps) {
+  const [text, setText] = useState(String(current));
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const hintId = `${MAX_AGE_INPUT_ID}-hint`;
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setFormError(null);
+    const parsed = parseMaxAgeInput(text);
+    if (!parsed.ok) {
+      setFieldError(parsed.error);
+      document.getElementById(MAX_AGE_INPUT_ID)?.focus();
+      return;
+    }
+    if (parsed.value === current) {
+      onOpenChange(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      const saved = await saveManualRateMaxAgeDays(token, parsed.value);
+      onSaved(saved);
+      onOpenChange(false);
+    } catch (err) {
+      const message = apiErrorMessage(err, copy.maxAge.saveError);
+      if (err instanceof ApiError && err.status === 400) {
+        setFieldError(message);
+        document.getElementById(MAX_AGE_INPUT_ID)?.focus();
+      } else {
+        setFormError(message);
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <FormModal
+      open={open}
+      onOpenChange={onOpenChange}
+      title={copy.maxAge.dialogTitle}
+      description={copy.maxAge.dialogDescription}
+      onSubmit={handleSubmit}
+      submitLabel={copy.save}
+      submitting={saving}
+      error={formError}
+      touchTargets
+    >
+      <FormField
+        htmlFor={MAX_AGE_INPUT_ID}
+        label={copy.maxAge.field}
+        error={fieldError}
+        hint={copy.maxAge.hint}
+        hintId={hintId}
+      >
+        <Input
+          id={MAX_AGE_INPUT_ID}
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value);
+            setFieldError(null);
+          }}
+          disabled={saving}
+          aria-required
+          aria-invalid={fieldError ? true : undefined}
+          aria-describedby={fieldError ? fieldErrorId(MAX_AGE_INPUT_ID) : hintId}
+          className="w-28 tabular-nums"
+        />
+      </FormField>
     </FormModal>
   );
 }
