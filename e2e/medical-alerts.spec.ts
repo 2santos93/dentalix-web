@@ -5,7 +5,8 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
-import { LATE_BROWSER_TIME, atSede, lastSlotToday, sedeDayFromToday } from './support/clock';
+import { LATE_BROWSER_TIME, SEDE_TODAY_TZ, atSede, lastSlotToday, sedeDayFromToday } from './support/clock';
+import { E2E_TODAY_REGION } from './support/regional';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { API_URL, tenantOrigin } from './support/urls';
 
@@ -42,7 +43,10 @@ const dentist = { fullName: 'Lina Alerta', email: `lina.ale.${suffix}@example.co
 const reception = { fullName: 'Rita Recepción', email: `rita.ale.${suffix}@example.com` };
 const last = `Alerta${suffix}`.slice(0, 40);
 const MIN = 60_000;
-const tomorrow = sedeDayFromToday(1);
+// DX-460: la sede y el navegador en la zona segura de la suite: la franja de hoy vale a cualquier hora.
+const ZONE = SEDE_TODAY_TZ;
+test.use({ timezoneId: ZONE });
+const tomorrow = sedeDayFromToday(1, ZONE);
 
 const QA_DIR = path.resolve(process.env.DX247_QA_DIR ?? 'e2e/.qa-shots');
 const QA = process.env.DX247_QA_SHOTS === '1';
@@ -72,6 +76,7 @@ test.beforeAll(async ({ request }) => {
     fullName: admin.fullName,
     email: admin.email,
     password,
+    location: E2E_TODAY_REGION,
   });
   await addStaffViaApi(request, session, { ...dentist, role: 'DENTIST', password });
   await addStaffViaApi(request, session, { ...reception, role: 'RECEPTION', password });
@@ -95,7 +100,7 @@ test.beforeAll(async ({ request }) => {
     });
     patients[key] = created.id;
     // 15 min cada una (la tarjeta más corta), cada media hora desde las 09:00.
-    const start = atSede(tomorrow, ['09:00', '09:30', '10:00', '10:30'][i]);
+    const start = atSede(tomorrow, ['09:00', '09:30', '10:00', '10:30'][i], ZONE);
     await apiPost(request, session, '/appointments', {
       patientId: created.id,
       providerId: linaId,
@@ -382,7 +387,7 @@ test('«Nueva cita» con Jorge avisa «Requiere premedicación» antes de agenda
 test('«En clínica» muestra la misma alerta junto al paciente que llegó', async ({ page, request }) => {
   // Jorge, también hoy (23:55–23:59 de la sede, DX-252), creada aquí: si el
   // reloj ya no deja agendarla, solo falla este test, no el fichero entero.
-  const slot = lastSlotToday();
+  const slot = lastSlotToday('23:55', '23:59', ZONE);
   const today = await apiPost<{ id: string }>(request, session, '/appointments', {
     patientId: patients.jorge,
     providerId: linaId,
@@ -390,7 +395,7 @@ test('«En clínica» muestra la misma alerta junto al paciente que llegó', asy
     end: slot.end.toISOString(),
     reason: 'Control',
   });
-  await page.clock.install({ time: atSede(slot.day, LATE_BROWSER_TIME) });
+  await page.clock.install({ time: atSede(slot.day, LATE_BROWSER_TIME, ZONE) });
   const arrived = await request.patch(`${API_URL}/appointments/${today.id}`, {
     headers: session.headers,
     data: { status: 'ARRIVED' },
