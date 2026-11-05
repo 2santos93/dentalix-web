@@ -190,7 +190,10 @@ describe('NoteTemplatesManager (DX-170)', () => {
     await user.click(within(table).getByRole('button', { name: 'Acciones de Resina' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Desactivar' }));
     await waitFor(() =>
-      expect(mockedUpdate).toHaveBeenCalledWith('tok', 'tpl-resina', { active: false }),
+      expect(mockedUpdate).toHaveBeenCalledWith('tok', 'tpl-resina', {
+        active: false,
+        version: 1,
+      }),
     );
     expect(await within(table).findByText('Desactivada')).toBeInTheDocument();
     await user.click(within(table).getByRole('button', { name: 'Acciones de Resina' }));

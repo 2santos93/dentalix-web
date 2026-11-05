@@ -133,7 +133,10 @@ export function NoteTemplatesManager({ token, allowed }: NoteTemplatesManagerPro
 
   async function toggleActive(template: NoteTemplate) {
     try {
-      upsert(await updateNoteTemplate(token, template.id, { active: !template.active }));
+      upsert(await updateNoteTemplate(token, template.id, {
+          active: !template.active,
+          version: template.version,
+        }));
     } catch {
       // Escalón 3: la lista sigue siendo correcta (no cambió nada).
       notifyError(copy.toggleError(template.name), {

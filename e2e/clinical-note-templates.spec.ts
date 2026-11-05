@@ -181,3 +181,50 @@ for (const viewport of VIEWPORTS) {
     await expectNoHorizontalScroll(page);
   });
 }
+
+// DX-231: otro ADMIN guarda la plantilla mientras esta se edita -> 409 con
+// «Recargar», que trae la versión guardada.
+for (const viewport of VIEWPORTS) {
+  test(`editor de plantillas: el 409 se explica con «Recargar» (${viewport.name})`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    const tag = `${suffix}s${viewport.width}`;
+    const origin = await registerAndLogin(page, {
+      subdomain: `test-clinic-stale-${tag}`,
+      clinicName: `Clinica Version ${tag}`,
+      fullName: ownerName,
+      email: `test.user.stale.${tag}@example.com`,
+      password,
+      location: E2E_TODAY_REGION,
+    });
+    const call = await api(page, origin);
+    const created = await call<{ id: string; version: number }>('post', '/clinical-note-templates', {
+      name: 'Endodoncia',
+      body: 'Conducto {{Conducto}}.',
+      prompts: [{ label: 'Conducto', type: 'TEXT' }],
+    });
+
+    await page.goto(`${origin}/settings/plantillas-de-evolucion`);
+    await page.getByRole('button', { name: 'Endodoncia' }).click();
+    const form = page.getByRole('dialog', { name: 'Editar plantilla de evolución' });
+    await form.getByLabel('Nombre').fill('Mi edición');
+
+    // Otro ADMIN la guarda antes.
+    await call('patch', `/clinical-note-templates/${created.id}`, {
+      version: created.version,
+      name: 'Endodoncia (otro admin)',
+    });
+
+    await form.getByRole('button', { name: 'Guardar cambios' }).click();
+    await expect(form.getByRole('alert')).toContainText('La plantilla cambió mientras la editabas');
+    const reload = form.getByRole('button', { name: 'Recargar' });
+    await expect(reload).toBeVisible();
+    await expectNoHorizontalScroll(page);
+
+    await reload.click();
+    await expect(form.getByLabel('Nombre')).toHaveValue('Endodoncia (otro admin)');
+    await expect(form.getByRole('alert')).toBeHidden();
+    await form.getByRole('button', { name: 'Guardar cambios' }).click();
+    await expect(form).toBeHidden({ timeout: 10_000 });
+  });
+}
