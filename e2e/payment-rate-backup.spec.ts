@@ -93,7 +93,9 @@ for (const viewport of VIEWPORTS) {
     }) => {
       test.skip(!E2E_DATABASE_URL, DB_SKIP);
       test.setTimeout(240_000);
-      const tag = `${suffix}${viewport.width}`;
+      // `--repeat-each` repite el test en el mismo worker (mismo `suffix`): sin
+      // el índice de repetición, la 2.ª alta de la clínica choca con la 1.ª.
+      const tag = `${suffix}${viewport.width}r${test.info().repeatEachIndex}`;
       const email = `admin.dx402.${tag}@example.com`;
       const session = await registerClinicViaApi(request, {
         subdomain: `dx402-${tag}`,

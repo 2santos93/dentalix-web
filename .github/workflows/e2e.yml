@@ -13,6 +13,16 @@ on:
         description: Rama, tag o commit de dentalix-api contra el que probar
         required: false
         default: main
+      # DX-413: para repetir un test (p. ej. 10 veces seguidas) sin la suite
+      # entera. Opcionales: sin ellos, la suite completa de siempre.
+      grep:
+        description: Filtro de Playwright (--grep) para correr solo los tests que lo cumplan
+        required: false
+        default: ''
+      repeat_each:
+        description: Veces que se repite cada test (--repeat-each, entero; 1 = una)
+        required: false
+        default: '1'
 
 # En una rama o un PR, un push nuevo cancela la ejecución anterior. En main
 # no (DX-292, TST-033): cada merge tiene su E2E completa. Su grupo es propio
@@ -114,10 +124,32 @@ jobs:
         timeout-minutes: 8
         run: scripts/e2e-ci.sh web
 
+      # DX-413: `grep` y `repeat_each` (solo en workflow_dispatch) se pasan a
+      # Playwright únicamente si se dieron; por defecto, la suite completa. La
+      # guardia de saltados/flaky de abajo no cambia: lee el informe de lo que
+      # corrió, así que un run filtrado no falla por tests no ejecutados.
+      # Con repeat_each, cada repetición cuenta como un test (más de 2 flaky
+      # ponen el paso en rojo, como en la suite entera). Entran por `env`, no
+      # por interpolación en el script.
       - name: Playwright
         id: playwright
         timeout-minutes: 50
-        run: scripts/e2e-ci.sh test
+        env:
+          E2E_GREP: ${{ inputs.grep }}
+          E2E_REPEAT_EACH: ${{ inputs.repeat_each }}
+        run: |
+          args=()
+          if [[ -n "${E2E_GREP}" ]]; then
+            args+=(--grep "${E2E_GREP}")
+          fi
+          if [[ -n "${E2E_REPEAT_EACH}" && "${E2E_REPEAT_EACH}" != "1" ]]; then
+            if ! [[ "${E2E_REPEAT_EACH}" =~ ^[1-9][0-9]{0,2}$ ]]; then
+              echo "::error::repeat_each debe ser un entero positivo (recibido: ${E2E_REPEAT_EACH})"
+              exit 1
+            fi
+            args+=(--repeat-each "${E2E_REPEAT_EACH}")
+          fi
+          scripts/e2e-ci.sh test ${args[@]+"${args[@]}"}
 
       # DX-252 (TST-030): la E2E no sale verde con tests sin ejecutar. Falla,
       # nombrando cada test, si el informe tiene «skipped» fuera de la lista
