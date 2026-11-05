@@ -300,8 +300,10 @@ for (const viewport of VIEWPORTS) {
       route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'Servicio temporalmente no disponible.' }) }),
       { times: 1 },
     );
-    // El radio y las acciones siguen el orden visual con teclado.
+    // El radio, el selector de otras indicaciones (DX-250) y las acciones siguen el orden visual con teclado.
     await suggested.focus();
+    await page.keyboard.press('Tab');
+    await expect(otherSelect).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(panel.getByRole('button', { name: 'Imprimir' })).toBeFocused();
 
@@ -378,8 +380,13 @@ for (const viewport of VIEWPORTS) {
     await page.route(deliveriesRoute, async (route) => {
       if (!failedOnce) {
         failedOnce = true;
+        // La API es de otro origen: sin CORS el navegador descartaría el 502.
         await route.fulfill({
           status: 502,
+          headers: {
+            'access-control-allow-origin': route.request().headers()['origin'] ?? '*',
+            'access-control-allow-credentials': 'true',
+          },
           contentType: 'application/json',
           body: JSON.stringify({ message: 'Bad Gateway' }),
         });
@@ -387,9 +394,19 @@ for (const viewport of VIEWPORTS) {
       }
       const real = await route.fetch();
       const body = (await real.json()) as Record<string, unknown> & { delivery: Record<string, unknown> };
+      // Cuerpo nuevo: se descartan el largo y la codificación del original.
+      const headers = { ...real.headers() };
+      delete headers['content-length'];
+      delete headers['content-encoding'];
       await route.fulfill({
-        response: real,
-        json: { ...body, emailQueued: false, sentTo: null, delivery: { ...body.delivery, emailStatus: 'NOT_SENT' } },
+        status: real.status(),
+        headers,
+        body: JSON.stringify({
+          ...body,
+          emailQueued: false,
+          sentTo: null,
+          delivery: { ...body.delivery, emailStatus: 'NOT_SENT' },
+        }),
       });
     });
     await panel.getByRole('button', { name: 'Enviar por email' }).click();
