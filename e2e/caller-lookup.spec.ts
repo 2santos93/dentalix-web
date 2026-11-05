@@ -127,10 +127,13 @@ test('390: abre a pantalla completa, sin scroll horizontal, y el botón de la ba
   await page.getByRole('banner').getByRole('button', { name: '¿Quién llama?' }).click();
   const dialog = page.getByRole('dialog', { name: '¿Quién llama?' });
   await expect(dialog).toBeVisible();
-  const box = await dialog.boundingBox();
-  expect(box?.x).toBe(0);
-  expect(box?.width).toBe(390);
-  expect(box?.height).toBeCloseTo(844, 0);
+  // Tras la animación de apertura (escala .98 → 1) el sondeo ve la medida final.
+  await expect
+    .poll(async () => {
+      const box = await dialog.boundingBox();
+      return box && [Math.round(box.x), Math.round(box.width), Math.round(box.height)];
+    }, { message: 'el diálogo ocupa la pantalla a 390 px' })
+    .toEqual([0, 390, 844]);
 
   await dialog.getByLabel('Número de teléfono').fill(FAMILY.typed);
   await dialog.getByRole('button', { name: 'Buscar' }).click();
