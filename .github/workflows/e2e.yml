@@ -1,5 +1,9 @@
 name: E2E
 
+# DX-494: un relanzamiento (web_sha) se identifica en la lista de runs por el sha
+# de la web y la ref de la API; el resto de runs se llaman como siempre.
+run-name: ${{ inputs.web_sha && format('E2E web@{0} api@{1}', inputs.web_sha, inputs.api_ref || 'main') || 'E2E' }}
+
 # Suite Playwright de la web contra la API real (DX-070). Cada fase la corre
 # `scripts/e2e-ci.sh`, el mismo script que se usa en local para reproducir la
 # CI paso a paso (ver la cabecera del script).
@@ -91,9 +95,26 @@ jobs:
     steps:
       # Los dos repos, hermanos en el workspace: la API no queda dentro del
       # árbol de la web (el `next build` no debe ver su código).
+      # DX-494: `web_sha` debe ser un sha completo (checkout no resuelve
+      # abreviados ni acepta valores con forma de opción). Falla pronto y claro.
+      - name: Validar web_sha
+        if: inputs.web_sha != ''
+        working-directory: .
+        timeout-minutes: 1
+        env:
+          WEB_SHA: ${{ inputs.web_sha }}
+        run: |
+          if ! [[ "${WEB_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error title=web_sha no válido::web_sha debe ser un sha completo de 40 caracteres hexadecimales en minúscula"
+            exit 1
+          fi
+
       # DX-494: `web_sha` (solo workflow_dispatch) prueba ese commit de la web
-      # en vez del de la ref del run; el workflow y `scripts/e2e-ci.sh` que
-      # corren son los de ese commit.
+      # en vez del de la ref del run. El YAML del workflow es el de la ref con
+      # la que se lanza (main); solo los archivos del checkout (scripts/e2e-ci.sh,
+      # specs, package-lock) son los de `web_sha`. Por eso un sha anterior a las
+      # fases que el YAML de main llama (`skips`, `schema`) falla con «Fase
+      # desconocida».
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.web_sha || github.sha }}
@@ -234,7 +255,9 @@ jobs:
         # En línea y no en scripts/e2e-ci.sh: con `web_sha` el script es el de
         # un commit viejo, que no tendría esta fase.
         run: |
-          msg="bloqueado por dentalix-api@${API_SHA:-desconocido} (api_ref: ${API_REF}); web probada: ${WEB_SHA}"
+          # api_ref es texto libre: sin caracteres de control ni % en la anotación.
+          safe_ref="$(printf '%s' "${API_REF}" | tr -cd 'A-Za-z0-9._/-' | cut -c1-100)"
+          msg="bloqueado por dentalix-api@${API_SHA:-desconocido} (api_ref: ${safe_ref}); web probada: ${WEB_SHA}"
           {
             echo "## Bloqueado por la API, no por la web"
             echo

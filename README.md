@@ -96,6 +96,12 @@ scripts/e2e-relaunch.sh <sha1> <sha2> <sha3>
 gh workflow run e2e.yml --repo 2santos93/dentalix-web --ref main -f web_sha=<sha> -f api_ref=main
 ```
 
+El sha va completo (40 caracteres: `git rev-parse <sha>`); el workflow rechaza
+cualquier otro valor. El YAML del workflow es el de `main`; solo los archivos
+de la web (`scripts/e2e-ci.sh`, specs) son los del sha. Por eso solo vale para
+shas que ya tengan las fases `skips` y `schema` (DX-252, DX-537): uno anterior
+falla con «Fase desconocida». El run relanzado se llama `E2E web@<sha> api@<ref>`.
+
 Para saber cuáles quedaron bloqueados: `gh run list --repo 2santos93/dentalix-web
 --workflow e2e.yml --branch main --status failure` y abrir el resumen de cada una.
 El run relanzado queda en la lista de `E2E` con el sha en su resumen.

@@ -20,8 +20,8 @@ if [[ $# -eq 0 ]]; then
 fi
 
 for sha in "$@"; do
-  if ! [[ "$sha" =~ ^[0-9a-f]{7,40}$ ]]; then
-    echo "sha no válido: ${sha}" >&2
+  if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "sha no válido (hacen falta los 40 caracteres, git rev-parse <sha>): ${sha}" >&2
     exit 2
   fi
 done

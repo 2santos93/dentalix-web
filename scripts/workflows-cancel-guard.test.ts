@@ -58,10 +58,12 @@ describe('workflows de la web: cancel-in-progress', () => {
     expect(violations(file, wf)).toEqual([]);
   });
 
-  it('ci.yml en main: el grupo lleva el sha del push', () => {
-    const wf = yaml.load(readFileSync(path.join(WORKFLOWS_DIR, 'ci.yml'), 'utf8')) as Workflow;
-    const group = (wf.concurrency as { group: string }).group;
-    expect(group).toContain('github.sha');
+  it.each([
+    ['ci.yml', "ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}"],
+    ['e2e.yml', "e2e-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}"],
+  ])('%s: el grupo fuera de un PR es único por run', (file, group) => {
+    const wf = yaml.load(readFileSync(path.join(WORKFLOWS_DIR, file), 'utf8')) as Workflow;
+    expect((wf.concurrency as { group: string }).group).toBe(group);
   });
 
   describe('el detector', () => {
