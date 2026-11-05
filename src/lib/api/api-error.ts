@@ -14,6 +14,12 @@ export interface ExistingPatientRef {
   lastName: string;
 }
 
+/** Las citas que nombra un 409 `SCHEDULE_AFFECTS_APPOINTMENTS` (DX-267). */
+export interface AffectedAppointmentsRef {
+  total: number;
+  sample: { id: string; locationId: string; start: string; end: string; patientName: string }[];
+}
+
 export class ApiError extends Error {
   /**
    * Los mensajes que dio el servidor, tal cual: uno, varios (el array de
@@ -64,6 +70,8 @@ export class ApiError extends Error {
    * (quien llama puede verlo): el mostrador ve a quién va a atender.
    */
   public readonly existingPatient: ExistingPatientRef | null;
+  /** DX-267: el 409 de un horario que deja citas fuera: cuántas y una muestra. */
+  public readonly affectedAppointments: AffectedAppointmentsRef | null;
 
   constructor(
     public readonly status: number,
@@ -79,6 +87,7 @@ export class ApiError extends Error {
       canOverride?: boolean | null;
       existingPatientId?: string | null;
       existingPatient?: ExistingPatientRef | null;
+      affectedAppointments?: AffectedAppointmentsRef | null;
     } = {},
   ) {
     super(message);
@@ -93,6 +102,7 @@ export class ApiError extends Error {
     this.canOverride = details.canOverride ?? null;
     this.existingPatientId = details.existingPatientId ?? null;
     this.existingPatient = details.existingPatient ?? null;
+    this.affectedAppointments = details.affectedAppointments ?? null;
   }
 }
 

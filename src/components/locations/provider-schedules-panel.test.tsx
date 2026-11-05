@@ -148,6 +148,36 @@ describe('ProviderSchedulesPanel', () => {
     expect(mockedRoster).not.toHaveBeenCalled();
   });
 
+  it('DX-267: un horario que deja citas fuera las enseña y se guarda solo al confirmar', async () => {
+    mockedReplace.mockRejectedValueOnce(
+      new ApiError(409, 'x', {
+        code: 'SCHEDULE_AFFECTS_APPOINTMENTS',
+        affectedAppointments: {
+          total: 1,
+          sample: [
+            {
+              id: 'c1',
+              locationId: 'a',
+              start: '2030-07-04T14:00:00.000Z',
+              end: '2030-07-04T14:30:00.000Z',
+              patientName: 'Ana Pérez',
+            },
+          ],
+        },
+      }),
+    );
+    mockedReplace.mockResolvedValueOnce(configured);
+    const user = userEvent.setup();
+    render(<ProviderSchedulesPanel token="tok" canEdit />);
+    await user.click(await screen.findByRole('button', { name: 'Guardar horario' }));
+    expect(await screen.findByTestId('affected-appointments')).toHaveTextContent('Ana Pérez');
+    expect(mockedReplace).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('button', { name: 'Guardar de todos modos' }));
+    await waitFor(() => expect(mockedReplace).toHaveBeenCalledTimes(2));
+    expect(mockedReplace.mock.calls[1][2]).toMatchObject({ confirmAffected: true });
+    await waitFor(() => expect(screen.queryByTestId('affected-appointments')).not.toBeInTheDocument());
+  });
+
   it('un fallo de carga es escalón 1 con reintento', async () => {
     mockedGet.mockRejectedValueOnce(new ApiError(500, 'boom'));
     const user = userEvent.setup();

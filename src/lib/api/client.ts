@@ -5,7 +5,7 @@ import {
   setActiveLocationId,
 } from '@/lib/locations/location-store';
 import { apiBaseUrl } from './api-base';
-import { ApiError, NetworkError, type ExistingPatientRef } from './api-error';
+import { ApiError, NetworkError, type ExistingPatientRef, type AffectedAppointmentsRef } from './api-error';
 import { parseRetryAfter } from './error-message';
 
 export { ApiError, NetworkError };
@@ -305,6 +305,7 @@ export function apiErrorFromBody(
   let canOverride: boolean | null = null;
   let existingPatientId: string | null = null;
   let existingPatient: ExistingPatientRef | null = null;
+  let affectedAppointments: AffectedAppointmentsRef | null = null;
   if (body && typeof body === 'object') {
     const data = body as {
       message?: unknown;
@@ -316,6 +317,7 @@ export function apiErrorFromBody(
       canOverride?: unknown;
       existingPatientId?: unknown;
       existingPatient?: unknown;
+      affectedAppointments?: AffectedAppointmentsRef;
     };
     const raw = data.message;
     if (typeof raw === 'string' && raw) messages = [raw];
@@ -330,6 +332,9 @@ export function apiErrorFromBody(
       existingPatientId = data.existingPatientId;
     }
     existingPatient = parseExistingPatient(data.existingPatient);
+    if (data.affectedAppointments && typeof data.affectedAppointments === 'object') {
+      affectedAppointments = data.affectedAppointments;
+    }
   }
   const message = messages.length > 0 ? messages.join('; ') : `HTTP ${status}`;
   return new ApiError(status, message, {
@@ -343,6 +348,7 @@ export function apiErrorFromBody(
     canOverride,
     existingPatientId,
     existingPatient,
+    affectedAppointments,
   });
 }
 

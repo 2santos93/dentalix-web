@@ -11509,6 +11509,7 @@ export interface components {
             ranges: components["schemas"]["WeeklyRangeDto"][];
         };
         ProviderScheduleDto: {
+            affectedAppointments?: components["schemas"]["ScheduleAffectedAppointmentsDto"];
             /** Format: uuid */
             providerId: string;
             /** @description false = sin horario configurado: se le puede citar en cualquier horario de la sede (sin restricción). */
@@ -11524,6 +11525,23 @@ export interface components {
         ReplaceProviderScheduleDto: {
             /** @description El horario COMPLETO del profesional, todas sus sedes. Las sedes que no vengan (o vengan sin tramos) dejan de tener horario suyo. Lista vacía = sin horario: se le puede citar en cualquier horario de la sede. */
             locations: components["schemas"]["ProviderLocationScheduleInputDto"][];
+            /** @description DX-267: guardar aunque deje citas fuera. Sin esto, 409 con el recuento y una muestra. Las citas no se mueven. */
+            confirmAffected?: boolean;
+        };
+        ScheduleAffectedAppointmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            patientName: string;
+        };
+        ScheduleAffectedAppointmentsDto: {
+            total: number;
+            sample: components["schemas"]["ScheduleAffectedAppointmentDto"][];
         };
         MinuteRangeDto: {
             /**
@@ -11565,8 +11583,11 @@ export interface components {
             ranges: components["schemas"]["MinuteRangeDto"][];
             /** @example Cubre a la Dra. Ruiz */
             note?: Record<string, never> | null;
+            /** @description DX-267: guardar aunque deje citas fuera. Sin esto, 409 con el recuento y una muestra. Las citas no se mueven. */
+            confirmAffected?: boolean;
         };
         SetProviderOverrideResultDto: {
+            affectedAppointments?: components["schemas"]["ScheduleAffectedAppointmentsDto"];
             /** Format: uuid */
             id: string;
             /** Format: uuid */
