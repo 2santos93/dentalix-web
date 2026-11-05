@@ -197,6 +197,7 @@ describe('canRetryDeliver', () => {
     expect(canRetryDeliver(new DOMException('tarda', 'TimeoutError'))).toBe(true);
     for (const status of [500, 502, 503, 504]) expect(canRetryDeliver(new ApiError(status, 'x'))).toBe(true);
     for (const status of [400, 403, 404, 409, 422, 429]) expect(canRetryDeliver(new ApiError(status, 'x'))).toBe(false);
+    expect(canRetryDeliver(new ApiError(409, 'x', { code: 'POSTOP_DELIVERY_IN_PROGRESS' }))).toBe(true);
     expect(canRetryDeliver(new Error('x'))).toBe(false);
   });
 });

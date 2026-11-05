@@ -94,7 +94,8 @@ export function postOpPanelMode(
  */
 export function canRetryDeliver(err: unknown): boolean {
   if (err instanceof NetworkError) return true;
-  if (err instanceof ApiError) return err.status >= 500;
+  // 409 de la API: la repetición llegó mientras la primera aún registraba el email.
+  if (err instanceof ApiError) return err.status >= 500 || err.code === 'POSTOP_DELIVERY_IN_PROGRESS';
   return err instanceof DOMException && err.name === 'TimeoutError';
 }
 

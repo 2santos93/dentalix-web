@@ -73,6 +73,8 @@ const copy = {
   deliverError: 'No pudimos entregar las indicaciones.',
   recheckError:
     'No pudimos comprobar si la entrega ya quedó registrada. Se reintenta la comprobación, no la entrega.',
+  replayedEmail:
+    'Esta entrega ya estaba registrada. Mira su estado en la lista «Entregadas en esta cita».',
   alreadyRecorded: 'La entrega ya había quedado registrada, así que no se repitió.',
   alreadyRecordedEmailNotSent:
     'La entrega ya había quedado registrada, pero el email no salió. Entrégala por otro canal.',
@@ -256,7 +258,11 @@ export function AppointmentPostOpPanel({ token, appointmentId, clock, readOnly =
         }
       }
       const result = await deliverPostOp(token, appointmentId, { templateId, channel }, attempt.key);
-      if (channel === 'EMAIL' && !result.emailQueued) {
+      if (channel === 'EMAIL' && result.publicUrl === null && !result.emailQueued) {
+        // Una repetición (`publicUrl` null): este clic no sabe cómo acabó el
+        // email. No se abre la alerta de «no salió»: habla la lista releída.
+        toast.info(copy.replayedEmail);
+      } else if (channel === 'EMAIL' && !result.emailQueued) {
         // La API registró la entrega pero el email no entró en la cola: aviso
         // persistente con el enlace (solo existe en esta respuesta).
         setCopyState('idle');

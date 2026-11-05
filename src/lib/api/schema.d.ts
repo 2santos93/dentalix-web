@@ -17676,7 +17676,7 @@ export interface components {
         /** @enum {string} */
         PostOpDeliveryChannel: "PRINT" | "EMAIL" | "WHATSAPP_LINK";
         /**
-         * @description DX-250: estado del email de una entrega EMAIL, leído del outbox. `QUEUED`: en cola; `SENT`: el proveedor lo aceptó; `NOT_SENT`: nunca se encoló o se agotaron los reintentos (la historia clínica debe decir «no enviado»). null en PRINT y WHATSAPP_LINK.
+         * @description DX-250: estado del email de una entrega EMAIL, leído del outbox. `QUEUED`: en cola; `SENT`: el proveedor lo aceptó; `NOT_SENT`: nunca se encoló o se agotaron los reintentos (la historia clínica debe decir «no enviado»). null: PRINT y WHATSAPP_LINK, y también una entrega EMAIL anterior a la retención del outbox (MAIL_OUTBOX_RETENTION_DAYS) sin fila: desconocido, no se afirma nada. Si se alarga la retención, las filas ya purgadas dentro de la nueva ventana se leen `NOT_SENT`.
          * @enum {string}
          */
         PostOpEmailStatus: "QUEUED" | "SENT" | "NOT_SENT";
@@ -17713,7 +17713,7 @@ export interface components {
              * @description Caducidad del enlace público; null en PRINT
              */
             linkExpiresAt: string | null;
-            /** @description DX-250: estado del email de una entrega EMAIL, leído del outbox. `QUEUED`: en cola; `SENT`: el proveedor lo aceptó; `NOT_SENT`: nunca se encoló o se agotaron los reintentos (la historia clínica debe decir «no enviado»). null en PRINT y WHATSAPP_LINK. */
+            /** @description DX-250: estado del email de una entrega EMAIL, leído del outbox. `QUEUED`: en cola; `SENT`: el proveedor lo aceptó; `NOT_SENT`: nunca se encoló o se agotaron los reintentos (la historia clínica debe decir «no enviado»). null: PRINT y WHATSAPP_LINK, y también una entrega EMAIL anterior a la retención del outbox (MAIL_OUTBOX_RETENTION_DAYS) sin fila: desconocido, no se afirma nada. Si se alarga la retención, las filas ya purgadas dentro de la nueva ventana se leen `NOT_SENT`. */
             emailStatus: components["schemas"]["PostOpEmailStatus"] | null;
         };
         PostOpSuggestionsDto: {
@@ -17795,7 +17795,7 @@ export interface components {
              * @description Caducidad del enlace público; null en PRINT
              */
             linkExpiresAt: string | null;
-            /** @description DX-250: estado del email de una entrega EMAIL, leído del outbox. `QUEUED`: en cola; `SENT`: el proveedor lo aceptó; `NOT_SENT`: nunca se encoló o se agotaron los reintentos (la historia clínica debe decir «no enviado»). null en PRINT y WHATSAPP_LINK. */
+            /** @description DX-250: estado del email de una entrega EMAIL, leído del outbox. `QUEUED`: en cola; `SENT`: el proveedor lo aceptó; `NOT_SENT`: nunca se encoló o se agotaron los reintentos (la historia clínica debe decir «no enviado»). null: PRINT y WHATSAPP_LINK, y también una entrega EMAIL anterior a la retención del outbox (MAIL_OUTBOX_RETENTION_DAYS) sin fila: desconocido, no se afirma nada. Si se alarga la retención, las filas ya purgadas dentro de la nueva ventana se leen `NOT_SENT`. */
             emailStatus: components["schemas"]["PostOpEmailStatus"] | null;
             /** @description Texto tal como se entregó */
             renderedText: string;
@@ -34081,7 +34081,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description DX-250: UUID generado una vez por clic y reutilizado en los reintentos. Repetir la petición con la misma clave en la misma cita devuelve la entrega ya registrada (sin `publicUrl` ni `whatsapp`: el token solo sale en la primera respuesta) en vez de crear otra, y no vuelve a encolar el email. */
+                /** @description DX-250: UUID generado una vez por clic y reutilizado en los reintentos. Repetir la petición con la misma clave en la misma cita devuelve la entrega ya registrada (sin `publicUrl` ni `whatsapp`: el token solo sale en la primera respuesta) en vez de crear otra, y no vuelve a encolar el email. La repetición responde igual 201 (no 200). Con otra plantilla u otro canal: 422 `IDEMPOTENCY_KEY_REUSED`. */
                 "Idempotency-Key"?: string;
             };
             path: {
@@ -34103,7 +34103,7 @@ export interface operations {
                     "application/json": components["schemas"]["PostOpDeliveryCreatedDto"];
                 };
             };
-            /** @description La plantilla está inactiva, o el host de la petición no sirve para armar el enlace (EMAIL y WHATSAPP_LINK) */
+            /** @description La plantilla está inactiva, el host de la petición no sirve para armar el enlace (EMAIL y WHATSAPP_LINK), o la Idempotency-Key no es un UUID */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -34117,7 +34117,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Sin email ni responsable que reciba avisos, sin un teléfono que sirva para WhatsApp, o el paciente dio de baja los envíos */
+            /** @description Repetición (misma Idempotency-Key) de un EMAIL que aún se está registrando (`code: POSTOP_DELIVERY_IN_PROGRESS`): vuelve a consultar en unos segundos. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sin email ni responsable que reciba avisos, sin un teléfono que sirva para WhatsApp, o el paciente dio de baja los envíos; o la cita está cancelada, fue un no-show o es de un día que aún no llega (DX-250); o la Idempotency-Key ya se usó con otra plantilla u otro canal (`code: IDEMPOTENCY_KEY_REUSED`) */
             422: {
                 headers: {
                     [name: string]: unknown;

@@ -614,6 +614,43 @@ describe('AppointmentPostOpPanel: fix round 1 de DX-250', () => {
     expect(toast.info).toHaveBeenCalledWith(expect.stringMatching(/enlace no se puede recuperar/));
   });
 
+  it('una repetición de EMAIL sin enlace y sin cola NO abre la alerta «no salió»: aviso informativo y relee la lista', async () => {
+    mockedGet.mockResolvedValue(suggestions());
+    mockedDeliver.mockResolvedValue(
+      created({
+        delivery: deliverySummary({ channel: 'EMAIL', emailStatus: 'NOT_SENT' }),
+        publicUrl: null,
+        sentTo: null,
+        emailQueued: false,
+      }),
+    );
+    renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+    await waitFor(() => expect(toast.info).toHaveBeenCalledWith(expect.stringMatching(/ya estaba registrada/)));
+    expect(screen.queryByText('El email no salió')).not.toBeInTheDocument();
+    await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
+  });
+
+  it('un 409 «se está registrando» de la API sí ofrece «Reintentar»; un 409 sin ese código no', async () => {
+    mockedGet.mockResolvedValue(suggestions());
+    mockedDeliver
+      .mockRejectedValueOnce(
+        new ApiError(409, 'La entrega se está registrando; espera unos segundos y vuelve a consultar', {
+          code: 'POSTOP_DELIVERY_IN_PROGRESS',
+        }),
+      )
+      .mockRejectedValueOnce(new ApiError(409, 'Conflicto', { code: 'OTRO' }));
+    renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    expect((toast.error as jest.Mock).mock.calls[0][1].action).toEqual(
+      expect.objectContaining({ label: 'Reintentar' }),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(2));
+    expect((toast.error as jest.Mock).mock.calls[1][1].action).toBeUndefined();
+  });
+
   describe('solo lectura (cita cancelada o no-show)', () => {
     it('muestra las entregas anteriores sin selector ni botones', async () => {
       mockedGet.mockResolvedValue(
