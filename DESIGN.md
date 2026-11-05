@@ -581,6 +581,14 @@ focus (`title=` does neither on touch/keyboard). Never the only accessible name.
 `Popover`: anchored interactive layer (filters, pickers). Both float: surface + border +
 `shadow-overlay`.
 
+**A row action that exists but cannot run (DX-432).** `RowAction.disabledReason` keeps the item
+in the «⋯» as `aria-disabled` (still reachable by keyboard, never Radix `disabled`, which drops
+it from the focus order) and prints the reason under its label, tied with `aria-describedby`:
+a tooltip would be invisible on touch. Choosing it does nothing and the menu stays open. Used
+for «Anular» on a payment that backs a refund and for the credit actions when reception's cap
+is 0. After an action whose origin row is gone (a transfer, a just-issued refund receipt), focus
+lands on the section heading (`titleFocusable`), not on `<body>`.
+
 ### Error States
 Severity follows what a user can still do, not how bad the failure sounds. The
 test for picking a rung: when the error state is truthy, what disappears from
