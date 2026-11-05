@@ -211,4 +211,23 @@ describe('scripts/check-e2e-skips.mjs (DX-252)', () => {
       expect(res.summary).toContain('Sin tests flaky');
     });
   });
+
+  describe('fichero de flaky para la tendencia (DX-452)', () => {
+    it('con E2E_FLAKY_OUT deja los flaky de la run (fichero y título, sin repetidos de más) y su run', () => {
+      const out = path.join(mkdtempSync(path.join(tmpdir(), 'dx452-flaky-')), 'e2e-flaky.json');
+      const res = run(report([ok('crea una cita'), flaky('guarda el código')]), { E2E_FLAKY_OUT: out, GITHUB_RUN_ID: '777' });
+      expect(res.code).toBe(0);
+      expect(JSON.parse(readFileSync(out, 'utf8'))).toMatchObject({
+        runId: '777',
+        total: 2,
+        flaky: [{ file: 'e2e/clinical-codes.spec.ts', title: 'guarda el código' }],
+      });
+    });
+
+    it('una run sin flaky deja la lista vacía: cuenta como run limpia para la tendencia', () => {
+      const out = path.join(mkdtempSync(path.join(tmpdir(), 'dx452-flaky-')), 'e2e-flaky.json');
+      run(report([ok('crea una cita')]), { E2E_FLAKY_OUT: out, GITHUB_RUN_ID: '778' });
+      expect(JSON.parse(readFileSync(out, 'utf8')).flaky).toEqual([]);
+    });
+  });
 });

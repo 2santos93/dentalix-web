@@ -4,7 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
 import { axeViolations } from './support/axe';
-import { ageRateBacklog, E2E_DATABASE_URL, postponeRateRetry } from './support/db';
+import { ageRateBacklog, E2E_DATABASE_URL, fireAllocationsSweepNow, postponeRateRetry } from './support/db';
 import { fillDate } from './support/dates';
 import { expectNoHorizontalScroll } from './support/layout';
 import { E2E_REGION } from './support/regional';
@@ -19,8 +19,9 @@ import { API_URL } from './support/urls';
  * pasa a manual (manual desde hoy) y registra la tasa VES de ese día: el
  * formulario le dice que servirá de respaldo a ese abono (y, con un día sin
  * abonos pendientes, que no se usará). El registro adelanta el reintento y el
- * barrido de cada minuto (worker de la API de la suite, APP_ROLE=all) congela
- * la tasa: el aviso desaparece.
+ * barrido del worker de la API de la suite (APP_ROLE=all), que el test adelanta
+ * en vez de esperar a su cron de cada minuto (DX-452), congela la tasa: el
+ * aviso desaparece.
  */
 
 const suffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 8);
@@ -28,6 +29,8 @@ const password = 'Password123!';
 const DB_SKIP = 'E2E_DATABASE_URL no definido: no se puede envejecer el reintento del abono';
 const NOTICE = 'Abonos sin tasa';
 const QA_DIR = process.env.E2E_QA_DIR;
+/** DX-452: el barrido, adelantado a mano, resuelve el abono en segundos (< 15 s). */
+const SWEEP_TIMEOUT_MS = 15_000;
 
 const VIEWPORTS = [
   { name: '1440', width: 1440, height: 900 },
@@ -158,22 +161,26 @@ for (const viewport of VIEWPORTS) {
       await expect(page.getByText('Tasa de VES registrada.')).toBeVisible();
 
       // 4. El registro adelanta el reintento y el barrido lo resuelve: el aviso desaparece.
-      // Se espera a la primera lectura del aviso antes de sondear: cada vuelta
-      // del sondeo espera la respuesta de SU carga. (Recargar con el
-      // `/auth/refresh` en vuelo ya no cierra la sesión: la API reemite el
-      // token vigente al anterior durante la gracia; ver session-cookie.spec.)
+      // DX-452: el test no espera al cron de cada minuto del worker. Cada vuelta
+      // adelanta el tick del barrido a «ahora» (el worker de la suite sondea cada
+      // 250 ms) y lee el aviso con la respuesta de SU carga. El barrido es
+      // idempotente y `singleton`: un tick saltado lo recoge la vuelta siguiente.
+      // Se espera a la primera lectura del aviso antes de sondear.
+      // (Recargar con el `/auth/refresh` en vuelo ya no cierra la sesión: la API
+      // reemite el token vigente al anterior durante la gracia; ver session-cookie.spec.)
       const isBacklog = (r: { url(): string }) => new URL(r.url()).pathname.endsWith('/payments/rate-backlog');
       await Promise.all([page.waitForResponse(isBacklog), page.goto(`${session.origin}/dashboard`)]);
       await expect
         .poll(
           async () => {
+            fireAllocationsSweepNow();
             const [res] = await Promise.all([
               page.waitForResponse(isBacklog),
               page.reload(),
             ]);
             return ((await res.json()) as { count: number }).count;
           },
-          { timeout: 120_000, intervals: [5_000] },
+          { timeout: SWEEP_TIMEOUT_MS, intervals: [1_000] },
         )
         .toBe(0);
       await expect(page.getByRole('region', { name: NOTICE })).toHaveCount(0);

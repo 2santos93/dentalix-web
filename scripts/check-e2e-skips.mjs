@@ -24,7 +24,11 @@
 // siempre (`::warning` en Actions) y sale con 1 si hay más de MAX_FLAKY. Con
 // GITHUB_STEP_SUMMARY deja en el resumen del job el recuento y, por nombre,
 // los flaky, los fallidos y los saltados sin permiso.
-import { appendFileSync, readFileSync } from 'node:fs';
+//
+// DX-452 (TST-056): con E2E_FLAKY_OUT deja ahí un JSON pequeño con los flaky de
+// la run ({ runId, sha, total, flaky: [{ file, title }] }), que la CI sube como
+// artefacto para la guardia de tendencia (scripts/check-e2e-flaky-trend.mjs).
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 const SEP = ' › ';
@@ -135,6 +139,7 @@ const tooFlaky = flaky.length > MAX_FLAKY;
 const name = (t) => `${t.file}:${t.line} «${t.title}»`;
 
 writeSummary();
+writeFlakyFile();
 
 console.log(
   `Playwright: ${all.length} tests, ${skipped.length} saltados (${skipped.length - offenders.length} permitidos por e2e/allowed-skips.json), ${flaky.length} flaky.`,
@@ -194,4 +199,17 @@ function writeSummary() {
     ...(offenders.length > 0 ? section('Saltados sin permiso', offenders, '', (t) => t.why) : []),
   ];
   appendFileSync(file, `${lines.join('\n')}\n`);
+}
+
+/** DX-452: los flaky de esta run, para la tendencia (ver la cabecera). */
+function writeFlakyFile() {
+  const file = process.env.E2E_FLAKY_OUT;
+  if (!file) return;
+  const out = {
+    runId: process.env.GITHUB_RUN_ID ?? null,
+    sha: process.env.GITHUB_SHA ?? null,
+    total: all.length,
+    flaky: flaky.map((t) => ({ file: t.file, title: t.title })),
+  };
+  writeFileSync(file, `${JSON.stringify(out, null, 2)}\n`);
 }
