@@ -11,7 +11,7 @@ import { RateCountNotice } from '@/components/payments/rate-count-notice';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import type { CreditBalanceRow } from '@/lib/receivables/credit-balances-api';
-import { carteraPanelProps, type CarteraViewTabs } from './cartera-tabs';
+import { carteraNavFor, carteraPanelProps, type CarteraViewTabs } from './cartera-tabs';
 import { debtorCopy, statementHref } from './debtor-parts';
 import { ScopeMarker } from './scope-marker';
 import { creditRowKey, useCreditBalances } from './use-credit-balances';
@@ -19,7 +19,7 @@ import { creditRowKey, useCreditBalances } from './use-credit-balances';
 export const creditBalancesCopy = {
   title: 'Cartera',
   description:
-    'Pacientes con dinero a favor: lo abonado de más o en un plan cancelado, ya descontados traspasos y devoluciones. Abre su estado de cuenta para aplicarlo a otro plan o devolverlo.',
+    'Pacientes con dinero a favor en cada sede: lo abonado de más o en un plan cancelado, ya descontados traspasos y devoluciones. Abre su estado de cuenta para aplicarlo a otro plan o devolverlo.',
   listLabel: 'Pacientes con saldo a favor',
   countNoun: 'saldo a favor',
   countNounPlural: 'saldos a favor',
@@ -121,7 +121,7 @@ export function CreditBalancesView({ token, tabs }: { token: string; tabs?: Cart
         meta={head ? <ScopeMarker location={location} /> : null}
       />
       {/* Sin acceso (403) no hay otra vista que ofrecer: solo el aviso. */}
-      {!forbidden ? tabs?.nav : null}
+      {!forbidden ? carteraNavFor(token, tabs) : null}
 
       <div className="flex flex-col gap-3" {...carteraPanelProps(tabs)}>
         {forbidden ? (

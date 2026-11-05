@@ -14,7 +14,9 @@ export const CREDIT_BALANCES_MORE_ERROR = 'No pudimos cargar más saldos a favor
 /** Filas por página (la API la acepta tal cual). */
 export const CREDIT_BALANCES_PAGE_SIZE = 25;
 
-export const creditRowKey = (row: CreditBalanceRow) => `${row.patient.id}:${row.currency}`;
+/** Una fila por paciente, sede y moneda. */
+export const creditRowKey = (row: CreditBalanceRow) =>
+  `${row.patient.id}:${row.location?.id ?? ''}:${row.currency}`;
 
 export interface CreditBalancesState {
   /** Primera página + las que se añadieron con «Cargar más». */

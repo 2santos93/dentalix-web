@@ -38,7 +38,7 @@ import { AgingSummary } from './aging-summary';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { ScopeMarker } from './scope-marker';
-import { carteraPanelProps, type CarteraViewTabs } from './cartera-tabs';
+import { carteraNavFor, carteraPanelProps, type CarteraViewTabs } from './cartera-tabs';
 import {
   AgeCell,
   AgeMeta,
@@ -366,7 +366,7 @@ export function ReceivablesView({ token, tabs }: { token: string; tabs?: Cartera
       />
 
       {/* Sin acceso (403) no hay otra vista que ofrecer: solo el aviso. */}
-      {!forbidden ? tabs?.nav : null}
+      {!forbidden ? carteraNavFor(token, tabs) : null}
 
       <div className="flex flex-col gap-3" {...carteraPanelProps(tabs)}>
         {/* Sin acceso (403) no hay filas que filtrar ni exportar: solo el aviso. */}

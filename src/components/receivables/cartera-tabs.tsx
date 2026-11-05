@@ -1,6 +1,7 @@
 'use client';
 import * as React from 'react';
 import { TabBar } from '@/components/ui/tabs';
+import { getTokenRole } from '@/lib/auth/token-role';
 
 export type CarteraTabKey = 'por-cobrar' | 'saldo-a-favor';
 
@@ -37,6 +38,20 @@ export function carteraPanelProps(tabs: CarteraViewTabs | undefined) {
         'aria-labelledby': tabs.tabId,
       } as const)
     : {};
+}
+
+/**
+ * Las pestañas solo se pintan al rol que tiene Cartera (ADMIN y RECEPTION),
+ * leído SÍNCRONO del token de sesión: un rol clínico que llega por URL no ve
+ * las pestañas ni un instante, antes de que la API responda 403. Un rol que
+ * no se pudo leer cuenta como sin permiso (`getTokenRole`).
+ */
+export function carteraNavFor(
+  token: string,
+  tabs: CarteraViewTabs | undefined,
+): React.ReactNode {
+  const role = getTokenRole(token);
+  return role === 'ADMIN' || role === 'RECEPTION' ? tabs?.nav : null;
 }
 
 interface CarteraTabsProps {

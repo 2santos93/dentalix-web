@@ -112,6 +112,38 @@ async function openRowMenu(user: ReturnType<typeof userEvent.setup>, name = 'Ana
   await user.click(screen.getByRole('button', { name: `Acciones de ${name}` }));
 }
 
+describe('ReceivablesView · pestañas de la cartera (DX-430, M4)', () => {
+  beforeEach(() => {
+    mockedAging.mockReset();
+    jest.mocked(listLocations).mockResolvedValue([clinicLocation()]);
+    mockedClinic.mockResolvedValue('Clínica Demo');
+    mockedAging.mockReturnValue(new Promise(() => {}));
+  });
+  const tabs = {
+    nav: <div role="tablist" aria-label="Vistas de la cartera" />,
+    panelId: 'p',
+    tabId: 't',
+  };
+
+  it('ADMIN y RECEPTION ven las pestañas desde el primer pintado', () => {
+    for (const role of ['ADMIN', 'RECEPTION'] as const) {
+      mockedRole.mockReturnValue(role);
+      const { unmount } = render(<ReceivablesView token="tok" tabs={tabs} />);
+      expect(screen.getByRole('tablist')).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it('un rol clínico o ilegible no las ve ni un instante, antes de que responda la API', () => {
+    for (const role of ['DENTIST', 'ASSISTANT', null] as const) {
+      mockedRole.mockReturnValue(role);
+      const { unmount } = render(<ReceivablesView token="tok" tabs={tabs} />);
+      expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+});
+
 describe('ReceivablesView (DX-145)', () => {
   beforeEach(() => {
     mockedAging.mockReset();
