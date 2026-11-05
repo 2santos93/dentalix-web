@@ -94,6 +94,20 @@ export function sedeDayFromToday(days: number, zone = SEDE_TZ): string {
   return sedeDate(new Date(Date.now() + days * DAY_MS), zone);
 }
 
+/**
+ * El primer día de lunes a viernes a `days` días o más de hoy. Para lo que
+ * dependa del horario de alta de una sede sin horario, que no abre el domingo y
+ * el sábado solo por la mañana: `sedeDayFromToday` caerá ahí algún día de la
+ * semana, y más cuando la suite corre en otra zona (`SEDE_TODAY_TZ`).
+ */
+export function sedeWeekdayFromToday(days: number, zone = SEDE_TZ): string {
+  for (let n = days; ; n += 1) {
+    const day = sedeDayFromToday(n, zone);
+    const weekday = new Date(`${day}T12:00:00Z`).getUTCDay();
+    if (weekday >= 1 && weekday <= 5) return day;
+  }
+}
+
 /** El día civil `days` días después de `day` (`YYYY-MM-DD`; calendario puro, sin zona). */
 export function addDays(day: string, days: number): string {
   const at = new Date(`${day}T12:00:00Z`);

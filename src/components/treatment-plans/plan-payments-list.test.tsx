@@ -93,3 +93,40 @@ describe('PlanPaymentsList: medio real del abono (DX-414)', () => {
     expect(screen.queryByText(/PRI-000008.*dividido/)).not.toBeInTheDocument();
   });
 });
+
+// DX-384: la lista de abonos dice «tasa del 30/10/2026» cuando la tasa
+// congelada es la última registrada, de un día anterior al del abono.
+function frozenPayment(over: Partial<Payment> = {}): Payment {
+  return payment({
+    amount: 3650,
+    paidOn: '2026-10-31',
+    receiptNumber: 'PRI-000007',
+    exchangeRateCurrency: 'USD',
+    exchangeRateStatus: 'FROZEN',
+    frozenRate: { currency: 'USD', fromPerBase: 36.5, toPerBase: 1, source: 'MANUAL', date: '2026-10-30' },
+    ...over,
+  });
+}
+
+function renderList(p: Payment) {
+  render(
+    <PlanPaymentsList payments={[p]} voidingPaymentId={null} onVoid={jest.fn()} onReceipt={jest.fn()} fmt={fmt} />,
+  );
+}
+
+describe('PlanPaymentsList: día de la tasa congelada (DX-384)', () => {
+  it('la tasa de un día anterior al del abono se lee «tasa del …»', () => {
+    renderList(frozenPayment());
+    expect(screen.getAllByText(/Tasa congelada: .* · manual · tasa del 30\/10\/2026/).length).toBeGreaterThan(0);
+  });
+
+  it('la tasa del propio día sigue con el día tal cual', () => {
+    renderList(
+      frozenPayment({
+        frozenRate: { currency: 'USD', fromPerBase: 36.5, toPerBase: 1, source: 'MANUAL', date: '2026-10-31' },
+      }),
+    );
+    expect(screen.getAllByText(/Tasa congelada: .* · manual · 31\/10\/2026/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/tasa del/)).not.toBeInTheDocument();
+  });
+});

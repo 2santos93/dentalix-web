@@ -32,6 +32,11 @@ interface CreditBalanceSectionProps {
   planName: (planId: string) => string;
   /** ADMIN y recepción (con tope): las acciones; el resto solo ve la cifra. */
   canAct: boolean;
+  /**
+   * DX-432: por qué las acciones no se pueden ahora (recepción con el tope en
+   * 0): siguen en el «⋯», deshabilitadas y con esta explicación.
+   */
+  actBlockedReason?: string | null;
   /** Tras un traspaso (aviso) o una devolución (su comprobante). */
   onTransferred: (notice: string) => void;
   onRefunded: (refund: CreditRefund) => void;
@@ -46,6 +51,7 @@ export function CreditBalanceSection({
   statement,
   planName,
   canAct,
+  actBlockedReason = null,
   onTransferred,
   onRefunded,
 }: CreditBalanceSectionProps) {
@@ -96,11 +102,13 @@ export function CreditBalanceSection({
             ? (source) => [
                 {
                   label: copy.transfer,
+                  ...(actBlockedReason ? { disabledReason: actBlockedReason } : {}),
                   icon: <ArrowRightLeft aria-hidden />,
                   onSelect: () => setAction({ kind: 'transfer', source }),
                 },
                 {
                   label: copy.refund,
+                  ...(actBlockedReason ? { disabledReason: actBlockedReason } : {}),
                   icon: <Undo2 aria-hidden />,
                   onSelect: () => setAction({ kind: 'refund', source }),
                 },

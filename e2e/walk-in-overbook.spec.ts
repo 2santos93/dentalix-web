@@ -2,7 +2,7 @@ import { test, expect, type APIRequestContext, type Page } from './support/test'
 import { randomUUID } from 'node:crypto';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
-import { SEDE_TODAY_TZ, atSede, sedeDayFromToday } from './support/clock';
+import { SEDE_TODAY_TZ, atSede, sedeDayFromToday, sedeWeekdayFromToday } from './support/clock';
 import { fillDate, fillTime } from './support/dates';
 import { expectNoHorizontalScroll } from './support/layout';
 import { E2E_TODAY_REGION } from './support/regional';
@@ -234,8 +234,9 @@ test('DX-509-bis: mover un sobrecupo a una hora ocupada ofrece el siguiente huec
   expect(await apiCall<{ overbooked: boolean }>(request, 'get', `/appointments/${walkIn.id}`)).toMatchObject({
     overbooked: true,
   });
-  // Destino: dentro de tres días a las 10:00, ocupado por otra cita del odontólogo.
-  const day = sedeDayFromToday(3, ZONE);
+  // Destino: un día laborable a las 10:00, ocupado por otra cita del odontólogo. La oferta
+  // sale del horario de alta: en domingo saltaría al lunes y el sábado cierra a las 13:00.
+  const day = sedeWeekdayFromToday(3, ZONE);
   await apiPost(request, session, '/appointments', {
     patientId: elsaId,
     providerId: dentistId,

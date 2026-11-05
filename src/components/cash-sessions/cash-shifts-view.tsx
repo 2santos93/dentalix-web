@@ -498,7 +498,7 @@ function CurrentSessionCard({
             <p className="text-sm text-muted">{copy.noSession}</p>
           )}
           {session ? (
-            <p className="text-sm text-muted tabular-nums">{copy.outflowsCount(session.outflows.length)}</p>
+            <p className="text-sm text-muted tabular-nums">{copy.outflowsCount(session.outflows.length + (session.creditRefunds?.length ?? 0))}</p>
           ) : null}
           {current.settings.requireOpenSession && session ? (
             <p className="text-sm text-muted">{copy.requireOpen}</p>

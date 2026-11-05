@@ -15,8 +15,16 @@ export type ExchangeRates = components['schemas']['RatesResponseDto'];
  * "today" it is the sede's (`sedeToday(timeZone)`), never the browser's
  * (DX-354b, E9), so there is no default here.
  */
-export async function getExchangeRates(token: string, date: string): Promise<ExchangeRates> {
+export async function getExchangeRates(
+  token: string,
+  date: string,
+  currencies: readonly string[] = [],
+): Promise<ExchangeRates> {
   const search = new URLSearchParams({ date });
+  // DX-384: con las monedas con que se va a convertir, la API devuelve, con
+  // fuente manual y sin tasa de ese día, la última registrada dentro del
+  // plazo de la clínica y la fecha de la que son (`rateDate`).
+  if (currencies.length > 0) search.set('currencies', currencies.join(','));
   return apiFetch<ExchangeRates>(`/exchange/rates?${search.toString()}`, {
     token,
   });

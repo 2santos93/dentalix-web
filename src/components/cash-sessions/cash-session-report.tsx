@@ -108,7 +108,9 @@ const copy = {
   noOutflows: 'Sin salidas de caja en este turno.',
   // DX-253: devoluciones de saldo a favor en efectivo (restan en «Salidas»).
   creditRefundsLabel: 'Devoluciones de saldo a favor',
-  colRefund: 'Comprobante',
+  colRefund: 'Concepto',
+  // DX-432: la fila dice qué es, no solo su número.
+  refundRow: (number: string) => `Devolución ${number}`,
   outflowBookedElsewhere:
     'Anulada con la caja ya cerrada: aquí sigue restando y la anulación es un ajuste en otra caja.',
   historyTitle: 'Historial',
@@ -625,7 +627,7 @@ function OutflowList({ session, txt }: { session: CashSessionDetail; txt: Docume
                   <TableCell className="tabular-nums">
                     {txt.time(r.createdAt)}
                   </TableCell>
-                  <TableCell className="tabular-nums">{r.number}</TableCell>
+                  <TableCell className="tabular-nums">{copy.refundRow(r.number)}</TableCell>
                   <TableCell>{r.patient.fullName}</TableCell>
                   <TableCell>{r.createdBy.fullName ?? '—'}</TableCell>
                   <TableCell className="text-right font-medium tabular-nums">

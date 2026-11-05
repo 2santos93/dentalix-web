@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AccountStatementView } from './account-statement-view';
 import { AccountStatementPrintView } from './account-statement-print-view';
@@ -19,6 +19,13 @@ import { tokenForRole } from '@/lib/test/data-consents';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
 import { regionalFormat } from '@/lib/format/regional-format';
+import {
+  getCreditMovements,
+  getCreditPolicy,
+  transferCredit,
+  refundCredit,
+} from '@/lib/patient-credit/patient-credit-api';
+import { refundFixture } from '@/lib/test/credit-refund';
 
 jest.mock('../../lib/payments/payments-api', () => ({
   voidPayment: jest.fn(),
@@ -43,6 +50,15 @@ jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([]),
 }));
 
+jest.mock('../../lib/patient-credit/patient-credit-api', () => ({
+  ...jest.requireActual('../../lib/patient-credit/patient-credit-api'),
+  getCreditMovements: jest.fn(),
+  getCreditPolicy: jest.fn(),
+  transferCredit: jest.fn(),
+  refundCredit: jest.fn(),
+  getCreditRefund: jest.fn(),
+}));
+
 jest.mock('../../lib/payments/payment-receipts-api', () => ({
   ...jest.requireActual('../../lib/payments/payment-receipts-api'),
   getPaymentReceipt: jest.fn(),
@@ -65,6 +81,10 @@ function money(text: string | null | undefined): string {
 }
 
 beforeEach(() => {
+  (getCreditMovements as jest.Mock).mockReset().mockResolvedValue({ transfers: [], refunds: [] });
+  (getCreditPolicy as jest.Mock).mockReset().mockResolvedValue({ receptionMaxAmount: 100000 });
+  (transferCredit as jest.Mock).mockReset();
+  (refundCredit as jest.Mock).mockReset();
   mockedGet.mockReset();
   mockedVoid.mockReset();
   mockedRecord.mockReset();
@@ -771,5 +791,145 @@ describe('botones táctiles del estado de cuenta (DX-414)', () => {
     await screen.findByRole('table', { name: /movimientos/i });
     expect(screen.getByRole('button', { name: 'Registrar abono' }).className).toContain('max-sm:min-h-11');
     expect(screen.getByRole('button', { name: 'Plan de cuotas' }).className).toContain('max-sm:min-h-11');
+  });
+});
+
+/** Un plan cancelado con 300.000 abonados (queda a favor) y uno vivo que debe 400.000. */
+function creditStatement() {
+  const base = accountStatementFixture();
+  const [live] = base.plans;
+  return {
+    ...base,
+    plans: [
+      { ...live, id: 'live', budgeted: 400000, paid: 0, balance: 400000 },
+      { ...live, id: 'cancelled', status: 'CANCELLED' as const, countsTowardsBalance: false, paid: 300000, balance: -300000 },
+    ],
+    movements: [{ ...base.movements[1], id: 'pay-c', amount: 300000, treatmentPlanId: 'cancelled' }],
+  };
+}
+
+describe('saldo a favor en el estado de cuenta (DX-432)', () => {
+  it('«Traspasos y devoluciones» se ve aunque el saldo a favor sea 0 (ADMIN y recepción); DENTIST no la pide', async () => {
+    const base = accountStatementFixture();
+    mockedGet.mockResolvedValue({ ...base, plans: base.plans.map((p) => ({ ...p, balance: Math.max(p.balance, 0) })) });
+    const { unmount } = render(<AccountStatementView token={tokenForRole('ADMIN')} patientId="pat-1" />);
+    expect(await screen.findByRole('heading', { name: 'Traspasos y devoluciones' })).toBeInTheDocument();
+    expect(await screen.findByText('Aún no hay traspasos ni devoluciones')).toBeInTheDocument();
+    expect(screen.queryByTestId('credit-balance')).not.toBeInTheDocument();
+    expect(getCreditMovements).toHaveBeenCalledWith(expect.any(String), 'pat-1');
+    unmount();
+    (getCreditMovements as jest.Mock).mockClear();
+    render(<AccountStatementView token={tokenForRole('DENTIST')} patientId="pat-1" />);
+    await screen.findByRole('region', { name: /resumen en VES/i });
+    expect(screen.queryByRole('heading', { name: 'Traspasos y devoluciones' })).not.toBeInTheDocument();
+    expect(getCreditMovements).not.toHaveBeenCalled();
+  });
+
+  it('recepción con el tope en 0: «Aplicar a otro plan» y «Devolver» deshabilitadas y con el porqué', async () => {
+    const user = userEvent.setup();
+    (getCreditPolicy as jest.Mock).mockResolvedValue({ receptionMaxAmount: 0 });
+    mockedGet.mockResolvedValue(creditStatement());
+    render(<AccountStatementView token={tokenForRole('RECEPTION')} patientId="pat-1" />);
+    await screen.findByTestId('credit-balance');
+    await waitFor(() => expect(getCreditPolicy).toHaveBeenCalled());
+    const trigger = within(screen.getByTestId('credit-balance')).getByRole('button', { name: /^Acciones de/ });
+    // Un solo clic; el menú abierto se repinta cuando llega el tope (solo aserciones en waitFor).
+    await user.click(trigger);
+    const items = await screen.findAllByRole('menuitem');
+    await waitFor(() => expect(items[0]).toHaveAttribute('aria-disabled', 'true'));
+    expect(screen.getAllByText(/Recepción no puede traspasar ni devolver saldo a favor/).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('el administrador no consulta el tope y sus acciones siguen activas', async () => {
+    const user = userEvent.setup();
+    mockedGet.mockResolvedValue(creditStatement());
+    render(<AccountStatementView token={tokenForRole('ADMIN')} patientId="pat-1" />);
+    const credit = await screen.findByTestId('credit-balance');
+    await user.click(within(credit).getByRole('button', { name: /^Acciones de/ }));
+    expect(await screen.findByRole('menuitem', { name: /Devolver/ })).not.toHaveAttribute('aria-disabled');
+    expect(getCreditPolicy).not.toHaveBeenCalled();
+  });
+
+  it('un abono que es referencia de una devolución: «Anular» deshabilitado con la explicación de la API', async () => {
+    const user = userEvent.setup();
+    const reason =
+      'No se puede anular: el abono es referencia de la devolución DEV-NOR-000007: una devolución no se deshace y el abono queda como su traza contable.';
+    const base = accountStatementFixture();
+    mockedGet.mockResolvedValue({
+      ...base,
+      movements: base.movements.map((m) => (m.id === 'pay-2' ? { ...m, voidBlockedReason: reason } : m)),
+    });
+    render(<AccountStatementView token={tokenForRole('ADMIN')} patientId="pat-1" />);
+    const table = await screen.findByRole('table', { name: /movimientos/i });
+    const row = within(table).getByRole('row', { name: /10\/09\/2026/ });
+    await user.click(within(row).getByRole('button', { name: /^acciones de abono de/i }));
+    const anular = await screen.findByRole('menuitem', { name: /Anular/ });
+    expect(anular).toHaveAttribute('aria-disabled', 'true');
+    expect(anular).toHaveAccessibleDescription(reason);
+    await user.click(anular);
+    expect(screen.queryByRole('dialog', { name: /anular este abono/i })).not.toBeInTheDocument();
+  });
+
+  it('reimprimir una devolución del historial abre su comprobante y, al cerrarlo, el foco vuelve a la fila de donde salió', async () => {
+    const user = userEvent.setup();
+    const refund = refundFixture({ id: 'r-1', number: 'DEV-NOR-000007', currency: 'VES', treatmentPlanId: 'cancelled' });
+    (getCreditMovements as jest.Mock).mockResolvedValue({ transfers: [], refunds: [refund] });
+    mockedGet.mockResolvedValue(creditStatement());
+    render(<AccountStatementView token={tokenForRole('ADMIN')} patientId="pat-1" />);
+    const history = await screen.findByTestId('credit-movements');
+    const table = await within(history).findByRole('table');
+    const trigger = within(table).getByRole('button', { name: /^Acciones de/ });
+    await user.click(trigger);
+    await user.click(await screen.findByRole('menuitem', { name: 'Reimprimir comprobante' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Comprobante de devolución' });
+    expect(within(dialog).getByRole('link', { name: /Imprimir A4/ })).toHaveAttribute('href', '/print/credit-refunds/r-1');
+    await user.click(within(dialog).getAllByRole('button', { name: 'Cerrar' })[0]);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it('una devolución recién hecha abre su comprobante y, al cerrarlo, el foco queda en «Traspasos y devoluciones»', async () => {
+    const user = userEvent.setup();
+    (refundCredit as jest.Mock).mockResolvedValue(
+      refundFixture({ id: 'r-9', number: 'DEV-NOR-000009', currency: 'VES', treatmentPlanId: 'cancelled' }),
+    );
+    mockedGet.mockResolvedValue(creditStatement());
+    render(<AccountStatementView token={tokenForRole('ADMIN')} patientId="pat-1" />);
+    const credit = await screen.findByTestId('credit-balance');
+    await user.click(within(credit).getByRole('button', { name: /^Acciones de/ }));
+    await user.click(await screen.findByRole('menuitem', { name: /Devolver/ }));
+    const form = await screen.findByRole('dialog');
+    await user.type(within(form).getByLabelText('Importe a devolver'), '50000');
+    fireEvent.change(within(form).getByLabelText('Motivo'), { target: { value: 'El paciente se muda' } });
+    fireEvent.change(within(form).getByLabelText('Cómo se devuelve'), { target: { value: 'TRANSFER' } });
+    await user.click(within(form).getByRole('button', { name: 'Devolver' }));
+    const receipt = await screen.findByRole('dialog', { name: 'Devolución registrada' });
+    await user.click(within(receipt).getAllByRole('button', { name: 'Cerrar' })[0]);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Traspasos y devoluciones' })).toHaveFocus());
+  });
+
+  it('un traspaso correcto avisa (toast), recarga y deja el foco en «Traspasos y devoluciones»', async () => {
+    const user = userEvent.setup();
+    (transferCredit as jest.Mock).mockResolvedValue({});
+    mockedGet.mockResolvedValue(creditStatement());
+    render(
+      <>
+        <Toaster />
+        <AccountStatementView token={tokenForRole('ADMIN')} patientId="pat-1" />
+      </>,
+    );
+    const credit = await screen.findByTestId('credit-balance');
+    await user.click(within(credit).getByRole('button', { name: /^Acciones de/ }));
+    await user.click(await screen.findByRole('menuitem', { name: /Aplicar a otro plan/ }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Importe a aplicar'), '200000');
+    await user.click(within(dialog).getByRole('button', { name: 'Aplicar al plan' }));
+    await waitFor(() => expect(transferCredit).toHaveBeenCalled());
+    await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(/Saldo a favor aplicado/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Traspasos y devoluciones' })).toHaveFocus());
+    // El historial se pidió de nuevo.
+    expect((getCreditMovements as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 });
