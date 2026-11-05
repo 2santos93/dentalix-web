@@ -3943,6 +3943,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/unallocated-payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cobrado sin imputar / a cuenta, por abono
+         * @description Abonos vivos a un plan que se cobra (ni cancelado ni rechazado) de pacientes vivos, con base en la moneda del plan, cuyo día civil (en la zona de la sede del abono) cae en el período y cuya sede ve quien consulta (DX-089). `allocated` es la suma de sus imputaciones vivas y `unallocated` la base menos lo imputado (> 0), por moneda del plan y sin convertir: son las cifras de GET /payments/:id/allocations. Los abonos sin tasa para su día (sin base) no se pueden imputar: se cuentan en `paymentsWithoutRateCount`. Sin datos clínicos.
+         */
+        get: operations["UnallocatedPaymentsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/unallocated-payments.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cobrado sin imputar / a cuenta en CSV (mismos filtros, sin paginar)
+         * @description Abonos vivos a un plan que se cobra (ni cancelado ni rechazado) de pacientes vivos, con base en la moneda del plan, cuyo día civil (en la zona de la sede del abono) cae en el período y cuya sede ve quien consulta (DX-089). `allocated` es la suma de sus imputaciones vivas y `unallocated` la base menos lo imputado (> 0), por moneda del plan y sin convertir: son las cifras de GET /payments/:id/allocations. Los abonos sin tasa para su día (sin base) no se pueden imputar: se cuentan en `paymentsWithoutRateCount`. Sin datos clínicos. Las mismas filas que la pantalla, todas, con el período y la sede en la cabecera y los totales por moneda al final; UTF-8 con BOM; celdas protegidas contra fórmulas. Cada descarga deja un evento EXPORT en la auditoría.
+         */
+        get: operations["UnallocatedPaymentsController_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/closing-queue": {
         parameters: {
             query?: never;
@@ -6656,6 +6696,31 @@ export interface components {
              */
             rate: string;
         };
+        AuditAllocationLineDto: {
+            /**
+             * Format: uuid
+             * @description El ítem del plan.
+             */
+            itemId: string;
+            /**
+             * @description En la moneda del plan.
+             * @example 25.5
+             */
+            amount: number;
+        };
+        AuditAllocationDto: {
+            /** @description ISO 4217: la moneda del plan. */
+            currency: string;
+            /**
+             * @description MANUAL: el ADMIN fijó la imputación a mano. AUTO: la devolvió al reparto automático.
+             * @enum {string}
+             */
+            mode: "MANUAL" | "AUTO";
+            /** @description Origen: las líneas de antes de guardar. */
+            before: components["schemas"]["AuditAllocationLineDto"][];
+            /** @description Destino: las líneas que quedaron (tras el reparto). */
+            after: components["schemas"]["AuditAllocationLineDto"][];
+        };
         AuditConfigChangeDto: {
             /**
              * @description Valores antes del cambio (o del retiro).
@@ -6726,6 +6791,8 @@ export interface components {
             exchangeRateBackup?: components["schemas"]["AuditExchangeRateBackupDto"];
             /** @description DX-381: alta de una tasa de cambio manual (`resourceId` = la tasa): moneda, día y tasa. Nada del autor ni de los abonos. */
             exchangeRate?: components["schemas"]["AuditExchangeRateDto"];
+            /** @description DX-051/DX-399: un ADMIN reasignó la imputación de un abono (`resourceId` = el abono, `reason` PAYMENT_REALLOCATED): modo, moneda del plan y las líneas (ítem e importe) de antes y de después. Nada del paciente. */
+            allocation?: components["schemas"]["AuditAllocationDto"];
             /** @description DX-360: configuración de la clínica (sedes, horario, recordatorios, dominios, política de datos, tipos de cita, pagadores, plantillas, inventario): los campos que cambiaron con su antes y después, o un lado en un alta o un retiro. El texto libre o largo (cuerpo de una plantilla, notas, motivo) solo figura en `changedFields`; nunca secretos (token de un dominio) ni datos de pacientes. */
             configChange?: components["schemas"]["AuditConfigChangeDto"];
             /** @description DX-330: cambio del plazo de conservación de la historia clínica (`reason` CLINICAL_RECORD_RETENTION_SETTINGS): dirección, pacientes protegidos, plazos vigentes y si corrigió una subida reciente. Solo códigos y enteros. */
@@ -12142,6 +12209,13 @@ export interface components {
              */
             policyVersionId?: string | null;
         };
+        PlanVisitItemDetailDto: {
+            /** Format: uuid */
+            id: string;
+            toothNumber: string;
+            surfaces: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
+            procedureName: string;
+        };
         UnscheduledPlanDto: {
             /** Format: uuid */
             planId: string;
@@ -12197,13 +12271,6 @@ export interface components {
             minimumDay: string;
             planItemIds: string[];
             planItems: components["schemas"]["PlanVisitItemDetailDto"][];
-        };
-        PlanVisitItemDetailDto: {
-            /** Format: uuid */
-            id: string;
-            toothNumber: string;
-            surfaces: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
-            procedureName: string;
         };
         PlanVisitsDto: {
             /** Format: uuid */
@@ -15306,6 +15373,90 @@ export interface components {
             total: number;
             page: number;
             pageSize: number;
+        };
+        UnallocatedFiltersEchoDto: {
+            /** Format: uuid */
+            locationId: string | null;
+            locationName: string | null;
+        };
+        UnallocatedLocationOptionDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            isActive: boolean;
+        };
+        UnallocatedOptionsDto: {
+            /** @description Las sedes que ve quien consulta, para el filtro */
+            locations: components["schemas"]["UnallocatedLocationOptionDto"][];
+        };
+        UnallocatedPatientDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+        };
+        UnallocatedLocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        UnallocatedPaymentRowDto: {
+            /** Format: uuid */
+            paymentId: string;
+            patient: components["schemas"]["UnallocatedPatientDto"];
+            /** @description Sede del abono: el importe y la fecha se pintan con el formato de esa sede */
+            location: components["schemas"]["UnallocatedLocationDto"];
+            /**
+             * @description Día civil del abono en la zona de su sede
+             * @example 2026-10-20
+             */
+            paidOn: string;
+            /**
+             * @description En la moneda del abono
+             * @example 100
+             */
+            paymentAmount: number;
+            /** @description Código ISO 4217 de 3 letras. */
+            paymentCurrency: string;
+            /** Format: uuid */
+            planId: string;
+            /** @description Código ISO 4217 de 3 letras. Moneda del plan: `allocated` y `unallocated` van en ella */
+            planCurrency: string;
+            /**
+             * @description Lo imputado a ítems del plan, en la moneda del plan
+             * @example 70
+             */
+            allocated: number;
+            /**
+             * @description Lo que queda a cuenta: el abono en la moneda del plan menos lo imputado; siempre > 0
+             * @example 30
+             */
+            unallocated: number;
+        };
+        UnallocatedTotalDto: {
+            /** @description Código ISO 4217 de 3 letras (moneda del plan). */
+            currency: string;
+            /** @description Abonos con algo sin imputar en esta moneda */
+            count: number;
+            allocated: number;
+            unallocated: number;
+        };
+        UnallocatedPaymentsPageDto: {
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+            filters: components["schemas"]["UnallocatedFiltersEchoDto"];
+            options: components["schemas"]["UnallocatedOptionsDto"];
+            /** @description Del abono más reciente al más antiguo. Solo abonos vivos a un plan que se cobra (no cancelado ni rechazado), con base y con algo sin imputar */
+            items: components["schemas"]["UnallocatedPaymentRowDto"][];
+            /** @description Filas de la lista completa. Paginación por desplazamiento sobre una lista que se recalcula en cada petición */
+            total: number;
+            page: number;
+            pageSize: number;
+            /** @description Por moneda del plan, sobre TODAS las filas del período y las sedes (no solo la página) */
+            totals: components["schemas"]["UnallocatedTotalDto"][];
+            /** @description Abonos del período sin tasa para su día: no se pueden imputar todavía y no están en las cifras */
+            paymentsWithoutRateCount: number;
         };
         /**
          * @description Las secciones que ve el rol: ADMIN las tres, DENTIST EVOLUTION y TREATMENT, RECEPTION OUTCOME
@@ -30145,6 +30296,90 @@ export interface operations {
                 content?: never;
             };
             /** @description Solo la administración y los odontólogos ven la producción por procedimiento. / Solo puedes ver tu propia producción. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    UnallocatedPaymentsController_list: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de la sede del abono). Como mucho 24 meses por calendario; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo los abonos de esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                page?: number;
+                /** @description Tope: 100 (un valor mayor se recorta) */
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnallocatedPaymentsPageDto"];
+                };
+            };
+            /** @description Período inválido o de más de 24 meses */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no tiene acceso a lo cobrado sin imputar: es para administración y recepción. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    UnallocatedPaymentsController_csv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de la sede del abono). Como mucho 24 meses por calendario; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo los abonos de esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Período inválido o de más de 24 meses */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no tiene acceso a lo cobrado sin imputar: es para administración y recepción. / sede fuera de las del usuario */
             403: {
                 headers: {
                     [name: string]: unknown;

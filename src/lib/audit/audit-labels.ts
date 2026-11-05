@@ -1,7 +1,7 @@
 import type { AuditAction, AuditEvent, AuditResourceType } from './audit-api';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { BadgeProps } from '@/components/ui/badge';
-import { NO_SEDE_FORMAT, sedeCivilDate } from '@/lib/format/sede-number';
+import { NO_SEDE_FORMAT, sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeMinute, type SedeClock } from '@/lib/locations/sede-clock';
 import { DOC_TYPE_LABEL, genericDocTypeName } from '@/lib/patients/doc-type';
@@ -828,6 +828,31 @@ export function exchangeRateDetail(metadata: AuditMetadata, fmt: RegionalFormat 
   const value = Number(rate.rate);
   const shown = fmt && Number.isFinite(value) ? fmt.number(value, { min: 0, max: 8 }) : NO_SEDE_FORMAT;
   return `${rate.currency} · ${sedeCivilDate(rate.day, fmt)} · ${shown}`;
+}
+
+/** «2 ítems · 100,00 EUR» o «sin imputar»: un lado de la reimputación de un abono. */
+function allocationSide(
+  lines: readonly { amount: number }[],
+  currency: string,
+  fmt: RegionalFormat | null,
+): string {
+  if (lines.length === 0) return 'sin imputar';
+  const total = Math.round(lines.reduce((sum, l) => sum + l.amount * 100, 0)) / 100;
+  return `${lines.length} ${lines.length === 1 ? 'ítem' : 'ítems'} · ${sedeMoney(total, currency, fmt)}`;
+}
+
+/**
+ * DX-051/DX-399: un ADMIN reasignó la imputación de un abono. Dice la regla
+ * (fijada a mano o devuelta al reparto automático) y el antes y el después, con
+ * el importe en la moneda del plan y el formato de la sede: «Imputación fijada
+ * a mano · antes: 1 ítem · 100,00 EUR → después: 1 ítem · 25,50 EUR». Los ítems
+ * exactos y sus importes van en la metadata. null si el evento no es de ello.
+ */
+export function paymentAllocationDetail(metadata: AuditMetadata, fmt: RegionalFormat | null): string | null {
+  const allocation = metadata.allocation;
+  if (metadata.reason !== 'PAYMENT_REALLOCATED' || !allocation) return null;
+  const what = allocation.mode === 'MANUAL' ? 'Imputación fijada a mano' : 'Imputación devuelta al reparto automático';
+  return `${what} · antes: ${allocationSide(allocation.before, allocation.currency, fmt)} → después: ${allocationSide(allocation.after, allocation.currency, fmt)}`;
 }
 
 /** DX-316: qué cambió en el calendario de una sede, o null si el evento no es de él. */

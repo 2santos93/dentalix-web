@@ -3018,6 +3018,62 @@ describe('TreatmentPlansTab', () => {
       expect(screen.queryByRole('menuitem', { name: 'Imputación' })).not.toBeInTheDocument();
     });
 
+    it('«Ver imputación» abre el detalle de solo lectura: ADMIN lo tiene, también con el plan cancelado', async () => {
+      mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
+      jest.mocked(getPaymentAllocations).mockResolvedValue({
+        paymentId: 'pay-1',
+        receiptNumber: 'PRI-000001',
+        locationId: 'loc-1',
+        treatmentPlanId: 'plan-1',
+        paymentAmount: 50000,
+        paymentCurrency: 'USD',
+        paidOn: '2026-01-05',
+        planCurrency: 'USD',
+        planStatus: 'ACCEPTED',
+        planAmount: 50000,
+        manual: false,
+        allocated: 30000,
+        unallocated: 20000,
+        version: 'a'.repeat(64),
+        allocations: [{ treatmentPlanItemId: item2.id, amount: 30000, source: 'AUTO' }],
+        items: [
+          {
+            itemId: item2.id,
+            toothNumber: '26',
+            procedureName: 'Limpieza',
+            status: 'ACCEPTED',
+            billable: 80000,
+            paidByOthers: 0,
+            free: 80000,
+          },
+        ],
+      });
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      const payments = await openPaymentsTable(user);
+      const row = within(payments).getByText('PRI-000001').closest('tr') as HTMLTableRowElement;
+      await pickRowAction(user, row, 'Ver imputación');
+
+      const dialog = await screen.findByRole('dialog', { name: 'Imputación del abono' });
+      expect(jest.mocked(getPaymentAllocations)).toHaveBeenCalledWith(adminToken, 'pay-1');
+      expect(await within(dialog).findByText('Automática (más antiguo primero)')).toBeInTheDocument();
+      expect(within(dialog).getByRole('row', { name: /Limpieza/ })).toBeInTheDocument();
+      expect(within(dialog).getByRole('row', { name: /A cuenta/ })).toBeInTheDocument();
+      // ADMIN puede pasar de ahí a cambiarla.
+      expect(within(dialog).getByRole('button', { name: 'Cambiar imputación' })).toBeInTheDocument();
+    });
+
+    it('«Ver imputación» no sale para un rol que no lee abonos', async () => {
+      mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
+      const user = userEvent.setup();
+      const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u-r', tenantId: 't1', role: 'RECEPTION' }))}.s`;
+      render(<TreatmentPlansTab patientId="pat-1" token={receptionToken} />);
+      const payments = await openPaymentsTable(user);
+      await user.click(within(payments).getAllByRole('button', { name: /^Acciones de abono/ })[0]);
+      expect(await screen.findByRole('menuitem', { name: 'Recibo' })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: 'Ver imputación' })).not.toBeInTheDocument();
+    });
+
     it('saving the allocation closes the modal and refreshes balance and payments', async () => {
       mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
       const allocations = {

@@ -15,10 +15,11 @@ export type CompareMode = LocationsComparison['compare'];
 /**
  * ¿Ve alguna pestaña de «Reportes»? «Comparar sedes» es de la administración
  * (REPORT_ROLES); «Producción por procedimiento» también la ve el odontólogo,
- * solo la suya (PRODUCTION_REPORT_ROLES, DX-423).
+ * solo la suya (PRODUCTION_REPORT_ROLES, DX-423); «Cobrado sin imputar»,
+ * recepción (UNALLOCATED_PAYMENTS_ROLES, DX-399).
  */
 export function canViewReports(role: ClinicRole | null): boolean {
-  return role === 'ADMIN' || role === 'DENTIST';
+  return role === 'ADMIN' || role === 'DENTIST' || role === 'RECEPTION';
 }
 
 export interface LocationsComparisonFilters {

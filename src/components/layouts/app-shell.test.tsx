@@ -120,7 +120,7 @@ describe('AppShell', () => {
   // DASHBOARD_ROLES, CATALOG_READ_ROLES, INVENTORY_ROLES, STAFF_WRITE_ROLES,
   // CLOSING_QUEUE_ROLES (DX-439), TREATMENT_PLAN_FOLLOW_UP_ROLES (Presupuestos, DX-040)
   // RECEIVABLES_ROLES (Cartera, DX-145) y REPORT_ROLES + PRODUCTION_REPORT_ROLES
-  // (Reportes, DX-014 y DX-423).
+  // (Reportes, DX-014 y DX-423) y UNALLOCATED_PAYMENTS_ROLES (Reportes › «Cobrado sin imputar», DX-399).
   const ROLE_NAV: Record<string, { visible: string[]; hidden: string[] }> = {
     ADMIN: {
       visible: [
@@ -149,8 +149,8 @@ describe('AppShell', () => {
       hidden: ['Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Personal', 'Auditoría', 'Reportes', 'Pendiente de cerrar'],
     },
     RECEPTION: {
-      visible: ['Inicio', 'Pacientes', 'Agenda', 'Caja', 'Cartera', 'Presupuestos', 'Pendiente de cerrar'],
-      hidden: ['Gastos', 'Catálogo', 'Inventario', 'Personal', 'Auditoría', 'Reportes'],
+      visible: ['Inicio', 'Pacientes', 'Agenda', 'Caja', 'Cartera', 'Reportes', 'Presupuestos', 'Pendiente de cerrar'],
+      hidden: ['Gastos', 'Catálogo', 'Inventario', 'Personal', 'Auditoría'],
     },
   };
   it.each(Object.keys(ROLE_NAV))('el menú de %s solo enseña lo que su rol puede abrir', async (role) => {
@@ -320,7 +320,7 @@ describe('AppShell', () => {
       expect(groupsOf(nav)).toEqual([
         [null, ['/dashboard', '/agenda', '/patients']],
         ['Atención', ['/agenda/pendiente-de-cerrar', '/presupuestos']],
-        ['Finanzas', ['/caja', '/caja/cartera']],
+        ['Finanzas', ['/caja', '/caja/cartera', '/reportes']],
         ['Administración', ['/settings']],
       ]);
       expect(nav.queryByText('Clínica')).not.toBeInTheDocument();

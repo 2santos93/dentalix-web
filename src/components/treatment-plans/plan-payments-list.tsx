@@ -48,6 +48,8 @@ interface PlanPaymentsListProps {
   manualPaymentIds?: ReadonlySet<string>;
   /** DX-051: abre «Imputar abono»; solo ADMIN y en un plan que se cobra. */
   onAllocate?: (paymentId: string) => void;
+  /** DX-399: abre «Imputación del abono», de solo lectura (a qué ítems fue y con qué regla). */
+  onViewAllocation?: (paymentId: string) => void;
   /** DX-375/DX-378/DX-386: formato de la sede para importe, día y tasa congelada; `null` mientras carga («—»). */
   fmt: RegionalFormat | null;
   /** DX-515: anota el nº de la factura fiscal externa del abono (ADMIN y recepción). */
@@ -89,6 +91,7 @@ export function PlanPaymentsList({
   billable = true,
   manualPaymentIds,
   onAllocate,
+  onViewAllocation,
   fmt,
   onExternalInvoice,
 }: PlanPaymentsListProps) {
@@ -202,6 +205,9 @@ export function PlanPaymentsList({
     const actions: RowAction[] = [{ label: copy.receiptAction, onSelect: () => onReceipt(p.id) }];
     if (onExternalInvoice) {
       actions.push({ label: externalInvoiceCopy.action, onSelect: () => onExternalInvoice(p) });
+    }
+    if (onViewAllocation) {
+      actions.push({ label: copy.viewAllocationAction, onSelect: () => onViewAllocation(p.id) });
     }
     if (onAllocate) {
       actions.push({

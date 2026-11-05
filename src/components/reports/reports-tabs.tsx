@@ -3,15 +3,17 @@ import type { ClinicRole } from '@/lib/me/me-api';
 import { TabBar } from '@/components/ui/tabs';
 
 /**
- * Pestañas de «Reportes» (DX-014): «Comparar sedes» (solo ADMIN) y
+ * Pestañas de «Reportes» (DX-014): «Comparar sedes» (solo ADMIN),
  * «Producción por procedimiento» (DX-423: ADMIN y DENTIST, que ve solo la
- * suya). Las siguientes son una línea más en `REPORT_TABS` y su vista en la
+ * suya) y «Cobrado sin imputar» (DX-399: ADMIN y recepción). Las siguientes son una línea más en `REPORT_TABS` y su vista en la
  * página. Patrón ARIA de pestañas con activación manual, como la Caja: las
  * flechas mueven el foco y Enter/Espacio (o el clic) eligen.
  */
 export const REPORT_TABS = [
   { key: 'comparar-sedes', label: 'Comparar sedes', roles: ['ADMIN'] },
   { key: 'produccion', label: 'Producción por procedimiento', roles: ['ADMIN', 'DENTIST'] },
+  // DX-399: lo cobrado que aún no cubre ningún ítem; los roles de cobro (UNALLOCATED_PAYMENTS_ROLES).
+  { key: 'sin-imputar', label: 'Cobrado sin imputar', roles: ['ADMIN', 'RECEPTION'] },
 ] as const satisfies readonly { key: string; label: string; roles: readonly ClinicRole[] }[];
 
 export type ReportTabKey = (typeof REPORT_TABS)[number]['key'];

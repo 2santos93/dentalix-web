@@ -3,6 +3,7 @@ import type { AuditEvent } from './audit-api';
 import {
   exchangeRateBackupDetail,
   exchangeRateDetail,
+  paymentAllocationDetail,
   receiptDetail,
   cancellationDetail,
   importBatchDetail,
@@ -819,5 +820,61 @@ describe('staffDetail › cambio de sedes del miembro (DX-381)', () => {
 
   it('un evento anterior, sin antes ni después, sigue diciendo solo el motivo', () => {
     expect(staffDetail({ reason: 'LOCATIONS_CHANGED' }, names)).toBe('Sedes del miembro cambiadas');
+  });
+});
+
+describe('paymentAllocationDetail (DX-399)', () => {
+  // Intl separa el código del importe con un espacio duro.
+  const detail = (...args: Parameters<typeof paymentAllocationDetail>) =>
+    paymentAllocationDetail(...args)?.replace(/\u00a0/g, ' ');
+  const ES_VE = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
+  const ITEM_A = '11111111-1111-4111-8111-111111111111';
+  const ITEM_B = '22222222-2222-4222-8222-222222222222';
+  const manual = {
+    reason: 'PAYMENT_REALLOCATED',
+    allocation: {
+      currency: 'EUR',
+      mode: 'MANUAL' as const,
+      before: [{ itemId: ITEM_A, amount: 100 }],
+      after: [{ itemId: ITEM_B, amount: 25.5 }],
+    },
+  };
+
+  it('fijada a mano: la regla y el antes y el después con el importe en la moneda del plan', () => {
+    expect(detail(manual, ES_VE)).toBe(
+      'Imputación fijada a mano · antes: 1 ítem · EUR 100,00 → después: 1 ítem · EUR 25,50',
+    );
+  });
+
+  it('devuelta al reparto automático, con varios ítems y un lado sin imputar', () => {
+    expect(
+      detail(
+        {
+          reason: 'PAYMENT_REALLOCATED',
+          allocation: {
+            currency: 'USD',
+            mode: 'AUTO',
+            before: [],
+            after: [
+              { itemId: ITEM_A, amount: 10.1 },
+              { itemId: ITEM_B, amount: 20.2 },
+            ],
+          },
+        },
+        ES_VE,
+      ),
+    ).toBe('Imputación devuelta al reparto automático · antes: sin imputar → después: 2 ítems · USD 30,30');
+  });
+
+  it('sin el formato de la sede no inventa otro: «—»', () => {
+    expect(paymentAllocationDetail(manual, null)).toBe(
+      'Imputación fijada a mano · antes: 1 ítem · — → después: 1 ítem · —',
+    );
+  });
+
+  it('null si el evento no es de una reimputación', () => {
+    expect(paymentAllocationDetail({}, ES_VE)).toBeNull();
+    expect(paymentAllocationDetail({ reason: 'PAYMENT_REALLOCATED' }, ES_VE)).toBeNull();
+    expect(paymentAllocationDetail({ allocation: manual.allocation }, ES_VE)).toBeNull();
   });
 });

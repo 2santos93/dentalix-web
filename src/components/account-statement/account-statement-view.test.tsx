@@ -8,6 +8,7 @@ import { getAccountStatement } from '@/lib/account-statement/account-statement-a
 import { getPlanBalance, recordPayment, voidPayment } from '@/lib/payments/payments-api';
 import { listBillablePlans, type BillablePlan } from '@/lib/payments/billable-plans-api';
 import { createPaymentPlan } from '@/lib/payment-plans/payment-plan-api';
+import { getPaymentAllocations } from '@/lib/payments/payment-allocations-api';
 import { getPaymentReceipt } from '@/lib/payments/payment-receipts-api';
 import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
 import {
@@ -38,6 +39,10 @@ jest.mock('../../lib/payments/billable-plans-api', () => ({
 }));
 jest.mock('../../lib/payment-plans/payment-plan-api', () => ({
   createPaymentPlan: jest.fn(),
+}));
+jest.mock('../../lib/payments/payment-allocations-api', () => ({
+  getPaymentAllocations: jest.fn(),
+  replacePaymentAllocations: jest.fn(),
 }));
 jest.mock('../../lib/locations/locations-api', () => ({
   // El fixture trae abonos de dos sedes (loc-1, loc-2): cada fila usa la suya (DX-354b, E1).
@@ -271,6 +276,55 @@ it('un 403 explica que el rol no tiene acceso, sin reintento', async () => {
   expect(await screen.findByText(/tu rol no tiene acceso al estado de cuenta/i)).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /reintentar/i })).not.toBeInTheDocument();
   await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(1));
+});
+
+it('«Ver imputación» (DX-399): los abonos a un plan vivo la ofrecen, el anulado no, y abre el detalle de solo lectura', async () => {
+  const user = userEvent.setup();
+  mockedGet.mockResolvedValue(accountStatementFixture());
+  (getPaymentAllocations as jest.Mock).mockResolvedValue({
+    paymentId: 'pay-2',
+    receiptNumber: null,
+    locationId: 'loc-2',
+    treatmentPlanId: 'plan-1',
+    paymentAmount: 200000,
+    paymentCurrency: 'VES',
+    paidOn: '2026-09-18',
+    planCurrency: 'VES',
+    planStatus: 'ACCEPTED',
+    planAmount: 200000,
+    manual: true,
+    allocated: 150000,
+    unallocated: 50000,
+    version: 'a'.repeat(64),
+    allocations: [{ treatmentPlanItemId: 'item-1', amount: 150000, source: 'MANUAL' }],
+    items: [
+      {
+        itemId: 'item-1',
+        toothNumber: '11',
+        procedureName: 'Corona',
+        status: 'ACCEPTED',
+        billable: 300000,
+        paidByOthers: 0,
+        free: 300000,
+      },
+    ],
+  });
+  render(<AccountStatementView token="tok" patientId="pat-1" />);
+
+  const table = await screen.findByRole('table', { name: /movimientos/i });
+  const [, voidedRow, liveRow] = within(table).getAllByRole('row');
+  expect(await rowMenu(user, voidedRow)).not.toContain('Ver imputación');
+  await user.keyboard('{Escape}');
+  expect(await rowMenu(user, liveRow)).toContain('Ver imputación');
+  await user.click(screen.getByRole('menuitem', { name: 'Ver imputación' }));
+
+  const dialog = await screen.findByRole('dialog', { name: 'Imputación del abono' });
+  expect(getPaymentAllocations).toHaveBeenCalledWith('tok', 'pay-2');
+  expect(await within(dialog).findByText('Manual')).toBeInTheDocument();
+  expect(within(dialog).getByRole('row', { name: /Corona/ })).toBeInTheDocument();
+  expect(within(dialog).getByRole('row', { name: /A cuenta/ })).toBeInTheDocument();
+  // Recepción no cambia la imputación desde aquí.
+  expect(within(dialog).queryByRole('button', { name: 'Cambiar imputación' })).not.toBeInTheDocument();
 });
 
 it('cada movimiento, también el anulado, abre su recibo de caja (DX-136)', async () => {

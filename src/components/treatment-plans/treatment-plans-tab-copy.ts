@@ -238,6 +238,8 @@ export const copy = {
   manualAllocation: 'Fijada a mano',
   // DX-051: abre «Imputar abono» (solo ADMIN).
   allocationAction: 'Imputación',
+  // DX-399: el detalle de solo lectura de a qué ítems se imputó el abono.
+  viewAllocationAction: 'Ver imputación',
   emptyPaymentsTitle: 'Este plan todavía no tiene abonos.',
   emptyPaymentsDescription: 'Registra el primer abono con «Registrar abono».',
 
