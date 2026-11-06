@@ -87,7 +87,9 @@ export function PlanQuoteActions({
           </p>
         </div>
       ) : null}
-      {acceptance?.remote ? <RemoteAcceptanceEvidence token={token} remote={acceptance.remote} /> : null}
+      {acceptance?.remote ? (
+        <RemoteAcceptanceEvidence remote={acceptance.remote} stamp={stamp} locationId={plan.acceptedLocationId} />
+      ) : null}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         {canPrintPlanQuote(role) ? (

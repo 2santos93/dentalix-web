@@ -5,6 +5,7 @@ import { Send } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 import { useSedeClock, type SedeClock } from '@/lib/locations/sede-clock';
+import type { SedePainters } from '@/lib/locations/sede-stamp';
 import type { ClinicRole } from '@/lib/me/me-api';
 import {
   canRevokeSignatureRequest,
@@ -49,21 +50,27 @@ function at(iso: string, clock: SedeClock | null): string {
   return clock ? clock.fmt.dateTime(new Date(iso), clock.timeZone) : NO_SEDE_FORMAT;
 }
 
-/** Evidencias de un plan aceptado a distancia (DX-415), para la ficha. */
+/**
+ * Evidencias de un plan aceptado a distancia (DX-415), para la ficha. DX-514:
+ * con el pintor de la pantalla y la sede donde se aceptó (`locationId`), el
+ * mismo reloj que pinta «Aceptado a distancia … el …»; nunca el del navegador
+ * ni UTC (sin sede conocida, «—»).
+ */
 export function RemoteAcceptanceEvidence({
-  token,
   remote,
+  stamp,
+  locationId,
 }: {
-  token: string;
   remote: NonNullable<NonNullable<TreatmentPlan['acceptance']>['remote']>;
+  stamp: SedePainters;
+  locationId: string | null | undefined;
 }) {
-  const sede = useSedeClock(token);
-  const clock = sede.status === 'ready' ? sede.clock : null;
+  const paint = (iso: string) => stamp.dateTime(iso, locationId);
   const rows: [string, string][] = [
     [copy.evidenceTo, remote.destinationMasked],
-    [copy.evidenceSent, at(remote.sentAt, clock)],
-    [copy.evidenceOpened, at(remote.openedAt, clock)],
-    [copy.evidenceVerified, at(remote.verifiedAt, clock)],
+    [copy.evidenceSent, paint(remote.sentAt)],
+    [copy.evidenceOpened, paint(remote.openedAt)],
+    [copy.evidenceVerified, paint(remote.verifiedAt)],
     ...(remote.ipAddress ? ([[copy.evidenceIp, remote.ipAddress]] as [string, string][]) : []),
   ];
   return (
