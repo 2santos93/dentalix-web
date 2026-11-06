@@ -107,6 +107,9 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   // DX-233: horario de un profesional por sede y sus excepciones por fecha.
   PROVIDER_SCHEDULE: 'Horario del profesional',
   CHAIR: 'Sillón',
+  // DX-542: equipos biomédicos de la sede y sus mantenimientos.
+  EQUIPMENT: 'Equipo biomédico',
+  EQUIPMENT_MAINTENANCE: 'Mantenimiento de equipo',
   // DX-099: anamnesis por enlace (enlace, envío, revisión, anulación).
   MEDICAL_HISTORY_SUBMISSION: 'Anamnesis por enlace',
   // DX-243: firma a distancia (enviar, abrir, código, bloqueo, firma, anular).
@@ -421,9 +424,11 @@ const CHAIR_REASONS: Record<string, string> = {
   CHAIR_ORDER: 'Orden de los sillones',
   CHAIR_DEACTIVATED: 'Sillón desactivado',
   CHAIR_REACTIVATED: 'Sillón reactivado',
+  // DX-542: la baja de un equipo biomédico.
+  EQUIPMENT_RETIRED: 'Equipo dado de baja',
 };
 
-/** DX-211: qué se hizo con un sillón (orden, desactivar, reactivar), o null. */
+/** DX-211: qué se hizo con un sillón (orden, desactivar, reactivar) o, DX-542, la baja de un equipo; o null. */
 export function chairDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && CHAIR_REASONS[metadata.reason]) ?? null;
 }
