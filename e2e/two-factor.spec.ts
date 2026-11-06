@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { test, expect } from './support/test';
 import { loginAs, waitForHydratedForm } from './support/auth';
 import { registerClinicViaApi } from './support/api';
+import { passEnrollEmailCode } from './support/enroll-email-code';
+import { mailMark } from './support/mail';
 import { expectNoHorizontalScroll } from './support/layout';
 import { totpNow } from './support/totp';
 import { tenantOrigin } from './support/urls';
@@ -123,7 +125,10 @@ test('la clínica exige el MFA: el ADMIN sin él pasa por el alta forzada al ent
   await waitForHydratedForm(page);
   await page.getByLabel('Correo electrónico').fill(data.email);
   await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
+  const mark = mailMark();
   await page.getByRole('button', { name: 'Iniciar sesión' }).click();
+  await expectNoHorizontalScroll(page);
+  await passEnrollEmailCode(page, data.email, mark);
 
   const secretEl = page.getByTestId('mfa-secret');
   await expect(secretEl).toBeVisible();
