@@ -10,6 +10,7 @@ import {
   CalendarDays,
   ClipboardClock,
   ClipboardList,
+  Stethoscope,
   Coins,
   Clock,
   FileSignature,
@@ -35,6 +36,7 @@ import { canManageConsentTemplates } from '@/lib/consents/consents-api';
 import { canManagePrescriptionSettings } from '@/lib/prescriptions/prescriptions-api';
 import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
 import { canManageChairs } from '@/lib/chairs/chairs-api';
+import { canManageEquipment } from '@/lib/equipment/equipment-api';
 import { canManagePayers } from '@/lib/payers/payers-api';
 import { canManagePriceLists } from '@/lib/price-lists/price-lists-api';
 import { canManageAgreements } from '@/lib/agreements/agreements-api';
@@ -178,6 +180,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Los sillones de cada sede, su orden en la agenda y su profesional por defecto.',
         icon: Armchair,
         visible: canManageChairs,
+      },
+      // DX-542.
+      {
+        href: '/settings/equipos',
+        label: 'Equipos biomédicos',
+        description: 'Inventario de equipos de cada sede, su hoja de vida y sus mantenimientos.',
+        icon: Stethoscope,
+        visible: canManageEquipment,
       },
       // DX-026.
       {
