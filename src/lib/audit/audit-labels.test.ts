@@ -142,6 +142,7 @@ describe('chairDetail (DX-211)', () => {
     expect(chairDetail({ reason: 'CHAIR_ORDER' })).toBe('Orden de los sillones');
     expect(chairDetail({ reason: 'CHAIR_DEACTIVATED' })).toBe('Sillón desactivado');
     expect(chairDetail({ reason: 'CHAIR_REACTIVATED' })).toBe('Sillón reactivado');
+    expect(chairDetail({ reason: 'EQUIPMENT_RETIRED' })).toBe('Equipo dado de baja');
     expect(chairDetail({ reason: 'SEDATION_VITALS' })).toBeNull();
   });
 });
