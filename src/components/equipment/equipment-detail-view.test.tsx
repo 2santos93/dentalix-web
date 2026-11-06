@@ -61,7 +61,7 @@ describe('EquipmentDetailView (DX-542)', () => {
       maintenances: [{ ...detail.maintenances[0], voidedAt: '2026-11-06T12:00:00.000Z', voidReason: 'Mal cargado' }],
     });
     await user.click(alert.querySelector('button')!);
-    await waitFor(() => expect(screen.getByText('ANULADO')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Anulado')).toBeInTheDocument());
     expect(mockedGet).toHaveBeenCalledTimes(3);
   });
 });

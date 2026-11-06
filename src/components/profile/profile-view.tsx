@@ -35,6 +35,7 @@ const copy = {
   nameMissing: 'Escribe tu nombre.',
   save: 'Guardar',
   saveFor: 'Guardar el nombre',
+  nameSaved: 'Nombre guardado.',
   saveError: 'No pudimos guardar tu nombre. Intenta de nuevo.',
   emailLabel: 'Correo electrónico',
   clinicLabel: 'Clínica',
@@ -255,6 +256,7 @@ export function ProfileView({ token }: ProfileViewProps) {
             error={nameError}
             saveLabel={copy.save}
             saveAriaLabel={copy.saveFor}
+            savedMessage={copy.nameSaved}
             onDiscard={() => {
               discardName();
               setNameError(null);

@@ -282,7 +282,7 @@ for (const width of [390, 1440]) {
     await admin.page.goto(`${origin}/patients/${patient!.id}?tab=treatment-plans`);
     const legacyItem = admin.page.getByRole('row').or(admin.page.getByRole('listitem'))
       .filter({ has: admin.page.getByText('Consulta de urgencia', { exact: true }) })
-      .filter({ has: admin.page.getByRole('combobox', { name: 'Estado del ítem del diente 21', exact: true }) })
+      .filter({ has: admin.page.getByRole('combobox', { name: /^Estado del ítem(?: \d+)? del diente 21 · Consulta de urgencia$/ }) })
       .locator('visible=true');
     await expect(legacyItem).toHaveCount(1);
     const unattributed = legacyItem.getByText('Sin atribuir', { exact: true });

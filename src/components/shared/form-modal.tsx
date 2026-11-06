@@ -29,6 +29,11 @@ interface FormModalProps {
   /** Independent of `submitting` — e.g. required fields missing. */
   submitDisabled?: boolean;
   /**
+   * La acción espera algo que aún carga (p. ej. la lista de la salida): spinner
+   * y `aria-busy` en la primaria, desactivada; Cancelar sigue disponible.
+   */
+  submitBusy?: boolean;
+  /**
    * Explica junto a la acción qué falta para poder enviar. `null` = nada que
    * explicar ahora, pero el hueco se conserva; `undefined` = sin hueco.
    */
@@ -107,6 +112,23 @@ function firstNativeInvalidTextControl(form: HTMLFormElement): HTMLElement | nul
   return null;
 }
 
+const FOCUSABLE = 'input:not([type=hidden]), select, textarea, button, [tabindex]:not([tabindex="-1"])';
+
+/**
+ * DX-546 · FE-113: la pantalla con `ownValidation` pinta sus errores con
+ * `aria-invalid`; el foco va al primero (o a lo primero enfocable dentro de
+ * él, p. ej. un segmento de `DatePicker`). Si la pantalla ya lo llevó a un
+ * campo inválido, se respeta.
+ */
+function focusFirstInvalid(form: HTMLFormElement) {
+  const active = form.ownerDocument.activeElement;
+  if (active instanceof HTMLElement && form.contains(active) && active.closest('[aria-invalid="true"]')) return;
+  const invalid = form.querySelector<HTMLElement>('[aria-invalid="true"]');
+  if (!invalid) return;
+  const target = invalid.matches(FOCUSABLE) ? invalid : invalid.querySelector<HTMLElement>(FOCUSABLE);
+  target?.focus();
+}
+
 /**
  * Altura táctil (44 px) en móvil para todo control del modal; las casillas y
  * los radios conservan su tamaño (su etiqueta ya da el área táctil).
@@ -131,6 +153,7 @@ export function FormModal({
   cancelLabel = 'Cancelar',
   submitting = false,
   submitDisabled = false,
+  submitBusy = false,
   submitHint,
   hideSubmit = false,
   error,
@@ -145,6 +168,15 @@ export function FormModal({
 }: FormModalProps) {
   const submitHintId = React.useId();
   const errorRef = React.useRef<HTMLDivElement>(null);
+  const formRef = React.useRef<HTMLFormElement>(null);
+  // DX-546 · FE-113: con `ownValidation`, cada envío pide revisar —tras pintar
+  // los errores— si hay que llevar el foco al primer campo inválido.
+  const [submitCount, setSubmitCount] = React.useState(0);
+  React.useEffect(() => {
+    if (!ownValidation || submitCount === 0) return;
+    const form = formRef.current;
+    if (form) focusFirstInvalid(form);
+  }, [ownValidation, submitCount]);
   React.useEffect(() => {
     if (!error) return;
     const el = errorRef.current;
@@ -172,7 +204,9 @@ export function FormModal({
         {/* `noValidate`: un `required` nativo de RadioGroup o Checkbox no se
             adelanta a la validación propia (ver firstNativeInvalidTextControl). */}
         <form
+          ref={formRef}
           onSubmit={(event) => {
+            if (ownValidation) setSubmitCount((n) => n + 1);
             const invalid = ownValidation ? null : firstNativeInvalidTextControl(event.currentTarget);
             if (invalid) {
               event.preventDefault();
@@ -242,7 +276,7 @@ export function FormModal({
                 <Button
                   type="submit"
                   variant={destructive ? 'destructive' : 'default'}
-                  loading={submitting}
+                  loading={submitting || submitBusy}
                   disabled={submitDisabled}
                   aria-describedby={submitHint ? submitHintId : undefined}
                 >
