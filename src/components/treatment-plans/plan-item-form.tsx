@@ -16,6 +16,7 @@ import {
   needsReason,
   noDiscountAllowed,
   priceBelowCatalogCapMessage,
+  referenceInPlanCurrency,
   roleCapMessage,
   type DiscountRules,
 } from '@/lib/discounts/discount-rules';
@@ -131,6 +132,14 @@ export function PlanItemForm({
   const addNoDiscount = noDiscountAllowed(quoteReady);
   // Referencia de la rebaja (R1): el precio resuelto, no el de catálogo.
   const referencePrice = quoteReady ? quoteReady.price : (catalogById.get(catalogItemId)?.defaultPrice ?? null);
+  // DX-489 / DX-513: la referencia sale de una lista en la moneda del plan, o
+  // del catálogo en SU moneda (la que dice la API). En otra moneda, o sin
+  // saberla, bajar de ella no es un descuento: ni pide motivo ni topa el rol
+  // (como la API, `referenceCurrency`). B4 (DX-502): hasta que llega el precio
+  // resuelto no se sabe la moneda; se avisa como antes y decide la API.
+  const catalogInOtherCurrency =
+    quoteReady !== null && !referenceInPlanCurrency(quoteReady.source, catalogCurrency, plan.currency);
+  const discountReference = catalogInOtherCurrency ? null : referencePrice;
 
   function handleProcedureChange(nextCatalogItemId: string) {
     setCatalogItemId(nextCatalogItemId);
@@ -184,7 +193,8 @@ export function PlanItemForm({
     // resuelto ni descontar; se dice aquí, sin llamar a la API.
     if (
       addNoDiscount &&
-      (discountValue > 0 || (priceInput !== undefined && referencePrice !== null && priceInput < referencePrice))
+      (discountValue > 0 ||
+        (priceInput !== undefined && discountReference !== null && priceInput < discountReference))
     ) {
       setItemAmountErrors({
         [discountValue > 0 ? 'discount' : 'price']: NO_DISCOUNT_ALLOWED_NOTICE,
@@ -195,10 +205,9 @@ export function PlanItemForm({
     // API los vuelve a aplicar. SEC-041: sobre el descuento EFECTIVO, que
     // suma la rebaja del precio frente al de catálogo.
     setAddReasonErrors(null);
-    const catalogPrice = referencePrice;
-    const effectivePrice = priceInput ?? catalogPrice;
+    const effectivePrice = priceInput ?? referencePrice;
     const effective =
-      effectivePrice !== null ? effectiveDiscount(catalogPrice, effectivePrice, discountValue) : null;
+      effectivePrice !== null ? effectiveDiscount(discountReference, effectivePrice, discountValue) : null;
     if (discountRules && role && effective && exceedsCap(discountRules, role, effective.listPrice, effective.total)) {
       const cap = capFor(discountRules, role);
       setAddItemValidationError(
@@ -259,14 +268,17 @@ export function PlanItemForm({
   // un precio o descuento que no se entiende no hay aviso (el envío lo para).
   const addEffective =
     addPrice !== null && addDiscountInput !== null && addPriceInput !== null
-      ? effectiveDiscount(addCatalogPrice, addPrice, addDiscountValue)
+      ? effectiveDiscount(discountReference, addPrice, addDiscountValue)
       : null;
   const addBelowCatalog = addEffective !== null && addEffective.priceReduction > 0;
-  // DX-489: sin lista de precios en la moneda del plan, el precio de
-  // referencia es el del catálogo, en su propia moneda: no se resta del plan.
-  // B4 (DX-502): hasta que llega el precio resuelto no se sabe la moneda del
-  // catálogo: no se pinta ni la rebaja ni la variante «en otra moneda».
-  const catalogInOtherCurrency = quoteReady?.source === 'CATALOG' && catalogCurrency !== plan.currency;
+  // DX-513: por debajo de un catálogo en otra moneda (sin convertir) no hay
+  // rebaja, pero se dice cuál es la referencia y que no cuenta.
+  const addBelowOtherCurrency =
+    catalogInOtherCurrency &&
+    addEffective !== null &&
+    addPrice !== null &&
+    addCatalogPrice !== null &&
+    addPrice < addCatalogPrice;
   const addDiscounted = addEffective ? addEffective.total > 0 : addDiscountValue > 0;
   const addReasonRequired =
     discountRules !== null &&
@@ -325,7 +337,7 @@ export function PlanItemForm({
               [
                 itemAmountErrors.price ? fieldErrorId('tp-price') : null,
                 quoteReady && priceQuote.status === 'ready' ? 'tp-price-source' : null,
-                addBelowCatalog ? 'tp-price-below-catalog' : null,
+                addBelowCatalog || addBelowOtherCurrency ? 'tp-price-below-catalog' : null,
               ]
                 .filter(Boolean)
                 .join(' ') || undefined
@@ -346,24 +358,28 @@ export function PlanItemForm({
             />
           ) : null}
           {/* SEC-041: aviso, no bloqueo; la API decide con el
-              tope del rol. */}
+              tope del rol. DX-513: frente a un catálogo en otra
+              moneda no hay rebaja; una nota neutra dice la
+              referencia y que no cuenta. */}
           <p id="tp-price-below-catalog" role="status" className="t-caption text-warning-text">
             {addBelowCatalog && addEffective && addCatalogPrice !== null ? (
               <>
                 <span className="block font-medium">{PRICE_BELOW_CATALOG_NOTICE}</span>
                 {quoteReady ? (
                   <span className="block">
-                    {catalogInOtherCurrency
-                      ? copy.priceBelowCatalogOtherCurrency(
-                          formatListPrice(addCatalogPrice, catalogCurrency, sedeListPriceFormat(fmt)),
-                        )
-                      : copy.priceBelowCatalogDetail(
-                          sedeMoney(addEffective.priceReduction, plan.currency, fmt),
-                          sedeMoney(addCatalogPrice, plan.currency, fmt),
-                        )}
+                    {copy.priceBelowCatalogDetail(
+                      sedeMoney(addEffective.priceReduction, plan.currency, fmt),
+                      sedeMoney(addCatalogPrice, plan.currency, fmt),
+                    )}
                   </span>
                 ) : null}
               </>
+            ) : addBelowOtherCurrency && addCatalogPrice !== null ? (
+              <span className="block text-muted">
+                {copy.priceBelowCatalogOtherCurrency(
+                  formatListPrice(addCatalogPrice, catalogCurrency, sedeListPriceFormat(fmt)),
+                )}
+              </span>
             ) : null}
           </p>
         </FormField>

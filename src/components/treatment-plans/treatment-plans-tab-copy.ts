@@ -154,11 +154,12 @@ export const copy = {
   itemDiscount: (amount: string) => `Descuento −${amount}`,
   // SEC-041: el precio por debajo del de catálogo cuenta como descuento.
   itemPriceReduction: (amount: string, catalog: string) => `Rebaja −${amount} (catálogo ${catalog})`,
-  // DX-502: `null` = la moneda del catálogo no se sabe: sin cifra.
+  // DX-502: `null` = la moneda del catálogo no se sabe: sin cifra. DX-513: en
+  // otra moneda (o sin saberla) bajar de él no es un descuento.
   priceBelowCatalogOtherCurrency: (catalog: string | null) =>
     catalog === null
-      ? 'Precio de catálogo en una moneda que no se sabe, sin convertir. Se compara con el tope de tu rol y sale en el informe de descuentos.'
-      : `Precio de catálogo: ${catalog}, en otra moneda y sin convertir. Se compara con el tope de tu rol y sale en el informe de descuentos.`,
+      ? 'Precio de catálogo en una moneda que no se sabe, sin convertir. No cuenta como descuento: ni pide motivo ni sale en el informe de descuentos.'
+      : `Precio de catálogo: ${catalog}, en otra moneda y sin convertir. No cuenta como descuento: ni pide motivo ni sale en el informe de descuentos.`,
   priceBelowCatalogDetail: (reduction: string, catalog: string) =>
     `Rebaja de ${reduction} sobre ${catalog}. Se compara con el tope de tu rol y sale en el informe de descuentos.`,
   // DX-204: motivo del descuento y «Descuento %» sobre varios ítems.

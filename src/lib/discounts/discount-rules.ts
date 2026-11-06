@@ -94,6 +94,36 @@ export function effectiveDiscount(
   };
 }
 
+/**
+ * DX-513: ¿la referencia de la rebaja (`catalogPrice`, el precio resuelto) está
+ * en la moneda del plan? Si salió de una lista (de la sede o del convenio), sí:
+ * la API solo toma listas en esa moneda. Si salió del catálogo (o de un % sobre
+ * él, o es anterior a DX-105), está en la moneda del catálogo (`catalogCurrency`,
+ * DX-502), que puede ser otra o no saberse. Espejo de `referenceCurrency` de la
+ * API (`effective-discount.ts`).
+ */
+export function referenceInPlanCurrency(
+  source: string | null | undefined,
+  catalogCurrency: string | null | undefined,
+  planCurrency: string,
+): boolean {
+  if (source === 'PRICE_LIST' || source === 'AGREEMENT_PRICE_LIST') return true;
+  return catalogCurrency != null && catalogCurrency === planCurrency;
+}
+
+/**
+ * DX-513: la referencia con la que se mide la rebaja de precio, o `null`. En
+ * otra moneda, o en una que no se sabe, bajar de ella no es un descuento: ni
+ * pide motivo ni consume el tope; solo cuenta el descuento del ítem.
+ */
+export function discountReference(
+  item: { catalogPrice: number | null | undefined; catalogCurrency?: string | null; priceSource?: string | null },
+  planCurrency: string,
+): number | null {
+  if (item.catalogPrice == null) return null;
+  return referenceInPlanCurrency(item.priceSource, item.catalogCurrency, planCurrency) ? item.catalogPrice : null;
+}
+
 /** Texto cuando la prestación no admite descuentos (DX-105). */
 export const NO_DISCOUNT_ALLOWED_NOTICE = 'Esta prestación no admite descuentos.';
 

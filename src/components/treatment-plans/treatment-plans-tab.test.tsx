@@ -2545,8 +2545,112 @@ describe('TreatmentPlansTab', () => {
         ).toBeInTheDocument();
       });
 
+      // DX-513: una rebaja frente a un catálogo en otra moneda (o en una que
+      // no se sabe) no es un descuento: ni pide motivo ni topa el rol. El
+      // plan de estos tests está en USD; el catálogo, en VES (3.600,00).
+      describe('DX-513: catálogo en otra moneda', () => {
+        const assistantToken = `h.${btoa(JSON.stringify({ sub: 'u3', tenantId: 't1', role: 'ASSISTANT' }))}.s`;
+        const vesQuote = (overrides: Partial<PriceQuote> = {}) =>
+          quoteOf('cat-1', { basePrice: 3600, price: 3600, catalogCurrency: 'VES', ...overrides }, 'USD');
+
+        it('plan en USD con el catálogo en VES: ni motivo ni tope; dice la referencia en VES y que no cuenta', async () => {
+          mockedGetPriceQuote.mockResolvedValue(vesQuote());
+          mockedAddItem.mockResolvedValue({ ...item1, id: 'item-3' });
+          const user = await openForm(assistantToken);
+          await typePrice(user, '80');
+          expect(
+            screen.queryByText('Precio por debajo del de catálogo: cuenta como descuento.'),
+          ).not.toBeInTheDocument();
+          expect(screen.queryByLabelText(/motivo del descuento/i)).not.toBeInTheDocument();
+          const note = document.getElementById('tp-price-below-catalog');
+          expect(note).toHaveTextContent(
+            'Precio de catálogo: VES 3.600,00, en otra moneda y sin convertir. No cuenta como descuento: ni pide motivo ni sale en el informe de descuentos.',
+          );
+          expect(note).not.toHaveTextContent(/Rebaja de|tope de tu rol|USD 3\.600/);
+          const price = screen.getByLabelText('Precio', { exact: true });
+          expect(price.getAttribute('aria-describedby')?.split(' ')).toContain('tp-price-below-catalog');
+          await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
+          await waitFor(() =>
+            expect(mockedAddItem).toHaveBeenCalledWith(assistantToken, 'plan-1', {
+              toothNumber: '16',
+              catalogItemId: 'cat-1',
+              price: 80,
+            }),
+          );
+          expect(screen.queryByText(/Tu rol permite hasta/)).not.toBeInTheDocument();
+        });
+
+        it('el descuento propio sigue contando (en USD): la asistente no puede darlo', async () => {
+          mockedGetPriceQuote.mockResolvedValue(vesQuote());
+          const user = await openForm(assistantToken);
+          await typePrice(user, '80');
+          await user.type(screen.getByLabelText('Descuento (opcional)', { exact: true }), '1');
+          await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
+          expect(
+            await screen.findByText('Tu rol permite hasta un 0 % de descuento por ítem.'),
+          ).toBeInTheDocument();
+          expect(mockedAddItem).not.toHaveBeenCalled();
+        });
+
+        it('convenio por % sobre el catálogo en VES: tampoco es un descuento en USD', async () => {
+          mockedGetPriceQuote.mockResolvedValue(
+            vesQuote({ price: 3240, source: 'AGREEMENT_PERCENT', agreementId: 'ag-1', agreementName: 'Seguros Sol' }),
+          );
+          const user = await openForm(discountAdminToken);
+          await typePrice(user, '80');
+          expect(screen.queryByLabelText(/motivo del descuento/i)).not.toBeInTheDocument();
+          expect(
+            screen.queryByText('Precio por debajo del de catálogo: cuenta como descuento.'),
+          ).not.toBeInTheDocument();
+        });
+
+        it('lista de la sede en USD con el catálogo en VES: la rebaja frente a la lista sí cuenta (misma moneda)', async () => {
+          mockedGetPriceQuote.mockResolvedValue(vesQuote({ price: 100, source: 'PRICE_LIST' }));
+          const user = await openForm(discountAdminToken);
+          await typePrice(user, '80');
+          expect(screen.getByText('Precio por debajo del de catálogo: cuenta como descuento.')).toBeInTheDocument();
+          expect(screen.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeInTheDocument();
+        });
+
+        it('catalogCurrency NULL: como moneda distinta, sin cifra y sin motivo', async () => {
+          mockedGetPriceQuote.mockResolvedValue(vesQuote({ catalogCurrency: null }));
+          const user = await openForm(assistantToken);
+          await typePrice(user, '1');
+          expect(screen.queryByLabelText(/motivo del descuento/i)).not.toBeInTheDocument();
+          const note = document.getElementById('tp-price-below-catalog');
+          expect(note).toHaveTextContent(
+            'Precio de catálogo en una moneda que no se sabe, sin convertir. No cuenta como descuento: ni pide motivo ni sale en el informe de descuentos.',
+          );
+          expect(note).not.toHaveTextContent(/3\.600/);
+        });
+
+        it('frontera: al precio de catálogo, ni aviso ni nota', async () => {
+          mockedGetPriceQuote.mockResolvedValue(vesQuote());
+          const user = await openForm(assistantToken);
+          await typePrice(user, '3600');
+          expect(document.getElementById('tp-price-below-catalog')).toBeEmptyDOMElement();
+        });
+
+        it('en la tabla, un ítem en USD con el catálogo en VES no pinta «Rebaja»', async () => {
+          const crossCurrency = {
+            ...item1,
+            price: 80,
+            catalogPrice: 3600,
+            basePrice: 3600,
+            catalogCurrency: 'VES',
+            priceSource: 'CATALOG' as const,
+          };
+          mockedListPlans.mockResolvedValue([plan1]);
+          mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [crossCurrency, item2] });
+          render(<TreatmentPlansTab patientId="pat-1" token={discountAdminToken} />);
+          const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+          expect(table).not.toHaveTextContent(/Rebaja −/);
+        });
+      });
+
       it('el ítem con el precio rebajado muestra el de catálogo y la rebaja', async () => {
-        const reduced = { ...item1, catalogPrice: 60000, discountReason: 'LOYALTY' as const };
+        // DX-513: la rebaja solo se pinta con el catálogo en la moneda del plan.
+        const reduced = { ...item1, catalogPrice: 60000, catalogCurrency: 'USD', discountReason: 'LOYALTY' as const };
         mockedListPlans.mockResolvedValue([plan1]);
         mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [reduced, item2] });
         render(<TreatmentPlansTab patientId="pat-1" token={discountAdminToken} />);
@@ -2728,7 +2832,9 @@ describe('TreatmentPlansTab', () => {
     });
 
     it('una prestación sin descuentos bloquea el campo de descuento y rechaza un precio por debajo', async () => {
-      mockedGetPriceQuote.mockResolvedValue(agreementQuote({ allowDiscount: false }));
+      // DX-513: el catálogo en la moneda del plan; en otra, bajar de él no es
+      // un descuento (como en la API).
+      mockedGetPriceQuote.mockResolvedValue(agreementQuote({ allowDiscount: false, catalogCurrency: 'USD' }));
       const user = await openForm();
       await user.click(screen.getByRole('radio', { name: /resina/i }));
       const price = screen.getByLabelText<HTMLInputElement>(/^precio$/i);
