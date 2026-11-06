@@ -2602,6 +2602,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment/maintenance-due": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mantenimientos de equipos vencidos o por vencer («Mi día»)
+         * @description DX-543: equipos ACTIVOS con el próximo preventivo vencido (OVERDUE) o que vence hoy o en los próximos 30 días (DUE_SOON), contados en el día de la sede de cada equipo, con la misma regla que `nextMaintenanceOn`/`maintenanceStatus` de la lista. Fuera: al día, sin programar y dados de baja. En la sede activa (`X-Location-Id`); sin ella, las sedes permitidas al usuario (vista consolidada). De lo más urgente a lo menos. Solo ADMIN.
+         */
+        get: operations["EquipmentController_listMaintenanceDue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment/{id}": {
         parameters: {
             query?: never;
@@ -12088,6 +12108,48 @@ export interface components {
             total: number;
             page: number;
             pageSize: number;
+        };
+        /**
+         * @description OVERDUE: la fecha ya pasó en el día de la sede. DUE_SOON: es hoy o en los próximos 30 días.
+         * @enum {string}
+         */
+        EquipmentMaintenanceDueStatus: "OVERDUE" | "DUE_SOON";
+        EquipmentMaintenanceDueItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Unidad dental Sillón 1 */
+            name: string;
+            category: components["schemas"]["EquipmentCategory"];
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            /** Format: uuid */
+            chairId: string | null;
+            chairName: string | null;
+            /**
+             * Format: date
+             * @description Día del próximo preventivo en la sede del equipo (la misma regla que `nextMaintenanceOn` de la lista).
+             * @example 2026-11-06
+             */
+            nextMaintenanceOn: string;
+            /** @description OVERDUE: la fecha ya pasó en el día de la sede. DUE_SOON: es hoy o en los próximos 30 días. */
+            maintenanceStatus: components["schemas"]["EquipmentMaintenanceDueStatus"];
+            /**
+             * @description Días de la sede hasta esa fecha: 0 = hoy, negativo = días de retraso.
+             * @example -31
+             */
+            daysUntilDue: number;
+        };
+        EquipmentMaintenanceDueResponseDto: {
+            /**
+             * Format: date-time
+             * @description Instante del cálculo.
+             */
+            generatedAt: string;
+            /** @description Los primeros `limit` avisos, de lo más urgente a lo menos (fecha más antigua primero; a igual fecha, sede, nombre e id). */
+            items: components["schemas"]["EquipmentMaintenanceDueItemDto"][];
+            /** @description Todos los avisos del alcance (vencidos + vencen pronto). */
+            total: number;
         };
         /** @enum {string} */
         EquipmentMaintenanceKind: "PREVENTIVE" | "CORRECTIVE" | "CALIBRATION";
@@ -27648,6 +27710,45 @@ export interface operations {
             };
             /** @description Sede o sillón no encontrados en esta clínica */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    EquipmentController_listMaintenanceDue: {
+        parameters: {
+            query?: {
+                /** @description Cuántos avisos devolver (el total los cuenta todos). */
+                limit?: number;
+            };
+            header?: {
+                /** @description Sede activa; sin ella, las sedes permitidas al usuario (vista consolidada) */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipmentMaintenanceDueResponseDto"];
+                };
+            };
+            /** @description Límite inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los equipos biomédicos. (o sede no permitida) */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
