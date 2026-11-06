@@ -4,7 +4,12 @@ import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeMoney } from '@/lib/format/sede-number';
 import type { DentalCatalogItem } from '@/lib/odontogram/catalog-api';
 import type { PlanItemBalance } from '@/lib/payments/payments-api';
-import { DISCOUNT_REASON_LABELS, effectiveDiscount, type DiscountReasonCode } from '@/lib/discounts/discount-rules';
+import {
+  DISCOUNT_REASON_LABELS,
+  discountReference,
+  effectiveDiscount,
+  type DiscountReasonCode,
+} from '@/lib/discounts/discount-rules';
 import { ITEM_STATUS_LABELS } from '@/lib/treatment-plans/item-status';
 import { attributionText } from '@/lib/treatment-plans/item-attribution';
 import type { SedePainters } from '@/lib/locations/sede-stamp';
@@ -192,14 +197,19 @@ function FeeItemLine({
 /** Línea del descuento de un ítem: importe y, si lo tiene, su motivo. */
 function ItemDiscountLine({
   item,
+  currency,
   money,
   listPrice,
 }: {
   item: TreatmentPlanItem;
+  /** Moneda del plan: la rebaja solo se mide en ella (DX-513). */
+  currency: string;
   money: (amount: number) => string;
   listPrice: ListPriceText;
 }) {
-  const { priceReduction } = effectiveDiscount(item.catalogPrice, item.price, item.discount);
+  // DX-513: frente a un catálogo en otra moneda (o en una que no se sabe) no
+  // hay rebaja que pintar, como en la API.
+  const { priceReduction } = effectiveDiscount(discountReference(item, currency), item.price, item.discount);
   const origin = itemPriceOriginText(item, listPrice);
   if (item.discount <= 0 && priceReduction <= 0 && !origin) return null;
   const reason = item.discountReason as DiscountReasonCode | null;
@@ -401,7 +411,7 @@ export function ItemsTable({
                   <TableCell className="text-muted">{surfacesLabel(item)}</TableCell>
                   <TableCell className="tabular-nums">
                     {money(item.price)}
-                    <ItemDiscountLine item={item} money={money} listPrice={listPriceOf(item)} />
+                    <ItemDiscountLine item={item} currency={currency} money={money} listPrice={listPriceOf(item)} />
                   </TableCell>
                   {itemBalances ? <ItemPaidCell item={itemBalances.get(item.id)} currency={currency} fmt={fmt} /> : null}
                   <TableCell>
@@ -494,7 +504,7 @@ export function ItemsTable({
               <p className="mt-1 text-sm text-muted">{surfacesLabel(item)}</p>
               <p className="mt-1 font-medium text-ink tabular-nums">
                 {money(item.price)}
-                <ItemDiscountLine item={item} money={money} listPrice={listPriceOf(item)} />
+                <ItemDiscountLine item={item} currency={currency} money={money} listPrice={listPriceOf(item)} />
               </p>
               {itemBalances?.has(item.id) ? (
                 <div className="mt-1">

@@ -11,6 +11,8 @@ import {
   PRICE_BELOW_CATALOG_NOTICE,
   effectiveDiscount,
   priceBelowCatalogCapMessage,
+  discountReference,
+  referenceInOtherCurrency,
   type DiscountRules,
 } from './discount-rules';
 import * as discountRules from './discount-rules';
@@ -171,5 +173,46 @@ describe('decimales por moneda sin lista en la web (GLOBAL-G1 R7, DX-340)', () =
     // At 7%, the maximum 8.6415 truncates to 8 RSD (8.64 in cents).
     expect(discountForPercent(123.45, 7.5, rsd, 7)).toBe(8);
     expect(discountForPercent(123.45, 7.5, eur, 7)).toBe(8.64);
+  });
+});
+
+// DX-513: la rebaja no se mide frente a una referencia en otra moneda CONOCIDA
+// (espejo de `referenceInOtherCurrency` de la API); con la moneda desconocida
+// cuenta como hoy. Plan en USD o VES; catálogo en VES.
+describe('discountReference (DX-513)', () => {
+  const catalogItem = (catalogCurrency: string | null) => ({
+    catalogPrice: 3600,
+    catalogCurrency,
+    priceSource: 'CATALOG',
+  });
+
+  it('plan en VES con el catálogo en VES: la referencia de siempre', () => {
+    expect(discountReference(catalogItem('VES'), 'VES')).toBe(3600);
+  });
+
+  it('plan en USD con el catálogo en VES: sin referencia; catalogCurrency NULL: la de siempre', () => {
+    expect(discountReference(catalogItem('VES'), 'USD')).toBeNull();
+    expect(discountReference(catalogItem(null), 'USD')).toBe(3600);
+    expect(effectiveDiscount(discountReference(catalogItem('VES'), 'USD'), 80, 0).total).toBe(0);
+  });
+
+  it('una lista (de la sede o del convenio) está en la moneda del plan aunque el catálogo no', () => {
+    for (const source of ['PRICE_LIST', 'AGREEMENT_PRICE_LIST']) {
+      expect(referenceInOtherCurrency(source, 'VES', 'USD')).toBe(false);
+      expect(referenceInOtherCurrency(source, null, 'USD')).toBe(false);
+    }
+    expect(referenceInOtherCurrency('AGREEMENT_PERCENT', 'VES', 'USD')).toBe(true);
+    expect(referenceInOtherCurrency(null, 'VES', 'VES')).toBe(false);
+    expect(referenceInOtherCurrency(undefined, undefined, 'VES')).toBe(false);
+  });
+
+  it('frontera: al precio de catálogo no hay rebaja; un céntimo por debajo, en la misma moneda, sí', () => {
+    const ref = discountReference(catalogItem('VES'), 'VES');
+    expect(effectiveDiscount(ref, 3600, 0).total).toBe(0);
+    expect(effectiveDiscount(ref, 3599.99, 0).priceReduction).toBe(0.01);
+  });
+
+  it('un ítem libre no tiene referencia', () => {
+    expect(discountReference({ catalogPrice: null, catalogCurrency: 'VES', priceSource: null }, 'VES')).toBeNull();
   });
 });

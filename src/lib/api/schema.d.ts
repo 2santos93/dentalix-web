@@ -13297,7 +13297,7 @@ export interface components {
             surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             /** Format: uuid */
             catalogItemId: string;
-            /** @description Precio explícito (máx. 2 decimales). Si se omite, la API lo resuelve (DX-105): convenio vigente del paciente → lista de precios activa de la sede → precio de catálogo; sin ninguno, 400. El resuelto queda como referencia (`catalogPrice`): un precio por debajo cuenta como descuento (tope del rol y motivo de la política) y, si la prestación no admite descuentos, 400 */
+            /** @description Precio explícito (máx. 2 decimales). Si se omite, la API lo resuelve (DX-105): convenio vigente del paciente → lista de precios activa de la sede → precio de catálogo; sin ninguno, 400. El resuelto queda como referencia (`catalogPrice`): un precio por debajo cuenta como descuento (tope del rol y motivo de la política) y, si la prestación no admite descuentos, 400. DX-513: no cuenta si la referencia es el precio de catálogo en otra moneda conocida (`catalogCurrency` distinta de la del plan, sin convertir); con la moneda del catálogo desconocida, sí */
             price?: number;
             /** @description Descuento en la moneda del plan (máx. 2 decimales, default 0); nunca mayor que el precio (400). DX-204: por encima del tope del rol, 403; en un plan aceptado, 409 */
             discount?: number;
@@ -13642,7 +13642,7 @@ export interface components {
             catalogPrice: number | null;
             /** @description Precio pactado del ítem */
             price: number;
-            /** @description SEC-041: rebaja del precio frente al de catálogo (0 si no la hay) */
+            /** @description SEC-041: rebaja del precio frente al de catálogo (0 si no la hay). DX-513: 0 también si la referencia está en otra moneda conocida (el catálogo en una moneda distinta de la del plan, sin convertir); con la moneda del catálogo desconocida cuenta */
             priceReduction: number;
             /** @description Descuento del ítem (campo `discount`) */
             itemDiscount: number;
@@ -29078,15 +29078,22 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description status ACCEPTED: solo DENTIST y ADMIN (la asistente no acepta en nombre del doctor) */
+            /** @description status ACCEPTED: solo DENTIST y ADMIN (la asistente no acepta en nombre del doctor). DX-513: al cambiar la moneda, un ítem cuya rebaja frente al catálogo pasaría a contar como descuento supera el tope del rol de quien la cambia (mismo mensaje que el alta) */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED); plan aceptado con firma: no cambia de moneda ni vuelve atrás (DX-012); otra opción del grupo ya aceptada; la moneda no cambia si el plan tiene abonos vivos, un plan de cuotas activo o está cerrado (DX-109), ni si tiene asientos de saldo a favor (traspaso dado o recibido, o devolución), aunque no tenga abonos: code PLAN_CURRENCY_LOCKED_BY_CREDIT (DX-438). SEC-050: el plan que lleva un cargo vigente por inasistencia no se cancela ni cambia de moneda (completarlo sí). Aceptar pasa los ítems propuestos a aceptados, igual que la aceptación firmada, y cancela el plan de cuotas activo de las hermanas que rechaza; cancelar cancela también el plan de cuotas activo */
+            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED); DX-513: la moneda no cambia si con ella un ítem pasaría a contar como descuento sin firmar, o si una rebaja frente al catálogo que cuenta hoy dejaría de verse en el informe de descuentos (nada cambia: ni el plan ni sus ítems); plan aceptado con firma: no cambia de moneda ni vuelve atrás (DX-012); otra opción del grupo ya aceptada; la moneda no cambia si el plan tiene abonos vivos, un plan de cuotas activo o está cerrado (DX-109), ni si tiene asientos de saldo a favor (traspaso dado o recibido, o devolución), aunque no tenga abonos: code PLAN_CURRENCY_LOCKED_BY_CREDIT (DX-438). SEC-050: el plan que lleva un cargo vigente por inasistencia no se cancela ni cambia de moneda (completarlo sí). Aceptar pasa los ítems propuestos a aceptados, igual que la aceptación firmada, y cancela el plan de cuotas activo de las hermanas que rechaza; cancelar cancela también el plan de cuotas activo */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description DX-513: al cambiar la moneda, un ítem cuya rebaja frente al catálogo pasaría a contar como descuento supera el umbral del motivo y no lo tiene (mismo mensaje que el alta) */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
