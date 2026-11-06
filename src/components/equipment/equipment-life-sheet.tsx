@@ -37,7 +37,6 @@ export const lifeSheetCopy = {
   cost: 'Costo',
   nextDue: 'Dejó programado el próximo',
   recordedBy: (name: string, when: string) => `Registrado por ${name} el ${when}`,
-  voided: 'ANULADO',
   voidedNote: (when: string, reason: string) => `Anulado el ${when}: ${reason}`,
   none: '—',
 };
@@ -165,11 +164,8 @@ export function EquipmentLifeSheet({ equipment, stamp, maintenanceActions }: Equ
                       <span className="tabular-nums">{day(m.performedOn)}</span> · {MAINTENANCE_KIND_LABELS[m.kind]}
                     </p>
                     <div className="flex items-center gap-2">
-                      {voided ? (
-                        <span className="rounded-full border border-danger px-2 text-xs font-semibold text-danger-text">
-                          {copy.voided}
-                        </span>
-                      ) : null}
+                      {/* DX-546 · FE-115: «Anulado» es neutro (registro retirado, no un error). */}
+                      {voided ? <StatusBadge kind="clinicalRecord" status="VOIDED" /> : null}
                       {maintenanceActions?.(m)}
                     </div>
                   </div>
