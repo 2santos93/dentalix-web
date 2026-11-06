@@ -264,11 +264,14 @@ function moveQaAppointmentToToday(id: string, start: Date, end: Date): void {
   ]);
 }
 
-test('DX-546 · FE-109: en una tableta táctil (1024 px, columnas por defecto) el paso del flujo tiene 44 px de zona táctil', async ({
+test('DX-546 · FE-109: en una tableta táctil (1180 px apaisada, columnas por defecto) el paso del flujo tiene 44 px de zona táctil', async ({
   browser,
 }) => {
+  // Una tableta de recepción apaisada (iPad Air, 1180 × 820). Con tres
+  // columnas, a 1024 px la tarjeta no llega a los 224 px con los que enseña el
+  // paso junto a la alerta médica (DX-237): ahí solo está en el detalle.
   const tablet = await browser.newPage({
-    viewport: { width: 1024, height: 768 },
+    viewport: { width: 1180, height: 820 },
     hasTouch: true,
     isMobile: true,
     timezoneId: ZONE,
@@ -299,11 +302,16 @@ test('DX-546 · FE-109: en una tableta táctil (1024 px, columnas por defecto) e
   expect(zone.position).toBe('absolute');
   expect(zone.height).toBeGreaterThanOrEqual(44);
   expect(zone.width).toBeGreaterThanOrEqual(44);
-  // Un toque en el borde de la zona ampliada cae en el botón, no en la tarjeta.
+  // Un toque en la zona ampliada, a 6 px del icono (fuera de sus 28 px), cae
+  // en el botón y no en la tarjeta (que abriría la ficha de la cita).
+  await arrive.scrollIntoViewIfNeeded();
   const box = (await arrive.boundingBox())!;
   const hit = await tablet.evaluate(
-    ({ x, y }) => (document.elementFromPoint(x, y) as HTMLElement | null)?.getAttribute('aria-label') ?? '',
-    { x: box.x + box.width / 2, y: box.y - 6 },
+    ({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      return el?.closest('button')?.getAttribute('aria-label') ?? el?.outerHTML.slice(0, 120) ?? 'nada';
+    },
+    { x: box.x - 6, y: box.y + box.height / 2 },
   );
   expect(hit).toBe(`Llegó: ${carla}`);
   await tablet.close();
