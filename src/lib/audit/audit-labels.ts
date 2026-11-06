@@ -240,6 +240,20 @@ export function anamnesisDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && ANAMNESIS_REASONS[metadata.reason]) ?? null;
 }
 
+const PRESCRIPTION_VERIFICATION_REASONS: Record<string, string> = {
+  PRESCRIPTION_VERIFIED: 'Verificada con su código en la página pública: válida',
+  PRESCRIPTION_VERIFIED_VOIDED: 'Verificada con su código en la página pública: anulada',
+  PRESCRIPTION_INTEGRITY_MISMATCH: 'Verificación pública: la huella no coincide (no se pudo verificar)',
+};
+
+/**
+ * DX-467: un tercero (la farmacia) comprobó la receta con su código en la
+ * página pública; qué vio, o null si el evento no es de eso.
+ */
+export function prescriptionVerificationDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && PRESCRIPTION_VERIFICATION_REASONS[metadata.reason]) ?? null;
+}
+
 const SIGNATURE_REASONS: Record<string, string> = {
   SIGNATURE_REQUEST_SENT: 'Enviado a firmar a distancia',
   SIGNATURE_REQUEST_REVOKED: 'Enlace de firma anulado',

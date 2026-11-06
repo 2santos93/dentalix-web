@@ -44,6 +44,7 @@ import {
   importBatchDetail,
   planItemAttributionDetail,
   anamnesisDetail,
+  prescriptionVerificationDetail,
   signatureRequestDetail,
 } from '@/lib/audit/audit-labels';
 import { configChangeItems, type ConfigChangeItem } from '@/lib/audit/config-change';
@@ -106,6 +107,8 @@ const copy = {
   unknownActor: 'Usuario no identificado',
   // DX-128: la baja de recordatorios por enlace o mensaje la hace el paciente.
   patientActor: 'El propio paciente',
+  // DX-467: un tercero (la farmacia) verifica la receta en la página pública.
+  publicVerifier: 'Verificación pública (sin sesión)',
   formerMember: 'Usuario retirado',
   // Sin "Intenta de nuevo.": alimenta AsyncSection -> SectionError, que trae su botón.
   loadError: 'No pudimos cargar la auditoría.',
@@ -572,12 +575,14 @@ function eventDetail(
     exchangeRateDetail(event.metadata, clock?.fmt ?? null) ??
     paymentAllocationDetail(event.metadata, clock?.fmt ?? null) ??
     anamnesisDetail(event.metadata) ??
-    signatureRequestDetail(event.metadata)
+    signatureRequestDetail(event.metadata) ??
+    prescriptionVerificationDetail(event.metadata)
   );
 }
 
 function actorName(event: AuditEvent): string {
   if (event.actor) return event.actor.fullName ?? copy.formerMember;
+  if (prescriptionVerificationDetail(event.metadata)) return copy.publicVerifier;
   return isPatientOptOut(event.metadata) ? copy.patientActor : copy.unknownActor;
 }
 

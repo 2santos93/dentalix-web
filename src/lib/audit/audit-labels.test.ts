@@ -14,6 +14,7 @@ import {
   AUDIT_RESOURCE_OPTIONS,
   actorRoleLabel,
   communicationDetail,
+  prescriptionVerificationDetail,
   implantSearchDetail,
   isPatientOptOut,
   staffLoginDetail,
@@ -113,6 +114,22 @@ describe('etiquetas de auditoría', () => {
   it('reconoce la baja que hizo el propio paciente', () => {
     expect(isPatientOptOut({ reason: 'REMINDER_OPT_OUT', origin: 'LINK' })).toBe(true);
     expect(isPatientOptOut({ reason: 'COMMUNICATION_PREFERENCES_CHANGED' })).toBe(false);
+  });
+});
+
+describe('prescriptionVerificationDetail (DX-467)', () => {
+  it('dice qué vio quien verificó la receta en la página pública', () => {
+    expect(prescriptionVerificationDetail({ reason: 'PRESCRIPTION_VERIFIED', origin: 'PUBLIC_LINK' })).toBe(
+      'Verificada con su código en la página pública: válida',
+    );
+    expect(prescriptionVerificationDetail({ reason: 'PRESCRIPTION_VERIFIED_VOIDED', origin: 'PUBLIC_LINK' })).toBe(
+      'Verificada con su código en la página pública: anulada',
+    );
+    expect(prescriptionVerificationDetail({ reason: 'PRESCRIPTION_INTEGRITY_MISMATCH', origin: 'PUBLIC_LINK' })).toBe(
+      'Verificación pública: la huella no coincide (no se pudo verificar)',
+    );
+    expect(prescriptionVerificationDetail({ reason: 'PRESCRIPTION_SAFETY_CHECK' })).toBeNull();
+    expect(prescriptionVerificationDetail({})).toBeNull();
   });
 });
 
