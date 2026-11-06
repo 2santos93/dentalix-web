@@ -29,6 +29,11 @@ interface FormModalProps {
   /** Independent of `submitting` — e.g. required fields missing. */
   submitDisabled?: boolean;
   /**
+   * La acción espera algo que aún carga (p. ej. la lista de la salida): spinner
+   * y `aria-busy` en la primaria, desactivada; Cancelar sigue disponible.
+   */
+  submitBusy?: boolean;
+  /**
    * Explica junto a la acción qué falta para poder enviar. `null` = nada que
    * explicar ahora, pero el hueco se conserva; `undefined` = sin hueco.
    */
@@ -131,6 +136,7 @@ export function FormModal({
   cancelLabel = 'Cancelar',
   submitting = false,
   submitDisabled = false,
+  submitBusy = false,
   submitHint,
   hideSubmit = false,
   error,
@@ -242,7 +248,7 @@ export function FormModal({
                 <Button
                   type="submit"
                   variant={destructive ? 'destructive' : 'default'}
-                  loading={submitting}
+                  loading={submitting || submitBusy}
                   disabled={submitDisabled}
                   aria-describedby={submitHint ? submitHintId : undefined}
                 >

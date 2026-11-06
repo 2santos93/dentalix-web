@@ -16,6 +16,9 @@ export type EquipmentCategory = Schemas['EquipmentCategory'];
 export type EquipmentRiskClass = Schemas['EquipmentRiskClass'];
 export type MaintenanceKind = Schemas['EquipmentMaintenanceKind'];
 export type EquipmentStatusFilter = 'ACTIVE' | 'RETIRED' | 'ALL';
+// DX-543: los avisos de mantenimiento de «Mi día».
+export type MaintenanceDue = Schemas['EquipmentMaintenanceDueResponseDto'];
+export type MaintenanceDueItem = Schemas['EquipmentMaintenanceDueItemDto'];
 
 /** Equipos biomédicos: solo ADMIN los ve y los gestiona (como la API). */
 export function canManageEquipment(role: ClinicRole | null): boolean {
@@ -74,6 +77,16 @@ export async function listEquipment(token: string, params: ListEquipmentParams =
   if (params.pageSize) search.set('pageSize', String(params.pageSize));
   const qs = search.toString();
   return apiFetch<EquipmentList>(`/equipment${qs ? `?${qs}` : ''}`, { token });
+}
+
+/**
+ * DX-543 · `GET /equipment/maintenance-due`: los equipos con el preventivo
+ * vencido o que vence en ≤30 días, de lo más urgente a lo menos. La sede viaja
+ * en `X-Location-Id` (apiFetch, el selector global); sin ella, las permitidas.
+ */
+export async function getMaintenanceDue(token: string, params: { limit?: number } = {}): Promise<MaintenanceDue> {
+  const qs = params.limit ? `?limit=${params.limit}` : '';
+  return apiFetch<MaintenanceDue>(`/equipment/maintenance-due${qs}`, { token });
 }
 
 /** La hoja de vida: el equipo y sus mantenimientos en orden cronológico. */

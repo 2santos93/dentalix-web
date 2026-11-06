@@ -147,3 +147,18 @@ describe('FormModal touchTargets (DX-394)', () => {
     expect(screen.getByRole('dialog').className).not.toContain('min-h-11');
   });
 });
+
+describe('FormModal submitBusy', () => {
+  it('la acción queda ocupada y desactivada sin bloquear Cancelar', () => {
+    const props = { open: true, onOpenChange: jest.fn(), title: 'Salida', onSubmit: jest.fn() };
+    render(
+      <FormModal {...props} submitBusy submitLabel="Cargando…">
+        Campos
+      </FormModal>,
+    );
+    const submit = screen.getByRole('button', { name: 'Cargando…' });
+    expect(submit).toBeDisabled();
+    expect(submit).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeEnabled();
+  });
+});

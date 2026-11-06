@@ -25,6 +25,8 @@ import { withoutRateCopy } from '@/components/payments/without-rate-notice';
 import { getWorkQueuesSummary, type WorkQueueItem, type WorkQueueKey } from '@/lib/work-queues/work-queues-api';
 import { WorkQueuesProvider } from '@/components/work-queues/work-queues-context';
 import { getTokenRole } from '@/lib/auth/token-role';
+import { getMaintenanceDue } from '@/lib/equipment/equipment-api';
+import { maintenanceDueFixture } from '@/lib/test/equipment';
 
 // jest.mock no reescribe alias: rutas relativas (convención del repo).
 jest.mock('../../lib/dashboard/dashboard-api', () => ({ getDashboard: jest.fn() }));
@@ -36,6 +38,11 @@ jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn()
 jest.mock('../../lib/work-queues/work-queues-api', () => ({
   ...jest.requireActual('../../lib/work-queues/work-queues-api'),
   getWorkQueuesSummary: jest.fn(),
+}));
+// DX-543: los avisos de mantenimiento de equipos (solo ADMIN).
+jest.mock('../../lib/equipment/equipment-api', () => ({
+  ...jest.requireActual('../../lib/equipment/equipment-api'),
+  getMaintenanceDue: jest.fn(),
 }));
 jest.mock('../../lib/cash-sessions/cash-sessions-api', () => ({ getCurrentCashSession: jest.fn() }));
 jest.mock('../../lib/inventory/inventory-api', () => ({ listInventoryItems: jest.fn() }));
@@ -64,6 +71,7 @@ const m = {
   production: jest.mocked(getProductionByProcedure),
   receivables: jest.mocked(getReceivablesSummary),
   workQueues: jest.mocked(getWorkQueuesSummary),
+  equipmentDue: jest.mocked(getMaintenanceDue),
 };
 
 /** Lo que devuelve la API por rol (WORK_QUEUE_ROLES): la API reparte, la web pinta. */
@@ -291,6 +299,11 @@ beforeEach(() => {
   m.comparison.mockResolvedValue(comparison());
   m.workQueues.mockImplementation(async (token, keys) => queuesFor(token, keys));
   m.receivables.mockResolvedValue(receivables);
+  m.equipmentDue.mockResolvedValue({
+    generatedAt: FROZEN_NOW.toISOString(),
+    items: [maintenanceDueFixture({ id: 'eq-1', name: 'Unidad dental Sillón 1', chairName: 'Sillón 1' })],
+    total: 1,
+  });
   m.inventory.mockResolvedValue({
     items: [{ id: 'i1', name: 'Guantes de nitrilo', unit: 'caja', stock: 1, minStock: 5, lowStock: true }],
     total: 4,
@@ -410,6 +423,27 @@ describe('Inicio · ADMIN', () => {
     fail = false;
     await userEvent.click(within(pending).getByRole('button', { name: 'Reintentar' }));
     expect(await pendingValue('closing')).toHaveTextContent('3');
+  });
+
+  it('«Mantenimientos de equipos» en la columna de «Mi día», con enlace a la hoja de vida (DX-543)', async () => {
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const block = await screen.findByRole('region', { name: 'Mantenimientos de equipos' });
+    expect(
+      await within(block).findByRole('link', { name: 'Unidad dental Sillón 1 (hoja de vida)' }),
+    ).toHaveAttribute('href', '/settings/equipos/eq-1');
+    expect(within(block).getByText('Vencido')).toBeInTheDocument();
+  });
+
+  it('si fallan los avisos de equipos, solo ese bloque avisa: «Pendientes» y Hoy siguen (DX-543)', async () => {
+    m.equipmentDue.mockRejectedValue(new Error('network'));
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const block = await screen.findByRole('region', { name: 'Mantenimientos de equipos' });
+    expect(await within(block).findByRole('alert')).toHaveTextContent(
+      'No se pudieron cargar los mantenimientos de los equipos.',
+    );
+    expect(await pendingValue('closing')).toHaveTextContent('3');
+    const today = screen.getByRole('region', { name: 'Hoy' });
+    expect(within(today).queryByRole('alert')).toBeNull();
   });
 
   it('las listas a 0 se pliegan en «Al día» y se despliegan con teclado', async () => {
@@ -633,6 +667,8 @@ describe('Inicio · RECEPTION', () => {
     expect(m.getDashboard).not.toHaveBeenCalled();
     expect(m.comparison).not.toHaveBeenCalled();
     expect(m.inventory).not.toHaveBeenCalled();
+    expect(m.equipmentDue).not.toHaveBeenCalled();
+    expect(screen.queryByRole('region', { name: 'Mantenimientos de equipos' })).not.toBeInTheDocument();
   });
 });
 
@@ -647,7 +683,7 @@ describe('Inicio · DENTIST', () => {
     const production = await screen.findByTestId('production-VES');
     expect(production).toHaveTextContent('7 procedimientos');
     expect(m.production.mock.calls[0][1]).toEqual({ from: '2026-08-01', to: '2026-08-15' });
-    for (const fn of [m.getDashboard, m.comparison, m.receivables, m.cash, m.inventory, m.listStaff]) {
+    for (const fn of [m.getDashboard, m.comparison, m.receivables, m.cash, m.inventory, m.listStaff, m.equipmentDue]) {
       expect(fn).not.toHaveBeenCalled();
     }
   });
@@ -664,5 +700,6 @@ describe('Inicio · ASSISTANT', () => {
     expect(within(lowStock).getByText('Se muestran 1 de 4.')).toBeInTheDocument();
     expect(screen.queryByTestId('pending-closing')).not.toBeInTheDocument();
     expect(m.getDashboard).not.toHaveBeenCalled();
+    expect(m.equipmentDue).not.toHaveBeenCalled();
   });
 });

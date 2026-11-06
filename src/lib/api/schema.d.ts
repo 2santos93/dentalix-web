@@ -2602,6 +2602,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment/maintenance-due": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mantenimientos de equipos vencidos o por vencer («Mi día»)
+         * @description DX-543: equipos ACTIVOS con el próximo preventivo vencido (OVERDUE) o que vence hoy o en los próximos 30 días (DUE_SOON), contados en el día de la sede de cada equipo, con la misma regla que `nextMaintenanceOn`/`maintenanceStatus` de la lista. Fuera: al día, sin programar y dados de baja. En la sede activa (`X-Location-Id`); sin ella, las sedes permitidas al usuario (vista consolidada). De lo más urgente a lo menos. Solo ADMIN.
+         */
+        get: operations["EquipmentController_listMaintenanceDue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment/{id}": {
         parameters: {
             query?: never;
@@ -12088,6 +12108,48 @@ export interface components {
             total: number;
             page: number;
             pageSize: number;
+        };
+        /**
+         * @description OVERDUE: la fecha ya pasó en el día de la sede. DUE_SOON: es hoy o en los próximos 30 días.
+         * @enum {string}
+         */
+        EquipmentMaintenanceDueStatus: "OVERDUE" | "DUE_SOON";
+        EquipmentMaintenanceDueItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Unidad dental Sillón 1 */
+            name: string;
+            category: components["schemas"]["EquipmentCategory"];
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            /** Format: uuid */
+            chairId: string | null;
+            chairName: string | null;
+            /**
+             * Format: date
+             * @description Día del próximo preventivo en la sede del equipo (la misma regla que `nextMaintenanceOn` de la lista).
+             * @example 2026-11-06
+             */
+            nextMaintenanceOn: string;
+            /** @description OVERDUE: la fecha ya pasó en el día de la sede. DUE_SOON: es hoy o en los próximos 30 días. */
+            maintenanceStatus: components["schemas"]["EquipmentMaintenanceDueStatus"];
+            /**
+             * @description Días de la sede hasta esa fecha: 0 = hoy, negativo = días de retraso.
+             * @example -31
+             */
+            daysUntilDue: number;
+        };
+        EquipmentMaintenanceDueResponseDto: {
+            /**
+             * Format: date-time
+             * @description Instante del cálculo.
+             */
+            generatedAt: string;
+            /** @description Los primeros `limit` avisos, de lo más urgente a lo menos (fecha más antigua primero; a igual fecha, sede, nombre e id). */
+            items: components["schemas"]["EquipmentMaintenanceDueItemDto"][];
+            /** @description Todos los avisos del alcance (vencidos + vencen pronto). */
+            total: number;
         };
         /** @enum {string} */
         EquipmentMaintenanceKind: "PREVENTIVE" | "CORRECTIVE" | "CALIBRATION";
@@ -22168,6 +22230,13 @@ export interface operations {
                     "application/json": components["schemas"]["PatientDetailDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     PatientsController_archive: {
@@ -22228,6 +22297,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PatientDto"];
                 };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -23817,6 +23893,13 @@ export interface operations {
                     "application/json": components["schemas"]["DentalCatalogItemDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     LocationsController_list: {
@@ -23883,6 +23966,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LocationDto"];
                 };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -27655,6 +27745,45 @@ export interface operations {
             };
         };
     };
+    EquipmentController_listMaintenanceDue: {
+        parameters: {
+            query?: {
+                /** @description Cuántos avisos devolver (el total los cuenta todos). */
+                limit?: number;
+            };
+            header?: {
+                /** @description Sede activa; sin ella, las sedes permitidas al usuario (vista consolidada) */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipmentMaintenanceDueResponseDto"];
+                };
+            };
+            /** @description Límite inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los equipos biomédicos. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     EquipmentController_detail: {
         parameters: {
             query?: never;
@@ -30183,6 +30312,13 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentDto"][];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     PaymentsController_create: {
@@ -30209,7 +30345,7 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentDto"];
                 };
             };
-            /** @description DX-377: el medio pide referencia y no llegó, o el medio no es de la clínica o está desactivado. DX-075: `paidAt` como día civil posterior a hoy en la sede («La fecha del abono no puede ser posterior a hoy en la sede.»). DX-054: `paidAt` como instante a más de 24 h en el futuro («La fecha del abono no puede estar más de 24 horas en el futuro.»). */
+            /** @description Id que no es UUID. DX-377: el medio pide referencia y no llegó, o el medio no es de la clínica o está desactivado. DX-075: `paidAt` como día civil posterior a hoy en la sede («La fecha del abono no puede ser posterior a hoy en la sede.»). DX-054: `paidAt` como instante a más de 24 h en el futuro («La fecha del abono no puede estar más de 24 horas en el futuro.»). */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -30359,6 +30495,13 @@ export interface operations {
                     "application/json": components["schemas"]["PlanBalanceWithItemsDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     PaymentsController_updateExternalInvoiceNumber: {
@@ -30436,7 +30579,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Falta `reason` o no tiene 3–300 caracteres */
+            /** @description Id que no es UUID, o falta `reason` o no tiene 3–300 caracteres */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -30872,6 +31015,13 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentPlanDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     PaymentPlansController_create: {
@@ -30897,6 +31047,13 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentPlanDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description El plan ya tiene un plan de cuotas activo, o está rechazado o cancelado y no se financia (DX-109). */
             409: {
                 headers: {
@@ -30919,6 +31076,13 @@ export interface operations {
         responses: {
             /** @description Payment plan cancelled */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Id que no es UUID */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -33425,6 +33589,13 @@ export interface operations {
                     "application/json": components["schemas"]["InventoryItemDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     InventoryController_remove: {
@@ -33440,6 +33611,13 @@ export interface operations {
         responses: {
             /** @description Item soft-deleted (deletedAt set) */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Id que no es UUID */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -33470,6 +33648,13 @@ export interface operations {
                     "application/json": components["schemas"]["InventoryItemDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     InventoryController_listMovements: {
@@ -33490,6 +33675,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InventoryMovementDto"][];
                 };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -33515,6 +33707,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InventoryMovementDto"];
                 };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

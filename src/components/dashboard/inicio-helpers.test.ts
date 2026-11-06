@@ -35,6 +35,7 @@ describe('acceso por rol (copia de los @Roles de la API)', () => {
     ['closingQueue', ['ADMIN', 'DENTIST', 'RECEPTION']],
     ['lowStock', ['ADMIN', 'ASSISTANT']],
     ['myProduction', ['DENTIST']],
+    ['equipmentMaintenance', ['ADMIN']],
   ] as const)('%s → %j', (block, roles) => {
     for (const role of ['ADMIN', 'DENTIST', 'ASSISTANT', 'RECEPTION'] as const) {
       expect(canSeeBlock(block, role)).toBe((roles as readonly string[]).includes(role));

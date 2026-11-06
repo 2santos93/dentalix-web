@@ -80,4 +80,48 @@ describe('CheckoutDialog (DX-202)', () => {
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(screen.getByText(checkoutCopy.completeError)).toBeInTheDocument();
   });
+
+  describe('FE-108: no se completa sin la lista de comprobación', () => {
+    it('mientras carga, el botón está desactivado y ocupado, y no completa', async () => {
+      let resolve: (value: CheckoutChecklist) => void = () => {};
+      get.mockReturnValue(new Promise<CheckoutChecklist>((r) => (resolve = r)));
+      const { onComplete } = mount();
+      const button = screen.getByRole('button', { name: checkoutCopy.loading });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute('aria-busy', 'true');
+      expect(screen.queryByRole('button', { name: checkoutCopy.submit })).not.toBeInTheDocument();
+      // Ni con Intro desde el diálogo: el envío nativo del formulario tampoco completa.
+      fireEvent.submit(button.closest('form') as HTMLFormElement);
+      expect(onComplete).not.toHaveBeenCalled();
+      // Cancelar sigue disponible: la salida del diálogo no depende de la carga.
+      expect(screen.getByRole('button', { name: 'Cancelar' })).toBeEnabled();
+      resolve(list());
+      await userEvent.click(await screen.findByRole('button', { name: checkoutCopy.submitWithPending(3) }));
+      expect(onComplete).toHaveBeenCalledWith(['NEXT_VISIT', 'PAYMENT', 'EMAIL']);
+    });
+
+    it('si la carga falla, no hay botón de completar y «Reintentar» la vuelve a pedir', async () => {
+      get.mockRejectedValueOnce(new Error('red'));
+      const { onComplete } = mount();
+      expect(await screen.findByText(checkoutCopy.loadError)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Completar/ })).not.toBeInTheDocument();
+      fireEvent.submit(screen.getByRole('button', { name: 'Reintentar' }).closest('form') as HTMLFormElement);
+      expect(onComplete).not.toHaveBeenCalled();
+
+      get.mockResolvedValue(list());
+      await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+      await userEvent.click(await screen.findByRole('button', { name: checkoutCopy.submitWithPending(3) }));
+      expect(onComplete).toHaveBeenCalledWith(['NEXT_VISIT', 'PAYMENT', 'EMAIL']);
+    });
+
+    it('un reintento que vuelve a fallar sigue bloqueando', async () => {
+      get.mockRejectedValue(new Error('red'));
+      const { onComplete } = mount();
+      await userEvent.click(await screen.findByRole('button', { name: 'Reintentar' }));
+      expect(await screen.findByText(checkoutCopy.loadError)).toBeInTheDocument();
+      expect(get).toHaveBeenCalledTimes(2);
+      expect(screen.queryByRole('button', { name: /Completar/ })).not.toBeInTheDocument();
+      expect(onComplete).not.toHaveBeenCalled();
+    });
+  });
 });

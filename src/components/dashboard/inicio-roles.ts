@@ -38,6 +38,8 @@ const ACCESS = {
   periodResults: ['ADMIN'],
   /** Cartera por antigüedad en detalle: la mirada de gestión. Recepción ve la fila de pendientes. */
   aging: ['ADMIN'],
+  /** `GET /equipment/maintenance-due` (EQUIPMENT_ROLES, DX-543): los equipos son solo de ADMIN. */
+  equipmentMaintenance: ['ADMIN'],
   /** `GET /reports/production-by-procedure` (PRODUCTION_REPORT_ROLES), acotada al propio. */
   myProduction: ['DENTIST'],
 } as const satisfies Record<string, readonly ClinicRole[]>;
