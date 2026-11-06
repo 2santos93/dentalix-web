@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { test, expect } from './support/test';
 import { waitForHydratedForm, loginAs } from './support/auth';
 import { addStaffViaApi, registerClinicViaApi } from './support/api';
+import { passEnrollEmailCode } from './support/enroll-email-code';
+import { mailMark } from './support/mail';
 import { expectNoHorizontalScroll } from './support/layout';
 import { shot } from './support/qa-shot';
 import { totpNow } from './support/totp';
@@ -102,7 +104,9 @@ for (const { width, height } of VIEWPORTS) {
     await member.reload();
     await expect(member).toHaveURL(/\/login/);
     const forced = await open();
+    const mark = mailMark();
     await password(forced, origin, dentist.email);
+    await passEnrollEmailCode(forced, dentist.email, mark);
     const secretEl = forced.getByTestId('mfa-secret');
     await expect(secretEl).toBeVisible();
     await expectNoHorizontalScroll(forced);
@@ -152,8 +156,13 @@ for (const { width, height } of VIEWPORTS) {
     await expect(reset).toHaveCount(0);
 
     // Sin verificación y obligatoria: el próximo login vuelve al alta.
+    // SEC-066: vuelve a pedir el código del correo. Sale uno por cuenta y
+    // cliente cada 60 s: si el anterior es más reciente, la API responde 429 y
+    // se reintenta pasado ese plazo.
     const after = await open();
-    await password(after, origin, dentist.email);
-    await expect(after.getByTestId('mfa-secret')).toBeVisible();
+    await expect(async () => {
+      await password(after, origin, dentist.email);
+      await expect(after.getByLabel('Código del correo')).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 90_000, intervals: [10_000] });
   });
 }
