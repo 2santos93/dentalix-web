@@ -117,7 +117,7 @@ export interface paths {
         put?: never;
         /**
          * Inicia sesión en la clínica del host (o en plataforma desde el apex)
-         * @description DX-021-bis: en el apex la contraseña no basta: responde siempre `MfaChallengeDto`; sin MFA, el alta exige además el código enviado al correo (`emailCodeRequired`). SEC-008: un superadmin SIN membresía en la clínica solo entra como acceso de soporte (break-glass): necesita el MFA enrolado (`/platform/mfa`), `mfaCode` y `breakGlassReason`. Recibe solo un access token ADMIN de vida corta (`breakGlass: true`, `expiresAt`), sin refresh, y el acceso queda en `GET /support-accesses` de la clínica.
+         * @description DX-021-bis: en el apex la contraseña no basta: responde siempre `MfaChallengeDto`. SEC-066: toda alta forzada (superadmin en el apex o miembro de una clínica con el MFA obligatorio) exige además el código enviado al correo de la cuenta (`emailCodeRequired`, `emailCodeRef`); si no se pudo enviar (ya salió uno a esta cuenta desde este cliente hace menos de 1 min), 429 con `Retry-After`. SEC-008: un superadmin SIN membresía en la clínica solo entra como acceso de soporte (break-glass): necesita el MFA enrolado (`/platform/mfa`), `mfaCode` y `breakGlassReason`. Recibe solo un access token ADMIN de vida corta (`breakGlass: true`, `expiresAt`), sin refresh, y el acceso queda en `GET /support-accesses` de la clínica.
          */
         post: operations["AuthController_loginHandler"];
         delete?: never;
@@ -255,7 +255,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Alta forzada: genera el secreto (pendiente) y el otpauth URI */
+        /**
+         * Alta forzada: genera el secreto (pendiente) y el otpauth URI
+         * @description DX-021-bis, SEC-066: exige `emailCode`, el código de 8 dígitos que el login envió al correo de la cuenta (superadmin o miembro de clínica; el login lo indica con `emailCodeRequired`). Es de ESE `mfaToken`: no vale para otra cuenta ni otra clínica, caduca con él (10 min) y admite 10 intentos. Un código erróneo queda en la auditoría (LOGIN_FAILED `INVALID_EMAIL_CODE`, en la clínica o en plataforma) y cuenta para la espera por cuenta y cliente.
+         */
         post: operations["LoginMfaController_startEnrollment"];
         delete?: never;
         options?: never;
@@ -274,7 +277,7 @@ export interface paths {
         put?: never;
         /**
          * Alta forzada: confirma con un código, activa la verificación y abre la sesión
-         * @description Devuelve los 10 códigos de recuperación (una sola vez). Queda auditado (UPDATE STAFF_MEMBER `MFA_ENABLED` y LOGIN `MFA_ENROLLED`).
+         * @description Exige otra vez el `emailCode` del correo (sin él no se activa, no hay sesión ni códigos de recuperación). Devuelve los 10 códigos de recuperación (una sola vez). Queda auditado (UPDATE STAFF_MEMBER `MFA_ENABLED` y LOGIN `MFA_ENROLLED`).
          */
         post: operations["LoginMfaController_confirmEnrollment"];
         delete?: never;
@@ -7040,7 +7043,7 @@ export interface components {
             /** Format: date-time */
             expiresAt: string;
             /**
-             * @description DX-021-bis: alta de un superadmin: se le envió un código al correo que exige POST /auth/login/mfa/enrollment.
+             * @description DX-021-bis, SEC-066: alta forzada (de un superadmin o de un miembro de clínica): se envió un código al correo de la cuenta que exigen POST /auth/login/mfa/enrollment y /enrollment/confirm. Viene siempre con `mfa: MFA_ENROLLMENT_REQUIRED`.
              * @enum {boolean}
              */
             emailCodeRequired?: true;
@@ -7124,7 +7127,7 @@ export interface components {
             /** @description El `mfaToken` (MFA_ENROLLMENT_REQUIRED) del login. */
             mfaToken: string;
             /**
-             * @description DX-021-bis: alta de un superadmin (`emailCodeRequired`): el código de 8 dígitos de ESTE token. 10 intentos fallidos en total; agotados, el token queda inservible y hay que volver a entrar.
+             * @description DX-021-bis, SEC-066: obligatorio en el alta forzada (`emailCodeRequired`): el código de 8 dígitos de ESTE token, enviado al correo de la cuenta. 10 intentos fallidos en total; agotados, el token queda inservible y hay que volver a entrar.
              * @example 12345678
              */
             emailCode?: string;
@@ -7142,7 +7145,7 @@ export interface components {
             /** @description El `mfaToken` (MFA_ENROLLMENT_REQUIRED) del login. */
             mfaToken: string;
             /**
-             * @description DX-021-bis: alta de un superadmin (`emailCodeRequired`): el código de 8 dígitos de ESTE token. 10 intentos fallidos en total; agotados, el token queda inservible y hay que volver a entrar.
+             * @description DX-021-bis, SEC-066: obligatorio en el alta forzada (`emailCodeRequired`): el código de 8 dígitos de ESTE token, enviado al correo de la cuenta. 10 intentos fallidos en total; agotados, el token queda inservible y hay que volver a entrar.
              * @example 12345678
              */
             emailCode?: string;
@@ -20667,14 +20670,14 @@ export interface operations {
                     "application/json": components["schemas"]["MfaEnrollmentDto"];
                 };
             };
-            /** @description Alta de un superadmin: falta el código enviado a su correo o no es correcto */
+            /** @description Falta el código enviado al correo o no es correcto (mismo mensaje en los dos casos) */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description `code: "MFA_CHALLENGE_EXPIRED"` */
+            /** @description `code: "MFA_CHALLENGE_EXPIRED"` (token caducado, usado, de otra clínica o con su código del correo agotado: volver a iniciar sesión) */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -20722,7 +20725,7 @@ export interface operations {
                     "application/json": components["schemas"]["MfaEnrolledSessionDto"];
                 };
             };
-            /** @description Código erróneo o sin alta pendiente */
+            /** @description Falta el código del correo o no es correcto, código de la app erróneo o sin alta pendiente */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -25659,6 +25662,13 @@ export interface operations {
                     "application/json": components["schemas"]["AppointmentDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     AppointmentsController_update: {
@@ -25685,7 +25695,7 @@ export interface operations {
                     "application/json": components["schemas"]["AppointmentWriteDto"];
                 };
             };
-            /** @description Datos inválidos o al pasado, salida de COMPLETED sin `statusReason` válido (DX-273), o cancelar sin `cancelledByKind` o sin `cancelReasonCode` (DX-279), con el mensaje en español */
+            /** @description Id que no es UUID, datos inválidos o al pasado, salida de COMPLETED sin `statusReason` válido (DX-273), o cancelar sin `cancelledByKind` o sin `cancelReasonCode` (DX-279), con el mensaje en español */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -25741,6 +25751,20 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CheckoutChecklistDto"];
                 };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La cita es de una sede no permitida al usuario (DX-089) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Cita no encontrada en esta clínica */
             404: {
