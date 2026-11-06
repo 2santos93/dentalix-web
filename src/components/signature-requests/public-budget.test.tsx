@@ -60,10 +60,13 @@ describe('PublicBudgetSummary: precio de lista en la moneda del catálogo (DX-50
     expect(document.body.textContent).not.toMatch(/79\.899/);
   });
 
-  it('sin moneda del catálogo conocida, no dice nada del precio de lista: ni cifra, ni nota, ni ahorro', () => {
+  it('sin moneda del catálogo conocida, oculta la cifra y lo explica con la nota de referencia, sin ahorro', () => {
     render(<PublicBudgetSummary budget={eurBudget({ listPriceCurrency: null }, 79899.45)} clock={CLOCK} />);
-    expect(screen.queryByText(/[Pp]recio de lista/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Precio de lista/)).not.toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/80\.000/);
+    expect(text(screen.getByTestId('public-budget-list-price-hidden-note'))).toBe(
+      'El precio de lista del catálogo de la clínica no se muestra: no se sabe en qué moneda está y no se convierte a EUR.',
+    );
     expect(screen.queryByTestId('public-budget-list-price-note')).not.toBeInTheDocument();
     expect(screen.queryByText('Ahorro por convenio')).not.toBeInTheDocument();
   });
@@ -77,6 +80,8 @@ describe('PublicBudgetSummary: precio de lista en la moneda del catálogo (DX-50
     expect(text(screen.getByTestId('public-budget-list-price-note'))).toBe(
       'El precio de lista es el del catálogo de la clínica, en VES: es de referencia y no se convierte a EUR.',
     );
+    // El oculto también se explica, aparte.
+    expect(screen.getByTestId('public-budget-list-price-hidden-note')).toBeInTheDocument();
   });
 
   it('con el catálogo en la moneda del plan: precio de lista y ahorro, sin nota', () => {
@@ -85,6 +90,7 @@ describe('PublicBudgetSummary: precio de lista en la moneda del catálogo (DX-50
     expect(screen.getByText('Precio de lista EUR 120,00', { normalizer: (s) => s.replace(/\s/g, ' ') })).toBeInTheDocument();
     expect(screen.getByText('Ahorro por convenio')).toBeInTheDocument();
     expect(screen.queryByTestId('public-budget-list-price-note')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('public-budget-list-price-hidden-note')).not.toBeInTheDocument();
   });
 
   it('sin convenio no hay precio de lista ni nota', () => {

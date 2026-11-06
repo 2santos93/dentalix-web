@@ -4,6 +4,7 @@ import type { SedeClock } from '@/lib/locations/sede-clock';
 import type { PublicBudget } from '@/lib/signature-requests/signature-requests-api';
 import {
   formatListPrice,
+  listPriceHiddenNote,
   listPriceNote,
   listPricesCurrency,
   listPricesInPlanCurrency,
@@ -47,11 +48,11 @@ function hasListPrice(item: PublicBudgetItem): item is PublicBudgetItem & { list
  *
  * DX-502: el precio de lista es el del catálogo, en SU moneda
  * (`listPriceCurrency`, congelada en la foto), nunca en la del plan. Sin
- * moneda conocida (foto anterior a DX-502 o sedes sin moneda común) no se
- * dice nada del precio de lista: el paciente no lee una nota sobre algo que no
- * ve. La nota de referencia acompaña solo a los precios de lista que se ven en
- * otra moneda, y en ninguno de los dos casos se muestra el «Ahorro por
- * convenio», que restaría monedas distintas.
+ * moneda conocida (foto anterior a DX-502 o sedes sin moneda común) la cifra
+ * se oculta y una nota lo explica, con el mismo texto que el impreso y la
+ * pestaña del plan (sin datos internos). La nota de referencia acompaña a los
+ * precios de lista que se ven en otra moneda, y en ninguno de los dos casos se
+ * muestra el «Ahorro por convenio», que restaría monedas distintas.
  */
 export function PublicBudgetSummary({ budget, clock }: { budget: PublicBudget; clock: SedeClock | null }) {
   const fmt = clock?.fmt ?? null;
@@ -64,6 +65,7 @@ export function PublicBudgetSummary({ budget, clock }: { budget: PublicBudget; c
   const listCurrencies = budget.items.filter(hasListPrice).map((item) => item.listPriceCurrency);
   const listInPlanCurrency = listPricesInPlanCurrency(listCurrencies, budget.currency);
   const shownForeign = listCurrencies.filter((c): c is string => c !== null && c !== budget.currency);
+  const hiddenListPrice = listCurrencies.includes(null);
 
   return (
     <div className="flex flex-col gap-4">
@@ -140,6 +142,11 @@ export function PublicBudgetSummary({ budget, clock }: { budget: PublicBudget; c
       {shownForeign.length > 0 ? (
         <p data-testid="public-budget-list-price-note" className="text-xs text-[#4b5563]">
           {listPriceNote(listPricesCurrency(shownForeign), budget.currency)}
+        </p>
+      ) : null}
+      {hiddenListPrice ? (
+        <p data-testid="public-budget-list-price-hidden-note" className="text-xs text-[#4b5563]">
+          {listPriceHiddenNote(budget.currency)}
         </p>
       ) : null}
     </div>
