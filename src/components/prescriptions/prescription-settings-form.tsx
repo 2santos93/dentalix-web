@@ -17,7 +17,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { SaveBar, useSettingsDraft } from '@/components/settings/save-bar';
 import { SettingRows } from '@/components/settings/settings-page';
-import { cn } from '@/lib/utils';
 
 const copy = {
   wordsTitle: 'Cantidad en letras',
@@ -91,7 +90,6 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
   const [validityError, setValidityError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
-  const noticeRef = useRef<HTMLParagraphElement>(null);
   const id = useId();
   const formId = `${id}-form`;
   const validityId = `${id}-validity`;
@@ -113,12 +111,6 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
       cancelled = true;
     };
   }, [token, reloadKey]);
-
-  // Tras guardar, la barra desaparece (no hay cambios) y el foco caería a
-  // `<body>`: lo llevamos al aviso para no perder el sitio al teclado.
-  useEffect(() => {
-    if (notice) noticeRef.current?.focus();
-  }, [notice]);
 
   if (loadError) {
     return (
@@ -225,12 +217,7 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
           </FormField>
         </div>
       </SettingRows>
-      <p
-        ref={noticeRef}
-        role="status"
-        tabIndex={-1}
-        className={cn(notice ? 'text-sm text-success-text' : 'sr-only', 'focus:outline-none')}
-      >
+      <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
       {/* Único guardado: aparece con cambios; el error del guardado va dentro. */}

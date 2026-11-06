@@ -38,6 +38,18 @@ describe('ProfileView', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: /guardar/i })).not.toBeInTheDocument());
   });
 
+  it('DX-546 · FE-110: tras guardar el nombre, el foco vuelve al formulario y se anuncia «Nombre guardado.»', async () => {
+    render(<ProfileView token="T" />);
+    const input = await screen.findByLabelText('Nombre completo');
+    fireEvent.change(input, { target: { value: 'Ana G. Nueva' } });
+    const save = screen.getByRole('button', { name: 'Guardar el nombre' });
+    save.focus();
+    fireEvent.click(save);
+    expect(await screen.findByText('Nombre guardado.')).toBeInTheDocument();
+    expect(input.closest('form')).toHaveFocus();
+    expect(document.body).not.toHaveFocus();
+  });
+
   it('read-only facts come before the editable name; other clinics are listed', async () => {
     (getMe as jest.Mock).mockResolvedValue({
       ...profile,

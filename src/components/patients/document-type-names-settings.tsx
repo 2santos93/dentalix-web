@@ -22,7 +22,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { SaveBar, useSettingsDraft } from '@/components/settings/save-bar';
 import { SettingRows } from '@/components/settings/settings-page';
-import { cn } from '@/lib/utils';
 
 const copy = {
   hint: (generic: string) => `Vacío: se usa «${generic}».`,
@@ -70,7 +69,6 @@ export function DocumentTypeNamesSettingsSection({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<DocType, string>>>({});
   const [notice, setNotice] = useState('');
-  const noticeRef = useRef<HTMLParagraphElement>(null);
   const idPrefix = useId();
   const inputRefs = useRef<Partial<Record<DocType, HTMLInputElement | null>>>({});
   // Cada petición es un objeto nuevo: el efecto enfoca aunque se repita el tipo.
@@ -79,11 +77,6 @@ export function DocumentTypeNamesSettingsSection({
   useEffect(() => {
     if (focusRequest) inputRefs.current[focusRequest.type]?.focus();
   }, [focusRequest]);
-
-  // Tras guardar, la barra desaparece y el foco caería a `<body>`: va al aviso.
-  useEffect(() => {
-    if (notice) noticeRef.current?.focus();
-  }, [notice]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -211,12 +204,7 @@ export function DocumentTypeNamesSettingsSection({
           );
         })}
       </SettingRows>
-      <p
-        ref={noticeRef}
-        role="status"
-        tabIndex={-1}
-        className={cn(notice ? 'text-sm text-success-text' : 'sr-only', 'focus:outline-none')}
-      >
+      <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
       {/* Único guardado: aparece con cambios; el error del guardado va dentro. */}

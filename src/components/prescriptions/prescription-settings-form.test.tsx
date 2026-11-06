@@ -111,15 +111,14 @@ describe('PrescriptionSettingsForm (DX-324)', () => {
     expect(validity()).toHaveValue('10');
   });
 
-  it('after a save, focus goes to the saved notice, not to <body> (the bar is gone)', async () => {
+  it('after a save, focus returns to the form (SaveBar, FE-110), not to <body> (the bar is gone)', async () => {
     const user = await renderLoaded();
     mockedSave.mockImplementation(async (_t, s) => s);
     await user.click(screen.getByRole('checkbox', { name: 'Cantidad en letras' }));
     await user.click(save());
     const notice = await screen.findByText('Ajustes de la receta guardados.');
-    await waitFor(() => expect(notice).toHaveFocus());
+    await waitFor(() => expect(notice.closest('form')).toHaveFocus());
     expect(notice).toHaveAttribute('role', 'status');
-    expect(notice).toHaveAttribute('tabindex', '-1');
     noSaveBar();
     expect(document.body).not.toHaveFocus();
   });
