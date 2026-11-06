@@ -12239,10 +12239,12 @@ export interface components {
             notes?: string | null;
             /**
              * Format: uuid
-             * @description Trasladar a otra sede: quita el sillón, salvo que venga uno de la sede nueva.
+             * @description Trasladar a otra sede: quita el sillón, salvo que venga uno de la sede nueva. No admite null.
              */
             locationId?: string;
+            /** @description No admite null ni vacío. */
             name?: string;
+            /** @description No admite null. */
             category?: components["schemas"]["EquipmentCategory"];
         };
         RetireEquipmentDto: {

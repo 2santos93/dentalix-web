@@ -38,8 +38,7 @@ test.afterAll(async ({ request }) => {
 });
 
 /** Errores de la consola del navegador (los de red de un 4xx esperado no cuentan). */
-function watchConsole(page: Page): string[] {
-  const errors: string[] = [];
+function watchConsole(page: Page, errors: string[] = []): string[] {
   page.on('console', (msg) => {
     if (msg.type() === 'error' && !/Failed to load resource/.test(msg.text())) errors.push(msg.text());
   });
@@ -48,15 +47,18 @@ function watchConsole(page: Page): string[] {
 }
 
 for (const width of [1440, 390] as const) {
-  test(`ADMIN crea un equipo, registra un preventivo y abre e imprime su hoja de vida (${width}px)`, async ({ page }) => {
+  test(`ADMIN crea un equipo, registra un preventivo y abre e imprime su hoja de vida (${width}px)`, async ({ page: firstPage }) => {
+    let page = firstPage;
     const errors = watchConsole(page);
     await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
     await loginAs(page, origin, DEMO_ADMIN_EMAIL, DEMO_PASSWORD);
+    // «Todas las sedes» en el selector global (sin sede activa): la lista
+    // consolida la clínica. La demo trae equipos en todas las sedes; uno vencido.
+    await page.evaluate(() => window.localStorage.removeItem('dentalix.activeLocationId'));
     await page.goto(`${origin}/settings/equipos`);
     await expect(page.getByRole('heading', { level: 1, name: 'Equipos biomédicos' })).toBeVisible({ timeout: 15_000 });
-
-    // La demo trae equipos en todas las sedes; uno vencido.
-    await page.getByRole('main').getByLabel('Sede', { exact: true }).selectOption({ label: 'Todas las sedes' });
+    await expect(page.getByTestId('settings-scope')).toContainText('Todas las sedes');
+    await expect(page.getByRole('main').getByText('Sede São Paulo').filter({ visible: true }).first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('Unidad dental Sillón 1')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('Vencido').first()).toBeVisible();
     await shot(page, 'DX-542-listado', width);
@@ -109,7 +111,14 @@ for (const width of [1440, 390] as const) {
     await expectNoHorizontalScrollIn(page);
     await shot(page, 'DX-542-hoja-de-vida', width);
 
-    await page.getByRole('link', { name: 'Imprimir hoja de vida' }).click();
+    // Como las demás imprimibles: en otra pestaña.
+    const [printTab] = await Promise.all([
+      page.context().waitForEvent('page'),
+      page.getByRole('button', { name: 'Imprimir hoja de vida' }).click(),
+    ]);
+    page = printTab;
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    watchConsole(page, errors);
     await expect(page.getByRole('toolbar', { name: 'Acciones de la hoja de vida' })).toBeVisible();
     await expect(page.getByRole('heading', { name })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Imprimir' })).toBeEnabled();
