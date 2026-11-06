@@ -29,9 +29,9 @@ const mockedBalance = getPlanBalance as jest.MockedFunction<typeof getPlanBalanc
 const mockedSettings = jest.mocked(getExchangeRateSettings);
 
 /** DX-386: el formato de la sede del fixture (es-VE) y el código ISO, con el espacio normalizado. */
-const ES_CO = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
+const ES_VE = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
 function money(amount: number, currency: string): string {
-  return moneyWithCode(amount, currency, ES_CO).replace(/\u00A0/g, ' ');
+  return moneyWithCode(amount, currency, ES_VE).replace(/\u00A0/g, ' ');
 }
 
 function balanceFixture(overrides: Partial<PlanBalance> = {}): PlanBalance {

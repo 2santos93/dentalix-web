@@ -270,8 +270,10 @@ function Body({
                     }
                   />
                   {/* DX-399-quater-bis: el `free` no resta lo recibido (los abonos
-                      van primero), así que imputar ahí lo desplaza. */}
-                  {rows.some((row) => row.byTransfer > 0) ? (
+                      van primero), así que imputar ahí lo desplaza. Solo quien
+                      puede cambiar la imputación (ADMIN, plan cobrable) lee la
+                      nota: a recepción no le pide nada que no puede hacer. */}
+                  {canChange && rows.some((row) => row.byTransfer > 0) ? (
                     <p className="text-sm text-muted">{allocationCopy.byTransferNote}</p>
                   ) : null}
                   <DescriptionList

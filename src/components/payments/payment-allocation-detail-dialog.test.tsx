@@ -247,7 +247,8 @@ describe('PaymentAllocationDetailDialog: lo cubierto por traspaso (DX-399-quater
 
   it('marca el ítem con «30,00 USD por traspaso» y avisa de que imputar ahí desplaza ese saldo', async () => {
     mockedGet.mockResolvedValue(WITH_TRANSFER_IN);
-    renderDialog();
+    // ADMIN desde el plan: puede pasar a «Cambiar imputación».
+    renderDialog({ onChange: jest.fn() });
     const dialog = await screen.findByRole('dialog', { name: 'Imputación del abono' });
     const list = await within(dialog).findByRole('table', { name: 'Ítems a los que se imputó el abono' });
     const corona = within(list).getByRole('row', { name: /Corona/ });
@@ -259,9 +260,20 @@ describe('PaymentAllocationDetailDialog: lo cubierto por traspaso (DX-399-quater
     ).toBeInTheDocument();
   });
 
+  it('sin poder cambiar la imputación (recepción), la marca sí pero la nota no', async () => {
+    mockedGet.mockResolvedValue(WITH_TRANSFER_IN);
+    renderDialog();
+    const dialog = await screen.findByRole('dialog', { name: 'Imputación del abono' });
+    const list = await within(dialog).findByRole('table', { name: 'Ítems a los que se imputó el abono' });
+    const corona = within(list).getByRole('row', { name: /Corona/ });
+    expect(within(corona).getByText(/por traspaso$/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/vuelve a quedar a cuenta/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Cambiar imputación' })).not.toBeInTheDocument();
+  });
+
   it('sin traspasos no hay marca ni nota', async () => {
     mockedGet.mockResolvedValue(AUTO);
-    renderDialog();
+    renderDialog({ onChange: jest.fn() });
     const dialog = await screen.findByRole('dialog', { name: 'Imputación del abono' });
     await within(dialog).findByRole('table', { name: 'Ítems a los que se imputó el abono' });
     expect(within(dialog).queryByText(/por traspaso/)).not.toBeInTheDocument();

@@ -137,10 +137,18 @@ async function openPlanP(page: Page): Promise<Locator> {
   return panel;
 }
 
-/** La fila (escritorio) o la tarjeta (móvil) de un ítem del plan. */
+/**
+ * La fila (escritorio) o la tarjeta (móvil) de un ítem del plan. En el móvil,
+ * el `li` más interno con el procedimiento: nunca un `li` contenedor que
+ * envuelva la lista entera.
+ */
 function planItem(panel: Locator, mobile: boolean, procedure: string): Locator {
   return mobile
-    ? panel.locator('li').filter({ hasText: procedure }).locator('visible=true')
+    ? panel
+        .locator('li')
+        .filter({ hasText: procedure })
+        .filter({ hasNot: panel.page().locator('li') })
+        .locator('visible=true')
     : panel
         .getByRole('table', { name: /^Ítems de la visita \d+$/ })
         .getByRole('row')
@@ -161,7 +169,9 @@ for (const viewport of VIEWPORTS) {
       await expect(covered).toContainText(`Cobrado ${money(60)} ·`, { timeout: 15_000 });
       await expect(covered.getByText('Cubierto', { exact: true })).toBeVisible();
     } else {
-      await expect(covered.locator('td[data-label="Cobrado"]')).toHaveText(`${money(60)}${line}`, { timeout: 15_000 });
+      const paid = covered.locator('td[data-label="Cobrado"]');
+      await expect(paid).toContainText(money(60), { timeout: 15_000 });
+      await expect(paid.getByText(line)).toBeVisible();
       await expect(covered.locator('td[data-label="Pendiente"]')).toHaveText('Cubierto');
     }
     await expect(covered.getByText(line)).toBeVisible();
@@ -189,10 +199,9 @@ for (const viewport of VIEWPORTS) {
     const row = statement
       .locator('table[aria-label="Cobrado por ítem del plan"] tr')
       .filter({ hasText: names.covered });
-    await expect(row.locator('td[data-label="Cobrado"]')).toHaveText(
-      `${money(60)}De ello, ${money(30)} por traspaso de otro plan`,
-      { timeout: 15_000 },
-    );
+    const paid = row.locator('td[data-label="Cobrado"]');
+    await expect(paid).toContainText(money(60), { timeout: 15_000 });
+    await expect(paid.getByText(`De ello, ${money(30)} por traspaso de otro plan`)).toBeVisible();
     await expect(row.locator('td[data-label="Pendiente"]')).toHaveText('Cubierto');
     await expect(
       statement.locator('table[aria-label="Cobrado por ítem del plan"] tr').filter({ hasText: names.own }),
