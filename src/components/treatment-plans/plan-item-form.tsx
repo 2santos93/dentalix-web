@@ -16,7 +16,7 @@ import {
   needsReason,
   noDiscountAllowed,
   priceBelowCatalogCapMessage,
-  referenceInPlanCurrency,
+  referenceInOtherCurrency,
   roleCapMessage,
   type DiscountRules,
 } from '@/lib/discounts/discount-rules';
@@ -133,12 +133,16 @@ export function PlanItemForm({
   // Referencia de la rebaja (R1): el precio resuelto, no el de catálogo.
   const referencePrice = quoteReady ? quoteReady.price : (catalogById.get(catalogItemId)?.defaultPrice ?? null);
   // DX-489 / DX-513: la referencia sale de una lista en la moneda del plan, o
-  // del catálogo en SU moneda (la que dice la API). En otra moneda, o sin
-  // saberla, bajar de ella no es un descuento: ni pide motivo ni topa el rol
-  // (como la API, `referenceCurrency`). B4 (DX-502): hasta que llega el precio
-  // resuelto no se sabe la moneda; se avisa como antes y decide la API.
+  // del catálogo en SU moneda (la que dice la API). Solo en otra moneda
+  // CONOCIDA bajar de ella no es un descuento: ni pide motivo ni topa el rol
+  // (como la API, `referenceInOtherCurrency`). Sin saberla, cuenta como hoy.
+  // B4 (DX-502): hasta que llega el precio resuelto no se sabe la moneda; se
+  // avisa como antes y decide la API.
   const catalogInOtherCurrency =
-    quoteReady !== null && !referenceInPlanCurrency(quoteReady.source, catalogCurrency, plan.currency);
+    quoteReady !== null && referenceInOtherCurrency(quoteReady.source, catalogCurrency, plan.currency);
+  // DX-502: catálogo de moneda desconocida; la rebaja cuenta, pero su cifra no
+  // se pinta en la moneda del plan.
+  const catalogCurrencyUnknown = quoteReady?.source === 'CATALOG' && catalogCurrency === null;
   const discountReference = catalogInOtherCurrency ? null : referencePrice;
 
   function handleProcedureChange(nextCatalogItemId: string) {
@@ -359,25 +363,27 @@ export function PlanItemForm({
           ) : null}
           {/* SEC-041: aviso, no bloqueo; la API decide con el
               tope del rol. DX-513: frente a un catálogo en otra
-              moneda no hay rebaja; una nota neutra dice la
-              referencia y que no cuenta. */}
+              moneda conocida no hay rebaja; una nota neutra dice
+              la referencia y que no cuenta. */}
           <p id="tp-price-below-catalog" role="status" className="t-caption text-warning-text">
             {addBelowCatalog && addEffective && addCatalogPrice !== null ? (
               <>
                 <span className="block font-medium">{PRICE_BELOW_CATALOG_NOTICE}</span>
                 {quoteReady ? (
                   <span className="block">
-                    {copy.priceBelowCatalogDetail(
-                      sedeMoney(addEffective.priceReduction, plan.currency, fmt),
-                      sedeMoney(addCatalogPrice, plan.currency, fmt),
-                    )}
+                    {catalogCurrencyUnknown
+                      ? copy.priceBelowCatalogUnknownCurrency
+                      : copy.priceBelowCatalogDetail(
+                          sedeMoney(addEffective.priceReduction, plan.currency, fmt),
+                          sedeMoney(addCatalogPrice, plan.currency, fmt),
+                        )}
                   </span>
                 ) : null}
               </>
-            ) : addBelowOtherCurrency && addCatalogPrice !== null ? (
+            ) : addBelowOtherCurrency && addCatalogPrice !== null && catalogCurrency !== null ? (
               <span className="block text-muted">
                 {copy.priceBelowCatalogOtherCurrency(
-                  formatListPrice(addCatalogPrice, catalogCurrency, sedeListPriceFormat(fmt)),
+                  sedeListPriceFormat(fmt)(addCatalogPrice, catalogCurrency),
                 )}
               </span>
             ) : null}

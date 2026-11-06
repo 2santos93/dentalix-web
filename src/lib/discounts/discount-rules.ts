@@ -96,32 +96,33 @@ export function effectiveDiscount(
 
 /**
  * DX-513: ¿la referencia de la rebaja (`catalogPrice`, el precio resuelto) está
- * en la moneda del plan? Si salió de una lista (de la sede o del convenio), sí:
- * la API solo toma listas en esa moneda. Si salió del catálogo (o de un % sobre
- * él, o es anterior a DX-105), está en la moneda del catálogo (`catalogCurrency`,
- * DX-502), que puede ser otra o no saberse. Espejo de `referenceCurrency` de la
- * API (`effective-discount.ts`).
+ * en otra moneda CONOCIDA? Si salió de una lista (de la sede o del convenio),
+ * no: la API solo toma listas en la moneda del plan. Si salió del catálogo (o
+ * de un % sobre él, o es anterior a DX-105), está en la moneda del catálogo
+ * (`catalogCurrency`, DX-502): otra moneda solo si se sabe y es distinta. Sin
+ * saberla (NULL) cuenta como hoy (decisión de producto). Espejo de
+ * `referenceInOtherCurrency` de la API (`effective-discount.ts`).
  */
-export function referenceInPlanCurrency(
+export function referenceInOtherCurrency(
   source: string | null | undefined,
   catalogCurrency: string | null | undefined,
   planCurrency: string,
 ): boolean {
-  if (source === 'PRICE_LIST' || source === 'AGREEMENT_PRICE_LIST') return true;
-  return catalogCurrency != null && catalogCurrency === planCurrency;
+  if (source === 'PRICE_LIST' || source === 'AGREEMENT_PRICE_LIST') return false;
+  return catalogCurrency != null && catalogCurrency !== planCurrency;
 }
 
 /**
  * DX-513: la referencia con la que se mide la rebaja de precio, o `null`. En
- * otra moneda, o en una que no se sabe, bajar de ella no es un descuento: ni
- * pide motivo ni consume el tope; solo cuenta el descuento del ítem.
+ * otra moneda conocida, bajar de ella no es un descuento: ni pide motivo ni
+ * consume el tope; solo cuenta el descuento del ítem.
  */
 export function discountReference(
   item: { catalogPrice: number | null | undefined; catalogCurrency?: string | null; priceSource?: string | null },
   planCurrency: string,
 ): number | null {
   if (item.catalogPrice == null) return null;
-  return referenceInPlanCurrency(item.priceSource, item.catalogCurrency, planCurrency) ? item.catalogPrice : null;
+  return referenceInOtherCurrency(item.priceSource, item.catalogCurrency, planCurrency) ? null : item.catalogPrice;
 }
 
 /** Texto cuando la prestación no admite descuentos (DX-105). */

@@ -13297,7 +13297,7 @@ export interface components {
             surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             /** Format: uuid */
             catalogItemId: string;
-            /** @description Precio explícito (máx. 2 decimales). Si se omite, la API lo resuelve (DX-105): convenio vigente del paciente → lista de precios activa de la sede → precio de catálogo; sin ninguno, 400. El resuelto queda como referencia (`catalogPrice`): un precio por debajo cuenta como descuento (tope del rol y motivo de la política) y, si la prestación no admite descuentos, 400 */
+            /** @description Precio explícito (máx. 2 decimales). Si se omite, la API lo resuelve (DX-105): convenio vigente del paciente → lista de precios activa de la sede → precio de catálogo; sin ninguno, 400. El resuelto queda como referencia (`catalogPrice`): un precio por debajo cuenta como descuento (tope del rol y motivo de la política) y, si la prestación no admite descuentos, 400. DX-513: no cuenta si la referencia es el precio de catálogo en otra moneda conocida (`catalogCurrency` distinta de la del plan, sin convertir); con la moneda del catálogo desconocida, sí */
             price?: number;
             /** @description Descuento en la moneda del plan (máx. 2 decimales, default 0); nunca mayor que el precio (400). DX-204: por encima del tope del rol, 403; en un plan aceptado, 409 */
             discount?: number;
@@ -13642,7 +13642,7 @@ export interface components {
             catalogPrice: number | null;
             /** @description Precio pactado del ítem */
             price: number;
-            /** @description SEC-041: rebaja del precio frente al de catálogo (0 si no la hay) */
+            /** @description SEC-041: rebaja del precio frente al de catálogo (0 si no la hay). DX-513: 0 también si la referencia está en otra moneda conocida (el catálogo en una moneda distinta de la del plan, sin convertir); con la moneda del catálogo desconocida cuenta */
             priceReduction: number;
             /** @description Descuento del ítem (campo `discount`) */
             itemDiscount: number;

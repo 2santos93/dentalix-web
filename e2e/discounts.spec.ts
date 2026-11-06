@@ -15,16 +15,13 @@ import { DEMO_CURRENCY } from './support/demo';
  *      15 % con «Descuento %»: ve «Tu rol permite hasta un 10 %…» y nada
  *      cambia. Con un 10 % se aplica, redondeado al céntimo (USD, DX-340).
  *   2. En «Agregar ítem», un descuento por encima del 10 % pide el motivo.
- *      DX-513: las sedes de la demo están en USD, BRL y GBP, así que la
- *      moneda del catálogo no se sabe (DX-502): bajar el precio del de
- *      catálogo NO es un descuento. El formulario lo dice sin pedir motivo y
- *      la API guarda el 50 % sin 403 ni firma. La rebaja frente a un catálogo
- *      en la moneda del plan (SEC-041) la prueba
- *      `plan-item-discount-currency.spec.ts` en una clínica de una moneda.
+ *      SEC-041: bajar el precio del de catálogo avisa «Precio por debajo del
+ *      de catálogo: cuenta como descuento.» y pide el motivo; al 50 % el
+ *      odontólogo ve su tope (y la API da 403); al 95 % se guarda (201).
  *   3. La administración abre «Descuentos» (menú lateral): el total del periodo
- *      incluye el 10 % del odontólogo, con su nombre, y no la «rebaja» frente
- *      al catálogo de moneda desconocida, ni la de convenio (SEC-047, ver el
- *      spec de DX-513). Y Ajustes → Descuentos enseña los topes.
+ *      incluye el 10 % del odontólogo, con su nombre, y la rebaja de precio
+ *      del 95 % («Precio rebajado a…»). Y Ajustes → Descuentos
+ *      enseña los topes.
  * En escritorio (1440 px) y en móvil (390 px, tarjetas apiladas, sin scroll
  * horizontal).
  */
@@ -37,9 +34,7 @@ const DENTIST_EMAIL = process.env.E2E_DEMO_DENTIST_EMAIL ?? 'dentista@demo.denta
 // debajo del de catálogo (el primero), que contaría como descuento (SEC-041).
 const PRICES = [800, 923.45, 899.99];
 const PRICE_NOTICE = 'Precio por debajo del de catálogo: cuenta como descuento.';
-// DX-513: con la moneda del catálogo desconocida, la referencia no cuenta.
-const UNKNOWN_CATALOG_NOTE =
-  'Precio de catálogo en una moneda que no se sabe, sin convertir. No cuenta como descuento: ni pide motivo ni sale en el informe de descuentos.';
+const PRICE_CAP_10 = `${PRICE_NOTICE} Tu rol permite hasta un 10 % de descuento por ítem.`;
 
 const rawSuffix = process.env.E2E_RUN_SUFFIX ?? randomUUID();
 const suffix = rawSuffix
@@ -105,9 +100,8 @@ async function seed(
     });
   }
   // SEC-047: otra paciente con un convenio interno (lo asigna el ADMIN, sin
-  // cobertura) y un ítem resuelto por él. DX-513: en la demo la moneda del
-  // catálogo no se sabe, así que su rebaja no sale en el informe; la frase
-  // larga a 390 px (QA D1) la prueba `plan-item-discount-currency.spec.ts`.
+  // cobertura) y un ítem resuelto por él: su línea del informe lleva la frase
+  // larga del convenio, que a 390 px no debe desbordar la tarjeta (QA D1).
   const payer = await post<{ id: string }>('/payers', { name: `Cortesía empleados ${tag}`, type: 'OTHER' });
   const agreement = await post<{ id: string }>('/agreements', {
     name: `Cortesía empleados de la clínica 100 % ${tag}`,
@@ -218,36 +212,42 @@ for (const viewport of [
     await panel.getByLabel(/^descuento/i).fill('200');
     await expect(panel.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeVisible();
 
-    // --- 2b. DX-513: en la demo (sedes en USD, BRL y GBP) la moneda del
-    // catálogo no se sabe: bajar del precio de catálogo (800) no es un
-    // descuento. Ni aviso, ni motivo, ni tope del rol.
+    // --- 2b. SEC-041: el precio por debajo del de catálogo (800) cuenta
+    // como descuento: aviso, motivo y tope del rol.
     await panel.getByLabel(/^descuento/i).fill('');
     await panel.getByLabel('Código FDI').fill('46');
     await panel.getByLabel('Buscar en el catálogo').fill(data.procedureLabel);
     await panel.getByRole('radio', { name: data.procedureLabel }).check();
     const priceField = panel.getByLabel('Precio', { exact: true });
     await expect(priceField).toHaveValue('800');
-    await priceField.fill('400');
-    await expect(panel.locator('#tp-price-below-catalog')).toHaveText(UNKNOWN_CATALOG_NOTE);
     await expect(panel.getByText(PRICE_NOTICE, { exact: true })).toHaveCount(0);
-    await expect(panel.getByLabel(/^Motivo del descuento/)).toHaveCount(0);
+    await priceField.fill('400');
+    await expect(panel.getByText(PRICE_NOTICE, { exact: true })).toBeVisible();
+    await expect(panel.getByLabel('Motivo del descuento', { exact: true })).toBeVisible();
+    await expect(panel.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeVisible();
     if (viewport.width === 390) await expectNoHorizontalScroll(page);
+    await panel.getByRole('button', { name: 'Agregar ítem', exact: true }).click();
+    await expect(panel.getByText(PRICE_CAP_10)).toBeVisible();
+    // Al 95 % el aviso sigue, pero el motivo es opcional.
+    await priceField.fill('760');
+    await expect(panel.getByText(PRICE_NOTICE, { exact: true })).toBeVisible();
+    await expect(panel.getByLabel('Motivo del descuento (opcional)')).toBeVisible();
 
-    // La API dice lo mismo: al 50 %, 201 sin firma de descuento.
+    // La API es la frontera: al 50 %, 403 en español; al 95 %, 201 a su nombre.
     const itemsUrl = `${API_URL}/treatment-plans/${data.planId}/items`;
     const dentistHeaders = { 'X-Tenant-Host': host, Authorization: `Bearer ${dentistToken}` };
     const halfPrice = await page.request.post(itemsUrl, {
       headers: dentistHeaders,
       data: { toothNumber: '46', catalogItemId: data.procedureId, price: 400 },
     });
-    expect(halfPrice.status()).toBe(201);
-    expect(await halfPrice.json()).toMatchObject({
-      catalogPrice: 800,
-      catalogCurrency: null,
-      price: 400,
-      discount: 0,
-      discountById: null,
+    expect(halfPrice.status()).toBe(403);
+    expect(((await halfPrice.json()) as { message: string }).message).toBe(PRICE_CAP_10);
+    const reduced = await page.request.post(itemsUrl, {
+      headers: dentistHeaders,
+      data: { toothNumber: '46', catalogItemId: data.procedureId, price: 760 },
     });
+    expect(reduced.status()).toBe(201);
+    expect(await reduced.json()).toMatchObject({ catalogPrice: 800, price: 760, discount: 0 });
 
     // --- 3. La administración ve el descuento en el informe.
     const adminContext = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
@@ -262,14 +262,16 @@ for (const viewport of [
         ? admin.getByRole('list', { name: 'Descuentos del periodo' }).getByRole('listitem')
         : admin.getByRole('table', { name: 'Descuentos del periodo' }).getByRole('row');
     await expect(rows.filter({ hasText: data.fullName }).first()).toBeVisible();
-    // Los tres del 10 %; el ítem al 50 % frente al catálogo de moneda
-    // desconocida no es un descuento (DX-513).
-    await expect(rows.filter({ hasText: data.fullName })).toHaveCount(3);
-    await expect(rows.filter({ hasText: data.fullName }).filter({ hasText: /Precio rebajado a/ })).toHaveCount(0);
-    // SEC-047 + DX-513: la rebaja de convenio se mide frente al catálogo, en
-    // una moneda que en la demo no se sabe: no sale. La frase larga a 390 px
-    // la prueba `plan-item-discount-currency.spec.ts`.
-    await expect(rows.filter({ hasText: data.agreementPatientName })).toHaveCount(0);
+    // Los tres del 10 % y la rebaja de precio del 95 % (SEC-041).
+    await expect(rows.filter({ hasText: data.fullName })).toHaveCount(4);
+    await expect(
+      // DX-378 (FE-078): separadores de la sede (es-VE) y siempre el código de la moneda, nunca «$».
+      rows.filter({ hasText: data.fullName }).filter({ hasText: /Precio rebajado a USD\s760,00/ }),
+    ).toHaveCount(1);
+    // SEC-047: la línea solo de convenio, con su frase, sin desbordar a 390 px.
+    const agreementLine = rows.filter({ hasText: data.agreementPatientName });
+    await expect(agreementLine).toHaveCount(1);
+    await expect(agreementLine).toContainText('Convenio «Cortesía empleados de la clínica 100 %');
     if (viewport.width === 390) {
       await expectNoHorizontalScroll(admin);
       await expectNoHorizontalScrollIn(admin);
