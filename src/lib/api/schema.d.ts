@@ -22230,6 +22230,13 @@ export interface operations {
                     "application/json": components["schemas"]["PatientDetailDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     PatientsController_archive: {
@@ -22290,6 +22297,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PatientDto"];
                 };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -23879,6 +23893,13 @@ export interface operations {
                     "application/json": components["schemas"]["DentalCatalogItemDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     LocationsController_list: {
@@ -23945,6 +23966,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LocationDto"];
                 };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -30284,6 +30312,13 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentDto"][];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     PaymentsController_create: {
@@ -30310,7 +30345,7 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentDto"];
                 };
             };
-            /** @description DX-377: el medio pide referencia y no llegó, o el medio no es de la clínica o está desactivado. DX-075: `paidAt` como día civil posterior a hoy en la sede («La fecha del abono no puede ser posterior a hoy en la sede.»). DX-054: `paidAt` como instante a más de 24 h en el futuro («La fecha del abono no puede estar más de 24 horas en el futuro.»). */
+            /** @description Id que no es UUID. DX-377: el medio pide referencia y no llegó, o el medio no es de la clínica o está desactivado. DX-075: `paidAt` como día civil posterior a hoy en la sede («La fecha del abono no puede ser posterior a hoy en la sede.»). DX-054: `paidAt` como instante a más de 24 h en el futuro («La fecha del abono no puede estar más de 24 horas en el futuro.»). */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -30460,6 +30495,13 @@ export interface operations {
                     "application/json": components["schemas"]["PlanBalanceWithItemsDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     PaymentsController_updateExternalInvoiceNumber: {
@@ -30537,7 +30579,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Falta `reason` o no tiene 3–300 caracteres */
+            /** @description Id que no es UUID, o falta `reason` o no tiene 3–300 caracteres */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -30973,6 +31015,13 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentPlanDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     PaymentPlansController_create: {
@@ -30998,6 +31047,13 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentPlanDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description El plan ya tiene un plan de cuotas activo, o está rechazado o cancelado y no se financia (DX-109). */
             409: {
                 headers: {
@@ -31020,6 +31076,13 @@ export interface operations {
         responses: {
             /** @description Payment plan cancelled */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Id que no es UUID */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -33526,6 +33589,13 @@ export interface operations {
                     "application/json": components["schemas"]["InventoryItemDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     InventoryController_remove: {
@@ -33541,6 +33611,13 @@ export interface operations {
         responses: {
             /** @description Item soft-deleted (deletedAt set) */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Id que no es UUID */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -33571,6 +33648,13 @@ export interface operations {
                     "application/json": components["schemas"]["InventoryItemDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     InventoryController_listMovements: {
@@ -33591,6 +33675,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InventoryMovementDto"][];
                 };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -33616,6 +33707,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InventoryMovementDto"];
                 };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
