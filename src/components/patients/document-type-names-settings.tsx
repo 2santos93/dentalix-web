@@ -22,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { SaveBar, useSettingsDraft } from '@/components/settings/save-bar';
 import { SettingRows } from '@/components/settings/settings-page';
+import { cn } from '@/lib/utils';
 
 const copy = {
   hint: (generic: string) => `Vacío: se usa «${generic}».`,
@@ -69,6 +70,7 @@ export function DocumentTypeNamesSettingsSection({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<DocType, string>>>({});
   const [notice, setNotice] = useState('');
+  const noticeRef = useRef<HTMLParagraphElement>(null);
   const idPrefix = useId();
   const inputRefs = useRef<Partial<Record<DocType, HTMLInputElement | null>>>({});
   // Cada petición es un objeto nuevo: el efecto enfoca aunque se repita el tipo.
@@ -204,7 +206,16 @@ export function DocumentTypeNamesSettingsSection({
           );
         })}
       </SettingRows>
-      <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
+      {/* DX-546 · FE-110: tras guardar, la SaveBar lleva aquí el foco (`savedFocusTo`). */}
+      <p
+        ref={noticeRef}
+        role="status"
+        tabIndex={-1}
+        className={cn(
+          notice ? 'text-sm text-success-text' : 'sr-only',
+          'rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text',
+        )}
+      >
         {notice}
       </p>
       {/* Único guardado: aparece con cambios; el error del guardado va dentro. */}
@@ -212,6 +223,7 @@ export function DocumentTypeNamesSettingsSection({
         dirty={dirty}
         saving={saving}
         form={formId}
+        savedFocusTo={noticeRef}
         error={saveError}
         saveLabel={copy.save}
         onDiscard={() => {

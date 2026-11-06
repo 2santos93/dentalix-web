@@ -61,15 +61,16 @@ describe('DocumentTypeNamesSettingsSection (DX-327)', () => {
     expect(mockedSave).not.toHaveBeenCalled();
   });
 
-  it('after saving, the bar goes away and focus returns to the form (SaveBar, FE-110), not to <body>', async () => {
+  it('after saving, the bar goes away and focus lands on «Nombres guardados.» (SaveBar savedFocusTo, FE-110), not on <body>', async () => {
     const user = userEvent.setup();
     mockedSave.mockResolvedValue({ ...NONE, PASSPORT: 'Doc' });
     render(<DocumentTypeNamesSettingsSection token="tok" allowed />);
     await user.type(await screen.findByLabelText(DOC_TYPE_LABEL.PASSPORT), 'Doc');
     await user.click(screen.getByRole('button', { name: 'Guardar' }));
     const notice = await screen.findByText('Nombres guardados.');
-    await waitFor(() => expect(notice.closest('form')).toHaveFocus());
+    await waitFor(() => expect(notice).toHaveFocus());
     expect(notice).toHaveAttribute('role', 'status');
+    expect(notice).toHaveAttribute('tabindex', '-1');
     expect(screen.queryByRole('button', { name: 'Guardar' })).not.toBeInTheDocument();
   });
 

@@ -100,10 +100,16 @@ export interface SaveBarProps {
   savedMessage?: string;
   /**
    * Adónde vuelve el foco cuando la barra se va con el foco dentro (tras
-   * «Guardar» o «Descartar»). Por defecto, el `<form>` de `form` (o el que la
-   * contiene), que se hace enfocable con `tabIndex={-1}`.
+   * «Guardar» o «Descartar»). Por defecto, el título de la sección o de la
+   * página que la contiene (`SaveBarFocusScope`, que ponen `SettingsSection`
+   * y `SettingsPage`): un destino con nombre, declarado con `tabIndex={-1}`.
    */
   returnFocusTo?: React.RefObject<HTMLElement | null>;
+  /**
+   * Tras un guardado correcto, el foco va aquí en vez de a `returnFocusTo`
+   * (p. ej. el aviso «… guardados.» de la pantalla, con `tabIndex={-1}`).
+   */
+  savedFocusTo?: React.RefObject<HTMLElement | null>;
   className?: string;
 }
 
@@ -115,26 +121,22 @@ function focusIsLost(doc: Document): boolean {
   return active === null || active === doc.body || !active.isConnected;
 }
 
-/** El destino estable del foco tras la barra: `returnFocusTo`, o el formulario. */
-function focusTarget(
-  live: HTMLElement | null,
-  form: string | undefined,
-  returnFocusTo: React.RefObject<HTMLElement | null> | undefined,
-): HTMLElement | null {
-  if (returnFocusTo?.current) return returnFocusTo.current;
-  if (!live) return null;
-  const byId = form ? live.ownerDocument.getElementById(form) : null;
-  return byId ?? live.closest('form');
-}
+/**
+ * El destino del foco cuando la barra se va: el título de la sección (o de la
+ * página) que la contiene. Lo ponen `SettingsSection` y `SettingsPage`; una
+ * pantalla con su propia cabecera lo envuelve con `SaveBarFocusScope`. El
+ * destino lleva `tabIndex={-1}` en su JSX: la barra no toca el DOM ajeno.
+ */
+const SaveBarFocusTarget = React.createContext<React.RefObject<HTMLElement | null> | null>(null);
 
-function focusStable(target: HTMLElement) {
-  // Un contenedor (el formulario) recibe el foco solo por programa: sin
-  // anillo, como el aviso de los formularios (`focus:outline-none`).
-  if (!target.hasAttribute('tabindex')) {
-    target.setAttribute('tabindex', '-1');
-    target.classList.add('outline-none');
-  }
-  target.focus({ preventScroll: true });
+export function SaveBarFocusScope({
+  target,
+  children,
+}: {
+  target: React.RefObject<HTMLElement | null>;
+  children: React.ReactNode;
+}) {
+  return <SaveBarFocusTarget.Provider value={target}>{children}</SaveBarFocusTarget.Provider>;
 }
 
 /**
@@ -151,7 +153,9 @@ function focusStable(target: HTMLElement) {
  *
  * Foco (DX-546 · FE-110): al irse la barra con el foco dentro (o con el foco
  * ya suelto, porque «Guardar» se deshabilitó mientras guardaba), el foco va a
- * `returnFocusTo` o al formulario, nunca a `<body>`. Si el guardado falla, la
+ * un destino con nombre —`savedFocusTo` tras guardar, `returnFocusTo`, o el
+ * título de su sección o página (`SaveBarFocusScope`)—, nunca a `<body>` ni a
+ * un contenedor sin nombre (DESIGN.md → «focus lands on the section heading»). Si el guardado falla, la
  * barra sigue y el foco vuelve a «Guardar» para reintentar.
  */
 export function SaveBar({
@@ -165,8 +169,10 @@ export function SaveBar({
   saveAriaLabel,
   savedMessage,
   returnFocusTo,
+  savedFocusTo,
   className,
 }: SaveBarProps) {
+  const scopeTarget = React.useContext(SaveBarFocusTarget);
   const visible = dirty || saving || Boolean(error);
   const liveRef = React.useRef<HTMLDivElement>(null);
   const saveRef = React.useRef<HTMLButtonElement>(null);
@@ -194,8 +200,9 @@ export function SaveBar({
       const result: Outcome = discarding.current ? 'discarded' : before.saving ? 'saved' : null;
       discarding.current = false;
       if (focusWasInside.current || (result !== null && focusIsLost(doc))) {
-        const target = focusTarget(liveRef.current, form, returnFocusTo);
-        if (target) focusStable(target);
+        const target =
+          (result === 'saved' ? savedFocusTo?.current : null) ?? returnFocusTo?.current ?? scopeTarget?.current;
+        target?.focus();
       }
       focusWasInside.current = false;
       // El aviso va al contenedor vivo, que ya está montado: el lector de
@@ -208,7 +215,7 @@ export function SaveBar({
       return;
     }
     if (visible && before.saving && !saving && focusIsLost(doc)) saveRef.current?.focus();
-  }, [visible, saving, form, returnFocusTo]);
+  }, [visible, saving, returnFocusTo, savedFocusTo, scopeTarget]);
 
   const announcement =
     visible || outcome === null ? null : outcome === 'discarded' ? saveBarCopy.discarded : (savedMessage ?? null);

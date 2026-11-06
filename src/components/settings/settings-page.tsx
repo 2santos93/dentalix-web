@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/shared/page-header';
 import { SectionHeader } from '@/components/ui/section-header';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { SaveBarFocusScope } from './save-bar';
 import { SETTINGS_BACK } from './settings-sections';
 
 /**
@@ -65,6 +66,8 @@ export function SettingsPage({
   // La vuelta a «Ajustes» la hace la sub-navegación en `xl`; una vuelta a otra
   // pantalla (Sedes) se queda siempre: la sub-navegación no la sustituye.
   const backIsIndex = back.href === SETTINGS_BACK.href;
+  // DX-546 · FE-110: el destino del foco de una SaveBar fuera de toda sección.
+  const titleRef = React.useRef<HTMLHeadingElement>(null);
   const scopeNode: React.ReactNode =
     scope === 'clinic' ? scopeCopy.clinic : scope === 'sede' ? scopeCopy.sede : (scope ?? null);
   return (
@@ -80,6 +83,7 @@ export function SettingsPage({
         {back.label}
       </Link>
       <PageHeader
+        titleRef={titleRef}
         title={title}
         description={description}
         actions={actions}
@@ -91,7 +95,9 @@ export function SettingsPage({
           ) : undefined
         }
       />
-      <div className="flex flex-col gap-10">{children}</div>
+      <SaveBarFocusScope target={titleRef}>
+        <div className="flex flex-col gap-10">{children}</div>
+      </SaveBarFocusScope>
     </div>
   );
 }
@@ -119,16 +125,20 @@ export function SettingsSection({
 }: SettingsSectionProps) {
   const autoId = React.useId();
   const headingId = id ?? `settings-section-${autoId}`;
+  // DX-546 · FE-110: el título es el destino del foco de la SaveBar de dentro.
+  const titleRef = React.useRef<HTMLHeadingElement>(null);
   return (
     <section aria-labelledby={headingId} className={cn('flex flex-col gap-3', className)}>
       <SectionHeader
         as={as}
         titleId={headingId}
+        titleRef={titleRef}
+        titleFocusable
         title={title}
         description={description ? <span className="block max-w-[68ch]">{description}</span> : undefined}
         actions={actions}
       />
-      {children}
+      <SaveBarFocusScope target={titleRef}>{children}</SaveBarFocusScope>
     </section>
   );
 }

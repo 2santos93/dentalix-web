@@ -35,6 +35,11 @@ interface PageHeaderProps {
    * de enlace pequeña, para que no compita con el título.
    */
   back?: { href: string; label: string };
+  /**
+   * Ref del h1: con ella el título recibe el foco por programa (`tabIndex=-1`,
+   * con el anillo de foco), p. ej. tras la SaveBar (DX-546).
+   */
+  titleRef?: React.Ref<HTMLHeadingElement>;
 }
 
 /**
@@ -50,7 +55,7 @@ interface PageHeaderProps {
  * pantalla y su contenido: es el intervalo más grande de la página, y por eso lo
  * demás puede ir apretado sin que todo pese lo mismo.
  */
-export function PageHeader({ title, description, meta, actions, back }: PageHeaderProps) {
+export function PageHeader({ title, description, meta, actions, back, titleRef }: PageHeaderProps) {
   return (
     <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       {/* `min-w-0` + `break-words`: a long patient name must shrink and wrap
@@ -66,7 +71,17 @@ export function PageHeader({ title, description, meta, actions, back }: PageHead
             {back.label}
           </Link>
         ) : null}
-        <h1 className="t-display text-ink">{title}</h1>
+        <h1
+          ref={titleRef}
+          tabIndex={titleRef ? -1 : undefined}
+          className={
+            titleRef
+              ? 't-display rounded-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text'
+              : 't-display text-ink'
+          }
+        >
+          {title}
+        </h1>
         {/* `max-w-[68ch]`: la línea de apoyo es prosa y se lee en medida de
             prosa. Sin tope, en escritorio se estiraba los 1150px del contenido
             y una frase de once palabras se leía como un pie de página. */}

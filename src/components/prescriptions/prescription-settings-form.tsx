@@ -17,6 +17,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { SaveBar, useSettingsDraft } from '@/components/settings/save-bar';
 import { SettingRows } from '@/components/settings/settings-page';
+import { cn } from '@/lib/utils';
 
 const copy = {
   wordsTitle: 'Cantidad en letras',
@@ -90,6 +91,7 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
   const [validityError, setValidityError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
+  const noticeRef = useRef<HTMLParagraphElement>(null);
   const id = useId();
   const formId = `${id}-form`;
   const validityId = `${id}-validity`;
@@ -217,7 +219,16 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
           </FormField>
         </div>
       </SettingRows>
-      <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
+      {/* DX-546 · FE-110: tras guardar, la SaveBar lleva aquí el foco (`savedFocusTo`). */}
+      <p
+        ref={noticeRef}
+        role="status"
+        tabIndex={-1}
+        className={cn(
+          notice ? 'text-sm text-success-text' : 'sr-only',
+          'rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text',
+        )}
+      >
         {notice}
       </p>
       {/* Único guardado: aparece con cambios; el error del guardado va dentro. */}
@@ -225,6 +236,7 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
         dirty={dirty}
         saving={saving}
         form={formId}
+        savedFocusTo={noticeRef}
         error={saveError}
         saveLabel={copy.save}
         onDiscard={() => {
