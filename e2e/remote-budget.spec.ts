@@ -1,11 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import type { Locator, Page } from '@playwright/test';
-import { test, expect } from './support/test';
+import type { APIRequestContext, Locator, Page } from '@playwright/test';
+import { test, expect, watchCspViolations } from './support/test';
 import { loginAs } from './support/auth';
-import { apiPost, registerClinicViaApi } from './support/api';
+import { apiPost, registerClinicViaApi, type ApiSession } from './support/api';
+import { SEDE_TZ } from './support/clock';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { MAIL_DIR, linkFromMail, mailMark } from './support/mail';
-import { E2E_BROWSER_LOCALE } from './support/regional';
+import { E2E_BROWSER_LOCALE, E2E_REGION } from './support/regional';
+import { API_URL } from './support/urls';
+import { regionalFormat } from '../src/lib/format/regional-format';
 
 /**
  * e2e DX-415: aceptación del presupuesto a distancia.
@@ -20,6 +23,11 @@ import { E2E_BROWSER_LOCALE } from './support/regional';
  *      mismo enlace después: «Enlace no válido».
  *   3. La ficha (1440 y 390) dice «Aceptado a distancia por …» con las
  *      evidencias y el plan ya no se puede enviar.
+ *   4. DX-514: con el navegador en otra zona (Tokio), el impreso dice
+ *      «Firmado a distancia por … (paciente)» y «Enviado por <quien lo
+ *      envió>», y el impreso y la ficha pintan cada hora con el reloj de la
+ *      sede (Caracas), a 1440 y 390. Las horas son las que guardó la API (no
+ *      se elige ningún día), así que no dependen de la fecha en que corre.
  *
  * Estado: crea su propia clínica (no toca la demo).
  */
@@ -36,7 +44,25 @@ const PROCEDURE = `Corona ${suffix}`.slice(0, 40);
 
 let origin = '';
 let patientId = '';
+let planId = '';
+let admin: ApiSession | null = null;
 let link = '';
+
+/** El reloj de la sede de la suite (Caracas, es-VE, 24 h): así pinta la web sus horas. */
+const sedeFmt = regionalFormat(E2E_REGION);
+const atSedeClock = (iso: string) => sedeFmt.dateTime(new Date(iso), SEDE_TZ);
+/** `Intl` separa con espacios duros; se normaliza para comparar. */
+const norm = (value: string) => value.replace(/\s+/g, ' ').trim();
+
+async function expectText(locator: Locator, expected: string): Promise<void> {
+  await expect.poll(async () => norm((await locator.textContent()) ?? ''), { timeout: 15_000 }).toContain(norm(expected));
+}
+
+async function apiGet<T>(request: APIRequestContext, session: ApiSession, path: string): Promise<T> {
+  const res = await request.get(`${API_URL}${path}`, { headers: session.headers });
+  expect(res.ok(), `GET ${path} falló: ${await res.text()}`).toBeTruthy();
+  return (await res.json()) as T;
+}
 
 test.describe.configure({ mode: 'serial' });
 
@@ -55,7 +81,7 @@ test.describe('Presupuesto a distancia (DX-415)', () => {
   test.skip(!MAIL_DIR, 'E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)');
 
   test.beforeAll(async ({ request }) => {
-    const admin = await registerClinicViaApi(request, clinic);
+    admin = await registerClinicViaApi(request, clinic);
     origin = admin.origin;
     const catalog = await apiPost<{ id: string }>(request, admin, '/catalog/items', {
       code: `cor-${suffix}`.slice(0, 30),
@@ -77,6 +103,7 @@ test.describe('Presupuesto a distancia (DX-415)', () => {
     const plan = await apiPost<{ id: string }>(request, admin, `/patients/${patient.id}/treatment-plans`, {
       currency: 'USD',
     });
+    planId = plan.id;
     await apiPost(request, admin, `/treatment-plans/${plan.id}/items`, {
       toothNumber: '36',
       catalogItemId: catalog.id,
@@ -160,6 +187,64 @@ test.describe('Presupuesto a distancia (DX-415)', () => {
       await expect(evidence).toContainText('ma***@example.com');
       await expect(page.getByRole('button', { name: 'Enviar a aceptar' })).toHaveCount(0);
       if (viewport.width === 390) await expectNoHorizontalScroll(page);
+    }
+  });
+
+  test('DX-514: el impreso dice quién firmó y quién envió, y las horas son las de la sede, no las del navegador (1440 y 390)', async ({
+    browser,
+    request,
+  }) => {
+    expect(admin, 'el beforeAll no dejó la sesión').not.toBeNull();
+    const quote = await apiGet<{
+      patient: { name: string };
+      acceptance: {
+        signerName: string;
+        acceptedAt: string;
+        acceptedByName: string;
+        remote: { sentAt: string; openedAt: string; verifiedAt: string; signerType?: string } | null;
+      } | null;
+    }>(request, admin!, `/patients/${patientId}/treatment-plans/${planId}/quote`);
+    const acceptance = quote.acceptance;
+    expect(acceptance?.remote?.signerType).toBe('PATIENT');
+    expect(acceptance?.acceptedByName).toBe(clinic.fullName);
+    const remote = acceptance!.remote!;
+    // El navegador en Tokio (13 h por delante de Caracas): una hora pintada con
+    // su zona, o en UTC, no coincidiría con la de la sede.
+    const context = await browser.newContext({ locale: E2E_BROWSER_LOCALE, timezoneId: 'Asia/Tokyo' });
+    // El guardián de CSP de la suite mira el `context` del fixture, no este.
+    const csp = watchCspViolations(context);
+    const page = await context.newPage();
+    try {
+      await loginAs(page, origin, clinic.email, clinic.password);
+      for (const viewport of [
+        { width: 1440, height: 900 },
+        { width: 390, height: 844 },
+      ]) {
+        await page.setViewportSize(viewport);
+        await page.goto(`${origin}/print/patients/${patientId}/treatment-plans/${planId}`);
+        const signature = page.getByTestId('quote-signature');
+        await expect(signature).toBeVisible({ timeout: 15_000 });
+        await expectText(
+          signature,
+          `Firmado a distancia por ${acceptance!.signerName} (paciente) el ${atSedeClock(acceptance!.acceptedAt)}`,
+        );
+        await expectText(signature, `Enviado por ${clinic.fullName} el ${atSedeClock(remote.sentAt)}`);
+        await expect(signature).not.toContainText('Registró la firma');
+        if (viewport.width === 390) await expectNoHorizontalScroll(page);
+
+        await page.goto(`${origin}/patients/${patientId}?tab=treatment-plans`);
+        const status = page.getByText(/Aceptado a distancia por Marta/);
+        await expect(status).toBeVisible({ timeout: 15_000 });
+        await expectText(status, `el ${atSedeClock(acceptance!.acceptedAt)}`);
+        const evidence = page.getByLabel('Evidencias de la aceptación a distancia');
+        await expectText(evidence, `Enviado:${atSedeClock(remote.sentAt)}`);
+        await expectText(evidence, `Abierto:${atSedeClock(remote.openedAt)}`);
+        await expectText(evidence, `Código verificado:${atSedeClock(remote.verifiedAt)}`);
+        if (viewport.width === 390) await expectNoHorizontalScroll(page);
+      }
+      csp.expectNone();
+    } finally {
+      await context.close();
     }
   });
 });

@@ -76,7 +76,7 @@ export function PlanQuoteActions({
       {acceptance ? (
         <div role="status" className="flex items-start gap-2 text-sm">
           <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-success-text" />
-          <p>
+          <p className="min-w-0 break-words">
             <span className="font-medium text-ink tabular-nums">
               {(acceptance.remote ? copy.acceptedRemotely : copy.acceptedBy)(
                 acceptance.signerName,
@@ -87,7 +87,9 @@ export function PlanQuoteActions({
           </p>
         </div>
       ) : null}
-      {acceptance?.remote ? <RemoteAcceptanceEvidence token={token} remote={acceptance.remote} /> : null}
+      {acceptance?.remote ? (
+        <RemoteAcceptanceEvidence remote={acceptance.remote} stamp={stamp} locationId={plan.acceptedLocationId} />
+      ) : null}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         {canPrintPlanQuote(role) ? (

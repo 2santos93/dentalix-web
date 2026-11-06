@@ -121,6 +121,38 @@ describe('PlanQuoteActions (DX-012)', () => {
     expect(dateTimeIn('berlin', acceptedAt)).not.toBe(dateTimeIn('caracas', acceptedAt));
   });
 
+  it('DX-514: aceptado a distancia, «Aceptado» y las evidencias («Enviado», «Abierto», «Código verificado») con el reloj de la sede donde se aceptó', () => {
+    // Pantalla en Miami; aceptado en la sede de Caracas; jest en UTC.
+    const acceptedAt = '2026-10-31T04:46:00.000Z';
+    const remote = {
+      destinationMasked: 'ma***@example.com',
+      sentAt: '2026-10-31T04:44:00.000Z',
+      openedAt: '2026-10-31T04:45:00.000Z',
+      verifiedAt: '2026-10-31T04:45:30.000Z',
+      ipAddress: null,
+    };
+    renderActions(
+      plan({
+        status: 'ACCEPTED',
+        acceptedLocationId: STAMP_SEDES.caracas.id,
+        acceptance: { signerName: 'Marta Ríos', acceptedAt, remote },
+      }),
+      'DENTIST',
+      testStamp([STAMP_SEDES.miami, STAMP_SEDES.caracas]),
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(
+      `Aceptado a distancia por Marta Ríos el ${dateTimeIn('caracas', acceptedAt)}`,
+    );
+    const evidence = screen.getByLabelText('Evidencias de la aceptación a distancia');
+    expect(evidence).toHaveTextContent(`Enviado:${dateTimeIn('caracas', remote.sentAt)}`);
+    expect(evidence).toHaveTextContent(`Abierto:${dateTimeIn('caracas', remote.openedAt)}`);
+    expect(evidence).toHaveTextContent(`Código verificado:${dateTimeIn('caracas', remote.verifiedAt)}`);
+    // 04:44 UTC = 12:44 a. m. en Caracas: ni la hora UTC ni la de la sede de la pantalla.
+    expect(dateTimeIn('caracas', remote.sentAt)).toMatch(/12:44/);
+    expect(evidence).not.toHaveTextContent(/4:44|4:45/);
+    expect(evidence).not.toHaveTextContent(dateTimeIn('miami', remote.sentAt));
+  });
+
   it('sin formato de la sede, «—» en lugar de la fecha (el aviso lo pinta la pantalla)', () => {
     renderActions(
       plan({

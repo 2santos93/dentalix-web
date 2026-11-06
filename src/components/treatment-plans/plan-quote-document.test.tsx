@@ -1,7 +1,8 @@
 import { render, screen, within } from '@testing-library/react';
 import { PlanQuoteDocument } from './plan-quote-document';
 import { planQuoteFixture, SIGNED_ACCEPTANCE } from './plan-quote-fixture';
-import { FORMAT_DE, FORMAT_ES, FORMAT_US } from '@/lib/test/document-regional';
+import { FORMAT_DE, FORMAT_ES, FORMAT_US, REGIONAL_VE } from '@/lib/test/document-regional';
+import { documentFormat } from '@/lib/format/document-format';
 
 // `Intl` con «es» separa los miles con un espacio duro; se normaliza para leer.
 const text = (el: HTMLElement) => (el.textContent ?? '').replace(/\s/g, ' ');
@@ -119,6 +120,110 @@ describe('PlanQuoteDocument (DX-012)', () => {
     expect(signature).toHaveTextContent('Registró la firma: Dra. Laura Gómez');
     expect(screen.getByText('c'.repeat(64))).toBeInTheDocument();
     expect(screen.queryByText(/pudo alterarse/)).not.toBeInTheDocument();
+  });
+
+  it('DX-514: a 390 px los textos largos se parten (nombre de procedimiento, paciente, firmante), sin desbordar', () => {
+    // jsdom no mide: se comprueba que las cajas pueden encogerse y partir palabras (DESIGN: wrap, no ocultar).
+    const longProcedure = 'Rehabilitación-implantosoportada-con-pilar-personalizado-de-zirconio';
+    const longName = 'María Alejandra Rodríguez-Villasmil de Fernández';
+    render(
+      <PlanQuoteDocument
+        format={FORMAT_ES}
+        catalogCurrency="VES"
+        quote={planQuoteFixture({
+          patient: { name: longName, document: 'Documento nacional V-12345678' },
+          items: [{ ...planQuoteFixture().items[0], procedure: longProcedure }],
+          planStatus: 'ACCEPTED',
+          acceptance: { ...SIGNED_ACCEPTANCE, signerName: longName },
+        })}
+      />,
+    );
+    const card = screen.getByRole('list', { name: 'Procedimientos del presupuesto' });
+    const procedure = within(card).getByText(longProcedure);
+    expect(procedure).toHaveClass('min-w-0', 'break-words');
+    expect(procedure.nextElementSibling).toHaveClass('shrink-0');
+    const parties = screen.getByTestId('quote-parties');
+    expect(within(parties).getByText(longName)).toHaveClass('break-words');
+    expect(within(parties).getByText(longName).parentElement).toHaveClass('min-w-0');
+    const caption = screen.getByTestId('quote-signature').querySelector('figcaption');
+    expect(caption).toHaveClass('break-words');
+    expect(caption?.closest('figure')).toHaveClass('min-w-0');
+  });
+
+  describe('DX-514: aceptado a distancia', () => {
+    // Sede en Caracas (UTC−4) y jest en UTC: 02:30 UTC del 31 es el 30 a las 10:30 p. m. en la sede.
+    const FORMAT_VE = documentFormat(REGIONAL_VE)!;
+    const REMOTE = {
+      signatureRequestId: 'sr-1',
+      channel: 'EMAIL' as const,
+      destinationMasked: 'an***@example.com',
+      sentAt: '2026-10-30T22:00:00.000Z',
+      openedAt: '2026-10-31T02:20:00.000Z',
+      verifiedAt: '2026-10-31T02:25:00.000Z',
+    };
+    const remoteAcceptance = (
+      signerName: string,
+      signerType?: 'PATIENT' | 'GUARDIAN',
+    ): NonNullable<Parameters<typeof planQuoteFixture>[0]>['acceptance'] => ({
+      ...SIGNED_ACCEPTANCE,
+      signerName,
+      acceptedAt: '2026-10-31T02:30:00.000Z',
+      acceptedByName: 'Dra. Laura Gómez',
+      remote: { ...REMOTE, ...(signerType ? { signerType } : {}) },
+    });
+    const renderRemote = (acceptance: ReturnType<typeof remoteAcceptance>) =>
+      render(
+        <PlanQuoteDocument
+          format={FORMAT_VE}
+          catalogCurrency="VES"
+          quote={planQuoteFixture({ planStatus: 'ACCEPTED', acceptance })}
+        />,
+      );
+
+    it('firmó la paciente: «Firmado a distancia por … (paciente)» y «Enviado por …», con la hora de la sede', () => {
+      renderRemote(remoteAcceptance('Ana Pérez', 'PATIENT'));
+      const signature = screen.getByTestId('quote-signature');
+      expect(text(signature)).toContain('Firmado a distancia por Ana Pérez (paciente) el 30/10/2026 10:30 p. m.');
+      expect(text(signature)).toContain('Enviado por Dra. Laura Gómez el 30/10/2026 6:00 p. m.');
+      expect(signature).not.toHaveTextContent('Registró la firma');
+      expect(signature).not.toHaveTextContent('Aceptado y firmado por');
+      // Nunca la hora en UTC (ni la del navegador, que en jest es UTC).
+      expect(signature).not.toHaveTextContent(/31\/10\/2026|2:30|22:00/);
+    });
+
+    it('firmó el representante: «(representante de <paciente>)»', () => {
+      renderRemote(remoteAcceptance('Luis Pérez', 'GUARDIAN'));
+      const signature = screen.getByTestId('quote-signature');
+      expect(text(signature)).toContain(
+        'Firmado a distancia por Luis Pérez (representante de Ana Pérez) el 30/10/2026 10:30 p. m.',
+      );
+      expect(within(signature).getByRole('img', { name: 'Firma de Luis Pérez' })).toBeInTheDocument();
+      expect(text(signature)).toContain('Enviado por Dra. Laura Gómez');
+    });
+
+    it('sin el tipo de firmante (API anterior) no inventa el papel', () => {
+      renderRemote(remoteAcceptance('Ana Pérez'));
+      expect(text(screen.getByTestId('quote-signature'))).toContain(
+        'Firmado a distancia por Ana Pérez el 30/10/2026 10:30 p. m.',
+      );
+    });
+
+    it('aceptado en la clínica no cambia: «Aceptado y firmado por …» y «Registró la firma: …»', () => {
+      render(
+        <PlanQuoteDocument
+          format={FORMAT_VE}
+          catalogCurrency="VES"
+          quote={planQuoteFixture({
+            planStatus: 'ACCEPTED',
+            acceptance: { ...SIGNED_ACCEPTANCE, acceptedAt: '2026-10-31T02:30:00.000Z' },
+          })}
+        />,
+      );
+      const signature = screen.getByTestId('quote-signature');
+      expect(text(signature)).toContain('Aceptado y firmado por Ana Pérez el 30/10/2026 10:30 p. m.');
+      expect(signature).toHaveTextContent('Registró la firma: Dra. Laura Gómez');
+      expect(signature).not.toHaveTextContent(/a distancia|Enviado por/);
+    });
   });
 
   it('avisa si la huella no coincide con lo guardado', () => {

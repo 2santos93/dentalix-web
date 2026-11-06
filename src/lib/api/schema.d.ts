@@ -13447,6 +13447,8 @@ export interface components {
         };
         /** @enum {string} */
         SignatureRequestChannel: "EMAIL";
+        /** @enum {string} */
+        ConsentSignerType: "PATIENT" | "GUARDIAN";
         PlanQuoteRemoteAcceptanceDto: {
             /** Format: uuid */
             signatureRequestId: string;
@@ -13459,6 +13461,7 @@ export interface components {
             openedAt: string;
             /** Format: date-time */
             verifiedAt: string;
+            signerType?: components["schemas"]["ConsentSignerType"];
         };
         PlanQuoteAcceptanceDto: {
             signerName: string;
@@ -13469,7 +13472,7 @@ export interface components {
              * @description Hora del servidor
              */
             acceptedAt: string;
-            /** @description Quien registró la firma (usuario de la clínica) */
+            /** @description Quien registró la firma (usuario de la clínica). A distancia (DX-514): quien envió el enlace; el firmante es `signerName`. */
             acceptedByName: string;
             /** @description SHA-256 de contentHash + firmante + firma + hora */
             acceptanceHash: string;
@@ -18832,8 +18835,6 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
-        /** @enum {string} */
-        ConsentSignerType: "PATIENT" | "GUARDIAN";
         SignatureRecipientOptionDto: {
             allowed: boolean;
             /** @description Por qué no se puede enviar (en español) */
