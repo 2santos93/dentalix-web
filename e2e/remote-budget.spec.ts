@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { APIRequestContext, Locator, Page } from '@playwright/test';
-import { test, expect } from './support/test';
+import { test, expect, watchCspViolations } from './support/test';
 import { loginAs } from './support/auth';
 import { apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { SEDE_TZ } from './support/clock';
@@ -211,6 +211,8 @@ test.describe('Presupuesto a distancia (DX-415)', () => {
     // El navegador en Tokio (13 h por delante de Caracas): una hora pintada con
     // su zona, o en UTC, no coincidiría con la de la sede.
     const context = await browser.newContext({ locale: E2E_BROWSER_LOCALE, timezoneId: 'Asia/Tokyo' });
+    // El guardián de CSP de la suite mira el `context` del fixture, no este.
+    const csp = watchCspViolations(context);
     const page = await context.newPage();
     try {
       await loginAs(page, origin, clinic.email, clinic.password);
@@ -240,6 +242,7 @@ test.describe('Presupuesto a distancia (DX-415)', () => {
         await expectText(evidence, `Código verificado:${atSedeClock(remote.verifiedAt)}`);
         if (viewport.width === 390) await expectNoHorizontalScroll(page);
       }
+      csp.expectNone();
     } finally {
       await context.close();
     }
