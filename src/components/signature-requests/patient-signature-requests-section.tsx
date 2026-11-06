@@ -68,8 +68,6 @@ const copy = {
   revokeError: 'No pudimos anular el enlace. Intenta de nuevo.',
   revokedToast: 'Enlace anulado: ya no sirve.',
   sentToast: (to: string) => `Enlace enviado a ${to}.`,
-  notQueued:
-    'La solicitud quedó registrada, pero el email no salió. Anúlala y envíala de nuevo.',
   // DX-422: el PDF firmado que genera la API al quedar completo.
   pdfReady: 'PDF firmado archivado en Documentos del paciente.',
   pdfPending: 'Generando el PDF firmado: aparecerá aquí y en Documentos del paciente.',
@@ -351,9 +349,12 @@ export function PatientSignatureRequestsSection({
     }
   }
 
+  // DX-149-quater (I1): desde DX-149-ter la API guarda la solicitud y su email
+  // en la misma transacción, así que un 201 siempre lleva el email en cola
+  // (`emailQueued: true`); si no se pudo encolar, responde error y no queda
+  // nada. Ya no hay solicitud «registrada sin email» que avisar.
   function handleSent(created: SignatureRequestCreated) {
-    if (created.emailQueued) toast.success(copy.sentToast(created.destinationMasked));
-    else toast.warning(copy.notQueued);
+    toast.success(copy.sentToast(created.destinationMasked));
     // Un envío nuevo anula el anterior del mismo documento: se relee la lista.
     setReloadKey((k) => k + 1);
   }
