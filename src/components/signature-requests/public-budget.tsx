@@ -2,6 +2,14 @@ import * as React from 'react';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import type { SedeClock } from '@/lib/locations/sede-clock';
 import type { PublicBudget } from '@/lib/signature-requests/signature-requests-api';
+import {
+  formatListPrice,
+  listPriceHiddenNote,
+  listPriceNote,
+  listPricesCurrency,
+  listPricesInPlanCurrency,
+  sedeListPriceFormat,
+} from '@/lib/treatment-plans/list-price';
 
 export const publicBudgetCopy = {
   heading: 'Presupuesto',
@@ -24,17 +32,40 @@ export const publicBudgetCopy = {
 
 const copy = publicBudgetCopy;
 
+type PublicBudgetItem = PublicBudget['items'][number];
+
+/** ¿El ítem enseña «Precio de lista»? El de un convenio, si lo guardó. */
+function hasListPrice(item: PublicBudgetItem): item is PublicBudgetItem & { listPrice: number } {
+  return item.listPrice !== null && item.agreementName !== null;
+}
+
 /**
  * El presupuesto que el paciente acepta a distancia (DX-415): la foto que se
  * envió, con importes en la moneda del plan y el formato de la sede que lo
  * envió, con el código ISO de la moneda (DX-378; sin formato de sede, «—»). En el móvil cada ítem
  * es una tarjeta (sin tabla que desborde a 390 px). Papel blanco y tinta
  * oscura, como el resto del documento, para imprimirlo igual.
+ *
+ * DX-502: el precio de lista es el del catálogo, en SU moneda
+ * (`listPriceCurrency`, congelada en la foto), nunca en la del plan. Sin
+ * moneda conocida (foto anterior a DX-502 o sedes sin moneda común) la cifra
+ * se oculta y una nota lo explica, con el mismo texto que el impreso y la
+ * pestaña del plan (sin datos internos). La nota de referencia acompaña a los
+ * precios de lista que se ven en otra moneda, y en ninguno de los dos casos se
+ * muestra el «Ahorro por convenio», que restaría monedas distintas.
  */
 export function PublicBudgetSummary({ budget, clock }: { budget: PublicBudget; clock: SedeClock | null }) {
   const fmt = clock?.fmt ?? null;
   const money = (value: number) => sedeMoney(value, budget.currency, fmt);
   const civil = (day: string) => sedeCivilDate(day, fmt);
+  const listFormat = sedeListPriceFormat(fmt);
+  // Sin moneda conocida, `null`: no se pinta.
+  const listPriceText = (item: PublicBudgetItem) =>
+    hasListPrice(item) ? formatListPrice(item.listPrice, item.listPriceCurrency, listFormat) : null;
+  const listCurrencies = budget.items.filter(hasListPrice).map((item) => item.listPriceCurrency);
+  const listInPlanCurrency = listPricesInPlanCurrency(listCurrencies, budget.currency);
+  const shownForeign = listCurrencies.filter((c): c is string => c !== null && c !== budget.currency);
+  const hiddenListPrice = listCurrencies.includes(null);
 
   return (
     <div className="flex flex-col gap-4">
@@ -48,37 +79,40 @@ export function PublicBudgetSummary({ budget, clock }: { budget: PublicBudget; c
       </div>
 
       <ul aria-label={copy.itemsLabel} className="flex flex-col divide-y divide-[#e5e7eb] border-y border-[#e5e7eb]">
-        {budget.items.map((item, index) => (
-          <li key={`${item.toothNumber}-${index}`} className="flex flex-col gap-1 py-3 text-sm">
-            <div className="flex items-start justify-between gap-3">
-              <p className="min-w-0 break-words font-medium text-[#111827]">
-                {item.procedure}
-                <span className="block font-normal text-[#4b5563]">
-                  {copy.tooth(item.toothNumber)}
-                  {item.surfaces.length > 0 ? ` · ${item.surfaces.join(', ')}` : ''}
-                </span>
-              </p>
-              <p className="shrink-0 text-right font-medium tabular-nums text-[#111827]">{money(item.subtotal)}</p>
-            </div>
-            <dl className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-[#4b5563] tabular-nums">
-              <div className="flex gap-1">
-                <dt>{copy.unitPrice}</dt>
-                <dd>{money(item.unitPrice)}</dd>
+        {budget.items.map((item, index) => {
+          const listText = listPriceText(item);
+          return (
+            <li key={`${item.toothNumber}-${index}`} className="flex flex-col gap-1 py-3 text-sm">
+              <div className="flex items-start justify-between gap-3">
+                <p className="min-w-0 break-words font-medium text-[#111827]">
+                  {item.procedure}
+                  <span className="block font-normal text-[#4b5563]">
+                    {copy.tooth(item.toothNumber)}
+                    {item.surfaces.length > 0 ? ` · ${item.surfaces.join(', ')}` : ''}
+                  </span>
+                </p>
+                <p className="shrink-0 text-right font-medium tabular-nums text-[#111827]">{money(item.subtotal)}</p>
               </div>
-              {item.discount > 0 ? (
+              <dl className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-[#4b5563] tabular-nums">
                 <div className="flex gap-1">
-                  <dt>{copy.discount}</dt>
-                  <dd>−{money(item.discount)}</dd>
+                  <dt>{copy.unitPrice}</dt>
+                  <dd>{money(item.unitPrice)}</dd>
                 </div>
-              ) : null}
-              {item.listPrice !== null && item.agreementName ? (
-                <div>
-                  <dd>{copy.listPrice(money(item.listPrice))}</dd>
-                </div>
-              ) : null}
-            </dl>
-          </li>
-        ))}
+                {item.discount > 0 ? (
+                  <div className="flex gap-1">
+                    <dt>{copy.discount}</dt>
+                    <dd>−{money(item.discount)}</dd>
+                  </div>
+                ) : null}
+                {listText ? (
+                  <div>
+                    <dd>{copy.listPrice(listText)}</dd>
+                  </div>
+                ) : null}
+              </dl>
+            </li>
+          );
+        })}
       </ul>
 
       {budget.totals.map((total) => (
@@ -93,7 +127,7 @@ export function PublicBudgetSummary({ budget, clock }: { budget: PublicBudget; c
               <dd>−{money(total.discount)}</dd>
             </div>
           ) : null}
-          {total.agreementSaving > 0 ? (
+          {total.agreementSaving > 0 && listInPlanCurrency ? (
             <div className="flex justify-between gap-3">
               <dt className="text-[#4b5563]">{copy.saving}</dt>
               <dd>{money(total.agreementSaving)}</dd>
@@ -105,6 +139,16 @@ export function PublicBudgetSummary({ budget, clock }: { budget: PublicBudget; c
           </div>
         </dl>
       ))}
+      {shownForeign.length > 0 ? (
+        <p data-testid="public-budget-list-price-note" className="text-xs text-[#4b5563]">
+          {listPriceNote(listPricesCurrency(shownForeign), budget.currency)}
+        </p>
+      ) : null}
+      {hiddenListPrice ? (
+        <p data-testid="public-budget-list-price-hidden-note" className="text-xs text-[#4b5563]">
+          {listPriceHiddenNote(budget.currency)}
+        </p>
+      ) : null}
     </div>
   );
 }

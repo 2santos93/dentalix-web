@@ -13095,6 +13095,8 @@ export interface components {
             catalogPrice: number | null;
             /** @description DX-105: precio de catálogo (`defaultPrice`) en el alta. Null en ítems anteriores a DX-105 o sin precio de catálogo. */
             basePrice: number | null;
+            /** @description DX-502: moneda de `basePrice`, la del catálogo (común a las sedes activas) al dar de alta el ítem, congelada. Null si no había una común o no hay precio de catálogo. Puede no ser la del plan: no se convierte. */
+            catalogCurrency: string | null;
             /**
              * @description DX-105: de dónde salió `catalogPrice` (convenio por %, lista del convenio, lista de la sede o catálogo). Null en ítems anteriores a DX-105.
              * @enum {string|null}
@@ -13432,6 +13434,8 @@ export interface components {
             listPrice: number | null;
             /** @description Convenio con que se fijó el precio del ítem (v2). Null si no hubo convenio. */
             agreementName: string | null;
+            /** @description DX-502: moneda ISO 4217 de `listPrice`, la del catálogo al dar de alta el ítem (congelada; en v1/v2/v3, la guardada en el ítem). Puede no ser la del plan: no se convierte. Null si no se sabe: la web oculta la cifra y pone la nota de referencia. */
+            listPriceCurrency: string | null;
         };
         PlanQuoteTotalDto: {
             /** @description Código ISO 4217 de 3 letras. */
@@ -13442,7 +13446,7 @@ export interface components {
             discount: number;
             /** @description gross − discount */
             net: number;
-            /** @description Ahorro por convenio (v2): Σ max(0, precio de lista − precio de referencia) de los ítems con convenio, en la moneda del plan. 0 en v1. */
+            /** @description Ahorro por convenio (v2): Σ max(0, precio de lista − precio de referencia) de los ítems con convenio, en la moneda del plan. v4 (DX-502): solo los ítems cuyo precio de lista está en la moneda del plan (nunca resta monedas distintas). 0 en v1. */
             agreementSaving: number;
         };
         /** @enum {string} */
@@ -13488,10 +13492,10 @@ export interface components {
             /** @description Organización clínica actual; separada del contenido firmado. */
             visitOrganization?: components["schemas"]["PlanQuoteVisitDto"][];
             /**
-             * @description 3 = con datos fiscales congelados (DX-019); 2 = con convenio y ahorro (DX-105); 1 = foto firmada antes de DX-105 (sin convenio).
+             * @description 4 = con la moneda de cada precio de lista (DX-502) y los datos fiscales congelados si la clínica los tiene; 3 = con datos fiscales congelados (DX-019); 2 = con convenio y ahorro (DX-105); 1 = foto firmada antes de DX-105 (sin convenio).
              * @enum {number}
              */
-            version: 1 | 2;
+            version: 1 | 2 | 3 | 4;
             /** Format: uuid */
             planId: string;
             /** Format: uuid */
@@ -13539,6 +13543,8 @@ export interface components {
         PriceQuoteDto: {
             /** @description Precio de catálogo (`defaultPrice`); null si no tiene */
             basePrice: number | null;
+            /** @description DX-502: moneda de `basePrice`: la del catálogo, común a todas las sedes activas de la clínica (no solo las del usuario). Null si no hay una común. Puede no ser la del plan (`currency`): no se convierte. */
+            catalogCurrency: string | null;
             /** @description Precio de referencia resuelto (el `catalogPrice` que tendría el ítem); null = sin precio: hay que indicarlo */
             price: number | null;
             /**
@@ -19109,12 +19115,15 @@ export interface components {
             subtotal: number;
             listPrice: number | null;
             agreementName: string | null;
+            /** @description DX-502: moneda ISO 4217 de `listPrice`: la del catálogo, congelada en la foto enviada (en un enlace anterior a DX-502, v2/v3, la congelada en los ítems del plan). Puede no ser la del plan: no se convierte. Null si no se sabe (sedes sin moneda común): no se muestra la cifra. */
+            listPriceCurrency: string | null;
         };
         PublicBudgetTotalDto: {
             currency: string;
             gross: number;
             discount: number;
             net: number;
+            /** @description Ahorro por convenio en `currency`. Desde DX-502 no suma los ítems cuyo precio de lista está en otra moneda (o en una desconocida). */
             agreementSaving: number;
         };
         PublicBudgetDto: {
