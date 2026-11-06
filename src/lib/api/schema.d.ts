@@ -6074,6 +6074,26 @@ export interface paths {
         patch: operations["PrescriptionTemplatesController_update"];
         trace?: never;
     };
+    "/api/v1/public/prescription-verifications/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Verifica una receta con su código (página pública /receta/<código>)
+         * @description Dice si la receta es válida (con fecha de emisión, profesional y su registro, clínica e iniciales del paciente), está anulada (solo la fecha) o no se puede verificar porque su hash no coincide. Nunca medicamentos, diagnóstico ni documento del paciente. Acepta el código en minúsculas o con guiones. Cada verificación de una receta encontrada queda en la auditoría como VIEW de PRESCRIPTION, origen PUBLIC_LINK, sin actor, con reason PRESCRIPTION_VERIFIED, PRESCRIPTION_VERIFIED_VOIDED o PRESCRIPTION_INTEGRITY_MISMATCH.
+         */
+        get: operations["PublicPrescriptionVerificationsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/implants": {
         parameters: {
             query?: never;
@@ -19449,6 +19469,11 @@ export interface components {
             safetyOverrideReason: string | null;
             /** @description SHA-256 (hex) del contenido emitido */
             contentHash: string;
+            /**
+             * @description DX-467: código de verificación (12 símbolos sin 0/O, 1/I/L; se imprime en grupos de 4). Quien tenga la receta la comprueba en la página pública /receta/<código>. Fuera del hash; inmutable.
+             * @example K7M2P9QRT4XW
+             */
+            verificationCode: string;
             /** Format: date-time */
             voidedAt: string | null;
             /** Format: uuid */
@@ -19668,6 +19693,11 @@ export interface components {
             safetyOverrideReason: string | null;
             /** @description SHA-256 (hex) del contenido emitido */
             contentHash: string;
+            /**
+             * @description DX-467: código de verificación (12 símbolos sin 0/O, 1/I/L; se imprime en grupos de 4). Quien tenga la receta la comprueba en la página pública /receta/<código>. Fuera del hash; inmutable.
+             * @example K7M2P9QRT4XW
+             */
+            verificationCode: string;
             /** Format: date-time */
             voidedAt: string | null;
             /** Format: uuid */
@@ -19680,6 +19710,11 @@ export interface components {
             locationFormat: components["schemas"]["PrescriptionLocationFormatDto"];
             /** @description true si el hash guardado coincide con el recalculado al leer */
             integrityOk: boolean;
+            /**
+             * @description DX-467: URL de la página pública de verificación, en el host de plataforma de la clínica, para el QR de la receta impresa. null si no hay host seguro: se imprime solo el código.
+             * @example https://demo.dentalix.app/receta/K7M2P9QRT4XW
+             */
+            verificationUrl: string | null;
         };
         VoidPrescriptionDto: {
             /** @example Dosis equivocada */
@@ -19722,6 +19757,38 @@ export interface components {
             name?: string;
             notes?: string;
             items?: components["schemas"]["PrescriptionItemInputDto"][];
+        };
+        /**
+         * @description VALID = auténtica y no anulada; VOIDED = anulada; UNVERIFIABLE = el hash guardado no coincide con el recalculado (no se puede verificar: contactar con la clínica).
+         * @enum {string}
+         */
+        PublicPrescriptionVerificationState: "VALID" | "VOIDED" | "UNVERIFIABLE";
+        PublicPrescriptionVerificationDto: {
+            /** @description VALID = auténtica y no anulada; VOIDED = anulada; UNVERIFIABLE = el hash guardado no coincide con el recalculado (no se puede verificar: contactar con la clínica). */
+            state: components["schemas"]["PublicPrescriptionVerificationState"];
+            /**
+             * Format: date-time
+             * @description Emisión (solo VALID).
+             */
+            issuedAt: string | null;
+            /**
+             * Format: date-time
+             * @description Anulación (solo VOIDED; sin motivo ni autor).
+             */
+            voidedAt: string | null;
+            /** @description Profesional que la emitió (solo VALID). */
+            professionalName: string | null;
+            /** @description Su nº de registro profesional (solo VALID). */
+            professionalLicense: string | null;
+            /** @description Clínica tal como figura en la receta (solo VALID). */
+            clinicName: string | null;
+            /**
+             * @description Iniciales del paciente (solo VALID).
+             * @example A. P. G.
+             */
+            patientInitials: string | null;
+            /** @description Formato regional y zona actuales de la sede de la receta, para pintar las fechas como en la receta impresa. */
+            regional: components["schemas"]["PrescriptionLocationFormatDto"];
         };
         PatientImplantDto: {
             /** Format: uuid */
@@ -37112,6 +37179,41 @@ export interface operations {
             };
             /** @description Ya existe una plantilla con ese nombre */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicPrescriptionVerificationsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicPrescriptionVerificationDto"];
+                };
+            };
+            /** @description Código mal formado, inexistente, de otra clínica o host sin clínica: el mismo 404 genérico («No encontramos ninguna receta con este código.»). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

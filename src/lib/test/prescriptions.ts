@@ -51,6 +51,7 @@ export function makePrescription(overrides: Partial<Prescription> = {}): Prescri
     safetyAlerts: [],
     safetyOverrideReason: null,
     contentHash: 'a'.repeat(64),
+    verificationCode: 'K7M2P9QRT4XW',
     voidedAt: null,
     voidedById: null,
     voidedByName: null,
@@ -115,6 +116,7 @@ export function makePrescriptionDocument(
     clinicLogoUrl: null,
     locationFormat: PRESCRIPTION_NEW_YORK_FORMAT,
     integrityOk: true,
+    verificationUrl: 'https://demo.dentalix.app/receta/K7M2P9QRT4XW',
     ...overrides,
   };
 }

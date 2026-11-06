@@ -1,5 +1,7 @@
 import { ClinicFiscalLines } from '@/components/brand/clinic-fiscal-lines';
 import * as React from 'react';
+import { QRCodeSVG } from 'qrcode.react';
+import { groupVerificationCode, verificationUrlLabel } from '@/lib/prescriptions/prescription-verification';
 import type { PrescriptionDocument as PrescriptionDoc } from '@/lib/prescriptions/prescriptions-api';
 import type { PrescriptionFormat } from '@/lib/prescriptions/prescription-format';
 import { legacyPrescriptionLayout } from '@/lib/prescriptions/legacy-prescription-layout';
@@ -40,7 +42,51 @@ const copy = {
   footerHash: 'Huella SHA-256 del contenido emitido',
   tampered:
     'La huella no coincide con el contenido guardado: esta receta pudo alterarse fuera de Dentalix.',
+  verification: 'Verificación de la receta',
+  verificationCode: 'Código de verificación',
+  verificationQr: 'Código QR para verificar la receta',
+  verificationHow: (where: string) =>
+    `Escanee el código QR o entre en ${where} para comprobar si sigue vigente.`,
+  verificationNoUrl: 'Para comprobar si sigue vigente, consulte a la clínica con este código.',
 };
+
+/**
+ * DX-467: el código de verificación (en grupos de 4, para dictarlo) y el QR a
+ * la página pública `/receta/<código>` del host de la clínica. Sin URL segura
+ * (la API no pudo armarla), solo el código. Toda receta lo lleva, también las
+ * emitidas antes (su código salió del barrido de la migración).
+ */
+function VerificationBlock({ code, url }: { code: string; url: string | null }) {
+  return (
+    <section
+      aria-label={copy.verification}
+      className="prescription-verification mt-6 flex items-center gap-4 border-t border-[#d1d5db] pt-3 text-xs text-[#4b5563] break-inside-avoid"
+    >
+      {url ? (
+        <QRCodeSVG
+          value={url}
+          size={84}
+          level="M"
+          marginSize={0}
+          title={copy.verificationQr}
+          bgColor="#ffffff"
+          fgColor="#111827"
+          className="size-[22mm] shrink-0"
+        />
+      ) : null}
+      <div className="flex min-w-0 flex-col gap-1">
+        <p className="text-sm font-semibold text-[#111827]">{copy.verification}</p>
+        <p>
+          {copy.verificationCode}:{' '}
+          <span className="font-mono text-sm font-semibold tracking-wider text-[#111827]">
+            {groupVerificationCode(code)}
+          </span>
+        </p>
+        <p className="wrap-anywhere">{url ? copy.verificationHow(verificationUrlLabel(url)) : copy.verificationNoUrl}</p>
+      </div>
+    </section>
+  );
+}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -238,6 +284,8 @@ export function PrescriptionDocument({ prescription: rx, format }: PrescriptionD
           <p className="border-t border-[#111827] pt-2 text-sm">{copy.signature}</p>
         </div>
       </section>
+
+      <VerificationBlock code={rx.verificationCode} url={rx.verificationUrl} />
 
       <footer className="mt-6 flex flex-col gap-1 border-t border-[#d1d5db] pt-3 text-xs text-[#4b5563]">
         {!rx.integrityOk ? <p className="font-medium text-[#be123c]">{copy.tampered}</p> : null}

@@ -299,9 +299,15 @@ const LEGACY_ES_MARKUP = [
   '</article>',
 ];
 
-/** Enmascara las fechas y corta por etiquetas para que un fallo señale la pieza que cambió. */
+/**
+ * Enmascara las fechas y corta por etiquetas para que un fallo señale la pieza
+ * que cambió. DX-467: el bloque de verificación (código y QR), que toda receta
+ * lleva ahora delante del pie, también las legadas, se quita aquí y se prueba
+ * aparte: el resto del marcado legado sigue igual.
+ */
 function legacyMarkup(html: string): string[] {
   return html
+    .replace(/<section aria-label="Verificación de la receta"[\s\S]*?<\/section>/, '')
     .replace(/\d{2}[/.]\d{2}[/.]\d{4}(?: \d{1,2}:\d{2}(?: [ap]\. m\.)?)?/g, '[fecha]')
     .split(/(?=<)/);
 }
@@ -315,6 +321,27 @@ function item(rx: PrescriptionDoc, overrides: Partial<PrescriptionDoc['items'][n
 }
 
 describe('PrescriptionDocument (A4)', () => {
+  it('DX-467: imprime el código de verificación agrupado y el QR a /receta/<código> del host de la clínica', () => {
+    const { container } = renderDocument(makePrescriptionDocument());
+    const section = screen.getByRole('region', { name: 'Verificación de la receta' });
+    expect(section).toHaveTextContent('K7M2-P9QR-T4XW');
+    expect(section).toHaveTextContent('demo.dentalix.app/receta/K7M2P9QRT4XW');
+    const qr = container.querySelector('.prescription-verification svg');
+    expect(qr).not.toBeNull();
+    expect(qr?.querySelector('title')?.textContent).toBe('Código QR para verificar la receta');
+    // El QR lleva la URL entera (con protocolo): se dibuja con módulos, así que
+    // basta con que haya dibujo.
+    expect(qr?.querySelectorAll('path').length).toBeGreaterThan(0);
+  });
+
+  it('DX-467: sin URL segura de la clínica, solo el código (sin QR)', () => {
+    const { container } = renderDocument(makePrescriptionDocument({ verificationUrl: null }));
+    const section = screen.getByRole('region', { name: 'Verificación de la receta' });
+    expect(section).toHaveTextContent('K7M2-P9QR-T4XW');
+    expect(section).toHaveTextContent('Para comprobar si sigue vigente, consulte a la clínica con este código.');
+    expect(container.querySelector('.prescription-verification svg')).toBeNull();
+  });
+
   it('el logo no filtra la URL de la receta al host de la imagen', () => {
     renderDocument(makePrescriptionDocument({ clinicLogoUrl: 'https://cdn.example.com/logo.png' }));
     expect(screen.getByRole('img', { name: 'Clínica Demo' })).toHaveAttribute('referrerpolicy', 'no-referrer');
@@ -331,7 +358,10 @@ describe('PrescriptionDocument (A4)', () => {
         'Medicamentos1.Amoxicilina 500 mgCápsula · Vía oral1 cápsula, cada 8 horas, durante 7 días.' +
         'Cantidad total: 21 (veintiuno) cápsulas' +
         'Profesional que prescribeDra. Laura RuizRegistro profesionalRM-12345Contactolaura@example.com' +
-        'Firma del profesionalHuella SHA-256 del contenido emitido: ' +
+        'Firma del profesional' +
+        'Código QR para verificar la recetaVerificación de la recetaCódigo de verificación: K7M2-P9QR-T4XW' +
+        'Escanee el código QR o entre en demo.dentalix.app/receta/K7M2P9QRT4XW para comprobar si sigue vigente.' +
+        'Huella SHA-256 del contenido emitido: ' +
         'a'.repeat(64),
     );
     expect(screen.getByRole('heading', { name: 'Fórmula médica' })).toBeInTheDocument();
@@ -350,7 +380,10 @@ describe('PrescriptionDocument (A4)', () => {
         'Medicamentos1.Amoxicilina 500 mgCápsula · Vía oral1 cápsula, cada 8 horas, durante 7 días.' +
         'Cantidad total: 21 (veintiuno) cápsulas · Envases: 2' +
         'Profesional que prescribeDra. Laura RuizNº de colegiado28/012345Contactolaura@example.com' +
-        'Firma del profesionalHuella SHA-256 del contenido emitido: ' +
+        'Firma del profesional' +
+        'Código QR para verificar la recetaVerificación de la recetaCódigo de verificación: K7M2-P9QR-T4XW' +
+        'Escanee el código QR o entre en demo.dentalix.app/receta/K7M2P9QRT4XW para comprobar si sigue vigente.' +
+        'Huella SHA-256 del contenido emitido: ' +
         'a'.repeat(64),
     );
     expect(screen.getByText('DNI/NIE').nextSibling).toHaveTextContent('12345678Z');
