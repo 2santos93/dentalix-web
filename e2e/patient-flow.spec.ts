@@ -264,6 +264,51 @@ function moveQaAppointmentToToday(id: string, start: Date, end: Date): void {
   ]);
 }
 
+test('DX-546 · FE-109: en una tableta táctil (1024 px, columnas por defecto) el paso del flujo tiene 44 px de zona táctil', async ({
+  browser,
+}) => {
+  const tablet = await browser.newPage({
+    viewport: { width: 1024, height: 768 },
+    hasTouch: true,
+    isMobile: true,
+    timezoneId: ZONE,
+    locale: E2E_BROWSER_LOCALE,
+  });
+  await lateEvening(tablet);
+  await loginAs(tablet, origin, reception.email, password);
+  expect(await tablet.evaluate(() => window.matchMedia('(pointer: coarse)').matches)).toBe(true);
+  await tablet.goto(`${origin}/agenda`);
+  await tablet.getByRole('button', { name: 'Día', exact: true }).click();
+  // Desde 768 px el Día abre en columnas sin elegirlo.
+  await expect(tablet.getByTestId('day-column').first()).toBeVisible({ timeout: 15_000 });
+  const carla = `Carla ${last}`;
+  const arrive = tablet
+    .getByTestId('day-column-appointment')
+    .filter({ hasText: carla })
+    .getByRole('button', { name: `Llegó: ${carla}` });
+  await expect(arrive).toBeVisible();
+  const zone = await arrive.evaluate((el) => {
+    const after = getComputedStyle(el, '::after');
+    const { width, height } = el.getBoundingClientRect();
+    return {
+      position: after.position,
+      height: height - parseFloat(after.top) - parseFloat(after.bottom),
+      width: width - parseFloat(after.left) - parseFloat(after.right),
+    };
+  });
+  expect(zone.position).toBe('absolute');
+  expect(zone.height).toBeGreaterThanOrEqual(44);
+  expect(zone.width).toBeGreaterThanOrEqual(44);
+  // Un toque en el borde de la zona ampliada cae en el botón, no en la tarjeta.
+  const box = (await arrive.boundingBox())!;
+  const hit = await tablet.evaluate(
+    ({ x, y }) => (document.elementFromPoint(x, y) as HTMLElement | null)?.getAttribute('aria-label') ?? '',
+    { x: box.x + box.width / 2, y: box.y - 6 },
+  );
+  expect(hit).toBe(`Llegó: ${carla}`);
+  await tablet.close();
+});
+
 test('DX-237: el paso del flujo en la tarjeta de columnas, según el rol y de quién es la cita', async ({
   page,
   browser,
