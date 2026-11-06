@@ -13932,7 +13932,7 @@ export interface components {
              */
             billable: number;
             /**
-             * @description Σ de lo imputado al ítem
+             * @description Σ de lo imputado al ítem por los abonos más lo que le cubre el saldo recibido por traspaso (paidByTransfersIn, DX-399-quater)
              * @example 60
              */
             paid: number;
@@ -13941,6 +13941,11 @@ export interface components {
              * @example 40
              */
             balance: number;
+            /**
+             * @description DX-399-quater: de `paid`, lo que cubre el saldo que el plan recibió por traspaso de otro plan del paciente y que ninguna devolución ni traspaso de salida gastó. Cubre lo que los abonos no cubren, después de ellos. Ausente si es 0
+             * @example 30
+             */
+            paidByTransfersIn?: number;
         };
         PlanBalanceWithItemsDto: {
             /** @description Código ISO 4217 de 3 letras. */
@@ -13975,7 +13980,7 @@ export interface components {
              */
             rateProviderTimedOut: boolean;
             /**
-             * @description Σ de lo imputado a los ítems
+             * @description Σ de lo imputado a los ítems por los abonos (sin `paidByTransfersIn`): Σ `items[].paid` = `allocated` + Σ `items[].paidByTransfersIn` (DX-399-quater)
              * @example 150
              */
             allocated: number;
@@ -13984,6 +13989,11 @@ export interface components {
              * @example 30
              */
             unallocated: number;
+            /**
+             * @description DX-399-quater: lo que el plan recibió por traspaso y que no gastó ninguna salida ni cubre ningún ítem: sigue a cuenta del plan, aparte de `unallocated` (que es de los abonos). Ausente si es 0
+             * @example 30
+             */
+            transfersInOnAccount?: number;
             /**
              * @description Abonos vivos sin base (sin tasa): no se imputan
              * @example 0
@@ -14301,6 +14311,11 @@ export interface components {
              * @example 30
              */
             paidByOthers: number;
+            /**
+             * @description DX-399-quater: lo que le cubre el saldo que el plan recibió por traspaso, después de todos los abonos (también este). No resta de `free`: los abonos van primero, así que imputar este abono al ítem lo desplaza y lo recibido vuelve a quedar a cuenta del plan. Ausente si es 0
+             * @example 30
+             */
+            paidByTransfersIn?: number;
             /**
              * @description Lo que este abono puede imputarle: billable − paidByOthers
              * @example 70
