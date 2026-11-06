@@ -340,9 +340,13 @@ export function PatientFlowActions({
               else void runner.run(appointmentId, action, patientName);
             }}
             data-flow-action={action}
+            // DX-546 · FE-109: el icono se queda en 28 px y el `::after` lleva
+            // el área de toque a 44 px con puntero táctil a cualquier ancho
+            // (las columnas son la vista de las tabletas) y en una ventana
+            // estrecha (`max-sm`).
             className={
               compact
-                ? "relative size-7 bg-surface text-primary-text shadow-sm pointer-coarse:size-7 max-sm:after:absolute max-sm:after:-inset-2 max-sm:after:content-['']"
+                ? "relative size-7 bg-surface text-primary-text shadow-sm pointer-coarse:size-7 max-sm:after:absolute max-sm:after:-inset-2 max-sm:after:content-[''] pointer-coarse:after:absolute pointer-coarse:after:-inset-2 pointer-coarse:after:content-['']"
                 : 'h-11 sm:h-9'
             }
           >

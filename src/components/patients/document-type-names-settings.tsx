@@ -80,11 +80,6 @@ export function DocumentTypeNamesSettingsSection({
     if (focusRequest) inputRefs.current[focusRequest.type]?.focus();
   }, [focusRequest]);
 
-  // Tras guardar, la barra desaparece y el foco caería a `<body>`: va al aviso.
-  useEffect(() => {
-    if (notice) noticeRef.current?.focus();
-  }, [notice]);
-
   useEffect(() => {
     if (!allowed) return;
     let cancelled = false;
@@ -211,11 +206,15 @@ export function DocumentTypeNamesSettingsSection({
           );
         })}
       </SettingRows>
+      {/* DX-546 · FE-110: tras guardar, la SaveBar lleva aquí el foco (`savedFocusTo`). */}
       <p
         ref={noticeRef}
         role="status"
         tabIndex={-1}
-        className={cn(notice ? 'text-sm text-success-text' : 'sr-only', 'focus:outline-none')}
+        className={cn(
+          notice ? 'text-sm text-success-text' : 'sr-only',
+          'rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text',
+        )}
       >
         {notice}
       </p>
@@ -224,6 +223,7 @@ export function DocumentTypeNamesSettingsSection({
         dirty={dirty}
         saving={saving}
         form={formId}
+        savedFocusTo={noticeRef}
         error={saveError}
         saveLabel={copy.save}
         onDiscard={() => {

@@ -69,7 +69,9 @@ function EquipmentScreen({ token }: { token: string }) {
         <EquipmentManager
           token={token}
           allowed={canManageEquipment(getTokenRole(token))}
-          locations={state.locations.filter((l) => l.isActive)}
+          // DX-546 · FE-112: todas, también las desactivadas: un equipo de una
+          // sede cerrada se mantiene con su «hoy» y su moneda.
+          locations={state.locations}
           initialLocationId={active?.id ?? null}
         />
       )}
