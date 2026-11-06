@@ -110,6 +110,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   // DX-542: equipos biomédicos de la sede y sus mantenimientos.
   EQUIPMENT: 'Equipo biomédico',
   EQUIPMENT_MAINTENANCE: 'Mantenimiento de equipo',
+  // DX-544: expediente de rayos X de la sede (licencias y control de calidad).
+  RADIOLOGY_RECORD: 'Documento de rayos X',
   // DX-099: anamnesis por enlace (enlace, envío, revisión, anulación).
   MEDICAL_HISTORY_SUBMISSION: 'Anamnesis por enlace',
   // DX-243: firma a distancia (enviar, abrir, código, bloqueo, firma, anular).

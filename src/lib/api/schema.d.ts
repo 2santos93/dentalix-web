@@ -2686,6 +2686,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/radiology-records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Licencias y controles de calidad de rayos X por sede
+         * @description Del vencimiento más próximo al más lejano, paginados, con su estado en el día de la sede (vencido, vence pronto ≤90 días, al día o renovado). Por defecto, los no anulados. DENTIST y ADMIN.
+         */
+        get: operations["RadiologyController_list"];
+        put?: never;
+        post: operations["RadiologyController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/radiology-records/due": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Licencias y controles de rayos X vencidos o por vencer («Mi día»)
+         * @description DX-544: documentos vivos y sin renovar vencidos (OVERDUE) o que vencen hoy o en los próximos 90 días (DUE_SOON), contados en el día de la sede de cada uno, con la misma regla que `status` de la lista. En la sede activa (`X-Location-Id`); sin ella, las sedes permitidas al usuario. De lo más urgente a lo menos. DENTIST y ADMIN.
+         */
+        get: operations["RadiologyController_listDue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/radiology-records/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["RadiologyController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["RadiologyController_update"];
+        trace?: never;
+    };
+    "/api/v1/radiology-records/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["RadiologyController_void"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payment-methods": {
         parameters: {
             query?: never;
@@ -6748,7 +6820,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "RADIOLOGY_RECORD" | "PATIENT_RECALL" | "RECALL_CONTACT";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -12341,6 +12413,200 @@ export interface components {
             nextDueOn?: string | null;
         };
         VoidMaintenanceDto: {
+            reason: string;
+        };
+        /** @enum {string} */
+        RadiologyRecordKind: "LICENSE" | "QUALITY_CONTROL";
+        /**
+         * @description Solo en una licencia: I (periapical) o II (panorámica, tomografía).
+         * @enum {string}
+         */
+        RadiologyLicenseCategory: "I" | "II";
+        /**
+         * @description En el día de la sede: OVERDUE (antes de hoy), DUE_SOON (hoy a +90 días), UP_TO_DATE, o RENEWED (otro vivo del mismo tipo, sede y equipo vence después). null si está anulado.
+         * @enum {string}
+         */
+        RadiologyRecordStatus: "OVERDUE" | "DUE_SOON" | "UP_TO_DATE" | "RENEWED";
+        RadiologyRecordDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            /**
+             * Format: uuid
+             * @description Equipo de rayos X de la MISMA sede (DX-542); null = la sede.
+             */
+            equipmentId: string | null;
+            equipmentName: string | null;
+            kind: components["schemas"]["RadiologyRecordKind"];
+            /** @description Solo en una licencia: I (periapical) o II (panorámica, tomografía). */
+            category: components["schemas"]["RadiologyLicenseCategory"] | null;
+            /** @description Nº de la licencia o resolución, o del informe. */
+            reference: string | null;
+            /** @description Autoridad que expidió la licencia o empresa que hizo el control. */
+            issuer: string;
+            /**
+             * Format: date
+             * @description Día de expedición (de la sede).
+             * @example 2026-11-06
+             */
+            issuedOn: string;
+            /**
+             * Format: date
+             * @description Día de vencimiento: el escrito o, si no se escribió, expedición + 5 años (licencia I), + 4 (licencia II) o + 2 (control de calidad).
+             * @example 2026-11-06
+             */
+            expiresOn: string;
+            /**
+             * Format: uuid
+             * @description Encargado u oficial de protección radiológica del personal.
+             */
+            officerUserId: string | null;
+            /** @description Nombre del miembro del personal elegido como encargado. */
+            officerMemberName: string | null;
+            /** @description Encargado escrito a mano (si no es del personal). */
+            officerName: string | null;
+            notes: string | null;
+            /** @description En el día de la sede: OVERDUE (antes de hoy), DUE_SOON (hoy a +90 días), UP_TO_DATE, o RENEWED (otro vivo del mismo tipo, sede y equipo vence después). null si está anulado. */
+            status: components["schemas"]["RadiologyRecordStatus"] | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            voidedAt: string | null;
+            voidReason: string | null;
+        };
+        ListRadiologyRecordsResponseDto: {
+            items: components["schemas"]["RadiologyRecordDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        /**
+         * @description OVERDUE: ya venció en el día de la sede. DUE_SOON: vence hoy o en los próximos 90 días.
+         * @enum {string}
+         */
+        RadiologyDueStatus: "OVERDUE" | "DUE_SOON";
+        RadiologyDueItemDto: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["RadiologyRecordKind"];
+            category: components["schemas"]["RadiologyLicenseCategory"] | null;
+            reference: string | null;
+            issuer: string;
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            /** Format: uuid */
+            equipmentId: string | null;
+            equipmentName: string | null;
+            /**
+             * Format: date
+             * @description Día de vencimiento en la sede.
+             * @example 2026-11-06
+             */
+            expiresOn: string;
+            /** @description OVERDUE: ya venció en el día de la sede. DUE_SOON: vence hoy o en los próximos 90 días. */
+            status: components["schemas"]["RadiologyDueStatus"];
+            /**
+             * @description Días de la sede hasta el vencimiento: 0 = hoy, negativo = días vencido.
+             * @example -12
+             */
+            daysUntilExpiry: number;
+        };
+        RadiologyDueResponseDto: {
+            /**
+             * Format: date-time
+             * @description Instante del cálculo.
+             */
+            generatedAt: string;
+            /** @description Los primeros `limit` avisos, de lo más urgente a lo menos (vencimiento más antiguo primero; a igual fecha, sede, tipo e id). */
+            items: components["schemas"]["RadiologyDueItemDto"][];
+            /** @description Todos los avisos del alcance (vencidos + vencen pronto). */
+            total: number;
+        };
+        CreateRadiologyRecordDto: {
+            /**
+             * Format: uuid
+             * @description Equipo de rayos X ACTIVO de la MISMA sede; null = ninguno.
+             */
+            equipmentId?: string | null;
+            /** @description Obligatoria en una licencia; no va en un control de calidad. */
+            category?: components["schemas"]["RadiologyLicenseCategory"] | null;
+            /** @description Nº o resolución; obligatorio en una licencia. */
+            reference?: string | null;
+            /**
+             * Format: date
+             * @description Vencimiento del papel (posterior a la expedición, 10 años como mucho). Vacío o null: se calcula (licencia I +5 años, II +4, control +2). En la edición, sin él se recalcula solo si cambian la expedición o la categoría.
+             * @example 2026-11-06
+             */
+            expiresOn?: string | null;
+            /**
+             * Format: uuid
+             * @description Encargado u oficial de protección radiológica: un miembro ACTIVO del personal (o `officerName`, no los dos).
+             */
+            officerUserId?: string | null;
+            /** @description Encargado escrito a mano si no es del personal. */
+            officerName?: string | null;
+            notes?: string | null;
+            kind: components["schemas"]["RadiologyRecordKind"];
+            /**
+             * Format: uuid
+             * @description Sede del documento.
+             */
+            locationId: string;
+            /** @example Autoridad sanitaria de la región */
+            issuer: string;
+            /**
+             * Format: date
+             * @description No futura en la sede.
+             * @example 2026-11-06
+             */
+            issuedOn: string;
+        };
+        UpdateRadiologyRecordDto: {
+            /**
+             * Format: uuid
+             * @description Equipo de rayos X ACTIVO de la MISMA sede; null = ninguno.
+             */
+            equipmentId?: string | null;
+            /** @description Obligatoria en una licencia; no va en un control de calidad. */
+            category?: components["schemas"]["RadiologyLicenseCategory"] | null;
+            /** @description Nº o resolución; obligatorio en una licencia. */
+            reference?: string | null;
+            /**
+             * Format: date
+             * @description Vencimiento del papel (posterior a la expedición, 10 años como mucho). Vacío o null: se calcula (licencia I +5 años, II +4, control +2). En la edición, sin él se recalcula solo si cambian la expedición o la categoría.
+             * @example 2026-11-06
+             */
+            expiresOn?: string | null;
+            /**
+             * Format: uuid
+             * @description Encargado u oficial de protección radiológica: un miembro ACTIVO del personal (o `officerName`, no los dos).
+             */
+            officerUserId?: string | null;
+            /** @description Encargado escrito a mano si no es del personal. */
+            officerName?: string | null;
+            notes?: string | null;
+            /**
+             * Format: uuid
+             * @description Mover a otra sede: quita el equipo, salvo que venga uno de la sede nueva. No admite null.
+             */
+            locationId?: string;
+            /** @description No admite null ni vacío. */
+            issuer?: string;
+            /**
+             * Format: date
+             * @description No futura en la sede. No admite null.
+             * @example 2026-11-06
+             */
+            issuedOn?: string;
+        };
+        VoidRadiologyRecordDto: {
             reason: string;
         };
         /**
@@ -28022,6 +28288,283 @@ export interface operations {
                 content?: never;
             };
             /** @description Equipo o mantenimiento no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya estaba anulado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RadiologyController_list: {
+        parameters: {
+            query?: {
+                /** @description Una sede. Sin ella: la de la cabecera X-Location-Id o todas las permitidas. */
+                locationId?: string;
+                kind?: components["schemas"]["RadiologyRecordKind"];
+                /** @description LIVE = sin anular. */
+                status?: "LIVE" | "VOIDED" | "ALL";
+                page?: number;
+                pageSize?: number;
+            };
+            header?: {
+                /** @description Sede activa; sin ella ni `locationId`, las sedes permitidas al usuario (vista consolidada) */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListRadiologyRecordsResponseDto"];
+                };
+            };
+            /** @description Filtro inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo odontología y administración ven el expediente de rayos X. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RadiologyController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRadiologyRecordDto"];
+            };
+        };
+        responses: {
+            /** @description Registrado; sin `expiresOn` se calcula: licencia I +5 años, II +4, control de calidad +2. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RadiologyRecordDto"];
+                };
+            };
+            /** @description Campo inválido (todos los errores en un mensaje): categoría fuera de una licencia, expedición futura, equipo de otra sede o que no es de rayos X… */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración registra o cambia el expediente de rayos X. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede, equipo o miembro del personal no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RadiologyController_listDue: {
+        parameters: {
+            query?: {
+                /** @description Cuántos avisos devolver (el total los cuenta todos). */
+                limit?: number;
+            };
+            header?: {
+                /** @description Sede activa; sin ella, las sedes permitidas al usuario (vista consolidada) */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RadiologyDueResponseDto"];
+                };
+            };
+            /** @description Límite inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo odontología y administración ven el expediente de rayos X. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RadiologyController_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RadiologyRecordDto"];
+                };
+            };
+            /** @description Solo odontología y administración ven el expediente de rayos X. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Documento no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RadiologyController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRadiologyRecordDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RadiologyRecordDto"];
+                };
+            };
+            /** @description Campo inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración registra o cambia el expediente de rayos X. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Documento, sede, equipo o miembro del personal no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El documento está anulado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RadiologyController_void: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidRadiologyRecordDto"];
+            };
+        };
+        responses: {
+            /** @description Anulado con motivo (no se borra): sigue en el expediente, marcado, y deja de avisar. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RadiologyRecordDto"];
+                };
+            };
+            /** @description Motivo inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración registra o cambia el expediente de rayos X. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Documento no encontrado en esta clínica */
             404: {
                 headers: {
                     [name: string]: unknown;
