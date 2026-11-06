@@ -24,9 +24,11 @@ import { itemPriceOriginText, type ListPriceText } from './price-quote-line';
 import {
   ITEM_STATUS_OPTIONS,
   copy,
+  itemRefs,
   procedureName,
   surfacesLabel,
   type FeeRef,
+  type ItemRef,
 } from './treatment-plans-tab-copy';
 
 /*
@@ -113,10 +115,12 @@ export interface ItemsTableProps {
  */
 function ItemAttributionLine({
   item,
+  itemRef,
   onCorrect,
   stamp,
 }: {
   item: TreatmentPlanItem;
+  itemRef: ItemRef;
   onCorrect?: (itemId: string) => void;
   stamp: SedePainters;
 }) {
@@ -133,8 +137,8 @@ function ItemAttributionLine({
           className="px-2"
           aria-label={
             item.performedLocationId === null
-              ? copy.attributeItemFor(item.toothNumber)
-              : copy.correctAttributionFor(item.toothNumber)
+              ? copy.attributeItemFor(itemRef)
+              : copy.correctAttributionFor(itemRef)
           }
           onClick={() => onCorrect(item.id)}
         >
@@ -222,14 +226,16 @@ function ItemDiscountLine({
 
 function ItemSelectBox({
   item,
+  itemRef,
   selection,
 }: {
   item: TreatmentPlanItem;
+  itemRef: ItemRef;
   selection: NonNullable<ItemsTableProps['selection']>;
 }) {
   return (
     <Checkbox
-      aria-label={copy.selectItem(item.toothNumber)}
+      aria-label={copy.selectItem(itemRef)}
       checked={selection.selectedIds.has(item.id)}
       onChange={(e) => selection.onToggle(item.id, e.target.checked)}
     />
@@ -335,6 +341,10 @@ export function ItemsTable({
     (locked && status === 'PROPOSED') ||
     (closed && status !== item.status && status !== 'DONE') ||
     (item.status === 'DONE' && status !== 'DONE' && !canLeaveDone(item));
+  // DX-546 · FE-111: el nombre de los controles de cada ítem (único en la lista).
+  const refs = itemRefs(items, catalogById);
+  const refOf = (item: TreatmentPlanItem): ItemRef =>
+    refs.get(item.id) ?? { tooth: item.toothNumber, procedure: procedureName(item, catalogById), position: null };
   if (items.length === 0) {
     return <EmptyState size="inline" role="status" title={copy.emptyItemsTitle} description={copy.emptyItemsDescription} />;
   }
@@ -373,6 +383,7 @@ export function ItemsTable({
               const updating = updatingItemId === item.id;
               const focused = focusedTooth === item.toothNumber;
               const implantLink = implantLinkFor(item);
+              const ref = refOf(item);
               return (
                 <TableRow
                   key={item.id}
@@ -384,7 +395,7 @@ export function ItemsTable({
                 >
                   {selection ? (
                     <TableCell className="w-10">
-                      {isFee(item) ? null : <ItemSelectBox item={item} selection={selection} />}
+                      {isFee(item) ? null : <ItemSelectBox item={item} itemRef={ref} selection={selection} />}
                     </TableCell>
                   ) : null}
                   <TableCell className="font-medium tabular-nums">{item.toothNumber || copy.noTooth}</TableCell>
@@ -402,7 +413,7 @@ export function ItemsTable({
                         <NativeSelect
                           size="sm"
                           className="w-auto"
-                          aria-label={copy.itemStatusSelectLabel(item.toothNumber)}
+                          aria-label={copy.itemStatusSelectLabel(ref)}
                           value={item.status}
                           disabled={updating || statusFrozen(item)}
                           onChange={(e) => onStatusChange(item.id, e.target.value as TreatmentPlanItemStatus)}
@@ -419,7 +430,7 @@ export function ItemsTable({
                           </span>
                         )}
                       </span>
-                      <ItemAttributionLine item={item} onCorrect={onCorrectAttribution} stamp={stamp} />
+                      <ItemAttributionLine item={item} itemRef={ref} onCorrect={onCorrectAttribution} stamp={stamp} />
                       <FeeItemLine
                         item={item}
                         label={procedureName(item, catalogById)}
@@ -467,6 +478,7 @@ export function ItemsTable({
           const updating = updatingItemId === item.id;
           const focused = focusedTooth === item.toothNumber;
           const implantLink = implantLinkFor(item);
+          const ref = refOf(item);
           return (
             <li
               key={item.id}
@@ -475,7 +487,7 @@ export function ItemsTable({
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-3 font-medium text-ink tabular-nums">
-                  {selection && !isFee(item) ? <ItemSelectBox item={item} selection={selection} /> : null}
+                  {selection && !isFee(item) ? <ItemSelectBox item={item} itemRef={ref} selection={selection} /> : null}
                   {item.toothNumber ? `${copy.colTooth} ${item.toothNumber}` : copy.noTooth}
                 </span>
                 <StatusBadge kind="treatmentPlanItem" status={item.status} />
@@ -492,7 +504,7 @@ export function ItemsTable({
                 </div>
               ) : null}
               <div className="mt-1">
-                <ItemAttributionLine item={item} onCorrect={onCorrectAttribution} stamp={stamp} />
+                <ItemAttributionLine item={item} itemRef={ref} onCorrect={onCorrectAttribution} stamp={stamp} />
               </div>
               {isFee(item) ? (
                 <div className="mt-2">
@@ -509,7 +521,7 @@ export function ItemsTable({
               <div className="mt-3 flex items-center justify-between gap-2">
                 <NativeSelect
                   className="w-auto"
-                  aria-label={copy.itemStatusSelectLabel(item.toothNumber)}
+                  aria-label={copy.itemStatusSelectLabel(ref)}
                   value={item.status}
                   disabled={updating || statusFrozen(item)}
                   onChange={(e) => onStatusChange(item.id, e.target.value as TreatmentPlanItemStatus)}

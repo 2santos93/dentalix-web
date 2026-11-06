@@ -1595,7 +1595,7 @@ describe('TreatmentPlansTab', () => {
       const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       const select = within(table).getByRole('combobox', { name: /estado del ítem del diente 26/i });
       expect(within(select).getByRole('option', { name: 'Aceptado' })).toBeEnabled();
-      await user.click(within(table).getByRole('button', { name: 'Corregir quién realizó el ítem del diente 26' }));
+      await user.click(within(table).getByRole('button', { name: /^Corregir quién realizó el ítem del diente 26 · / }));
       const dialog = await screen.findByRole('dialog', { name: 'Corregir quién lo realizó' });
       const performer = within(dialog).getByRole('combobox', { name: 'Profesional que lo realizó' });
       await waitFor(() => expect(performer).toHaveValue('u-laura'));
@@ -1619,7 +1619,7 @@ describe('TreatmentPlansTab', () => {
       const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       expect(within(table).queryByRole('button', { name: /corregir quién/i })).not.toBeInTheDocument();
       await user.click(
-        within(table).getByRole('button', { name: 'Atribuir quién, cuándo y dónde se realizó el ítem del diente 47' }),
+        within(table).getByRole('button', { name: /^Atribuir quién, cuándo y dónde se realizó el ítem del diente 47 · / }),
       );
       const dialog = await screen.findByRole('dialog', { name: 'Atribuir el procedimiento' });
       expect(within(dialog).getByRole('combobox', { name: 'Sede donde se realizó' })).toBeInTheDocument();
@@ -2019,7 +2019,7 @@ describe('TreatmentPlansTab', () => {
       expect(screen.queryByRole('button', { name: 'Aceptar con firma' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /^quitar$/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('form', { name: /agregar ítem/i })).not.toBeInTheDocument();
-      const [statusSelect] = screen.getAllByLabelText('Estado del ítem del diente 11');
+      const [statusSelect] = screen.getAllByLabelText(/^Estado del ítem del diente 11 · /);
       expect(within(statusSelect).getByRole('option', { name: 'Propuesto' })).toBeDisabled();
       expect(within(statusSelect).getByRole('option', { name: 'Realizado' })).toBeEnabled();
       // Máquina de estados (DX-040): un plan aceptado solo pasa a completado o
@@ -2269,8 +2269,8 @@ describe('TreatmentPlansTab', () => {
 
       const bulk = screen.getByRole('button', { name: 'Descuento %' });
       expect(bulk).toBeDisabled();
-      await user.click(within(table).getByRole('checkbox', { name: 'Seleccionar el ítem del diente 11' }));
-      await user.click(within(table).getByRole('checkbox', { name: 'Seleccionar el ítem del diente 26' }));
+      await user.click(within(table).getByRole('checkbox', { name: /^Seleccionar el ítem del diente 11 · / }));
+      await user.click(within(table).getByRole('checkbox', { name: /^Seleccionar el ítem del diente 26 · / }));
       expect(screen.getByText('2 ítems seleccionados')).toBeInTheDocument();
       await user.click(bulk);
 
@@ -2305,7 +2305,7 @@ describe('TreatmentPlansTab', () => {
       );
       const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       await waitFor(() => expect(mockedGetDiscountPolicy).toHaveBeenCalled());
-      await user.click(within(table).getByRole('checkbox', { name: 'Seleccionar el ítem del diente 11' }));
+      await user.click(within(table).getByRole('checkbox', { name: /^Seleccionar el ítem del diente 11 · / }));
       await user.click(screen.getByRole('button', { name: 'Descuento %' }));
       const dialog = await screen.findByRole('dialog');
       await user.type(within(dialog).getByLabelText('Porcentaje de descuento'), '5');
@@ -2725,7 +2725,7 @@ describe('TreatmentPlansTab', () => {
       render(<TreatmentPlansTab patientId="pat-1" token={discountDentistToken} />);
       const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       await waitFor(() => expect(mockedGetDiscountPolicy).toHaveBeenCalled());
-      await user.click(within(table).getByRole('checkbox', { name: 'Seleccionar el ítem del diente 11' }));
+      await user.click(within(table).getByRole('checkbox', { name: /^Seleccionar el ítem del diente 11 · / }));
       await user.click(screen.getByRole('button', { name: 'Descuento %' }));
       const dialog = await screen.findByRole('dialog');
       await user.type(within(dialog).getByLabelText('Porcentaje de descuento'), '5');
@@ -2963,7 +2963,7 @@ describe('TreatmentPlansTab', () => {
         await waitFor(() => expect(mockedGetDiscountPolicy).toHaveBeenCalled());
         const before = mockedGetPlanBalance.mock.calls.length;
 
-        await user.click(within(table).getByRole('checkbox', { name: 'Seleccionar el ítem del diente 26' }));
+        await user.click(within(table).getByRole('checkbox', { name: /^Seleccionar el ítem del diente 26 · / }));
         await user.click(screen.getByRole('button', { name: 'Descuento %' }));
         const dialog = await screen.findByRole('dialog');
         await user.type(within(dialog).getByLabelText('Porcentaje de descuento'), '5');
