@@ -183,10 +183,10 @@ export function PlanQuoteDocument({ quote, format, catalogCurrency, secondCurren
             />
           ) : null}
           <div className="min-w-0">
-            <p className="text-base font-semibold">{quote.clinicName}</p>
+            <p className="break-words text-base font-semibold">{quote.clinicName}</p>
             {/* DX-019: datos fiscales de la clínica (los de hoy, como el logo). */}
             <ClinicFiscalLines fiscal={quote.clinicFiscal} />
-            <p className="text-sm text-[#4b5563]">
+            <p className="break-words text-sm text-[#4b5563]">
               {quote.location.name}
               {quote.location.address ? (
                 <>
@@ -216,17 +216,17 @@ export function PlanQuoteDocument({ quote, format, catalogCurrency, secondCurren
         data-testid="quote-parties"
         className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-3 print:grid-cols-3"
       >
-        <div>
+        <div className="min-w-0">
           <dt className="text-xs font-medium text-[#6b7280]">{copy.patient}</dt>
-          <dd className="font-medium">{quote.patient.name}</dd>
+          <dd className="break-words font-medium">{quote.patient.name}</dd>
         </div>
         <div>
           <dt className="text-xs font-medium text-[#6b7280]">{copy.document}</dt>
           <dd className="tabular-nums">{quote.patient.document ?? copy.noDocument}</dd>
         </div>
-        <div>
+        <div className="min-w-0">
           <dt className="text-xs font-medium text-[#6b7280]">{copy.professional}</dt>
-          <dd>{quote.professionalName ?? copy.noProfessional}</dd>
+          <dd className="break-words">{quote.professionalName ?? copy.noProfessional}</dd>
         </div>
         {quote.agreement ? (
           <div className="sm:col-span-3 print:col-span-3" data-testid="quote-agreement">
@@ -294,9 +294,10 @@ export function PlanQuoteDocument({ quote, format, catalogCurrency, secondCurren
               return (
               <li key={item.id} className="py-3 text-sm">
                 {startsVisit(index)?<h2 className="mb-3 text-base font-semibold">{visitTitle(item.id)}</h2>:null}
+                {/* DX-514: un nombre largo sin espacios se parte; el importe no se encoge. */}
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="font-medium">{item.procedure}</span>
-                  <span className="font-medium tabular-nums">{money(item.subtotal, currency)}</span>
+                  <span className="min-w-0 break-words font-medium">{item.procedure}</span>
+                  <span className="shrink-0 font-medium tabular-nums">{money(item.subtotal, currency)}</span>
                 </div>
                 <p className="mt-0.5 text-xs text-[#4b5563]">
                   <span className="tabular-nums">{copy.toothLabel(item.toothNumber)}</span> · {surfacesOf(item)} ·{' '}
@@ -375,14 +376,14 @@ export function PlanQuoteDocument({ quote, format, catalogCurrency, secondCurren
         className="quote-signature mt-10"
       >
         {acceptance ? (
-          <figure className="flex max-w-sm flex-col gap-2">
+          <figure className="flex min-w-0 max-w-sm flex-col gap-2">
             {/* eslint-disable-next-line @next/next/no-img-element -- data URL de la firma; next/image no la optimiza */}
             <img
               src={acceptance.signature}
               alt={copy.signatureAlt(acceptance.signerName)}
               className="h-24 w-full object-contain object-left-bottom"
             />
-            <figcaption className="border-t border-[#111827] pt-2 text-sm">
+            <figcaption className="break-words border-t border-[#111827] pt-2 text-sm">
               {acceptance.remote ? (
                 <>
                   <span className="block font-medium">

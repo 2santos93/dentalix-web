@@ -3,12 +3,6 @@ import { test as base, expect, type BrowserContext } from '@playwright/test';
 export * from '@playwright/test';
 
 /**
- * `test` de la suite con un guardián de CSP (DX-062): cualquier violación de la
- * Content-Security-Policy que el navegador registre en la consola (en la página
- * del test o en las que abra, como la imprimible) hace fallar el test. Así la
- * suite completa demuestra que la app funciona con la CSP activa.
- */
-/**
  * Las violaciones de CSP que registre la consola de `context`. Para un contexto
  * propio (`browser.newContext`), que el guardián automático no ve: el test
  * llama a `expectNone()` antes de cerrarlo (DX-514).
@@ -24,6 +18,12 @@ export function watchCspViolations(context: BrowserContext): { expectNone(): voi
   };
 }
 
+/**
+ * `test` de la suite con un guardián de CSP (DX-062): cualquier violación de la
+ * Content-Security-Policy que el navegador registre en la consola (en la página
+ * del test o en las que abra, como la imprimible) hace fallar el test. Así la
+ * suite completa demuestra que la app funciona con la CSP activa.
+ */
 export const test = base.extend<{ cspGuard: void }>({
   cspGuard: [
     async ({ context }, use) => {

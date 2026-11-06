@@ -122,6 +122,34 @@ describe('PlanQuoteDocument (DX-012)', () => {
     expect(screen.queryByText(/pudo alterarse/)).not.toBeInTheDocument();
   });
 
+  it('DX-514: a 390 px los textos largos se parten (nombre de procedimiento, paciente, firmante), sin desbordar', () => {
+    // jsdom no mide: se comprueba que las cajas pueden encogerse y partir palabras (DESIGN: wrap, no ocultar).
+    const longProcedure = 'Rehabilitación-implantosoportada-con-pilar-personalizado-de-zirconio';
+    const longName = 'María Alejandra Rodríguez-Villasmil de Fernández';
+    render(
+      <PlanQuoteDocument
+        format={FORMAT_ES}
+        catalogCurrency="VES"
+        quote={planQuoteFixture({
+          patient: { name: longName, document: 'Documento nacional V-12345678' },
+          items: [{ ...planQuoteFixture().items[0], procedure: longProcedure }],
+          planStatus: 'ACCEPTED',
+          acceptance: { ...SIGNED_ACCEPTANCE, signerName: longName },
+        })}
+      />,
+    );
+    const card = screen.getByRole('list', { name: 'Procedimientos del presupuesto' });
+    const procedure = within(card).getByText(longProcedure);
+    expect(procedure).toHaveClass('min-w-0', 'break-words');
+    expect(procedure.nextElementSibling).toHaveClass('shrink-0');
+    const parties = screen.getByTestId('quote-parties');
+    expect(within(parties).getByText(longName)).toHaveClass('break-words');
+    expect(within(parties).getByText(longName).parentElement).toHaveClass('min-w-0');
+    const caption = screen.getByTestId('quote-signature').querySelector('figcaption');
+    expect(caption).toHaveClass('break-words');
+    expect(caption?.closest('figure')).toHaveClass('min-w-0');
+  });
+
   describe('DX-514: aceptado a distancia', () => {
     // Sede en Caracas (UTC−4) y jest en UTC: 02:30 UTC del 31 es el 30 a las 10:30 p. m. en la sede.
     const FORMAT_VE = documentFormat(REGIONAL_VE)!;
