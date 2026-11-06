@@ -264,6 +264,59 @@ function moveQaAppointmentToToday(id: string, start: Date, end: Date): void {
   ]);
 }
 
+test('DX-546 · FE-109: en una tableta táctil (1180 px apaisada, columnas por defecto) el paso del flujo tiene 44 px de zona táctil', async ({
+  browser,
+}) => {
+  // Una tableta de recepción apaisada (iPad Air, 1180 × 820). Con tres
+  // columnas, a 1024 px la tarjeta no llega a los 224 px con los que enseña el
+  // paso junto a la alerta médica (DX-237): ahí solo está en el detalle.
+  const tablet = await browser.newPage({
+    viewport: { width: 1180, height: 820 },
+    hasTouch: true,
+    isMobile: true,
+    timezoneId: ZONE,
+    locale: E2E_BROWSER_LOCALE,
+  });
+  await lateEvening(tablet);
+  await loginAs(tablet, origin, reception.email, password);
+  expect(await tablet.evaluate(() => window.matchMedia('(pointer: coarse)').matches)).toBe(true);
+  await tablet.goto(`${origin}/agenda`);
+  await tablet.getByRole('button', { name: 'Día', exact: true }).click();
+  // Desde 768 px el Día abre en columnas sin elegirlo.
+  await expect(tablet.getByTestId('day-column').first()).toBeVisible({ timeout: 15_000 });
+  const carla = `Carla ${last}`;
+  const arrive = tablet
+    .getByTestId('day-column-appointment')
+    .filter({ hasText: carla })
+    .getByRole('button', { name: `Llegó: ${carla}` });
+  await expect(arrive).toBeVisible();
+  const zone = await arrive.evaluate((el) => {
+    const after = getComputedStyle(el, '::after');
+    const { width, height } = el.getBoundingClientRect();
+    return {
+      position: after.position,
+      height: height - parseFloat(after.top) - parseFloat(after.bottom),
+      width: width - parseFloat(after.left) - parseFloat(after.right),
+    };
+  });
+  expect(zone.position).toBe('absolute');
+  expect(zone.height).toBeGreaterThanOrEqual(44);
+  expect(zone.width).toBeGreaterThanOrEqual(44);
+  // Un toque en la zona ampliada, a 6 px del icono (fuera de sus 28 px), cae
+  // en el botón y no en la tarjeta (que abriría la ficha de la cita).
+  await arrive.scrollIntoViewIfNeeded();
+  const box = (await arrive.boundingBox())!;
+  const hit = await tablet.evaluate(
+    ({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      return el?.closest('button')?.getAttribute('aria-label') ?? el?.outerHTML.slice(0, 120) ?? 'nada';
+    },
+    { x: box.x - 6, y: box.y + box.height / 2 },
+  );
+  expect(hit).toBe(`Llegó: ${carla}`);
+  await tablet.close();
+});
+
 test('DX-237: el paso del flujo en la tarjeta de columnas, según el rol y de quién es la cita', async ({
   page,
   browser,

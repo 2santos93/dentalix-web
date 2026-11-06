@@ -84,7 +84,11 @@ interface EquipmentManagerProps {
   token: string;
   /** Solo ADMIN (la API exige el rol para leer y escribir). */
   allowed: boolean;
-  /** Sedes activas de la clínica. */
+  /**
+   * Todas las sedes de la clínica, también las desactivadas (DX-546 · FE-112):
+   * con «Todas las sedes» la API lista los equipos de una sede cerrada, y su
+   * «hoy» y su moneda salen de ella. Solo las activas se ofrecen para elegir.
+   */
   locations: ClinicLocation[];
   /** La sede activa del selector del shell, si hay una. */
   initialLocationId: string | null;
@@ -106,7 +110,8 @@ export function EquipmentManager({ token, allowed, locations, initialLocationId 
   // La sede es la del selector global (DX-089): `apiFetch` la manda en
   // `X-Location-Id` y la API acota con ella; sin sede activa, toda la clínica.
   // Cambiarla recarga la vista, así que basta con leerla al montar.
-  const activeLocationId = locations.some((l) => l.id === initialLocationId) ? initialLocationId : null;
+  const activeLocations = locations.filter((l) => l.isActive);
+  const activeLocationId = activeLocations.some((l) => l.id === initialLocationId) ? initialLocationId : null;
   const [status, setStatus] = useState<EquipmentStatusFilter>('ACTIVE');
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS);
@@ -123,7 +128,7 @@ export function EquipmentManager({ token, allowed, locations, initialLocationId 
   const stamp = useSedeStamp(token, rows.map((r) => r.locationId));
 
   useEffect(() => {
-    if (!allowed || locations.length === 0) return;
+    if (!allowed || activeLocations.length === 0) return;
     let cancelled = false;
     async function load() {
       setLoading(true);
@@ -149,14 +154,14 @@ export function EquipmentManager({ token, allowed, locations, initialLocationId 
     return () => {
       cancelled = true;
     };
-  }, [token, allowed, locations.length, status, debouncedQuery, page, reloadKey]);
+  }, [token, allowed, activeLocations.length, status, debouncedQuery, page, reloadKey]);
 
   if (!allowed) {
     return (
       <EmptyState role="status" icon={<Lock aria-hidden />} title={copy.forbiddenTitle} description={copy.forbiddenHint} />
     );
   }
-  if (locations.length === 0) {
+  if (activeLocations.length === 0) {
     return <EmptyState title={copy.noLocations} description={copy.noLocationsHint} />;
   }
 
@@ -176,7 +181,7 @@ export function EquipmentManager({ token, allowed, locations, initialLocationId 
   }
 
   const filtered = debouncedQuery.trim() !== '' || status !== 'ACTIVE';
-  const defaultLocation = activeLocationId ?? locations[0].id;
+  const defaultLocation = activeLocationId ?? activeLocations[0].id;
   const locationOf = (id: string) => locations.find((l) => l.id === id);
   const retireToday = (e: Equipment) => {
     const zone = locationOf(e.locationId)?.timeZone;

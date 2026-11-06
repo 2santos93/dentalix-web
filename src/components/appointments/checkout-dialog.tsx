@@ -17,6 +17,8 @@ export const checkoutCopy = {
   title: (name: string) => `Salida de ${name}`,
   description: 'Antes de despedirlo, revisa si falta algo. Puedes completar la cita aunque quede algo pendiente.',
   submit: 'Completar la cita',
+  /** FE-108: la primaria mientras llega la lista; sin ella no se completa. */
+  loading: 'Cargando…',
   submitWithPending: (count: number) => `Completar con ${count} pendiente${count === 1 ? '' : 's'}`,
   loadError: 'No pudimos comprobar la salida del paciente.',
   completeError: 'No pudimos completar la cita. Intenta de nuevo.',
@@ -34,6 +36,10 @@ export const checkoutCopy = {
  * DX-202: la salida del paciente. Enseña qué falta, con un enlace a la ficha en
  * otra pestaña para resolverlo, y se relee al volver a esta. No bloquea: lo que
  * quede pendiente viaja al completar y queda en la auditoría.
+ *
+ * FE-108: sin la lista no se puede completar. Mientras carga, la primaria está
+ * ocupada y desactivada; si falla, desaparece y queda «Reintentar» (rung 1).
+ * Completar sin ella mandaría `checkoutPending = []`: nada en la auditoría.
  */
 export function CheckoutDialog({
   token,
@@ -69,11 +75,21 @@ export function CheckoutDialog({
     return () => window.removeEventListener('focus', load);
   }, [load]);
 
+  // «Reintentar» vuelve al esqueleto (y a la primaria ocupada) mientras pide;
+  // la relectura al volver a la pestaña no, para no parpadear sobre el error.
+  const retry = useCallback(() => {
+    setError(null);
+    load();
+  }, [load]);
+
   const items = list ? checkoutItems(list) : [];
   const pending = items.filter((i) => !i.done).map((i) => i.item);
+  const loadError = list ? null : error;
+  const failed = loadError !== null;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!list) return;
     setSubmitting(true);
     setSubmitError(null);
     const done = await onComplete(pending);
@@ -90,12 +106,20 @@ export function CheckoutDialog({
       title={checkoutCopy.title(patientName)}
       description={checkoutCopy.description}
       onSubmit={handleSubmit}
-      submitLabel={pending.length > 0 ? checkoutCopy.submitWithPending(pending.length) : checkoutCopy.submit}
+      submitLabel={
+        !list
+          ? checkoutCopy.loading
+          : pending.length > 0
+            ? checkoutCopy.submitWithPending(pending.length)
+            : checkoutCopy.submit
+      }
+      submitBusy={!list && !failed}
+      hideSubmit={failed}
       submitting={submitting}
       error={submitError}
     >
-      {error && !list ? (
-        <SectionError description={error} onRetry={load} />
+      {loadError !== null ? (
+        <SectionError description={loadError} onRetry={retry} />
       ) : !list ? (
         <div role="status" className="flex flex-col gap-2">
           <Skeleton className="h-11 w-full" />

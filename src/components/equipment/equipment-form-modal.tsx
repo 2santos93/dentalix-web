@@ -34,6 +34,8 @@ export const equipmentFormCopy = {
   chairNone: 'Sin sillón',
   chairsError: 'No pudimos cargar los sillones',
   chairMovedHint: 'Al cambiar de sede se quita el sillón, salvo que elijas uno de la sede nueva.',
+  inactiveLocation: (name: string) => `${name} (inactiva)`,
+  inactiveLocationHint: 'Esta sede está desactivada. Elige una sede activa para reubicar el equipo.',
   name: 'Nombre',
   namePlaceholder: 'Por ejemplo, Autoclave sala 1',
   category: 'Tipo',
@@ -68,7 +70,11 @@ interface EquipmentFormModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   token: string;
-  /** Sedes activas de la clínica (la del equipo se mantiene al editar). */
+  /**
+   * Sedes de la clínica. Se eligen las activas; al editar, la del equipo se
+   * ofrece aunque esté desactivada («(inactiva)»), como su valor actual, y da
+   * el «hoy» de la fecha de adquisición (DX-546 · FE-112).
+   */
   locations: ClinicLocation[];
   /** Sede propuesta al crear. */
   defaultLocationId: string;
@@ -117,6 +123,8 @@ export function EquipmentFormModal({
   const [submitting, setSubmitting] = useState(false);
 
   const location = locations.find((l) => l.id === locationId);
+  const locationOptions = locations.filter((l) => l.isActive || l.id === equipment?.locationId);
+  const inactiveSelected = location !== undefined && !location.isActive;
   const today = location?.timeZone ? sedeToday(location.timeZone) : undefined;
 
   useEffect(() => {
@@ -209,16 +217,22 @@ export function EquipmentFormModal({
       ownValidation
     >
       <div className="grid gap-4 sm:grid-cols-2">
-        <FormField htmlFor="equipment-location" label={copy.location}>
+        <FormField
+          htmlFor="equipment-location"
+          label={copy.location}
+          hint={inactiveSelected ? copy.inactiveLocationHint : undefined}
+          hintId="equipment-location-hint"
+        >
           <NativeSelect
             id="equipment-location"
             value={locationId}
             disabled={submitting}
+            aria-describedby={inactiveSelected ? 'equipment-location-hint' : undefined}
             onChange={(e) => changeLocation(e.target.value)}
           >
-            {locations.map((l) => (
+            {locationOptions.map((l) => (
               <option key={l.id} value={l.id}>
-                {l.name}
+                {l.isActive ? l.name : copy.inactiveLocation(l.name)}
               </option>
             ))}
           </NativeSelect>

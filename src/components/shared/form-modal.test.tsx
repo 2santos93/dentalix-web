@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { render, screen } from '@testing-library/react';
 import { setupUser } from '@/lib/test/user';
+import { DatePicker } from '@/components/ui/date-picker';
 import { RadioGroup, RadioOption } from '@/components/ui/radio-group';
 import { FormModal } from './form-modal';
 
@@ -145,5 +146,65 @@ describe('FormModal touchTargets (DX-394)', () => {
   it('sin touchTargets no se fuerza la altura de los botones', () => {
     render(<FormModal {...props}>Campos</FormModal>);
     expect(screen.getByRole('dialog').className).not.toContain('min-h-11');
+  });
+});
+
+describe('FormModal submitBusy', () => {
+  it('la acción queda ocupada y desactivada sin bloquear Cancelar', () => {
+    const props = { open: true, onOpenChange: jest.fn(), title: 'Salida', onSubmit: jest.fn() };
+    render(
+      <FormModal {...props} submitBusy submitLabel="Cargando…">
+        Campos
+      </FormModal>,
+    );
+    const submit = screen.getByRole('button', { name: 'Cargando…' });
+    expect(submit).toBeDisabled();
+    expect(submit).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeEnabled();
+  });
+});
+
+describe('FormModal ownValidation: foco en el primer error (DX-546 · FE-113)', () => {
+  function Harness({ focusSecond = false }: { focusSecond?: boolean }) {
+    const [invalid, setInvalid] = React.useState(false);
+    const secondRef = React.useRef<HTMLInputElement>(null);
+    return (
+      <FormModal
+        open
+        onOpenChange={() => {}}
+        title="Prueba"
+        ownValidation
+        onSubmit={(e) => {
+          e.preventDefault();
+          setInvalid(true);
+          if (focusSecond) secondRef.current?.focus();
+        }}
+      >
+        <DatePicker
+          id="fm-date"
+          label="Fecha"
+          value={null}
+          onChange={() => {}}
+          aria-invalid={invalid ? true : undefined}
+        />
+        <label htmlFor="fm-text">Texto</label>
+        <input id="fm-text" ref={secondRef} aria-invalid={invalid ? true : undefined} />
+      </FormModal>
+    );
+  }
+
+  it('lleva el foco a lo primero enfocable del primer campo inválido (un segmento del DatePicker)', async () => {
+    const user = setupUser();
+    render(<Harness />);
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    const group = screen.getByRole('group', { name: 'Fecha' });
+    expect(group).toContainElement(document.activeElement as HTMLElement);
+  });
+
+  it('si la pantalla ya llevó el foco a un campo inválido, no se lo quita', async () => {
+    const user = setupUser();
+    render(<Harness focusSecond />);
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    expect(screen.getByLabelText('Texto')).toHaveFocus();
   });
 });

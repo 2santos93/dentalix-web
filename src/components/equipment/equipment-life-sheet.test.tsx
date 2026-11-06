@@ -55,7 +55,12 @@ describe('EquipmentLifeSheet (DX-542)', () => {
     expect(items[1]).toHaveTextContent('Luis Pérez');
     expect(items[1]).toHaveTextContent('USD');
     expect(items[1]).toHaveTextContent('02/05/2027');
-    expect(within(items[2]).getByText('ANULADO')).toBeInTheDocument();
+    // DX-546 · FE-115: «Anulado» es el Badge neutro de DESIGN.md (registro retirado, no un error).
+    const voided = within(items[2]).getByText('Anulado');
+    expect(voided).toHaveAttribute('data-status', 'VOIDED');
+    expect(voided).toHaveClass('bg-surface-active', 'text-ink', 'rounded-full');
+    expect(voided.className).not.toMatch(/danger/);
+    expect(within(items[2]).queryByText('ANULADO')).toBeNull();
     expect(items[2]).toHaveTextContent('Equipo equivocado');
   });
 

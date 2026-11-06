@@ -112,13 +112,13 @@ export const copy = {
   removeConfirm: 'Quitar ítem',
   genericItemUpdateError: 'No pudimos actualizar el estado del ítem. Intenta de nuevo.',
   genericRemoveItemError: 'No pudimos quitar el ítem. Intenta de nuevo.',
-  itemStatusSelectLabel: (tooth: string) => `Estado del ítem del diente ${tooth}`,
+  itemStatusSelectLabel: (item: ItemRef) => `Estado del ${itemRefText(item)}`,
   // DX-050: quién lo realizó. Corregirlo es solo de la administración.
   correctAttribution: 'Corregir',
-  correctAttributionFor: (tooth: string) => `Corregir quién realizó el ítem del diente ${tooth}`,
+  correctAttributionFor: (item: ItemRef) => `Corregir quién realizó el ${itemRefText(item)}`,
   // DX-305: un realizado «Sin atribuir» se atribuye con quién, cuándo y dónde.
   attributeItem: 'Atribuir',
-  attributeItemFor: (tooth: string) => `Atribuir quién, cuándo y dónde se realizó el ítem del diente ${tooth}`,
+  attributeItemFor: (item: ItemRef) => `Atribuir quién, cuándo y dónde se realizó el ${itemRefText(item)}`,
   markDoneSubject: (procedure: string, tooth: string) => `${procedure} · diente ${tooth}`,
   addItemHeading: 'Agregar ítem',
   invalidToothNumber: 'Número de diente inválido. Usa la notación FDI (ej. 11, 26, 55).',
@@ -160,7 +160,7 @@ export const copy = {
     `Rebaja de ${reduction} sobre ${catalog}. Se compara con el tope de tu rol y sale en el informe de descuentos.`,
   // DX-204: motivo del descuento y «Descuento %» sobre varios ítems.
   itemDiscountReason: (reason: string) => `Motivo: ${reason}`,
-  selectItem: (tooth: string) => `Seleccionar el ítem del diente ${tooth}`,
+  selectItem: (item: ItemRef) => `Seleccionar el ${itemRefText(item)}`,
   selectAll: 'Seleccionar todos',
   clearSelection: 'Quitar selección',
   selectedCount: (n: number) =>
@@ -289,6 +289,39 @@ export function feeReferences(items: TreatmentPlanItem[]): ReadonlyMap<string, F
 
 export function procedureName(item: TreatmentPlanItem, catalogById: Map<string, DentalCatalogItem>): string {
   return catalogById.get(item.catalogItemId)?.labelEs ?? item.catalogItemId;
+}
+
+/**
+ * DX-546 · FE-111: cómo se nombra un ítem en sus controles (estado, selección,
+ * atribución): el diente si lo tiene, siempre el procedimiento y, si otro ítem
+ * de la misma lista se llamaría igual, su número en la lista.
+ */
+export interface ItemRef {
+  tooth: string;
+  procedure: string;
+  /** 1-based; `null` si el nombre ya es único. */
+  position: number | null;
+}
+
+function itemRefText({ tooth, procedure, position }: ItemRef): string {
+  return `ítem${position === null ? '' : ` ${position}`}${tooth ? ` del diente ${tooth}` : ''} · ${procedure}`;
+}
+
+/** El `ItemRef` de cada ítem de la lista, por id: nombres únicos dentro de ella. */
+export function itemRefs(
+  items: readonly TreatmentPlanItem[],
+  catalogById: Map<string, DentalCatalogItem>,
+): Map<string, ItemRef> {
+  const base = items.map((item) => ({ tooth: item.toothNumber, procedure: procedureName(item, catalogById) }));
+  const key = (ref: { tooth: string; procedure: string }) => `${ref.tooth}\u0000${ref.procedure}`;
+  const counts = new Map<string, number>();
+  for (const ref of base) counts.set(key(ref), (counts.get(key(ref)) ?? 0) + 1);
+  return new Map(
+    items.map((item, i) => [
+      item.id,
+      { ...base[i], position: (counts.get(key(base[i])) ?? 0) > 1 ? i + 1 : null },
+    ]),
+  );
 }
 
 export function surfacesLabel(item: TreatmentPlanItem): string {

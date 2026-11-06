@@ -1,4 +1,9 @@
-import type { Equipment, EquipmentDetail, EquipmentMaintenance } from '@/lib/equipment/equipment-api';
+import type {
+  Equipment,
+  EquipmentDetail,
+  EquipmentMaintenance,
+  MaintenanceDueItem,
+} from '@/lib/equipment/equipment-api';
 
 /** Un equipo de prueba (DX-542): activo, sin programa, en la sede `norte`. */
 export function equipmentFixture(partial: Partial<Equipment> & { id: string; name: string }): Equipment {
@@ -57,4 +62,21 @@ export function equipmentDetailFixture(
   partial: Partial<EquipmentDetail> & { id: string; name: string },
 ): EquipmentDetail {
   return { ...equipmentFixture(partial), maintenances: [], ...partial };
+}
+
+/** Un aviso de «Mi día» (DX-543): vencido hace 31 días en la Sede Norte. */
+export function maintenanceDueFixture(
+  partial: Partial<MaintenanceDueItem> & { id: string; name: string },
+): MaintenanceDueItem {
+  return {
+    category: 'DENTAL_UNIT',
+    locationId: 'norte',
+    locationName: 'Sede Norte',
+    chairId: null,
+    chairName: null,
+    nextMaintenanceOn: '2026-10-06',
+    maintenanceStatus: 'OVERDUE',
+    daysUntilDue: -31,
+    ...partial,
+  };
 }
