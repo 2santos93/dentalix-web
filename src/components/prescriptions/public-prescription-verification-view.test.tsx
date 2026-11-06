@@ -45,9 +45,15 @@ describe('PublicPrescriptionVerificationView (DX-467)', () => {
 
   it('cargando y luego «Receta válida» con fecha, profesional, registro, clínica e iniciales', async () => {
     mockedGet.mockResolvedValue(verification());
-    render(<PublicPrescriptionVerificationView code="K7M2P9QRT4XW" />);
-    expect(screen.getByRole('status')).toHaveTextContent('Comprobando la receta…');
+    render(<PublicPrescriptionVerificationView code="k7m2-p9qr-t4xw" />);
+    // Una sola región viva desde el principio: anuncia la carga y luego el veredicto.
+    const live = screen.getByRole('status');
+    expect(live).toHaveTextContent('Comprobando la receta…');
+    expect(screen.queryByText('K7M2-P9QR-T4XW')).not.toBeInTheDocument();
     expect(await screen.findByRole('heading', { level: 1, name: 'Receta válida' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBe(live);
+    expect(live).toHaveTextContent('Receta válida');
+    // Normalizado antes de pedirlo y de pintarlo.
     expect(mockedGet).toHaveBeenCalledWith('K7M2P9QRT4XW');
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     const field = (label: string) => screen.getByText(label).nextElementSibling;
@@ -87,7 +93,7 @@ describe('PublicPrescriptionVerificationView (DX-467)', () => {
   });
 
   it('hash que no casa: «No se puede verificar; contacte con la clínica» y nada más', async () => {
-    mockedGet.mockResolvedValue(verification({ ...EMPTY, state: 'UNVERIFIABLE' }));
+    mockedGet.mockResolvedValue(verification({ ...EMPTY, state: 'UNVERIFIABLE', regional: null }));
     render(<PublicPrescriptionVerificationView code="K7M2P9QRT4XW" />);
     expect(
       await screen.findByRole('heading', {
@@ -105,6 +111,19 @@ describe('PublicPrescriptionVerificationView (DX-467)', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Receta no encontrada' })).toBeInTheDocument();
     expect(screen.getByText(/Revise que el código esté completo/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Receta no encontrada');
+    expect(screen.queryByText(/ZZZZ/)).not.toBeInTheDocument();
+  });
+
+  it('lo que no puede ser un código no se pide ni se refleja en la página', async () => {
+    const probe = '<script>alert(1)</script>';
+    render(<PublicPrescriptionVerificationView code={probe} />);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Receta no encontrada' })).toBeInTheDocument();
+    expect(mockedGet).not.toHaveBeenCalled();
+    expect(document.body.textContent).not.toContain('alert');
+    // Con caracteres ambiguos (O en vez de 0) tampoco.
+    render(<PublicPrescriptionVerificationView code="K7M2P9QRT4XO" />);
+    expect(mockedGet).not.toHaveBeenCalled();
   });
 
   it('429: aviso de esperar, sin pedir de nuevo sola', async () => {
@@ -119,6 +138,8 @@ describe('PublicPrescriptionVerificationView (DX-467)', () => {
     render(<PublicPrescriptionVerificationView code="K7M2P9QRT4XW" />);
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('No pudimos comprobar la receta.');
+    expect(screen.getByRole('heading', { level: 1, name: 'No pudimos comprobar la receta.' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: /reintentar/i }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Receta válida' })).toBeInTheDocument();
     await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));

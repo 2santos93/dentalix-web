@@ -1,4 +1,5 @@
 import {
+  normalizeVerificationCode,
   groupVerificationCode,
   verificationUrlLabel,
   getPublicPrescriptionVerification,
@@ -13,6 +14,13 @@ jest.mock('../api/client', () => ({
 const mockedFetch = apiFetch as jest.MockedFunction<typeof apiFetch>;
 
 describe('código de verificación de la receta (DX-467)', () => {
+  it('normaliza lo tecleado y rechaza lo que no es del alfabeto (como la API)', () => {
+    expect(normalizeVerificationCode('k7m2-p9qr t4xw')).toBe('K7M2P9QRT4XW');
+    for (const bad of ['', 'K7M2P9QRT4X', 'K7M2P9QRT4XW2', 'K7M2P9QRT4X0', 'K7M2P9QRT4XI', '<b>K7M2P9QRT4XW</b>']) {
+      expect(normalizeVerificationCode(bad)).toBeNull();
+    }
+  });
+
   it('se lee en grupos de 4', () => {
     expect(groupVerificationCode('K7M2P9QRT4XW')).toBe('K7M2-P9QR-T4XW');
   });

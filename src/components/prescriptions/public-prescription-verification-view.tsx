@@ -7,6 +7,7 @@ import { documentFormat, documentTexts } from '@/lib/format/document-format';
 import {
   getPublicPrescriptionVerification,
   groupVerificationCode,
+  normalizeVerificationCode,
   type PublicPrescriptionVerification,
 } from '@/lib/prescriptions/prescription-verification';
 import { PublicNotice } from '@/components/shared/public-page';
@@ -44,7 +45,7 @@ type LoadState =
   | { kind: 'error' }
   | { kind: 'notFound' }
   | { kind: 'throttled' }
-  | { kind: 'ready'; data: PublicPrescriptionVerification };
+  | { kind: 'ready'; code: string; data: PublicPrescriptionVerification };
 
 const TONES = {
   success: 'bg-success-subtle text-success-text',
@@ -95,6 +96,35 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** El titular de cada veredicto: lo pinta el h1 y lo anuncia la región viva. */
+function verdictTitle(data: PublicPrescriptionVerification): string {
+  const texts = documentTexts(documentFormat(data.regional));
+  switch (data.state) {
+    case 'VALID':
+      return copy.valid;
+    case 'VOIDED':
+      return copy.voided(texts.date(data.voidedAt));
+    case 'UNVERIFIABLE':
+      return copy.unverifiable;
+  }
+}
+
+/** Lo que anuncia la región viva en cada estado (montada desde el principio). */
+function announcement(state: LoadState): string {
+  switch (state.kind) {
+    case 'loading':
+      return copy.loading;
+    case 'error':
+      return copy.loadErrorTitle;
+    case 'notFound':
+      return copy.notFoundTitle;
+    case 'throttled':
+      return copy.throttledTitle;
+    case 'ready':
+      return verdictTitle(state.data);
+  }
+}
+
 function Result({ data }: { data: PublicPrescriptionVerification }) {
   // La fecha con el formato de la sede de la receta (DX-354), nunca el del
   // navegador; sin formato, «—» (la fecha es el sujeto de la frase).
@@ -113,9 +143,9 @@ function Result({ data }: { data: PublicPrescriptionVerification }) {
         </Verdict>
       );
     case 'VOIDED':
-      return <Verdict icon={Ban} tone="neutral" title={copy.voided(texts.date(data.voidedAt))} hint={copy.voidedHint} />;
+      return <Verdict icon={Ban} tone="neutral" title={verdictTitle(data)} hint={copy.voidedHint} />;
     case 'UNVERIFIABLE':
-      return <Verdict icon={ShieldAlert} tone="danger" title={copy.unverifiable} hint={copy.unverifiableHint} />;
+      return <Verdict icon={ShieldAlert} tone="danger" title={verdictTitle(data)} hint={copy.unverifiableHint} />;
   }
 }
 
@@ -126,15 +156,18 @@ function Result({ data }: { data: PublicPrescriptionVerification }) {
  * e iniciales del paciente), si está anulada (y cuándo) o si no se puede
  * verificar; nunca lo prescrito. Móvil primero: una columna.
  */
-export function PublicPrescriptionVerificationView({ code }: { code: string }) {
-  const [state, setState] = useState<LoadState>({ kind: 'loading' });
+export function PublicPrescriptionVerificationView({ code: rawCode }: { code: string }) {
+  // Lo que no puede ser un código ni se pide ni se pinta: la URL no se refleja.
+  const code = normalizeVerificationCode(rawCode);
+  const [state, setState] = useState<LoadState>(code ? { kind: 'loading' } : { kind: 'notFound' });
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    if (!code) return;
     let cancelled = false;
     getPublicPrescriptionVerification(code)
       .then((data) => {
-        if (!cancelled) setState({ kind: 'ready', data });
+        if (!cancelled) setState({ kind: 'ready', code, data });
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -152,16 +185,23 @@ export function PublicPrescriptionVerificationView({ code }: { code: string }) {
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-8 sm:max-w-lg">
         <p className="text-sm font-medium text-muted">{copy.eyebrow}</p>
 
+        {/* Una sola región viva desde el primer render: anuncia la carga y
+            después el veredicto, sin que haga falta buscarlo. */}
+        <div role="status" className="sr-only">
+          {announcement(state)}
+        </div>
+
         {state.kind === 'loading' && (
-          <div role="status" className="flex flex-col gap-4">
-            <span className="sr-only">{copy.loading}</span>
+          <div aria-hidden className="flex flex-col gap-4">
             <Skeleton className="h-8 w-56" />
             <Skeleton className="h-48 w-full rounded-xl" />
           </div>
         )}
 
         {state.kind === 'error' && (
-          <SectionError
+          <>
+            <h1 className="sr-only">{copy.loadErrorTitle}</h1>
+            <SectionError
             title={copy.loadErrorTitle}
             description={copy.loadError}
             onRetry={() => {
@@ -169,6 +209,7 @@ export function PublicPrescriptionVerificationView({ code }: { code: string }) {
               setReloadKey((k) => k + 1);
             }}
           />
+          </>
         )}
 
         {state.kind === 'notFound' && (
@@ -179,11 +220,14 @@ export function PublicPrescriptionVerificationView({ code }: { code: string }) {
           <PublicNotice headingLevel={1} icon={Timer} title={copy.throttledTitle} message={copy.throttledMessage} />
         )}
 
-        {state.kind === 'ready' && <Result data={state.data} />}
-
-        <p className="text-xs text-muted">
-          {copy.code}: <span className="font-mono tracking-wider text-ink">{groupVerificationCode(code)}</span>
-        </p>
+        {state.kind === 'ready' && (
+          <>
+            <Result data={state.data} />
+            <p className="text-xs text-muted">
+              {copy.code}: <span className="font-mono tracking-wider text-ink">{groupVerificationCode(state.code)}</span>
+            </p>
+          </>
+        )}
       </main>
     </div>
   );

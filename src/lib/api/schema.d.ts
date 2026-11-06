@@ -19787,8 +19787,8 @@ export interface components {
              * @example A. P. G.
              */
             patientInitials: string | null;
-            /** @description Formato regional y zona actuales de la sede de la receta, para pintar las fechas como en la receta impresa. */
-            regional: components["schemas"]["PrescriptionLocationFormatDto"];
+            /** @description Formato regional y zona actuales de la sede de la receta, para pintar la fecha como en la receta impresa. Solo con fecha que pintar (VALID y VOIDED); null en UNVERIFIABLE. */
+            regional: components["schemas"]["PrescriptionLocationFormatDto"] | null;
         };
         PatientImplantDto: {
             /** Format: uuid */

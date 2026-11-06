@@ -10,6 +10,19 @@ export type PublicPrescriptionVerificationState =
   components['schemas']['PublicPrescriptionVerificationState'];
 
 const GROUP = 4;
+/** El mismo alfabeto y largo que la API (sin 0/O, 1/I/L). */
+const CODE = /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{12}$/;
+
+/**
+ * Lo que llega en la URL o se teclea, en la forma guardada (mayúsculas, sin
+ * espacios ni guiones), o `null` si no puede ser un código: entonces ni se
+ * pregunta a la API ni se pinta.
+ */
+export function normalizeVerificationCode(raw: string): string | null {
+  if (raw.length > 32) return null;
+  const code = raw.replace(/[\s-]/g, '').toUpperCase();
+  return CODE.test(code) ? code : null;
+}
 
 /** El código como se imprime y se dicta: `K7M2-P9QR-T4XW`. */
 export function groupVerificationCode(code: string): string {
