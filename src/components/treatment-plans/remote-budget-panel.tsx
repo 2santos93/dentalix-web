@@ -26,7 +26,6 @@ export const remoteBudgetCopy = {
   loadError: 'No pudimos cargar el estado del envío.',
   retry: 'Reintentar',
   requestStatus: (status: string, to: string, when: string) => `Enviado a aceptar a ${to} el ${when} · ${status}`,
-  emailNotQueued: 'La solicitud quedó registrada pero el email no salió: envíala de nuevo.',
   remoteAccepted: (name: string, when: string) => `Aceptado a distancia por ${name} el ${when}`,
   evidenceHeading: 'Evidencias de la aceptación a distancia',
   evidenceTo: 'Enviado por email a',
@@ -95,7 +94,6 @@ export function RemoteBudgetPanel({ token, patientId, plan, role }: RemoteBudget
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [sending, setSending] = useState(false);
-  const [emailNotQueued, setEmailNotQueued] = useState(false);
   const sede = useSedeClock(token);
   const screenClock = sede.status === 'ready' ? sede.clock : null;
 
@@ -157,7 +155,6 @@ export function RemoteBudgetPanel({ token, patientId, plan, role }: RemoteBudget
           )}
         </p>
       ) : null}
-      {emailNotQueued ? <InlineError>{copy.emailNotQueued}</InlineError> : null}
       <div>
         <Button type="button" variant="secondary" disabled={loading} onClick={() => setSending(true)}>
           <Send aria-hidden />
@@ -172,10 +169,10 @@ export function RemoteBudgetPanel({ token, patientId, plan, role }: RemoteBudget
           patientId={patientId}
           planId={plan.id}
           replacesPending={pending}
-          onSent={(created) => {
-            setRequest(created);
-            setEmailNotQueued(!created.emailQueued);
-          }}
+          // DX-149-quater: un 201 siempre lleva el email en cola (la API guarda
+          // la solicitud y su email en la misma transacción; si no se puede
+          // encolar, responde error y no queda nada).
+          onSent={(created) => setRequest(created)}
         />
       ) : null}
     </div>
