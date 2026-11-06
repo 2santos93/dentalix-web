@@ -18,6 +18,9 @@ describe('vocabulario de estados (tones.ts)', () => {
     expect(statusTone('treatmentPlan', 'REJECTED')).toBe('danger');
     expect(statusTone('treatmentPlan', 'CANCELLED')).toBe('neutral');
     expect(statusTone('treatmentPlan', 'DRAFT')).toBe('neutral');
+    expect(statusTone('equipmentMaintenance', 'OVERDUE')).toBe('danger');
+    expect(statusTone('equipmentMaintenance', 'DUE_SOON')).toBe('warning');
+    expect(statusTone('equipment', 'RETIRED')).toBe('neutral');
   });
 
   it('«Anulado», «Pendiente», «Parcial» y «Vencido» tienen un solo tono en todo el producto', () => {

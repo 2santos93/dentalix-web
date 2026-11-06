@@ -2586,6 +2586,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["EquipmentController_list"];
+        put?: never;
+        post: operations["EquipmentController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["EquipmentController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["EquipmentController_update"];
+        trace?: never;
+    };
+    "/api/v1/equipment/{id}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["EquipmentController_retire"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/{id}/maintenances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["EquipmentController_addMaintenance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/{id}/maintenances/{maintenanceId}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["EquipmentController_void"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payment-methods": {
         parameters: {
             query?: never;
@@ -6648,7 +6728,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "PATIENT_RECALL" | "RECALL_CONTACT";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -11937,6 +12017,269 @@ export interface components {
              * @description null quita el profesional por defecto.
              */
             defaultProviderId?: string | null;
+        };
+        /** @enum {string} */
+        EquipmentCategory: "AUTOCLAVE" | "DENTAL_UNIT" | "XRAY" | "COMPRESSOR" | "CURING_LIGHT" | "ULTRASONIC_SCALER" | "OTHER";
+        /** @enum {string} */
+        EquipmentRiskClass: "I" | "IIA" | "IIB" | "III";
+        /** @enum {string} */
+        EquipmentStatus: "ACTIVE" | "RETIRED";
+        /**
+         * @description En el día de la sede: OVERDUE (antes de hoy), DUE_SOON (hoy a +30 días), UP_TO_DATE o UNSCHEDULED. null si está dado de baja.
+         * @enum {string}
+         */
+        EquipmentMaintenanceStatus: "OVERDUE" | "DUE_SOON" | "UP_TO_DATE" | "UNSCHEDULED";
+        EquipmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            /** Format: uuid */
+            chairId: string | null;
+            chairName: string | null;
+            /** @example Autoclave sala 1 */
+            name: string;
+            category: components["schemas"]["EquipmentCategory"];
+            brand: string | null;
+            model: string | null;
+            serialNumber: string | null;
+            /** @description Registro sanitario del producto (texto libre). */
+            sanitaryRegistration: string | null;
+            riskClass: components["schemas"]["EquipmentRiskClass"] | null;
+            /**
+             * Format: date
+             * @example 2026-11-06
+             */
+            acquiredOn: string | null;
+            /** @description Periodicidad del mantenimiento preventivo en meses. */
+            maintenanceIntervalMonths: number | null;
+            status: components["schemas"]["EquipmentStatus"];
+            /**
+             * Format: date
+             * @example 2026-11-06
+             */
+            retiredOn: string | null;
+            retiredReason: string | null;
+            notes: string | null;
+            /**
+             * Format: date
+             * @description Último mantenimiento vivo (de cualquier tipo).
+             * @example 2026-11-06
+             */
+            lastMaintenanceOn: string | null;
+            /**
+             * Format: date
+             * @description Próximo preventivo: el que fijó el último preventivo vivo (o su fecha + la periodicidad); sin preventivos, la adquisición + la periodicidad. null = sin programar.
+             * @example 2026-11-06
+             */
+            nextMaintenanceOn: string | null;
+            /** @description En el día de la sede: OVERDUE (antes de hoy), DUE_SOON (hoy a +30 días), UP_TO_DATE o UNSCHEDULED. null si está dado de baja. */
+            maintenanceStatus: components["schemas"]["EquipmentMaintenanceStatus"] | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ListEquipmentResponseDto: {
+            items: components["schemas"]["EquipmentDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        /** @enum {string} */
+        EquipmentMaintenanceKind: "PREVENTIVE" | "CORRECTIVE" | "CALIBRATION";
+        EquipmentMaintenanceDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            equipmentId: string;
+            kind: components["schemas"]["EquipmentMaintenanceKind"];
+            /**
+             * Format: date
+             * @description Día en que se hizo (de la sede).
+             * @example 2026-11-06
+             */
+            performedOn: string;
+            technician: string | null;
+            company: string | null;
+            description: string;
+            /** @example 120.5 */
+            cost: number | null;
+            /** @description ISO 4217; solo con costo. */
+            currency: string | null;
+            /**
+             * Format: date
+             * @description Próximo mantenimiento que dejó fijado: el explícito o, en un preventivo, la fecha + la periodicidad del equipo.
+             * @example 2026-11-06
+             */
+            nextDueOn: string | null;
+            /**
+             * Format: uuid
+             * @description Quién lo registró.
+             */
+            createdById: string;
+            createdByName: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            voidedAt: string | null;
+            /** Format: uuid */
+            voidedById: string | null;
+            voidReason: string | null;
+        };
+        EquipmentDetailDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            /** Format: uuid */
+            chairId: string | null;
+            chairName: string | null;
+            /** @example Autoclave sala 1 */
+            name: string;
+            category: components["schemas"]["EquipmentCategory"];
+            brand: string | null;
+            model: string | null;
+            serialNumber: string | null;
+            /** @description Registro sanitario del producto (texto libre). */
+            sanitaryRegistration: string | null;
+            riskClass: components["schemas"]["EquipmentRiskClass"] | null;
+            /**
+             * Format: date
+             * @example 2026-11-06
+             */
+            acquiredOn: string | null;
+            /** @description Periodicidad del mantenimiento preventivo en meses. */
+            maintenanceIntervalMonths: number | null;
+            status: components["schemas"]["EquipmentStatus"];
+            /**
+             * Format: date
+             * @example 2026-11-06
+             */
+            retiredOn: string | null;
+            retiredReason: string | null;
+            notes: string | null;
+            /**
+             * Format: date
+             * @description Último mantenimiento vivo (de cualquier tipo).
+             * @example 2026-11-06
+             */
+            lastMaintenanceOn: string | null;
+            /**
+             * Format: date
+             * @description Próximo preventivo: el que fijó el último preventivo vivo (o su fecha + la periodicidad); sin preventivos, la adquisición + la periodicidad. null = sin programar.
+             * @example 2026-11-06
+             */
+            nextMaintenanceOn: string | null;
+            /** @description En el día de la sede: OVERDUE (antes de hoy), DUE_SOON (hoy a +30 días), UP_TO_DATE o UNSCHEDULED. null si está dado de baja. */
+            maintenanceStatus: components["schemas"]["EquipmentMaintenanceStatus"] | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description Todos sus mantenimientos (también los anulados), del más antiguo al más reciente. */
+            maintenances: components["schemas"]["EquipmentMaintenanceDto"][];
+        };
+        CreateEquipmentDto: {
+            /**
+             * Format: uuid
+             * @description Sillón de la MISMA sede (activo); null = ninguno.
+             */
+            chairId?: string | null;
+            brand?: string | null;
+            model?: string | null;
+            serialNumber?: string | null;
+            /** @description Registro sanitario del producto (texto libre). */
+            sanitaryRegistration?: string | null;
+            riskClass?: components["schemas"]["EquipmentRiskClass"] | null;
+            /**
+             * Format: date
+             * @description No futura en la sede.
+             * @example 2026-11-06
+             */
+            acquiredOn?: string | null;
+            /** @description Periodicidad del preventivo en meses; null = sin programa. */
+            maintenanceIntervalMonths?: number | null;
+            notes?: string | null;
+            /**
+             * Format: uuid
+             * @description Sede del equipo.
+             */
+            locationId: string;
+            /** @example Autoclave sala 1 */
+            name: string;
+            category: components["schemas"]["EquipmentCategory"];
+        };
+        UpdateEquipmentDto: {
+            /**
+             * Format: uuid
+             * @description Sillón de la MISMA sede (activo); null = ninguno.
+             */
+            chairId?: string | null;
+            brand?: string | null;
+            model?: string | null;
+            serialNumber?: string | null;
+            /** @description Registro sanitario del producto (texto libre). */
+            sanitaryRegistration?: string | null;
+            riskClass?: components["schemas"]["EquipmentRiskClass"] | null;
+            /**
+             * Format: date
+             * @description No futura en la sede.
+             * @example 2026-11-06
+             */
+            acquiredOn?: string | null;
+            /** @description Periodicidad del preventivo en meses; null = sin programa. */
+            maintenanceIntervalMonths?: number | null;
+            notes?: string | null;
+            /**
+             * Format: uuid
+             * @description Trasladar a otra sede: quita el sillón, salvo que venga uno de la sede nueva. No admite null.
+             */
+            locationId?: string;
+            /** @description No admite null ni vacío. */
+            name?: string;
+            /** @description No admite null. */
+            category?: components["schemas"]["EquipmentCategory"];
+        };
+        RetireEquipmentDto: {
+            /**
+             * Format: date
+             * @description Día de la baja; por defecto hoy en la sede. No futura ni anterior a la adquisición.
+             * @example 2026-11-06
+             */
+            retiredOn?: string;
+            reason: string;
+        };
+        RecordMaintenanceDto: {
+            kind: components["schemas"]["EquipmentMaintenanceKind"];
+            /**
+             * Format: date
+             * @description No futura en la sede.
+             * @example 2026-11-06
+             */
+            performedOn: string;
+            technician?: string | null;
+            company?: string | null;
+            description: string;
+            /** @description Mayor que 0, 2 decimales como mucho; siempre con `currency`. */
+            cost?: number | null;
+            /** @description ISO 4217 de 3 letras; solo con costo. */
+            currency?: string | null;
+            /**
+             * Format: date
+             * @description Próximo mantenimiento explícito (posterior a la fecha). Sin él, un preventivo suma la periodicidad del equipo.
+             * @example 2026-11-06
+             */
+            nextDueOn?: string | null;
+        };
+        VoidMaintenanceDto: {
+            reason: string;
         };
         /**
          * @description Tipo base: efectivo, tarjeta, transferencia, digital u otro. El abono sigue guardando el método antiguo derivado (DIGITAL → TRANSFER).
@@ -27212,6 +27555,351 @@ export interface operations {
             };
             /** @description Sillón no encontrado en esta clínica */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    EquipmentController_list: {
+        parameters: {
+            query?: {
+                /** @description Una sede. Sin ella: la de la cabecera X-Location-Id o todas las permitidas. */
+                locationId?: string;
+                status?: "ACTIVE" | "RETIRED" | "ALL";
+                /** @description Contenido en el nombre, la marca, el modelo o el nº de serie. */
+                query?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Equipos por nombre, paginados, con su próximo mantenimiento y si está vencido o próximo (≤30 días) en el día de su sede. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListEquipmentResponseDto"];
+                };
+            };
+            /** @description Filtro inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los equipos biomédicos. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    EquipmentController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEquipmentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipmentDto"];
+                };
+            };
+            /** @description Campo inválido (todos los errores en un mensaje), o el sillón es de otra sede o está desactivado */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los equipos biomédicos. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede o sillón no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    EquipmentController_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Hoja de vida: el equipo y sus mantenimientos en orden cronológico. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipmentDetailDto"];
+                };
+            };
+            /** @description Solo administración gestiona los equipos biomédicos. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Equipo no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    EquipmentController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateEquipmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipmentDto"];
+                };
+            };
+            /** @description Campo inválido, o el sillón es de otra sede o está desactivado */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los equipos biomédicos. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Equipo, sede o sillón no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El equipo está dado de baja */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    EquipmentController_retire: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetireEquipmentDto"];
+            };
+        };
+        responses: {
+            /** @description Dado de baja (no se borra ni se reactiva): conserva su hoja de vida. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipmentDto"];
+                };
+            };
+            /** @description Motivo o fecha inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los equipos biomédicos. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Equipo no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya estaba dado de baja */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    EquipmentController_addMaintenance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordMaintenanceDto"];
+            };
+        };
+        responses: {
+            /** @description El mantenimiento registrado; un preventivo deja como próximo la fecha + la periodicidad del equipo (o el explícito). */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipmentMaintenanceDto"];
+                };
+            };
+            /** @description Campo inválido (fecha futura, costo sin moneda, moneda desconocida…) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los equipos biomédicos. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Equipo no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El equipo está dado de baja */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    EquipmentController_void: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                maintenanceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidMaintenanceDto"];
+            };
+        };
+        responses: {
+            /** @description Anulado con motivo (no se borra): sigue en la hoja de vida, marcado. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipmentMaintenanceDto"];
+                };
+            };
+            /** @description Motivo inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los equipos biomédicos. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Equipo o mantenimiento no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya estaba anulado */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

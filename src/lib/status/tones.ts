@@ -262,7 +262,29 @@ const recall = {
   INACTIVE: s('neutral', 'Retirado'),
 } satisfies Presentations<Schemas['RecallStatus']>;
 
+// ── Equipos biomédicos (DX-542) ─────────────────────────────────────────────
+
+/**
+ * Programa de mantenimiento del equipo en el día de su sede: vencido es un
+ * fallo, «Vence pronto» pide agendarlo, «Al día» (como el recall) y «Sin
+ * programar» no piden nada.
+ */
+const equipmentMaintenance = {
+  OVERDUE: s('danger', 'Vencido'),
+  DUE_SOON: s('warning', 'Vence pronto'),
+  UP_TO_DATE: s('neutral', 'Al día'),
+  UNSCHEDULED: s('neutral', 'Sin programar'),
+} satisfies Presentations<Schemas['EquipmentMaintenanceStatus']>;
+
+/** Activo como el personal; dado de baja es un cierre sin juicio. */
+const equipment = {
+  ACTIVE: s('success', 'Activo'),
+  RETIRED: s('neutral', 'Dado de baja'),
+} satisfies Presentations<Schemas['EquipmentStatus']>;
+
 export const STATUS_PRESENTATION = {
+  equipmentMaintenance,
+  equipment,
   appointment,
   punctuality,
   reminder,
