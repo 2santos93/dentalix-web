@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { EquipmentDetailView } from './equipment-detail-view';
 import { EquipmentManager } from './equipment-manager';
-import { getEquipment, listEquipment } from '@/lib/equipment/equipment-api';
+import { getEquipment, listEquipment, updateEquipment } from '@/lib/equipment/equipment-api';
 import { listLocations } from '@/lib/locations/locations-api';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { clinicLocation } from '@/lib/test/locations';
@@ -13,6 +13,7 @@ jest.mock('../../lib/equipment/equipment-api', () => ({
   ...jest.requireActual('../../lib/equipment/equipment-api'),
   getEquipment: jest.fn(),
   listEquipment: jest.fn(),
+  updateEquipment: jest.fn(),
 }));
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../../lib/chairs/chairs-api', () => ({
@@ -28,6 +29,7 @@ jest.mock('../../lib/reference/currencies-api', () => ({
 
 const mockedGet = getEquipment as jest.MockedFunction<typeof getEquipment>;
 const mockedList = listEquipment as jest.MockedFunction<typeof listEquipment>;
+const mockedUpdate = updateEquipment as jest.MockedFunction<typeof updateEquipment>;
 
 const norte = clinicLocation({ id: 'norte', name: 'Sede Norte', locale: 'es-VE', hourCycle: 'h23' });
 // Una sede cerrada, en otra zona y con otra moneda: su «hoy» y su moneda no son los de Norte.
@@ -94,6 +96,21 @@ describe('equipo de una sede desactivada (DX-546 · FE-112)', () => {
     expect(
       within(dialog).getByText('Al cambiar de sede se quita el sillón, salvo que elijas uno de la sede nueva.'),
     ).toBeInTheDocument();
+  });
+
+  it('«Editar» sin tocar la sede: el PATCH no lleva locationId (el equipo sigue en su sede desactivada)', async () => {
+    mockedUpdate.mockResolvedValue(inVieja);
+    render(<EquipmentDetailView token="tok" equipmentId="e1" locations={locations} />);
+    const user = setupUser();
+    await user.click(await screen.findByRole('button', { name: 'Editar' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Marca'), 'Tuttnauer');
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    const [, id, body] = mockedUpdate.mock.calls[0];
+    expect(id).toBe('e1');
+    expect(body).not.toHaveProperty('locationId');
+    expect(body).toEqual(expect.objectContaining({ brand: 'Tuttnauer', name: 'Autoclave' }));
   });
 
   it('desde la lista: «Nuevo equipo» solo ofrece sedes activas y un equipo de la sede cerrada se mantiene con su moneda', async () => {
