@@ -165,7 +165,7 @@ export function EquipmentLifeSheet({ equipment, stamp, maintenanceActions }: Equ
                     </p>
                     <div className="flex items-center gap-2">
                       {/* DX-546 · FE-115: «Anulado» es neutro (registro retirado, no un error). */}
-                      {voided ? <StatusBadge kind="clinicalRecord" status="VOIDED" /> : null}
+                      {voided ? <StatusBadge kind="equipmentMaintenanceRecord" status="VOIDED" /> : null}
                       {maintenanceActions?.(m)}
                     </div>
                   </div>

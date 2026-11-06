@@ -276,6 +276,15 @@ const equipmentMaintenance = {
   UNSCHEDULED: s('neutral', 'Sin programar'),
 } satisfies Presentations<Schemas['EquipmentMaintenanceStatus']>;
 
+/**
+ * DX-546 · FE-115: un mantenimiento de la hoja de vida de un equipo. No se
+ * edita ni se borra: si estaba mal, se anula con motivo. Anulado = registro
+ * retirado, neutro como en el resto del producto, nunca rojo.
+ */
+const equipmentMaintenanceRecord = {
+  VOIDED: s('neutral', 'Anulado'),
+} satisfies Presentations<'VOIDED'>;
+
 /** Activo como el personal; dado de baja es un cierre sin juicio. */
 const equipment = {
   ACTIVE: s('success', 'Activo'),
@@ -284,6 +293,7 @@ const equipment = {
 
 export const STATUS_PRESENTATION = {
   equipmentMaintenance,
+  equipmentMaintenanceRecord,
   equipment,
   appointment,
   punctuality,
