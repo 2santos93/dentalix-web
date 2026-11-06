@@ -55,7 +55,6 @@ function renderTable(items: TreatmentPlanItem[]) {
       items={items}
       catalogById={catalogById}
       currency="USD"
-      catalogCurrency="USD"
       visit={null}
       feeRefs={new Map()}
       updatingItemId={null}

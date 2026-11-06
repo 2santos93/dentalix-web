@@ -17,8 +17,6 @@ import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { documentFormat } from '@/lib/format/document-format';
 import { DocumentFormatNote } from '@/components/documents/document-format-note';
 import { quoteFromRates, ratePerBase } from '@/lib/payments/payment-rate';
-import { useLocationsState } from '@/lib/locations/use-locations-state';
-import { clinicBaseCurrency } from '@/lib/locations/location-settings';
 
 const copy = {
   toolbar: 'Acciones del presupuesto',
@@ -95,15 +93,10 @@ export function PlanQuotePrintView({
   const today = timeZone ? sedeToday(timeZone) : '';
   const rates = useExchangeRates(token, today, second !== '' && data !== null);
   const secondResult = data && second ? secondCurrencyOf(rates, data.currency, second, today) : null;
-  // DX-489: el precio de lista va en la moneda del catálogo (la común de las
-  // sedes). Se espera a saberla para pintar e imprimir. Si las sedes no
-  // cargan, el documento se ve con la cifra sin moneda, pero con el aviso y su
-  // Reintentar, y el diálogo de impresión NO se abre solo: imprimiría algo
-  // distinto de la pestaña (sin moneda ni «Ahorro por convenio») sin decirlo.
-  const locations = useLocationsState(token);
-  const catalogCurrency = locations.status === 'ready' ? clinicBaseCurrency(locations.locations) : null;
-  const ready = data !== null && locations.status !== 'loading';
-  const autoPrint = data !== null && format !== null && locations.status === 'ready';
+  // DX-502: el precio de lista ya trae su moneda (la del catálogo congelada
+  // en cada ítem, `listPriceCurrency`): no hace falta leer las sedes.
+  const ready = data !== null;
+  const autoPrint = data !== null && format !== null;
 
   useEffect(() => {
     if (!allowed) return;
@@ -179,11 +172,6 @@ export function PlanQuotePrintView({
           </Button>
         </div>
       </div>
-      {data && locations.status === 'error' ? (
-        <div className="px-4 pt-3 print:hidden" data-testid="quote-locations-error">
-          <SedeConfigError kind="currency" variant="note" onRetry={locations.retry} />
-        </div>
-      ) : null}
       {data && second ? (
         <div role="status" aria-live="polite" className="px-4 pt-3 text-sm text-ink print:hidden">
           {zone.status === 'error' ? (
@@ -216,7 +204,6 @@ export function PlanQuotePrintView({
               <PlanQuoteDocument
                 quote={data}
                 format={format}
-                catalogCurrency={catalogCurrency}
                 secondCurrency={secondResult && 'value' in secondResult ? secondResult.value : null}
               />
             </div>

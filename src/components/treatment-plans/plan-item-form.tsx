@@ -59,8 +59,6 @@ interface PlanItemFormProps {
   /** DX-204: política de descuentos para avisar antes de enviar; `null` = decide la API. */
   discountRules: DiscountRules | null;
   role: ClinicRole | null;
-  /** DX-489: moneda del catálogo (la del «precio de lista»); `null` si no se sabe. */
-  catalogCurrency: string | null;
   /** DX-489: formato de la sede, el de los demás importes del plan; `null` mientras carga («—»). */
   fmt: RegionalFormat | null;
   /** Tras agregar: refresca el plan y el saldo (y se espera antes de reactivar el botón). */
@@ -82,7 +80,6 @@ export function PlanItemForm({
   catalogById,
   discountRules,
   role,
-  catalogCurrency,
   fmt,
   onAdded,
   submitPrimary = true,
@@ -127,6 +124,9 @@ export function PlanItemForm({
     },
   });
   const quoteReady = priceQuote.status === 'ready' ? priceQuote.quote : null;
+  // DX-502: la moneda del catálogo la dice la API (la común de TODAS las sedes
+  // activas, no solo las del usuario); sin precio resuelto, no se sabe.
+  const catalogCurrency = quoteReady?.catalogCurrency ?? null;
   const addPriceLoading = priceQuote.status === 'loading';
   const addNoDiscount = noDiscountAllowed(quoteReady);
   // Referencia de la rebaja (R1): el precio resuelto, no el de catálogo.
@@ -264,8 +264,9 @@ export function PlanItemForm({
   const addBelowCatalog = addEffective !== null && addEffective.priceReduction > 0;
   // DX-489: sin lista de precios en la moneda del plan, el precio de
   // referencia es el del catálogo, en su propia moneda: no se resta del plan.
-  const catalogInOtherCurrency =
-    (quoteReady ? quoteReady.source === 'CATALOG' : true) && catalogCurrency !== plan.currency;
+  // B4 (DX-502): hasta que llega el precio resuelto no se sabe la moneda del
+  // catálogo: no se pinta ni la rebaja ni la variante «en otra moneda».
+  const catalogInOtherCurrency = quoteReady?.source === 'CATALOG' && catalogCurrency !== plan.currency;
   const addDiscounted = addEffective ? addEffective.total > 0 : addDiscountValue > 0;
   const addReasonRequired =
     discountRules !== null &&
@@ -350,16 +351,18 @@ export function PlanItemForm({
             {addBelowCatalog && addEffective && addCatalogPrice !== null ? (
               <>
                 <span className="block font-medium">{PRICE_BELOW_CATALOG_NOTICE}</span>
-                <span className="block">
-                  {catalogInOtherCurrency
-                    ? copy.priceBelowCatalogOtherCurrency(
-                        formatListPrice(addCatalogPrice, catalogCurrency, sedeListPriceFormat(fmt)),
-                      )
-                    : copy.priceBelowCatalogDetail(
-                        sedeMoney(addEffective.priceReduction, plan.currency, fmt),
-                        sedeMoney(addCatalogPrice, plan.currency, fmt),
-                      )}
-                </span>
+                {quoteReady ? (
+                  <span className="block">
+                    {catalogInOtherCurrency
+                      ? copy.priceBelowCatalogOtherCurrency(
+                          formatListPrice(addCatalogPrice, catalogCurrency, sedeListPriceFormat(fmt)),
+                        )
+                      : copy.priceBelowCatalogDetail(
+                          sedeMoney(addEffective.priceReduction, plan.currency, fmt),
+                          sedeMoney(addCatalogPrice, plan.currency, fmt),
+                        )}
+                  </span>
+                ) : null}
               </>
             ) : null}
           </p>

@@ -27,6 +27,8 @@ export const ITEM_WITHOUT_DISCOUNT = {
   discountLocationId: null,
   // DX-105: sin convenio ni lista, el ítem no lleva foto de origen del precio.
   basePrice: null,
+  // DX-502: sin precio de catálogo, sin su moneda.
+  catalogCurrency: null,
   priceSource: null,
   agreementId: null,
   agreementName: null,

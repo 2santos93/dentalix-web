@@ -2,7 +2,8 @@ import { PRICE_SOURCE_LABELS } from '@/components/agreements/agreement-labels';
 import type { PriceSource } from '@/lib/patients/patient-agreement-api';
 
 const copy = {
-  listPrice: (amount: string) => `precio de lista ${amount}`,
+  listPrice: (amount: string | null) =>
+    amount === null ? 'precio de lista oculto: moneda del catálogo desconocida' : `precio de lista ${amount}`,
   agreementItem: (name: string) => `Convenio ${name}`,
   priceListItem: 'Lista de precios de la sede',
 };
@@ -13,9 +14,10 @@ function isAgreementSource(source: string | null | undefined): boolean {
 
 /**
  * Pinta el precio de lista (el del catálogo) con SU moneda, que puede no ser la
- * del plan (DX-489, `formatListPrice`).
+ * del plan (DX-489, `formatListPrice`); `null` si no se sabe (DX-502): la cifra
+ * se oculta y la línea lo dice.
  */
-export type ListPriceText = (value: number) => string;
+export type ListPriceText = (value: number) => string | null;
 
 /**
  * Origen del precio resuelto en el formulario: «Convenio · Seguros Sol ·

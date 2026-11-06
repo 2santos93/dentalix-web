@@ -389,6 +389,8 @@ function quoteOf(catalogItemId: string, overrides: Partial<PriceQuote> = {}, cur
   const base = catalog.find((c) => c.id === catalogItemId)?.defaultPrice ?? null;
   return {
     basePrice: base,
+    // DX-502: el catálogo en la moneda del plan, salvo que el test diga otra.
+    catalogCurrency: currency,
     price: base,
     source: 'CATALOG',
     agreementId: null,
@@ -914,6 +916,8 @@ describe('TreatmentPlansTab', () => {
       discount: 0,
       catalogPrice: 100.55,
       basePrice: 80000,
+      // DX-502: la moneda del catálogo, congelada en el ítem por la API.
+      catalogCurrency: 'VES',
       priceSource: 'AGREEMENT_PRICE_LIST' as const,
       agreementId: 'ag-1',
       agreementName: 'Seguros Sol',
@@ -937,9 +941,59 @@ describe('TreatmentPlansTab', () => {
       expect(table).not.toHaveTextContent(/80\.000,00\sEUR|EUR\s80\.000,00/);
     });
 
+    it('DX-502: con la moneda congelada en el ítem, aunque las sedes que ve el usuario estén en otra', async () => {
+      // Un usuario restringido a una sede en USD: la moneda del catálogo es la
+      // que guardó la API (la común de TODAS las sedes), no la de su sede.
+      jest.mocked(listLocations).mockResolvedValue([{ ...clinicLocation(), currency: 'USD' }]);
+      try {
+        render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+        const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+        expect(
+          within(table).getByText(/^Convenio Seguros Sol · precio de lista VES 80\.000,00$/),
+        ).toBeInTheDocument();
+        expect(table).not.toHaveTextContent(/USD\s80\.000,00/);
+      } finally {
+        jest.mocked(listLocations).mockResolvedValue([clinicLocation()]);
+      }
+    });
+
+    it('DX-502: sin moneda del catálogo conocida, el ítem oculta la cifra y lo dice', async () => {
+      mockedGetPlan.mockResolvedValue({ ...eurPlan, items: [{ ...eurItem, catalogCurrency: null }], total: 100.55 });
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+      expect(
+        within(table).getByText(/^Convenio Seguros Sol · precio de lista oculto: moneda del catálogo desconocida$/),
+      ).toBeInTheDocument();
+      expect(table).not.toHaveTextContent(/80\.000,00/);
+    });
+
+    it('DX-502: el formulario con la moneda del catálogo desconocida tampoco pinta la cifra', async () => {
+      mockedGetPriceQuote.mockResolvedValue({
+        basePrice: 80000,
+        catalogCurrency: null,
+        price: 100.55,
+        source: 'AGREEMENT_PRICE_LIST',
+        agreementId: 'ag-1',
+        agreementName: 'Seguros Sol',
+        allowDiscount: true,
+        currency: 'EUR',
+      });
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      await screen.findByRole('table', { name: /ítems de la visita/i });
+      await user.type(screen.getByLabelText(/código fdi/i), '16');
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      expect(
+        await screen.findByText(
+          /^Convenio \(lista de precios\) · Seguros Sol · precio de lista oculto: moneda del catálogo desconocida$/,
+        ),
+      ).toBeInTheDocument();
+    });
+
     it('el formulario dice el precio de lista en VES', async () => {
       mockedGetPriceQuote.mockResolvedValue({
         basePrice: 80000,
+        catalogCurrency: 'VES',
         price: 100.55,
         source: 'AGREEMENT_PRICE_LIST',
         agreementId: 'ag-1',
@@ -960,6 +1014,7 @@ describe('TreatmentPlansTab', () => {
     it('sin lista en EUR, el aviso de precio por debajo del catálogo no pinta el catálogo en EUR', async () => {
       mockedGetPriceQuote.mockResolvedValue({
         basePrice: 80000,
+        catalogCurrency: 'VES',
         price: 80000,
         source: 'CATALOG',
         agreementId: null,
@@ -978,6 +1033,44 @@ describe('TreatmentPlansTab', () => {
       const notice = await screen.findByText(/^Precio de catálogo: VES 80\.000,00, en otra moneda y sin convertir\./);
       expect(notice).toBeInTheDocument();
       expect(document.getElementById('tp-price-below-catalog')).not.toHaveTextContent(/EUR\s80\.000|Rebaja de/);
+    });
+
+    it('DX-502: con el catálogo en una moneda que no se sabe, el aviso no inventa cifra ni moneda', async () => {
+      mockedGetPriceQuote.mockResolvedValue({
+        basePrice: 80000,
+        catalogCurrency: null,
+        price: 80000,
+        source: 'CATALOG',
+        agreementId: null,
+        agreementName: null,
+        allowDiscount: true,
+        currency: 'EUR',
+      });
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      await screen.findByRole('table', { name: /ítems de la visita/i });
+      await user.type(screen.getByLabelText(/código fdi/i), '16');
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      const field = screen.getByLabelText('Precio', { exact: true });
+      await user.clear(field);
+      await user.type(field, '100,55');
+      expect(
+        await screen.findByText(/^Precio de catálogo en una moneda que no se sabe, sin convertir\./),
+      ).toBeInTheDocument();
+      expect(document.getElementById('tp-price-below-catalog')).not.toHaveTextContent(/80\.000|Rebaja de/);
+    });
+
+    it('B4: sin precio resuelto (falló), el aviso no pinta la rebaja ni la variante «en otra moneda»', async () => {
+      mockedGetPriceQuote.mockRejectedValue(new Error('red'));
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      await screen.findByRole('table', { name: /ítems de la visita/i });
+      await user.type(screen.getByLabelText(/código fdi/i), '16');
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      const field = screen.getByLabelText('Precio', { exact: true });
+      await user.clear(field);
+      await user.type(field, '1');
+      expect(document.getElementById('tp-price-below-catalog')).not.toHaveTextContent(/otra moneda|Rebaja de/);
     });
 
     it('el mismo importe sale con UN formato en el resumen, la tabla y la lista de abonos', async () => {
@@ -2343,8 +2436,9 @@ describe('TreatmentPlansTab', () => {
 
     // SEC-041: un precio por debajo del de catálogo cuenta como descuento.
     describe('precio por debajo del de catálogo (SEC-041)', () => {
-      // El catálogo en la moneda del plan (sedes en USD): la rebaja se puede
-      // restar. Con el catálogo en otra moneda, ver DX-489.
+      // El catálogo en la moneda del plan (el precio resuelto lo da en USD,
+      // DX-502): la rebaja se puede restar. Con el catálogo en otra moneda,
+      // ver DX-489.
       const { clinicLocation } = jest.requireActual('../../lib/test/locations');
       beforeEach(() => {
         jest.mocked(listLocations).mockResolvedValue([{ ...clinicLocation(), currency: 'USD' }]);
@@ -2485,6 +2579,8 @@ describe('TreatmentPlansTab', () => {
         {
           price: 40000,
           basePrice: 50000,
+          // El catálogo en VES (DX-502: lo dice la API); el plan, en USD.
+          catalogCurrency: 'VES',
           source: 'AGREEMENT_PERCENT',
           agreementId: 'ag-1',
           agreementName: 'Seguros Sol',
@@ -2672,6 +2768,7 @@ describe('TreatmentPlansTab', () => {
         ...item1,
         catalogPrice: 40000,
         basePrice: 50000,
+        catalogCurrency: 'VES',
         priceSource: 'AGREEMENT_PERCENT' as const,
         agreementId: 'ag-1',
         agreementName: 'Seguros Sol',
@@ -2688,6 +2785,7 @@ describe('TreatmentPlansTab', () => {
         ...item1,
         catalogPrice: 40000,
         basePrice: 50000,
+        catalogCurrency: 'VES',
         discount: 2000,
         priceSource: 'AGREEMENT_PERCENT' as const,
         agreementId: 'ag-1',
