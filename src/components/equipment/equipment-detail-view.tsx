@@ -1,7 +1,6 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { Archive, Ban, Pencil, Printer, Wrench } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -95,21 +94,24 @@ export function EquipmentDetailView({ token, equipmentId, locations }: Equipment
     };
   }, [token, equipmentId, reloadKey]);
 
+  if (notFound) {
+    return <EmptyState role="status" title={copy.notFoundTitle} description={copy.notFoundHint} />;
+  }
+  // Escalón 1 también tras una acción: si la recarga falla, la hoja que quedó
+  // en pantalla ya no es la de la API (el mantenimiento o la baja sí se
+  // guardaron), así que no se deja a la vista como si estuviera al día.
+  if (error) {
+    return (
+      <SectionError
+        description={error}
+        onRetry={() => {
+          setError(null);
+          setReloadKey((k) => k + 1);
+        }}
+      />
+    );
+  }
   if (!detail) {
-    if (notFound) {
-      return <EmptyState role="status" title={copy.notFoundTitle} description={copy.notFoundHint} />;
-    }
-    if (error) {
-      return (
-        <SectionError
-          description={error}
-          onRetry={() => {
-            setError(null);
-            setReloadKey((k) => k + 1);
-          }}
-        />
-      );
-    }
     return (
       <div role="status" className="flex flex-col gap-3">
         <span className="sr-only">{copy.loading}</span>
@@ -152,11 +154,13 @@ export function EquipmentDetailView({ token, equipmentId, locations }: Equipment
             </Button>
           </>
         ) : null}
-        <Button asChild variant="secondary">
-          <Link href={equipmentPrintHref(detail.id)}>
-            <Printer aria-hidden />
-            {copy.print}
-          </Link>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => window.open(equipmentPrintHref(detail.id), '_blank', 'noopener')}
+        >
+          <Printer aria-hidden />
+          {copy.print}
         </Button>
         {activeEquipment ? (
           <Button type="button" variant="destructive-ghost" onClick={() => openModal('retire')}>
