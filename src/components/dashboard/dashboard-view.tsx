@@ -15,6 +15,7 @@ import { RateBacklogNotice } from '@/components/payments/rate-backlog-notice';
 import { ClinicFiscalNotice } from '@/components/clinic-settings/clinic-fiscal-notice';
 import { AgingSection } from './aging-section';
 import { EquipmentMaintenanceSection } from './equipment-maintenance-section';
+import { RadiologyDueSection } from './radiology-due-section';
 import { LowStockSection } from './dashboard-sections';
 import { canSeeBlock, INICIO_DESCRIPTION, INICIO_DESCRIPTION_FALLBACK } from './inicio-roles';
 import { MyProductionSection } from './my-production-section';
@@ -167,6 +168,8 @@ export function DashboardView({ token }: DashboardViewProps) {
             {canSeeBlock('equipmentMaintenance', role) ? (
               <EquipmentMaintenanceSection token={token} scopeKey={scopeKey} />
             ) : null}
+            {/* DX-544: licencias y controles de rayos X por vencer (solo ADMIN, con su propia carga). */}
+            {canSeeBlock('radiologyDue', role) ? <RadiologyDueSection token={token} scopeKey={scopeKey} /> : null}
           </div>
         </div>
 

@@ -11,7 +11,7 @@ function tokenForRole(role: string): string {
 }
 
 describe('SettingsIndex (DX-282)', () => {
-  it('ADMIN: siete secciones y las 30 pantallas como enlaces', () => {
+  it('ADMIN: siete secciones y las 31 pantallas como enlaces', () => {
     render(<SettingsIndex token={tokenForRole('ADMIN')} />);
 
     const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
@@ -24,7 +24,7 @@ describe('SettingsIndex (DX-282)', () => {
       'Datos y seguridad',
       'Herramientas y registros',
     ]);
-    expect(screen.getAllByRole('link')).toHaveLength(30);
+    expect(screen.getAllByRole('link')).toHaveLength(31);
     expect(
       within(screen.getByRole('list', { name: 'Tu cuenta' })).getByRole('link', { name: /^Mi perfil Tu nombre/ }),
     ).toHaveAttribute('href', '/settings/profile');
@@ -47,11 +47,14 @@ describe('SettingsIndex (DX-282)', () => {
     );
   });
 
-  it.each(['RECEPTION', 'DENTIST'])('%s solo ve lo que puede abrir', (role) => {
+  it.each([
+    ['RECEPTION', ['/settings/profile', '/settings/sedes', '/settings/horarios', '/settings/privacidad']],
+    ['DENTIST', ['/settings/profile', '/settings/sedes', '/settings/horarios', '/settings/privacidad', '/settings/rayos-x']],
+  ])('%s solo ve lo que puede abrir', (role, expected) => {
     render(<SettingsIndex token={tokenForRole(role)} />);
 
     const links = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
-    expect(links).toEqual(['/settings/profile', '/settings/sedes', '/settings/horarios', '/settings/privacidad']);
+    expect(links).toEqual(expected);
     expect(screen.queryByRole('heading', { name: 'Cobro' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Historia clínica' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Consentimientos/ })).not.toBeInTheDocument();

@@ -27,6 +27,8 @@ import { WorkQueuesProvider } from '@/components/work-queues/work-queues-context
 import { getTokenRole } from '@/lib/auth/token-role';
 import { getMaintenanceDue } from '@/lib/equipment/equipment-api';
 import { maintenanceDueFixture } from '@/lib/test/equipment';
+import { getRadiologyDue } from '@/lib/radiology/radiology-api';
+import { radiologyDueFixture } from '@/lib/test/radiology';
 
 // jest.mock no reescribe alias: rutas relativas (convención del repo).
 jest.mock('../../lib/dashboard/dashboard-api', () => ({ getDashboard: jest.fn() }));
@@ -43,6 +45,11 @@ jest.mock('../../lib/work-queues/work-queues-api', () => ({
 jest.mock('../../lib/equipment/equipment-api', () => ({
   ...jest.requireActual('../../lib/equipment/equipment-api'),
   getMaintenanceDue: jest.fn(),
+}));
+// DX-544: los avisos del expediente de rayos X (solo ADMIN en Inicio).
+jest.mock('../../lib/radiology/radiology-api', () => ({
+  ...jest.requireActual('../../lib/radiology/radiology-api'),
+  getRadiologyDue: jest.fn(),
 }));
 jest.mock('../../lib/cash-sessions/cash-sessions-api', () => ({ getCurrentCashSession: jest.fn() }));
 jest.mock('../../lib/inventory/inventory-api', () => ({ listInventoryItems: jest.fn() }));
@@ -72,6 +79,7 @@ const m = {
   receivables: jest.mocked(getReceivablesSummary),
   workQueues: jest.mocked(getWorkQueuesSummary),
   equipmentDue: jest.mocked(getMaintenanceDue),
+  radiologyDue: jest.mocked(getRadiologyDue),
 };
 
 /** Lo que devuelve la API por rol (WORK_QUEUE_ROLES): la API reparte, la web pinta. */
@@ -304,6 +312,11 @@ beforeEach(() => {
     items: [maintenanceDueFixture({ id: 'eq-1', name: 'Unidad dental Sillón 1', chairName: 'Sillón 1' })],
     total: 1,
   });
+  m.radiologyDue.mockResolvedValue({
+    generatedAt: FROZEN_NOW.toISOString(),
+    items: [radiologyDueFixture({ id: 'rx-1', reference: 'QC-0917' })],
+    total: 1,
+  });
   m.inventory.mockResolvedValue({
     items: [{ id: 'i1', name: 'Guantes de nitrilo', unit: 'caja', stock: 1, minStock: 5, lowStock: true }],
     total: 4,
@@ -444,6 +457,27 @@ describe('Inicio · ADMIN', () => {
     expect(await pendingValue('closing')).toHaveTextContent('3');
     const today = screen.getByRole('region', { name: 'Hoy' });
     expect(within(today).queryByRole('alert')).toBeNull();
+  });
+
+  it('«Licencias y controles de rayos X» va junto a los mantenimientos, con enlace al expediente (DX-544)', async () => {
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const block = await screen.findByRole('region', { name: 'Licencias y controles de rayos X' });
+    expect(
+      await within(block).findByRole('link', { name: 'Control de calidad QC-0917 (abrir el expediente de rayos X)' }),
+    ).toHaveAttribute('href', '/settings/rayos-x');
+    expect(within(block).getByText('Venció hace 12 días')).toBeInTheDocument();
+  });
+
+  it('si fallan los avisos de rayos X, solo ese bloque avisa y los mantenimientos siguen (DX-544)', async () => {
+    m.radiologyDue.mockRejectedValue(new Error('network'));
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const block = await screen.findByRole('region', { name: 'Licencias y controles de rayos X' });
+    expect(await within(block).findByRole('alert')).toHaveTextContent(
+      'No se pudieron cargar las licencias y los controles de rayos X.',
+    );
+    const equipment = screen.getByRole('region', { name: 'Mantenimientos de equipos' });
+    expect(await within(equipment).findByText('Unidad dental Sillón 1')).toBeInTheDocument();
+    expect(await pendingValue('closing')).toHaveTextContent('3');
   });
 
   it('las listas a 0 se pliegan en «Al día» y se despliegan con teclado', async () => {
@@ -668,7 +702,9 @@ describe('Inicio · RECEPTION', () => {
     expect(m.comparison).not.toHaveBeenCalled();
     expect(m.inventory).not.toHaveBeenCalled();
     expect(m.equipmentDue).not.toHaveBeenCalled();
+    expect(m.radiologyDue).not.toHaveBeenCalled();
     expect(screen.queryByRole('region', { name: 'Mantenimientos de equipos' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Licencias y controles de rayos X' })).not.toBeInTheDocument();
   });
 });
 
@@ -683,7 +719,7 @@ describe('Inicio · DENTIST', () => {
     const production = await screen.findByTestId('production-VES');
     expect(production).toHaveTextContent('7 procedimientos');
     expect(m.production.mock.calls[0][1]).toEqual({ from: '2026-08-01', to: '2026-08-15' });
-    for (const fn of [m.getDashboard, m.comparison, m.receivables, m.cash, m.inventory, m.listStaff, m.equipmentDue]) {
+    for (const fn of [m.getDashboard, m.comparison, m.receivables, m.cash, m.inventory, m.listStaff, m.equipmentDue, m.radiologyDue]) {
       expect(fn).not.toHaveBeenCalled();
     }
   });
@@ -701,5 +737,6 @@ describe('Inicio · ASSISTANT', () => {
     expect(screen.queryByTestId('pending-closing')).not.toBeInTheDocument();
     expect(m.getDashboard).not.toHaveBeenCalled();
     expect(m.equipmentDue).not.toHaveBeenCalled();
+    expect(m.radiologyDue).not.toHaveBeenCalled();
   });
 });

@@ -23,10 +23,10 @@ describe('Índice de Ajustes (DX-282)', () => {
     ]);
   });
 
-  it('ADMIN ve las 30 pantallas de ajustes (Mi perfil incluido), cada una una sola vez', () => {
+  it('ADMIN ve las 31 pantallas de ajustes (Mi perfil incluido), cada una una sola vez', () => {
     const hrefs = hrefsFor('ADMIN');
-    expect(hrefs).toHaveLength(30);
-    expect(new Set(hrefs).size).toBe(30);
+    expect(hrefs).toHaveLength(31);
+    expect(new Set(hrefs).size).toBe(31);
   });
 
   it('la entrada de Historia clínica dice también el plazo de conservación (DX-330)', () => {
@@ -40,6 +40,7 @@ describe('Índice de Ajustes (DX-282)', () => {
     expect(tools?.entries.map((entry) => entry.label)).toEqual([
       'Importar pacientes',
       'Implantes',
+      'Rayos X: licencias y control de calidad',
       'Accesos de soporte',
       'Auditoría',
     ]);
@@ -100,7 +101,22 @@ describe('Índice de Ajustes (DX-282)', () => {
     expect([...all].sort()).toEqual(pages);
   });
 
-  it.each(['DENTIST', 'ASSISTANT', 'RECEPTION'] as const)(
+  it('DENTIST ve además el expediente de rayos X, que lee sin cambiarlo (DX-544)', () => {
+    expect(hrefsFor('DENTIST')).toEqual([
+      '/settings/profile',
+      '/settings/sedes',
+      '/settings/horarios',
+      '/settings/privacidad',
+      '/settings/rayos-x',
+    ]);
+    const entry = SETTINGS_SECTIONS.flatMap((section) => section.entries).find((e) => e.href === '/settings/rayos-x');
+    expect(entry?.label).toBe('Rayos X: licencias y control de calidad');
+    // Un registro, como los implantes: en «Herramientas y registros».
+    const tools = visibleSettingsSections('DENTIST').find((section) => section.id === 'herramientas');
+    expect(tools?.entries.map((e) => e.href)).toEqual(['/settings/rayos-x']);
+  });
+
+  it.each(['ASSISTANT', 'RECEPTION'] as const)(
     '%s solo ve Mi perfil, Sedes, Horarios y Privacidad de datos',
     (role) => {
       expect(hrefsFor(role)).toEqual(FOR_EVERYONE);

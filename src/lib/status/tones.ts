@@ -285,6 +285,20 @@ const equipmentMaintenanceRecord = {
   VOIDED: s('neutral', 'Anulado'),
 } satisfies Presentations<'VOIDED'>;
 
+/**
+ * DX-544: un documento del expediente de rayos X (licencia o control de
+ * calidad) en el día de su sede. «Vencido» y «Vence pronto» como los
+ * mantenimientos; «Al día» y «Renovado» (ya hay otro que vence después) no
+ * piden nada; «Anulado» es un registro retirado, neutro.
+ */
+const radiologyRecord = {
+  OVERDUE: s('danger', 'Vencido'),
+  DUE_SOON: s('warning', 'Vence pronto'),
+  UP_TO_DATE: s('neutral', 'Al día'),
+  RENEWED: s('neutral', 'Renovado'),
+  VOIDED: s('neutral', 'Anulado'),
+} satisfies Presentations<Schemas['RadiologyRecordStatus'] | 'VOIDED'>;
+
 /** Activo como el personal; dado de baja es un cierre sin juicio. */
 const equipment = {
   ACTIVE: s('success', 'Activo'),
@@ -295,6 +309,7 @@ export const STATUS_PRESENTATION = {
   equipmentMaintenance,
   equipmentMaintenanceRecord,
   equipment,
+  radiologyRecord,
   appointment,
   punctuality,
   reminder,

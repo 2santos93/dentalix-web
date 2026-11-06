@@ -26,6 +26,7 @@ import {
   NotebookPen,
   Pill,
   ScanBarcode,
+  ScanLine,
   ShieldCheck,
   UserCheck,
   UserRound,
@@ -37,6 +38,7 @@ import { canManagePrescriptionSettings } from '@/lib/prescriptions/prescriptions
 import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
 import { canManageChairs } from '@/lib/chairs/chairs-api';
 import { canManageEquipment } from '@/lib/equipment/equipment-api';
+import { canReadRadiology } from '@/lib/radiology/radiology-api';
 import { canManagePayers } from '@/lib/payers/payers-api';
 import { canManagePriceLists } from '@/lib/price-lists/price-lists-api';
 import { canManageAgreements } from '@/lib/agreements/agreements-api';
@@ -355,6 +357,15 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Buscar implantes colocados por lote y exportarlos.',
         icon: ScanBarcode,
         visible: canSearchImplantLots,
+      },
+      // DX-544: el expediente regulatorio de rayos X de cada sede, un registro
+      // como los implantes. Lo leen odontología y administración; escribe ADMIN.
+      {
+        href: '/settings/rayos-x',
+        label: 'Rayos X: licencias y control de calidad',
+        description: 'Licencia y control de calidad de cada equipo de rayos X, con su vencimiento.',
+        icon: ScanLine,
+        visible: canReadRadiology,
       },
       // SEC-008.
       {

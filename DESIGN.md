@@ -757,7 +757,7 @@ screen it opens; a group with no visible entries disappears.
 Every screen under `/settings` uses ONE template, `src/components/settings/` (B6). The
 index (`settings-sections.ts`) is the complete map — *Tu cuenta* (Mi perfil) · Clínica y
 sedes · Agenda · Cobro · Historia clínica · Datos y seguridad · *Herramientas y registros*
-(Importar pacientes, Implantes, Accesos de soporte, Auditoría: tools and logs, not
+(Importar pacientes, Implantes, Rayos X, Accesos de soporte, Auditoría: tools and logs, not
 policies) — and each entry's label is **exactly** its page's title.
 
 - **Frame** (`app/(app)/settings/layout.tsx` → `SettingsShell`): from `xl` (≥1280px) a

@@ -40,6 +40,12 @@ const ACCESS = {
   aging: ['ADMIN'],
   /** `GET /equipment/maintenance-due` (EQUIPMENT_ROLES, DX-543): los equipos son solo de ADMIN. */
   equipmentMaintenance: ['ADMIN'],
+  /**
+   * `GET /radiology-records/due` (RADIOLOGY_READ_ROLES = DENTIST y ADMIN,
+   * DX-544), ACOTADO a ADMIN: renovar la licencia es trabajo de gestión; el
+   * odontólogo la consulta en Ajustes.
+   */
+  radiologyDue: ['ADMIN'],
   /** `GET /reports/production-by-procedure` (PRODUCTION_REPORT_ROLES), acotada al propio. */
   myProduction: ['DENTIST'],
 } as const satisfies Record<string, readonly ClinicRole[]>;

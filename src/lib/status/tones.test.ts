@@ -24,6 +24,13 @@ describe('vocabulario de estados (tones.ts)', () => {
     // DX-546 · FE-115: un mantenimiento anulado es un registro retirado, no un fallo.
     expect(statusTone('equipmentMaintenanceRecord', 'VOIDED')).toBe('neutral');
     expect(statusLabel('equipmentMaintenanceRecord', 'VOIDED')).toBe('Anulado');
+    // DX-544: el expediente de rayos X habla como los mantenimientos.
+    expect(statusTone('radiologyRecord', 'OVERDUE')).toBe('danger');
+    expect(statusLabel('radiologyRecord', 'OVERDUE')).toBe('Vencido');
+    expect(statusTone('radiologyRecord', 'DUE_SOON')).toBe('warning');
+    expect(statusLabel('radiologyRecord', 'UP_TO_DATE')).toBe('Al día');
+    expect(statusTone('radiologyRecord', 'RENEWED')).toBe('neutral');
+    expect(statusLabel('radiologyRecord', 'VOIDED')).toBe('Anulado');
   });
 
   it('«Anulado», «Pendiente», «Parcial» y «Vencido» tienen un solo tono en todo el producto', () => {
