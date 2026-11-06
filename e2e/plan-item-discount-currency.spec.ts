@@ -2,6 +2,8 @@ import { test, expect, type Locator, type Page } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
+import { DAY_MS } from './support/clock';
+import { fillDateRange } from './support/dates';
 import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
 import { E2E_REGION } from './support/regional';
 import { API_URL, tenantOrigin } from './support/urls';
@@ -22,7 +24,12 @@ import { moneyWithCode } from '../src/lib/format/sede-number';
  *     su frase larga sin desbordar a 390 px), nunca el ítem en VES.
  * En escritorio (1440 px) y en móvil (390 px, sin scroll horizontal).
  */
-const suffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase();
+// Revisión H2: 8 caracteres, como `discounts.spec.ts`, para que el ancho del
+// viewport quepa en el `docNumber` (máx. 20) y los dos tests no lo compartan.
+const suffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID())
+  .replace(/[^a-z0-9]/gi, '')
+  .toLowerCase()
+  .slice(0, 8);
 const subdomain = `dto-moneda-${suffix}`.slice(0, 40);
 const origin = tenantOrigin(subdomain);
 const password = 'Password123!';
@@ -33,6 +40,15 @@ const PRICE_NOTICE = 'Precio por debajo del de catálogo: cuenta como descuento.
 
 const sedeFmt = regionalFormat(E2E_REGION);
 const sede = (amount: number, currency: string) => moneyWithCode(amount, currency, sedeFmt).replace(/ /g, ' ');
+
+/** Día civil `YYYY-MM-DD` de `at` en la zona de la sede de la suite. */
+const sedeDay = (at: Date) =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: E2E_REGION.timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(at);
 
 let session: ApiSession;
 let procedureId = '';
@@ -99,6 +115,10 @@ for (const viewport of [
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const tag = `${suffix}${viewport.width}`;
     await loginAs(page, origin, admin.email, password);
+    // Revisión H3: el periodo del informe se fija alrededor de los ítems (un
+    // día antes del primero y uno después del último), nunca «el mes hasta
+    // hoy»: un test que cruce la medianoche de fin de mes no los pierde.
+    const seededFrom = new Date();
 
     // --- Plan en VES: 80 VES frente a 3.600 USD no es un descuento.
     const ves = await patientWithPlan(page, `v${tag}`, 'VES');
@@ -147,9 +167,17 @@ for (const viewport of [
       catalogItemId: procedureId,
     });
 
+    const seededTo = new Date();
+
     // --- Informe: la rebaja en USD y la de convenio; el ítem en VES, no.
     await page.goto(`${origin}/caja/descuentos`);
     await expect(page.getByRole('heading', { name: 'Descuentos', level: 1 })).toBeVisible({ timeout: 15_000 });
+    await fillDateRange(
+      page,
+      'Periodo',
+      sedeDay(new Date(seededFrom.getTime() - DAY_MS)),
+      sedeDay(new Date(seededTo.getTime() + DAY_MS)),
+    );
     const rows =
       viewport.width === 390
         ? page.getByRole('list', { name: 'Descuentos del periodo' }).getByRole('listitem')
