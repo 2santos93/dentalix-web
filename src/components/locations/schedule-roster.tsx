@@ -22,6 +22,8 @@ const copy = {
   retry: 'Reintentar',
   empty: 'No hay profesionales que atiendan pacientes',
   override: 'Excepción',
+  today: 'Hoy',
+  todayLabel: (day: string) => `${day}, hoy`,
   legend:
     'Cada día, la sede y los tramos en que atiende. «Excepción» = un horario distinto para esa fecha; «Sin horario» = se le puede citar en cualquier horario de la sede.',
 };
@@ -115,15 +117,17 @@ export function ScheduleRoster({ token, today }: ScheduleRosterProps) {
             className="hidden border-b border-border bg-surface-sunken lg:grid lg:grid-cols-[11rem_repeat(7,minmax(0,1fr))]"
           >
             <span className="px-3 py-2.5 text-xs font-medium text-muted">{copy.provider}</span>
+            {/* DX-546 · FE-114: «hoy» con texto y peso, en primary-text (AA sobre la superficie), no solo por color. */}
             {dates.map((d) => (
               <span
                 key={d}
+                data-roster-today={d === today ? '' : undefined}
                 className={cn(
-                  'border-l border-border px-3 py-2.5 text-xs font-medium tabular-nums text-muted first-letter:uppercase',
-                  d === today && 'text-primary',
+                  'border-l border-border px-3 py-2.5 text-xs font-medium tabular-nums first-letter:uppercase',
+                  d === today ? 'font-semibold text-primary-text' : 'text-muted',
                 )}
               >
-                {dayHeader(d)}
+                {d === today ? `${dayHeader(d)} · ${copy.today}` : dayHeader(d)}
               </span>
             ))}
           </div>
@@ -143,14 +147,20 @@ export function ScheduleRoster({ token, today }: ScheduleRosterProps) {
                   <div
                     key={date}
                     role="group"
-                    aria-label={dayLong(date)}
+                    aria-label={date === today ? copy.todayLabel(dayLong(date)) : dayLong(date)}
+                    aria-current={date === today ? 'date' : undefined}
                     className={cn(
                       'flex items-start justify-between gap-3 border-b border-border-subtle px-4 py-2 last:border-b-0 lg:flex-col lg:justify-start lg:gap-1 lg:border-b-0 lg:border-l lg:border-border lg:px-3 lg:py-3',
                       date === today && 'bg-primary-subtle',
                     )}
                   >
-                    <span className="shrink-0 text-sm tabular-nums text-muted first-letter:uppercase lg:sr-only">
-                      {dayHeader(date)}
+                    <span
+                      className={cn(
+                        'shrink-0 text-sm tabular-nums first-letter:uppercase lg:sr-only',
+                        date === today ? 'font-semibold text-ink' : 'text-muted',
+                      )}
+                    >
+                      {date === today ? `${dayHeader(date)} · ${copy.today}` : dayHeader(date)}
                     </span>
                     <span className="flex min-w-0 flex-col items-end gap-1 text-right lg:items-start lg:text-left">
                       {entries.map((e, i) =>
