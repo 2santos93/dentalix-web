@@ -105,7 +105,7 @@ for (const { width, height } of VIEWPORTS) {
     await third.getByRole('button', { name: /código de recuperación/ }).click();
     await third.getByLabel('Código de recuperación').fill(codes[1]);
     await third.getByRole('button', { name: 'Verificar' }).click();
-    await expect(third.getByRole('alert')).toBeVisible();
+    await expect(third.getByRole('alert').filter({ hasText: /\S/ })).toBeVisible();
     await third.getByLabel('Código de recuperación').fill(newCodes[0]);
     await third.getByRole('button', { name: 'Verificar' }).click();
     await expect(third.getByRole('heading', { name: 'Clínicas' })).toBeVisible();
