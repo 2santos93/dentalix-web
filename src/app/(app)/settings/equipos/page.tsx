@@ -17,6 +17,8 @@ const copy = {
   checkingSession: 'Verificando sesión…',
   locationsError: 'No pudimos cargar las sedes.',
   loading: 'Cargando sedes…',
+  scopeLocation: (name: string) => `Sede: ${name} (cámbiala en el selector de sede)`,
+  scopeAll: 'Todas las sedes (elige una en el selector de sede)',
 };
 
 /** Equipos biomédicos por sede (DX-542). Solo ADMIN los ve y los gestiona. */
@@ -39,33 +41,38 @@ export default function EquipmentSettingsPage() {
   }
   if (!accessToken) return null;
 
-  return (
-    <SettingsPage title={copy.title} description={copy.description} scope="sede" width="wide">
-      <EquipmentRoute token={accessToken} />
-    </SettingsPage>
-  );
+  return <EquipmentScreen token={accessToken} />;
 }
 
-function EquipmentRoute({ token }: { token: string }) {
+/**
+ * La sede la elige el selector global (como Gastos y Caja): la línea de
+ * alcance dice cuál es, o que se ve toda la clínica.
+ */
+function EquipmentScreen({ token }: { token: string }) {
   const state = useLocationsState(token);
-  if (state.status === 'loading') {
-    return (
-      <div role="status" className="flex flex-col gap-2">
-        <span className="sr-only">{copy.loading}</span>
-        <Skeleton className="h-10 w-full sm:w-72" />
-        <Skeleton className="h-40 w-full" />
-      </div>
-    );
-  }
-  if (state.status === 'error') {
-    return <SectionError description={copy.locationsError} onRetry={state.retry} />;
-  }
+  const active =
+    state.status === 'ready' && state.activeLocationId
+      ? state.locations.find((l) => l.id === state.activeLocationId && l.isActive)
+      : undefined;
+  const scope = state.status === 'ready' ? (active ? copy.scopeLocation(active.name) : copy.scopeAll) : 'sede';
   return (
-    <EquipmentManager
-      token={token}
-      allowed={canManageEquipment(getTokenRole(token))}
-      locations={state.locations.filter((l) => l.isActive)}
-      initialLocationId={state.activeLocationId}
-    />
+    <SettingsPage title={copy.title} description={copy.description} scope={scope} width="wide">
+      {state.status === 'loading' ? (
+        <div role="status" className="flex flex-col gap-2">
+          <span className="sr-only">{copy.loading}</span>
+          <Skeleton className="h-10 w-full sm:w-72" />
+          <Skeleton className="h-40 w-full" />
+        </div>
+      ) : state.status === 'error' ? (
+        <SectionError description={copy.locationsError} onRetry={state.retry} />
+      ) : (
+        <EquipmentManager
+          token={token}
+          allowed={canManageEquipment(getTokenRole(token))}
+          locations={state.locations.filter((l) => l.isActive)}
+          initialLocationId={active?.id ?? null}
+        />
+      )}
+    </SettingsPage>
   );
 }

@@ -28,9 +28,9 @@ function page(items: Equipment[]) {
   return { items, total: items.length, page: 1, pageSize: 50 };
 }
 
-function renderManager(allowed = true) {
+function renderManager(allowed = true, initialLocationId: string | null = 'norte') {
   return render(
-    <EquipmentManager token="tok" allowed={allowed} locations={[norte, sur]} initialLocationId="norte" />,
+    <EquipmentManager token="tok" allowed={allowed} locations={[norte, sur]} initialLocationId={initialLocationId} />,
   );
 }
 
@@ -62,7 +62,10 @@ describe('EquipmentManager (DX-542)', () => {
     );
     renderManager();
     const table = await screen.findByRole('table', { name: 'Equipos biomédicos' });
-    expect(mockedList).toHaveBeenCalledWith('tok', expect.objectContaining({ locationId: 'norte', status: 'ACTIVE' }));
+    // La sede viaja en X-Location-Id (apiFetch): la llamada no la repite.
+    expect(mockedList).toHaveBeenCalledWith('tok', expect.objectContaining({ status: 'ACTIVE' }));
+    expect(mockedList.mock.calls[0][1]).not.toHaveProperty('locationId');
+    expect(within(table).queryByRole('columnheader', { name: 'Sede' })).toBeNull();
     const rows = within(table).getAllByRole('row');
     expect(rows[1]).toHaveTextContent('Autoclave');
     expect(rows[1]).toHaveTextContent('Autoclave · Tuttnauer');
@@ -89,16 +92,36 @@ describe('EquipmentManager (DX-542)', () => {
     expect(mockedList).toHaveBeenCalledTimes(2);
   });
 
-  it('filtra por estado y por todas las sedes', async () => {
+  it('filtra por estado; no hay un selector de sede propio (manda el global)', async () => {
     mockedList.mockResolvedValue(page([]));
     renderManager();
     await screen.findByText('Todavía no hay equipos en esta sede');
+    expect(screen.queryByRole('combobox', { name: 'Sede' })).toBeNull();
     const user = setupUser();
-    await user.selectOptions(screen.getByLabelText('Estado'), 'RETIRED');
-    await user.selectOptions(screen.getByLabelText('Sede'), '');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Estado' }), 'RETIRED');
     await waitFor(() =>
-      expect(mockedList).toHaveBeenLastCalledWith('tok', expect.objectContaining({ locationId: undefined, status: 'RETIRED' })),
+      expect(mockedList).toHaveBeenLastCalledWith('tok', expect.objectContaining({ status: 'RETIRED' })),
     );
+  });
+
+  it('con «Todas las sedes» en el selector global consolida la clínica y enseña la sede de cada equipo', async () => {
+    mockedList.mockResolvedValue(
+      page([
+        equipmentFixture({ id: 'e1', name: 'Autoclave' }),
+        equipmentFixture({ id: 'e2', name: 'Compresor', locationId: 'sur', locationName: 'Sede Sur' }),
+      ]),
+    );
+    renderManager(true, null);
+    const table = await screen.findByRole('table', { name: 'Equipos biomédicos' });
+    expect(within(table).getByRole('columnheader', { name: 'Sede' })).toBeInTheDocument();
+    expect(within(table).getByText('Sede Sur')).toBeInTheDocument();
+    expect(mockedList.mock.calls[0][1]).not.toHaveProperty('locationId');
+  });
+
+  it('sin equipos en toda la clínica lo dice así', async () => {
+    mockedList.mockResolvedValue(page([]));
+    renderManager(true, null);
+    expect(await screen.findByText('Todavía no hay equipos en la clínica')).toBeInTheDocument();
   });
 
   it('quien no es ADMIN ve el aviso y no se pide nada', async () => {

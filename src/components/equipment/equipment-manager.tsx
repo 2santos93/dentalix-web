@@ -19,7 +19,6 @@ import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
-import { FormField } from '@/components/shared/form-field';
 import { ListToolbar, ResultCount } from '@/components/shared/list-toolbar';
 import { Pagination } from '@/components/shared/pagination';
 import { Button } from '@/components/ui/button';
@@ -34,8 +33,6 @@ const SEARCH_DEBOUNCE_MS = 300;
 const PAGE_SIZE = 50;
 
 export const equipmentManagerCopy = {
-  location: 'Sede',
-  allLocations: 'Todas las sedes',
   status: 'Estado',
   statusActive: 'Activos',
   statusRetired: 'Dados de baja',
@@ -46,6 +43,7 @@ export const equipmentManagerCopy = {
   countNoun: 'equipo',
   countNounPlural: 'equipos',
   empty: 'Todavía no hay equipos en esta sede',
+  emptyClinic: 'Todavía no hay equipos en la clínica',
   emptyHint:
     'Registra los equipos de la sede (autoclave, unidades, rayos X…) para llevar su hoja de vida y su programa de mantenimiento.',
   emptyFiltered: 'Ningún equipo coincide con la búsqueda',
@@ -105,9 +103,10 @@ type Modal =
  */
 export function EquipmentManager({ token, allowed, locations, initialLocationId }: EquipmentManagerProps) {
   const router = useRouter();
-  const [locationId, setLocationId] = useState(
-    () => locations.find((l) => l.id === initialLocationId)?.id ?? (locations.length > 1 ? '' : (locations[0]?.id ?? '')),
-  );
+  // La sede es la del selector global (DX-089): `apiFetch` la manda en
+  // `X-Location-Id` y la API acota con ella; sin sede activa, toda la clínica.
+  // Cambiarla recarga la vista, así que basta con leerla al montar.
+  const activeLocationId = locations.some((l) => l.id === initialLocationId) ? initialLocationId : null;
   const [status, setStatus] = useState<EquipmentStatusFilter>('ACTIVE');
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS);
@@ -130,7 +129,6 @@ export function EquipmentManager({ token, allowed, locations, initialLocationId 
       setLoading(true);
       try {
         const res = await listEquipment(token, {
-          locationId: locationId || undefined,
           status,
           query: debouncedQuery,
           page,
@@ -151,7 +149,7 @@ export function EquipmentManager({ token, allowed, locations, initialLocationId 
     return () => {
       cancelled = true;
     };
-  }, [token, allowed, locations.length, locationId, status, debouncedQuery, page, reloadKey]);
+  }, [token, allowed, locations.length, status, debouncedQuery, page, reloadKey]);
 
   if (!allowed) {
     return (
@@ -178,7 +176,7 @@ export function EquipmentManager({ token, allowed, locations, initialLocationId 
   }
 
   const filtered = debouncedQuery.trim() !== '' || status !== 'ACTIVE';
-  const defaultLocation = locationId || initialLocationId || locations[0].id;
+  const defaultLocation = activeLocationId ?? locations[0].id;
   const locationOf = (id: string) => locations.find((l) => l.id === id);
   const retireToday = (e: Equipment) => {
     const zone = locationOf(e.locationId)?.timeZone;
@@ -197,7 +195,7 @@ export function EquipmentManager({ token, allowed, locations, initialLocationId 
       header: copy.colType,
       cell: (e) => equipmentSubtitle(e),
     },
-    ...(locationId === ''
+    ...(activeLocationId === null
       ? [
           {
             id: 'location',
@@ -218,6 +216,8 @@ export function EquipmentManager({ token, allowed, locations, initialLocationId 
       id: 'serial',
       header: copy.colSerial,
       showFrom: 'xl',
+      // Un nº de serie no se parte a media palabra: la columna se ensancha.
+      cellClassName: 'whitespace-nowrap',
       cell: (e) => <span className="tabular-nums">{e.serialNumber ?? '—'}</span>,
       mobileCell: () => null,
     },
@@ -264,37 +264,19 @@ export function EquipmentManager({ token, allowed, locations, initialLocationId 
           </Button>
         }
       >
-        <FormField htmlFor="equipment-filter-location" label={copy.location} className="sm:w-56">
-          <NativeSelect
-            id="equipment-filter-location"
-            value={locationId}
-            onChange={(e) => {
-              setLocationId(e.target.value);
-              setPage(1);
-            }}
-          >
-            {locations.length > 1 ? <option value="">{copy.allLocations}</option> : null}
-            {locations.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-          </NativeSelect>
-        </FormField>
-        <FormField htmlFor="equipment-filter-status" label={copy.status} className="sm:w-44">
-          <NativeSelect
-            id="equipment-filter-status"
-            value={status}
-            onChange={(e) => {
-              setStatus(e.target.value as EquipmentStatusFilter);
-              setPage(1);
-            }}
-          >
-            <option value="ACTIVE">{copy.statusActive}</option>
-            <option value="RETIRED">{copy.statusRetired}</option>
-            <option value="ALL">{copy.statusAll}</option>
-          </NativeSelect>
-        </FormField>
+        <NativeSelect
+          aria-label={copy.status}
+          value={status}
+          className="sm:w-44"
+          onChange={(e) => {
+            setStatus(e.target.value as EquipmentStatusFilter);
+            setPage(1);
+          }}
+        >
+          <option value="ACTIVE">{copy.statusActive}</option>
+          <option value="RETIRED">{copy.statusRetired}</option>
+          <option value="ALL">{copy.statusAll}</option>
+        </NativeSelect>
       </ListToolbar>
 
       {!loading && !error && rows.length > 0 ? (
@@ -310,7 +292,7 @@ export function EquipmentManager({ token, allowed, locations, initialLocationId 
         error={error}
         onRetry={() => setReloadKey((k) => k + 1)}
         isEmpty={rows.length === 0}
-        emptyTitle={filtered ? copy.emptyFiltered : copy.empty}
+        emptyTitle={filtered ? copy.emptyFiltered : activeLocationId ? copy.empty : copy.emptyClinic}
         emptyDescription={filtered ? copy.emptyFilteredHint : copy.emptyHint}
         emptyIcon={<ClipboardList aria-hidden />}
         emptyAction={
