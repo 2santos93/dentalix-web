@@ -779,6 +779,12 @@ export function clinicSettingsDetail(metadata: AuditMetadata): string | null {
   const { from, to } = metadata.statusChange;
   if (metadata.reason === 'PRESCRIPTION_SETTINGS') return prescriptionSettingsDetail(from, to);
   if (metadata.reason === 'EXCHANGE_RATE_SOURCE') return exchangeRateSourceDetail(from, to);
+  // DX-540: el aviso de registro profesional de las evoluciones (OFF/ON).
+  if (metadata.reason === 'CLINICAL_ENTRY_LICENSE_WARNING') {
+    if (from === 'OFF' && to === 'ON') return 'Aviso de registro profesional en las evoluciones: activado';
+    if (from === 'ON' && to === 'OFF') return 'Aviso de registro profesional en las evoluciones: desactivado';
+    return null;
+  }
   // DX-021: solo el sentido del cambio.
   if (metadata.reason === 'MFA_POLICY') {
     if (to === 'ALL_MFA_REQUIRED') return 'Verificación en dos pasos: obligatoria para todo el equipo';

@@ -437,6 +437,18 @@ describe('clinicSettingsDetail (DX-328)', () => {
     expect(clinicSettingsDetail({ reason: 'EXCHANGE_RATE_SOURCE', statusChange: { from: 'AUTOMATIC', to: 'OTRA' } })).toBeNull();
   });
 
+  it.each([
+    ['OFF', 'ON', 'Aviso de registro profesional en las evoluciones: activado'],
+    ['ON', 'OFF', 'Aviso de registro profesional en las evoluciones: desactivado'],
+  ])('DX-540: CLINICAL_ENTRY_LICENSE_WARNING %s → %s', (from, to, text) => {
+    expect(clinicSettingsDetail({ reason: 'CLINICAL_ENTRY_LICENSE_WARNING', statusChange: { from, to } })).toBe(text);
+  });
+
+  it('DX-540: CLINICAL_ENTRY_LICENSE_WARNING with unknown codes → null', () => {
+    expect(clinicSettingsDetail({ reason: 'CLINICAL_ENTRY_LICENSE_WARNING', statusChange: { from: 'ON', to: 'ON' } })).toBeNull();
+    expect(clinicSettingsDetail({ reason: 'CLINICAL_ENTRY_LICENSE_WARNING' })).toBeNull();
+  });
+
   it('PRESCRIPTION_SETTINGS without statusChange → null; majority-age codes stay its own', () => {
     expect(clinicSettingsDetail({ reason: 'PRESCRIPTION_SETTINGS' })).toBeNull();
     expect(

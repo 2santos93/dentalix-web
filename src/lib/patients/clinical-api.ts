@@ -54,6 +54,11 @@ export interface ClinicalEntry {
   reason: string | null;
   notes: string;
   performedById: string | null;
+  /**
+   * DX-540: registro profesional del autor congelado al firmar (inalterable).
+   * null (o ausente en respuestas antiguas) si no lo tenía.
+   */
+  authorProfessionalLicense?: string | null;
   /** DX-170: cita en la que se documentó (null en las evoluciones sueltas). */
   appointmentId?: string | null;
   /** DX-170: plantilla con la que se redactó (solo procedencia). */
@@ -74,6 +79,18 @@ export type ClinicalEntryDiagnosis = components['schemas']['ClinicalEntryDiagnos
 export type ClinicalEntryDiagnosisInput =
   components['schemas']['ClinicalEntryDiagnosisInputDto'];
 export type DiagnosisKind = components['schemas']['ClinicalDiagnosisKind'];
+
+/** DX-540: aviso de la firma (no bloquea), p. ej. firmada sin registro profesional. */
+export type ClinicalEntryWarning = components['schemas']['ClinicalEntryWarningDto'];
+/** DX-540: registro del usuario y aviso que traería su firma, antes de guardar. */
+export type ClinicalEntrySigning = components['schemas']['ClinicalEntrySigningDto'];
+/** DX-540: ajustes de las evoluciones de la clínica (solo ADMIN los cambia). */
+export type ClinicalEntrySettings = components['schemas']['ClinicalEntrySettingsDto'];
+
+/** La evolución recién firmada con los avisos de la firma (solo en el alta). */
+export interface CreatedClinicalEntry extends ClinicalEntry {
+  warnings?: ClinicalEntryWarning[];
+}
 
 /** Topes por evolución que repite la API: 1 principal y hasta 3 relacionados. */
 export const MAX_RELATED_DIAGNOSES = 3;
@@ -124,10 +141,31 @@ export async function createClinicalEntry(
   token: string,
   patientId: string,
   input: CreateClinicalEntryInput,
-): Promise<ClinicalEntry> {
-  return apiFetch<ClinicalEntry>(`/patients/${patientId}/clinical-entries`, {
+): Promise<CreatedClinicalEntry> {
+  return apiFetch<CreatedClinicalEntry>(`/patients/${patientId}/clinical-entries`, {
     method: 'POST',
     body: input,
+    token,
+  });
+}
+
+/** DX-540: lo que sabría la firma del usuario actual (registro y aviso). */
+export async function getClinicalEntrySigning(token: string): Promise<ClinicalEntrySigning> {
+  return apiFetch<ClinicalEntrySigning>('/clinical-entries/signing', { token });
+}
+
+export async function getClinicalEntrySettings(token: string): Promise<ClinicalEntrySettings> {
+  return apiFetch<ClinicalEntrySettings>('/clinical-entries/settings', { token });
+}
+
+/** Solo ADMIN (la API responde 403 a los demás); queda en la auditoría. */
+export async function updateClinicalEntrySettings(
+  token: string,
+  settings: ClinicalEntrySettings,
+): Promise<ClinicalEntrySettings> {
+  return apiFetch<ClinicalEntrySettings>('/clinical-entries/settings', {
+    method: 'PUT',
+    body: settings,
     token,
   });
 }

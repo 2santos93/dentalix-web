@@ -5,9 +5,15 @@ import { CalendarCheck } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   createClinicalEntry,
+  getClinicalEntrySigning,
   type ClinicalEntry,
   type CreateClinicalEntryInput,
 } from '@/lib/patients/clinical-api';
+import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
+import {
+  ProfessionalLicenseNotice,
+  announceClinicalEntryWarnings,
+} from './professional-license-notice';
 import { listNoteTemplates, type NoteTemplate } from '@/lib/clinical-notes/note-templates-api';
 import {
   composeNote,
@@ -113,6 +119,26 @@ export function NewEvolutionModal({
   const [diagnosesError, setDiagnosesError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // DX-540: ¿la firma saldría sin registro profesional (y la clínica avisa)?
+  const [licenseMissing, setLicenseMissing] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    // Fail soft: sin esta consulta no hay aviso previo, pero el alta trae el
+    // mismo aviso en su respuesta (toast tras guardar).
+    getClinicalEntrySigning(token)
+      .then((signing) => {
+        if (cancelled) return;
+        setLicenseMissing(signing.warnings.some((w) => w.code === 'PROFESSIONAL_LICENSE_MISSING'));
+      })
+      .catch(() => {
+        /* fail soft — el aviso llega con la respuesta del alta */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, token]);
 
   useEffect(() => {
     if (!open) return;
@@ -183,9 +209,11 @@ export function NewEvolutionModal({
     };
     setSubmitting(true);
     try {
-      const created = await createClinicalEntry(token, patientId, input);
+      const { warnings, ...created } = await createClinicalEntry(token, patientId, input);
       onCreated({ ...created, addenda: created.addenda ?? [] });
       onOpenChange(false);
+      // DX-540: ya guardada; el aviso del servidor se lee en un toast.
+      announceClinicalEntryWarnings(warnings);
     } catch (err) {
       setError(apiErrorMessage(err, copy.genericError));
     } finally {
@@ -207,6 +235,12 @@ export function NewEvolutionModal({
       submitDisabled={!appointment && today === null}
       size="lg"
     >
+      {licenseMissing ? (
+        <ProfessionalLicenseNotice
+          canEditStaff={getTokenRole(token) === 'ADMIN'}
+          userId={getTokenUserId(token)}
+        />
+      ) : null}
       {appointment ? (
         <p className="flex items-center gap-2 rounded-lg bg-surface-sunken px-3 py-2 text-sm text-ink">
           <CalendarCheck aria-hidden className="size-4 shrink-0 text-muted" />
