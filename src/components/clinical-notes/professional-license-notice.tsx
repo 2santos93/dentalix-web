@@ -44,7 +44,7 @@ export function ProfessionalLicenseNotice({ canEditStaff, userId }: Professional
             target="_blank"
             rel="noopener noreferrer"
             aria-label={`${copy.editLink} ${copy.newTab}`}
-            className="inline-flex min-h-11 items-center font-medium text-ink sm:min-h-0"
+            className="inline-flex min-h-11 items-center font-medium text-primary-text underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text sm:min-h-0"
           >
             {copy.editLink}
           </Link>
