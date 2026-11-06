@@ -118,3 +118,32 @@ describe('ItemPaidLine — anidación válida (DX-406)', () => {
     expect(warned).toEqual([]);
   });
 });
+
+// DX-399-quater-bis: el ejemplo de DX-399-quater. Un ítem de 60 USD cubierto
+// con 30 de un abono propio y 30 del saldo recibido por traspaso de otro plan.
+describe('lo cubierto por traspaso (DX-399-quater-bis)', () => {
+  const covered = balanceOf({ billable: 60, paid: 60, balance: 0, paidByTransfersIn: 30 });
+
+  it('Cobrado lleva la línea «De ello, … por traspaso de otro plan»', () => {
+    const [paid, pending] = renderCells(covered, 'USD');
+    expect(paid).toHaveTextContent(/^USD 60,00De ello, USD 30,00 por traspaso de otro plan$/);
+    expect(within(pending).getByText('Cubierto')).toBeInTheDocument();
+  });
+
+  it('también en la tarjeta del móvil', () => {
+    render(<ItemPaidLine item={covered} currency="USD" fmt={ES_CO} />);
+    expect(screen.getByText(/^De ello, USD\s30,00 por traspaso de otro plan$/)).toBeInTheDocument();
+  });
+
+  it('sin traspasos (la API lo omite) o en 0, nada cambia', () => {
+    const [paid] = renderCells(balanceOf({ paidByTransfersIn: 0 }));
+    expect(paid).toHaveTextContent(/^EUR 60,00$/);
+    render(<ItemPaidLine item={balanceOf()} currency="EUR" fmt={ES_CO} />);
+    expect(screen.queryByText(/por traspaso/)).not.toBeInTheDocument();
+  });
+
+  it('un ítem sin importe a cobrar no la pinta', () => {
+    renderCells(balanceOf({ status: 'PROPOSED', billable: 0, paid: 0, balance: 0, paidByTransfersIn: 30 }));
+    expect(screen.queryByText(/por traspaso/)).not.toBeInTheDocument();
+  });
+});

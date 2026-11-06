@@ -504,3 +504,39 @@ describe('ReallocatePaymentModal (DX-051)', () => {
     expect(props.onOpenChange).toHaveBeenCalledWith(false);
   });
 });
+
+// DX-399-quater-bis: «Libre para este abono» no resta lo que cubre el saldo
+// recibido por traspaso (los abonos van primero): el ítem lo marca y una nota
+// dice que imputar ahí desplaza ese saldo.
+describe('ReallocatePaymentModal: lo cubierto por traspaso (DX-399-quater-bis)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    sede = 'caracas';
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin]);
+  });
+
+  it('marca el ítem con «… por traspaso» junto a lo libre y añade la nota', async () => {
+    mockedGet.mockResolvedValue({
+      ...DATA,
+      items: [{ ...DATA.items[0], paidByTransfersIn: 30 }, DATA.items[1]],
+    });
+    renderModal();
+    await loaded();
+    const table = screen.getByRole('table', { name: 'Ítems imputables del plan' });
+    const resina = within(table).getByText('Resina').closest('tr') as HTMLTableRowElement;
+    expect(within(resina).getByText(`${money(30, 'EUR')} por traspaso`)).toBeInTheDocument();
+    const limpieza = within(table).getByText('Limpieza').closest('tr') as HTMLTableRowElement;
+    expect(within(limpieza).queryByText(/por traspaso/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Si imputas este abono aquí, ese saldo vuelve a quedar a cuenta del plan.'),
+    ).toBeInTheDocument();
+  });
+
+  it('sin traspasos no hay marca ni nota', async () => {
+    mockedGet.mockResolvedValue(DATA);
+    renderModal();
+    await loaded();
+    expect(screen.queryByText(/por traspaso/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/vuelve a quedar a cuenta/)).not.toBeInTheDocument();
+  });
+});

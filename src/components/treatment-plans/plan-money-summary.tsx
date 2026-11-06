@@ -74,6 +74,17 @@ export function PlanMoneySummary({
         help: allocationCopy.unallocatedHelp,
       });
     }
+    // DX-399-quater-bis: lo recibido por traspaso que ningún ítem cubre. Sin
+    // esta fila, un saldo a favor así no tiene ninguna línea que lo explique.
+    const transfersIn = balance.transfersInOnAccount ?? 0;
+    if (transfersIn > 0) {
+      figures.push({
+        key: 'transfersInOnAccount',
+        label: allocationCopy.transfersInOnAccount,
+        value: money(transfersIn, balance.planCurrency),
+        help: allocationCopy.transfersInOnAccountHelp,
+      });
+    }
   }
 
   return (

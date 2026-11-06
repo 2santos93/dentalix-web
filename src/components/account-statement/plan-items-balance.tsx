@@ -142,6 +142,19 @@ export function PlanItemsBalance({ token, planId }: { token: string; planId: str
               </div>
             </dl>
           ) : null}
+          {/* DX-399-quater-bis: lo recibido por traspaso que ningún ítem cubre;
+              la API lo omite si es 0. */}
+          {(balance.transfersInOnAccount ?? 0) > 0 ? (
+            <dl>
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                <dt className="t-label text-muted">{allocationCopy.transfersInOnAccount}</dt>
+                <dd className="font-medium text-ink tabular-nums">
+                  {sedeMoney(balance.transfersInOnAccount ?? 0, balance.planCurrency, fmt)}
+                </dd>
+                <dd className="t-caption w-full text-muted">{allocationCopy.transfersInOnAccountHelp}</dd>
+              </div>
+            </dl>
+          ) : null}
           {/* Sin él, Cobrado + Sin imputar no llega a lo «Abonado» del plan y
               nada lo explica. DX-472-bis: si son abonos «sin tasa» (o que el
               proveedor no convirtió), una línea que remite al aviso de arriba
