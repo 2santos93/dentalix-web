@@ -17,6 +17,7 @@ import { allocationCopy } from '@/lib/payments/allocation-copy';
 import type { PaymentAllocations, ReplacePaymentAllocationsInput } from '@/lib/payments/payment-allocations-api';
 import { PLAN_STATUS_LABELS, isPlanBillable } from '@/lib/treatment-plans/plan-status';
 import { cn } from '@/lib/utils';
+import { ByTransferMark } from './by-transfer-mark';
 import { usePaymentAllocations } from './use-payment-allocations';
 import { useSedeStamp, type SedeStamp } from '@/lib/locations/sede-stamp';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
@@ -331,6 +332,11 @@ export function ReallocatePaymentModal({
                                 </TableCell>
                                 <TableCell className="text-right tabular-nums" data-label={copy.colFree}>
                                   {money(item.free, data.planCurrency)}
+                                  {(item.paidByTransfersIn ?? 0) > 0 ? (
+                                    <span className="mt-1 flex justify-end">
+                                      <ByTransferMark amount={money(item.paidByTransfersIn ?? 0, data.planCurrency)} />
+                                    </span>
+                                  ) : null}
                                 </TableCell>
                                 <TableCell className="sm:w-56" data-label={copy.colAmount}>
                                   <label htmlFor={fieldId} className="sr-only">
@@ -364,6 +370,11 @@ export function ReallocatePaymentModal({
                         </TableBody>
                       </Table>
                     </div>
+                    {/* DX-399-quater-bis: lo libre no resta lo recibido por traspaso
+                        (los abonos van primero): imputar ahí lo desplaza. */}
+                    {parsed.some(({ item }) => (item.paidByTransfersIn ?? 0) > 0) ? (
+                      <p className="text-sm text-muted">{allocationCopy.byTransferNote}</p>
+                    ) : null}
 
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div

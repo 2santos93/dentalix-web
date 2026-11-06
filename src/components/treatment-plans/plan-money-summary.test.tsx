@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { rateProviderCopy } from '@/components/payments/rate-provider-notice';
 import { withoutRateCopy } from '@/components/payments/without-rate-notice';
 import type { PlanBalance } from '@/lib/payments/payments-api';
+import { regionalFormat, type RegionalFormat } from '@/lib/format/regional-format';
 import { PlanMoneySummary } from './plan-money-summary';
 import { BALANCE_WITHOUT_ALLOCATIONS } from './plan-fixture';
 
@@ -23,14 +24,14 @@ const balance = (overrides: Partial<PlanBalance>): PlanBalance => ({
   ...overrides,
 });
 
-function renderSummary(value: PlanBalance, onRetryBalance = jest.fn()) {
+function renderSummary(value: PlanBalance, onRetryBalance = jest.fn(), fmt: RegionalFormat | null = null) {
   render(
     <PlanMoneySummary
       token="t"
       total={300}
       currency="USD"
       balance={value}
-      fmt={null}
+      fmt={fmt}
       onRetryBalance={onRetryBalance}
       retryingBalance={false}
     />,
@@ -55,5 +56,23 @@ describe('PlanMoneySummary: «sin tasa» frente a «el proveedor no respondió»
 
     await userEvent.click(screen.getByRole('button', { name: rateProviderCopy.retry }));
     expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('PlanMoneySummary: lo recibido por traspaso a cuenta (DX-399-quater-bis)', () => {
+  const ES_VE = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
+
+  it('con saldo recibido que no cubre ningún ítem, una fila que lo explica', () => {
+    renderSummary(balance({ transfersInOnAccount: 30 }), jest.fn(), ES_VE);
+    const label = screen.getByText('Saldo recibido por traspaso, a cuenta');
+    expect(label.tagName).toBe('DT');
+    expect(label.parentElement).toHaveTextContent(/USD\s30,00/);
+    expect(screen.getByText('Llegó de otro plan del paciente y todavía no cubre ningún ítem.')).toBeInTheDocument();
+  });
+
+  it('sin traspasos (la API lo omite), la fila no sale', () => {
+    renderSummary(balance({}), jest.fn(), ES_VE);
+    expect(screen.queryByText(/por traspaso/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('term').map((t) => t.textContent)).toEqual(['Total', 'A pagar', 'Pagado', 'Saldo']);
   });
 });

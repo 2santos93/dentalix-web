@@ -29,9 +29,9 @@ const mockedBalance = getPlanBalance as jest.MockedFunction<typeof getPlanBalanc
 const mockedSettings = jest.mocked(getExchangeRateSettings);
 
 /** DX-386: el formato de la sede del fixture (es-VE) y el código ISO, con el espacio normalizado. */
-const ES_CO = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
+const ES_VE = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
 function money(amount: number, currency: string): string {
-  return moneyWithCode(amount, currency, ES_CO).replace(/\u00A0/g, ' ');
+  return moneyWithCode(amount, currency, ES_VE).replace(/\u00A0/g, ' ');
 }
 
 function balanceFixture(overrides: Partial<PlanBalance> = {}): PlanBalance {
@@ -126,6 +126,54 @@ it('loads on open and shows procedure, tooth, status, A pagar, Cobrado, Pendient
   // Todo imputado: no hay «Sin imputar»; todos con tasa: no hay aviso.
   expect(screen.queryByText('Sin imputar')).not.toBeInTheDocument();
   expect(screen.queryByText(/todavía sin convertir/)).not.toBeInTheDocument();
+});
+
+// DX-399-quater-bis: el ejemplo de DX-399-quater. Un ítem de 60 USD con 30 de
+// un abono propio y 30 del saldo recibido por traspaso de otro plan; otros 30
+// recibidos siguen a cuenta del plan.
+it('lo cubierto por traspaso: la línea bajo Cobrado y la fila del saldo recibido a cuenta', async () => {
+  mockedBalance.mockResolvedValue(
+    balanceFixture({
+      planCurrency: 'USD',
+      billable: 60,
+      paid: 30,
+      allocated: 30,
+      transfersInOnAccount: 30,
+      items: [
+        {
+          itemId: 'item-1',
+          toothNumber: '16',
+          procedureName: 'Corona',
+          status: 'ACCEPTED',
+          billable: 60,
+          paid: 60,
+          balance: 0,
+          paidByTransfersIn: 30,
+        },
+      ],
+    }),
+  );
+  render(<PlanItemsBalance token="tok" planId="plan-1" />);
+  const table = await screen.findByRole('table', { name: /por ítem/i });
+  const row = within(table).getAllByRole('row')[1];
+  const paid = within(row).getAllByRole('cell')[4];
+  await waitFor(() =>
+    expect((paid.textContent ?? '').replace(/\u00A0/g, ' ')).toBe(
+      `${money(60, 'USD')}De ello, ${money(30, 'USD')} por traspaso de otro plan`,
+    ),
+  );
+  expect(within(row).getAllByRole('cell')[5]).toHaveTextContent('Cubierto');
+  const onAccount = screen.getByText('Saldo recibido por traspaso, a cuenta').closest('div');
+  expect((onAccount?.textContent ?? '').replace(/\u00A0/g, ' ')).toContain(money(30, 'USD'));
+  expect(screen.getByText('Llegó de otro plan del paciente y todavía no cubre ningún ítem.')).toBeInTheDocument();
+});
+
+it('sin traspasos (la API omite los dos campos), nada de «por traspaso»', async () => {
+  mockedBalance.mockResolvedValue(balanceFixture({ unallocated: 7.5 }));
+  render(<PlanItemsBalance token="tok" planId="plan-1" />);
+  await screen.findByRole('table', { name: /por ítem/i });
+  expect(await screen.findByText('Sin imputar')).toBeInTheDocument();
+  expect(screen.queryByText(/por traspaso/)).not.toBeInTheDocument();
 });
 
 it('formats with the currency of the balance itself', async () => {

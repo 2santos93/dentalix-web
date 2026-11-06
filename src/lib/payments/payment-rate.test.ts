@@ -19,11 +19,11 @@ const frozen = (
 });
 
 // Sede del test, explícita: el formato sale de la sede (DX-378), nunca de un idioma fijo.
-const ES_CO = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
+const ES_VE = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
 
 describe('frozenRateLabel (DX-375)', () => {
   it('dice cuántas unidades de la moneda menor vale 1 de la mayor, la fuente y el día', () => {
-    expect(frozenRateLabel(frozen(), ES_CO)?.replace(/\s/g, ' ')).toBe(
+    expect(frozenRateLabel(frozen(), ES_VE)?.replace(/\s/g, ' ')).toBe(
       'Tasa congelada: 1 USD = GBP 4.000,00 · automática · 30/10/2026',
     );
   });
@@ -42,13 +42,13 @@ describe('frozenRateLabel (DX-375)', () => {
             date: '2026-10-30',
           },
         },
-        ES_CO,
+        ES_VE,
       )?.replace(/\s/g, ' '),
     ).toBe('Tasa congelada: 1 USD = GBP 4.100,00 · manual · 30/10/2026');
   });
 
   it('una tasa cruzada sale de las dos tasas congeladas', () => {
-    expect(frozenRateLabel(frozen({ currency: 'EUR', toPerBase: 0.8 }), ES_CO)?.replace(/\s/g, ' ')).toMatch(
+    expect(frozenRateLabel(frozen({ currency: 'EUR', toPerBase: 0.8 }), ES_VE)?.replace(/\s/g, ' ')).toMatch(
       /1 EUR = GBP 5\.000,00/,
     );
   });
@@ -56,7 +56,7 @@ describe('frozenRateLabel (DX-375)', () => {
   // DX-384: la última tasa registrada, de un día anterior al del abono.
   it('si la tasa es de un día anterior al del abono dice «tasa del …» en el formato de la sede', () => {
     expect(
-      frozenRateLabel(frozen({ source: 'MANUAL', date: '2026-10-30' }, '2026-10-31'), ES_CO)?.replace(/\s/g, ' '),
+      frozenRateLabel(frozen({ source: 'MANUAL', date: '2026-10-30' }, '2026-10-31'), ES_VE)?.replace(/\s/g, ' '),
     ).toBe('Tasa congelada: 1 USD = GBP 4.000,00 · manual · tasa del 30/10/2026');
     expect(
       frozenRateLabel(
@@ -67,7 +67,7 @@ describe('frozenRateLabel (DX-375)', () => {
   });
 
   it('sin tasa congelada no hay etiqueta', () => {
-    expect(frozenRateLabel({ currency: 'GBP', paidOn: '2026-10-30', frozenRate: null }, ES_CO)).toBeNull();
+    expect(frozenRateLabel({ currency: 'GBP', paidOn: '2026-10-30', frozenRate: null }, ES_VE)).toBeNull();
   });
 
   it('con el formato de otra sede y siempre el código ISO, nunca un símbolo (DX-378)', () => {

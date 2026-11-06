@@ -224,6 +224,68 @@ describe('PaymentAllocationDetailDialog (DX-399)', () => {
   });
 });
 
+// DX-399-quater-bis: el ejemplo de DX-399-quater. El plan tiene un ítem de 60
+// USD; este abono de 30 le imputa 30 y el saldo recibido por traspaso de otro
+// plan del paciente cubre los otros 30. `free` no lo resta (los abonos van
+// primero): imputar ahí lo desplaza.
+const WITH_TRANSFER_IN: PaymentAllocations = {
+  ...AUTO,
+  paymentAmount: 30,
+  planAmount: 30,
+  allocated: 30,
+  unallocated: 0,
+  onAccount: 0,
+  allocations: [{ treatmentPlanItemId: 'item-1', amount: 30, source: 'AUTO' }],
+  items: [{ ...item('item-1', 'Corona', '16'), billable: 60, free: 60, paidByTransfersIn: 30 }],
+};
+
+describe('PaymentAllocationDetailDialog: lo cubierto por traspaso (DX-399-quater-bis)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.mocked(listLocations).mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin]);
+  });
+
+  it('marca el ítem con «30,00 USD por traspaso» y avisa de que imputar ahí desplaza ese saldo', async () => {
+    mockedGet.mockResolvedValue(WITH_TRANSFER_IN);
+    // ADMIN desde el plan: puede pasar a «Cambiar imputación».
+    renderDialog({ onChange: jest.fn() });
+    const dialog = await screen.findByRole('dialog', { name: 'Imputación del abono' });
+    const list = await within(dialog).findByRole('table', { name: 'Ítems a los que se imputó el abono' });
+    const corona = within(list).getByRole('row', { name: /Corona/ });
+    expect(
+      within(corona).getByText((_, el) => el?.tagName === 'SPAN' && flat(el.textContent) === `${money(30, 'USD')} por traspaso`),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText('Si imputas este abono aquí, ese saldo vuelve a quedar a cuenta del plan.'),
+    ).toBeInTheDocument();
+  });
+
+  it('sin poder cambiar la imputación (recepción), la marca sí pero la nota no', async () => {
+    mockedGet.mockResolvedValue(WITH_TRANSFER_IN);
+    renderDialog();
+    const dialog = await screen.findByRole('dialog', { name: 'Imputación del abono' });
+    const list = await within(dialog).findByRole('table', { name: 'Ítems a los que se imputó el abono' });
+    const corona = within(list).getByRole('row', { name: /Corona/ });
+    expect(within(corona).getByText(/por traspaso$/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/vuelve a quedar a cuenta/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Cambiar imputación' })).not.toBeInTheDocument();
+  });
+
+  it('sin traspasos no hay marca ni nota', async () => {
+    mockedGet.mockResolvedValue(AUTO);
+    renderDialog({ onChange: jest.fn() });
+    const dialog = await screen.findByRole('dialog', { name: 'Imputación del abono' });
+    await within(dialog).findByRole('table', { name: 'Ítems a los que se imputó el abono' });
+    expect(within(dialog).queryByText(/por traspaso/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/vuelve a quedar a cuenta/)).not.toBeInTheDocument();
+  });
+
+  it('allocationRows lleva lo cubierto por traspaso de cada ítem; «A cuenta» nunca', () => {
+    expect(allocationRows(WITH_TRANSFER_IN).map((r) => [r.procedure, r.byTransfer])).toEqual([['Corona', 30]]);
+    expect(allocationRows(AUTO).map((r) => r.byTransfer)).toEqual([0, 0]);
+  });
+});
+
 describe('allocationRows', () => {
   it('pone las líneas en el orden del servidor y «A cuenta» al final solo si queda algo', () => {
     expect(allocationRows(AUTO).map((r) => [r.procedure, r.amount])).toEqual([

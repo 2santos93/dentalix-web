@@ -4,7 +4,7 @@ import type { PlanItemBalance } from '@/lib/payments/payments-api';
 import { regionalFormat, type RegionalFormat } from '@/lib/format/regional-format';
 
 // DX-386: con el formato de la sede y el código ISO (fixture explícito es-VE).
-const ES_CO = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
+const ES_VE = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
 
 function balanceOf(overrides: Partial<PlanItemBalance> = {}): PlanItemBalance {
   return {
@@ -19,7 +19,7 @@ function balanceOf(overrides: Partial<PlanItemBalance> = {}): PlanItemBalance {
   };
 }
 
-function renderCells(item: PlanItemBalance | undefined, currency = 'EUR', fmt: RegionalFormat | null = ES_CO) {
+function renderCells(item: PlanItemBalance | undefined, currency = 'EUR', fmt: RegionalFormat | null = ES_VE) {
   render(
     <table>
       <tbody>
@@ -81,19 +81,19 @@ describe('ItemPaidCell', () => {
 
 describe('ItemPaidLine', () => {
   it('reads «Cobrado {x} · Pendiente {y}» on mobile cards', () => {
-    render(<ItemPaidLine item={balanceOf()} currency="EUR" fmt={ES_CO} />);
+    render(<ItemPaidLine item={balanceOf()} currency="EUR" fmt={ES_VE} />);
     expect(screen.getByText(/cobrado/i)).toHaveTextContent('Cobrado EUR 60,00 · Pendiente EUR 40,00');
   });
 
   it('pending 0 shows the Cubierto badge, PROPOSED the dash', () => {
-    const { rerender } = render(<ItemPaidLine item={balanceOf({ paid: 100, balance: 0 })} currency="EUR" fmt={ES_CO} />);
+    const { rerender } = render(<ItemPaidLine item={balanceOf({ paid: 100, balance: 0 })} currency="EUR" fmt={ES_VE} />);
     expect(screen.getByText('Cubierto')).toBeInTheDocument();
-    rerender(<ItemPaidLine item={balanceOf({ status: 'PROPOSED', billable: 0, paid: 0, balance: 0 })} currency="EUR" fmt={ES_CO} />);
+    rerender(<ItemPaidLine item={balanceOf({ status: 'PROPOSED', billable: 0, paid: 0, balance: 0 })} currency="EUR" fmt={ES_VE} />);
     expect(screen.getByLabelText('Sin importe a cobrar')).toHaveTextContent('—');
   });
 
   it('renders nothing without the item balance', () => {
-    const { container } = render(<ItemPaidLine item={undefined} currency="EUR" fmt={ES_CO} />);
+    const { container } = render(<ItemPaidLine item={undefined} currency="EUR" fmt={ES_VE} />);
     expect(container).toBeEmptyDOMElement();
   });
 });
@@ -110,11 +110,48 @@ describe('ItemPaidLine — anidación válida (DX-406)', () => {
 
   it.each(cases)('%s: ningún elemento de bloque dentro de un <p> y sin aviso de React', (_name, item) => {
     const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const { container } = render(<ItemPaidLine item={item} currency="USD" fmt={ES_CO} />);
+    const { container } = render(<ItemPaidLine item={item} currency="USD" fmt={ES_VE} />);
     const blocks = Array.from(container.querySelectorAll('p *')).filter((el) => BLOCK.has(el.tagName));
     expect(blocks.map((el) => el.outerHTML)).toEqual([]);
     const warned = errors.mock.calls.map((c) => c.join(' ')).filter((m) => /cannot be a descendant of <p>|validateDOMNesting|cannot contain/.test(m));
     errors.mockRestore();
     expect(warned).toEqual([]);
+  });
+});
+
+// DX-399-quater-bis: el ejemplo de DX-399-quater. Un ítem de 60 USD cubierto
+// con 30 de un abono propio y 30 del saldo recibido por traspaso de otro plan.
+describe('lo cubierto por traspaso (DX-399-quater-bis)', () => {
+  const covered = balanceOf({ billable: 60, paid: 60, balance: 0, paidByTransfersIn: 30 });
+
+  it('Cobrado lleva la línea «De ello, … por traspaso de otro plan»', () => {
+    const [paid, pending] = renderCells(covered, 'USD');
+    expect(paid).toHaveTextContent(/^USD 60,00De ello, USD 30,00 por traspaso de otro plan$/);
+    expect(within(pending).getByText('Cubierto')).toBeInTheDocument();
+  });
+
+  it('también en la tarjeta del móvil', () => {
+    render(<ItemPaidLine item={covered} currency="USD" fmt={ES_VE} />);
+    expect(screen.getByText(/^De ello, USD\s30,00 por traspaso de otro plan$/)).toBeInTheDocument();
+  });
+
+  it('pago parcial en la tarjeta del móvil: «Cobrado · Pendiente» y debajo lo que es por traspaso', () => {
+    // Ítem de 100: 30 de un abono y 30 recibidos por traspaso; quedan 40.
+    render(<ItemPaidLine item={balanceOf({ paid: 60, balance: 40, paidByTransfersIn: 30 })} currency="USD" fmt={ES_VE} />);
+    expect(screen.getByText(/^Cobrado USD\s60,00 · Pendiente USD\s40,00$/)).toBeInTheDocument();
+    expect(screen.getByText(/^De ello, USD\s30,00 por traspaso de otro plan$/)).toBeInTheDocument();
+    expect(screen.queryByText('Cubierto')).not.toBeInTheDocument();
+  });
+
+  it('sin traspasos (la API lo omite) o en 0, nada cambia', () => {
+    const [paid] = renderCells(balanceOf({ paidByTransfersIn: 0 }));
+    expect(paid).toHaveTextContent(/^EUR 60,00$/);
+    render(<ItemPaidLine item={balanceOf()} currency="EUR" fmt={ES_VE} />);
+    expect(screen.queryByText(/por traspaso/)).not.toBeInTheDocument();
+  });
+
+  it('un ítem sin importe a cobrar no la pinta', () => {
+    renderCells(balanceOf({ status: 'PROPOSED', billable: 0, paid: 0, balance: 0, paidByTransfersIn: 30 }));
+    expect(screen.queryByText(/por traspaso/)).not.toBeInTheDocument();
   });
 });

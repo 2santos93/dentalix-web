@@ -19,6 +19,7 @@ import { allocationCopy, allocationRule } from '@/lib/payments/allocation-copy';
 import type { PaymentAllocations } from '@/lib/payments/payment-allocations-api';
 import { PLAN_STATUS_LABELS, isPlanBillable } from '@/lib/treatment-plans/plan-status';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { ByTransferMark } from './by-transfer-mark';
 import { usePaymentAllocations } from './use-payment-allocations';
 
 // Copy como constantes (i18n-ready), igual que el resto de vistas.
@@ -52,6 +53,8 @@ interface LineRow {
   procedure: string;
   tooth: string | null;
   amount: number;
+  /** DX-399-quater-bis: lo que le cubre al ítem el saldo recibido por traspaso (0 si nada). */
+  byTransfer: number;
 }
 
 /** Recibo · importe · fecha civil del abono, con el formato de SU sede. */
@@ -76,6 +79,7 @@ export function allocationRows(data: PaymentAllocations): LineRow[] {
       procedure: item?.procedureName ?? copy.unknownItem,
       tooth: item ? item.toothNumber || allocationCopy.noTooth : null,
       amount: line.amount,
+      byTransfer: item?.paidByTransfersIn ?? 0,
     };
   });
   // A cuenta NETO de lo devuelto o traspasado (la cifra del informe «Cobrado sin imputar»).
@@ -86,6 +90,7 @@ export function allocationRows(data: PaymentAllocations): LineRow[] {
       procedure: allocationCopy.onAccount,
       tooth: null,
       amount: data.onAccount,
+      byTransfer: 0,
     });
   }
   return rows;
@@ -148,6 +153,7 @@ function Body({
   const rule = data ? allocationRule(data.manual) : null;
   const billable = data ? isPlanBillable(data.planStatus) : true;
   const canChange = onChange !== undefined && data !== null && billable && data.planAmount !== null;
+  const rows = data ? allocationRows(data) : [];
 
   const columns: DataListColumn<LineRow>[] = [
     {
@@ -160,6 +166,11 @@ function Body({
             <span className="font-medium text-ink">{row.procedure}</span>
             <span className="t-caption text-muted">{allocationCopy.onAccountHelp}</span>
           </span>
+        ) : row.byTransfer > 0 && data ? (
+          <span className="flex flex-col items-start gap-1">
+            <span className="font-medium text-ink break-words">{row.procedure}</span>
+            <ByTransferMark amount={money(row.byTransfer, data.planCurrency)} />
+          </span>
         ) : (
           <span className="font-medium text-ink break-words">{row.procedure}</span>
         ),
@@ -169,12 +180,24 @@ function Body({
       id: 'tooth',
       header: allocationCopy.colTooth,
       cell: (row) => (row.tooth ? <span className="tabular-nums">{row.tooth}</span> : null),
-      mobileCell: (row) =>
-        row.itemId === null
-          ? allocationCopy.onAccountHelp
-          : row.tooth && /^\d/.test(row.tooth)
-            ? copy.tooth(row.tooth)
-            : row.tooth,
+      mobileCell: (row) => {
+        const tooth =
+          row.itemId === null
+            ? allocationCopy.onAccountHelp
+            : row.tooth && /^\d/.test(row.tooth)
+              ? copy.tooth(row.tooth)
+              : row.tooth;
+        // En el móvil, la marca va en la línea 2 y no en el título, que se
+        // recorta a dos líneas.
+        if (row.byTransfer <= 0 || !data) return tooth;
+        return (
+          <>
+            {tooth}
+            {tooth ? <span aria-hidden> · </span> : null}
+            <ByTransferMark amount={money(row.byTransfer, data.planCurrency)} />
+          </>
+        );
+      },
     },
     {
       id: 'amount',
@@ -234,7 +257,7 @@ function Body({
                 <>
                   <DataList
                     label={copy.list}
-                    rows={allocationRows(data)}
+                    rows={rows}
                     columns={columns}
                     getRowKey={(row) => row.id}
                     empty={
@@ -246,6 +269,13 @@ function Body({
                       />
                     }
                   />
+                  {/* DX-399-quater-bis: el `free` no resta lo recibido (los abonos
+                      van primero), así que imputar ahí lo desplaza. Solo quien
+                      puede cambiar la imputación (ADMIN, plan cobrable) lee la
+                      nota: a recepción no le pide nada que no puede hacer. */}
+                  {canChange && rows.some((row) => row.byTransfer > 0) ? (
+                    <p className="text-sm text-muted">{allocationCopy.byTransferNote}</p>
+                  ) : null}
                   <DescriptionList
                     layout="inline"
                     aria-label={copy.summary}
