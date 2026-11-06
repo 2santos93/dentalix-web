@@ -6,6 +6,8 @@
 #
 # Uso: report-step-duration.sh <etiqueta> <tope-en-minutos>
 # Escribe una tabla en $GITHUB_STEP_SUMMARY (o en stdout fuera de Actions).
+# DURATION_HINT cambia qué hacer que dice el aviso (OPS-057: los pasos de apt
+# no se acortan repartiendo tests); por defecto, el de Playwright.
 set -euo pipefail
 
 if [ "$#" -ne 2 ]; then
@@ -22,6 +24,7 @@ fi
 started="${STEP_STARTED_AT:?Falta STEP_STARTED_AT (epoch del inicio del paso)}"
 now="${STEP_FINISHED_AT:-$(date +%s)}"
 warn_pct="${DURATION_WARN_PCT:-70}"
+hint="${DURATION_HINT:-Acorta la suite o reparte los tests antes de que GitHub corte el paso.}"
 
 elapsed=$((now - started))
 limit=$((limit_min * 60))
@@ -39,5 +42,5 @@ summary="${GITHUB_STEP_SUMMARY:-/dev/stdout}"
 
 echo "${label}: ${human} de ${limit_min} min (${pct} %)."
 if [ "$pct" -ge "$warn_pct" ]; then
-  echo "::warning title=${label} cerca del tope::${human} son el ${pct} % de timeout-minutes (${limit_min} min). Acorta la suite o reparte los tests antes de que GitHub corte el paso."
+  echo "::warning title=${label} cerca del tope::${human} son el ${pct} % de timeout-minutes (${limit_min} min). ${hint}"
 fi

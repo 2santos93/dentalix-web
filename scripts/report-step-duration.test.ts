@@ -48,6 +48,17 @@ describe('scripts/report-step-duration.sh (DX-452)', () => {
     expect(res.summary).toContain('| 35 min 0 s (2100 s) | 50 min | 70 % | 70 % |');
   });
 
+  it('DURATION_HINT cambia qué hacer en el aviso (OPS-057: pasos de apt)', () => {
+    const res = run(['Poppler', '5'], {
+      STEP_STARTED_AT: '1000',
+      STEP_FINISHED_AT: '1210',
+      DURATION_HINT: 'Suele ser el mirror de apt.',
+    });
+    expect(res.code).toBe(0);
+    expect(res.out).toContain('::warning title=Poppler cerca del tope::3 min 30 s son el 70 % de timeout-minutes (5 min). Suele ser el mirror de apt.');
+    expect(res.out).not.toContain('reparte los tests');
+  });
+
   it('sin hora de inicio o con un tope que no es un entero: 2', () => {
     expect(run(['Playwright', '50'], { STEP_STARTED_AT: '' }).code).not.toBe(0);
     expect(run(['Playwright', '0'], at(10)).code).toBe(2);

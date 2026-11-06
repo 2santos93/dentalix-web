@@ -20,7 +20,9 @@ jobs:
   checks:
     name: Lint, tipos, tests y build
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # OPS-057: 5,6–11 min por run; el paso de Chromium tiene tope propio de 10
+    # (un mirror de apt lento llegó a 9 min en la E2E) y el job lo absorbe.
+    timeout-minutes: 30
     env:
       NEXT_TELEMETRY_DISABLED: '1'
       # La URL de la API (API_URL) es de runtime (DX-083) y el build no la
@@ -44,8 +46,73 @@ jobs:
       - run: npm run lint
       - run: npx tsc --noEmit
       # DX-297: Jest resolves compiled form colors in real Chromium.
+      # OPS-057: como en la E2E (e2e.yml), los navegadores se cachean por la
+      # versión exacta de @playwright/test del package-lock y el SO; con caché
+      # solo se instalan las librerías del sistema. apt reintenta cada descarga
+      # (`Acquire::Retries` en apt.conf.d, porque Playwright lanza su propio
+      # `apt-get`) y el paso, hasta 3 veces. Su duración va al resumen.
+      - name: Versión de Playwright y SO (clave de la caché de navegadores)
+        id: playwright-version
+        timeout-minutes: 1
+        run: |
+          version="$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test']?.version ?? ''")"
+          if ! [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            echo "::error title=Versión de Playwright::package-lock.json no tiene node_modules/@playwright/test con una versión exacta (es «${version}»)"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "os=$(. /etc/os-release && echo "${ID}-${VERSION_ID}")-$(uname -m)" >> "$GITHUB_OUTPUT"
+      - name: Navegadores de Playwright (restaurar la caché)
+        id: playwright-cache
+        timeout-minutes: 2
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ steps.playwright-version.outputs.os }}-${{ steps.playwright-version.outputs.version }}
+      - name: Hora de inicio de Chromium
+        id: chromium-start
+        timeout-minutes: 1
+        run: echo "at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: Instalar Chromium para las pruebas de contraste
-        run: npx playwright install --with-deps chromium
+        id: chromium
+        timeout-minutes: 10
+        env:
+          BROWSERS_CACHED: ${{ steps.playwright-cache.outputs.cache-hit }}
+        run: |
+          echo 'Acquire::Retries "3";' | sudo tee /etc/apt/apt.conf.d/80-dentalix-retries >/dev/null
+          if [[ "${BROWSERS_CACHED}" == "true" ]]; then
+            install=(install-deps chromium)
+          else
+            install=(install --with-deps chromium)
+          fi
+          for attempt in 1 2 3; do
+            if npx playwright "${install[@]}"; then
+              exit 0
+            fi
+            if [[ "${attempt}" -lt 3 ]]; then
+              echo "::warning title=Chromium de Playwright::intento ${attempt} de 3 fallido (playwright ${install[*]}); reintento"
+              sleep $((attempt * 15))
+            fi
+          done
+          echo "::error title=Chromium de Playwright::playwright ${install[*]} falló en 3 intentos"
+          exit 1
+      - name: Duración de Chromium
+        if: always() && steps.chromium.outcome != 'skipped'
+        timeout-minutes: 1
+        env:
+          STEP_STARTED_AT: ${{ steps.chromium-start.outputs.at }}
+          DURATION_HINT: Suele ser el mirror de apt; mira los reintentos en el log del paso.
+        run: scripts/report-step-duration.sh "Chromium (pruebas de contraste)" 10
+      # `continue-on-error`: una carrera con otra run por la misma clave no
+      # pone la CI en rojo; la próxima run la vuelve a intentar.
+      - name: Navegadores de Playwright (guardar la caché)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 2
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
       - name: Supuestos de país (check:country-assumptions)
         run: npm run check:country-assumptions
       - run: npx jest --ci
