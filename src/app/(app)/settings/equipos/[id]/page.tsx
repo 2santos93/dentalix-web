@@ -77,7 +77,9 @@ function LifeSheetRoute({ token, equipmentId }: { token: string; equipmentId: st
     <EquipmentDetailView
       token={token}
       equipmentId={equipmentId}
-      locations={state.locations.filter((l) => l.isActive)}
+      // DX-546 · FE-112: todas, también las desactivadas: un equipo de una
+          // sede cerrada se mantiene con su «hoy» y su moneda.
+          locations={state.locations}
     />
   );
 }

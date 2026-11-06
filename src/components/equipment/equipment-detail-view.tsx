@@ -56,7 +56,10 @@ type Modal =
 interface EquipmentDetailViewProps {
   token: string;
   equipmentId: string;
-  /** Sedes activas: la del equipo da su «hoy» y su moneda. */
+  /**
+   * Todas las sedes, también las desactivadas (DX-546 · FE-112): la del equipo
+   * da su «hoy» y su moneda aunque esté cerrada.
+   */
   locations: ClinicLocation[];
 }
 
