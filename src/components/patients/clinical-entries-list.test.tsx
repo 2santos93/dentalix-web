@@ -26,6 +26,12 @@ jest.mock('../../lib/patients/clinical-api', () => ({
   listClinicalEntries: jest.fn(),
   createClinicalEntry: jest.fn(),
   createClinicalEntryAddendum: jest.fn(),
+  // DX-540: el modal consulta la firma al abrirse (sin aviso en estos tests).
+  getClinicalEntrySigning: jest.fn().mockResolvedValue({
+    professionalLicense: 'RP-1',
+    warnMissingProfessionalLicense: false,
+    warnings: [],
+  }),
 }));
 // El autor de cada evolución se resuelve contra el personal de la clínica.
 jest.mock('../../lib/staff/staff-api', () => ({
@@ -116,6 +122,18 @@ describe('ClinicalEntriesList', () => {
 
     const rows = await screen.findAllByText(/Dra\. Ana Ríos/);
     expect(rows.length).toBeGreaterThan(0);
+  });
+
+  it('DX-540: muestra «Reg. prof.» del autor congelado en la evolución, y nada si no lo tenía', async () => {
+    mockedList.mockResolvedValue([
+      { ...entries[0], authorProfessionalLicense: 'RP-12345' },
+      { ...entries[1], authorProfessionalLicense: null },
+    ]);
+    render(<ClinicalEntriesList token="tok" patientId="p1" />);
+
+    // Tabla de escritorio y tarjeta de móvil: el mismo dato en las dos.
+    expect(await screen.findAllByText('Reg. prof. RP-12345')).toHaveLength(2);
+    expect(screen.getAllByText(/Reg\. prof\./)).toHaveLength(2);
   });
 
   it('si el personal no carga, la evolución conserva su marca de tiempo', async () => {

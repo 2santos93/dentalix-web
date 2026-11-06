@@ -1501,7 +1501,7 @@ export interface paths {
         put?: never;
         /**
          * Registra una evolución (inalterable, DX-038)
-         * @description DX-170: con `templateId`, el texto compuesto se guarda en `notes` (enviado ya revisado, o compuesto por el servidor con `answers`). Con `appointmentId`, la evolución queda ligada a la cita.
+         * @description DX-170: con `templateId`, el texto compuesto se guarda en `notes` (enviado ya revisado, o compuesto por el servidor con `answers`). Con `appointmentId`, la evolución queda ligada a la cita. DX-540: congela el registro profesional del autor (`authorProfessionalLicense`) y, si la clínica tiene el aviso activo y el autor no lo tiene, responde `warnings: [{ code: PROFESSIONAL_LICENSE_MISSING }]` sin bloquear la firma.
          */
         post: operations["ClinicalEntriesController_create"];
         delete?: never;
@@ -1548,6 +1548,47 @@ export interface paths {
         head?: never;
         /** No permitido: una evolución no se edita (DX-038) */
         patch: operations["ClinicalEntriesController_rejectPatch"];
+        trace?: never;
+    };
+    "/api/v1/clinical-entries/signing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Registro profesional del usuario y aviso que traería su firma (DX-540)
+         * @description Para avisar en «Nueva evolución» antes de guardar. Mismo cálculo que el alta.
+         */
+        get: operations["ClinicalEntrySettingsController_signing"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clinical-entries/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ajustes de las evoluciones de la clínica (DX-540) */
+        get: operations["ClinicalEntrySettingsController_settings"];
+        /**
+         * Cambia los ajustes de las evoluciones de la clínica; queda en la auditoría
+         * @description DX-540. Aplica a la siguiente firma; una evolución ya firmada no cambia. Si nada cambia, responde 200 sin evento de auditoría.
+         */
+        put: operations["ClinicalEntrySettingsController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/clinical-note-templates": {
@@ -9342,6 +9383,58 @@ export interface components {
             /** @description 0 = principal; 1..3 = relacionados */
             position: number;
         };
+        /**
+         * @description PROFESSIONAL_LICENSE_MISSING: la clínica avisa y el autor firmó sin registro profesional.
+         * @enum {string}
+         */
+        ClinicalEntryWarningCode: "PROFESSIONAL_LICENSE_MISSING";
+        ClinicalEntryWarningDto: {
+            /** @description PROFESSIONAL_LICENSE_MISSING: la clínica avisa y el autor firmó sin registro profesional. */
+            code: components["schemas"]["ClinicalEntryWarningCode"];
+            /** @description Texto en español para mostrarlo tal cual */
+            message: string;
+        };
+        CreatedClinicalEntryDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: date-time */
+            entryDate: string;
+            reason: string | null;
+            notes: string;
+            /** Format: uuid */
+            performedById: string | null;
+            /**
+             * @description DX-540: registro profesional del autor congelado al firmar (inalterable). null si no lo tenía o en evoluciones anteriores.
+             * @example RP-12345
+             */
+            authorProfessionalLicense: string | null;
+            /**
+             * Format: uuid
+             * @description DX-170: cita ligada (null en las evoluciones sueltas)
+             */
+            appointmentId: string | null;
+            /**
+             * Format: uuid
+             * @description DX-170: plantilla con la que se redactó (solo procedencia; el texto está en notes)
+             */
+            templateId: string | null;
+            appointment: components["schemas"]["ClinicalEntryAppointmentDto"] | null;
+            /**
+             * Format: date-time
+             * @description Fecha de registro: la fija el servidor
+             */
+            createdAt: string;
+            /** @description Adendas de corrección, en orden cronológico (DX-038) */
+            addenda: components["schemas"]["ClinicalEntryAddendumDto"][];
+            /** @description DX-212: diagnósticos CIE-10, el principal primero (vacío en las evoluciones sin diagnóstico) */
+            diagnoses: components["schemas"]["ClinicalEntryDiagnosisDto"][];
+            /** @description DX-540: avisos de la firma; vacío si no hay nada que avisar. No se guardan con la evolución. */
+            warnings: components["schemas"]["ClinicalEntryWarningDto"][];
+        };
         ClinicalEntryDto: {
             /** Format: uuid */
             id: string;
@@ -9355,6 +9448,11 @@ export interface components {
             notes: string;
             /** Format: uuid */
             performedById: string | null;
+            /**
+             * @description DX-540: registro profesional del autor congelado al firmar (inalterable). null si no lo tenía o en evoluciones anteriores.
+             * @example RP-12345
+             */
+            authorProfessionalLicense: string | null;
             /**
              * Format: uuid
              * @description DX-170: cita ligada (null en las evoluciones sueltas)
@@ -9381,6 +9479,24 @@ export interface components {
             reason: string;
             /** @description Texto aclaratorio que corrige o completa la evolución */
             text: string;
+        };
+        ClinicalEntrySigningDto: {
+            /**
+             * @description Registro profesional del usuario en esta clínica (el que se congelaría al firmar); null si no lo tiene.
+             * @example RP-12345
+             */
+            professionalLicense: string | null;
+            /** @description Ajuste de la clínica (ver /clinical-entries/settings) */
+            warnMissingProfessionalLicense: boolean;
+            /** @description Los avisos que traería la firma ahora mismo (los mismos que devolvería el alta). */
+            warnings: components["schemas"]["ClinicalEntryWarningDto"][];
+        };
+        ClinicalEntrySettingsDto: {
+            /**
+             * @description Avisar al firmar una evolución si el autor no tiene registro profesional. No bloquea la firma. false al crear la clínica.
+             * @example true
+             */
+            warnMissingProfessionalLicense: boolean;
         };
         /** @enum {string} */
         ClinicalNotePromptType: "ONE" | "MULTI" | "TEXT";
@@ -23917,7 +24033,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClinicalEntryDto"];
+                    "application/json": components["schemas"]["CreatedClinicalEntryDto"];
                 };
             };
             /** @description Texto vacío, respuesta inválida, plantilla desactivada, cita de otro paciente, cita cancelada / no-show, cita de un día futuro o diagnósticos inválidos (DX-212: código CIE-10 inexistente, segundo principal, más de 3 relacionados, diente no FDI). */
@@ -24061,6 +24177,95 @@ export interface operations {
         responses: {
             /** @description La historia clínica no se puede modificar. Añade una adenda. */
             405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicalEntrySettingsController_signing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalEntrySigningDto"];
+                };
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicalEntrySettingsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalEntrySettingsDto"];
+                };
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicalEntrySettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClinicalEntrySettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalEntrySettingsDto"];
+                };
+            };
+            /** @description Falta el sí/no o no es booleano */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar los ajustes de las evoluciones. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -2,7 +2,8 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NewEvolutionModal } from './new-evolution-modal';
 import { listNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
-import { createClinicalEntry } from '@/lib/patients/clinical-api';
+import { createClinicalEntry, getClinicalEntrySigning } from '@/lib/patients/clinical-api';
+import { toast } from 'sonner';
 import { prophylaxisTemplate, resinTemplate } from './fixtures';
 import { searchIcd10 } from '@/lib/reference/icd10-api';
 
@@ -17,13 +18,28 @@ jest.mock('../../lib/clinical-notes/note-templates-api', () => ({
 jest.mock('../../lib/patients/clinical-api', () => ({
   ...jest.requireActual('../../lib/patients/clinical-api'),
   createClinicalEntry: jest.fn(),
+  getClinicalEntrySigning: jest.fn(),
 }));
+jest.mock('sonner', () => ({ toast: { warning: jest.fn(), success: jest.fn(), error: jest.fn() } }));
+const mockedWarning = toast.warning as jest.Mock;
 
 jest.mock('../../lib/reference/icd10-api', () => ({ searchIcd10: jest.fn() }));
 const mockedIcd10 = searchIcd10 as jest.MockedFunction<typeof searchIcd10>;
 
 const mockedList = listNoteTemplates as jest.MockedFunction<typeof listNoteTemplates>;
 const mockedCreate = createClinicalEntry as jest.MockedFunction<typeof createClinicalEntry>;
+const mockedSigning = getClinicalEntrySigning as jest.MockedFunction<typeof getClinicalEntrySigning>;
+const SIGNED_OK = { professionalLicense: 'RP-1', warnMissingProfessionalLicense: true, warnings: [] };
+const MISSING = {
+  code: 'PROFESSIONAL_LICENSE_MISSING' as const,
+  message: 'La evolución se guardó sin tu número de registro profesional.',
+};
+
+function tokenForRole(role: string): string {
+  const part = (value: string) =>
+    btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${part('{"alg":"HS256"}')}.${part(JSON.stringify({ sub: 'u-me', tenantId: 't1', role }))}.sig`;
+}
 
 const created = {
   id: 'ce-1',
@@ -63,6 +79,8 @@ describe('NewEvolutionModal (DX-170)', () => {
     mockedCreate.mockReset();
     mockedList.mockResolvedValue([resinTemplate, prophylaxisTemplate]);
     mockedCreate.mockResolvedValue(created);
+    mockedSigning.mockReset();
+    mockedSigning.mockResolvedValue(SIGNED_OK);
   });
 
   it('busca plantillas por nombre o carpeta, sin tildes', async () => {
@@ -348,3 +366,76 @@ describe('NewEvolutionModal · diagnósticos CIE-10 (DX-212)', () => {
   });
 });
 
+
+describe('NewEvolutionModal · registro profesional (DX-540)', () => {
+  beforeEach(() => {
+    mockedList.mockReset();
+    mockedCreate.mockReset();
+    mockedSigning.mockReset();
+    mockedWarning.mockClear();
+    mockedList.mockResolvedValue([resinTemplate]);
+  });
+
+  async function writeAndSave(user: ReturnType<typeof userEvent.setup>) {
+    await screen.findByRole('radio', { name: /resina/i });
+    await user.type(screen.getByLabelText(/texto de la evolución/i), 'Control');
+    await user.click(screen.getByRole('button', { name: /guardar evolución/i }));
+  }
+
+  it('sin registro y con el aviso activo: lo dice antes de guardar, y guarda igual', async () => {
+    const user = userEvent.setup();
+    mockedSigning.mockResolvedValue({
+      professionalLicense: null,
+      warnMissingProfessionalLicense: true,
+      warnings: [MISSING],
+    });
+    mockedCreate.mockResolvedValue({ ...created, authorProfessionalLicense: null, warnings: [MISSING] });
+    const { onCreated } = renderModal({ token: tokenForRole('DENTIST') });
+
+    const notice = await screen.findByText(/vas a firmar sin registro profesional/i);
+    expect(notice.closest('[role="status"]')).toHaveTextContent(/pide a un administrador/i);
+    expect(mockedSigning).toHaveBeenCalledWith(tokenForRole('DENTIST'));
+    // El botón de guardar sigue activo: el aviso no bloquea.
+    expect(screen.getByRole('button', { name: /guardar evolución/i })).toBeEnabled();
+
+    await writeAndSave(user);
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    expect(mockedWarning).toHaveBeenCalledWith('Evolución guardada sin registro profesional', {
+      description: MISSING.message,
+      duration: 10000,
+    });
+  });
+
+  it('ADMIN sin registro: el aviso enlaza a su ficha de Personal', async () => {
+    mockedSigning.mockResolvedValue({
+      professionalLicense: null,
+      warnMissingProfessionalLicense: true,
+      warnings: [MISSING],
+    });
+    renderModal({ token: tokenForRole('ADMIN') });
+    const link = await screen.findByRole('link', { name: /cargar mi registro en personal/i });
+    expect(link).toHaveAttribute('href', '/staff/u-me');
+  });
+
+  it('con registro (o con el aviso desactivado): ni aviso previo ni toast', async () => {
+    const user = userEvent.setup();
+    mockedSigning.mockResolvedValue(SIGNED_OK);
+    mockedCreate.mockResolvedValue({ ...created, authorProfessionalLicense: 'RP-1', warnings: [] });
+    const { onCreated } = renderModal({ token: tokenForRole('DENTIST') });
+    await writeAndSave(user);
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    expect(screen.queryByText(/vas a firmar sin registro profesional/i)).toBeNull();
+    expect(mockedWarning).not.toHaveBeenCalled();
+  });
+
+  it('si no se puede consultar la firma, el flujo sigue igual y el aviso llega tras guardar', async () => {
+    const user = userEvent.setup();
+    mockedSigning.mockRejectedValue(new Error('red'));
+    mockedCreate.mockResolvedValue({ ...created, warnings: [MISSING] });
+    const { onCreated } = renderModal({ token: tokenForRole('DENTIST') });
+    await writeAndSave(user);
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    expect(screen.queryByText(/vas a firmar sin registro profesional/i)).toBeNull();
+    expect(mockedWarning).toHaveBeenCalledTimes(1);
+  });
+});

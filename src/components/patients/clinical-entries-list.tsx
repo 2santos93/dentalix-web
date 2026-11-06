@@ -51,6 +51,8 @@ const copy = {
   reasonFallback: '—',
   recordedBy: (author: string, when: string) => `${author} · ${when}`,
   recordedAt: (when: string) => when,
+  // DX-540: registro profesional del autor, congelado al firmar.
+  license: (license: string) => `Reg. prof. ${license}`,
   newEntry: 'Nueva evolución',
   genericLoadError: 'No pudimos cargar las evoluciones.',
   tableLabel: 'Evoluciones del paciente',
@@ -368,6 +370,12 @@ export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' 
     return author ? copy.recordedBy(author, when) : copy.recordedAt(when);
   }
 
+  /** DX-540: «Reg. prof. NNN» del autor al firmar; nada si no lo tenía. */
+  function renderLicense(entry: ClinicalEntry, className: string) {
+    if (!entry.authorProfessionalLicense) return null;
+    return <p className={className}>{copy.license(entry.authorProfessionalLicense)}</p>;
+  }
+
   /** Añade la adenda recién creada al final (orden cronológico) de su evolución. */
   function handleAddendumCreated(addendum: ClinicalEntryAddendum) {
     setEntries((prev) =>
@@ -584,6 +592,7 @@ export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' 
                 {/* Subordinado: es la procedencia del asiento, no su contenido. */}
                 <td className="px-4 py-3 align-top text-muted">
                   <p>{recordLine(entry.performedById, entry.createdAt)}</p>
+                  {renderLicense(entry, 'mt-0.5 text-xs tabular-nums')}
                   <div className="mt-2 flex flex-wrap gap-2">
                     {renderAnesthesiaButton(entry)}
                     {renderSedationButton(entry)}
@@ -615,6 +624,7 @@ export function ClinicalEntriesList({ token, patientId, heading = 'Evoluciones' 
               <p className="mt-3 border-t border-border-subtle pt-2 text-xs text-muted">
                 {recordLine(entry.performedById, entry.createdAt)}
               </p>
+              {renderLicense(entry, 'mt-0.5 text-xs tabular-nums text-muted')}
               <div className="mt-2 flex flex-col items-start gap-2">
                 {renderAnesthesiaButton(entry)}
                 {renderSedationButton(entry)}
