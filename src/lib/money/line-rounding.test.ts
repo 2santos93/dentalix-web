@@ -1,6 +1,15 @@
 import { discountForPercent, exceedsCap, type DiscountRules } from '@/lib/discounts/discount-rules';
 import vectors from './rounding-vectors.json';
-import { contractRoundingDigits, lineCents, linesTotal, roundingDigits, unitCents } from './line-rounding';
+import {
+  contractRoundingDigits,
+  installmentAmounts,
+  lineCents,
+  linesTotal,
+  roundingDigits,
+  unitCents,
+  type RoundingDigits,
+} from './line-rounding';
+import { amountCents } from './round';
 
 // DX-340: paridad con la API. `rounding-vectors.json` es copia byte a byte de
 // `dentalix-api/src/shared/money/rounding-vectors.json` (lo vigila
@@ -68,5 +77,73 @@ describe('redondeo por línea: vectores compartidos con la API (DX-340)', () => 
     // como desconocido («se calcula al aplicar»).
     expect(contractRoundingDigits({ roundingDigits: 3 })).toBeNull();
     expect(contractRoundingDigits({ roundingDigits: -1 })).toBeNull();
+  });
+
+  it.each(vectors.installmentSplit)(
+    'DX-488: cuotas de $financed $currency en $count (mismos vectores que la API)',
+    ({ currency, financed, count, installments }) => {
+      expect(installmentAmounts(financed, count, digitsOf(currency))).toEqual(installments);
+    },
+  );
+});
+
+describe('cuotas de un plan de pagos en unidades de la moneda (DX-488, espejo de generateSchedule)', () => {
+  /** El reparto al céntimo de antes de DX-488. */
+  function centsSplit(financedCents: number, n: number): number[] {
+    const base = Math.floor(financedCents / n);
+    return Array.from({ length: n }, (_, i) => (i === n - 1 ? financedCents - base * (n - 1) : base));
+  }
+
+  it('JPY 10000 en 3 = 3333, 3333, 3334; USD 100 en 3 = 33.33, 33.33, 33.34', () => {
+    expect(installmentAmounts(10000, 3, 0)).toEqual([3333, 3333, 3334]);
+    expect(installmentAmounts(100, 3, 2)).toEqual([33.33, 33.33, 33.34]);
+    expect(installmentAmounts(100, 3, 1)).toEqual([33.3, 33.3, 33.4]);
+  });
+
+  it('sin cuotas válidas o sin nada que financiar no hay reparto', () => {
+    expect(installmentAmounts(100, 0, 2)).toEqual([]);
+    expect(installmentAmounts(100, 1.5, 2)).toEqual([]);
+    expect(installmentAmounts(-1, 3, 2)).toEqual([]);
+    expect(installmentAmounts(0, 2, 0)).toEqual([0, 0]);
+  });
+
+  /** Casos con semilla fija (sin dependencias: mulberry32). */
+  function cases(seed: number, runs: number): { cents: number; n: number }[] {
+    let a = seed;
+    const rand = () => {
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const out = [
+      { cents: 0, n: 1 },
+      { cents: 1, n: 600 },
+      { cents: 10_000_000, n: 600 },
+      { cents: 1_000_050, n: 3 },
+    ];
+    for (let i = 0; i < runs; i++) {
+      out.push({ cents: Math.floor(rand() * 10_000_001), n: 1 + Math.floor(rand() * 600) });
+    }
+    return out;
+  }
+
+  it('propiedad: con 2 decimales, el reparto al céntimo de siempre', () => {
+    for (const { cents, n } of cases(488, 500)) {
+      expect(installmentAmounts(cents / 100, n, 2).map(amountCents)).toEqual(centsSplit(cents, n));
+    }
+  });
+
+  it('propiedad: suma exacta y cuotas 1..n−1 en unidades enteras, para 0, 1 y 2 decimales', () => {
+    for (const digits of [0, 1, 2] as RoundingDigits[]) {
+      const unit = 10 ** (2 - digits);
+      for (const { cents, n } of cases(4880 + digits, 500)) {
+        const out = installmentAmounts(cents / 100, n, digits).map(amountCents);
+        expect(out).toHaveLength(n);
+        expect(out.reduce((sum, c) => sum + c, 0)).toBe(cents);
+        expect(out.slice(0, -1).every((c) => c % unit === 0 && c >= 0)).toBe(true);
+        expect(out[n - 1]).toBeGreaterThanOrEqual(0);
+      }
+    }
   });
 });

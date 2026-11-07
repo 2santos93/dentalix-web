@@ -73,6 +73,23 @@ export function linesTotal(lines: readonly MoneyLine[]): number {
 }
 
 /**
+ * Cuotas de un plan de pagos (DX-488), espejo de `generateSchedule` de la API:
+ * en unidades de `roundingDigits` de la moneda (1, 10 o 100 céntimos), las
+ * cuotas 1…n−1 valen `floor(financiado / unidad / n) · unidad` y la última el
+ * resto, céntimos sueltos incluidos (JPY 10000 en 3 = 3333, 3333, 3334). Con 2
+ * dígitos es el reparto al céntimo de siempre. La suma es exacta. Sin cuotas
+ * válidas (n entero ≥ 1) o con un financiado negativo, `[]`.
+ */
+export function installmentAmounts(financed: number, count: number, digits: RoundingDigits): number[] {
+  const financedCents = amountCents(financed);
+  if (!Number.isInteger(count) || count < 1 || financedCents < 0) return [];
+  const unit = unitCents(digits);
+  const baseCents = Number((BigInt(financedCents) / unit / BigInt(count)) * unit);
+  const lastCents = financedCents - baseCents * (count - 1);
+  return Array.from({ length: count }, (_, i) => centsToAmount(i === count - 1 ? lastCents : baseCents));
+}
+
+/**
  * Los dígitos de redondeo que manda la API (`currencyDigits` del plan, una
  * moneda de `GET /currencies`); `null` si no llegan (API anterior a DX-340) o
  * no son válidos: la web no los adivina con una lista propia y nunca lanza

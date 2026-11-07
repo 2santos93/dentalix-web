@@ -10,12 +10,23 @@ import { clinicLocation } from '@/lib/test/locations';
 import { STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
 import { stampPainters } from '@/lib/locations/sede-stamp';
 import { testAgendaClock } from '@/lib/test/sede-clock';
+import { listCurrencies } from '@/lib/reference/currencies-api';
+import { resetCurrencyRoundingDigitsCache } from '@/lib/reference/currency-rounding-digits';
 
 jest.mock('../../lib/payment-plans/payment-plan-api', () => ({
   createPaymentPlan: jest.fn(),
 }));
 
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+
+// DX-488: los dígitos de redondeo de cada moneda llegan de `GET /currencies`.
+jest.mock('../../lib/reference/currencies-api', () => ({ listCurrencies: jest.fn() }));
+const mockedCurrencies = jest.mocked(listCurrencies);
+const CURRENCIES = [
+  { code: 'VES', name: 'Bolívar', symbol: 'Bs.', minorUnits: 2, roundingDigits: 2 },
+  { code: 'USD', name: 'Dólar', symbol: '$', minorUnits: 2, roundingDigits: 2 },
+  { code: 'JPY', name: 'Yen', symbol: '¥', minorUnits: 0, roundingDigits: 0 },
+];
 
 const mockedCreate = createPaymentPlan as jest.MockedFunction<typeof createPaymentPlan>;
 const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
@@ -28,7 +39,12 @@ const PLAN = { id: 'plan-1', currency: 'VES', billable: 1200000 };
 beforeEach(() => {
   mockedCreate.mockReset();
   mockedLocations.mockReset().mockResolvedValue([clinicLocation()]);
+  resetCurrencyRoundingDigitsCache();
+  mockedCurrencies.mockReset().mockResolvedValue(CURRENCIES as never);
 });
+
+/** El texto del modal, con los espacios duros como espacios. */
+const dialogText = () => screen.getByRole('dialog').textContent?.replace(/\s/g, ' ') ?? '';
 
 function renderModal(props: Partial<React.ComponentProps<typeof CreatePaymentPlanModal>> = {}) {
   const onCreated = jest.fn();
@@ -61,15 +77,19 @@ it('propone 12 cuotas mensuales desde hoy, sin pie y el total facturable del pla
   expect(dialog.querySelector<HTMLInputElement>('input[name="pp-start"]')?.value).toMatch(
     /^\d{4}-\d{2}-\d{2}$/,
   );
-  expect(dialog.textContent?.replace(/\s/g, ' ')).toContain('Cuota: VES 100.000,00');
+  await waitFor(() => expect(dialogText()).toContain('Cuota: VES 100.000,00'));
 });
 
-it('la vista previa sale con el formato de cada sede: Caracas «VES 100.000,00», Berlín «100.000,00 VES» (DX-354b)', () => {
+it('la vista previa sale con el formato de cada sede: Caracas «VES 100.000,00», Berlín «100.000,00 VES» (DX-354b)', async () => {
   const { unmount } = renderModal({ money: caracasMoney });
-  expect(screen.getByRole('dialog').textContent).toContain(`Cuota: ${moneyWithCode(100000, 'VES', STAMP_FORMATS.caracas)}`);
+  await waitFor(() =>
+    expect(screen.getByRole('dialog').textContent).toContain(`Cuota: ${moneyWithCode(100000, 'VES', STAMP_FORMATS.caracas)}`),
+  );
   unmount();
   renderModal({ money: berlinMoney });
-  expect(screen.getByRole('dialog').textContent).toContain(`Cuota: ${moneyWithCode(100000, 'VES', STAMP_FORMATS.berlin)}`);
+  await waitFor(() =>
+    expect(screen.getByRole('dialog').textContent).toContain(`Cuota: ${moneyWithCode(100000, 'VES', STAMP_FORMATS.berlin)}`),
+  );
   expect(screen.getByRole('dialog').textContent).not.toContain(moneyWithCode(100000, 'VES', STAMP_FORMATS.caracas));
 });
 
@@ -103,13 +123,59 @@ describe('la fecha de inicio por defecto es el día de la sede, no el del navega
   });
 });
 
-it('DX-489: desde el plan de tratamiento, la vista previa sale con el formato de la sede (código delante)', () => {
+it('DX-489: desde el plan de tratamiento, la vista previa sale con el formato de la sede (código delante)', async () => {
   const fmt = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
   renderModal({ money: (amount, code) => sedeMoney(amount, code, fmt) });
-  const dialog = screen.getByRole('dialog', { name: 'Crear plan de pagos' });
-  const text = dialog.textContent?.replace(/\s/g, ' ') ?? '';
-  expect(text).toContain('Cuota: VES 100.000,00');
-  expect(text).not.toContain('100.000,00 VES');
+  await waitFor(() => expect(dialogText()).toContain('Cuota: VES 100.000,00'));
+  expect(dialogText()).not.toContain('100.000,00 VES');
+});
+
+describe('DX-488: la vista previa reparte las cuotas como la API (unidades de la moneda, el resto a la última)', () => {
+  // Con los espacios duros como espacios, igual que `dialogText`.
+  const caracas = (amount: number, code: string) =>
+    moneyWithCode(amount, code, STAMP_FORMATS.caracas).replace(/\s/g, ' ');
+
+  async function withCount(count: string) {
+    const user = userEvent.setup();
+    const dialog = screen.getByRole('dialog');
+    await user.clear(within(dialog).getByLabelText('N.º de cuotas'));
+    await user.type(within(dialog).getByLabelText('N.º de cuotas'), count);
+  }
+
+  it('JPY 10000 en 3: cuota de 3333 sin decimales y la última de 3334', async () => {
+    renderModal({ plan: { id: 'plan-jpy', currency: 'JPY', billable: 10000 } });
+    await withCount('3');
+    await waitFor(() =>
+      expect(dialogText()).toContain(
+        `Financiado: ${caracas(10000, 'JPY')} · Cuota: ${caracas(3333, 'JPY')} · Última: ${caracas(3334, 'JPY')}`,
+      ),
+    );
+    expect(caracas(3333, 'JPY')).toBe('JPY 3.333');
+    expect(dialogText()).not.toContain('3.333,33');
+    expect(mockedCurrencies).toHaveBeenCalledWith('tok');
+  });
+
+  it('USD 200 en 3: 66,66 y la última de 66,68, céntimo a céntimo como antes', async () => {
+    renderModal({ plan: { id: 'plan-usd', currency: 'USD', billable: 200 } });
+    await withCount('3');
+    await waitFor(() =>
+      expect(dialogText()).toContain(`Cuota: ${caracas(66.66, 'USD')} · Última: ${caracas(66.68, 'USD')}`),
+    );
+  });
+
+  it('VES 1.200.000 en 12: todas iguales, sin «Última»', async () => {
+    renderModal();
+    await waitFor(() => expect(dialogText()).toContain(`Cuota: ${caracas(100000, 'VES')}`));
+    expect(dialogText()).not.toContain('Última');
+  });
+
+  it('sin los dígitos de la moneda (la API no responde) no adivina: «se calcula al crear»', async () => {
+    mockedCurrencies.mockReset().mockRejectedValue(new Error('offline'));
+    renderModal({ plan: { id: 'plan-jpy', currency: 'JPY', billable: 10000 } });
+    await waitFor(() => expect(mockedCurrencies).toHaveBeenCalled());
+    expect(dialogText()).toContain(`Financiado: ${caracas(10000, 'JPY')} · Cuota: se calcula al crear el plan`);
+    expect(dialogText()).not.toContain('3.333,33');
+  });
 });
 
 it('crea el plan de cuotas con los datos del formulario y avisa', async () => {
@@ -162,7 +228,7 @@ it('DX-241: pie y total con miles se leen como en el resto de la app', async () 
   await user.type(within(dialog).getByLabelText('Pie (opcional)'), '200.000');
   await user.clear(within(dialog).getByLabelText('Total a financiar'));
   await user.type(within(dialog).getByLabelText('Total a financiar'), '1.400.000');
-  expect(dialog.textContent?.replace(/\s/g, ' ')).toContain('Financiado: VES 1.200.000,00 · Cuota: VES 100.000,00');
+  await waitFor(() => expect(dialogText()).toContain('Financiado: VES 1.200.000,00 · Cuota: VES 100.000,00'));
   await user.click(within(dialog).getByRole('button', { name: 'Crear' }));
   await waitFor(() =>
     expect(mockedCreate).toHaveBeenCalledWith(
