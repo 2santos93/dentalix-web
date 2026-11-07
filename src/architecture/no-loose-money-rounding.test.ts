@@ -12,9 +12,9 @@ import allowlist from './no-loose-money-rounding.allowlist.json';
  *
  * Detecta, en el código que `git ls-files` lista bajo `src` (se ejecuta DESPUÉS
  * del commit; un fichero sin añadir no se ve): `Math.round|floor|trunc|ceil(…)`
- * cuyo argumento multiplica por 100, 1000 o 10000, y cualquier `.toFixed(` o
- * `.toPrecision(`. `src/lib/money/**` (el helper y el redondeo por línea) es la
- * casa del redondeo y queda fuera.
+ * cuyo argumento escala por 100, 1000, 10000, `1e2`, `10 ** n`, `Math.pow(10, n)` o `/ 0.01`, y cualquier `.toFixed(` o
+ * `.toPrecision(`. Solo `src/lib/money/round.ts` (el helper) queda fuera: el resto
+ * de `src/lib/money` se vigila como cualquier fichero.
  *
  * Lo que no es dinero (progreso, mg, ratios, tasas) se lista en
  * `no-loose-money-rounding.allowlist.json` con fichero, función, cuántos y por
@@ -23,7 +23,9 @@ import allowlist from './no-loose-money-rounding.allowlist.json';
  */
 const ROOT = join(__dirname, '..', '..');
 const MATH_ROUNDING = /Math\.(?:round|floor|trunc|ceil)\(/g;
-const SCALE_100 = /\*\s*(?:100|1000|10000)\b/;
+// Factor de céntimos escrito de cualquier forma: ×100/1000/10000, ×1e2, 10 ** n, Math.pow(10, n), / 0.01.
+const SCALE_100 =
+  /\*\s*(?:100|1000|10000)\b|\*\s*1e[1-4]\b|\b10\s*\*\*|Math\.pow\(\s*10\b|\/\s*(?:0?\.0+1\b|1e-\d)/;
 const TO_FIXED = /\.(?:toFixed|toPrecision)\(/g;
 const TOP_LEVEL = /^(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(\w+)|^(?:export\s+)?const\s+(\w+)\s*[=:]/;
 
@@ -75,7 +77,7 @@ function trackedSources(): string[] {
   return out
     .split('\n')
     .filter((f) => /\.tsx?$/.test(f) && !/\.(?:test|spec)\.tsx?$/.test(f) && !f.endsWith('.d.ts'))
-    .filter((f) => !f.startsWith('src/lib/money/'));
+    .filter((f) => f !== 'src/lib/money/round.ts');
 }
 
 function currentSites(): Site[] {
@@ -106,6 +108,10 @@ describe('DX-488-bis: sin redondeos de importes sueltos', () => {
     expect(f('const a = Math.trunc(price * 100);')).toBe(1);
     expect(f('const a = x.toFixed(2);')).toBe(1);
     expect(f('const a = x.toPrecision(4);')).toBe(1);
+    expect(f('const a = Math.round(x * 1e2) / 1e2;')).toBe(1);
+    expect(f('const a = Math.round(x * 10 ** digits);')).toBe(1);
+    expect(f('const a = Math.round(x * Math.pow(10, digits));')).toBe(1);
+    expect(f('const a = Math.round(x / 0.01);')).toBe(1);
     expect(f('const a = Math.floor(minute / 60);')).toBe(0);
     expect(f('const a = amountCents(x) + roundAmount(y);')).toBe(0);
   });
