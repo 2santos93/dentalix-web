@@ -11,17 +11,19 @@ import { regionalFormat } from '../src/lib/format/regional-format';
 import { moneyWithCode } from '../src/lib/format/sede-number';
 
 /**
- * e2e (DX-513): una rebaja frente a un catálogo en OTRA moneda no es un
- * descuento.
+ * e2e (DX-513-bis): una rebaja frente a un catálogo en OTRA moneda se mide
+ * frente a la referencia CONVERTIDA con la tasa del día, congelada en el ítem.
  *
  * Una clínica nueva con su única sede en USD (`E2E_REGION`): el catálogo está
- * en USD (3.600,00). La ADMIN (tope 100 %, motivo por encima del 10 %):
- *   - Plan en VES: al bajar el precio a 80 el formulario del ítem NO pide el
- *     motivo ni avisa «cuenta como descuento»; dice la referencia en USD y que
- *     no cuenta. El ítem se guarda sin firma de descuento.
+ * en USD (100,00) y la clínica usa tasa MANUAL (400 Bs./USD, sembrada: la CI
+ * no tiene proveedor). La ADMIN (tope 100 %, motivo por encima del 10 %):
+ *   - Plan en VES: el precio se precarga convertido (40.000,00 Bs.) con la
+ *     nota del catálogo en USD y la tasa; al bajarlo a 35.000 (12,5 %) avisa
+ *     «cuenta como descuento» y pide el motivo; el ítem guarda la foto.
  *   - Plan en USD (misma moneda): igual que antes (SEC-041): aviso y motivo.
- *   - Informe de descuentos: sale la rebaja en USD y la de convenio (SEC-047,
- *     su frase larga sin desbordar a 390 px), nunca el ítem en VES.
+ *   - Informe de descuentos: la fila en VES con la rebaja, el catálogo en USD
+ *     y la tasa; la rebaja en USD y la de convenio (SEC-047, sin desbordar a
+ *     390 px). El periodo se fija alrededor de los ítems (H3 de DX-513).
  * En escritorio (1440 px) y en móvil (390 px, sin scroll horizontal).
  */
 // Revisión H2: 8 caracteres, como `discounts.spec.ts`, para que el ancho del
@@ -33,9 +35,12 @@ const suffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID())
 const subdomain = `dto-moneda-${suffix}`.slice(0, 40);
 const origin = tenantOrigin(subdomain);
 const password = 'Password123!';
-const admin = { fullName: 'Ana Titular', email: `ana.dx513.${suffix}@example.com` };
+const admin = { fullName: 'Ana Titular', email: `ana.dx513b.${suffix}@example.com` };
 const procedureLabel = `Corona DX513 ${suffix}`.slice(0, 40);
-const CATALOG_PRICE = 3600;
+const CATALOG_PRICE = 100;
+/** Tasa MANUAL de la clínica: Bs. por 1 USD. */
+const VES_RATE = 400;
+const CONVERTED = CATALOG_PRICE * VES_RATE;
 const PRICE_NOTICE = 'Precio por debajo del de catálogo: cuenta como descuento.';
 
 const sedeFmt = regionalFormat(E2E_REGION);
@@ -52,6 +57,7 @@ const sedeDay = (at: Date) =>
 
 let session: ApiSession;
 let procedureId = '';
+let rateDay = '';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -64,6 +70,14 @@ test.beforeAll(async ({ request }) => {
     password,
   });
   expect(E2E_REGION.currency).toBe('USD');
+  // DX-513-bis: la tasa del día de la sede, registrada por la ADMIN.
+  rateDay = sedeDay(new Date());
+  const settings = await request.put(`${API_URL}/exchange/settings`, {
+    headers: session.headers,
+    data: { source: 'MANUAL' },
+  });
+  expect(settings.ok(), await settings.text()).toBeTruthy();
+  await apiPost(request, session, '/exchange/manual-rates', { date: rateDay, currency: 'VES', rate: VES_RATE });
   ({ id: procedureId } = await apiPost<{ id: string }>(request, session, '/catalog/items', {
     code: `dx513-${suffix}`.slice(0, 30),
     kind: 'PROCEDURE',
@@ -88,7 +102,11 @@ async function patientWithPlan(page: Page, tag: string, currency: string): Promi
   return { patientId, planId };
 }
 
-async function openForm(page: Page, patientId: string): Promise<{ panel: Locator; price: Locator }> {
+async function openForm(
+  page: Page,
+  patientId: string,
+  prefilled: number = CATALOG_PRICE,
+): Promise<{ panel: Locator; price: Locator }> {
   await page.goto(`${origin}/patients/${patientId}?tab=treatment-plans`);
   const panel = page.locator('#tabpanel-treatment-plans');
   await expect(panel.getByRole('heading', { name: 'Detalle del plan' })).toBeVisible({ timeout: 15_000 });
@@ -96,22 +114,31 @@ async function openForm(page: Page, patientId: string): Promise<{ panel: Locator
   await panel.getByLabel('Buscar en el catálogo').fill(procedureLabel);
   await panel.getByRole('radio', { name: procedureLabel }).check();
   const price = panel.getByLabel('Precio', { exact: true });
-  await expect(price).toHaveValue(String(CATALOG_PRICE), { timeout: 10_000 });
+  await expect(price).toHaveValue(String(prefilled), { timeout: 10_000 });
   return { panel, price };
 }
 
 async function planItems(page: Page, planId: string) {
   const res = await page.request.get(`${API_URL}/treatment-plans/${planId}`, { headers: session.headers });
   expect(res.ok()).toBeTruthy();
-  return ((await res.json()) as { items: { price: number; discountById: string | null; catalogCurrency: string | null }[] })
-    .items;
+  return (
+    (await res.json()) as {
+      items: {
+        price: number;
+        discountById: string | null;
+        catalogCurrency: string | null;
+        referencePriceInPlan: number | null;
+        referenceRate: { fromPerBase: number; toPerBase: number; source: string; rateDate: string } | null;
+      }[];
+    }
+  ).items;
 }
 
 for (const viewport of [
   { name: 'escritorio', width: 1440, height: 900 },
   { name: 'móvil', width: 390, height: 844 },
 ]) {
-  test(`plan en VES con el catálogo en USD: ni motivo ni informe; en USD, como siempre (${viewport.name})`, async ({ page }) => {
+  test(`plan en VES con el catálogo en USD: referencia convertida, motivo e informe con la tasa; en USD, como siempre (${viewport.name})`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const tag = `${suffix}${viewport.width}`;
     await loginAs(page, origin, admin.email, password);
@@ -119,21 +146,30 @@ for (const viewport of [
     // día antes del primero y uno después del último), nunca «el mes hasta
     // hoy»: un test que cruce la medianoche de fin de mes no los pierde.
     const seededFrom = new Date();
+    const rateText = `tasa 1 USD = ${sedeFmt.number(VES_RATE, { min: 0, max: 4 })} VES del ${sedeFmt.civilDate(rateDay)}, manual`;
 
-    // --- Plan en VES: 80 VES frente a 3.600 USD no es un descuento.
+    // --- Plan en VES: 100 USD a 400 = 40.000 Bs., precargado y con la nota.
     const ves = await patientWithPlan(page, `v${tag}`, 'VES');
-    const vesForm = await openForm(page, ves.patientId);
-    await vesForm.price.fill('80');
-    const note = vesForm.panel.locator('#tp-price-below-catalog');
-    await expect(note).toHaveText(
-      `Precio de catálogo: ${sede(CATALOG_PRICE, 'USD')}, en otra moneda y sin convertir. No cuenta como descuento: ni pide motivo ni sale en el informe de descuentos.`,
+    const vesForm = await openForm(page, ves.patientId, CONVERTED);
+    const converted = vesForm.panel.locator('#tp-price-converted');
+    await expect(converted).toHaveText(
+      `Catálogo: ${sede(CATALOG_PRICE, 'USD')} ≈ ${sede(CONVERTED, 'VES')} (${rateText}).`,
     );
-    await expect(vesForm.panel.getByText(PRICE_NOTICE, { exact: true })).toHaveCount(0);
-    await expect(vesForm.panel.getByLabel(/^Motivo del descuento/)).toHaveCount(0);
+    // Bajarlo a 35.000 (12,5 %) cuenta como descuento y pide el motivo.
+    await vesForm.price.fill('35000');
+    await expect(vesForm.panel.getByText(PRICE_NOTICE, { exact: true })).toBeVisible();
+    await expect(vesForm.panel.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeVisible();
+    await vesForm.panel.getByLabel('Motivo del descuento', { exact: true }).selectOption('PROMOTION');
     if (viewport.width === 390) await expectNoHorizontalScroll(page);
     await vesForm.panel.getByRole('button', { name: 'Agregar ítem', exact: true }).click();
     await expect.poll(async () => (await planItems(page, ves.planId)).length, { timeout: 10_000 }).toBe(1);
-    expect((await planItems(page, ves.planId))[0]).toMatchObject({ price: 80, discountById: null, catalogCurrency: 'USD' });
+    expect((await planItems(page, ves.planId))[0]).toMatchObject({
+      price: 35000,
+      catalogCurrency: 'USD',
+      referencePriceInPlan: CONVERTED,
+      referenceRate: { fromPerBase: 1, toPerBase: VES_RATE, source: 'MANUAL', rateDate: rateDay },
+    });
+    expect((await planItems(page, ves.planId))[0].discountById).not.toBeNull();
 
     // --- Plan en USD (misma moneda): aviso y motivo, como SEC-041.
     const usd = await patientWithPlan(page, `u${tag}`, 'USD');
@@ -169,7 +205,8 @@ for (const viewport of [
 
     const seededTo = new Date();
 
-    // --- Informe: la rebaja en USD y la de convenio; el ítem en VES, no.
+    // --- Informe: la rebaja en VES con el catálogo en USD y la tasa; la de
+    // USD y la de convenio, como siempre.
     await page.goto(`${origin}/caja/descuentos`);
     await expect(page.getByRole('heading', { name: 'Descuentos', level: 1 })).toBeVisible({ timeout: 15_000 });
     await fillDateRange(
@@ -186,8 +223,11 @@ for (const viewport of [
     await expect(
       rows.filter({ hasText: `Monedau${tag}`.slice(0, 40) }).filter({ hasText: `Precio rebajado a ${sede(80, 'USD')}` }),
     ).toHaveCount(1);
-    await expect(rows.filter({ hasText: `Monedav${tag}`.slice(0, 40) })).toHaveCount(0);
-    await expect(page.getByTestId('discount-total-VES')).toHaveCount(0);
+    const vesRow = rows.filter({ hasText: `Monedav${tag}`.slice(0, 40) });
+    await expect(vesRow).toHaveCount(1);
+    await expect(vesRow).toContainText(`Precio rebajado a ${sede(35000, 'VES')}`);
+    await expect(vesRow).toContainText(`Catálogo ${sede(CATALOG_PRICE, 'USD')} · ${rateText}`);
+    await expect(page.getByTestId('discount-total-VES')).toHaveCount(1);
     const agreementLine = rows.filter({ hasText: `Monedac${tag}`.slice(0, 40) });
     await expect(agreementLine).toHaveCount(1);
     await expect(agreementLine).toContainText('Convenio «Cortesía empleados de la clínica 100 %');

@@ -16,10 +16,10 @@ import {
   needsReason,
   noDiscountAllowed,
   priceBelowCatalogCapMessage,
-  referenceInOtherCurrency,
   roleCapMessage,
   type DiscountRules,
 } from '@/lib/discounts/discount-rules';
+import { referenceRateMissingText, referenceRateText } from '@/lib/discounts/reference-rate';
 import type { ClinicRole } from '@/lib/me/me-api';
 import {
   addItem,
@@ -105,6 +105,17 @@ export function PlanItemForm({
   const [itemAmountErrors, setItemAmountErrors] = useState<{ price?: string; discount?: string }>({});
   const [addItemError, setAddItemError] = useState<string | null>(null);
 
+  // DX-513-bis (L5): el precio de catálogo crudo solo sirve de respaldo si está
+  // en la moneda del plan (o en una que no se sabe, como DX-513). En otra
+  // moneda conocida, sin el precio resuelto no hay cifra que proponer ni con
+  // la que medir la rebaja: el campo queda vacío y se dice que falló.
+  const catalogFallback = (id: string): number | null => {
+    const item = catalogById.get(id);
+    if (item?.defaultPrice == null) return null;
+    const currency = item.catalogCurrency ?? null;
+    return currency === null || currency === plan.currency ? item.defaultPrice : null;
+  };
+
   // DX-105: el precio resuelto de la prestación elegida para ESTE paciente
   // (convenio > lista de la sede > catálogo). Precarga el campo; si falla,
   // vuelve el precio de catálogo y el campo sigue editable.
@@ -115,11 +126,14 @@ export function PlanItemForm({
     currency: plan.currency,
     onSettled: (q) => {
       if (q) {
-        setPrice(q.price !== null ? String(q.price) : '');
+        // DX-513-bis: se propone la referencia en la moneda del plan (la del
+        // catálogo convertida con la tasa de hoy), nunca la cifra cruda de
+        // otra moneda; sin tasa, nada.
+        setPrice(q.referencePriceInPlan !== null ? String(q.referencePriceInPlan) : '');
         if (noDiscountAllowed(q)) setDiscount('');
       } else {
-        const fallback = catalogById.get(catalogItemId)?.defaultPrice;
-        setPrice(fallback != null ? String(fallback) : '');
+        const fallback = catalogFallback(catalogItemId);
+        setPrice(fallback !== null ? String(fallback) : '');
       }
       setPriceEdited(false);
     },
@@ -131,19 +145,30 @@ export function PlanItemForm({
   const addPriceLoading = priceQuote.status === 'loading';
   const addNoDiscount = noDiscountAllowed(quoteReady);
   // Referencia de la rebaja (R1): el precio resuelto, no el de catálogo.
-  const referencePrice = quoteReady ? quoteReady.price : (catalogById.get(catalogItemId)?.defaultPrice ?? null);
-  // DX-489 / DX-513: la referencia sale de una lista en la moneda del plan, o
-  // del catálogo en SU moneda (la que dice la API). Solo en otra moneda
-  // CONOCIDA bajar de ella no es un descuento: ni pide motivo ni topa el rol
-  // (como la API, `referenceInOtherCurrency`). Sin saberla, cuenta como hoy.
-  // B4 (DX-502): hasta que llega el precio resuelto no se sabe la moneda; se
-  // avisa como antes y decide la API.
-  const catalogInOtherCurrency =
-    quoteReady !== null && referenceInOtherCurrency(quoteReady.source, catalogCurrency, plan.currency);
+  // DX-513-bis: en la moneda del plan; si el catálogo está en otra moneda, ya
+  // convertido con la tasa de hoy (como la API, `referenceInPlan`), así que
+  // bajar de ella cuenta como descuento igual que en la misma moneda.
+  const referencePrice = quoteReady
+    ? quoteReady.referencePriceInPlan
+    : catalogFallback(catalogItemId);
   // DX-502: catálogo de moneda desconocida; la rebaja cuenta, pero su cifra no
   // se pinta en la moneda del plan.
   const catalogCurrencyUnknown = quoteReady?.source === 'CATALOG' && catalogCurrency === null;
-  const discountReference = catalogInOtherCurrency ? null : referencePrice;
+  const discountReference = referencePrice;
+  // DX-513-bis: hace falta una tasa de hoy y no la hay: la API respondería
+  // 422; se dice antes y no se envía.
+  const rateMissing = quoteReady?.rateMissing === true;
+  const rateMissingNotice =
+    rateMissing && quoteReady ? referenceRateMissingText(quoteReady.missingRateCurrency ?? catalogCurrency ?? '', plan.currency, role) : null;
+  // DX-513-bis: la referencia convertida, con la cifra original y la tasa.
+  const convertedNote =
+    quoteReady && quoteReady.rate && quoteReady.referenceCurrency && quoteReady.price !== null && quoteReady.referencePriceInPlan !== null
+      ? copy.referenceConverted(
+          sedeListPriceFormat(fmt)(quoteReady.price, quoteReady.referenceCurrency) ?? '',
+          sedeMoney(quoteReady.referencePriceInPlan, plan.currency, fmt),
+          referenceRateText(quoteReady.rate, quoteReady.referenceCurrency, plan.currency, fmt),
+        )
+      : null;
 
   function handleProcedureChange(nextCatalogItemId: string) {
     setCatalogItemId(nextCatalogItemId);
@@ -151,8 +176,8 @@ export function PlanItemForm({
     // the field stays editable afterwards.
     // El precio resuelto del paciente llega de `usePriceQuote`; hasta
     // entonces el campo está en espera.
-    const item = catalogById.get(nextCatalogItemId);
-    setPrice(item?.defaultPrice != null ? String(item.defaultPrice) : '');
+    const fallback = catalogFallback(nextCatalogItemId);
+    setPrice(fallback !== null ? String(fallback) : '');
     setPriceEdited(false);
   }
 
@@ -175,6 +200,7 @@ export function PlanItemForm({
       setAddItemValidationError(copy.selectProcedurePrompt);
       return;
     }
+    if (rateMissing) return;
 
     const selectedSurfaces = SURFACE_ORDER.filter((s) => surfaces[s]);
     const itemCurrency = plan.currency;
@@ -275,14 +301,6 @@ export function PlanItemForm({
       ? effectiveDiscount(discountReference, addPrice, addDiscountValue)
       : null;
   const addBelowCatalog = addEffective !== null && addEffective.priceReduction > 0;
-  // DX-513: por debajo de un catálogo en otra moneda (sin convertir) no hay
-  // rebaja, pero se dice cuál es la referencia y que no cuenta.
-  const addBelowOtherCurrency =
-    catalogInOtherCurrency &&
-    addEffective !== null &&
-    addPrice !== null &&
-    addCatalogPrice !== null &&
-    addPrice < addCatalogPrice;
   const addDiscounted = addEffective ? addEffective.total > 0 : addDiscountValue > 0;
   const addReasonRequired =
     discountRules !== null &&
@@ -346,7 +364,8 @@ export function PlanItemForm({
               [
                 itemAmountErrors.price ? fieldErrorId('tp-price') : null,
                 quoteReady && priceQuote.status === 'ready' ? 'tp-price-source' : null,
-                addBelowCatalog || addBelowOtherCurrency ? 'tp-price-below-catalog' : null,
+                convertedNote ? 'tp-price-converted' : null,
+                addBelowCatalog ? 'tp-price-below-catalog' : null,
               ]
                 .filter(Boolean)
                 .join(' ') || undefined
@@ -366,10 +385,16 @@ export function PlanItemForm({
               listPrice={(value) => formatListPrice(value, catalogCurrency, sedeListPriceFormat(fmt))}
             />
           ) : null}
+          {/* DX-513-bis: nota neutra con la cifra del catálogo en su
+              moneda, la convertida y la tasa de hoy. */}
+          {convertedNote ? (
+            <p id="tp-price-converted" className="t-caption text-muted tabular-nums">
+              {convertedNote}
+            </p>
+          ) : null}
           {/* SEC-041: aviso, no bloqueo; la API decide con el
-              tope del rol. DX-513: frente a un catálogo en otra
-              moneda conocida no hay rebaja; una nota neutra dice
-              la referencia y que no cuenta. */}
+              tope del rol, también frente a la referencia
+              convertida (DX-513-bis). */}
           <p id="tp-price-below-catalog" role="status" className="t-caption text-warning-text">
             {addBelowCatalog && addEffective && addCatalogPrice !== null ? (
               <>
@@ -385,12 +410,6 @@ export function PlanItemForm({
                   </span>
                 ) : null}
               </>
-            ) : addBelowOtherCurrency && addCatalogPrice !== null && catalogCurrency !== null ? (
-              <span className="block text-muted">
-                {copy.priceBelowCatalogOtherCurrency(
-                  sedeListPriceFormat(fmt)(addCatalogPrice, catalogCurrency),
-                )}
-              </span>
             ) : null}
           </p>
         </FormField>
@@ -461,13 +480,14 @@ export function PlanItemForm({
         />
       </FormField>
 
+      {rateMissingNotice && <InlineError>{rateMissingNotice}</InlineError>}
       {addItemValidationError && <InlineError>{addItemValidationError}</InlineError>}
       {addItemError && <InlineError>{addItemError}</InlineError>}
 
       <Button
         type="submit"
         variant={submitPrimary ? 'default' : 'secondary'}
-        disabled={addItemSubmitting || addPriceLoading}
+        disabled={addItemSubmitting || addPriceLoading || rateMissing}
         className="self-start"
       >
         {addItemSubmitting ? copy.addItemSubmitting : copy.addItemSubmit}

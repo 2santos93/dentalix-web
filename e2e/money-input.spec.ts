@@ -66,7 +66,13 @@ test.beforeAll(async ({ request }) => {
   }
 });
 
-/** Un plan aceptado en `currency`, en dos cuotas mensuales desde hace 400 días. */
+/**
+ * Un plan aceptado en `currency`, en dos cuotas mensuales desde hace 400 días.
+ * DX-513-bis: el ítem es libre (sin precio de catálogo) con el precio
+ * explícito: el plan en VES de una sede en USD no tiene tasa en esta clínica
+ * y una referencia de catálogo en USD respondería 422. El importe del plan no
+ * cambia (400 USD y 400.000 VES), que es lo que el spec mide.
+ */
 async function seedOverduePlan(
   request: APIRequestContext,
   patientId: string,
@@ -77,7 +83,6 @@ async function seedOverduePlan(
     kind: 'PROCEDURE',
     labelEs: `Corona ${p.tag} ${suffix.slice(0, 6)}`,
     color: '#3366CC',
-    defaultPrice: p.price,
   });
   const plan = await apiPost<{ id: string }>(request, session, `/patients/${patientId}/treatment-plans`, {
     currency: p.currency,
@@ -85,6 +90,7 @@ async function seedOverduePlan(
   const item = await apiPost<{ id: string }>(request, session, `/treatment-plans/${plan.id}/items`, {
     toothNumber: '11',
     catalogItemId: catalog.id,
+    price: p.price,
   });
   const accept = await request.patch(`${API_URL}/treatment-plans/${plan.id}/items/${item.id}`, {
     headers: session.headers,

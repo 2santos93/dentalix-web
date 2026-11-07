@@ -13081,6 +13081,25 @@ export interface components {
         };
         /** @enum {string} */
         TreatmentPlanRejectionReason: "PRICE" | "FEAR" | "SECOND_OPINION" | "OTHER_OPTION_ACCEPTED" | "OTHER";
+        ReferenceRateDto: {
+            /**
+             * @description Unidades de la moneda de la referencia (`referenceCurrency`) por 1 USD.
+             * @example 880
+             */
+            fromPerBase: number;
+            /**
+             * @description Unidades de la moneda del plan por 1 USD.
+             * @example 1
+             */
+            toPerBase: number;
+            /** @description De dónde salió la tasa: del proveedor o la manual de la clínica. */
+            source: components["schemas"]["ExchangeRateSource"];
+            /**
+             * @description Día civil (AAAA-MM-DD) de la tasa usada; con tasa manual puede ser anterior al del ítem (DX-384).
+             * @example 2026-11-07
+             */
+            rateDate: string;
+        };
         TreatmentPlanItemDto: {
             /** @default 1 */
             visit: number;
@@ -13106,6 +13125,14 @@ export interface components {
              * @enum {string|null}
              */
             priceSource: "CATALOG" | "PRICE_LIST" | "AGREEMENT_PERCENT" | "AGREEMENT_PRICE_LIST" | null;
+            /** @description DX-513-bis: moneda de `catalogPrice` al escribir el ítem (la del plan para las listas, la del catálogo para el resto). Null si no se supo, en los libres y en los anteriores sin foto. */
+            referenceCurrency: string | null;
+            /** @description DX-513-bis: `catalogPrice` en la moneda del plan, congelado al escribir el ítem (convertido con `referenceRate` si su moneda era otra). Es la referencia del descuento: un precio por debajo cuenta (tope por rol y motivo). Null en los libres y en los anteriores sin foto (se miden como en DX-513). */
+            referencePriceInPlan: number | null;
+            /** @description DX-513-bis: `basePrice` en la moneda del plan, congelado con la referencia. Null si no hay o no se puede expresar sin otra tasa. */
+            basePriceInPlan: number | null;
+            /** @description DX-513-bis: la tasa con que se convirtió la referencia; null si no hizo falta. */
+            referenceRate: components["schemas"]["ReferenceRateDto"] | null;
             /**
              * Format: uuid
              * @description DX-105: convenio con el que se resolvió el precio
@@ -13563,6 +13590,16 @@ export interface components {
             allowDiscount: boolean;
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
+            /** @description DX-513-bis: moneda de `price` (la del plan para las listas, la del catálogo para el resto). Null si no se sabe o no hay precio. */
+            referenceCurrency: string | null;
+            /** @description DX-513-bis: `price` en la moneda del plan (convertido con `rate` si está en otra): el precio que se propone y la referencia del descuento. Null sin precio o sin tasa (`rateMissing`). */
+            referencePriceInPlan: number | null;
+            /** @description DX-513-bis: la tasa de hoy en la sede con la que se convertiría; null si no hace falta. */
+            rate: components["schemas"]["ReferenceRateDto"] | null;
+            /** @description DX-513-bis: hace falta una tasa (referencia en otra moneda) y no la hay hoy: el alta respondería 422 `DISCOUNT_REFERENCE_RATE_MISSING`. */
+            rateMissing: boolean;
+            /** @description DX-513-bis: con `rateMissing`, la moneda sin tasa (la que falta registrar); null si no falta. */
+            missingRateCurrency: string | null;
         };
         DiscountMaxPercentByRoleDto: {
             /** @description Administración (por defecto 100) */
@@ -13642,11 +13679,21 @@ export interface components {
             procedure: string;
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
-            /** @description SEC-041: precio de catálogo al dar de alta el ítem (null = ítem libre) */
+            /** @description SEC-041: precio de catálogo al dar de alta el ítem (null = ítem libre). DX-513-bis: en SU moneda (`referenceCurrency`), que puede no ser la del plan */
             catalogPrice: number | null;
+            /** @description DX-502: moneda de `basePrice` (la del catálogo al dar de alta el ítem); null si no se supo. En un ítem de lista no es la de `catalogPrice` */
+            catalogCurrency: string | null;
+            /** @description DX-513-bis: moneda de `catalogPrice` (la del plan para las listas, la del catálogo para el resto); null si no se sabe o el ítem es libre */
+            referenceCurrency: string | null;
+            /** @description DX-513-bis: `catalogPrice` en la moneda del plan, congelado al escribir el ítem (convertido con `rate` si estaba en otra moneda): la rebaja se mide frente a él. Null en los ítems anteriores sin foto (se miden como en DX-513) */
+            referencePriceInPlan: number | null;
+            /** @description DX-513-bis: `basePrice` en la moneda del plan, congelado con la referencia (la rebaja de convenio se mide con él) */
+            basePriceInPlan: number | null;
+            /** @description DX-513-bis: la tasa congelada con que se convirtió la referencia; null si no hizo falta. El informe nunca convierte al consultar */
+            rate: components["schemas"]["ReferenceRateDto"] | null;
             /** @description Precio pactado del ítem */
             price: number;
-            /** @description SEC-041: rebaja del precio frente al de catálogo (0 si no la hay). DX-513: 0 también si la referencia está en otra moneda conocida (el catálogo en una moneda distinta de la del plan, sin convertir); con la moneda del catálogo desconocida cuenta */
+            /** @description SEC-041: rebaja del precio frente al de catálogo (0 si no la hay), en la moneda del plan. DX-513-bis: frente a `referencePriceInPlan` (la referencia convertida y congelada) si el ítem la tiene; en un ítem anterior sin ella, DX-513: 0 si la referencia está en otra moneda conocida; con la moneda del catálogo desconocida cuenta */
             priceReduction: number;
             /** @description Descuento del ítem (campo `discount`) */
             itemDiscount: number;
@@ -29093,7 +29140,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED); DX-513: la moneda no cambia si con ella un ítem pasaría a contar como descuento sin firmar, o si una rebaja frente al catálogo que cuenta hoy dejaría de verse en el informe de descuentos (nada cambia: ni el plan ni sus ítems); plan aceptado con firma: no cambia de moneda ni vuelve atrás (DX-012); otra opción del grupo ya aceptada; la moneda no cambia si el plan tiene abonos vivos, un plan de cuotas activo o está cerrado (DX-109), ni si tiene asientos de saldo a favor (traspaso dado o recibido, o devolución), aunque no tenga abonos: code PLAN_CURRENCY_LOCKED_BY_CREDIT (DX-438). SEC-050: el plan que lleva un cargo vigente por inasistencia no se cancela ni cambia de moneda (completarlo sí). Aceptar pasa los ítems propuestos a aceptados, igual que la aceptación firmada, y cancela el plan de cuotas activo de las hermanas que rechaza; cancelar cancela también el plan de cuotas activo */
+            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED); DX-513-bis: la moneda no cambia si el plan tiene algún ítem vivo con precio de referencia (catálogo, lista o convenio): code PLAN_CURRENCY_LOCKED_BY_PRICED_ITEMS (los ítems libres no bloquean); DX-513: la moneda no cambia si con ella un ítem pasaría a contar como descuento sin firmar, o si una rebaja frente al catálogo que cuenta hoy dejaría de verse en el informe de descuentos (nada cambia: ni el plan ni sus ítems); plan aceptado con firma: no cambia de moneda ni vuelve atrás (DX-012); otra opción del grupo ya aceptada; la moneda no cambia si el plan tiene abonos vivos, un plan de cuotas activo o está cerrado (DX-109), ni si tiene asientos de saldo a favor (traspaso dado o recibido, o devolución), aunque no tenga abonos: code PLAN_CURRENCY_LOCKED_BY_CREDIT (DX-438). SEC-050: el plan que lleva un cargo vigente por inasistencia no se cancela ni cambia de moneda (completarlo sí). Aceptar pasa los ítems propuestos a aceptados, igual que la aceptación firmada, y cancela el plan de cuotas activo de las hermanas que rechaza; cancelar cancela también el plan de cuotas activo */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -29293,7 +29340,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo */
+            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo. DX-513-bis: `code` DISCOUNT_REFERENCE_RATE_MISSING si el precio de catálogo está en otra moneda y la clínica no tiene la tasa de hoy (el mensaje nombra la moneda y el día con el formato de la sede; a quien gestiona las tasas lo remite a Ajustes › Tasa de cambio y al resto le pide que avise a un administrador); no se guarda nada */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -29350,7 +29397,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo */
+            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo. DX-513-bis: `code` DISCOUNT_REFERENCE_RATE_MISSING si el precio de catálogo está en otra moneda y la clínica no tiene la tasa de hoy (el mensaje nombra la moneda y el día con el formato de la sede; a quien gestiona las tasas lo remite a Ajustes › Tasa de cambio y al resto le pide que avise a un administrador); no se guarda nada */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -29440,7 +29487,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo */
+            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo. DX-513-bis: `code` DISCOUNT_REFERENCE_RATE_MISSING si el precio de catálogo está en otra moneda y la clínica no tiene la tasa de hoy (el mensaje nombra la moneda y el día con el formato de la sede; a quien gestiona las tasas lo remite a Ajustes › Tasa de cambio y al resto le pide que avise a un administrador); no se guarda nada */
             422: {
                 headers: {
                     [name: string]: unknown;

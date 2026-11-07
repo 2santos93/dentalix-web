@@ -57,6 +57,11 @@ function row(overrides: Partial<DiscountReportItem> = {}): DiscountReportItem {
     procedure: 'Corona libre de metal',
     currency: 'USD',
     catalogPrice: null,
+    catalogCurrency: null,
+    referenceCurrency: null,
+    referencePriceInPlan: null,
+    basePriceInPlan: null,
+    rate: null,
     price: 1200000,
     priceReduction: 0,
     itemDiscount: 180000,
@@ -205,6 +210,38 @@ describe('DiscountReportView (DX-204)', () => {
     expect(within(tableRow).getByText(/Precio rebajado a 800\.000,00/)).toBeInTheDocument();
   });
 
+  it('DX-513-bis: una rebaja frente al catálogo en otra moneda dice la cifra del catálogo en su moneda y la tasa congelada', async () => {
+    mockedReport.mockResolvedValue(
+      report([
+        row({
+          currency: 'VES',
+          catalogPrice: 4.5,
+          referenceCurrency: 'USD',
+          referencePriceInPlan: 3960,
+          rate: { fromPerBase: 1, toPerBase: 880, source: 'MANUAL', rateDate: '2026-10-10' },
+          price: 3900,
+          priceReduction: 60,
+          itemDiscount: 0,
+          discount: 60,
+          percent: 1.52,
+        }),
+      ]),
+    );
+    render(<DiscountReportView token="tok" />);
+    const tableRow = await findRow();
+    expect(within(tableRow).getByText(/Precio rebajado a 3\.?900,00 VES/)).toBeInTheDocument();
+    expect(within(tableRow).getByText(/^Catálogo 4,50 USD · tasa 1 USD = 880 VES del 10\/10\/2026, manual$/)).toBeInTheDocument();
+  });
+
+  it('DX-513-bis: sin tasa (misma moneda), no hay línea de catálogo convertido', async () => {
+    mockedReport.mockResolvedValue(
+      report([row({ catalogPrice: 1000000, referenceCurrency: 'USD', referencePriceInPlan: 1000000, price: 800000, priceReduction: 200000, discount: 200000, itemDiscount: 0, percent: 20 })]),
+    );
+    render(<DiscountReportView token="tok" />);
+    const tableRow = await findRow();
+    expect(within(tableRow).queryByText(/^Catálogo /)).not.toBeInTheDocument();
+  });
+
   it('SEC-047: la rebaja de convenio sale aparte, con quién asignó el convenio y quién creó el ítem', async () => {
     const agreed = row({
       priceSource: 'AGREEMENT_PERCENT',
@@ -249,6 +286,63 @@ describe('DiscountReportView (DX-204)', () => {
     expect(within(tableRow).getByTestId('discount-author')).toHaveTextContent('Dr. Owner');
     // Sin descuento propio: no se pinta un «−0» como si lo hubiera.
     expect(within(tableRow).queryByText(/^−\s?0,00/)).not.toBeInTheDocument();
+  });
+
+  // M1 (DX-513-bis): convenio por % con el catálogo en otra moneda. La
+  // rebaja y su % se miden sobre la base CONVERTIDA (`basePriceInPlan`); la
+  // base cruda está en VES y nunca se pinta con la moneda del plan.
+  describe('M1: convenio por % entre monedas', () => {
+    const crossAgreement = (overrides: Partial<DiscountReportItem> = {}) =>
+      row({
+        currency: 'USD',
+        priceSource: 'AGREEMENT_PERCENT',
+        agreementName: 'Seguros Caracas',
+        catalogCurrency: 'VES',
+        referenceCurrency: 'VES',
+        catalogPrice: 3240,
+        basePrice: 3600,
+        referencePriceInPlan: 3.68,
+        basePriceInPlan: 4.09,
+        rate: { fromPerBase: 880, toPerBase: 1, source: 'MANUAL', rateDate: '2026-10-10' },
+        price: 3.68,
+        priceReduction: 0,
+        itemDiscount: 0,
+        discount: 0,
+        percent: 0,
+        reason: null,
+        reasonNote: null,
+        agreementReduction: 0.41,
+        agreementPercent: 10.02,
+        ...overrides,
+      });
+
+    it('la base del % es la convertida, en la moneda del plan', async () => {
+      mockedReport.mockResolvedValue(
+        report([crossAgreement()], {
+          totals: [],
+          agreementTotals: [{ currency: 'USD', items: 1, reduction: 0.41 }],
+        }),
+      );
+      render(<DiscountReportView token="tok" />);
+      const tableRow = await findRow();
+      const line = within(tableRow).getByText(/Convenio «Seguros Caracas»/);
+      expect(line).toHaveTextContent(/de 4,09\sUSD\)$/);
+      expect(line).not.toHaveTextContent(/3\.?600/);
+    });
+
+    it('sin base convertida, la base va con SU moneda (VES), nunca con la del plan', async () => {
+      mockedReport.mockResolvedValue(
+        report([crossAgreement({ basePriceInPlan: null })], {
+          totals: [],
+          agreementTotals: [{ currency: 'USD', items: 1, reduction: 0.41 }],
+        }),
+      );
+      render(<DiscountReportView token="tok" />);
+      const tableRow = await findRow();
+      const line = within(tableRow).getByText(/Convenio «Seguros Caracas»/);
+      expect(line).toHaveTextContent(/de 3\.?600,00\sVES\)$/);
+      expect(line).not.toHaveTextContent(/3\.?600,00\sUSD/);
+    });
   });
 
   it('B5: sin quien asignó el convenio, el autor es quien creó el ítem', async () => {
