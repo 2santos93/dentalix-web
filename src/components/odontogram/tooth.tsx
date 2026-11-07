@@ -167,7 +167,7 @@ export function Tooth({
       onFocus={onFocusTooth}
       className={cn(
         'min-w-6 rounded px-1 text-xs font-medium tabular-nums transition-colors',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-canvas',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text focus-visible:ring-offset-1 focus-visible:ring-offset-canvas',
         selected ? 'bg-primary text-primary-foreground' : 'text-ink hover:bg-surface-sunken',
       )}
     >
@@ -305,7 +305,7 @@ export function UneruptedTooth({
       onFocus={onFocusTooth}
       className={cn(
         'min-w-6 rounded px-1 text-xs font-medium tabular-nums transition-colors',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-canvas',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text focus-visible:ring-offset-1 focus-visible:ring-offset-canvas',
         selected ? 'bg-primary text-primary-foreground' : 'text-muted hover:bg-surface-sunken',
       )}
     >

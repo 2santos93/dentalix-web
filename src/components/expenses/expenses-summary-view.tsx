@@ -331,7 +331,7 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
                                     : expensesSummaryCopy.showBreakdown(month, row.locationName, expenses)
                                 }
                                 onClick={() => toggle(key)}
-                                className="inline-flex min-h-11 items-center gap-1 rounded-md px-1 tabular-nums hover:text-primary-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:min-h-8"
+                                className="inline-flex min-h-11 items-center gap-1 rounded-md px-1 tabular-nums hover:text-primary-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text sm:min-h-8"
                               >
                                 {open ? (
                                   <ChevronDown aria-hidden className="size-4" />

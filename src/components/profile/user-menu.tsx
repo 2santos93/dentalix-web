@@ -263,7 +263,7 @@ export function UserMenu({
             aria-label={[!avatarUrl && name ? initials(name) : null, copy.account, name].filter(Boolean).join(' · ')}
             title={isRail ? (name ?? copy.account) : undefined}
             className={cn(
-              'flex items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+              'flex items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text',
               isRail ? 'size-10 justify-center' : 'size-11 justify-center',
             )}
           >
@@ -282,7 +282,7 @@ export function UserMenu({
         <button
           type="button"
           className={cn(
-            'flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+            'flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text',
             open ? 'border-primary-border bg-primary-subtle' : 'border-border hover:bg-surface-sunken',
           )}
         >

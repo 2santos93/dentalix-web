@@ -210,7 +210,7 @@ export function AcceptPlanModal({
                 href={planQuotePrintHref(patientId, planId)}
                 target="_blank"
                 rel="noopener"
-                className="inline-flex items-center gap-1 font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="inline-flex items-center gap-1 font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
               >
                 {copy.viewFull}
                 <ExternalLink aria-hidden className="size-3.5" />

@@ -208,7 +208,7 @@ function LineRow({
                 onOpen(row);
               }}
               aria-label={productionCopy.openRow(row.code, row.label, row.currency)}
-              className="flex min-h-8 flex-col items-start rounded text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              className="flex min-h-8 flex-col items-start rounded text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
             >
               <span className="text-xs tabular-nums text-muted">{row.code}</span>{' '}
               <span className="font-medium text-primary-text underline-offset-2 hover:underline">{row.label}</span>
@@ -303,7 +303,7 @@ function ProductionTable({
       ref={frame}
       className={cn(
         'max-h-[70vh] min-w-0 max-w-full overflow-auto rounded-xl border border-border bg-surface',
-        'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary',
+        'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary-text',
       )}
       {...(scrollable
         ? {

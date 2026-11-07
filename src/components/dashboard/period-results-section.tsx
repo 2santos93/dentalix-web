@@ -182,7 +182,7 @@ export function PeriodResultsSection({
           <button
             type="button"
             onClick={currencyState.reset}
-            className="min-h-10 self-start rounded-sm text-sm font-medium text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:self-end pointer-coarse:min-h-11"
+            className="min-h-10 self-start rounded-sm text-sm font-medium text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text sm:self-end pointer-coarse:min-h-11"
           >
             {copy.backToDefault(currencyState.defaultCurrency)}
           </button>
