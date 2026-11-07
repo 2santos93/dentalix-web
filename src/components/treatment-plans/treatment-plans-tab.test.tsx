@@ -2695,6 +2695,19 @@ describe('TreatmentPlansTab', () => {
           expect(mockedAddItem).not.toHaveBeenCalled();
         });
 
+        it('L7: sin tasa, la asistente lee que se lo pida a un administrador', async () => {
+          mockedGetPriceQuote.mockResolvedValue(
+            vesQuote({ referencePriceInPlan: null, rate: null, rateMissing: true, missingRateCurrency: 'VES' }),
+          );
+          await openForm(assistantToken);
+          expect(
+            await screen.findByText(
+              'No hay tasa de VES para hoy: pide a un administrador que registre la tasa del día o una lista de precios en USD.',
+            ),
+          ).toBeInTheDocument();
+          expect(screen.queryByText(/regístrala en Ajustes/)).not.toBeInTheDocument();
+        });
+
         it('lista de la sede en USD con el catálogo en VES: sin tasa, la rebaja frente a la lista cuenta', async () => {
           mockedGetPriceQuote.mockResolvedValue(
             vesQuote({ price: 100, referenceCurrency: 'USD', referencePriceInPlan: 100, rate: null, source: 'PRICE_LIST' }),
@@ -2951,6 +2964,22 @@ describe('TreatmentPlansTab', () => {
           catalogItemId: 'cat-1',
         }),
       );
+    });
+
+    it('L5 (DX-513-bis): si falla el precio y el catálogo está en otra moneda, no precarga la cifra cruda ni la toma como referencia', async () => {
+      mockedListCatalogItems.mockResolvedValue(catalog.map((c) => ({ ...c, catalogCurrency: 'VES' })));
+      mockedGetPriceQuote.mockRejectedValueOnce(new Error('boom'));
+      const user = await openForm();
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+
+      expect(await screen.findByText('No pudimos traer el precio')).toBeInTheDocument();
+      const price = screen.getByLabelText<HTMLInputElement>(/^precio$/i);
+      expect(price).toBeEnabled();
+      expect(price.value).toBe('');
+      // Sin referencia en la moneda del plan, 40.000 no se compara con los
+      // 50.000 VES: no hay aviso inventado.
+      await user.type(price, '40000');
+      expect(document.getElementById('tp-price-below-catalog')).toBeEmptyDOMElement();
     });
 
     it('«Reintentar» vuelve a pedir el precio y lo precarga', async () => {

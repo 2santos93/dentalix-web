@@ -105,6 +105,17 @@ export function PlanItemForm({
   const [itemAmountErrors, setItemAmountErrors] = useState<{ price?: string; discount?: string }>({});
   const [addItemError, setAddItemError] = useState<string | null>(null);
 
+  // DX-513-bis (L5): el precio de catálogo crudo solo sirve de respaldo si está
+  // en la moneda del plan (o en una que no se sabe, como DX-513). En otra
+  // moneda conocida, sin el precio resuelto no hay cifra que proponer ni con
+  // la que medir la rebaja: el campo queda vacío y se dice que falló.
+  const catalogFallback = (id: string): number | null => {
+    const item = catalogById.get(id);
+    if (item?.defaultPrice == null) return null;
+    const currency = item.catalogCurrency ?? null;
+    return currency === null || currency === plan.currency ? item.defaultPrice : null;
+  };
+
   // DX-105: el precio resuelto de la prestación elegida para ESTE paciente
   // (convenio > lista de la sede > catálogo). Precarga el campo; si falla,
   // vuelve el precio de catálogo y el campo sigue editable.
@@ -121,8 +132,8 @@ export function PlanItemForm({
         setPrice(q.referencePriceInPlan !== null ? String(q.referencePriceInPlan) : '');
         if (noDiscountAllowed(q)) setDiscount('');
       } else {
-        const fallback = catalogById.get(catalogItemId)?.defaultPrice;
-        setPrice(fallback != null ? String(fallback) : '');
+        const fallback = catalogFallback(catalogItemId);
+        setPrice(fallback !== null ? String(fallback) : '');
       }
       setPriceEdited(false);
     },
@@ -139,7 +150,7 @@ export function PlanItemForm({
   // bajar de ella cuenta como descuento igual que en la misma moneda.
   const referencePrice = quoteReady
     ? quoteReady.referencePriceInPlan
-    : (catalogById.get(catalogItemId)?.defaultPrice ?? null);
+    : catalogFallback(catalogItemId);
   // DX-502: catálogo de moneda desconocida; la rebaja cuenta, pero su cifra no
   // se pinta en la moneda del plan.
   const catalogCurrencyUnknown = quoteReady?.source === 'CATALOG' && catalogCurrency === null;
@@ -148,7 +159,7 @@ export function PlanItemForm({
   // 422; se dice antes y no se envía.
   const rateMissing = quoteReady?.rateMissing === true;
   const rateMissingNotice =
-    rateMissing && quoteReady ? referenceRateMissingText(quoteReady.missingRateCurrency ?? catalogCurrency ?? '', plan.currency) : null;
+    rateMissing && quoteReady ? referenceRateMissingText(quoteReady.missingRateCurrency ?? catalogCurrency ?? '', plan.currency, role) : null;
   // DX-513-bis: la referencia convertida, con la cifra original y la tasa.
   const convertedNote =
     quoteReady && quoteReady.rate && quoteReady.referenceCurrency && quoteReady.price !== null && quoteReady.referencePriceInPlan !== null
@@ -165,8 +176,8 @@ export function PlanItemForm({
     // the field stays editable afterwards.
     // El precio resuelto del paciente llega de `usePriceQuote`; hasta
     // entonces el campo está en espera.
-    const item = catalogById.get(nextCatalogItemId);
-    setPrice(item?.defaultPrice != null ? String(item.defaultPrice) : '');
+    const fallback = catalogFallback(nextCatalogItemId);
+    setPrice(fallback !== null ? String(fallback) : '');
     setPriceEdited(false);
   }
 

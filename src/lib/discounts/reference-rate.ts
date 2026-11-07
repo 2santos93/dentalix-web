@@ -1,6 +1,8 @@
 import type { components } from '@/lib/api/schema';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { NO_SEDE_FORMAT, sedeCivilDate } from '@/lib/format/sede-number';
+import { canManageExchangeRates } from '@/lib/exchange/exchange-settings-api';
+import type { ClinicRole } from '@/lib/me/me-api';
 
 /** DX-513-bis: la tasa congelada con que se convirtió la referencia de un ítem. */
 export type ReferenceRate = components['schemas']['ReferenceRateDto'];
@@ -32,7 +34,14 @@ export function referenceRateText(
   return `tasa 1 ${strong} = ${amount} ${weak} del ${sedeCivilDate(rate.rateDate, fmt)}, ${SOURCE_LABELS[rate.source]}`;
 }
 
-/** Sin tasa de hoy: qué falta y las dos salidas (Ajustes o una lista en la moneda del plan). */
-export function referenceRateMissingText(currency: string, planCurrency: string): string {
-  return `No hay tasa de ${currency} para hoy: regístrala en Ajustes › Tasa de cambio o usa una lista de precios en ${planCurrency}.`;
+/**
+ * Sin tasa de hoy: qué falta y qué hacer según quién lo lee (L7). Solo quien
+ * gestiona las tasas (`canManageExchangeRates`, ADMIN) puede registrarla; al
+ * resto se le pide que avise a un administrador. Sin fecha ISO: «hoy».
+ */
+export function referenceRateMissingText(currency: string, planCurrency: string, role: ClinicRole | null): string {
+  const action = canManageExchangeRates(role)
+    ? `regístrala en Ajustes › Tasa de cambio o usa una lista de precios en ${planCurrency}.`
+    : `pide a un administrador que registre la tasa del día o una lista de precios en ${planCurrency}.`;
+  return `No hay tasa de ${currency} para hoy: ${action}`;
 }

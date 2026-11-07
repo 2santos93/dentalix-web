@@ -13681,6 +13681,8 @@ export interface components {
             currency: string;
             /** @description SEC-041: precio de catálogo al dar de alta el ítem (null = ítem libre). DX-513-bis: en SU moneda (`referenceCurrency`), que puede no ser la del plan */
             catalogPrice: number | null;
+            /** @description DX-502: moneda de `basePrice` (la del catálogo al dar de alta el ítem); null si no se supo. En un ítem de lista no es la de `catalogPrice` */
+            catalogCurrency: string | null;
             /** @description DX-513-bis: moneda de `catalogPrice` (la del plan para las listas, la del catálogo para el resto); null si no se sabe o el ítem es libre */
             referenceCurrency: string | null;
             /** @description DX-513-bis: `catalogPrice` en la moneda del plan, congelado al escribir el ítem (convertido con `rate` si estaba en otra moneda): la rebaja se mide frente a él. Null en los ítems anteriores sin foto (se miden como en DX-513) */
@@ -29338,7 +29340,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo. DX-513-bis: `code` DISCOUNT_REFERENCE_RATE_MISSING si el precio de catálogo está en otra moneda y la clínica no tiene la tasa de hoy (el mensaje nombra la moneda y remite a Ajustes › Tasa de cambio); no se guarda nada */
+            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo. DX-513-bis: `code` DISCOUNT_REFERENCE_RATE_MISSING si el precio de catálogo está en otra moneda y la clínica no tiene la tasa de hoy (el mensaje nombra la moneda y el día con el formato de la sede; a quien gestiona las tasas lo remite a Ajustes › Tasa de cambio y al resto le pide que avise a un administrador); no se guarda nada */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -29395,7 +29397,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo. DX-513-bis: `code` DISCOUNT_REFERENCE_RATE_MISSING si el precio de catálogo está en otra moneda y la clínica no tiene la tasa de hoy (el mensaje nombra la moneda y remite a Ajustes › Tasa de cambio); no se guarda nada */
+            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo. DX-513-bis: `code` DISCOUNT_REFERENCE_RATE_MISSING si el precio de catálogo está en otra moneda y la clínica no tiene la tasa de hoy (el mensaje nombra la moneda y el día con el formato de la sede; a quien gestiona las tasas lo remite a Ajustes › Tasa de cambio y al resto le pide que avise a un administrador); no se guarda nada */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -29485,7 +29487,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo. DX-513-bis: `code` DISCOUNT_REFERENCE_RATE_MISSING si el precio de catálogo está en otra moneda y la clínica no tiene la tasa de hoy (el mensaje nombra la moneda y remite a Ajustes › Tasa de cambio); no se guarda nada */
+            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo. DX-513-bis: `code` DISCOUNT_REFERENCE_RATE_MISSING si el precio de catálogo está en otra moneda y la clínica no tiene la tasa de hoy (el mensaje nombra la moneda y el día con el formato de la sede; a quien gestiona las tasas lo remite a Ajustes › Tasa de cambio y al resto le pide que avise a un administrador); no se guarda nada */
             422: {
                 headers: {
                     [name: string]: unknown;

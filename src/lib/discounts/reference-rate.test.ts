@@ -52,10 +52,16 @@ describe('referenceRateText', () => {
   });
 });
 
-describe('referenceRateMissingText', () => {
-  it('nombra la moneda que falta y las dos salidas', () => {
-    expect(referenceRateMissingText('VES', 'USD')).toBe(
+describe('referenceRateMissingText (L7: según quién lo lee)', () => {
+  it('ADMIN: puede registrarla', () => {
+    expect(referenceRateMissingText('VES', 'USD', 'ADMIN')).toBe(
       'No hay tasa de VES para hoy: regístrala en Ajustes › Tasa de cambio o usa una lista de precios en USD.',
+    );
+  });
+
+  it.each(['DENTIST', 'ASSISTANT', 'RECEPTION', null] as const)('%s: que lo pida a un administrador', (role) => {
+    expect(referenceRateMissingText('VES', 'USD', role)).toBe(
+      'No hay tasa de VES para hoy: pide a un administrador que registre la tasa del día o una lista de precios en USD.',
     );
   });
 });

@@ -242,12 +242,22 @@ function convertedLine(item: DiscountReportItem, fmt: RegionalFormat): string | 
   );
 }
 
+/**
+ * Base del % de convenio. DX-513-bis: la convertida a la moneda del plan
+ * (`basePriceInPlan`, sobre la que la API mide la rebaja); sin ella, el
+ * precio de catálogo con SU moneda (`catalogCurrency`), nunca con la del plan.
+ */
+function agreementBase(item: DiscountReportItem, fmt: RegionalFormat): string {
+  if (item.basePriceInPlan !== null) return moneyWithCode(item.basePriceInPlan, item.currency, fmt);
+  return moneyWithCode(item.basePrice ?? 0, item.catalogCurrency ?? item.currency, fmt);
+}
+
 function agreementLine(item: DiscountReportItem, fmt: RegionalFormat): string {
   return discountReportCopy.agreementLine(
     item.agreementName ?? '',
     moneyWithCode(item.agreementReduction, item.currency, fmt),
     fmt.percent(item.agreementPercent, 2),
-    moneyWithCode(item.basePrice ?? 0, item.currency, fmt),
+    agreementBase(item, fmt),
   );
 }
 
