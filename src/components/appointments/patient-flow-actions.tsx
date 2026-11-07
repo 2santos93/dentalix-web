@@ -22,7 +22,8 @@ import {
   type PlanItemReservedElsewhere,
 } from '@/lib/appointments/plan-item-reservations';
 import { notifyError } from '@/components/errors/notify';
-import { ApiError } from '@/lib/api/api-error';
+import { ApiError, isRejection } from '@/lib/api/api-error';
+import { InlineError } from '@/components/errors/inline-error';
 import { OVERBOOK_SLOT_TAKEN } from '@/lib/appointments/walk-in';
 import { KeepOverbookedDialog, type KeepOverbookedPrompt } from '@/components/appointments/keep-overbooked-dialog';
 import { CheckoutDialog } from '@/components/appointments/checkout-dialog';
@@ -31,6 +32,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 export const patientFlowCopy = {
+  retry: 'Reintentar',
   done: {
     ARRIVE: (name: string) => `${name} llegó.`,
     SEAT: (name: string) => `${name} pasó al sillón.`,
@@ -52,7 +54,17 @@ const ICONS: Record<FlowAction, typeof DoorOpen> = {
   UNDO_ARRIVAL: Undo2,
 };
 
+/** DX-538-bis: el fallo de un paso dado con un modal abierto, para pintarlo dentro. */
+export interface FlowError {
+  appointmentId: string;
+  message: string;
+  /** `null`: la API lo rechazó y repetirlo daría lo mismo. */
+  retry: (() => void) | null;
+}
+
 export interface PatientFlowRunner {
+  /** DX-538-bis: el último paso que falló con un modal abierto. */
+  error?: FlowError | null;
   /** Cita cuyo cambio está en curso (sus botones quedan deshabilitados). */
   pendingId: string | null;
   /** false: la API rechazó el paso; el aviso y el refresco ya se gestionaron. */
@@ -137,6 +149,7 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [claimingKey, setClaimingKey] = useState<string | null>(null);
   const [overbookPrompt, setOverbookPrompt] = useState<KeepOverbookedPrompt | null>(null);
+  const [flowError, setFlowError] = useState<FlowError | null>(null);
 
   async function claim(appointmentId: string, item: PlanItemReservedElsewhere) {
     setClaimingKey(claimKey(appointmentId, item.planItemId));
@@ -168,6 +181,7 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
     checkoutPending?: CheckoutItem[],
   ) {
     setPendingId(appointmentId);
+    setFlowError(null);
     try {
       let reserved: PlanItemReservedElsewhere[] = [];
       if (action === 'UNDO_ARRIVAL') {
@@ -243,10 +257,15 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
         return false;
       }
       // El reintento cierra sobre la propia operación (cita y paso): no hay
-      // estado ambiente que pueda quedar viejo.
-      notifyError(apiErrorMessage(err, patientFlowCopy.error), {
-        onRetry: () => void run(appointmentId, action, patientName, checkoutPending),
-      });
+      // estado ambiente que pueda quedar viejo. DX-538-bis: un rechazo (4xx)
+      // no se reintenta; con un modal abierto (detalle, «En clínica») el aviso
+      // flotante quedaría inerte y oculto al lector: el error va junto al paso.
+      const message = apiErrorMessage(err, patientFlowCopy.error);
+      const retry = isRejection(err)
+        ? null
+        : () => void run(appointmentId, action, patientName, checkoutPending);
+      if (modalOpen()) setFlowError({ appointmentId, message, retry });
+      else notifyError(message, retry ? { onRetry: retry } : undefined);
       return false;
     } finally {
       setPendingId(null);
@@ -257,6 +276,7 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
 
   return {
     pendingId,
+    error: flowError,
     run,
     token,
     claimingKey,
@@ -355,6 +375,17 @@ export function PatientFlowActions({
           </Button>
         );
       })}
+      {/* DX-538-bis: el fallo, aquí mismo y anunciado (role="alert"). */}
+      {!compact && runner.error?.appointmentId === appointmentId ? (
+        <div className="flex basis-full flex-col items-start gap-2">
+          <InlineError variant="summary">{runner.error.message}</InlineError>
+          {runner.error.retry ? (
+            <Button type="button" variant="secondary" size="sm" onClick={runner.error.retry}>
+              {patientFlowCopy.retry}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       {checkoutOpen && runner.token ? (
         <CheckoutDialog
           token={runner.token}

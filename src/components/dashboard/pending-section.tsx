@@ -224,7 +224,7 @@ export function PendingSection({
                 aria-expanded={unfolded}
                 aria-controls={foldId}
                 onClick={() => setUnfolded((v) => !v)}
-                className="flex min-h-11 items-center justify-between gap-3 rounded-md px-1 text-left text-sm text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-primary sm:min-h-9"
+                className="flex min-h-11 items-center justify-between gap-3 rounded-md px-1 text-left text-sm text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-primary-text sm:min-h-9"
                 data-testid="pending-folded-toggle"
               >
                 <span>{copy.folded(clear.length)}</span>
@@ -323,7 +323,7 @@ function PendingRow({
             type="button"
             onClick={onRetry}
             aria-label={copy.retry(row.label)}
-            className="inline-flex size-9 items-center justify-center rounded-md text-muted hover:bg-surface-sunken hover:text-ink focus-visible:outline-2 focus-visible:outline-primary max-md:size-11"
+            className="inline-flex size-9 items-center justify-center rounded-md text-muted hover:bg-surface-sunken hover:text-ink focus-visible:outline-2 focus-visible:outline-primary-text max-md:size-11"
           >
             <RotateCw aria-hidden className="size-4" />
           </button>

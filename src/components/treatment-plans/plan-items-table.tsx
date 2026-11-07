@@ -268,7 +268,7 @@ function OdontogramLink({
       // cinco filas ofrecerían cinco enlaces con el mismo nombre y ninguna
       // pista de a qué diente lleva cada uno.
       aria-label={copy.viewInOdontogramFor(toothNumber)}
-      className="text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+      className="text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
     >
       {copy.viewInOdontogram}
     </Link>
@@ -291,7 +291,7 @@ function RegisterImplantLink({
     <Link
       href={href(item)}
       aria-label={copy.registerImplantFor(item.toothNumber)}
-      className="text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+      className="text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
     >
       {copy.registerImplant}
     </Link>

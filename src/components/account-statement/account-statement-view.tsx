@@ -873,7 +873,7 @@ function PlanRows({
             href={quoteHref}
             target="_blank"
             rel="noopener"
-            className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:min-h-0"
+            className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text sm:min-h-0"
           >
             <FileText aria-hidden className="size-4" />
             {copy.quoteLink}

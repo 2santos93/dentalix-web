@@ -255,7 +255,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
               onClick={toggleSidebar}
               aria-label={copy.expand}
               title={copy.expand}
-              className="group flex size-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="group flex size-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
             >
               <span aria-hidden className="flex group-hover:hidden group-focus-visible:hidden">
                 <BrandMark name={branding.name} logoUrl={branding.logoUrl} />
@@ -272,7 +272,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
                 onClick={toggleSidebar}
                 aria-label={copy.collapse}
                 title={copy.collapse}
-                className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
               >
                 <PanelLeftClose aria-hidden className="size-4" />
               </button>
@@ -289,7 +289,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
             aria-keyshortcuts="Meta+K Control+K"
             title={collapsed ? `${copy.search} (⌘K / Ctrl K)` : undefined}
             className={cn(
-              'flex items-center rounded-md border border-border bg-surface text-sm text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+              'flex items-center rounded-md border border-border bg-surface text-sm text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text',
               collapsed ? 'size-10 justify-center' : 'h-9 min-w-0 flex-1 gap-2 px-2.5',
             )}
           >
@@ -312,7 +312,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
               aria-keyshortcuts="Alt+Shift+Q"
               aria-haspopup="dialog"
               title={`${copy.caller} (Alt Mayús Q)`}
-              className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
             >
               <Phone aria-hidden className="size-4" />
             </button>
@@ -380,7 +380,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
                         href="/agenda/en-clinica"
                         aria-label={waitingForYouLabel(waitingForYou)}
                         className={cn(
-                          'rounded-full focus-visible:outline-2 focus-visible:outline-primary',
+                          'rounded-full focus-visible:outline-2 focus-visible:outline-primary-text',
                           collapsed && 'absolute right-0 -top-1',
                         )}
                       >
@@ -429,7 +429,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
               aria-label={copy.caller}
               aria-keyshortcuts="Alt+Shift+Q"
               aria-haspopup="dialog"
-              className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
             >
               <Phone aria-hidden className="size-5" />
             </button>
@@ -438,7 +438,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
             type="button"
             onClick={() => setPaletteOpen(true)}
             aria-label={copy.search}
-            className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
           >
             <Search aria-hidden className="size-5" />
           </button>
@@ -479,7 +479,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
                     aria-current={active ? 'page' : undefined}
                     aria-label={hasCount(href) || long ? navLabel(href) : undefined}
                     className={cn(
-                      'relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[0.6875rem] font-medium leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
+                      'relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[0.6875rem] font-medium leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-text',
                       active ? 'text-primary-text' : 'text-muted hover:text-ink',
                     )}
                   >
@@ -502,7 +502,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
                 aria-haspopup="dialog"
                 aria-expanded={moreOpen}
                 className={cn(
-                  'relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[0.6875rem] font-medium leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
+                  'relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[0.6875rem] font-medium leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-text',
                   activeInMore ? 'text-primary-text' : 'text-muted hover:text-ink',
                 )}
               >

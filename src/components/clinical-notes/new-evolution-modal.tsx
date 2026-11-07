@@ -338,7 +338,7 @@ export function NewEvolutionModal({
           <button
             type="button"
             onClick={() => setManualNotes(null)}
-            className="font-medium text-primary-text underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="font-medium text-primary-text underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
           >
             {copy.recompose}
           </button>
