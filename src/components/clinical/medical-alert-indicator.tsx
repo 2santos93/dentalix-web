@@ -180,7 +180,7 @@ export function MedicalAlertIndicator({
         className={cn(
           // El ::after amplía la zona táctil a 44 px sin mover nada. Su inset
           // cuenta desde dentro del borde de 1 px: 18 + 2·13 = 26 + 2·9 = 44.
-          "relative inline-flex shrink-0 items-center justify-center rounded-full border after:absolute after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+          "relative inline-flex shrink-0 items-center justify-center rounded-full border after:absolute after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text",
           size === 'compact' ? 'size-5 after:-inset-[13px]' : 'size-7 after:-inset-[9px]',
           severity === 'critical'
             ? 'border-danger/40 bg-surface text-danger-text'

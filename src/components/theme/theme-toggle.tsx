@@ -32,7 +32,7 @@ export function ThemeToggle() {
       aria-label="Cambiar tema"
       title={isDark ? 'Modo oscuro' : 'Modo claro'}
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border border-border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border border-border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text ${
         isDark ? 'bg-primary' : 'bg-bg'
       }`}
     >

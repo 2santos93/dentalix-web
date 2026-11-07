@@ -160,7 +160,7 @@ export function MonthAgenda({
                 onClick={() => onSelectDay(day.date)}
                 aria-pressed={isSelected}
                 aria-label={copy.dayLabel(longDayLabel(day.date), count)}
-                className="absolute inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+                className="absolute inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-text"
               />
               <span
                 className={cn(

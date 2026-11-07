@@ -436,7 +436,7 @@ export function AuditLogView({ token, patientId, onClearPatient, initialFilters 
               onClick={onClearPatient}
               aria-label={copy.clearPatient}
               title={copy.clearPatient}
-              className="flex size-6 items-center justify-center rounded-full text-muted hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary pointer-coarse:size-10"
+              className="flex size-6 items-center justify-center rounded-full text-muted hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text pointer-coarse:size-10"
             >
               <X aria-hidden className="size-3.5" />
             </button>
@@ -591,7 +591,7 @@ function PatientLink({ event }: { event: AuditEvent }) {
   return (
     <Link
       href={`/patients/${event.patient.id}`}
-      className="font-medium text-ink underline-offset-4 hover:text-primary-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      className="font-medium text-ink underline-offset-4 hover:text-primary-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
     >
       {event.patient.fullName}
     </Link>

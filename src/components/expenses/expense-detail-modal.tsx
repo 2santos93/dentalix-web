@@ -403,7 +403,7 @@ export function ExpenseDetailModal({
           <DialogTitle
             ref={titleRef}
             tabIndex={-1}
-            className="[overflow-wrap:anywhere] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="[overflow-wrap:anywhere] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
           >
             {title}
           </DialogTitle>
@@ -505,7 +505,7 @@ function PaymentRow({
           {payment.cashSessionId ? (
             <Link
               href={cashSessionHref(payment.cashSessionId)}
-              className="inline-flex min-h-11 items-center gap-1 text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:min-h-0"
+              className="inline-flex min-h-11 items-center gap-1 text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text sm:min-h-0"
             >
               <Wallet aria-hidden className="size-3.5" />
               {expenseDetailCopy.fromCash} · {expenseDetailCopy.fromCashLink}

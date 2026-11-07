@@ -542,7 +542,7 @@ export function LocationsComparisonView({ token }: { token: string }) {
                         <button
                           type="button"
                           onClick={() => setSort((s) => nextSort(s, 'name'))}
-                          className="group/sort t-label inline-flex min-h-8 items-center gap-1 rounded text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                          className="group/sort t-label inline-flex min-h-8 items-center gap-1 rounded text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                         >
                           {copy.location}
                           <SortIcon sort={sort} column="name" />
@@ -559,7 +559,7 @@ export function LocationsComparisonView({ token }: { token: string }) {
                             <button
                               type="button"
                               onClick={() => setSort((s) => nextSort(s, k.key as KpiKey))}
-                              className="group/sort t-label relative inline-flex min-h-8 items-center gap-1 rounded text-right text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                              className="group/sort t-label relative inline-flex min-h-8 items-center gap-1 rounded text-right text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                             >
                               <HeaderLabel label={k.label} />
                               <SortIcon sort={sort} column={k.key as KpiKey} overlay />

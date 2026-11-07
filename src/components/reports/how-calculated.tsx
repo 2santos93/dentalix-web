@@ -62,7 +62,7 @@ export function HowCalculated({ column, text }: { column: string; text: string }
         onKeyDown={(event) => {
           if (event.key === 'Escape') hide();
         }}
-        className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface-sunken hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface-sunken hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
       >
         <Info aria-hidden className="size-3.5" />
       </button>
