@@ -65,6 +65,11 @@ const sedeDay = (at: Date) =>
     day: '2-digit',
   }).format(at);
 
+/** «tasa 1 USD = 400 VES del …, manual» con el día de la tasa congelada. */
+const rateTextOn = (day: string) =>
+  `tasa 1 USD = ${sedeFmt.number(VES_RATE, { min: 0, max: 4 })} VES del ${sedeFmt.civilDate(day)}, manual`;
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 let session: ApiSession;
 let procedureId = '';
 let rateDay = '';
@@ -160,14 +165,23 @@ for (const viewport of [
     // día antes del primero y uno después del último), nunca «el mes hasta
     // hoy»: un test que cruce la medianoche de fin de mes no los pierde.
     const seededFrom = new Date();
-    const rateText = `tasa 1 USD = ${sedeFmt.number(VES_RATE, { min: 0, max: 4 })} VES del ${sedeFmt.civilDate(rateDay)}, manual`;
+    // Revisión de DX-513-ter: antes de dar de alta el ítem, la nota puede
+    // llevar la tasa de hoy o (si la prueba cruza la medianoche de la sede) la
+    // de mañana; después, el día es el que congeló el ítem, nunca uno calculado.
+    const possibleDays = [rateDay, sedeDay(new Date(Date.now() + DAY_MS))];
 
     // --- Plan en VES: 100 USD a 400 = 40.000 Bs., precargado y con la nota.
     const ves = await patientWithPlan(page, `v${tag}`, 'VES');
     const vesForm = await openForm(page, ves.patientId, CONVERTED);
     const converted = vesForm.panel.locator('#tp-price-converted');
     await expect(converted).toHaveText(
-      `Catálogo: ${sede(CATALOG_PRICE, 'USD')} ≈ ${sede(CONVERTED, 'VES')} (${rateText}).`,
+      new RegExp(
+        `^(${possibleDays
+          .map((day) =>
+            escapeRegExp(`Catálogo: ${sede(CATALOG_PRICE, 'USD')} ≈ ${sede(CONVERTED, 'VES')} (${rateTextOn(day)}).`),
+          )
+          .join('|')})$`,
+      ),
     );
     // Bajarlo a 35.000 (12,5 %) cuenta como descuento y pide el motivo.
     await vesForm.price.fill('35000');
@@ -181,9 +195,13 @@ for (const viewport of [
       price: 35000,
       catalogCurrency: 'USD',
       referencePriceInPlan: CONVERTED,
-      referenceRate: { fromPerBase: 1, toPerBase: VES_RATE, source: 'MANUAL', rateDate: rateDay },
+      referenceRate: { fromPerBase: 1, toPerBase: VES_RATE, source: 'MANUAL' },
     });
-    expect((await planItems(page, ves.planId))[0].discountById).not.toBeNull();
+    const vesItem = (await planItems(page, ves.planId))[0];
+    expect(vesItem.discountById).not.toBeNull();
+    const referenceRateDay = vesItem.referenceRate!.rateDate;
+    expect(possibleDays).toContain(referenceRateDay);
+    const rateText = rateTextOn(referenceRateDay);
 
     // --- Plan en USD (misma moneda): aviso y motivo, como SEC-041.
     const usd = await patientWithPlan(page, `u${tag}`, 'USD');
@@ -315,7 +333,7 @@ for (const viewport of [
     // cruzó la medianoche de la sede, mañana), no uno calculado aquí.
     const baseRateDay = measured.item.baseRate!.rateDate;
     expect([rateDay, sedeDay(new Date(Date.now() + DAY_MS)), sedeDay(new Date())]).toContain(baseRateDay);
-    const rateText = `tasa 1 USD = ${sedeFmt.number(VES_RATE, { min: 0, max: 4 })} VES del ${sedeFmt.civilDate(baseRateDay)}, manual`;
+    const rateText = rateTextOn(baseRateDay);
     // Sin tasa de EUR: el alta funciona igual, sin base.
     const unmeasured = await listAgreementItem('e', 'EUR', 80);
     expect(unmeasured.item).toMatchObject({ price: 80, basePriceInPlan: null, baseRate: null });
