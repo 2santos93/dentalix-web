@@ -321,6 +321,23 @@ describe("texto de las monedas en la auditoría (DX-517)", () => {
   });
 });
 
+describe("moneda del catálogo en la auditoría (DX-502-bis)", () => {
+  it("la nombra y pinta el antes y el después", () => {
+    const items = configChangeItems({
+      reason: "CLINIC_PROFILE",
+      changedFields: ["catalogCurrency"],
+      configChange: {
+        before: { catalogCurrency: null },
+        after: { catalogCurrency: "USD" },
+      },
+    });
+    expect(items).toHaveLength(1);
+    const item = items![0];
+    expect(item).toMatchObject({ field: "catalogCurrency", label: "Moneda del catálogo", kind: "changed" });
+    expect(item.kind === "changed" ? item.after : "").toBe("USD");
+  });
+});
+
 describe("datos de la clínica en la auditoría (DX-019)", () => {
   it("pinta el antes y el después del identificador fiscal y del logo", () => {
     const items = configChangeItems({

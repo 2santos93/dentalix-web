@@ -80,6 +80,8 @@ const FIELD_LABELS: Record<string, string> = {
   manualRateMaxAgeDays: "Días de validez de la última tasa manual",
   // DX-517: «VES=Bs.», una moneda por elemento.
   currencyTexts: "Texto de las monedas",
+  // DX-502-bis: moneda del catálogo de precios de la clínica.
+  catalogCurrency: "Moneda del catálogo",
   // DX-019: datos de la clínica.
   legalName: "Razón social",
   taxId: "Identificador fiscal",

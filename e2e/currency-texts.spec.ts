@@ -199,7 +199,7 @@ test('el índice de Ajustes enseña Monedas y describe Caja con el recibo (DX-51
     { timeout: 15_000 },
   );
   await expect(page.locator('a[href="/settings/monedas"]')).toHaveAccessibleName(
-    /^Monedas Cómo se escribe cada moneda en importes, recibos y mensajes\./,
+    /^Monedas Cómo se escribe cada moneda en importes, recibos y mensajes, y en qué moneda está el catálogo de precios\./,
   );
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize(viewport);
