@@ -224,7 +224,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       {
         href: '/settings/monedas',
         label: 'Monedas',
-        description: 'Cómo se escribe cada moneda en importes, recibos y mensajes. Y en qué moneda está el catálogo de precios.',
+        description: 'Cómo se escribe cada moneda en importes, recibos y mensajes, y en qué moneda está el catálogo de precios.',
         icon: Coins,
         visible: canManageCurrencyTexts,
       },

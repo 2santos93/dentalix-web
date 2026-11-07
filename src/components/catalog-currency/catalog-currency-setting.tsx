@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useId, useState } from 'react';
+import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getClinicSettings, updateClinicSettings } from '@/lib/clinic/clinic-settings-api';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
@@ -25,17 +26,19 @@ import {
 export const catalogCurrencyCopy = {
   heading: 'Moneda del catálogo',
   support:
-    'La moneda en la que están los precios del catálogo. Con ella, el presupuesto enseña el precio de lista y el ahorro por convenio.',
+    'La moneda en la que están los precios del catálogo. Con ella, el presupuesto muestra el precio de lista y el ahorro por convenio.',
   label: 'Moneda de los precios del catálogo',
   unset: 'Sin fijar',
   unsetCommon: (code: string) => `Sin fijar: se usa ${code}, la moneda de tus sedes activas.`,
   unsetMixed:
-    'Sin fijar: tus sedes activas usan monedas distintas, así que los ítems nuevos de los planes no enseñan precio de lista ni ahorro por convenio.',
+    'Sin fijar: tus sedes activas usan monedas distintas, así que los ítems nuevos de los planes no muestran precio de lista ni ahorro por convenio.',
   setHint: 'Los ítems que se agreguen a los planes la guardan. Los ya creados conservan la suya.',
   change: 'Cambiar',
   dialogTitle: 'Cambiar la moneda del catálogo',
   dialogDescription:
     'Elige la moneda en la que están los precios del catálogo. Solo afecta a los ítems que se agreguen a los planes desde ahora: los ya creados conservan la suya y ningún importe se convierte. El cambio queda en la auditoría.',
+  discountNote:
+    'En los planes en otra moneda, un precio por debajo del de catálogo ya no cuenta como descuento frente al catálogo: no pide motivo ni consume el tope de descuento. Esto también vale solo para los ítems nuevos.',
   fieldLabel: 'Moneda',
   unsetOption: 'Sin fijar (la de las sedes)',
   save: 'Guardar',
@@ -69,7 +72,6 @@ export function CatalogCurrencySetting({ token }: { token: string }) {
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [notice, setNotice] = useState('');
   const fieldId = useId();
 
   useEffect(() => {
@@ -96,8 +98,8 @@ export function CatalogCurrencySetting({ token }: { token: string }) {
     try {
       const saved = await updateClinicSettings(token, { catalogCurrency: draft === '' ? null : draft });
       setLoaded({ ...loaded, catalogCurrency: saved.catalogCurrency ?? null });
-      setNotice(copy.saved);
       setOpen(false);
+      toast.success(copy.saved);
     } catch (err) {
       setSaveError(apiErrorMessage(err, copy.saveError));
     } finally {
@@ -146,7 +148,6 @@ export function CatalogCurrencySetting({ token }: { token: string }) {
                 onClick={() => {
                   setDraft(current ?? '');
                   setSaveError(null);
-                  setNotice('');
                   setOpen(true);
                 }}
               >
@@ -155,16 +156,20 @@ export function CatalogCurrencySetting({ token }: { token: string }) {
             }
           />
         </SettingRows>
-        <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
-          {notice}
-        </p>
-        <Dialog open={open} onOpenChange={setOpen}>
+        {/* Mientras guarda, ni Escape ni un clic fuera cierran el diálogo. */}
+        <Dialog
+          open={open}
+          onOpenChange={(next) => {
+            if (!saving) setOpen(next);
+          }}
+        >
           <DialogContent className="max-w-md">
             <form onSubmit={handleSave} className="flex flex-col gap-4">
               <DialogHeader>
                 <DialogTitle>{copy.dialogTitle}</DialogTitle>
                 <DialogDescription>{copy.dialogDescription}</DialogDescription>
               </DialogHeader>
+              <p className="text-sm text-muted">{copy.discountNote}</p>
               <FormField htmlFor={fieldId} label={copy.fieldLabel}>
                 <NativeSelect
                   id={fieldId}

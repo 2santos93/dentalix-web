@@ -5,6 +5,9 @@ import { getClinicSettings, updateClinicSettings, type ClinicSettings } from '@/
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import { ApiError } from '@/lib/api/api-error';
+import { toast } from 'sonner';
+
+jest.mock('sonner', () => ({ toast: { success: jest.fn() } }));
 
 jest.mock('../../lib/clinic/clinic-settings-api', () => ({
   ...jest.requireActual('../../lib/clinic/clinic-settings-api'),
@@ -92,6 +95,8 @@ describe('Ajustes › Monedas: moneda del catálogo (DX-502-bis)', () => {
     await user.click(await screen.findByRole('button', { name: copy.change }));
     const dialog = await screen.findByRole('dialog', { name: copy.dialogTitle });
     expect(within(dialog).getByText(copy.dialogDescription)).toBeInTheDocument();
+    // DX-513: avisa de que, en planes de otra moneda, no hay descuento frente al catálogo.
+    expect(within(dialog).getByText(copy.discountNote)).toBeInTheDocument();
     const select = within(dialog).getByLabelText(copy.fieldLabel);
     expect(select).toHaveValue('');
     await user.selectOptions(select, 'USD');
@@ -99,7 +104,25 @@ describe('Ajustes › Monedas: moneda del catálogo (DX-502-bis)', () => {
     await waitFor(() => expect(mockedSave).toHaveBeenCalledWith('tok', { catalogCurrency: 'USD' }));
     await waitFor(() => expect(dialog).not.toBeInTheDocument());
     expect(screen.getByTestId('catalog-currency')).toHaveTextContent('USD · Dólar estadounidense');
-    expect(screen.getByText(copy.saved)).toBeInTheDocument();
+    expect(toast.success).toHaveBeenCalledWith(copy.saved);
+  });
+
+  it('mientras guarda, Escape no cierra el diálogo', async () => {
+    const user = userEvent.setup();
+    mockedGet.mockResolvedValue(settings(null));
+    let resolve: (value: ClinicSettings) => void = () => undefined;
+    mockedSave.mockReturnValueOnce(new Promise<ClinicSettings>((r) => (resolve = r)));
+    render(<CatalogCurrencySetting token="tok" />);
+    await user.click(await screen.findByRole('button', { name: copy.change }));
+    const dialog = await screen.findByRole('dialog', { name: copy.dialogTitle });
+    await user.selectOptions(within(dialog).getByLabelText(copy.fieldLabel), 'USD');
+    await user.click(within(dialog).getByRole('button', { name: copy.save }));
+    await waitFor(() => expect(mockedSave).toHaveBeenCalled());
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('dialog', { name: copy.dialogTitle })).toBeInTheDocument();
+    resolve(settings('USD'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByTestId('catalog-currency')).toHaveTextContent('USD · Dólar estadounidense');
   });
 
   it('«Sin fijar» la quita (null) y vuelve la regla de las sedes', async () => {
