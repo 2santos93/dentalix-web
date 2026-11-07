@@ -11,6 +11,7 @@ import {
   type PriceList,
   type PriceListItemRow,
 } from '@/lib/price-lists/price-lists-api';
+import { listCatalogDirectory } from '@/lib/odontogram/catalog-api';
 import { sedeMoney } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
@@ -52,6 +53,8 @@ const copy = {
   noPrice: 'Sin precio',
   noCategory: '—',
   noCatalogPrice: '—',
+  catalogOtherCurrencyNote: (catalog: string, list: string) =>
+    `El precio de catálogo está en ${catalog}: es de referencia y no se convierte a ${list}.`,
   editPrice: 'Editar precio',
   removePrice: 'Quitar precio',
   removeTitle: (name: string) => `¿Quitar el precio de «${name}»?`,
@@ -143,6 +146,25 @@ export function PriceListItemsView({ token, priceListId }: PriceListItemsViewPro
     () => ({ ...(search ? { query: search } : {}), page, pageSize: PAGE_SIZE }),
     [search, page],
   );
+
+  // DX-502-ter: el precio de catálogo (`defaultPrice`) está en la moneda del catálogo de la
+  // clínica, que puede no ser la de la lista. La da la API en la primera página del directorio
+  // (`undefined` = aún sin saber; `null` = la API tampoco lo sabe: el importe no lleva moneda
+  // inventada, va «—»).
+  const [catalogCurrency, setCatalogCurrency] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    listCatalogDirectory(token, { page: 1, pageSize: 1 })
+      .then((data) => {
+        if (!cancelled) setCatalogCurrency(data.catalogCurrency ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogCurrency(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   const listFound = list !== null;
   useEffect(() => {
@@ -255,7 +277,9 @@ export function PriceListItemsView({ token, priceListId }: PriceListItemsViewPro
   }
 
   function catalogPriceText(row: PriceListItemRow) {
-    return row.defaultPrice === null ? copy.noCatalogPrice : sedeMoney(row.defaultPrice, currency, fmt);
+    return row.defaultPrice === null || !catalogCurrency
+      ? copy.noCatalogPrice
+      : sedeMoney(row.defaultPrice, catalogCurrency, fmt);
   }
 
   function rowActions(row: PriceListItemRow): RowAction[] {
@@ -289,7 +313,7 @@ export function PriceListItemsView({ token, priceListId }: PriceListItemsViewPro
       numeric: true,
       cell: (r) => catalogPriceText(r),
       mobileCell: (r) =>
-        r.defaultPrice === null ? null : `${copy.catalogPriceLabel}: ${catalogPriceText(r)}`,
+        r.defaultPrice === null || !catalogCurrency ? null : `${copy.catalogPriceLabel}: ${catalogPriceText(r)}`,
     },
     { id: 'list', header: copy.colListPrice, numeric: true, mobile: 'trailing', cell: priceCell },
   ];
@@ -315,6 +339,12 @@ export function PriceListItemsView({ token, priceListId }: PriceListItemsViewPro
 
         {!loading && !loadError && hasAny ? (
           <ResultCount total={total} noun={copy.countNoun} nounPlural={copy.countNounPlural} />
+        ) : null}
+
+        {catalogCurrency && catalogCurrency !== currency ? (
+          <p role="note" className="text-sm text-muted" data-testid="catalog-other-currency-note">
+            {copy.catalogOtherCurrencyNote(catalogCurrency, currency)}
+          </p>
         ) : null}
 
         <AsyncSection
@@ -372,6 +402,7 @@ export function PriceListItemsView({ token, priceListId }: PriceListItemsViewPro
           token={token}
           priceListId={priceListId}
           currency={currency}
+          catalogCurrency={catalogCurrency ?? null}
           row={editing}
           onSaved={setRowPrice}
         />

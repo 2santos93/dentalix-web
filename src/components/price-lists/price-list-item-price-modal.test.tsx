@@ -21,7 +21,11 @@ const row: PriceListItemRow = {
   price: null,
 };
 
-function setup(overrides: Partial<PriceListItemRow> = {}, currency = 'USD') {
+function setup(
+  overrides: Partial<PriceListItemRow> = {},
+  currency = 'USD',
+  catalogCurrency: string | null = currency,
+) {
   const onSaved = jest.fn();
   const onOpenChange = jest.fn();
   render(
@@ -31,6 +35,7 @@ function setup(overrides: Partial<PriceListItemRow> = {}, currency = 'USD') {
       token="tok"
       priceListId="pl-1"
       currency={currency}
+      catalogCurrency={catalogCurrency}
       row={{ ...row, ...overrides }}
       onSaved={onSaved}
     />,
@@ -64,6 +69,20 @@ describe('PriceListItemPriceModal (DX-105)', () => {
     (listLocations as jest.Mock).mockReturnValue(new Promise(() => {}));
     const { dialog } = setup();
     expect(within(dialog).getByText(/Precio de catálogo: —/)).toBeInTheDocument();
+  });
+
+  it('DX-502-ter: el precio de catálogo va en la moneda del catálogo, no en la de la lista, y lo dice', async () => {
+    (listLocations as jest.Mock).mockResolvedValue([clinicLocation({ locale: 'en-US', currency: 'EUR' })]);
+    const { dialog } = setup({}, 'EUR', 'USD');
+    expect(
+      await within(dialog).findByText(/Precio de catálogo: USD\s80,000\.00 \(otra moneda: no se convierte a EUR\)\./),
+    ).toBeInTheDocument();
+  });
+
+  it('DX-502-ter: sin moneda de catálogo conocida no inventa una: «sin precio»', () => {
+    const { dialog } = setup({}, 'USD', null);
+    expect(within(dialog).getByText(/Precio de catálogo: sin precio\./)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/80/)).not.toBeInTheDocument();
   });
 
   it('sin precio de catálogo lo dice', () => {

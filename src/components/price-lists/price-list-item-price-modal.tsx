@@ -15,6 +15,7 @@ const copy = {
   description: (name: string, catalogPrice: string) =>
     `${name}. Precio de catálogo: ${catalogPrice}.`,
   noCatalogPrice: 'sin precio',
+  catalogOtherCurrency: (list: string) => ` (otra moneda: no se convierte a ${list})`,
   price: 'Precio de lista',
   hint: 'Hasta 2 decimales. Para dejar este procedimiento sin precio en la lista, usa «Quitar precio».',
   save: 'Guardar',
@@ -29,6 +30,8 @@ interface PriceListItemPriceModalProps {
   priceListId: string;
   /** Moneda de la lista: da los decimales y el formato del importe. */
   currency: string;
+  /** Moneda del precio de catálogo (la de la clínica, según la API); `null` = no se sabe. */
+  catalogCurrency: string | null;
   row: PriceListItemRow;
   onSaved: (catalogItemId: string, price: number) => void;
 }
@@ -44,6 +47,7 @@ export function PriceListItemPriceModal({
   token,
   priceListId,
   currency,
+  catalogCurrency,
   row,
   onSaved,
 }: PriceListItemPriceModalProps) {
@@ -77,7 +81,10 @@ export function PriceListItemPriceModal({
   }
 
   const catalogPrice =
-    row.defaultPrice === null ? copy.noCatalogPrice : sedeMoney(row.defaultPrice, currency, fmt);
+    row.defaultPrice === null || !catalogCurrency
+      ? copy.noCatalogPrice
+      : sedeMoney(row.defaultPrice, catalogCurrency, fmt) +
+        (catalogCurrency !== currency ? copy.catalogOtherCurrency(currency) : '');
 
   return (
     <FormModal

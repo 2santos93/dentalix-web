@@ -215,8 +215,15 @@ const CATALOG_LABEL_PREFIX = 'Corona DX502B';
 
 test('DX-502-ter: con la moneda fijada en USD, el catálogo y el selector de procedimiento muestran USD', async ({
   page,
+  request,
 }) => {
   test.setTimeout(120_000);
+  // Autónomo: fija USD por API (idempotente), sin depender del test serial anterior.
+  const fixed = await request.patch(`${API_URL}/clinic/settings`, {
+    headers: session.headers,
+    data: { catalogCurrency: 'USD' },
+  });
+  expect(fixed.ok(), `PATCH /clinic/settings falló: ${await fixed.text()}`).toBeTruthy();
   const usd = /US\$|USD/;
   await loginAs(page, origin, admin.email, password);
   for (const viewport of VIEWPORTS) {
@@ -226,11 +233,16 @@ test('DX-502-ter: con la moneda fijada en USD, el catálogo y el selector de pro
     await page.goto(`${origin}/catalog`);
     // La lista es paginada y la clínica nace con el catálogo semilla: se busca el ítem.
     await page.getByLabel('Buscar por nombre, código o categoría').fill(CATALOG_LABEL_PREFIX);
-    const row = page
-      .locator('tr, li, article, [role="row"]')
-      .filter({ hasText: CATALOG_LABEL_PREFIX })
-      .locator('visible=true')
-      .first();
+    // 1440 px: tabla; 390 px: lista de tarjetas. Siempre la fila de ESTE ítem.
+    const row =
+      viewport.width >= 768
+        ? page
+            .getByRole('table', { name: /catálogo/i })
+            .getByRole('row', { name: new RegExp(CATALOG_LABEL_PREFIX) })
+        : page
+            .getByRole('list', { name: /catálogo/i })
+            .getByRole('listitem')
+            .filter({ hasText: CATALOG_LABEL_PREFIX });
     await expect(row).toBeVisible({ timeout: 15_000 });
     await expect(row).toContainText(figure(CATALOG_PRICE));
     await expect(row).toContainText(usd);
@@ -247,7 +259,7 @@ test('DX-502-ter: con la moneda fijada en USD, el catálogo y el selector de pro
     await group.getByRole('searchbox', { name: 'Buscar en el catálogo' }).fill(CATALOG_LABEL_PREFIX);
     const option = group.getByRole('radio', { name: new RegExp(CATALOG_LABEL_PREFIX) });
     await expect(option).toBeVisible();
-    const optionPrice = group.getByTestId('catalog-picker-price').first();
+    const optionPrice = group.locator('label').filter({ has: option }).getByTestId('catalog-picker-price');
     await expect(optionPrice).toContainText(figure(CATALOG_PRICE));
     await expect(optionPrice).toContainText(usd);
     if (viewport.width === 390) await expectNoHorizontalScroll(page);
