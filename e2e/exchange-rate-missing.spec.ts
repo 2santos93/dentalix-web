@@ -83,6 +83,11 @@ async function seedPlanWithoutRate(request: APIRequestContext, admin: ApiSession
     docNumber: `ST${suffix}`.slice(0, 20),
     sex: 'F',
   });
+  // DX-513-bis: el catálogo en la moneda del plan (USD), fijado por la
+  // clínica. Así el ítem se da de alta sin tasa (su referencia está en la
+  // moneda del plan) con el mismo precio de siempre, y lo único «sin tasa» es
+  // lo que este spec prueba: el abono de hoy en la moneda de la sede.
+  await patch(request, admin, '/clinic/settings', { catalogCurrency: 'USD' });
   const catalog = await apiPost<{ id: string }>(request, admin, '/catalog/items', {
     code: `st-${suffix}`,
     kind: 'PROCEDURE',
