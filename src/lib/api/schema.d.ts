@@ -3353,7 +3353,7 @@ export interface paths {
         head?: never;
         /**
          * Cambia los datos de la clínica
-         * @description DX-019. Solo cambian los campos enviados; vacío o null borra un dato (salvo el nombre y el color). El identificador fiscal es texto libre, sin validar el formato de ningún país. Queda en la auditoría con el antes y el después. Los recibos ya emitidos conservan su foto.
+         * @description DX-019. Solo cambian los campos enviados; vacío o null borra un dato (salvo el nombre y el color). El identificador fiscal es texto libre, sin validar el formato de ningún país. Queda en la auditoría con el antes y el después. Los recibos ya emitidos conservan su foto. DX-502-bis: la moneda del catálogo (ISO 4217 de la referencia de monedas) solo cambia la de los ítems nuevos del plan.
          */
         patch: operations["ClinicSettingsController_update"];
         trace?: never;
@@ -13796,6 +13796,8 @@ export interface components {
             logoUrl: string | null;
             /** @description Falta la razón social o el identificador fiscal: los recibos dicen «Datos fiscales pendientes». */
             fiscalDataPending: boolean;
+            /** @description DX-502-bis. Moneda del catálogo de precios fijada por la clínica (ISO 4217): la de los ítems nuevos del plan. Null = sin fijar: la común de las sedes activas, o ninguna. */
+            catalogCurrency: string | null;
         };
         UpdateClinicSettingsDto: {
             /** @description Nombre comercial (obligatorio si se envía). 1..120. */
@@ -13817,6 +13819,8 @@ export interface components {
              * @example #0E7490
              */
             primaryColor?: string;
+            /** @description DX-502-bis. Moneda del catálogo de precios: código ISO 4217 de una moneda admitida (GET /currencies). Es la que se congela en los ítems NUEVOS del plan, para mostrar el precio de lista y el ahorro por convenio; los ítems ya creados no cambian. Vacío o null = sin fijar: la moneda común de las sedes activas, o ninguna. */
+            catalogCurrency?: string | null;
         };
         CurrencyDto: {
             /**
@@ -29929,7 +29933,7 @@ export interface operations {
                     "application/json": components["schemas"]["ClinicSettingsDto"];
                 };
             };
-            /** @description Un texto vacío donde es obligatorio, con saltos de línea o más largo que su tope, un email sin forma nombre@dominio o un color que no es #RRGGBB */
+            /** @description Un texto vacío donde es obligatorio, con saltos de línea o más largo que su tope, un email sin forma nombre@dominio, un color que no es #RRGGBB o una moneda del catálogo que no es una moneda admitida */
             400: {
                 headers: {
                     [name: string]: unknown;

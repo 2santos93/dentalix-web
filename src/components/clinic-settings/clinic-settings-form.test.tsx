@@ -37,6 +37,7 @@ const BASE: ClinicSettings = {
   primaryColor: '#0E7490',
   logoUrl: null,
   fiscalDataPending: true,
+  catalogCurrency: null,
 };
 
 const bar = () => screen.queryByRole('region', { name: 'Cambios sin guardar' });
