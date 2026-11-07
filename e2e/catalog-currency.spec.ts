@@ -259,7 +259,10 @@ test('DX-502-ter: con la moneda fijada en USD, el catálogo y el selector de pro
     await group.getByRole('searchbox', { name: 'Buscar en el catálogo' }).fill(CATALOG_LABEL_PREFIX);
     const option = group.getByRole('radio', { name: new RegExp(CATALOG_LABEL_PREFIX) });
     await expect(option).toBeVisible();
-    const optionPrice = group.locator('label').filter({ has: option }).getByTestId('catalog-picker-price');
+    const optionPrice = group
+      .locator('label')
+      .filter({ hasText: CATALOG_LABEL_PREFIX })
+      .getByTestId('catalog-picker-price');
     await expect(optionPrice).toContainText(figure(CATALOG_PRICE));
     await expect(optionPrice).toContainText(usd);
     if (viewport.width === 390) await expectNoHorizontalScroll(page);

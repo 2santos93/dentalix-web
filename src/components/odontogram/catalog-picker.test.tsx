@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CatalogPicker } from './catalog-picker';
 import type { DentalCatalogItem } from '@/lib/odontogram/catalog-api';
@@ -113,6 +113,11 @@ describe('CatalogPicker', () => {
     const prices = screen.getAllByTestId('catalog-picker-price');
     expect(prices).toHaveLength(1);
     expect(prices[0]).toHaveTextContent('US$ 150,00');
+    // Mismo recorrido que el e2e: la fila (label) del ítem contiene su precio.
+    const row = screen.getByRole('radio', { name: /resina/i }).closest('label') as HTMLElement;
+    expect(within(row).getByTestId('catalog-picker-price')).toHaveTextContent('US$ 150,00');
+    const other = screen.getByRole('radio', { name: /limpieza/i }).closest('label') as HTMLElement;
+    expect(within(other).queryByTestId('catalog-picker-price')).not.toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /resina/i })).toBeInTheDocument();
   });
 
