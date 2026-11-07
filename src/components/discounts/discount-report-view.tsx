@@ -20,6 +20,7 @@ import {
   type DiscountReportItem,
   type DiscountReportTotal,
   type AgreementReductionTotal,
+  type AgreementUnmeasuredTotal,
 } from '@/lib/discounts/discounts-api';
 import { DISCOUNT_REASON_LABELS, type DiscountReasonCode } from '@/lib/discounts/discount-rules';
 import { referenceRateText } from '@/lib/discounts/reference-rate';
@@ -63,6 +64,14 @@ export const discountReportCopy = {
   agreementReason: (name: string | null) => `Convenio ${name ?? ''}`.trim(),
   agreementLine: (name: string, amount: string, percent: string, base: string) =>
     `Convenio «${name}»: −${amount} (${percent} de ${base})`,
+  // DX-513-ter: convenio con el catálogo en otra moneda sin la base congelada
+  // (no había tasa al darlo de alta, o es anterior). No es un error: el dato
+  // no permite medirlo sin convertir, y el informe nunca convierte.
+  agreementUnmeasuredLine: (name: string, catalogCurrency: string, planCurrency: string) =>
+    `Convenio «${name}»: sin referencia comparable (catálogo en ${catalogCurrency}, plan en ${planCurrency})`,
+  agreementUnmeasuredAmount: 'Sin medir',
+  agreementUnmeasuredItems: (n: number) =>
+    n === 1 ? '1 ítem de convenio sin referencia comparable' : `${n} ítems de convenio sin referencia comparable`,
   agreementAssignedBy: (name: string) => `Convenio asignado por ${name}`,
   itemCreatedBy: (name: string) => `Ítem creado por ${name}`,
   items: (n: number) => (n === 1 ? '1 ítem' : `${n} ítems`),
@@ -90,9 +99,14 @@ export const discountReportCopy = {
   emptyHint: 'Prueba con otras fechas, otra sede u otro miembro del equipo.',
 };
 
-/** SEC-047: línea que solo tiene rebaja de convenio (sin descuento propio). */
+/** SEC-047: línea que solo tiene rebaja de convenio (sin descuento propio). DX-513-ter: o convenio sin medir. */
 function agreementOnly(item: DiscountReportItem): boolean {
-  return item.discount === 0 && item.agreementReduction > 0;
+  return item.discount === 0 && (item.agreementReduction > 0 || item.agreementUnmeasured);
+}
+
+/** SEC-047 / DX-513-ter: la fila habla de un convenio (con rebaja medida o sin medir). */
+function hasAgreement(item: DiscountReportItem): boolean {
+  return item.agreementReduction > 0 || item.agreementUnmeasured;
 }
 
 function reasonLabel(item: DiscountReportItem): string {
@@ -118,14 +132,16 @@ function patientHref(item: DiscountReportItem): string {
 function DiscountSummary({
   totals,
   agreementTotals,
+  agreementUnmeasuredTotals,
   fmt,
 }: {
   totals: DiscountReportTotal[];
   agreementTotals: AgreementReductionTotal[];
+  agreementUnmeasuredTotals: AgreementUnmeasuredTotal[];
   fmt: RegionalFormat;
 }) {
   const headingId = React.useId();
-  if (totals.length === 0 && agreementTotals.length === 0) return null;
+  if (totals.length === 0 && agreementTotals.length === 0 && agreementUnmeasuredTotals.length === 0) return null;
   return (
     <section aria-labelledby={headingId} className="rounded-xl border border-border bg-surface">
       <h2 id={headingId} className="t-title border-b border-border-subtle px-4 py-3 text-ink sm:px-6">
@@ -158,6 +174,15 @@ function DiscountSummary({
             ]}
           />
         ))}
+        {/* DX-513-ter: solo el recuento; sin cifra, porque no se pudo medir. */}
+        {agreementUnmeasuredTotals.map((total) => (
+          <SummaryRow
+            key={`unmeasured-${total.currency}`}
+            testId={`agreement-unmeasured-${total.currency}`}
+            heading={`${total.currency} · ${discountReportCopy.agreementUnmeasuredItems(total.items)}`}
+            metrics={[]}
+          />
+        ))}
       </div>
     </section>
   );
@@ -181,14 +206,16 @@ function SummaryRow({
       <p id={labelId} className="text-sm font-medium tabular-nums text-ink">
         {heading}
       </p>
-      <dl aria-labelledby={labelId} className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 sm:flex sm:gap-8">
-        {metrics.map((m) => (
-          <div key={m.label} className="contents sm:flex sm:min-w-0 sm:flex-col sm:items-end">
-            <dt className="t-label text-muted">{m.label}</dt>
-            <dd className={cn('text-right tabular-nums text-ink', m.strong && 'font-medium')}>{m.value}</dd>
-          </div>
-        ))}
-      </dl>
+      {metrics.length > 0 ? (
+        <dl aria-labelledby={labelId} className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 sm:flex sm:gap-8">
+          {metrics.map((m) => (
+            <div key={m.label} className="contents sm:flex sm:min-w-0 sm:flex-col sm:items-end">
+              <dt className="t-label text-muted">{m.label}</dt>
+              <dd className={cn('text-right tabular-nums text-ink', m.strong && 'font-medium')}>{m.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
     </div>
   );
 }
@@ -200,12 +227,18 @@ function SummaryRow({
  * rebaja no pinta un «−0» de descuento. En la tarjeta del teléfono solo va
  * el importe; la frase del convenio pasa a la línea 2, que parte líneas
  * (dentro de un bloque que no se encoge desbordaba 390 px, QA D1).
+ * DX-513-ter: un convenio sin medir lleva una línea neutra (no es un error) y,
+ * si es lo único de la fila, «Sin medir» en lugar del importe.
  */
 function AmountCell({ item, fmt }: { item: DiscountReportItem; fmt: RegionalFormat }) {
   const agreement = item.agreementReduction > 0;
+  const unmeasured = agreementUnmeasuredLine(item);
   return (
     <>
-      {item.discount > 0 || !agreement ? (
+      {item.discount === 0 && unmeasured ? (
+        <span className="block font-medium text-muted">{discountReportCopy.agreementUnmeasuredAmount}</span>
+      ) : null}
+      {item.discount > 0 || !hasAgreement(item) ? (
         <>
           <span className="block font-medium tabular-nums text-ink">
             −{moneyWithCode(item.discount, item.currency, fmt)}
@@ -229,16 +262,41 @@ function AmountCell({ item, fmt }: { item: DiscountReportItem; fmt: RegionalForm
       {agreement ? (
         <span className="block text-xs tabular-nums text-ink">{agreementLine(item, fmt)}</span>
       ) : null}
+      {unmeasured ? <span className="block text-xs text-muted">{unmeasured}</span> : null}
     </>
   );
 }
 
-/** DX-513-bis: el catálogo en su moneda y la tasa congelada; null si no se convirtió. */
+/**
+ * DX-513-bis: el catálogo en su moneda y la tasa congelada; null si no se
+ * convirtió. DX-513-ter: en una lista de convenio, la tasa es la de la base
+ * (`baseRate`): el catálogo (`basePrice`) en SU moneda (`catalogCurrency`).
+ * Nunca se empareja una tasa con `referenceCurrency` de una lista (sería
+ * «1 USD = 880 USD»).
+ */
 function convertedLine(item: DiscountReportItem, fmt: RegionalFormat): string | null {
-  if (!item.rate || !item.referenceCurrency || item.catalogPrice === null) return null;
-  return discountReportCopy.catalogConverted(
-    moneyWithCode(item.catalogPrice, item.referenceCurrency, fmt),
-    referenceRateText(item.rate, item.referenceCurrency, item.currency, fmt),
+  if (item.rate && item.referenceCurrency && item.catalogPrice !== null) {
+    return discountReportCopy.catalogConverted(
+      moneyWithCode(item.catalogPrice, item.referenceCurrency, fmt),
+      referenceRateText(item.rate, item.referenceCurrency, item.currency, fmt),
+    );
+  }
+  if (item.baseRate && item.catalogCurrency && item.basePrice !== null) {
+    return discountReportCopy.catalogConverted(
+      moneyWithCode(item.basePrice, item.catalogCurrency, fmt),
+      referenceRateText(item.baseRate, item.catalogCurrency, item.currency, fmt),
+    );
+  }
+  return null;
+}
+
+/** DX-513-ter: la frase neutra de un convenio sin medir; null si se midió o no hay convenio. */
+function agreementUnmeasuredLine(item: DiscountReportItem): string | null {
+  if (!item.agreementUnmeasured) return null;
+  return discountReportCopy.agreementUnmeasuredLine(
+    item.agreementName ?? '',
+    item.catalogCurrency ?? '',
+    item.currency,
   );
 }
 
@@ -261,9 +319,9 @@ function agreementLine(item: DiscountReportItem, fmt: RegionalFormat): string {
   );
 }
 
-/** SEC-047: quién asignó el convenio y quién creó el ítem, si hay rebaja de convenio. */
+/** SEC-047: quién asignó el convenio y quién creó el ítem, si hay rebaja de convenio (o sin medir, DX-513-ter). */
 function AgreementAuthors({ item, className }: { item: DiscountReportItem; className?: string }) {
-  if (item.agreementReduction <= 0) return null;
+  if (!hasAgreement(item)) return null;
   const unknown = discountReportCopy.unknownAuthor;
   return (
     <span className={cn('block text-xs text-muted', className)}>
@@ -437,6 +495,7 @@ export function DiscountReportView({ token }: { token: string }) {
               ) : null}
               {convertedLine(item, fmt) ? <> · {convertedLine(item, fmt)}</> : null}
               {item.agreementReduction > 0 ? <> · {agreementLine(item, fmt)}</> : null}
+              {agreementUnmeasuredLine(item) ? <> · {agreementUnmeasuredLine(item)}</> : null}
             </>
           ),
         },
@@ -446,16 +505,21 @@ export function DiscountReportView({ token }: { token: string }) {
           numeric: true,
           mobile: 'trailing',
           cell: (item) => <AmountCell item={item} fmt={fmt} />,
-          mobileCell: (item) => (
-            <span data-testid="discount-card-amount" className="font-medium">
-              −
-              {moneyWithCode(
-                item.discount > 0 || item.agreementReduction <= 0 ? item.discount : item.agreementReduction,
-                item.currency,
-                fmt,
-              )}
-            </span>
-          ),
+          mobileCell: (item) =>
+            item.discount === 0 && item.agreementUnmeasured ? (
+              <span data-testid="discount-card-amount" className="font-medium text-muted">
+                {discountReportCopy.agreementUnmeasuredAmount}
+              </span>
+            ) : (
+              <span data-testid="discount-card-amount" className="font-medium">
+                −
+                {moneyWithCode(
+                  item.discount > 0 || item.agreementReduction <= 0 ? item.discount : item.agreementReduction,
+                  item.currency,
+                  fmt,
+                )}
+              </span>
+            ),
         },
         {
           id: 'reason',
@@ -594,7 +658,14 @@ export function DiscountReportView({ token }: { token: string }) {
               emptyDescription={discountReportCopy.emptyHint}
               skeleton={<TableSkeleton rows={5} />}
             >
-              {data ? <DiscountSummary totals={data.totals} agreementTotals={data.agreementTotals} fmt={fmt} /> : null}
+              {data ? (
+                <DiscountSummary
+                  totals={data.totals}
+                  agreementTotals={data.agreementTotals}
+                  agreementUnmeasuredTotals={data.agreementUnmeasuredTotals}
+                  fmt={fmt}
+                />
+              ) : null}
 
               <ResultCount
                 total={data?.total ?? 0}

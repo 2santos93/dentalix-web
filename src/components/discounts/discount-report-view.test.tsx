@@ -62,6 +62,8 @@ function row(overrides: Partial<DiscountReportItem> = {}): DiscountReportItem {
     referencePriceInPlan: null,
     basePriceInPlan: null,
     rate: null,
+    baseRate: null,
+    agreementUnmeasured: false,
     price: 1200000,
     priceReduction: 0,
     itemDiscount: 180000,
@@ -105,6 +107,7 @@ function report(items: DiscountReportItem[], overrides: Partial<DiscountReport> 
         ]
       : [],
     agreementTotals: [],
+    agreementUnmeasuredTotals: [],
     items,
     total: items.length,
     page: 1,
@@ -426,6 +429,130 @@ describe('DiscountReportView (DX-204)', () => {
       const amount = within(card).getByTestId('discount-card-amount');
       expect(amount).not.toHaveTextContent(/Convenio «/);
       expect(amount).toHaveTextContent(/−\s?2\.000\.000,00/);
+    });
+  });
+
+  // DX-513-ter (test 15): lista de convenio en USD (3,50) con el catálogo en
+  // VES (3.600 Bs.). Medida: la rebaja sobre la base convertida y una línea
+  // con el catálogo en su moneda y la tasa congelada. Sin medir: una línea
+  // neutra «sin referencia comparable» y «Sin medir» en el importe.
+  describe('DX-513-ter: lista de convenio entre monedas', () => {
+    const RATE_880 = { fromPerBase: 880, toPerBase: 1, source: 'MANUAL' as const, rateDate: '2026-11-07' };
+    const listAgreement = (overrides: Partial<DiscountReportItem> = {}) =>
+      row({
+        currency: 'USD',
+        priceSource: 'AGREEMENT_PRICE_LIST',
+        agreementName: 'Empresa',
+        catalogCurrency: 'VES',
+        referenceCurrency: 'USD',
+        catalogPrice: 3.5,
+        referencePriceInPlan: 3.5,
+        basePrice: 3600,
+        price: 3.5,
+        priceReduction: 0,
+        itemDiscount: 0,
+        discount: 0,
+        percent: 0,
+        reason: null,
+        reasonNote: null,
+        discountById: null,
+        discountByName: null,
+        agreementAssignedById: 'adm-1',
+        agreementAssignedByName: 'Dr. Owner',
+        ...overrides,
+      });
+    const measured = () =>
+      listAgreement({ basePriceInPlan: 4.09, baseRate: RATE_880, agreementReduction: 0.59, agreementPercent: 14.43 });
+    const unmeasured = () => listAgreement({ itemId: 'item-2', agreementUnmeasured: true });
+
+    it('medida: la rebaja sobre la base convertida y el catálogo en VES con su tasa; nunca «1 USD = 880 USD»', async () => {
+      mockedReport.mockResolvedValue(
+        report([measured()], { totals: [], agreementTotals: [{ currency: 'USD', items: 1, reduction: 0.59 }] }),
+      );
+      render(<DiscountReportView token="tok" />);
+      const tableRow = await findRow();
+      expect(within(tableRow).getByText(/Convenio «Empresa»/)).toHaveTextContent(
+        /^Convenio «Empresa»: −0,59\sUSD \(14,43\s%\sde 4,09\sUSD\)$/,
+      );
+      expect(
+        within(tableRow).getByText(/^Catálogo 3\.?600,00 VES · tasa 1 USD = 880 VES del 07\/11\/2026, manual$/),
+      ).toBeInTheDocument();
+      expect(document.body).not.toHaveTextContent(/1 USD = 880 USD/);
+      expect(within(tableRow).queryByText('Sin medir')).not.toBeInTheDocument();
+    });
+
+    it('sin medir: línea neutra «sin referencia comparable», «Sin medir» en el importe (no «−0») y el autor del convenio', async () => {
+      mockedReport.mockResolvedValue(
+        report([unmeasured()], { totals: [], agreementUnmeasuredTotals: [{ currency: 'USD', items: 1 }] }),
+      );
+      render(<DiscountReportView token="tok" />);
+      const tableRow = await findRow();
+      const line = within(tableRow).getByText(/sin referencia comparable/);
+      expect(line).toHaveTextContent('Convenio «Empresa»: sin referencia comparable (catálogo en VES, plan en USD)');
+      expect(line).toHaveClass('text-muted');
+      expect(within(tableRow).getByText('Sin medir')).toBeInTheDocument();
+      expect(within(tableRow).queryByText(/^−\s?0,00/)).not.toBeInTheDocument();
+      expect(within(tableRow).queryByText(/^Catálogo /)).not.toBeInTheDocument();
+      // Es un convenio, no un descuento sin motivo: ni aviso ni «Sin registrar».
+      expect(within(tableRow).getByText('Convenio Empresa')).toBeInTheDocument();
+      expect(within(tableRow).queryByText('Sin motivo')).not.toBeInTheDocument();
+      expect(within(tableRow).getByTestId('discount-author')).toHaveTextContent('Dr. Owner');
+    });
+
+    it('sin medir y con descuento propio: el descuento sale y la línea neutra también', async () => {
+      mockedReport.mockResolvedValue(
+        report([unmeasured()].map((r) => ({ ...r, itemDiscount: 0.5, discount: 0.5, percent: 14.29, reason: 'PROMOTION' }))),
+      );
+      render(<DiscountReportView token="tok" />);
+      const tableRow = await findRow();
+      expect(within(tableRow).getByText(/^−\s?0,50\sUSD$/)).toBeInTheDocument();
+      expect(within(tableRow).getByText(/sin referencia comparable/)).toBeInTheDocument();
+      expect(within(tableRow).queryByText('Sin medir')).not.toBeInTheDocument();
+    });
+
+    it('el resumen cuenta las filas sin medir por moneda, sin cifra', async () => {
+      mockedReport.mockResolvedValue(
+        report([measured(), unmeasured()], {
+          totals: [],
+          agreementTotals: [{ currency: 'USD', items: 1, reduction: 0.59 }],
+          agreementUnmeasuredTotals: [{ currency: 'USD', items: 3 }],
+        }),
+      );
+      render(<DiscountReportView token="tok" />);
+      const summary = await screen.findByTestId('agreement-unmeasured-USD');
+      expect(summary).toHaveTextContent(/^USD · 3 ítems de convenio sin referencia comparable$/);
+      expect(screen.getByTestId('agreement-total-USD')).toHaveTextContent('USD · 1 ítem con rebaja de convenio');
+    });
+
+    it('solo filas sin medir: el resumen sale igual', async () => {
+      mockedReport.mockResolvedValue(
+        report([unmeasured()], { totals: [], agreementUnmeasuredTotals: [{ currency: 'USD', items: 1 }] }),
+      );
+      render(<DiscountReportView token="tok" />);
+      expect(await screen.findByTestId('agreement-unmeasured-USD')).toHaveTextContent(
+        'USD · 1 ítem de convenio sin referencia comparable',
+      );
+    });
+
+    describe('teléfono (<640px)', () => {
+      let restore: () => void;
+      beforeEach(() => {
+        restore = mockPhone();
+      });
+      afterEach(() => restore());
+
+      it('la línea 2 lleva la frase neutra y el importe dice «Sin medir»', async () => {
+        mockedReport.mockResolvedValue(report([measured(), unmeasured()], { totals: [] }));
+        render(<DiscountReportView token="tok" />);
+        const cards = within(await screen.findByRole('list', { name: 'Descuentos del periodo' })).getAllByRole(
+          'listitem',
+        );
+        expect(cards[0]).toHaveTextContent(/Catálogo 3\.?600,00 VES · tasa 1 USD = 880 VES/);
+        expect(within(cards[0]).getByTestId('discount-card-amount')).toHaveTextContent(/−\s?0,59/);
+        expect(cards[1]).toHaveTextContent('Convenio «Empresa»: sin referencia comparable (catálogo en VES, plan en USD)');
+        expect(within(cards[1]).getByTestId('discount-card-amount')).toHaveTextContent(/^Sin medir$/);
+        expect(cards[1]).toHaveTextContent('Dado por: Dr. Owner');
+      });
     });
   });
 

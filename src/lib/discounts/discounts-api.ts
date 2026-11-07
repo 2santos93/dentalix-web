@@ -11,6 +11,8 @@ export type DiscountReport = components['schemas']['DiscountReportDto'];
 export type DiscountReportItem = components['schemas']['DiscountReportItemDto'];
 export type DiscountReportTotal = components['schemas']['DiscountReportTotalDto'];
 export type AgreementReductionTotal = components['schemas']['AgreementReductionTotalDto'];
+/** DX-513-ter: líneas de convenio «sin referencia comparable» de una moneda, sin importe. */
+export type AgreementUnmeasuredTotal = components['schemas']['AgreementUnmeasuredTotalDto'];
 
 /** Cambiar la política y ver el informe: solo ADMIN (como la API). */
 export function canManageDiscounts(role: ClinicRole | null): boolean {
