@@ -13,7 +13,7 @@ import { FormModal } from '@/components/shared/form-modal';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { roundAmount } from '@/lib/money/round';
-import { installmentAmounts } from '@/lib/money/line-rounding';
+import { installmentSplit, MAX_INSTALLMENTS } from '@/lib/money/line-rounding';
 import { useCurrencyRoundingDigits } from '@/lib/reference/currency-rounding-digits';
 
 // Copy como constantes (i18n-ready). Los textos son los que ya tenía el modal
@@ -160,7 +160,7 @@ export function CreatePaymentPlanModal({
     };
     setFieldErrors(nextFieldErrors);
     if (nextFieldErrors.total || nextFieldErrors.downPayment || pie === null) return;
-    if (!Number.isInteger(count) || count < 1 || count > 600) {
+    if (!Number.isInteger(count) || count < 1 || count > MAX_INSTALLMENTS) {
       setError(copy.invalidCount);
       return;
     }
@@ -198,18 +198,20 @@ export function CreatePaymentPlanModal({
   // dígitos de redondeo de la moneda y el resto en la última.
   const previewFinanced = roundAmount(Math.max((total ?? 0) - (pie ?? 0), 0));
   const count = Number(form.installmentsCount);
-  const previewInstallments = digits === null ? null : installmentAmounts(previewFinanced, count, digits);
-  const previewPer = previewInstallments?.[0] ?? 0;
-  const previewLast = previewInstallments?.at(-1) ?? previewPer;
-  const previewText =
-    previewInstallments === null
+  // Un número de cuotas no válido (no entero, < 1 o > 600) no tiene vista
+  // previa: el error sale al crear. Solo se calculan la cuota base y la última.
+  const validCount = Number.isInteger(count) && count >= 1 && count <= MAX_INSTALLMENTS;
+  const split = digits === null ? null : installmentSplit(previewFinanced, count, digits);
+  const previewText = !validCount
+    ? null
+    : split === null
       ? copy.financedPreviewPending(money(previewFinanced, currency))
-      : previewLast === previewPer
-        ? copy.financedPreview(money(previewFinanced, currency), money(previewPer, currency))
+      : split.last === split.base
+        ? copy.financedPreview(money(previewFinanced, currency), money(split.base, currency))
         : copy.financedPreviewLast(
             money(previewFinanced, currency),
-            money(previewPer, currency),
-            money(previewLast, currency),
+            money(split.base, currency),
+            money(split.last, currency),
           );
 
   return (
@@ -235,7 +237,7 @@ export function CreatePaymentPlanModal({
               type="number"
               inputMode="numeric"
               min={1}
-              max={600}
+              max={MAX_INSTALLMENTS}
               step="1"
               value={form.installmentsCount}
               onChange={(e) => patch({ installmentsCount: e.target.value })}
@@ -298,9 +300,7 @@ export function CreatePaymentPlanModal({
             aria-describedby={fieldErrors.total ? fieldErrorId('pp-total') : undefined}
           />
         </FormField>
-        <p className="text-sm text-muted tabular-nums">
-          {previewText}
-        </p>
+        {previewText ? <p className="text-sm text-muted tabular-nums">{previewText}</p> : null}
         </>
       ) : null}
     </FormModal>

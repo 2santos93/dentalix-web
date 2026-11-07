@@ -169,6 +169,26 @@ describe('DX-488: la vista previa reparte las cuotas como la API (unidades de la
     expect(dialogText()).not.toContain('Última');
   });
 
+  it.each(['99999999999', '100000000', '0', '1.5', '601'])(
+    'M1: con %s cuotas (no válido) no se rompe ni se congela: no pinta vista previa',
+    async (count) => {
+      renderModal({ plan: { id: 'plan-jpy', currency: 'JPY', billable: 10000 } });
+      await waitFor(() => expect(dialogText()).toContain('Cuota:'));
+      await withCount(count);
+      expect(screen.getByRole('dialog', { name: 'Crear plan de pagos' })).toBeInTheDocument();
+      expect(dialogText()).not.toContain('Financiado:');
+      expect(dialogText()).not.toContain('Cuota:');
+    },
+  );
+
+  it('M1: 600 cuotas (el máximo de la API) sí tienen vista previa', async () => {
+    renderModal({ plan: { id: 'plan-jpy', currency: 'JPY', billable: 1000000 } });
+    await withCount('600');
+    await waitFor(() =>
+      expect(dialogText()).toContain(`Cuota: ${caracas(1666, 'JPY')} · Última: ${caracas(2066, 'JPY')}`),
+    );
+  });
+
   it('sin los dígitos de la moneda (la API no responde) no adivina: «se calcula al crear»', async () => {
     mockedCurrencies.mockReset().mockRejectedValue(new Error('offline'));
     renderModal({ plan: { id: 'plan-jpy', currency: 'JPY', billable: 10000 } });

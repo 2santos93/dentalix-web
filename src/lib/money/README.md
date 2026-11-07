@@ -31,7 +31,7 @@ Decimales de las monedas (DX-340, README de la API «Redondeo de importes»):
   JPY, EUR y ALL con 123,45 × 7,5 %, límites del descuento, total de líneas
   y, DX-488, el reparto de las cuotas de un plan de pagos en `installmentSplit`);
   `line-rounding.test.ts` los comprueba aquí.
-- **Cuotas de un plan de pagos** (DX-488): `installmentAmounts` reparte como
+- **Cuotas de un plan de pagos** (DX-488): `installmentSplit` (cuota base y última, en O(1); `null` fuera de 1…600 cuotas) reparte como
   `generateSchedule` de la API, en unidades de `roundingDigits` de la moneda y
   el resto en la última (JPY 10 000 en 3 = 3 333, 3 333 y 3 334; en USD y VES,
   al céntimo como siempre). La vista previa de «Crear plan de pagos» lee los

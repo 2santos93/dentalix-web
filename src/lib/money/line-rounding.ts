@@ -72,21 +72,32 @@ export function linesTotal(lines: readonly MoneyLine[]): number {
   return centsToAmount(lines.reduce((sum, line) => sum + lineCents(line), 0));
 }
 
+/** Máximo de cuotas de un plan de pagos: el mismo tope que la API (1…600). */
+export const MAX_INSTALLMENTS = 600;
+
 /**
  * Cuotas de un plan de pagos (DX-488), espejo de `generateSchedule` de la API:
  * en unidades de `roundingDigits` de la moneda (1, 10 o 100 céntimos), las
- * cuotas 1…n−1 valen `floor(financiado / unidad / n) · unidad` y la última el
- * resto, céntimos sueltos incluidos (JPY 10000 en 3 = 3333, 3333, 3334). Con 2
- * dígitos es el reparto al céntimo de siempre. La suma es exacta. Sin cuotas
- * válidas (n entero ≥ 1) o con un financiado negativo, `[]`.
+ * cuotas 1…n−1 valen `floor(financiado / unidad / n) · unidad` (`base`) y la
+ * última el resto, céntimos sueltos incluidos (`last`): JPY 10000 en 3 = 3333,
+ * 3333, 3334. Con 2 dígitos es el reparto al céntimo de siempre. Solo calcula
+ * esas dos cifras (O(1)): nunca un array de `count` elementos, así un número
+ * de cuotas tecleado enorme no congela la pantalla. `null` si `count` no es un
+ * entero entre 1 y `MAX_INSTALLMENTS` o el financiado es negativo.
  */
-export function installmentAmounts(financed: number, count: number, digits: RoundingDigits): number[] {
+export function installmentSplit(
+  financed: number,
+  count: number,
+  digits: RoundingDigits,
+): { base: number; last: number } | null {
   const financedCents = amountCents(financed);
-  if (!Number.isInteger(count) || count < 1 || financedCents < 0) return [];
+  if (!Number.isInteger(count) || count < 1 || count > MAX_INSTALLMENTS || financedCents < 0) return null;
   const unit = unitCents(digits);
   const baseCents = Number((BigInt(financedCents) / unit / BigInt(count)) * unit);
-  const lastCents = financedCents - baseCents * (count - 1);
-  return Array.from({ length: count }, (_, i) => centsToAmount(i === count - 1 ? lastCents : baseCents));
+  return {
+    base: centsToAmount(baseCents),
+    last: centsToAmount(financedCents - baseCents * (count - 1)),
+  };
 }
 
 /**
