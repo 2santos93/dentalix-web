@@ -30,6 +30,8 @@ import {
   locationNameMap,
   signatureRequestDetail,
   confirmationLinkDetail,
+  appointmentMoveDetail,
+  staffNameMap,
 } from './audit-labels';
 
 type AuditMetadata = AuditEvent['metadata'];
@@ -899,5 +901,56 @@ describe('paymentAllocationDetail (DX-399)', () => {
     expect(paymentAllocationDetail({}, ES_VE)).toBeNull();
     expect(paymentAllocationDetail({ reason: 'PAYMENT_REALLOCATED' }, ES_VE)).toBeNull();
     expect(paymentAllocationDetail({ allocation: manual.allocation }, ES_VE)).toBeNull();
+  });
+});
+
+describe('appointmentMoveDetail (DX-133-bis)', () => {
+  const ANA = 'AAAAAAAA-1111-4111-8111-111111111111';
+  const LUIS = '22222222-2222-4222-8222-222222222222';
+  const VE = { timeZone: 'America/Caracas', fmt: regionalFormat({ locale: 'es-VE', hourCycle: 'h12' }) };
+  const staff = staffNameMap([
+    { userId: ANA, fullName: 'Ana Pérez' },
+    { userId: LUIS, fullName: 'Luis Gómez' },
+  ]);
+  // 13:00 y 14:00 en Caracas (UTC−4).
+  const move = {
+    from: { start: '2026-11-10T17:00:00.000Z', end: '2026-11-10T17:30:00.000Z', providerId: ANA.toLowerCase() },
+    to: { start: '2026-11-10T18:00:00.000Z', end: '2026-11-10T18:30:00.000Z', providerId: LUIS },
+  };
+
+  it('pinta la hora con el reloj de la sede y el profesional antes y después', () => {
+    const detail = appointmentMoveDetail({ reason: 'APPOINTMENT_MOVED', move }, VE, staff);
+    expect(detail).toBe(
+      `Cita movida · Antes: ${VE.fmt.dateTime(new Date(move.from.start), VE.timeZone)}, Ana Pérez · Después: ${VE.fmt.dateTime(new Date(move.to.start), VE.timeZone)}, Luis Gómez`,
+    );
+    expect(detail).toMatch(/1:00/);
+    expect(detail).toMatch(/2:00/);
+  });
+
+  it('un profesional que ya no está se nombra como retirado, nunca por su id', () => {
+    const detail = appointmentMoveDetail(
+      { reason: 'APPOINTMENT_MOVED', move: { ...move, to: { ...move.to, providerId: '99999999-9999-4999-8999-999999999999' } } },
+      VE,
+      staff,
+    );
+    expect(detail).toContain('profesional retirado');
+    expect(detail).not.toContain('9999');
+  });
+
+  it('sin la lista del personal no nombra a nadie: solo si cambió de profesional', () => {
+    expect(appointmentMoveDetail({ reason: 'APPOINTMENT_MOVED', move }, VE, null)).toBe(
+      `Cita movida · ${VE.fmt.dateTime(new Date(move.from.start), VE.timeZone)} → ${VE.fmt.dateTime(new Date(move.to.start), VE.timeZone)} · otro profesional`,
+    );
+    expect(
+      appointmentMoveDetail({ reason: 'APPOINTMENT_MOVED', move: { ...move, to: { ...move.to, providerId: ANA } } }, VE, null),
+    ).not.toContain('otro profesional');
+  });
+
+  it('sin el reloj de la sede, «—» en vez de otra hora; null si no es un movimiento', () => {
+    expect(appointmentMoveDetail({ reason: 'APPOINTMENT_MOVED', move }, null, staff)).toBe(
+      'Cita movida · Antes: —, Ana Pérez · Después: —, Luis Gómez',
+    );
+    expect(appointmentMoveDetail({ reason: 'APPOINTMENT_MOVED' }, VE, staff)).toBe('Cita movida');
+    expect(appointmentMoveDetail({ reason: 'PATIENT_FLOW' }, VE, staff)).toBeNull();
   });
 });
