@@ -24,6 +24,7 @@ import {
   type MethodLineState,
   type PaymentMethodFieldsState,
 } from './payment-method-fields';
+import { amountCents, centsToAmount, roundAmount } from '@/lib/money/round';
 
 // Copy como constantes (i18n-ready). Ningún texto nombra un país ni un banco.
 export const splitPaymentCopy = {
@@ -226,16 +227,16 @@ export function splitTotalOf(
   for (const line of lines) {
     if (line.amount === null) continue;
     if (line.currency === planCurrency) {
-      cents += Math.round(line.amount * 100);
+      cents += amountCents(line.amount);
       continue;
     }
     if (rates.status === 'loading' || rates.status === 'idle') return { status: 'loading' };
     if (rates.status !== 'ready') return { status: 'unavailable' };
     const quote = quoteFromRates(rates.rates, line.currency, planCurrency);
     if (quote === null) return { status: 'unavailable' };
-    cents += Math.round(convertWithRate(line.amount, quote) * 100);
+    cents += amountCents(convertWithRate(line.amount, quote));
   }
-  return { status: 'ready', total: cents / 100 };
+  return { status: 'ready', total: centsToAmount(cents) };
 }
 
 /**
@@ -244,7 +245,7 @@ export function splitTotalOf(
  * cobro. La misma cuenta que `excessOverPending` de la API (QA DX-390).
  */
 export function excessOverPending(total: number, pending: number): number {
-  return Math.max(0, Math.round(total * 100) - Math.max(0, Math.round(pending * 100))) / 100;
+  return centsToAmount(Math.max(0, amountCents(total) - Math.max(0, amountCents(pending))));
 }
 
 /**
@@ -273,7 +274,7 @@ export function SplitPaymentSummary({
 }) {
   const money = (value: number) => sedeMoney(value, planCurrency, fmt);
   const known = total.status === 'ready' && typeof pending === 'number';
-  const after = known ? Math.round((pending - total.total) * 100) / 100 : null;
+  const after = known ? roundAmount(pending - total.total) : null;
   const excess = known ? excessOverPending(total.total, pending) : 0;
   const exceeds = excess > 0;
   return (

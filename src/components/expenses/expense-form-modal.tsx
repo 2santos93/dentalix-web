@@ -46,6 +46,7 @@ import type { ExpenseCategoriesState } from './use-expense-categories';
 import { locationRegionalFormat } from '@/lib/locations/location-settings';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
+import { amountCents } from '@/lib/money/round';
 
 export const expenseFormCopy = {
   ...expenseFieldsCopy,
@@ -222,7 +223,7 @@ export function ExpenseFormModal({
     if (!form.currency) next.currency = expenseFormCopy.currencyRequired;
     const { amount, error: amountError } = parseExpenseAmount(form.amount, form.currency);
     if (amountError) next.amount = amountError;
-    if (amount !== null && expense && Math.round(amount * 100) < Math.round(expense.paidAmount * 100)) {
+    if (amount !== null && expense && amountCents(amount) < amountCents(expense.paidAmount)) {
       next.amount = expenseFormCopy.amountMin(stamp.money(expense.paidAmount, expense.currency, expense.locationId));
     }
     if (!form.invoiceDate) next.invoiceDate = expenseFormCopy.invoiceDateRequired;

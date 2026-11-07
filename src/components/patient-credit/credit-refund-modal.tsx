@@ -26,6 +26,7 @@ import { creditPreviewCopy, type CreditSource } from './credit-balance';
 import { CreditPreview } from './credit-preview';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
+import { amountCents } from '@/lib/money/round';
 
 export const REFUND_REASON_MIN = 3;
 export const REFUND_REASON_MAX = 500;
@@ -129,7 +130,7 @@ export function CreditRefundModal({
     if (!parsed.ok || parsed.value <= 0) {
       setAmountError(parsed.ok || parsed.reason === 'empty' ? copy.invalidAmount : parsed.message);
       invalid = true;
-    } else if (Math.round(parsed.value * 100) > Math.round(source.credit * 100)) {
+    } else if (amountCents(parsed.value) > amountCents(source.credit)) {
       setAmountError(copy.overCredit(stamp.money(source.credit, source.currency)));
       invalid = true;
     }

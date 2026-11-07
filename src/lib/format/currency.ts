@@ -4,6 +4,7 @@
 import cldrFormatDigits from '@/lib/money/cldr-format-digits-zero.json';
 import { currencyTextFor, moneyWithCurrencyText, type CurrencyTexts } from '@/lib/format/currency-text';
 import { clinicCurrencyTexts } from '@/lib/format/clinic-currency-texts';
+import { amountText } from '@/lib/money/round';
 
 /**
  * Monedas que se PINTAN sin decimales: dígitos de formato de CLDR 47, fijados
@@ -54,7 +55,7 @@ export function formatCurrency(
       maximumFractionDigits: digits,
     }).format(amount);
   } catch {
-    return `${currency} ${amount.toFixed(digits)}`;
+    return `${currency} ${amountText(amount, digits)}`;
   }
 }
 

@@ -12,6 +12,7 @@ import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
 import { FormModal } from '@/components/shared/form-modal';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { roundAmount } from '@/lib/money/round';
 
 // Copy como constantes (i18n-ready). Los textos son los que ya tenía el modal
 // de «Plan de pagos» del plan de tratamiento, del que sale este componente.
@@ -35,10 +36,6 @@ const PERIODICITY_OPTIONS: { value: Periodicity; label: string }[] = [
   { value: 'BIWEEKLY', label: 'Quincenal' },
   { value: 'WEEKLY', label: 'Semanal' },
 ];
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
 
 /** El plan de tratamiento al que se le crea el calendario de cuotas. */
 export interface PaymentPlanTarget {
@@ -188,9 +185,9 @@ export function CreatePaymentPlanModal({
   }
 
   // Vista previa de la cuota (solo UX; el backend reparte de verdad).
-  const previewFinanced = round2(Math.max((total ?? 0) - (pie ?? 0), 0));
+  const previewFinanced = roundAmount(Math.max((total ?? 0) - (pie ?? 0), 0));
   const count = Number(form.installmentsCount);
-  const previewPer = count >= 1 ? round2(previewFinanced / count) : 0;
+  const previewPer = count >= 1 ? roundAmount(previewFinanced / count) : 0;
 
   return (
     <FormModal

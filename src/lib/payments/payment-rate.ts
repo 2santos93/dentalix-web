@@ -1,6 +1,7 @@
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import type { Payment } from './payments-api';
+import { roundAmount } from '@/lib/money/round';
 
 /** Estado de la tasa de un abono (DX-375). */
 export type PaymentExchangeRateStatus = Payment['exchangeRateStatus'];
@@ -96,7 +97,7 @@ export function ratePairLabel(
  * cobro coincide céntimo a céntimo con lo que guarda.
  */
 export function convertWithRate(amount: number, rate: Pick<RateQuote, 'fromPerBase' | 'toPerBase'>): number {
-  return Math.round((amount / rate.fromPerBase) * rate.toPerBase * 100) / 100;
+  return roundAmount((amount / rate.fromPerBase) * rate.toPerBase);
 }
 
 /**

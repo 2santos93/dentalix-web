@@ -6,6 +6,7 @@ import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeMinute, type SedeClock } from '@/lib/locations/sede-clock';
 import { DOC_TYPE_LABEL, genericDocTypeName } from '@/lib/patients/doc-type';
 import type { DocType } from '@/lib/patients/patients-api';
+import { centsToAmount, roundCents } from '@/lib/money/round';
 
 // Copy en español (i18n-ready), como el resto de etiquetas de dominio.
 
@@ -848,7 +849,7 @@ function allocationSide(
   fmt: RegionalFormat | null,
 ): string {
   if (lines.length === 0) return 'sin imputar';
-  const total = Math.round(lines.reduce((sum, l) => sum + l.amount * 100, 0)) / 100;
+  const total = centsToAmount(roundCents(lines.reduce((sum, l) => sum + l.amount * 100, 0)));
   return `${lines.length} ${lines.length === 1 ? 'ítem' : 'ítems'} · ${sedeMoney(total, currency, fmt)}`;
 }
 

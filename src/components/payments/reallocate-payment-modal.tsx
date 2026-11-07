@@ -21,6 +21,7 @@ import { ByTransferMark } from './by-transfer-mark';
 import { usePaymentAllocations } from './use-payment-allocations';
 import { useSedeStamp, type SedeStamp } from '@/lib/locations/sede-stamp';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
+import { amountCents, centsToAmount } from '@/lib/money/round';
 
 // Copy como constantes (i18n-ready), igual que el resto de vistas.
 const copy = {
@@ -71,8 +72,6 @@ function allocationSubject(data: PaymentAllocations, stamp: SedeStamp): string {
 function amountsOf(data: PaymentAllocations): Record<string, string> {
   return Object.fromEntries(data.allocations.map((line) => [line.treatmentPlanItemId, moneyInputText(line.amount)]));
 }
-
-const toCents = (amount: number) => Math.round(amount * 100);
 
 interface ReallocatePaymentModalProps {
   open: boolean;
@@ -159,10 +158,10 @@ export function ReallocatePaymentModal({
       })
     : [];
   const allocatedCents = parsed.reduce(
-    (sum, { result }) => (result?.ok && result.value > 0 ? sum + toCents(result.value) : sum),
+    (sum, { result }) => (result?.ok && result.value > 0 ? sum + amountCents(result.value) : sum),
     0,
   );
-  const planCents = data?.planAmount != null ? toCents(data.planAmount) : 0;
+  const planCents = data?.planAmount != null ? amountCents(data.planAmount) : 0;
   const over = allocatedCents > planCents;
 
   function setAmount(itemId: string, text: string) {
@@ -317,7 +316,7 @@ export function ReallocatePaymentModal({
                             // Cortesía, como el pie: la línea por encima de lo libre es la
                             // que el servidor rechazaría con «Un ítem admite como máximo…».
                             const overItem =
-                              !fieldError && result?.ok === true && toCents(result.value) > toCents(item.free);
+                              !fieldError && result?.ok === true && amountCents(result.value) > amountCents(item.free);
                             const overItemId = `${fieldId}-over`;
                             return (
                               <TableRow key={item.itemId} className="hover:bg-transparent">
@@ -382,15 +381,15 @@ export function ReallocatePaymentModal({
                       >
                         <p className="font-medium">
                           {copy.footer(
-                            money(allocatedCents / 100, data.planCurrency),
+                            money(centsToAmount(allocatedCents), data.planCurrency),
                             // Nunca negativo: cuánto se pasa lo dice el aviso de abajo.
-                            money(Math.max(0, planCents - allocatedCents) / 100, data.planCurrency),
+                            money(centsToAmount(Math.max(0, planCents - allocatedCents)), data.planCurrency),
                           )}
                         </p>
                         {/* Solo el aviso es alerta: el Σ cambia con cada tecla y no debe leerse cada vez. */}
                         {over ? (
                           <p role="alert">
-                            {copy.over(money((allocatedCents - planCents) / 100, data.planCurrency))}
+                            {copy.over(money(centsToAmount(allocatedCents - planCents), data.planCurrency))}
                           </p>
                         ) : null}
                       </div>

@@ -8,6 +8,7 @@ import {
   unitsToAmount,
   type RoundingDigits,
 } from '@/lib/money/line-rounding';
+import { amountCents, centsToAmount } from '@/lib/money/round';
 
 /*
  * DX-516: ajustes por medio de pago (impuesto, recargo o descuento), espejo
@@ -119,8 +120,8 @@ export function collectedAmount(
   amount: number,
   lines: readonly { type: PaymentAdjustmentType; amount: number }[],
 ): number {
-  const cents = lines.reduce((sum, l) => sum + adjustmentSign(l.type) * Math.round(l.amount * 100), Math.round(amount * 100));
-  return cents / 100;
+  const cents = lines.reduce((sum, l) => sum + adjustmentSign(l.type) * amountCents(l.amount), amountCents(amount));
+  return centsToAmount(cents);
 }
 
 /** «3 %», «7,5 %»: hasta 2 decimales, con la coma de los importes. */
