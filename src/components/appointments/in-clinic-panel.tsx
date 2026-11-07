@@ -150,6 +150,8 @@ export function InClinicPanel({
   const panelRunner: PatientFlowRunner = {
     token: runner.token,
     pendingId: runner.pendingId,
+    // DX-538-bis: el fallo de un paso, junto a sus botones dentro de la hoja.
+    error: runner.error,
     claimingKey: runner.claimingKey,
     claim: runner.claim,
     run: async (id, action, name, checkoutPending) => {

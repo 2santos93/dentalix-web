@@ -117,3 +117,12 @@ export class NetworkError extends Error {
     this.name = 'NetworkError';
   }
 }
+
+/**
+ * DX-538-bis: la API rechazó la petición (4xx: solape, permiso, estado que ya
+ * cambió…). Repetirla daría el mismo rechazo: no se ofrece «Reintentar».
+ * Un 5xx o un fallo de red, sí.
+ */
+export function isRejection(err: unknown): boolean {
+  return err instanceof ApiError && err.status >= 400 && err.status < 500;
+}

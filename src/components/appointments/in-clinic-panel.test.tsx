@@ -138,6 +138,24 @@ describe('InClinicPanel: sillón y «Mover a…» (DX-492)', () => {
     expect(screen.getByTestId('in-clinic-chair')).toHaveTextContent('Sillón 1 (inactivo)');
   });
 
+  it('DX-538-bis: el fallo de un paso se pinta junto a esa cita, dentro de la hoja', () => {
+    const failing = {
+      pendingId: null,
+      run: jest.fn(),
+      error: { appointmentId: 'a2', message: 'La cita ya cambió de estado.', retry: null },
+    };
+    render(
+      <InClinicPanel
+        state={staticState({ view: view({ waiting: [seated, item({ appointmentId: 'a2' })] }) })}
+        role="RECEPTION"
+        runner={failing}
+      />,
+    );
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByRole('alert')).toHaveTextContent('La cita ya cambió de estado.');
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
+  });
+
   it('«Mover a…» solo con sesión', () => {
     const state = staticState({ view: view({ waiting: [seated] }) });
     const name = /Mover a… la cita de Ana Ríos/;
@@ -541,7 +559,7 @@ describe('InClinicPanel (DX-200)', () => {
     expect(screen.getByRole('link', {name:'Abrir a pantalla completa'})).toHaveAttribute('href','/agenda/en-clinica');
   });
 
-  it('«Deshacer llegada» usa su ruta; un 409 avisa con Reintentar y relee', async () => {
+  it('«Deshacer llegada» usa su ruta; un 409 avisa sin Reintentar (DX-538-bis: daría lo mismo) y relee', async () => {
     mockedGet.mockResolvedValue(view({ waiting: [item({ appointmentId: 'a1' })] }));
     mockedUndo.mockRejectedValue(
       new ApiError(409, 'Solo se deshace la llegada de un paciente en espera.', undefined),
@@ -551,7 +569,7 @@ describe('InClinicPanel (DX-200)', () => {
     expect(mockedUndo).toHaveBeenCalledWith('T', 'a1');
     expect(toast.error).toHaveBeenCalledWith(
       'Solo se deshace la llegada de un paciente en espera.',
-      expect.objectContaining({ action: expect.objectContaining({ label: 'Reintentar' }) }),
+      expect.objectContaining({ action: undefined }),
     );
     await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
   });

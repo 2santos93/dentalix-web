@@ -130,7 +130,7 @@ import { InlineError } from '@/components/errors/inline-error';
 import { SectionError } from '@/components/errors/section-error';
 import { notifyError } from '@/components/errors/notify';
 import { toast } from 'sonner';
-import { ApiError } from '@/lib/api/api-error';
+import { ApiError, isRejection } from '@/lib/api/api-error';
 import {
   Sheet,
   SheetContent,
@@ -532,7 +532,11 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   // vuelve ahí (Radix lo devolvería a la opción de la lista, que ya no existe).
   const statusReturnFocus = useRef<HTMLElement | null>(null);
   // DX-538: el fallo de una acción del detalle, dentro del detalle.
-  const [detailError, setDetailError] = useState<{ message: string; retry: () => Promise<void> } | null>(null);
+  // DX-538-bis: `retry` nulo cuando la API lo rechazó (4xx): repetirlo daría lo mismo.
+  const [detailError, setDetailError] = useState<{
+    message: string;
+    retry: (() => Promise<void>) | null;
+  } | null>(null);
 
   // Fetch active staff once (retriable) — feeds the provider selector.
   useEffect(() => {
@@ -962,10 +966,9 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
         return;
       }
       // DX-133: un 4xx (solape, fuera de horario) repetiría el mismo rechazo: sin «Reintentar».
-      const rejected = err instanceof ApiError && err.status >= 400 && err.status < 500;
       notifyError(
         apiErrorMessage(err, copy.genericMoveError),
-        rejected ? undefined : { onRetry: () => handleDrop(appointment, target) },
+        isRejection(err) ? undefined : { onRetry: () => handleDrop(appointment, target) },
       );
     } finally {
       setMovePendingId(null);
@@ -1109,10 +1112,10 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
         return;
       }
       const message = apiErrorMessage(err, copy.genericStatusChangeError);
-      const retry = () => handleStatusChange(id, status, trigger);
+      const retry = isRejection(err) ? null : () => handleStatusChange(id, status, trigger);
       // DX-538: con el detalle abierto, el aviso con botón no se podría pulsar.
       if (detailAppointment?.id === id) setDetailError({ message, retry });
-      else notifyError(message, { onRetry: retry });
+      else notifyError(message, retry ? { onRetry: retry } : undefined);
     } finally {
       setUpdatingId(null);
     }
@@ -1180,9 +1183,9 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
       await refreshAppointmentsInPlace();
     } catch (err) {
       const message = apiErrorMessage(err, copy.wantsEarlierError);
-      const retry = () => handleWantsEarlierChange(id, wantsEarlier);
+      const retry = isRejection(err) ? null : () => handleWantsEarlierChange(id, wantsEarlier);
       if (detailAppointment?.id === id) setDetailError({ message, retry });
-      else notifyError(message, { onRetry: retry });
+      else notifyError(message, retry ? { onRetry: retry } : undefined);
     } finally {
       setUpdatingId(null);
     }
@@ -1832,9 +1835,16 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 {detailError ? (
                   <div className="flex flex-col items-start gap-2">
                     <InlineError variant="summary">{detailError.message}</InlineError>
-                    <Button type="button" variant="secondary" size="sm" onClick={() => void detailError.retry()}>
-                      {copy.detailRetry}
-                    </Button>
+                    {detailError.retry ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => void detailError.retry?.()}
+                      >
+                        {copy.detailRetry}
+                      </Button>
+                    ) : null}
                   </div>
                 ) : null}
                 {renderFlowActions(liveDetailAppointment, '')}
