@@ -13,6 +13,8 @@ import { FormModal } from '@/components/shared/form-modal';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { roundAmount } from '@/lib/money/round';
+import { installmentSplit, MAX_INSTALLMENTS } from '@/lib/money/line-rounding';
+import { useCurrencyRoundingDigits } from '@/lib/reference/currency-rounding-digits';
 
 // Copy como constantes (i18n-ready). Los textos son los que ya tenía el modal
 // de «Plan de pagos» del plan de tratamiento, del que sale este componente.
@@ -25,6 +27,10 @@ const copy = {
   totalField: 'Total a financiar',
   submit: 'Crear',
   financedPreview: (financed: string, per: string) => `Financiado: ${financed} · Cuota: ${per}`,
+  // DX-488: las cuotas van en unidades de la moneda y la última se lleva el resto.
+  financedPreviewLast: (financed: string, per: string, last: string) =>
+    `Financiado: ${financed} · Cuota: ${per} · Última: ${last}`,
+  financedPreviewPending: (financed: string) => `Financiado: ${financed} · Cuota: se calcula al crear el plan`,
   invalidCount: 'El número de cuotas debe ser un entero entre 1 y 600.',
   invalidTotal: 'El total a financiar debe ser mayor que 0.',
   invalidDownPayment: 'El pie no puede ser negativo ni mayor que el total.',
@@ -128,6 +134,9 @@ export function CreatePaymentPlanModal({
   const today = timeZone ? sedeToday(timeZone) : null;
   const startDate = form.startDate ?? today ?? '';
   const currency = plan?.currency ?? '';
+  // DX-488: los dígitos de redondeo de la moneda (`GET /currencies`) para
+  // repartir las cuotas como la API; `null` mientras no se sepan.
+  const digits = useCurrencyRoundingDigits(token, currency, open && plan !== null);
   const totalField = form.total ?? (plan ? moneyInputText(plan.billable) : '');
   // DX-241: la lectura común de los campos de dinero, con los decimales de la
   // moneda del plan. El pie vacío es 0.
@@ -151,7 +160,7 @@ export function CreatePaymentPlanModal({
     };
     setFieldErrors(nextFieldErrors);
     if (nextFieldErrors.total || nextFieldErrors.downPayment || pie === null) return;
-    if (!Number.isInteger(count) || count < 1 || count > 600) {
+    if (!Number.isInteger(count) || count < 1 || count > MAX_INSTALLMENTS) {
       setError(copy.invalidCount);
       return;
     }
@@ -184,10 +193,26 @@ export function CreatePaymentPlanModal({
     }
   }
 
-  // Vista previa de la cuota (solo UX; el backend reparte de verdad).
+  // Vista previa de las cuotas (solo UX; el backend reparte de verdad), con
+  // la MISMA regla que la API (DX-488, `generateSchedule`): en unidades de los
+  // dígitos de redondeo de la moneda y el resto en la última.
   const previewFinanced = roundAmount(Math.max((total ?? 0) - (pie ?? 0), 0));
   const count = Number(form.installmentsCount);
-  const previewPer = count >= 1 ? roundAmount(previewFinanced / count) : 0;
+  // Un número de cuotas no válido (no entero, < 1 o > 600) no tiene vista
+  // previa: el error sale al crear. Solo se calculan la cuota base y la última.
+  const validCount = Number.isInteger(count) && count >= 1 && count <= MAX_INSTALLMENTS;
+  const split = digits === null ? null : installmentSplit(previewFinanced, count, digits);
+  const previewText = !validCount
+    ? null
+    : split === null
+      ? copy.financedPreviewPending(money(previewFinanced, currency))
+      : split.last === split.base
+        ? copy.financedPreview(money(previewFinanced, currency), money(split.base, currency))
+        : copy.financedPreviewLast(
+            money(previewFinanced, currency),
+            money(split.base, currency),
+            money(split.last, currency),
+          );
 
   return (
     <FormModal
@@ -212,7 +237,7 @@ export function CreatePaymentPlanModal({
               type="number"
               inputMode="numeric"
               min={1}
-              max={600}
+              max={MAX_INSTALLMENTS}
               step="1"
               value={form.installmentsCount}
               onChange={(e) => patch({ installmentsCount: e.target.value })}
@@ -275,12 +300,7 @@ export function CreatePaymentPlanModal({
             aria-describedby={fieldErrors.total ? fieldErrorId('pp-total') : undefined}
           />
         </FormField>
-        <p className="text-sm text-muted tabular-nums">
-          {copy.financedPreview(
-            money(previewFinanced, currency),
-            money(previewPer, currency),
-          )}
-        </p>
+        {previewText ? <p className="text-sm text-muted tabular-nums">{previewText}</p> : null}
         </>
       ) : null}
     </FormModal>

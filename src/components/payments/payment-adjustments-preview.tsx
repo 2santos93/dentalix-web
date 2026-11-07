@@ -1,7 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { contractRoundingDigits } from '@/lib/money/line-rounding';
-import { listCurrencies } from '@/lib/reference/currencies-api';
+import {
+  currencyRoundingDigits,
+  resetCurrencyRoundingDigitsCache,
+  roundingDigitsOf,
+} from '@/lib/reference/currency-rounding-digits';
 import type { ClinicPaymentMethod } from '@/lib/payments/payment-methods-api';
 import {
   PAYMENT_ADJUSTMENT_TYPE_LABELS,
@@ -19,21 +22,9 @@ export const paymentAdjustmentsPreviewCopy = {
 };
 const copy = paymentAdjustmentsPreviewCopy;
 
-/** Decimales de redondeo por moneda (DX-340), leídos una vez por pestaña. */
-let digitsCache: Promise<Map<string, number>> | null = null;
-function currencyDigits(token: string): Promise<Map<string, number>> {
-  digitsCache ??= listCurrencies(token)
-    .then((list) => new Map(list.map((c) => [c.code.toUpperCase(), c.roundingDigits ?? -1])))
-    .catch((err: unknown) => {
-      digitsCache = null;
-      throw err;
-    });
-  return digitsCache;
-}
-
-/** Solo para las pruebas: olvida la caché de decimales. */
+/** Solo para las pruebas: olvida la caché de decimales (compartida, DX-488). */
 export function resetPaymentAdjustmentsPreviewCache(): void {
-  digitsCache = null;
+  resetCurrencyRoundingDigitsCache();
 }
 
 /**
@@ -66,7 +57,7 @@ export function PaymentAdjustmentsPreview({
   useEffect(() => {
     if (!needed) return;
     let cancelled = false;
-    currencyDigits(token).then(
+    currencyRoundingDigits(token).then(
       (map) => {
         if (!cancelled) setDigits(map);
       },
@@ -78,9 +69,7 @@ export function PaymentAdjustmentsPreview({
   }, [token, needed]);
 
   if (!needed) return null;
-  const rounding = contractRoundingDigits(
-    digits ? { roundingDigits: digits.get(currency.toUpperCase()) ?? -1 } : null,
-  );
+  const rounding = roundingDigitsOf(digits, currency);
   const lines = amount !== null && rounding !== null ? computePaymentAdjustments(rules, amount, currency, rounding) : null;
 
   return (
