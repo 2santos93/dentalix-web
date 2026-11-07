@@ -87,7 +87,11 @@ test.beforeAll(async ({ request }) => {
     data: { source: 'MANUAL' },
   });
   expect(settings.ok(), await settings.text()).toBeTruthy();
-  await apiPost(request, session, '/exchange/manual-rates', { date: rateDay, currency: 'VES', rate: VES_RATE });
+  // DX-513-ter (L1): también la de mañana en la zona de la sede, como la e2e de
+  // la API: una ejecución que cruce la medianoche sigue teniendo tasa del día.
+  for (const date of [rateDay, sedeDay(new Date(Date.now() + DAY_MS))]) {
+    await apiPost(request, session, '/exchange/manual-rates', { date, currency: 'VES', rate: VES_RATE });
+  }
   ({ id: procedureId } = await apiPost<{ id: string }>(request, session, '/catalog/items', {
     code: `dx513-${suffix}`.slice(0, 30),
     kind: 'PROCEDURE',
@@ -257,7 +261,6 @@ for (const viewport of [
     const tag = `${suffix}${viewport.width}`;
     await loginAs(page, origin, admin.email, password);
     const seededFrom = new Date();
-    const rateText = `tasa 1 USD = ${sedeFmt.number(VES_RATE, { min: 0, max: 4 })} VES del ${sedeFmt.civilDate(rateDay)}, manual`;
 
     /** Lista de convenio en `currency` con la corona a `price`, asignada a un paciente con un plan en esa moneda. */
     async function listAgreementItem(letter: string, currency: string, price: number) {
@@ -306,8 +309,13 @@ for (const viewport of [
       price: 30000,
       basePriceInPlan: CONVERTED,
       referenceRate: null,
-      baseRate: { fromPerBase: 1, toPerBase: VES_RATE, source: 'MANUAL', rateDate: rateDay },
+      baseRate: { fromPerBase: 1, toPerBase: VES_RATE, source: 'MANUAL' },
     });
+    // L1: el día de la tasa es el que congeló el ítem (hoy o, si la prueba
+    // cruzó la medianoche de la sede, mañana), no uno calculado aquí.
+    const baseRateDay = measured.item.baseRate!.rateDate;
+    expect([rateDay, sedeDay(new Date(Date.now() + DAY_MS)), sedeDay(new Date())]).toContain(baseRateDay);
+    const rateText = `tasa 1 USD = ${sedeFmt.number(VES_RATE, { min: 0, max: 4 })} VES del ${sedeFmt.civilDate(baseRateDay)}, manual`;
     // Sin tasa de EUR: el alta funciona igual, sin base.
     const unmeasured = await listAgreementItem('e', 'EUR', 80);
     expect(unmeasured.item).toMatchObject({ price: 80, basePriceInPlan: null, baseRate: null });
