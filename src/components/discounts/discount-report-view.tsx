@@ -22,6 +22,7 @@ import {
   type AgreementReductionTotal,
 } from '@/lib/discounts/discounts-api';
 import { DISCOUNT_REASON_LABELS, type DiscountReasonCode } from '@/lib/discounts/discount-rules';
+import { referenceRateText } from '@/lib/discounts/reference-rate';
 import { saveCsv } from '@/lib/files/save-csv';
 import { notifyError } from '@/components/errors/notify';
 import { Badge } from '@/components/ui/badge';
@@ -76,6 +77,8 @@ export const discountReportCopy = {
   tooth: (tooth: string, procedure: string) => `Diente ${tooth} · ${procedure}`,
   ofPrice: (price: string, percent: string) => `${percent} de ${price}`,
   priceReduced: (price: string) => `Precio rebajado a ${price} (bajo el de catálogo)`,
+  // DX-513-bis: la referencia se convirtió con la tasa congelada en el ítem.
+  catalogConverted: (catalog: string, rate: string) => `Catálogo ${catalog} · ${rate}`,
   noReason: 'Sin motivo',
   unknownAuthor: 'Sin registrar',
   // Sin «Intenta de nuevo.»: AsyncSection → SectionError trae «Reintentar».
@@ -220,10 +223,22 @@ function AmountCell({ item, fmt }: { item: DiscountReportItem; fmt: RegionalForm
           {discountReportCopy.priceReduced(moneyWithCode(item.price, item.currency, fmt))}
         </span>
       ) : null}
+      {convertedLine(item, fmt) ? (
+        <span className="block text-xs tabular-nums text-muted">{convertedLine(item, fmt)}</span>
+      ) : null}
       {agreement ? (
         <span className="block text-xs tabular-nums text-ink">{agreementLine(item, fmt)}</span>
       ) : null}
     </>
+  );
+}
+
+/** DX-513-bis: el catálogo en su moneda y la tasa congelada; null si no se convirtió. */
+function convertedLine(item: DiscountReportItem, fmt: RegionalFormat): string | null {
+  if (!item.rate || !item.referenceCurrency || item.catalogPrice === null) return null;
+  return discountReportCopy.catalogConverted(
+    moneyWithCode(item.catalogPrice, item.referenceCurrency, fmt),
+    referenceRateText(item.rate, item.referenceCurrency, item.currency, fmt),
   );
 }
 
@@ -410,6 +425,7 @@ export function DiscountReportView({ token }: { token: string }) {
               {item.priceReduction > 0 ? (
                 <> · {discountReportCopy.priceReduced(moneyWithCode(item.price, item.currency, fmt))}</>
               ) : null}
+              {convertedLine(item, fmt) ? <> · {convertedLine(item, fmt)}</> : null}
               {item.agreementReduction > 0 ? <> · {agreementLine(item, fmt)}</> : null}
             </>
           ),

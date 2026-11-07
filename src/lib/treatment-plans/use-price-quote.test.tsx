@@ -14,6 +14,11 @@ const quote = (price: number): PriceQuote => ({
   agreementName: null,
   allowDiscount: true,
   currency: 'USD',
+  referenceCurrency: 'VES',
+  referencePriceInPlan: price,
+  rate: { fromPerBase: 1, toPerBase: 1, source: 'MANUAL', rateDate: '2026-11-07' },
+  rateMissing: false,
+  missingRateCurrency: null,
 });
 
 function deferred() {

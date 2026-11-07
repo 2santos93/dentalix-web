@@ -30,6 +30,11 @@ export const ITEM_WITHOUT_DISCOUNT = {
   // DX-502: sin precio de catálogo, sin su moneda.
   catalogCurrency: null,
   priceSource: null,
+  // DX-513-bis: sin foto de la referencia (como un ítem libre).
+  referenceCurrency: null,
+  referencePriceInPlan: null,
+  basePriceInPlan: null,
+  referenceRate: null,
   agreementId: null,
   agreementName: null,
   pricingLocationId: null,

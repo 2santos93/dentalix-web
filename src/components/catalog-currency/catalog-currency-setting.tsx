@@ -38,7 +38,7 @@ export const catalogCurrencyCopy = {
   dialogDescription:
     'Elige la moneda en la que están los precios del catálogo. Solo afecta a los ítems que se agreguen a los planes desde ahora: los ya creados conservan la suya y ningún importe se convierte. El cambio queda en la auditoría.',
   discountNote:
-    'En los planes en otra moneda, un precio por debajo del de catálogo ya no cuenta como descuento frente al catálogo: no pide motivo ni consume el tope de descuento. Esto también vale solo para los ítems nuevos.',
+    'En los planes en otra moneda, el precio de catálogo se convierte con la tasa del día al añadir cada ítem; una rebaja frente a él cuenta como descuento.',
   fieldLabel: 'Moneda',
   unsetOption: 'Sin fijar (la de las sedes)',
   save: 'Guardar',

@@ -97,6 +97,10 @@ describe('Ajustes › Monedas: moneda del catálogo (DX-502-bis)', () => {
     expect(within(dialog).getByText(copy.dialogDescription)).toBeInTheDocument();
     // DX-513: avisa de que, en planes de otra moneda, no hay descuento frente al catálogo.
     expect(within(dialog).getByText(copy.discountNote)).toBeInTheDocument();
+    // DX-513-bis (F1): el catálogo en otra moneda se convierte; ya no «deja de contar».
+    expect(copy.discountNote).toBe(
+      'En los planes en otra moneda, el precio de catálogo se convierte con la tasa del día al añadir cada ítem; una rebaja frente a él cuenta como descuento.',
+    );
     const select = within(dialog).getByLabelText(copy.fieldLabel);
     expect(select).toHaveValue('');
     await user.selectOptions(select, 'USD');

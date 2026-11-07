@@ -57,6 +57,10 @@ function row(overrides: Partial<DiscountReportItem> = {}): DiscountReportItem {
     procedure: 'Corona libre de metal',
     currency: 'USD',
     catalogPrice: null,
+    referenceCurrency: null,
+    referencePriceInPlan: null,
+    basePriceInPlan: null,
+    rate: null,
     price: 1200000,
     priceReduction: 0,
     itemDiscount: 180000,
@@ -203,6 +207,38 @@ describe('DiscountReportView (DX-204)', () => {
     expect(within(tableRow).getByText(/−200\.000,00/)).toBeInTheDocument();
     expect(within(tableRow).getByText(/20 % de 1\.000\.000,00/)).toBeInTheDocument();
     expect(within(tableRow).getByText(/Precio rebajado a 800\.000,00/)).toBeInTheDocument();
+  });
+
+  it('DX-513-bis: una rebaja frente al catálogo en otra moneda dice la cifra del catálogo en su moneda y la tasa congelada', async () => {
+    mockedReport.mockResolvedValue(
+      report([
+        row({
+          currency: 'VES',
+          catalogPrice: 4.5,
+          referenceCurrency: 'USD',
+          referencePriceInPlan: 3960,
+          rate: { fromPerBase: 1, toPerBase: 880, source: 'MANUAL', rateDate: '2026-10-10' },
+          price: 3900,
+          priceReduction: 60,
+          itemDiscount: 0,
+          discount: 60,
+          percent: 1.52,
+        }),
+      ]),
+    );
+    render(<DiscountReportView token="tok" />);
+    const tableRow = await findRow();
+    expect(within(tableRow).getByText(/Precio rebajado a 3\.?900,00 VES/)).toBeInTheDocument();
+    expect(within(tableRow).getByText(/^Catálogo 4,50 USD · tasa 1 USD = 880 VES del 10\/10\/2026, manual$/)).toBeInTheDocument();
+  });
+
+  it('DX-513-bis: sin tasa (misma moneda), no hay línea de catálogo convertido', async () => {
+    mockedReport.mockResolvedValue(
+      report([row({ catalogPrice: 1000000, referenceCurrency: 'USD', referencePriceInPlan: 1000000, price: 800000, priceReduction: 200000, discount: 200000, itemDiscount: 0, percent: 20 })]),
+    );
+    render(<DiscountReportView token="tok" />);
+    const tableRow = await findRow();
+    expect(within(tableRow).queryByText(/^Catálogo /)).not.toBeInTheDocument();
   });
 
   it('SEC-047: la rebaja de convenio sale aparte, con quién asignó el convenio y quién creó el ítem', async () => {

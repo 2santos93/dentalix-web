@@ -397,6 +397,13 @@ function quoteOf(catalogItemId: string, overrides: Partial<PriceQuote> = {}, cur
     agreementName: null,
     allowDiscount: true,
     currency,
+    // DX-513-bis: la referencia ya en la moneda del plan (a la par: la misma
+    // cifra que `price`), salvo que el test diga otra.
+    referenceCurrency: currency,
+    referencePriceInPlan: overrides.price !== undefined ? overrides.price : base,
+    rate: null,
+    rateMissing: false,
+    missingRateCurrency: null,
     ...overrides,
   };
 }
@@ -994,6 +1001,11 @@ describe('TreatmentPlansTab', () => {
         agreementName: 'Seguros Sol',
         allowDiscount: true,
         currency: 'EUR',
+        referenceCurrency: 'EUR',
+        referencePriceInPlan: 100.55,
+        rate: null,
+        rateMissing: false,
+        missingRateCurrency: null,
       });
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
@@ -1017,6 +1029,11 @@ describe('TreatmentPlansTab', () => {
         agreementName: 'Seguros Sol',
         allowDiscount: true,
         currency: 'EUR',
+        referenceCurrency: 'EUR',
+        referencePriceInPlan: 100.55,
+        rate: null,
+        rateMissing: false,
+        missingRateCurrency: null,
       });
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
@@ -1028,7 +1045,7 @@ describe('TreatmentPlansTab', () => {
       ).toBeInTheDocument();
     });
 
-    it('sin lista en EUR, el aviso de precio por debajo del catálogo no pinta el catálogo en EUR', async () => {
+    it('DX-513-bis: sin lista en EUR, la rebaja se mide frente al catálogo convertido (160 €), no frente a 80.000 «EUR»', async () => {
       mockedGetPriceQuote.mockResolvedValue({
         basePrice: 80000,
         catalogCurrency: 'VES',
@@ -1038,6 +1055,11 @@ describe('TreatmentPlansTab', () => {
         agreementName: null,
         allowDiscount: true,
         currency: 'EUR',
+        referenceCurrency: 'VES',
+        referencePriceInPlan: 160,
+        rate: { fromPerBase: 400, toPerBase: 0.8, source: 'MANUAL', rateDate: '2026-11-07' },
+        rateMissing: false,
+        missingRateCurrency: null,
       });
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
@@ -1047,9 +1069,10 @@ describe('TreatmentPlansTab', () => {
       const field = screen.getByLabelText('Precio', { exact: true });
       await user.clear(field);
       await user.type(field, '100,55');
-      const notice = await screen.findByText(/^Precio de catálogo: VES 80\.000,00, en otra moneda y sin convertir\./);
-      expect(notice).toBeInTheDocument();
-      expect(document.getElementById('tp-price-below-catalog')).not.toHaveTextContent(/EUR\s80\.000|Rebaja de/);
+      const notice = document.getElementById('tp-price-below-catalog');
+      await waitFor(() => expect(notice).toHaveTextContent(/Rebaja de EUR\s59,45 sobre EUR\s160,00/));
+      expect(notice).not.toHaveTextContent(/80\.000/);
+      expect(document.getElementById('tp-price-converted')).toHaveTextContent(/^Catálogo: VES 80\.000,00 ≈ EUR\s160,00 \(tasa 1 EUR = 500 VES del .+, manual\)\.$/);
     });
 
     it('DX-502: con el catálogo en una moneda que no se sabe, el aviso no inventa cifra ni moneda', async () => {
@@ -1062,6 +1085,11 @@ describe('TreatmentPlansTab', () => {
         agreementName: null,
         allowDiscount: true,
         currency: 'EUR',
+        referenceCurrency: null,
+        referencePriceInPlan: 80000,
+        rate: null,
+        rateMissing: false,
+        missingRateCurrency: null,
       });
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
@@ -2562,91 +2590,62 @@ describe('TreatmentPlansTab', () => {
         ).toBeInTheDocument();
       });
 
-      // DX-513: una rebaja frente a un catálogo en otra moneda CONOCIDA no es
-      // un descuento: ni pide motivo ni topa el rol. Con la moneda
-      // desconocida, cuenta como hoy. El plan de estos tests está en USD; el
-      // catálogo, en VES (3.600,00).
-      describe('DX-513: catálogo en otra moneda', () => {
+      // DX-513-bis: la referencia en otra moneda CONOCIDA llega convertida a
+      // la del plan con la tasa de hoy (price-quote) y bajar de ella cuenta
+      // como descuento, igual que en la misma moneda. El plan de estos tests
+      // está en USD; el catálogo, en VES (3.600,00 a 880 Bs./USD = 4,09 USD).
+      describe('DX-513-bis: catálogo en otra moneda, convertido', () => {
         const assistantToken = `h.${btoa(JSON.stringify({ sub: 'u3', tenantId: 't1', role: 'ASSISTANT' }))}.s`;
+        const RATE = { fromPerBase: 880, toPerBase: 1, source: 'MANUAL' as const, rateDate: '2026-11-07' };
         const vesQuote = (overrides: Partial<PriceQuote> = {}) =>
-          quoteOf('cat-1', { basePrice: 3600, price: 3600, catalogCurrency: 'VES', ...overrides }, 'USD');
+          quoteOf(
+            'cat-1',
+            {
+              basePrice: 3600,
+              price: 3600,
+              catalogCurrency: 'VES',
+              referenceCurrency: 'VES',
+              referencePriceInPlan: 4.09,
+              rate: RATE,
+              ...overrides,
+            },
+            'USD',
+          );
 
-        it('plan en USD con el catálogo en VES: ni motivo ni tope; dice la referencia en VES y que no cuenta', async () => {
+        it('precarga la referencia convertida (4,09) y dice el catálogo en VES con la tasa', async () => {
+          mockedGetPriceQuote.mockResolvedValue(vesQuote());
+          await openForm(assistantToken);
+          const price = screen.getByLabelText<HTMLInputElement>('Precio', { exact: true });
+          await waitFor(() => expect(price.value).toBe('4.09'));
+          const note = document.getElementById('tp-price-converted');
+          expect(note).toHaveTextContent(/^Catálogo: VES 3\.600,00 ≈ USD 4,09 \(tasa 1 USD = 880 VES del .+, manual\)\.$/);
+          expect(price.getAttribute('aria-describedby')?.split(' ')).toContain('tp-price-converted');
+          expect(document.getElementById('tp-price-below-catalog')).toBeEmptyDOMElement();
+        });
+
+        it('sin tocar el precio, la asistente lo agrega sin motivo ni precio manual', async () => {
           mockedGetPriceQuote.mockResolvedValue(vesQuote());
           mockedAddItem.mockResolvedValue({ ...item1, id: 'item-3' });
           const user = await openForm(assistantToken);
-          await typePrice(user, '80');
-          expect(
-            screen.queryByText('Precio por debajo del de catálogo: cuenta como descuento.'),
-          ).not.toBeInTheDocument();
-          expect(screen.queryByLabelText(/motivo del descuento/i)).not.toBeInTheDocument();
-          const note = document.getElementById('tp-price-below-catalog');
-          expect(note).toHaveTextContent(
-            'Precio de catálogo: VES 3.600,00, en otra moneda y sin convertir. No cuenta como descuento: ni pide motivo ni sale en el informe de descuentos.',
+          await waitFor(() =>
+            expect(screen.getByLabelText<HTMLInputElement>('Precio', { exact: true }).value).toBe('4.09'),
           );
-          expect(note).not.toHaveTextContent(/Rebaja de|tope de tu rol|USD 3\.600/);
-          const price = screen.getByLabelText('Precio', { exact: true });
-          expect(price.getAttribute('aria-describedby')?.split(' ')).toContain('tp-price-below-catalog');
           await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
           await waitFor(() =>
             expect(mockedAddItem).toHaveBeenCalledWith(assistantToken, 'plan-1', {
               toothNumber: '16',
               catalogItemId: 'cat-1',
-              price: 80,
             }),
           );
-          expect(screen.queryByText(/Tu rol permite hasta/)).not.toBeInTheDocument();
         });
 
-        it('el descuento propio sigue contando (en USD): la asistente no puede darlo', async () => {
+        it('a 4,00 USD es una rebaja: aviso con la referencia en USD y 403 previo de la asistente (0 %)', async () => {
           mockedGetPriceQuote.mockResolvedValue(vesQuote());
           const user = await openForm(assistantToken);
-          await typePrice(user, '80');
-          await user.type(screen.getByLabelText('Descuento (opcional)', { exact: true }), '1');
-          await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
-          expect(
-            await screen.findByText('Tu rol permite hasta un 0 % de descuento por ítem.'),
-          ).toBeInTheDocument();
-          expect(mockedAddItem).not.toHaveBeenCalled();
-        });
-
-        it('convenio por % sobre el catálogo en VES: tampoco es un descuento en USD', async () => {
-          mockedGetPriceQuote.mockResolvedValue(
-            vesQuote({ price: 3240, source: 'AGREEMENT_PERCENT', agreementId: 'ag-1', agreementName: 'Seguros Sol' }),
-          );
-          const user = await openForm(discountAdminToken);
-          await typePrice(user, '80');
-          expect(screen.queryByLabelText(/motivo del descuento/i)).not.toBeInTheDocument();
-          expect(
-            screen.queryByText('Precio por debajo del de catálogo: cuenta como descuento.'),
-          ).not.toBeInTheDocument();
-        });
-
-        it('lista de la sede en USD con el catálogo en VES: la rebaja frente a la lista sí cuenta (misma moneda)', async () => {
-          mockedGetPriceQuote.mockResolvedValue(vesQuote({ price: 100, source: 'PRICE_LIST' }));
-          const user = await openForm(discountAdminToken);
-          await typePrice(user, '80');
-          expect(screen.getByText('Precio por debajo del de catálogo: cuenta como descuento.')).toBeInTheDocument();
-          expect(screen.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeInTheDocument();
-        });
-
-        it('catalogCurrency NULL: cuenta como hoy (aviso, motivo y tope), sin inventar cifra ni moneda', async () => {
-          mockedGetPriceQuote.mockResolvedValue(vesQuote({ catalogCurrency: null }));
-          const user = await openForm(discountAdminToken);
-          await typePrice(user, '80');
-          expect(screen.getByText('Precio por debajo del de catálogo: cuenta como descuento.')).toBeInTheDocument();
-          expect(screen.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeInTheDocument();
-          const note = document.getElementById('tp-price-below-catalog');
-          expect(note).toHaveTextContent(
-            'Precio de catálogo en una moneda que no se sabe, sin convertir. Se compara con el tope de tu rol y sale en el informe de descuentos.',
-          );
-          expect(note).not.toHaveTextContent(/3\.600|No cuenta como descuento/);
-        });
-
-        it('catalogCurrency NULL: la asistente (0 %) no puede bajarlo', async () => {
-          mockedGetPriceQuote.mockResolvedValue(vesQuote({ catalogCurrency: null }));
-          const user = await openForm(assistantToken);
-          await typePrice(user, '80');
+          await typePrice(user, '4');
+          const notice = document.getElementById('tp-price-below-catalog');
+          expect(notice).toHaveTextContent('Precio por debajo del de catálogo: cuenta como descuento.');
+          expect(notice).toHaveTextContent(/Rebaja de USD 0,09 sobre USD 4,09/);
           await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
           expect(
             await screen.findByText(
@@ -2656,15 +2655,102 @@ describe('TreatmentPlansTab', () => {
           expect(mockedAddItem).not.toHaveBeenCalled();
         });
 
-        it('frontera: al precio de catálogo, ni aviso ni nota', async () => {
+        it('el ADMIN a 3,60 (12 %): pide el motivo', async () => {
+          mockedGetPriceQuote.mockResolvedValue(vesQuote());
+          const user = await openForm(discountAdminToken);
+          await typePrice(user, '3.6');
+          expect(screen.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeInTheDocument();
+        });
+
+        it('convenio por % sobre el catálogo en VES: la referencia convertida (3,68) también cuenta', async () => {
+          mockedGetPriceQuote.mockResolvedValue(
+            vesQuote({
+              price: 3240,
+              referencePriceInPlan: 3.68,
+              source: 'AGREEMENT_PERCENT',
+              agreementId: 'ag-1',
+              agreementName: 'Seguros Sol',
+            }),
+          );
+          const user = await openForm(discountAdminToken);
+          await typePrice(user, '3');
+          expect(screen.getByText('Precio por debajo del de catálogo: cuenta como descuento.')).toBeInTheDocument();
+          expect(screen.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeInTheDocument();
+        });
+
+        it('sin tasa de hoy: no propone precio, lo dice (Ajustes o una lista en USD) y no deja agregar', async () => {
+          mockedGetPriceQuote.mockResolvedValue(
+            vesQuote({ referencePriceInPlan: null, rate: null, rateMissing: true, missingRateCurrency: 'VES' }),
+          );
+          const user = await openForm(discountAdminToken);
+          expect(
+            await screen.findByText(
+              'No hay tasa de VES para hoy: regístrala en Ajustes › Tasa de cambio o usa una lista de precios en USD.',
+            ),
+          ).toBeInTheDocument();
+          expect(screen.getByLabelText<HTMLInputElement>('Precio', { exact: true }).value).toBe('');
+          const submitButton = screen.getByRole('button', { name: /^agregar ítem$/i });
+          expect(submitButton).toBeDisabled();
+          await typePrice(user, '4');
+          expect(mockedAddItem).not.toHaveBeenCalled();
+        });
+
+        it('lista de la sede en USD con el catálogo en VES: sin tasa, la rebaja frente a la lista cuenta', async () => {
+          mockedGetPriceQuote.mockResolvedValue(
+            vesQuote({ price: 100, referenceCurrency: 'USD', referencePriceInPlan: 100, rate: null, source: 'PRICE_LIST' }),
+          );
+          const user = await openForm(discountAdminToken);
+          await typePrice(user, '80');
+          expect(document.getElementById('tp-price-converted')).toBeNull();
+          expect(screen.getByText('Precio por debajo del de catálogo: cuenta como descuento.')).toBeInTheDocument();
+          expect(screen.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeInTheDocument();
+        });
+
+        it('catalogCurrency NULL: cuenta como hoy (aviso, motivo y tope), sin inventar cifra ni moneda', async () => {
+          mockedGetPriceQuote.mockResolvedValue(
+            vesQuote({ catalogCurrency: null, referenceCurrency: null, referencePriceInPlan: 3600, rate: null }),
+          );
+          const user = await openForm(discountAdminToken);
+          await typePrice(user, '80');
+          expect(screen.getByText('Precio por debajo del de catálogo: cuenta como descuento.')).toBeInTheDocument();
+          expect(screen.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeInTheDocument();
+          const note = document.getElementById('tp-price-below-catalog');
+          expect(note).toHaveTextContent(
+            'Precio de catálogo en una moneda que no se sabe, sin convertir. Se compara con el tope de tu rol y sale en el informe de descuentos.',
+          );
+          expect(note).not.toHaveTextContent(/3\.600/);
+        });
+
+        it('frontera: a la referencia convertida (4,09), ni aviso ni rebaja', async () => {
           mockedGetPriceQuote.mockResolvedValue(vesQuote());
           const user = await openForm(assistantToken);
-          await typePrice(user, '3600');
+          await typePrice(user, '4.09');
           expect(document.getElementById('tp-price-below-catalog')).toBeEmptyDOMElement();
         });
 
-        it('en la tabla, un ítem en USD con el catálogo en VES no pinta «Rebaja»', async () => {
-          const crossCurrency = {
+        it('en la tabla, un ítem con foto pinta la rebaja en USD y el catálogo en VES con su tasa', async () => {
+          const converted = {
+            ...item1,
+            price: 4,
+            catalogPrice: 3600,
+            basePrice: 3600,
+            catalogCurrency: 'VES',
+            priceSource: 'CATALOG' as const,
+            referenceCurrency: 'VES',
+            referencePriceInPlan: 4.09,
+            basePriceInPlan: 4.09,
+            referenceRate: RATE,
+          };
+          mockedListPlans.mockResolvedValue([plan1]);
+          mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [converted, item2] });
+          render(<TreatmentPlansTab patientId="pat-1" token={discountAdminToken} />);
+          const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+          expect(within(table).getByText(/Rebaja −USD 0,09 \(catálogo USD 4,09\)/)).toBeInTheDocument();
+          expect(within(table).getByText(/^Catálogo VES 3\.600,00, tasa 1 USD = 880 VES del .+, manual$/)).toBeInTheDocument();
+        });
+
+        it('en la tabla, un ítem anterior (sin foto) en USD con el catálogo en VES no pinta «Rebaja» (DX-513)', async () => {
+          const legacy = {
             ...item1,
             price: 80,
             catalogPrice: 3600,
@@ -2673,7 +2759,7 @@ describe('TreatmentPlansTab', () => {
             priceSource: 'CATALOG' as const,
           };
           mockedListPlans.mockResolvedValue([plan1]);
-          mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [crossCurrency, item2] });
+          mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [legacy, item2] });
           render(<TreatmentPlansTab patientId="pat-1" token={discountAdminToken} />);
           const table = await screen.findByRole('table', { name: /ítems de la visita/i });
           expect(table).not.toHaveTextContent(/Rebaja −/);

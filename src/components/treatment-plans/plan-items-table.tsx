@@ -6,7 +6,7 @@ import type { DentalCatalogItem } from '@/lib/odontogram/catalog-api';
 import type { PlanItemBalance } from '@/lib/payments/payments-api';
 import {
   DISCOUNT_REASON_LABELS,
-  discountReference,
+  referenceInPlan,
   effectiveDiscount,
   type DiscountReasonCode,
 } from '@/lib/discounts/discount-rules';
@@ -14,6 +14,7 @@ import { ITEM_STATUS_LABELS } from '@/lib/treatment-plans/item-status';
 import { attributionText } from '@/lib/treatment-plans/item-attribution';
 import type { SedePainters } from '@/lib/locations/sede-stamp';
 import { formatListPrice, sedeListPriceFormat } from '@/lib/treatment-plans/list-price';
+import { referenceRateText } from '@/lib/discounts/reference-rate';
 import type { TreatmentPlanItem, TreatmentPlanItemStatus } from '@/lib/treatment-plans/treatment-plans-api';
 import { voidFeeCopy } from '@/components/appointments/fee-reason-modal';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -200,27 +201,38 @@ function ItemDiscountLine({
   currency,
   money,
   listPrice,
+  fmt,
 }: {
   item: TreatmentPlanItem;
   /** Moneda del plan: la rebaja solo se mide en ella (DX-513). */
   currency: string;
   money: (amount: number) => string;
   listPrice: ListPriceText;
+  fmt: RegionalFormat | null;
 }) {
-  // DX-513: frente a un catálogo en otra moneda (o en una que no se sabe) no
-  // hay rebaja que pintar, como en la API.
-  const { priceReduction } = effectiveDiscount(discountReference(item, currency), item.price, item.discount);
+  // DX-513-bis: la rebaja frente a la referencia en la moneda del plan (la
+  // foto, convertida con su tasa); un ítem anterior sin foto, como en DX-513.
+  const reference = referenceInPlan(item, currency);
+  const { priceReduction } = effectiveDiscount(reference, item.price, item.discount);
   const origin = itemPriceOriginText(item, listPrice);
+  const converted =
+    item.referenceRate && item.referenceCurrency && item.catalogPrice !== null
+      ? copy.itemReferenceConverted(
+          listPrice(item.catalogPrice) ?? '',
+          referenceRateText(item.referenceRate, item.referenceCurrency, currency, fmt),
+        )
+      : null;
   if (item.discount <= 0 && priceReduction <= 0 && !origin) return null;
   const reason = item.discountReason as DiscountReasonCode | null;
   return (
     <span className="block t-caption font-normal text-muted">
       {origin ? <span className="block tabular-nums">{origin}</span> : null}
-      {priceReduction > 0 && item.catalogPrice !== null ? (
+      {priceReduction > 0 && reference !== null ? (
         <span className="block">
-          {copy.itemPriceReduction(money(priceReduction), money(item.catalogPrice))}
+          {copy.itemPriceReduction(money(priceReduction), money(reference))}
         </span>
       ) : null}
+      {priceReduction > 0 && converted ? <span className="block tabular-nums">{converted}</span> : null}
       {item.discount > 0 ? <span className="block">{copy.itemDiscount(money(item.discount))}</span> : null}
       {reason ? (
         <span className="block">{copy.itemDiscountReason(DISCOUNT_REASON_LABELS[reason])}</span>
@@ -411,7 +423,7 @@ export function ItemsTable({
                   <TableCell className="text-muted">{surfacesLabel(item)}</TableCell>
                   <TableCell className="tabular-nums">
                     {money(item.price)}
-                    <ItemDiscountLine item={item} currency={currency} money={money} listPrice={listPriceOf(item)} />
+                    <ItemDiscountLine item={item} currency={currency} money={money} listPrice={listPriceOf(item)} fmt={fmt} />
                   </TableCell>
                   {itemBalances ? <ItemPaidCell item={itemBalances.get(item.id)} currency={currency} fmt={fmt} /> : null}
                   <TableCell>
@@ -504,7 +516,7 @@ export function ItemsTable({
               <p className="mt-1 text-sm text-muted">{surfacesLabel(item)}</p>
               <p className="mt-1 font-medium text-ink tabular-nums">
                 {money(item.price)}
-                <ItemDiscountLine item={item} currency={currency} money={money} listPrice={listPriceOf(item)} />
+                <ItemDiscountLine item={item} currency={currency} money={money} listPrice={listPriceOf(item)} fmt={fmt} />
               </p>
               {itemBalances?.has(item.id) ? (
                 <div className="mt-1">

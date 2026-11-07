@@ -126,6 +126,25 @@ export function discountReference(
   return referenceInOtherCurrency(item.priceSource, item.catalogCurrency, planCurrency) ? null : item.catalogPrice;
 }
 
+/**
+ * DX-513-bis: la referencia con la que se mide la rebaja, en la moneda del
+ * plan. Con foto (`referencePriceInPlan`, congelada al escribir el ítem con la
+ * tasa de ese día), la foto; sin ella (ítem anterior), DX-513 tal cual. Espejo
+ * de `referenceInPlan` de la API (`reference-in-plan.ts`).
+ */
+export function referenceInPlan(
+  item: {
+    catalogPrice: number | null | undefined;
+    catalogCurrency?: string | null;
+    priceSource?: string | null;
+    referencePriceInPlan?: number | null;
+  },
+  planCurrency: string,
+): number | null {
+  if (item.referencePriceInPlan != null) return item.referencePriceInPlan;
+  return discountReference(item, planCurrency);
+}
+
 /** Texto cuando la prestación no admite descuentos (DX-105). */
 export const NO_DISCOUNT_ALLOWED_NOTICE = 'Esta prestación no admite descuentos.';
 
