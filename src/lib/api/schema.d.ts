@@ -8971,6 +8971,8 @@ export interface components {
             defaultPrice: number | null;
             /** @description DX-105: false = la prestación no admite descuentos (ni % de convenio ni discrecionales). */
             allowDiscount: boolean;
+            /** @description DX-502-ter: moneda del `defaultPrice`, la del catálogo de la clínica; null si no se sabe. Solo la traen las lecturas (`GET /catalog/items`); es la misma en todos los ítems. */
+            catalogCurrency?: string | null;
             active: boolean;
             /** Format: date-time */
             createdAt: string;
@@ -8983,6 +8985,8 @@ export interface components {
             total: number;
             page: number;
             pageSize: number;
+            /** @description DX-502-ter: moneda del `defaultPrice` de los ítems (la que fijó la clínica en Ajustes o, sin ella, la común de sus sedes activas); null si no se sabe. La ven todos los roles que leen el catálogo. */
+            catalogCurrency: string | null;
         };
         UpdateCatalogItemDto: {
             code?: string;

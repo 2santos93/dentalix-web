@@ -9,8 +9,8 @@ import { tenantOrigin } from './support/urls';
  * pantallas de Pacientes, Catálogo y Caja dicen qué falló EN ESPAÑOL, en su
  * estado de sección (escalón 1) y con «Reintentar»; al reintentar con la API
  * ya sana, la pantalla carga. El catálogo de la clínica demo, con sedes en USD,
- * BRL y GBP (DX-335), no tiene una moneda común: pinta el precio de catálogo
- * sin código, nunca en una moneda que no es la suya. Escritorio (1440px) y móvil (390px).
+ * BRL y GBP (DX-335), tiene la moneda del catálogo fijada en USD (DX-502-ter): pinta el
+ * precio de catálogo en USD, nunca en una moneda que no es la suya. Escritorio (1440px) y móvil (390px).
  *
  * El fallo se fuerza interceptando la petición del navegador con `page.route`
  * (mismo origen, `/api/v1/...`), así no hace falta romper la API real.
@@ -115,12 +115,17 @@ for (const viewport of [
       await page.unroute(matcher, handler);
 
       if (screen.name === 'catalogo') {
-        // Las sedes de la demo cobran en monedas distintas (`clinicBaseCurrency`
-        // es null): el precio de catálogo sale sin código («450,00»), nunca con
-        // una moneda que no es la suya ni con símbolo («US$», DX-378).
-        await expect(page.getByText(/^\d{1,3}(?:\.\d{3})*,\d{2}$/).first()).toBeVisible();
+        // DX-502-ter: la demo tiene la moneda del catálogo fijada en USD aunque sus
+        // sedes cobren en USD, BRL y GBP: el precio de catálogo sale con el código
+        // USD (DX-378), en la posición que ponga el formato de la sede («USD 450,00»
+        // o «450,00 USD»); nunca con símbolo («US$») ni con otra moneda.
+        const amount = String.raw`\d{1,3}(?:\.\d{3})*,\d{2}`;
+        await expect(
+          page.getByText(new RegExp(`^(?:USD\\s${amount}|${amount}\\sUSD)$`)).first(),
+        ).toBeVisible();
         await expect(page.getByText(/US\$/)).toHaveCount(0);
-        await expect(page.getByText(/\d\s(?:[A-Z]{3}|€|Bs|R\$|£)$/)).toHaveCount(0);
+        await expect(page.getByText(/^[A-Z]{3}\s\d|\d\s[A-Z]{3}$/).filter({ hasNotText: /USD/ })).toHaveCount(0);
+        await expect(page.getByText(/\d\s(?:€|Bs|R\$|£)$/)).toHaveCount(0);
         await screenshot(page, `catalogo-precios-${viewport.width}.png`, testInfo.outputPath('qa'));
       }
     }

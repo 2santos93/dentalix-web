@@ -610,6 +610,23 @@ describe('TreatmentPlansTab', () => {
     expect(within(table).getByText('cat-missing')).toBeInTheDocument();
   });
 
+  it('DX-502-ter: el selector de procedimiento muestra el precio con la moneda del catálogo; sin moneda no lo muestra', async () => {
+    mockedListPlans.mockResolvedValue([plan1]);
+    mockedGetPlan.mockResolvedValue(plan1Detail);
+    mockedListCatalogItems.mockResolvedValue([
+      { ...catalog[0], catalogCurrency: 'USD' },
+      ...catalog.slice(1).map((c) => ({ ...c, catalogCurrency: null })),
+    ]);
+
+    render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+    await screen.findByRole('table', { name: /ítems de la visita/i });
+
+    const resina = await screen.findByRole('radio', { name: /resina/i });
+    expect(resina.closest('label')).toHaveTextContent(/US\$|USD/);
+    // Los demás ítems llevan precio pero la API no sabe su moneda: nada de importes sin moneda.
+    expect(screen.getAllByTestId('catalog-picker-price')).toHaveLength(1);
+  });
+
   it("prefills the price with the selected procedure's catalog defaultPrice, staying editable", async () => {
     mockedListPlans.mockResolvedValue([plan1]);
     mockedGetPlan.mockResolvedValue(plan1Detail);

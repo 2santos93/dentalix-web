@@ -22,6 +22,9 @@ import { regionalFormat } from '../src/lib/format/regional-format';
  *     un ítem NUEVO en USD enseña «Precio de lista» y «Ahorro por convenio»;
  *     el del ítem anterior sigue igual (lo congelado no cambia).
  *  3. Recepción no ve el ajuste (estado bloqueado de la página).
+ *  4. DX-502-ter: con la moneda fijada en USD y sedes en USD y VES, Ajustes ›
+ *     Catálogo y el selector de procedimiento del ítem muestran el precio en USD
+ *     (la API manda la moneda; ya no se deduce de las sedes).
  * A 390 y 1440 px, sin scroll horizontal a 390. Capturas en E2E_QA_DIR.
  */
 const suffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 10);
@@ -206,6 +209,65 @@ test('el ADMIN la fija en USD: el ítem nuevo enseña precio de lista y ahorro; 
   await openQuote(page, planBefore);
   await expect(page.getByTestId('quote-list-price-hidden-note')).toBeVisible();
   await expect(page.getByText('Ahorro por convenio')).toHaveCount(0);
+});
+
+const CATALOG_LABEL_PREFIX = 'Corona DX502B';
+
+test('DX-502-ter: con la moneda fijada en USD, el catálogo y el selector de procedimiento muestran USD', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000);
+  // Autónomo: fija USD por API (idempotente), sin depender del test serial anterior.
+  const fixed = await request.patch(`${API_URL}/clinic/settings`, {
+    headers: session.headers,
+    data: { catalogCurrency: 'USD' },
+  });
+  expect(fixed.ok(), `PATCH /clinic/settings falló: ${await fixed.text()}`).toBeTruthy();
+  const usd = /US\$|USD/;
+  await loginAs(page, origin, admin.email, password);
+  for (const viewport of VIEWPORTS) {
+    await page.setViewportSize(viewport);
+
+    // Ajustes › Catálogo: sedes en USD y VES, y aun así el precio sale en USD.
+    await page.goto(`${origin}/catalog`);
+    // La lista es paginada y la clínica nace con el catálogo semilla: se busca el ítem.
+    await page.getByLabel('Buscar por nombre, código o categoría').fill(CATALOG_LABEL_PREFIX);
+    // 1440 px: tabla; 390 px: lista de tarjetas. Siempre la fila de ESTE ítem.
+    const row =
+      viewport.width >= 768
+        ? page
+            .getByRole('table', { name: /catálogo/i })
+            .getByRole('row', { name: new RegExp(CATALOG_LABEL_PREFIX) })
+        : page
+            .getByRole('list', { name: /catálogo/i })
+            .getByRole('listitem')
+            .filter({ hasText: CATALOG_LABEL_PREFIX });
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await expect(row).toContainText(figure(CATALOG_PRICE));
+    await expect(row).toContainText(usd);
+    await expect(row).not.toContainText(/VES|Bs/);
+    if (viewport.width === 390) await expectNoHorizontalScroll(page);
+    await shoot(page, 'catalogo-precios-usd', viewport.width, row);
+
+    // Selector de procedimiento del ítem: cada fila con precio lleva su moneda.
+    await page.goto(`${origin}/patients/${patientId}?tab=treatment-plans`);
+    const panel = page.locator('#tabpanel-treatment-plans');
+    const form = panel.getByRole('form', { name: 'Agregar ítem' });
+    await expect(form).toBeVisible({ timeout: 15_000 });
+    const group = form.getByRole('group', { name: 'Procedimiento' });
+    await group.getByRole('searchbox', { name: 'Buscar en el catálogo' }).fill(CATALOG_LABEL_PREFIX);
+    const option = group.getByRole('radio', { name: new RegExp(CATALOG_LABEL_PREFIX) });
+    await expect(option).toBeVisible();
+    const optionPrice = group
+      .locator('label')
+      .filter({ hasText: CATALOG_LABEL_PREFIX })
+      .getByTestId('catalog-picker-price');
+    await expect(optionPrice).toContainText(figure(CATALOG_PRICE));
+    await expect(optionPrice).toContainText(usd);
+    if (viewport.width === 390) await expectNoHorizontalScroll(page);
+    await shoot(page, 'selector-precio-usd', viewport.width, group);
+  }
 });
 
 test('recepción no ve el ajuste: estado bloqueado de la página', async ({ page }) => {
