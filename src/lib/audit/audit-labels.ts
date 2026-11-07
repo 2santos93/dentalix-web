@@ -518,6 +518,43 @@ export function scheduleChangeDetail(metadata: AuditMetadata, fmt: RegionalForma
   return `Antes: ${side(change.before)} · Después: ${side(change.after)}`;
 }
 
+/** Nombre de cada miembro del personal por su `userId` (minúsculas). */
+export type StaffNames = ReadonlyMap<string, string>;
+
+export function staffNameMap(staff: readonly { userId: string; fullName: string }[]): StaffNames {
+  return new Map(staff.map((m) => [m.userId.toLowerCase(), m.fullName]));
+}
+
+/** Quien ya no está en el personal: nunca su id. */
+export const FORMER_PROVIDER = 'profesional retirado';
+
+/**
+ * DX-133-bis: una cita movida (`reason` APPOINTMENT_MOVED), con la hora y el
+ * profesional antes y después: «Cita movida · Antes: 10/11/2026 1:00 p. m.,
+ * Ana Pérez · Después: 10/11/2026 2:00 p. m., Luis Gómez». La hora va con el
+ * reloj de la sede de la cita (`clock`); sin él, «—», nunca otro formato
+ * (DX-354). Sin la lista del personal (no cargó) no se nombra a nadie: solo
+ * «otro profesional» si cambió. null si el evento no es un movimiento.
+ */
+export function appointmentMoveDetail(
+  metadata: AuditMetadata,
+  clock: SedeClock | null,
+  staff: StaffNames | null,
+): string | null {
+  if (metadata.reason !== 'APPOINTMENT_MOVED') return null;
+  const what = 'Cita movida';
+  const move = metadata.move;
+  if (!move) return what;
+  const when = (iso: string) => (clock ? clock.fmt.dateTime(new Date(iso), clock.timeZone) : NO_SEDE_FORMAT);
+  const who = (id: string) => staff?.get(id.toLowerCase()) ?? FORMER_PROVIDER;
+  if (!staff) {
+    const parts = [what, `${when(move.from.start)} → ${when(move.to.start)}`];
+    if (move.from.providerId.toLowerCase() !== move.to.providerId.toLowerCase()) parts.push('otro profesional');
+    return parts.join(' · ');
+  }
+  return `${what} · Antes: ${when(move.from.start)}, ${who(move.from.providerId)} · Después: ${when(move.to.start)}, ${who(move.to.providerId)}`;
+}
+
 /** DX-200: etiqueta de un estado de la cita en el registro de auditoría. */
 const APPOINTMENT_STATUS_LABELS: Record<string, string> = {
   SCHEDULED: 'Agendada',

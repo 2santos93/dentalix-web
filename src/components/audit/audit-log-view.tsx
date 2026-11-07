@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Lock, X } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
@@ -28,6 +28,9 @@ import {
   staffDetail,
   locationNameMap,
   type LocationNames,
+  appointmentMoveDetail,
+  staffNameMap,
+  type StaffNames,
   cashSessionDetail,
   sedationDetail,
   chairDetail,
@@ -49,7 +52,7 @@ import {
 import { configChangeItems, type ConfigChangeItem } from '@/lib/audit/config-change';
 import { auditTime, auditZoneHint, type AuditSedeTime, type AuditTime } from '@/lib/audit/audit-time';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
-import { screenLocation, sedeClockFor, type SedeClock, type SedeClockError } from '@/lib/locations/sede-clock';
+import { screenLocation, sedeClockFor, type AgendaClock, type SedeClock, type SedeClockError } from '@/lib/locations/sede-clock';
 import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
 import { useLocationsState } from '@/lib/locations/use-locations-state';
 import { isValidRange, MAX_RANGE_DAYS } from '@/lib/payments/cash-period';
@@ -239,6 +242,10 @@ export function AuditLogView({ token, patientId, onClearPatient, initialFilters 
   // DX-359: nombres de las sedes para los accesos del personal (`staffAccess`
   // solo trae ids) y para la hora de la sede de cada evento.
   const locationNames = useMemo(() => (locations ? locationNameMap(locations) : null), [locations]);
+  // DX-133-bis: el personal, una sola vez, para el filtro de usuario y para
+  // nombrar al profesional de una cita movida (la metadata solo trae ids).
+  const staff = useStaff(token);
+  const staffNames = useMemo(() => (staff.members ? staffNameMap(staff.members) : null), [staff.members]);
   // El desfase de hoy en el aviso de la zona; cada fila dice el suyo.
   const [now] = useState(() => new Date());
   const [data, setData] = useState<AuditEventsPage | null>(null);
@@ -339,7 +346,7 @@ export function AuditLogView({ token, patientId, onClearPatient, initialFilters 
     ? items.map((event) => ({
         event,
         time: auditTime(event, clock, locationNames),
-        detail: eventDetail(event, locationNames, clock),
+        detail: eventDetail(event, locationNames, clock, staffNames),
         change: configChangeItems(event.metadata, clock.fmt),
       }))
     : [];
@@ -353,7 +360,7 @@ export function AuditLogView({ token, patientId, onClearPatient, initialFilters 
         className="grid min-w-0 grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-end"
       >
         <ActorFilter
-          token={token}
+          staff={staff}
           id={actorId}
           value={filters.actorUserId}
           onChange={(actorUserId) => changeFilters({ actorUserId })}
@@ -548,9 +555,11 @@ function ConfigChangeValue({ item }: { item: ConfigChangeItem }) {
 function eventDetail(
   event: AuditEvent,
   locationNames: LocationNames | null,
-  clock: SedeClock | null,
+  clock: AgendaClock | null,
+  staffNames: StaffNames | null = null,
 ): string | null {
   return (
+    appointmentMoveDetail(event.metadata, moveClock(event, clock), staffNames) ??
     communicationDetail(event.metadata) ??
     confirmationLinkDetail(event.metadata) ??
     implantSearchDetail(event.metadata) ??
@@ -704,32 +713,24 @@ function auditColumns(showPatient: boolean): DataListColumn<AuditRowData>[] {
   return columns.filter((c): c is DataListColumn<AuditRowData> => c !== null);
 }
 
-/**
- * Filtro de usuario con el personal de la clínica (`GET /staff`). Si no carga,
- * escalón 2 de la escalera de errores: el control se sustituye en su sitio por
- * un `FieldError` con reintento; el resto de la pantalla sigue funcionando.
- */
-function ActorFilter({
-  token,
-  id,
-  value,
-  onChange,
-}: {
-  token: string;
-  id: string;
-  value: string;
-  onChange: (actorUserId: string) => void;
-}) {
-  const [staff, setStaff] = useState<StaffMember[] | null>(null);
+interface StaffState {
+  members: StaffMember[] | null;
+  failed: boolean;
+  retry: () => void;
+}
+
+/** El personal de la clínica (`GET /staff`), por nombre; `failed` si no cargó. */
+function useStaff(token: string): StaffState {
+  const [members, setMembers] = useState<StaffMember[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     listStaff(token)
-      .then((members) => {
+      .then((list) => {
         if (cancelled) return;
-        setStaff([...members].sort((a, b) => a.fullName.localeCompare(b.fullName, 'es')));
+        setMembers([...list].sort((a, b) => a.fullName.localeCompare(b.fullName, 'es')));
         setFailed(false);
       })
       .catch(() => {
@@ -740,10 +741,40 @@ function ActorFilter({
     };
   }, [token, attempt]);
 
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
+  return { members, failed, retry };
+}
+
+/**
+ * La hora de una cita movida va con el reloj de la sede de la cita (la del
+ * evento); un evento sin sede, con el de la pantalla. Una sede sin reloj
+ * conocido da null: «—», nunca otro formato (DX-354).
+ */
+function moveClock(event: AuditEvent, clock: AgendaClock | null): SedeClock | null {
+  if (!clock) return null;
+  return event.locationId ? clock.of(event.locationId) : clock;
+}
+
+/**
+ * Filtro de usuario con el personal de la clínica (`GET /staff`). Si no carga,
+ * escalón 2 de la escalera de errores: el control se sustituye en su sitio por
+ * un `FieldError` con reintento; el resto de la pantalla sigue funcionando.
+ */
+function ActorFilter({
+  staff: { members: staff, failed, retry },
+  id,
+  value,
+  onChange,
+}: {
+  staff: StaffState;
+  id: string;
+  value: string;
+  onChange: (actorUserId: string) => void;
+}) {
   return (
     <FormField htmlFor={id} label={copy.actorLabel} className="col-span-2 min-w-0 sm:w-52">
       {failed ? (
-        <FieldError label={copy.actorUnavailable} retryId={id} onRetry={() => setAttempt((n) => n + 1)} />
+        <FieldError label={copy.actorUnavailable} retryId={id} onRetry={retry} />
       ) : (
         <NativeSelect id={id} value={value} onChange={(e) => onChange(e.target.value)} disabled={staff === null}>
           <option value="">{copy.actorAll}</option>
