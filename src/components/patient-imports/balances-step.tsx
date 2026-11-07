@@ -23,6 +23,7 @@ import { ImportIssuesTable } from './import-issues-table';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeMoney, sedeNumber } from '@/lib/format/sede-number';
 import { Checkbox } from '@/components/ui/checkbox';
+import { roundAmount } from '@/lib/money/round';
 
 export const balancesCopy = {
   title: 'Saldos de los pacientes (opcional)',
@@ -335,7 +336,7 @@ export function CurrencyTotalsTable({
               </TableCell>
               <TableCell data-label={balancesCopy.errorTotal} className="tabular-nums sm:text-right">
                 {sedeMoney(
-                  Math.max(0, Math.round((amountOf(fileTotals, currency) - amountOf(validTotals, currency)) * 100) / 100),
+                  Math.max(0, roundAmount(amountOf(fileTotals, currency) - amountOf(validTotals, currency))),
                   currency,
                   fmt,
                 )}

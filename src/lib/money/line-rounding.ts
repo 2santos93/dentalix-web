@@ -9,10 +9,11 @@
  * importe es otra cosa (`formatCurrency`, dígitos de formato CLDR).
  */
 
+import { amountCents, centsToAmount } from './round';
+
 /** Decimales del redondeo por línea: los importes tienen como mucho 2. */
 export type RoundingDigits = 0 | 1 | 2;
 
-const HUNDRED = BigInt(100);
 const TEN_THOUSAND = BigInt(10000);
 const TWO = BigInt(2);
 
@@ -31,7 +32,7 @@ export function unitCents(digits: RoundingDigits): bigint {
 
 /** Importe → céntimos BigInt (redondeo al céntimo más cercano, como la API). */
 export function bigCents(amount: number): bigint {
-  return BigInt(Math.round(amount * 100));
+  return BigInt(amountCents(amount));
 }
 
 /** Un % (hasta 2 decimales) en puntos básicos: 7,5 % → 750. */
@@ -53,7 +54,7 @@ export function percentOfCentsInUnits(
 
 /** Unidades de la moneda → importe. */
 export function unitsToAmount(units: bigint, digits: RoundingDigits): number {
-  return Number(units * unitCents(digits)) / Number(HUNDRED);
+  return centsToAmount(Number(units * unitCents(digits)));
 }
 
 export interface MoneyLine {
@@ -63,12 +64,12 @@ export interface MoneyLine {
 
 /** Importe de una línea en céntimos exactos: precio − descuento. */
 export function lineCents(line: MoneyLine): number {
-  return Math.round(line.price * 100) - Math.round(line.discount * 100);
+  return amountCents(line.price) - amountCents(line.discount);
 }
 
 /** Total de un documento: la suma exacta de sus líneas. */
 export function linesTotal(lines: readonly MoneyLine[]): number {
-  return lines.reduce((sum, line) => sum + lineCents(line), 0) / 100;
+  return centsToAmount(lines.reduce((sum, line) => sum + lineCents(line), 0));
 }
 
 /**

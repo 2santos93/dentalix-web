@@ -2,6 +2,7 @@ import type { PaymentMethod } from '@/lib/payments/payments-api';
 import { PAYMENT_METHOD_OPTIONS } from '@/lib/payments/payment-method';
 import { parseMoneyInput } from '@/lib/format/money';
 import type { CashAdjustmentKind, CashExpectedLine } from './cash-sessions-api';
+import { amountCents, centsToAmount } from '@/lib/money/round';
 
 /*
  * El arqueo en pantalla (DX-027): las filas que se cuentan al cerrar y la
@@ -25,8 +26,6 @@ export const ADJUSTMENT_KIND_LABELS: Record<CashAdjustmentKind, string> = {
   CORRECTION: 'Corrección de un cierre',
   OUTFLOW_VOID: 'Anulación de salida',
 };
-
-const cents = (amount: number) => Math.round(amount * 100);
 
 /**
  * Las filas del arqueo. Con el esperado a la vista, una por cada par
@@ -73,7 +72,7 @@ export function rowDifference(row: CountRow): number | null {
   if (row.expected === null) return null;
   const counted = row.counted.trim() === '' ? 0 : parseCounted(row.counted, row.currency);
   if (counted === null) return null;
-  return (cents(counted) - cents(row.expected)) / 100;
+  return centsToAmount(amountCents(counted) - amountCents(row.expected));
 }
 
 /** ¿Hay alguna fila que no cuadra? (solo con el esperado a la vista) */

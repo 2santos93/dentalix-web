@@ -18,6 +18,7 @@ import {
 } from './expense-payment-fields';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
+import { amountCents } from '@/lib/money/round';
 
 export const expensePaymentCopy = {
   title: 'Registrar pago',
@@ -82,7 +83,7 @@ export function ExpensePaymentModal({
     let nextAmountError: string | null = null;
     if (!parsed.ok) nextAmountError = parsed.reason === 'empty' ? expensePaymentCopy.amountRequired : parsed.message;
     else if (parsed.value <= 0) nextAmountError = expensePaymentCopy.amountRequired;
-    else if (Math.round(parsed.value * 100) > Math.round(expense.pendingAmount * 100)) {
+    else if (amountCents(parsed.value) > amountCents(expense.pendingAmount)) {
       nextAmountError = expensePaymentCopy.overPending(pending);
     }
     const nextPaidOnError = paidOnError(payment, today);

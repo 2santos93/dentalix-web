@@ -57,6 +57,7 @@ import {
   splitTotalOf,
   useSplitLines,
 } from './split-payment-lines';
+import { amountCents } from '@/lib/money/round';
 
 // Copy como constantes (i18n-ready).
 export const recordPaymentCopy = {
@@ -478,7 +479,7 @@ export function RecordPaymentModal({
       focusField('rp-amount');
       return;
     }
-    if (opening && Math.round(parsed.value * 100) > Math.round(opening.pending * 100)) {
+    if (opening && amountCents(parsed.value) > amountCents(opening.pending)) {
       setAmountError(copy.overPending(money(opening.pending, opening.currency)));
       focusField('rp-amount');
       return;

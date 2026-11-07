@@ -15,6 +15,7 @@ import { creditPreviewCopy, type CreditSource } from './credit-balance';
 import { CreditPreview } from './credit-preview';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
+import { amountCents } from '@/lib/money/round';
 
 const copy = {
   title: 'Aplicar saldo a favor a otro plan',
@@ -94,7 +95,7 @@ export function CreditTransferModal({
       setAmountError(parsed.ok || parsed.reason === 'empty' ? copy.invalidAmount : parsed.message);
       return;
     }
-    if (Math.round(parsed.value * 100) > Math.round(source.credit * 100)) {
+    if (amountCents(parsed.value) > amountCents(source.credit)) {
       setAmountError(copy.overCredit(stamp.money(source.credit, source.currency)));
       return;
     }

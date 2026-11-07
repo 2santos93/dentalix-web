@@ -40,3 +40,5 @@ regiones y los indicativos salen de `libphonenumber-js` (MIT), sobre los
 metadatos de libphonenumber (Apache-2.0). Los nombres son de CLDR (Unicode
 License v3). La web no instala la librería: solo usa esta copia para elegir y
 nombrar la región.
+
+`round.ts` (DX-488-bis): único sitio de la web donde un importe se redondea a céntimos (`amountCents`, `roundAmount`, `centsToAmount`, `roundCents`, `amountText`); siempre 2 decimales, el redondeo por dígitos de moneda es de `line-rounding.ts`. La guarda `src/architecture/no-loose-money-rounding.test.ts` impide redondeos sueltos.

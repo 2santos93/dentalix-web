@@ -6,6 +6,7 @@ import {
   unitCents,
   unitsToAmount,
 } from '@/lib/money/line-rounding';
+import { amountCents, centsToAmount } from '@/lib/money/round';
 
 /**
  * Reglas de descuento de la clínica en la web (DX-204). Son un AVISO antes de
@@ -52,7 +53,7 @@ export function roleCapMessage(maxPercent: number): string {
 }
 
 function cents(amount: number): bigint {
-  return BigInt(Math.round(amount * 100));
+  return BigInt(amountCents(amount));
 }
 
 /** Aviso del formulario del ítem y prefijo de los errores de la API (SEC-041). */
@@ -88,9 +89,9 @@ export function effectiveDiscount(
   const catalogCents = catalogPrice == null ? null : cents(catalogPrice);
   const reduction = catalogCents !== null && catalogCents > priceCents ? catalogCents - priceCents : BigInt(0);
   return {
-    listPrice: Number(priceCents + reduction) / 100,
-    priceReduction: Number(reduction) / 100,
-    total: Number(reduction + cents(discount)) / 100,
+    listPrice: centsToAmount(Number(priceCents + reduction)),
+    priceReduction: centsToAmount(Number(reduction)),
+    total: centsToAmount(Number(reduction + cents(discount))),
   };
 }
 

@@ -14,6 +14,7 @@ import {
 } from '@/lib/payments/payment-rate';
 import { rateProviderCopy } from './rate-provider-notice';
 import type { ExchangeRatesState } from './use-exchange-rates';
+import { roundAmount } from '@/lib/money/round';
 
 // Copy como constantes (i18n-ready). Ningún texto nombra un país ni un banco.
 export const ratePreviewCopy = {
@@ -177,7 +178,7 @@ function PreviewBody({
   }
   const equivalent = convertWithRate(amount, rate);
   const after =
-    typeof planBalance === 'object' ? Math.round((planBalance.balance - equivalent) * 100) / 100 : null;
+    typeof planBalance === 'object' ? roundAmount(planBalance.balance - equivalent) : null;
   return (
     <>
       <dl className="mt-1 grid gap-x-4 gap-y-1 sm:grid-cols-2">

@@ -28,6 +28,7 @@
 
 import { currencyTextFor } from '@/lib/format/currency-text';
 import { clinicCurrencyTexts } from '@/lib/format/clinic-currency-texts';
+import { roundAmount } from '@/lib/money/round';
 
 /** Decimales que admite un importe escrito, en cualquier moneda. */
 const MONEY_DECIMALS = 2;
@@ -186,5 +187,5 @@ export function parseMoneyInput(text: string, currency: string): DecimalParseRes
 export function moneyInputText(amount: number): string {
   // Redondeado a céntimos: un total sumado en el cliente puede traer ruido de
   // coma flotante (0,1 + 0,2 = 0,30000000000000004) que no se volvería a leer.
-  return String(Math.round(amount * 100) / 100).replace('.', ',');
+  return String(roundAmount(amount)).replace('.', ',');
 }
