@@ -1232,10 +1232,14 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Barra de la agenda. Fila 1: vista · ‹ › Hoy · fecha · periodo, y a la
-          derecha las dos acciones. Fila 2: el filtro de profesional (con su
-          etiqueta visible), la presentación del Día y, sin panel lateral,
-          «En clínica» y «Pendientes». Se parte en filas limpias a 900 y 390. */}
+      {/* Barra de la agenda. Fila 1: vista · ‹ › Hoy · fecha · periodo (en el
+          teléfono, también «Nueva cita»). Fila 2, la barra de filtros: el filtro
+          de profesional (con su etiqueta visible) y la presentación del Día a la
+          izquierda; a la derecha, sin panel lateral, «En clínica» y «Pendientes»,
+          y en escritorio las acciones, que cierra «Nueva cita» (DESIGN.md: la
+          acción principal va en la barra de filtros, a la derecha, en su misma
+          fila). Si no cabe, el grupo de la derecha baja entero, alineado a la
+          derecha: nunca queda una fila de acciones suelta. */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
           <SegmentedControl
@@ -1275,29 +1279,16 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
           <h2 className="t-title min-w-0 text-ink first-letter:uppercase" data-testid="agenda-period">
             {nav.label}
           </h2>
-          <div className="ml-auto flex shrink-0 gap-2">
-            {/* En el teléfono «Bloquear horario» baja, como icono con su
-                nombre, a la fila de «En clínica» y «Pendientes»: así «Nueva
-                cita» cabe junto al periodo. */}
-            {canDownloadContingencyAgenda(role) && !phone ? (
-              <Button type="button" variant="secondary" onClick={() => setShowContingency(true)}>
-                <FileDown aria-hidden /> {contingencyCopy.button}
+          {/* En el teléfono «Nueva cita» va junto al periodo; las demás acciones
+              bajan, como iconos con su nombre, a la fila de «En clínica» y
+              «Pendientes». */}
+          {phone ? (
+            <div className="ml-auto flex shrink-0 gap-2">
+              <Button type="button" onClick={openNewAppointment}>
+                <Plus /> {copy.newAppointment}
               </Button>
-            ) : null}
-            {canWriteBlocks && !phone ? (
-              <Button type="button" variant="secondary" onClick={() => setShowBlockDialog(true)}>
-                <CalendarOff aria-hidden /> {copy.blockSchedule}
-              </Button>
-            ) : null}
-            {canWalkIn(role) && !phone ? (
-              <Button type="button" variant="secondary" onClick={() => setShowWalkIn(true)}>
-                <Siren aria-hidden /> {walkInCopy.button}
-              </Button>
-            ) : null}
-            <Button type="button" onClick={openNewAppointment}>
-              <Plus /> {copy.newAppointment}
-            </Button>
-          </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
@@ -1366,8 +1357,10 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
               />
             </div>
           ) : null}
-          {!wide ? (
-            <div className="flex w-full gap-2 sm:ml-auto sm:w-auto [&>button]:flex-1 sm:[&>button]:flex-none">
+          {!wide || !phone ? (
+            <div className="flex w-full gap-2 sm:ml-auto sm:w-auto sm:flex-wrap sm:justify-end [&>button]:flex-1 sm:[&>button]:flex-none">
+              {!wide ? (
+                <>
               {/* DX-200: «En clínica», en un cajón sin panel lateral. */}
               <Button
                 type="button"
@@ -1395,6 +1388,30 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 <ListTodo aria-hidden /> {copy.waitlistButton}{' '}
                 {waitlistCount ? <span className={counterClass}>{waitlistCount}</span> : null}
               </Button>
+                </>
+              ) : null}
+              {!phone ? (
+                <>
+                  {canDownloadContingencyAgenda(role) ? (
+                    <Button type="button" variant="secondary" onClick={() => setShowContingency(true)}>
+                      <FileDown aria-hidden /> {contingencyCopy.button}
+                    </Button>
+                  ) : null}
+                  {canWriteBlocks ? (
+                    <Button type="button" variant="secondary" onClick={() => setShowBlockDialog(true)}>
+                      <CalendarOff aria-hidden /> {copy.blockSchedule}
+                    </Button>
+                  ) : null}
+                  {canWalkIn(role) ? (
+                    <Button type="button" variant="secondary" onClick={() => setShowWalkIn(true)}>
+                      <Siren aria-hidden /> {walkInCopy.button}
+                    </Button>
+                  ) : null}
+                  <Button type="button" onClick={openNewAppointment}>
+                    <Plus /> {copy.newAppointment}
+                  </Button>
+                </>
+              ) : null}
               {canWalkIn(role) && phone ? (
                 <Button
                   type="button"
