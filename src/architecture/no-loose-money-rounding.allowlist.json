@@ -13,27 +13,27 @@
   },
   {
     "file": "src/components/patient-imports/balances-step.tsx",
-    "fn": "balancesCopy",
-    "count": 1,
-    "why": "Texto «Subiendo la hoja… N %»: progreso de subida, no un importe."
-  },
-  {
-    "file": "src/components/patient-imports/balances-step.tsx",
     "fn": "BalancesStep",
     "count": 1,
     "why": "Porcentaje de subida de la hoja de saldos; no es un importe."
   },
   {
-    "file": "src/components/patient-imports/patient-import-wizard.tsx",
-    "fn": "wizardCopy",
+    "file": "src/components/patient-imports/balances-step.tsx",
+    "fn": "balancesCopy",
     "count": 1,
-    "why": "Texto «Subiendo el archivo… N %»: progreso de subida, no un importe."
+    "why": "Texto «Subiendo la hoja… N %»: progreso de subida, no un importe."
   },
   {
     "file": "src/components/patient-imports/patient-import-wizard.tsx",
     "fn": "UploadStatus",
     "count": 1,
     "why": "Porcentaje de subida del archivo; no es un importe."
+  },
+  {
+    "file": "src/components/patient-imports/patient-import-wizard.tsx",
+    "fn": "wizardCopy",
+    "count": 1,
+    "why": "Texto «Subiendo el archivo… N %»: progreso de subida, no un importe."
   },
   {
     "file": "src/components/shared/single-file-field.tsx",
@@ -60,6 +60,12 @@
     "why": "Porcentaje del descuento sobre el precio (dos decimales), no un importe; el importe del descuento va por amountCents."
   },
   {
+    "file": "src/lib/money/line-rounding.ts",
+    "fn": "basisPoints",
+    "count": 1,
+    "why": "Un porcentaje (hasta 2 decimales) en puntos básicos, no un importe; el importe va por amountCents."
+  },
+  {
     "file": "src/lib/payments/payment-rate.ts",
     "fn": "ratePerBase",
     "count": 1,
@@ -73,14 +79,14 @@
   },
   {
     "file": "src/lib/sedation/sedation-api.ts",
-    "fn": "reversalDoses",
-    "count": 2,
-    "why": "Dosis de naloxona y flumazenil (mg); no es un importe."
-  },
-  {
-    "file": "src/lib/sedation/sedation-api.ts",
     "fn": "formatDecimal",
     "count": 1,
     "why": "Dosis y constantes clínicas (mg, kg) con coma decimal; no es un importe."
+  },
+  {
+    "file": "src/lib/sedation/sedation-api.ts",
+    "fn": "reversalDoses",
+    "count": 2,
+    "why": "Dosis de naloxona y flumazenil (mg); no es un importe."
   }
 ]
