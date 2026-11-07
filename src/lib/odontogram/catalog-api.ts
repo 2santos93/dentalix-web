@@ -34,6 +34,11 @@ export interface DentalCatalogItem {
   defaultPrice: number | null;
   /** DX-105: false = la prestación no admite descuentos (ni de convenio ni discrecionales). */
   allowDiscount?: boolean;
+  /**
+   * DX-502-ter: moneda de `defaultPrice` (la del catálogo de la clínica), `null` si no se
+   * sabe. La traen las lecturas de `GET /catalog/items`; no las altas ni las ediciones.
+   */
+  catalogCurrency?: string | null;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -69,6 +74,11 @@ export interface CatalogDirectoryPage {
   page: number;
   /** El que aplicó el servidor, que acota lo pedido — léelo de aquí, no lo asumas. */
   pageSize: number;
+  /**
+   * DX-502-ter: moneda del catálogo de la clínica (la fijada en Ajustes o, sin ella, la común
+   * de las sedes activas); `null` si no se sabe. Llega aunque la página venga vacía.
+   */
+  catalogCurrency?: string | null;
 }
 
 /**

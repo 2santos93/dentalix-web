@@ -98,4 +98,26 @@ describe('CatalogPicker', () => {
     expect(first).toBeChecked();
     expect(second).not.toBeChecked();
   });
+
+  it('DX-502-ter: muestra el precio de cada fila solo si el consumidor da uno con su moneda', () => {
+    render(
+      <CatalogPicker
+        items={items}
+        value={null}
+        onChange={() => {}}
+        idPrefix="tp"
+        legend="Procedimiento"
+        priceLabel={(i) => (i.id === 'cat-1' ? 'US$ 150,00' : null)}
+      />,
+    );
+    const prices = screen.getAllByTestId('catalog-picker-price');
+    expect(prices).toHaveLength(1);
+    expect(prices[0]).toHaveTextContent('US$ 150,00');
+    expect(screen.getByRole('radio', { name: /resina/i })).toBeInTheDocument();
+  });
+
+  it('sin `priceLabel` no pinta ningún precio (el odontograma no lo necesita)', () => {
+    render(<CatalogPicker items={items} value={null} onChange={() => {}} idPrefix="tp" legend="Procedimiento" />);
+    expect(screen.queryByTestId('catalog-picker-price')).not.toBeInTheDocument();
+  });
 });

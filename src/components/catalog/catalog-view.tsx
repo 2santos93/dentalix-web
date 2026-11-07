@@ -210,15 +210,21 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
   // DX-064: Odontólogo y Asistente leen el catálogo; escribir es de ADMIN, como en la API.
   const canWrite = canWriteCatalog(getTokenRole(token));
   const stamp = useSedeStamp(token);
-  // Moneda base de la clínica (la común de sus sedes activas, GLOBAL-G1). Con
-  // sedes en monedas distintas, el importe va sin símbolo. Si las sedes no
-  // cargaron o alguna no tiene moneda tampoco lleva símbolo, y además se dice
-  // con `SedeConfigError`: nunca una moneda de reserva.
+  // Moneda del catálogo (DX-502-ter). La API la manda con cada página, igual para
+  // todos los roles: la que fijó la clínica en Ajustes o, sin ella, la común de
+  // sus sedes activas (`null` si no se sabe). Hasta que llega la primera página
+  // (`undefined`) rige la regla de antes: la común de las sedes activas
+  // (GLOBAL-G1). Con sedes en monedas distintas, el importe va sin símbolo. Si
+  // las sedes no cargaron o alguna no tiene moneda tampoco lleva símbolo, y
+  // además se dice con `SedeConfigError`: nunca una moneda de reserva.
   const locationsState = useLocationsState(token);
-  const currency = locationsState.status === 'ready' ? clinicBaseCurrency(locationsState.locations) : null;
+  const [serverCurrency, setServerCurrency] = useState<string | null | undefined>(undefined);
+  const sedesCurrency = locationsState.status === 'ready' ? clinicBaseCurrency(locationsState.locations) : null;
+  const currency = serverCurrency !== undefined ? serverCurrency : sedesCurrency;
   const currencyUnknown =
-    locationsState.status === 'error' ||
-    (locationsState.status === 'ready' && hasActiveLocationWithoutCurrency(locationsState.locations));
+    currency === null &&
+    (locationsState.status === 'error' ||
+      (locationsState.status === 'ready' && hasActiveLocationWithoutCurrency(locationsState.locations)));
   const [items, setItems] = useState<DentalCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -320,6 +326,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
         if (cancelled) return;
         setItems(data.items);
         setTotal(data.total);
+        setServerCurrency(data.catalogCurrency);
         // El backend acota `pageSize`: se lee de la respuesta, no se asume.
         setPageSize(data.pageSize);
         // Una sola fila devuelta alguna vez basta para saber que el catálogo no
@@ -353,6 +360,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
       .then((data) => {
         setItems(data.items);
         setTotal(data.total);
+        setServerCurrency(data.catalogCurrency);
         setPageSize(data.pageSize);
         if (data.total > 0) setHasAny(true);
         setLoadError(null);

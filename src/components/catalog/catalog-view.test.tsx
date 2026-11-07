@@ -643,6 +643,66 @@ describe('CatalogView', () => {
     expect(within(table).queryByText(/€|EUR|VES|US\$|USD/)).not.toBeInTheDocument();
   });
 
+  describe('DX-502-ter: la moneda del catálogo viene de la API', () => {
+    const mixedSedes = () => [
+      ...clinicIn('VE'),
+      clinicLocation({
+        id: 'l2',
+        name: 'Madrid',
+        address: null,
+        country: 'ES',
+        isActive: true,
+        currency: 'EUR',
+        timeZone: 'Europe/Madrid',
+        locale: 'es-ES',
+        createdAt: '2026-01-01T00:00:00Z',
+      }),
+    ];
+
+    it.each(['ADMIN', 'DENTIST', 'ASSISTANT'] as const)(
+      '%s ve los precios en la moneda fijada aunque las sedes usen monedas distintas',
+      async (role) => {
+        mockedLocations.mockResolvedValue(mixedSedes());
+        mockedList.mockResolvedValue({ ...page([item1]), catalogCurrency: 'USD' });
+        render(<CatalogView token={tokenForRole(role)} />);
+        const table = await screen.findByRole('table', { name: /catálogo/i });
+        await waitFor(() => expect(within(table).getByText(/80[.,]000[.,]00/)).toBeInTheDocument());
+        expect(within(table).getByText(/US\$|USD/)).toBeInTheDocument();
+        expect(within(table).queryByText(/€|EUR|VES/)).not.toBeInTheDocument();
+      },
+    );
+
+    it('la moneda de la API manda sobre la de las sedes', async () => {
+      mockedList.mockResolvedValue({ ...page([item1]), catalogCurrency: 'USD' });
+      render(<CatalogView token={ADMIN_TOKEN} />);
+      const table = await screen.findByRole('table', { name: /catálogo/i });
+      await waitFor(() => expect(within(table).getByText(/US\$|USD/)).toBeInTheDocument());
+      expect(within(table).queryByText(/VES/)).not.toBeInTheDocument();
+    });
+
+    it('con la página vacía también la conoce (el alta de un ítem nuevo)', async () => {
+      mockedLocations.mockResolvedValue(mixedSedes());
+      mockedList.mockResolvedValue({ ...page([], 0), catalogCurrency: 'USD' });
+      render(<CatalogView token={ADMIN_TOKEN} />);
+      await screen.findByRole('button', { name: 'Agregar ítem' });
+      await waitFor(() => expect(mockedList).toHaveBeenCalled());
+      const user = setupUser();
+      await user.click(screen.getByRole('button', { name: 'Agregar ítem' }));
+      await user.type(await screen.findByLabelText(/^Precio/), '100');
+      // La vista previa del importe lleva la moneda del catálogo, no «sin moneda».
+      expect(await screen.findByText(/US\$|USD/)).toBeInTheDocument();
+    });
+
+    it('si la API no la sabe (null), el importe va sin moneda', async () => {
+      mockedLocations.mockResolvedValue(mixedSedes());
+      mockedList.mockResolvedValue({ ...page([item1]), catalogCurrency: null });
+      render(<CatalogView token={ADMIN_TOKEN} />);
+      const table = await screen.findByRole('table', { name: /catálogo/i });
+      await waitFor(() => expect(within(table).getByText('80.000,00')).toBeInTheDocument());
+      expect(within(table).queryByText(/€|EUR|VES|US\$|USD/)).not.toBeInTheDocument();
+    });
+  });
+
   it('sin sedes cargadas el importe sale «—» y un aviso, nunca en USD ni con otro formato', async () => {
     mockedLocations.mockRejectedValue(new TypeError('Failed to fetch'));
     mockedList.mockResolvedValue(page([item1]));

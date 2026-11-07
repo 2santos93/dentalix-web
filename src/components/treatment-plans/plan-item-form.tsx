@@ -319,6 +319,11 @@ export function PlanItemForm({
         // etiqueta de tipo se repetiría en todas las filas sin
         // decir nada.
         showKind={false}
+        priceLabel={(item) =>
+          item.defaultPrice == null
+            ? null
+            : formatListPrice(item.defaultPrice, item.catalogCurrency ?? null, sedeListPriceFormat(fmt))
+        }
       />
 
       <div className="grid gap-4 sm:grid-cols-2">
