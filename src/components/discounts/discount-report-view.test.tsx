@@ -534,6 +534,53 @@ describe('DiscountReportView (DX-204)', () => {
       );
     });
 
+    // DX-513-quater: lista de convenio con la moneda del catálogo NULL.
+    it('moneda del catálogo desconocida: la frase propia, nunca «catálogo en ,», «Sin medir» y el resumen sin cifra', async () => {
+      const unknownCatalog = () =>
+        listAgreement({ itemId: 'item-3', catalogCurrency: null, basePriceInPlan: 3600, agreementUnmeasured: true });
+      mockedReport.mockResolvedValue(
+        report([unknownCatalog()], { totals: [], agreementUnmeasuredTotals: [{ currency: 'USD', items: 1 }] }),
+      );
+      render(<DiscountReportView token="tok" />);
+      const tableRow = await findRow();
+      expect(within(tableRow).getByText(/sin referencia comparable/)).toHaveTextContent(
+        'Convenio «Empresa»: sin referencia comparable (moneda del catálogo desconocida, plan en USD)',
+      );
+      expect(screen.queryByText(/catálogo en ,/)).not.toBeInTheDocument();
+      expect(within(tableRow).getByText('Sin medir')).toBeInTheDocument();
+      expect(await screen.findByTestId('agreement-unmeasured-USD')).toHaveTextContent(
+        /^USD · 1 ítem de convenio sin referencia comparable$/,
+      );
+      expect(screen.queryByTestId('agreement-total-USD')).not.toBeInTheDocument();
+    });
+
+    it('convenio por % con la moneda del catálogo NULL: se sigue midiendo', async () => {
+      mockedReport.mockResolvedValue(
+        report(
+          [
+            listAgreement({
+              priceSource: 'AGREEMENT_PERCENT',
+              catalogCurrency: null,
+              basePrice: 3600,
+              basePriceInPlan: 3600,
+              catalogPrice: 3240,
+              referencePriceInPlan: 3240,
+              price: 3240,
+              agreementReduction: 360,
+              agreementPercent: 10,
+            }),
+          ],
+          { totals: [], agreementTotals: [{ currency: 'USD', items: 1, reduction: 360 }] },
+        ),
+      );
+      render(<DiscountReportView token="tok" />);
+      const tableRow = await findRow();
+      expect(within(tableRow).getByText(/Convenio «Empresa»/)).toHaveTextContent(
+        /^Convenio «Empresa»: −360,00\sUSD \(10\s%\sde 3\.?600,00\sUSD\)$/,
+      );
+      expect(within(tableRow).queryByText('Sin medir')).not.toBeInTheDocument();
+    });
+
     describe('teléfono (<640px)', () => {
       let restore: () => void;
       beforeEach(() => {
