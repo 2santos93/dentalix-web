@@ -10,7 +10,12 @@ describe('forgetServerBranding (DX-517-ter)', () => {
     const spy = jest.fn().mockResolvedValue({ status: 204 });
     global.fetch = spy as unknown as typeof fetch;
     await forgetServerBranding();
-    expect(spy).toHaveBeenCalledWith('/api/branding-cache', { method: 'POST', credentials: 'same-origin', cache: 'no-store' });
+    expect(spy).toHaveBeenCalledWith('/api/branding-cache', {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it('nunca lanza (la caché caduca sola en 30 s)', async () => {

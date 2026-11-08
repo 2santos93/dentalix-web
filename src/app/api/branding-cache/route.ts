@@ -16,6 +16,9 @@ import { forgetBrandingForHost } from '@/lib/branding';
  * - Otras réplicas de la web pueden seguir sirviendo la marca anterior hasta
  *   30 s (README, «Marca de la clínica en el servidor»).
  */
+// Node, como el render: los dos comparten la caché de `globalThis` del proceso.
+export const runtime = 'nodejs';
+
 const NO_STORE = { 'cache-control': 'no-store' } as const;
 
 function isSameOrigin(req: Request, host: string): boolean {
