@@ -259,6 +259,13 @@
       "annotation": "E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)",
       "requiresUnset": "E2E_MAIL_DIR",
       "reason": "Sin E2E_MAIL_DIR no se pueden leer el enlace ni el código del presupuesto a distancia."
+    },
+    {
+      "file": "e2e/branding-ssr-custom-domain.spec.ts",
+      "title": "dominio propio verificado: la marca va en el primer HTML y el navegador no la pide",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede dar por verificado un dominio propio",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede insertar el dominio propio VERIFIED (el TXT real no se puede publicar en la CI)."
     }
   ]
 }

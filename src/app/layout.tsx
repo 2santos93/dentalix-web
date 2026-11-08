@@ -5,9 +5,8 @@ import { ThemeProvider } from "@/components/theme/theme-provider";
 import { BrandingProvider } from "@/components/brand/branding-context";
 import { CurrencyTextsSync } from "@/components/brand/currency-texts-sync";
 import { Toaster } from "@/components/errors/toaster";
-import { fetchBranding } from "@/lib/branding";
+import { brandingForRequest } from "@/lib/branding";
 import { accentStyleSheet } from "@/lib/color/accent";
-import { parseTenantFromHost } from "@/lib/tenant";
 import "./globals.css";
 
 // Inter variable with the optical-size axis: text forms at UI sizes, display
@@ -44,11 +43,12 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const h = await headers();
-  // Prefer the tenant resolved by middleware (forwarded on the request via
-  // `x-tenant`); fall back to parsing `host` directly so this still works
-  // when middleware didn't run (e.g. unit tests, static rendering contexts).
-  const tenant = h.get("x-tenant") ?? parseTenantFromHost(h.get("host"));
-  const branding = await fetchBranding(tenant, h.get("host"));
+  // DX-517-ter: la marca de la clínica de ESTE host, en el servidor, para que
+  // el primer HTML ya la traiga (sin parpadeo ni remontaje). Por el `Host` que
+  // recibió Next: el mismo que su proxy manda a la API como X-Forwarded-Host
+  // para las llamadas del navegador. Una consulta por petición (React
+  // `cache`, la comparte `authContext`) y caché por host de 30 s.
+  const branding = await brandingForRequest(h.get("host"));
   // Nonce de la CSP de esta petición (lo genera proxy.ts, DX-062).
   const nonce = h.get("x-nonce") ?? undefined;
   // The tenant picks ONE color; the whole accent family (fill, ink on it,
@@ -76,9 +76,14 @@ export default async function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-canvas text-ink">
         <ThemeProvider nonce={nonce}>
-          <BrandingProvider value={{ name: branding.name, logoUrl: branding.logoUrl, primaryColor: branding.primaryColor }}>
+          <BrandingProvider
+            status={branding.status}
+            value={{ name: branding.name, logoUrl: branding.logoUrl, primaryColor: branding.primaryColor }}
+          >
             {/* DX-517: el texto propio de cada moneda, antes de pintar ningún importe. */}
-            <CurrencyTextsSync value={branding.currencyTexts}>{children}</CurrencyTextsSync>
+            <CurrencyTextsSync status={branding.status} value={branding.currencyTexts}>
+              {children}
+            </CurrencyTextsSync>
           </BrandingProvider>
           <Toaster />
         </ThemeProvider>

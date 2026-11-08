@@ -3,6 +3,7 @@ import { usePathname } from 'next/navigation';
 import * as React from 'react';
 import { apiFetch } from '@/lib/api/client';
 import { accentStyleSheet } from '@/lib/color/accent';
+import type { BrandingStatus } from '@/lib/branding';
 import { isPlatformHost, isRegistrationPath } from '@/lib/tenant';
 
 /**
@@ -11,12 +12,15 @@ import { isPlatformHost, isRegistrationPath } from '@/lib/tenant';
  * vuelva a pedirla. Fuera del provider (tests, páginas sin tenant), vacía: el
  * shell cae a la marca de Dentalix.
  *
- * DX-019:
- * - Si el servidor no supo la clínica (`*.localhost`, un dominio propio que
- *   el servidor no resuelve, o la marca falló), el navegador la pide por el
- *   proxy, que sí resuelve la clínica por el host. Así el login y la app
- *   enseñan su logo y su color también ahí. Donde aún no hay clínica no se
- *   pide (sería un 404 en la consola): el host de la plataforma y el registro.
+ * DX-019 / DX-517-ter:
+ * - El servidor la pide por el host de la página (`brandingForRequest`) y dice
+ *   si encontró clínica (`clinic`), si el host no tiene (`none`) o si no lo
+ *   pudo saber (`unknown`: la API no contestó a tiempo). Solo con `unknown`
+ *   la pide el navegador por el proxy; con `clinic` ya viene en el primer
+ *   HTML (sin parpadeo) y con `none` no hay nada que pedir. Excepción: al
+ *   salir del registro sin recargar (`none` porque la clínica aún no existía)
+ *   se pide una vez. Donde no hay clínica tampoco se pide en `unknown` (sería
+ *   un 404 en la consola): el host de la plataforma y el registro.
  * - Ajustes › Datos de la clínica la cambia al guardar (`useSetClinicBranding`):
  *   el color, el logo y el nombre se ven al instante, sin recargar.
  */
@@ -53,14 +57,39 @@ function readBranding(data: Record<string, unknown>): ClinicBranding {
   };
 }
 
-export function BrandingProvider({ value, children }: { value: ClinicBranding; children: React.ReactNode }) {
+/**
+ * DX-517-ter: ¿hay que pedir la marca desde el navegador? Solo si el servidor
+ * no lo supo (`unknown`), o si dijo `none` en el registro y la pestaña acaba
+ * de salir de él sin recargar (la clínica ya existe).
+ */
+export function useClientBrandingNeeded(status: BrandingStatus, pathname: string | null): boolean {
+  const onRegistration = isRegistrationPath(pathname);
+  const [leftRegistration, setLeftRegistration] = React.useState(false);
+  const [sawRegistration, setSawRegistration] = React.useState(onRegistration);
+  if (onRegistration && !sawRegistration) setSawRegistration(true);
+  if (!onRegistration && sawRegistration && !leftRegistration) setLeftRegistration(true);
+  if (onRegistration) return false;
+  return status === 'unknown' || (status === 'none' && leftRegistration);
+}
+
+export function BrandingProvider({
+  value,
+  status,
+  children,
+}: {
+  value: ClinicBranding;
+  /** Lo que supo el servidor; sin él (tests), `clinic` si trae nombre y si no `unknown`. */
+  status?: BrandingStatus;
+  children: React.ReactNode;
+}) {
   const [fetched, setFetched] = React.useState<ClinicBranding | null>(null);
   const [override, setOverride] = React.useState<ClinicBranding | null>(null);
-  const serverKnows = value.name !== null;
-  const clinicMayExist = !isRegistrationPath(usePathname());
+  const serverStatus: BrandingStatus = status ?? (value.name !== null ? 'clinic' : 'unknown');
+  const serverKnows = serverStatus === 'clinic';
+  const needed = useClientBrandingNeeded(serverStatus, usePathname());
 
   React.useEffect(() => {
-    if (serverKnows || !clinicMayExist || isPlatformHost(window.location.host)) return;
+    if (!needed || isPlatformHost(window.location.host)) return;
     let cancelled = false;
     apiFetch<Record<string, unknown>>('/public/tenant/branding')
       .then((data) => {
@@ -72,7 +101,7 @@ export function BrandingProvider({ value, children }: { value: ClinicBranding; c
     return () => {
       cancelled = true;
     };
-  }, [serverKnows, clinicMayExist]);
+  }, [needed]);
 
   const effective = override ?? (serverKnows ? value : (fetched ?? value));
   const memo = React.useMemo(

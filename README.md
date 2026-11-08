@@ -40,6 +40,26 @@ la imagen) la web no arranca sin una `API_URL` http(s) válida.
 Imagen de producción: `Dockerfile` (`output: 'standalone'`); runbook en
 `dentalix-docs/docs/operacion/despliegue.md`.
 
+## Marca de la clínica en el servidor (DX-517-ter)
+
+El layout raíz y las páginas de acceso piden la marca (nombre, logo, color y
+textos de moneda) en el render de servidor con el `Host` de la petición:
+`GET /public/tenant/branding/by-host?host=<host>` de la API, que resuelve
+subdominios de la plataforma, `*.localhost` y dominios propios verificados sin
+mirar ninguna cabecera. Así el primer HTML ya trae la marca: sin parpadeo y
+sin volver a montar el árbol. Detalles (`src/lib/branding.ts`):
+
+- Timeout de 1 s. Caché en memoria del proceso, por host (sin puerto): 30 s si
+  hay clínica, 60 s si no la hay; los errores no se guardan.
+- El servidor indica `clinic`, `none` o `unknown`; el navegador solo vuelve a
+  pedir la marca con `unknown` (la API no contestó a tiempo).
+- **Tras cambiar la marca en Ajustes, los demás pueden verla desactualizada
+  hasta 30 s** (la pestaña que guarda la ve al instante). Desactivar un dominio
+  propio corta el acceso al momento (la API no cachea); solo su marca cosmética
+  puede seguir hasta 30 s.
+- El HTML es dinámico (nonce de la CSP por petición): ninguna CDN debe
+  cachearlo.
+
 ## Regenerar el esquema de la API
 
 `src/lib/api/schema.d.ts` lo genera `openapi-typescript` a partir del OpenAPI de
