@@ -31,6 +31,16 @@ export function isPlatformHost(host: string): boolean {
   );
 }
 
+/**
+ * DX-554: el host es de una clínica (subdominio o dominio propio): todo lo que
+ * no es el dominio principal. Por el host y nada más, sin preguntar a la API:
+ * un dominio propio pendiente o una API lenta nunca deben mostrar la landing
+ * de Dentalix. Sin host no hay clínica.
+ */
+export function isClinicHost(host: string | null): boolean {
+  return !!host && !isPlatformHost(host);
+}
+
 /** El registro corre en el subdominio de una clínica que todavía no existe. */
 export function isRegistrationPath(pathname: string | null): boolean {
   return pathname === '/register' || (pathname?.startsWith('/register/') ?? false);
