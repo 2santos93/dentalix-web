@@ -25,6 +25,16 @@ import { moneyWithCode } from '../src/lib/format/sede-number';
  *     y la tasa; la rebaja en USD y la de convenio (SEC-047, sin desbordar a
  *     390 px). El periodo se fija alrededor de los ítems (H3 de DX-513).
  * En escritorio (1440 px) y en móvil (390 px, sin scroll horizontal).
+ *
+ * DX-513-ter: convenio de LISTA con el catálogo en otra moneda. El catálogo
+ * de esta clínica está en USD (100,00), así que es el caso espejo del de
+ * Venezuela (catálogo en VES, lista en USD), con la misma regla:
+ *   - Lista en VES (30.000 Bs.) y plan en VES, con la tasa del día: el alta
+ *     congela la base convertida (40.000 Bs.) y el informe mide la rebaja de
+ *     convenio (10.000 Bs.) con el catálogo en USD y la tasa.
+ *   - Lista en EUR y plan en EUR, sin tasa de EUR: el alta funciona igual y
+ *     el informe la señala «sin referencia comparable» y «Sin medir», con su
+ *     recuento en el resumen.
  */
 // Revisión H2: 8 caracteres, como `discounts.spec.ts`, para que el ancho del
 // viewport quepa en el `docNumber` (máx. 20) y los dos tests no lo compartan.
@@ -55,6 +65,11 @@ const sedeDay = (at: Date) =>
     day: '2-digit',
   }).format(at);
 
+/** «tasa 1 USD = 400 VES del …, manual» con el día de la tasa congelada. */
+const rateTextOn = (day: string) =>
+  `tasa 1 USD = ${sedeFmt.number(VES_RATE, { min: 0, max: 4 })} VES del ${sedeFmt.civilDate(day)}, manual`;
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 let session: ApiSession;
 let procedureId = '';
 let rateDay = '';
@@ -74,10 +89,16 @@ test.beforeAll(async ({ request }) => {
   rateDay = sedeDay(new Date());
   const settings = await request.put(`${API_URL}/exchange/settings`, {
     headers: session.headers,
-    data: { source: 'MANUAL' },
+    // DX-513-ter (L1): el plazo de la tasa MANUAL (DX-384), explícito: con la
+    // de hoy, una ejecución que cruce la medianoche de la sede sigue con tasa.
+    data: { source: 'MANUAL', manualRateMaxAgeDays: 3 },
   });
   expect(settings.ok(), await settings.text()).toBeTruthy();
-  await apiPost(request, session, '/exchange/manual-rates', { date: rateDay, currency: 'VES', rate: VES_RATE });
+  // La de ayer y la de hoy en la zona de la sede, como la e2e de la API (la API
+  // no admite días que aún no han llegado en la sede).
+  for (const date of [sedeDay(new Date(Date.now() - DAY_MS)), rateDay]) {
+    await apiPost(request, session, '/exchange/manual-rates', { date, currency: 'VES', rate: VES_RATE });
+  }
   ({ id: procedureId } = await apiPost<{ id: string }>(request, session, '/catalog/items', {
     code: `dx513-${suffix}`.slice(0, 30),
     kind: 'PROCEDURE',
@@ -146,14 +167,23 @@ for (const viewport of [
     // día antes del primero y uno después del último), nunca «el mes hasta
     // hoy»: un test que cruce la medianoche de fin de mes no los pierde.
     const seededFrom = new Date();
-    const rateText = `tasa 1 USD = ${sedeFmt.number(VES_RATE, { min: 0, max: 4 })} VES del ${sedeFmt.civilDate(rateDay)}, manual`;
+    // Revisión de DX-513-ter: antes de dar de alta el ítem, la nota puede
+    // llevar la tasa de hoy o la de ayer (sembradas las dos); después, el día
+    // es el que congeló el ítem, nunca uno calculado.
+    const possibleDays = [rateDay, sedeDay(new Date(new Date(`${rateDay}T12:00:00Z`).getTime() - DAY_MS))];
 
     // --- Plan en VES: 100 USD a 400 = 40.000 Bs., precargado y con la nota.
     const ves = await patientWithPlan(page, `v${tag}`, 'VES');
     const vesForm = await openForm(page, ves.patientId, CONVERTED);
     const converted = vesForm.panel.locator('#tp-price-converted');
     await expect(converted).toHaveText(
-      `Catálogo: ${sede(CATALOG_PRICE, 'USD')} ≈ ${sede(CONVERTED, 'VES')} (${rateText}).`,
+      new RegExp(
+        `^(${possibleDays
+          .map((day) =>
+            escapeRegExp(`Catálogo: ${sede(CATALOG_PRICE, 'USD')} ≈ ${sede(CONVERTED, 'VES')} (${rateTextOn(day)}).`),
+          )
+          .join('|')})$`,
+      ),
     );
     // Bajarlo a 35.000 (12,5 %) cuenta como descuento y pide el motivo.
     await vesForm.price.fill('35000');
@@ -167,9 +197,13 @@ for (const viewport of [
       price: 35000,
       catalogCurrency: 'USD',
       referencePriceInPlan: CONVERTED,
-      referenceRate: { fromPerBase: 1, toPerBase: VES_RATE, source: 'MANUAL', rateDate: rateDay },
+      referenceRate: { fromPerBase: 1, toPerBase: VES_RATE, source: 'MANUAL' },
     });
-    expect((await planItems(page, ves.planId))[0].discountById).not.toBeNull();
+    const vesItem = (await planItems(page, ves.planId))[0];
+    expect(vesItem.discountById).not.toBeNull();
+    const referenceRateDay = vesItem.referenceRate!.rateDate;
+    expect(possibleDays).toContain(referenceRateDay);
+    const rateText = rateTextOn(referenceRateDay);
 
     // --- Plan en USD (misma moneda): aviso y motivo, como SEC-041.
     const usd = await patientWithPlan(page, `u${tag}`, 'USD');
@@ -231,6 +265,109 @@ for (const viewport of [
     const agreementLine = rows.filter({ hasText: `Monedac${tag}`.slice(0, 40) });
     await expect(agreementLine).toHaveCount(1);
     await expect(agreementLine).toContainText('Convenio «Cortesía empleados de la clínica 100 %');
+    if (viewport.width === 390) {
+      await expectNoHorizontalScroll(page);
+      await expectNoHorizontalScrollIn(page);
+    }
+  });
+}
+
+for (const viewport of [
+  { name: 'escritorio', width: 1440, height: 900 },
+  { name: 'móvil', width: 390, height: 844 },
+]) {
+  test(`DX-513-ter: lista de convenio entre monedas, medida con la tasa y señalada sin ella (${viewport.name})`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    const tag = `${suffix}${viewport.width}`;
+    await loginAs(page, origin, admin.email, password);
+    const seededFrom = new Date();
+
+    /** Lista de convenio en `currency` con la corona a `price`, asignada a un paciente con un plan en esa moneda. */
+    async function listAgreementItem(letter: string, currency: string, price: number) {
+      const list = await apiPost<{ id: string }>(page.request, session, '/price-lists', {
+        name: `Lista ${currency} ${tag}`.slice(0, 60),
+        currency,
+      });
+      const priced = await page.request.put(`${API_URL}/price-lists/${list.id}/items`, {
+        headers: session.headers,
+        data: { items: [{ catalogItemId: procedureId, price }] },
+      });
+      expect(priced.ok(), await priced.text()).toBeTruthy();
+      const payer = await apiPost<{ id: string }>(page.request, session, '/payers', {
+        name: `Empresa ${currency} ${tag}`.slice(0, 60),
+        type: 'OTHER',
+      });
+      const name = `Empresa ${currency} ${tag}`.slice(0, 120);
+      const agreement = await apiPost<{ id: string }>(page.request, session, '/agreements', {
+        name,
+        payerId: payer.id,
+        kind: 'PRICE_LIST',
+        priceListId: list.id,
+      });
+      const target = await patientWithPlan(page, `${letter}${tag}`, currency);
+      const assigned = await page.request.put(`${API_URL}/patients/${target.patientId}/agreement`, {
+        headers: session.headers,
+        data: { agreementId: agreement.id },
+      });
+      expect(assigned.ok(), await assigned.text()).toBeTruthy();
+      // Sin precio: el de la lista. Nunca 422 por la tasa.
+      const item = await apiPost<{
+        price: number;
+        basePriceInPlan: number | null;
+        referenceRate: unknown;
+        baseRate: { fromPerBase: number; toPerBase: number; source: string; rateDate: string } | null;
+      }>(page.request, session, `/treatment-plans/${target.planId}/items`, {
+        toothNumber: '21',
+        catalogItemId: procedureId,
+      });
+      return { name, item, lastName: `Moneda${letter}${tag}`.slice(0, 40) };
+    }
+
+    // Con la tasa de VES del día: base 100 USD a 400 = 40.000 Bs., congelada.
+    const measured = await listAgreementItem('l', 'VES', 30000);
+    expect(measured.item).toMatchObject({
+      price: 30000,
+      basePriceInPlan: CONVERTED,
+      referenceRate: null,
+      baseRate: { fromPerBase: 1, toPerBase: VES_RATE, source: 'MANUAL' },
+    });
+    // L1: el día de la tasa es el que congeló el ítem (la de hoy o, por el
+    // plazo MANUAL, la de ayer), no uno calculado aquí.
+    const baseRateDay = measured.item.baseRate!.rateDate;
+    expect([rateDay, sedeDay(new Date(new Date(`${rateDay}T12:00:00Z`).getTime() - DAY_MS))]).toContain(
+      baseRateDay,
+    );
+    const rateText = rateTextOn(baseRateDay);
+    // Sin tasa de EUR: el alta funciona igual, sin base.
+    const unmeasured = await listAgreementItem('e', 'EUR', 80);
+    expect(unmeasured.item).toMatchObject({ price: 80, basePriceInPlan: null, baseRate: null });
+    const seededTo = new Date();
+
+    await page.goto(`${origin}/caja/descuentos`);
+    await expect(page.getByRole('heading', { name: 'Descuentos', level: 1 })).toBeVisible({ timeout: 15_000 });
+    await fillDateRange(
+      page,
+      'Periodo',
+      sedeDay(new Date(seededFrom.getTime() - DAY_MS)),
+      sedeDay(new Date(seededTo.getTime() + DAY_MS)),
+    );
+    const rows =
+      viewport.width === 390
+        ? page.getByRole('list', { name: 'Descuentos del periodo' }).getByRole('listitem')
+        : page.getByRole('table', { name: 'Descuentos del periodo' }).getByRole('row');
+    const measuredRow = rows.filter({ hasText: measured.lastName });
+    await expect(measuredRow).toHaveCount(1);
+    await expect(measuredRow).toContainText(`Convenio «${measured.name}»: −${sede(10000, 'VES')}`);
+    await expect(measuredRow).toContainText(`de ${sede(CONVERTED, 'VES')})`);
+    await expect(measuredRow).toContainText(`Catálogo ${sede(CATALOG_PRICE, 'USD')} · ${rateText}`);
+    await expect(measuredRow).not.toContainText('VES = ');
+    const unmeasuredRow = rows.filter({ hasText: unmeasured.lastName });
+    await expect(unmeasuredRow).toHaveCount(1);
+    await expect(unmeasuredRow).toContainText(
+      `Convenio «${unmeasured.name}»: sin referencia comparable (catálogo en USD, plan en EUR)`,
+    );
+    await expect(unmeasuredRow).toContainText('Sin medir');
+    await expect(page.getByTestId('agreement-unmeasured-EUR')).toContainText('de convenio sin referencia comparable');
     if (viewport.width === 390) {
       await expectNoHorizontalScroll(page);
       await expectNoHorizontalScrollIn(page);

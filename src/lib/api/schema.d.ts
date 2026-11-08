@@ -13129,10 +13129,12 @@ export interface components {
             referenceCurrency: string | null;
             /** @description DX-513-bis: `catalogPrice` en la moneda del plan, congelado al escribir el ítem (convertido con `referenceRate` si su moneda era otra). Es la referencia del descuento: un precio por debajo cuenta (tope por rol y motivo). Null en los libres y en los anteriores sin foto (se miden como en DX-513). */
             referencePriceInPlan: number | null;
-            /** @description DX-513-bis: `basePrice` en la moneda del plan, congelado con la referencia. Null si no hay o no se puede expresar sin otra tasa. */
+            /** @description DX-513-bis: `basePrice` en la moneda del plan, congelado con la referencia. DX-513-ter: en una lista de convenio con el catálogo en otra moneda, convertido con `baseRate`. Null si no hay o no había tasa para expresarlo. */
             basePriceInPlan: number | null;
-            /** @description DX-513-bis: la tasa con que se convirtió la referencia; null si no hizo falta. */
+            /** @description DX-513-bis: la tasa (de la moneda del catálogo a la del plan) con que se convirtió la referencia (`catalogPrice` en `referenceCurrency`); null si no hizo falta. DX-513-ter: siempre null en las listas (`PRICE_LIST`, `AGREEMENT_PRICE_LIST`), cuya referencia ya está en la moneda del plan: su tasa va en `baseRate`. */
             referenceRate: components["schemas"]["ReferenceRateDto"] | null;
+            /** @description DX-513-ter: en un ítem de lista de convenio con el catálogo en otra moneda, la tasa del día (de `catalogCurrency` a la del plan) con que se convirtió `basePrice` a `basePriceInPlan`, congelada al darlo de alta. Null si no hizo falta, si no había tasa ese día o si el ítem no es de lista. */
+            baseRate: components["schemas"]["ReferenceRateDto"] | null;
             /**
              * Format: uuid
              * @description DX-105: convenio con el que se resolvió el precio
@@ -13656,6 +13658,12 @@ export interface components {
             /** @description Suma de las rebajas de convenio (precio de catálogo − precio del convenio) */
             reduction: number;
         };
+        AgreementUnmeasuredTotalDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @description Líneas de convenio «sin referencia comparable» en esta moneda (no se suman en `agreementTotals`) */
+            items: number;
+        };
         DiscountReportItemDto: {
             /** Format: uuid */
             itemId: string;
@@ -13689,8 +13697,12 @@ export interface components {
             referencePriceInPlan: number | null;
             /** @description DX-513-bis: `basePrice` en la moneda del plan, congelado con la referencia (la rebaja de convenio se mide con él) */
             basePriceInPlan: number | null;
-            /** @description DX-513-bis: la tasa congelada con que se convirtió la referencia; null si no hizo falta. El informe nunca convierte al consultar */
+            /** @description DX-513-bis: la tasa congelada (de la moneda del catálogo a la del plan) con que se convirtió la referencia; null si no hizo falta. El informe nunca convierte al consultar. DX-513-ter: siempre null en las listas, cuya referencia ya está en la moneda del plan: su tasa va en `baseRate` */
             rate: components["schemas"]["ReferenceRateDto"] | null;
+            /** @description DX-513-ter: en una lista de convenio con el catálogo en otra moneda, la tasa del día (de `catalogCurrency` a la del plan) con que se convirtió `basePrice` a `basePriceInPlan` al dar de alta el ítem; null si no */
+            baseRate: components["schemas"]["ReferenceRateDto"] | null;
+            /** @description DX-513-ter: ítem de convenio con el catálogo en otra moneda conocida y sin la base congelada en la moneda del plan (no había tasa al darlo de alta, o es anterior): su rebaja de convenio no se puede medir sin convertir al consultar. Se señala «sin referencia comparable»: `agreementReduction` es 0 y no suma en `agreementTotals` */
+            agreementUnmeasured: boolean;
             /** @description Precio pactado del ítem */
             price: number;
             /** @description SEC-041: rebaja del precio frente al de catálogo (0 si no la hay), en la moneda del plan. DX-513-bis: frente a `referencePriceInPlan` (la referencia convertida y congelada) si el ítem la tiene; en un ítem anterior sin ella, DX-513: 0 si la referencia está en otra moneda conocida; con la moneda del catálogo desconocida cuenta */
@@ -13759,6 +13771,8 @@ export interface components {
             totals: components["schemas"]["DiscountReportTotalDto"][];
             /** @description SEC-047: rebajas de convenio por moneda. Van aparte: `totals` solo cuenta los descuentos (como en DX-204) */
             agreementTotals: components["schemas"]["AgreementReductionTotalDto"][];
+            /** @description DX-513-ter: líneas de convenio sin medir por moneda (catálogo en otra moneda sin la base congelada), sin importe. Aparte de `agreementTotals` */
+            agreementUnmeasuredTotals: components["schemas"]["AgreementUnmeasuredTotalDto"][];
             /** @description Página de ítems, más recientes primero */
             items: components["schemas"]["DiscountReportItemDto"][];
             /** @description Líneas del periodo (todas las páginas): descuentos y rebajas de convenio */
