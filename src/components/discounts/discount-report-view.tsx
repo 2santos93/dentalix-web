@@ -67,8 +67,12 @@ export const discountReportCopy = {
   // DX-513-ter: convenio con el catálogo en otra moneda sin la base congelada
   // (no había tasa al darlo de alta, o es anterior). No es un error: el dato
   // no permite medirlo sin convertir, y el informe nunca convierte.
-  agreementUnmeasuredLine: (name: string, catalogCurrency: string, planCurrency: string) =>
-    `Convenio «${name}»: sin referencia comparable (catálogo en ${catalogCurrency}, plan en ${planCurrency})`,
+  // DX-513-quater: con la moneda del catálogo NULL (`catalogCurrency` null)
+  // la frase dice que se desconoce; nunca «catálogo en , plan en USD».
+  agreementUnmeasuredLine: (name: string, catalogCurrency: string | null, planCurrency: string) =>
+    catalogCurrency === null
+      ? `Convenio «${name}»: sin referencia comparable (moneda del catálogo desconocida, plan en ${planCurrency})`
+      : `Convenio «${name}»: sin referencia comparable (catálogo en ${catalogCurrency}, plan en ${planCurrency})`,
   agreementUnmeasuredAmount: 'Sin medir',
   agreementUnmeasuredItems: (n: number) =>
     n === 1 ? '1 ítem de convenio sin referencia comparable' : `${n} ítems de convenio sin referencia comparable`,
@@ -295,7 +299,7 @@ function agreementUnmeasuredLine(item: DiscountReportItem): string | null {
   if (!item.agreementUnmeasured) return null;
   return discountReportCopy.agreementUnmeasuredLine(
     item.agreementName ?? '',
-    item.catalogCurrency ?? '',
+    item.catalogCurrency,
     item.currency,
   );
 }

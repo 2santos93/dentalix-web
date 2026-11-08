@@ -13701,7 +13701,7 @@ export interface components {
             rate: components["schemas"]["ReferenceRateDto"] | null;
             /** @description DX-513-ter: en una lista de convenio con el catálogo en otra moneda, la tasa del día (de `catalogCurrency` a la del plan) con que se convirtió `basePrice` a `basePriceInPlan` al dar de alta el ítem; null si no */
             baseRate: components["schemas"]["ReferenceRateDto"] | null;
-            /** @description DX-513-ter: ítem de convenio con el catálogo en otra moneda conocida y sin la base congelada en la moneda del plan (no había tasa al darlo de alta, o es anterior): su rebaja de convenio no se puede medir sin convertir al consultar. Se señala «sin referencia comparable»: `agreementReduction` es 0 y no suma en `agreementTotals` */
+            /** @description DX-513-ter: ítem de convenio con el catálogo en otra moneda conocida y sin la base congelada en la moneda del plan (no había tasa al darlo de alta, o es anterior), o lista de convenio con la moneda del catálogo desconocida (NULL; DX-513-quater): su rebaja de convenio no se puede medir sin convertir al consultar. Se señala «sin referencia comparable»: `agreementReduction` es 0 y no suma en `agreementTotals` */
             agreementUnmeasured: boolean;
             /** @description Precio pactado del ítem */
             price: number;
@@ -13744,7 +13744,7 @@ export interface components {
             agreementName: string | null;
             /** @description DX-105: precio de catálogo al dar de alta el ítem (sin convenio) */
             basePrice: number | null;
-            /** @description SEC-047: rebaja de convenio (precio de catálogo − precio del convenio; 0 sin convenio). Aparte del descuento total */
+            /** @description SEC-047: rebaja de convenio (precio de catálogo − precio del convenio; 0 sin convenio ni si `agreementUnmeasured`). Aparte del descuento total */
             agreementReduction: number;
             /** @description SEC-047: % de la rebaja de convenio sobre el precio de catálogo, 2 decimales */
             agreementPercent: number;
@@ -13771,7 +13771,7 @@ export interface components {
             totals: components["schemas"]["DiscountReportTotalDto"][];
             /** @description SEC-047: rebajas de convenio por moneda. Van aparte: `totals` solo cuenta los descuentos (como en DX-204) */
             agreementTotals: components["schemas"]["AgreementReductionTotalDto"][];
-            /** @description DX-513-ter: líneas de convenio sin medir por moneda (catálogo en otra moneda sin la base congelada), sin importe. Aparte de `agreementTotals` */
+            /** @description DX-513-ter: líneas de convenio sin medir por moneda (catálogo en otra moneda sin la base congelada, o lista de convenio con la moneda del catálogo desconocida), sin importe. Aparte de `agreementTotals` */
             agreementUnmeasuredTotals: components["schemas"]["AgreementUnmeasuredTotalDto"][];
             /** @description Página de ítems, más recientes primero */
             items: components["schemas"]["DiscountReportItemDto"][];
