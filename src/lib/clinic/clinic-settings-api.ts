@@ -32,7 +32,7 @@ export function updateClinicSettings(token: string, patch: ClinicSettingsPatch):
   return apiFetch<ClinicSettings>('/clinic/settings', { method: 'PATCH', body: patch, token });
 }
 
-/** `POST /clinic/settings/logo` (multipart). La API lo valida por sus bytes y lo re-escribe. */
+/** `POST /clinic/settings/logo` (multipart). La API lo valida por sus bytes y lo re-codifica (DX-019-bis: un WebP vuelve como PNG). */
 export function uploadClinicLogo(token: string, file: File): Promise<ClinicSettings> {
   const fd = new FormData();
   fd.append('file', file);
