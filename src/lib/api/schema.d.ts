@@ -14193,7 +14193,7 @@ export interface components {
         };
         RecordPaymentDto: {
             /**
-             * @description Must be a finite number > 0, with at most 2 decimal places
+             * @description Número finito mayor que 0, con como mucho 2 decimales.
              * @example 100
              */
             amount: number;
