@@ -94,7 +94,9 @@ test('activa con QR, entra con código, rechaza uno malo y un código de recuper
   await again.getByRole('button', { name: /código de recuperación/ }).click();
   await again.getByLabel('Código de recuperación').fill(codes[0]);
   await again.getByRole('button', { name: 'Verificar' }).click();
-  await expect(again.getByRole('alert')).toBeVisible();
+  // El anunciador de rutas de Next también es role="alert" (vacío): sin el
+  // filtro, strict mode falla al azar (DX-552; mismo arreglo que platform-mfa).
+  await expect(again.getByRole('alert').filter({ hasText: /\S/ })).toBeVisible();
   await expect(again).toHaveURL(/\/login/);
 });
 
