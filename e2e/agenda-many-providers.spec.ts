@@ -94,13 +94,20 @@ async function openDayColumns(page: Page) {
   await expect(page.getByTestId('day-column')).toHaveCount(PROVIDERS.length, { timeout: 15_000 });
 }
 
-/** El nombre y el tipo de la tarjeta se ven enteros dentro de sus bordes. */
-async function expectCardReadable(card: Locator, patient: string) {
+/**
+ * El nombre y el tipo de la tarjeta se ven dentro de sus bordes (nunca
+ * recortados por abajo). Con `typeMayTruncate` (8 columnas de 10rem y reloj
+ * de 12 h: la hora ya llena la fila) el tipo puede acabar en «…»; sin él,
+ * entero.
+ */
+async function expectCardReadable(card: Locator, patient: string, { typeMayTruncate = false } = {}) {
   await card.scrollIntoViewIfNeeded();
   const name = card.getByText(patient, { exact: true });
   const type = card.getByTestId('day-column-type');
   await expect(name).toBeVisible();
   await expect(type).toHaveText(TYPE_NAME);
+  // Truncado o no, el tipo entero queda al pasar el ratón.
+  await expect(type).toHaveAttribute('title', TYPE_NAME);
   const box = (await card.boundingBox())!;
   expect(box.height, 'la cita de 30 min mide 48 px').toBeLessThanOrEqual(50);
   for (const [what, el] of [
@@ -111,6 +118,7 @@ async function expectCardReadable(card: Locator, patient: string) {
     expect(b.y, `${what}: arriba dentro de la tarjeta`).toBeGreaterThanOrEqual(box.y - 0.5);
     expect(b.y + b.height, `${what}: abajo dentro de la tarjeta`).toBeLessThanOrEqual(box.y + box.height + 0.5);
     // Sin recortar: el texto cabe en su caja (ni elipsis en «Limpieza dental» ni en el nombre corto).
+    if (what === 'tipo' && typeMayTruncate) continue;
     const clipped = await el.evaluate((node) => node.scrollWidth > node.clientWidth + 1);
     expect(clipped, `${what}: no se recorta a lo ancho`).toBe(false);
   }
@@ -132,7 +140,7 @@ for (const scheme of ['light', 'dark'] as const) {
       const card = page
         .locator(`[data-testid="day-column"][aria-label="${provider.fullName}"]`)
         .getByTestId('day-column-appointment');
-      await expectCardReadable(card, `${provider.fullName.split(' ')[0]} ${PATIENT_LAST}`);
+      await expectCardReadable(card, `${provider.fullName.split(' ')[0]} ${PATIENT_LAST}`, { typeMayTruncate: true });
     }
     await expectNoHorizontalScroll(page);
   });

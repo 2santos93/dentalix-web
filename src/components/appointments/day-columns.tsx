@@ -661,6 +661,7 @@ export function DayColumns({
                   // 48 px) la fila del tipo quedaba recortada. Ahí el punto de
                   // estado y el tipo suben a la fila de la hora.
                   const compact = end - start < COMPACT_CARD_MINUTES;
+                  const compactLabel = a.appointmentType?.name ?? STATUS_LABELS[a.status];
                   const typeAndStatus = [a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ');
                   const statusDot = (
                     <span
@@ -706,9 +707,14 @@ export function DayColumns({
                             range,
                             showsOverbooked(a) ? OVERBOOKED_LABEL : null,
                             wantsEarlier ? WANTS_EARLIER_LABEL : null,
+                            // DX-133-ter: en la compacta el tipo (o, sin tipo, el
+                            // estado) va en la fila de la hora, antes del nombre:
+                            // el nombre accesible sigue el orden visible (axe
+                            // label-content-name-mismatch).
+                            compact ? compactLabel : null,
                             patient,
-                            a.appointmentType?.name,
-                            STATUS_LABELS[a.status],
+                            compact ? null : a.appointmentType?.name,
+                            compact && !a.appointmentType ? null : STATUS_LABELS[a.status],
                             overdueChipText(a.balance, fmt),
                             attendanceBadgeText(a.attendance),
                             copy.detailFor(byChair ? providerName(a.providerId) : p.label),
@@ -741,8 +747,8 @@ export function DayColumns({
                               <>
                                 {' '}
                                 {statusDot}
-                                <span data-testid="day-column-type" className="min-w-0 truncate text-xs">
-                                  {a.appointmentType?.name ?? STATUS_LABELS[a.status]}
+                                <span data-testid="day-column-type" title={compactLabel} className="min-w-0 truncate text-xs">
+                                  {compactLabel}
                                 </span>
                               </>
                             ) : null}
@@ -757,7 +763,7 @@ export function DayColumns({
                           {compact ? null : (
                             <span className="flex w-full min-w-0 items-center gap-1.5 text-xs">
                               {statusDot}
-                              <span data-testid="day-column-type" className="min-w-0 truncate">
+                              <span data-testid="day-column-type" title={typeAndStatus} className="min-w-0 truncate">
                                 {typeAndStatus}
                               </span>
                             </span>
