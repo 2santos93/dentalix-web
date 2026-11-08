@@ -4,6 +4,7 @@ import {
   BRANDING_FETCH_TIMEOUT_MS,
   brandingHostKey,
   fetchBrandingForHost,
+  forgetBrandingForHost,
   resetBrandingCacheForTests,
 } from './branding';
 import { clinicCurrencyTexts } from '@/lib/format/clinic-currency-texts';
@@ -260,4 +261,32 @@ describe('fetchBrandingForHost (DX-517-ter)', () => {
       expect(fetchMock.mock.calls.length).toBe(before + 1);
     });
   });
+
+  describe('forgetBrandingForHost (tras guardar la marca)', () => {
+    it('olvida SOLO ese host (normalizado): la siguiente vuelve a preguntar; el de otra clínica sigue en caché', async () => {
+      await fetchBrandingForHost('avila.dentalix.app');
+      await fetchBrandingForHost('norte.dentalix.app');
+      forgetBrandingForHost('AVILA.dentalix.app:3001');
+      await fetchBrandingForHost('avila.dentalix.app');
+      await fetchBrandingForHost('norte.dentalix.app');
+      const asked = fetchMock.mock.calls.map(([u]) => new URL(String(u)).searchParams.get('host'));
+      expect(asked).toEqual(['avila.dentalix.app', 'norte.dentalix.app', 'avila.dentalix.app']);
+    });
+
+    it('una consulta en vuelo al olvidar no deja guardada su respuesta (podía ser anterior al guardado)', async () => {
+      let release: (r: Partial<Response>) => void = () => {};
+      fetchMock.mockImplementationOnce(() => new Promise((r) => (release = r)));
+      const stale = fetchBrandingForHost('avila.dentalix.app');
+      forgetBrandingForHost('avila.dentalix.app');
+      release(ok({ ...AVILA, name: 'Nombre viejo' }));
+      expect((await stale).name).toBe('Nombre viejo');
+      expect((await fetchBrandingForHost('avila.dentalix.app')).name).toBe('Clínica Ávila');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([null, undefined, '', 'a..b'])('un host inválido (%p) no hace nada', (host) => {
+      expect(() => forgetBrandingForHost(host)).not.toThrow();
+    });
+  });
 });
+

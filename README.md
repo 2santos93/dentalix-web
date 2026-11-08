@@ -53,10 +53,13 @@ sin volver a montar el árbol. Detalles (`src/lib/branding.ts`):
   hay clínica, 60 s si no la hay; los errores no se guardan.
 - El servidor indica `clinic`, `none` o `unknown`; el navegador solo vuelve a
   pedir la marca con `unknown` (la API no contestó a tiempo).
-- **Tras cambiar la marca en Ajustes, los demás pueden verla desactualizada
-  hasta 30 s** (la pestaña que guarda la ve al instante). Desactivar un dominio
-  propio corta el acceso al momento (la API no cachea); solo su marca cosmética
-  puede seguir hasta 30 s.
+- Al guardar la marca (Ajustes › Datos de la clínica: nombre, color, logo) o
+  los textos de moneda, la pestaña llama a `POST /api/branding-cache` (ruta de
+  la web, solo del mismo origen, sin parámetros ni respuesta): la réplica que
+  la atiende olvida la marca de **ese** host y la siguiente página ya sale con
+  la nueva. **Las demás réplicas de la web pueden seguir sirviendo la marca
+  anterior hasta 30 s.** Desactivar un dominio propio corta el acceso al
+  momento (la API no cachea); solo su marca cosmética puede seguir hasta 30 s.
 - El HTML es dinámico (nonce de la CSP por petición): ninguna CDN debe
   cachearlo.
 

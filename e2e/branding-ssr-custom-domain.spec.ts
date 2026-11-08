@@ -56,8 +56,14 @@ test('dominio propio verificado: la marca va en el primer HTML y el navegador no
      FROM tenants WHERE subdomain = '${subdomain}'`,
   ]);
 
-  // El primer HTML, sin JavaScript, ya trae nombre y acento.
-  const res = await page.request.get(`${origin}/login`);
+  // El primer HTML, sin JavaScript, ya trae nombre y acento. `--host-resolver-rules`
+  // solo vale para Chromium: la petición de Playwright (Node) no resuelve el
+  // dominio, así que va a 127.0.0.1 con el `Host` del dominio propio, que es
+  // lo único que ve Next (y lo que manda a la API como `?host=`).
+  const res = await page.request.get(`http://127.0.0.1:${WEB_PORT}/login`, {
+    headers: { Host: `${customHost}:${WEB_PORT}` },
+    maxRedirects: 0,
+  });
   expect(res.status()).toBe(200);
   const html = await res.text();
   expect(html.slice(0, html.indexOf('</head>'))).toContain(`--color-primary:${color}`);
@@ -67,7 +73,9 @@ test('dominio propio verificado: la marca va en el primer HTML y el navegador no
   page.on('request', (req) => {
     if (/\/public\/tenant\/branding\/?$/.test(new URL(req.url()).pathname)) fetches.push(req);
   });
+  // El navegador, en cambio, sí va al dominio propio (resuelto a 127.0.0.1).
   await page.goto(`${origin}/login`);
+  expect(new URL(page.url()).host).toBe(`${customHost}:${WEB_PORT}`);
   const heading = page.getByRole('heading', { level: 1, name: clinicName });
   await expect(heading).toBeVisible();
   const handle = await heading.elementHandle();

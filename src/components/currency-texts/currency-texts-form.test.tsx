@@ -6,10 +6,13 @@ import { listLocations, type ClinicLocation } from '@/lib/locations/locations-ap
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import { clinicCurrencyTexts, setClinicCurrencyTexts } from '@/lib/format/clinic-currency-texts';
 import { ApiError } from '@/lib/api/api-error';
+import { forgetServerBranding } from '@/lib/branding-cache-client';
 
 const refresh = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 jest.mock('sonner', () => ({ toast: { success: jest.fn() } }));
+jest.mock('../../lib/branding-cache-client', () => ({ forgetServerBranding: jest.fn(() => Promise.resolve()) }));
+const mockedForget = jest.mocked(forgetServerBranding);
 jest.mock('../../lib/exchange/currency-texts-api', () => ({
   ...jest.requireActual('../../lib/exchange/currency-texts-api'),
   getCurrencyTexts: jest.fn(),
@@ -71,6 +74,26 @@ describe('Ajustes › Monedas (DX-517)', () => {
     await waitFor(() => expect(bar()).not.toBeInTheDocument());
     expect(clinicCurrencyTexts()).toEqual({ VES: 'Bs.' });
     expect(refresh).toHaveBeenCalled();
+    // DX-517-ter: el servidor olvida la marca de este host ANTES de refrescar.
+    expect(mockedForget).toHaveBeenCalledTimes(1);
+    expect(mockedForget.mock.invocationCallOrder[0]).toBeLessThan(refresh.mock.invocationCallOrder[0]);
+  });
+
+  it('DX-517-ter: no da el guardado por hecho hasta que el servidor olvida la marca de este host', async () => {
+    mockedGet.mockResolvedValue({ entries: [] });
+    mockedSave.mockResolvedValue({ entries: [{ currency: 'VES', text: 'Bs.' }] });
+    let done: () => void = () => {};
+    mockedForget.mockImplementationOnce(() => new Promise<void>((r) => (done = r)));
+    const user = userEvent.setup();
+    render(<CurrencyTextsForm token="tok" allowed />);
+    await user.type(await screen.findByRole('textbox', { name: 'Texto de VES' }), 'Bs.');
+    await user.click(screen.getByRole('button', { name: 'Guardar el texto de las monedas' }));
+    await waitFor(() => expect(mockedForget).toHaveBeenCalledTimes(1));
+    expect(bar()).toBeInTheDocument();
+    expect(refresh).not.toHaveBeenCalled();
+    done();
+    await waitFor(() => expect(bar()).not.toBeInTheDocument());
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('un texto de más de 8 caracteres no se manda: el campo dice por qué', async () => {
@@ -93,6 +116,7 @@ describe('Ajustes › Monedas (DX-517)', () => {
     await user.type(await screen.findByRole('textbox', { name: 'Texto de VES' }), 'Bs.');
     await user.click(screen.getByRole('button', { name: 'Guardar el texto de las monedas' }));
     expect(await screen.findByText('El texto de VES admite de 1 a 8 caracteres en una línea.')).toBeInTheDocument();
+    expect(mockedForget).not.toHaveBeenCalled();
   });
 
   it('otra moneda se añade como fila; vaciar un texto guardado lo quita', async () => {

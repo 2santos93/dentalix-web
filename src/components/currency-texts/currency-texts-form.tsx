@@ -12,6 +12,7 @@ import { listLocations, type ClinicLocation } from '@/lib/locations/locations-ap
 import { locationRegionalFormat } from '@/lib/locations/location-settings';
 import { CURRENCY_TEXT_MAX, isCurrencyText } from '@/lib/format/currency-text';
 import { setClinicCurrencyTexts } from '@/lib/format/clinic-currency-texts';
+import { forgetServerBranding } from '@/lib/branding-cache-client';
 import { NO_SEDE_FORMAT, moneyWithCode } from '@/lib/format/sede-number';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import type { RegionalFormat } from '@/lib/format/regional-format';
@@ -209,6 +210,9 @@ function CurrencyTextsFields({
     try {
       const res = await saveCurrencyTexts(token, entries);
       const saved = Object.fromEntries(res.entries.map((entry) => [entry.currency, entry.text]));
+      // DX-517-ter: que el servidor olvide la marca de este host (lleva los
+      // textos) antes de dar el guardado por hecho y refrescar.
+      await forgetServerBranding();
       // Toda la pestaña pinta ya con el texto nuevo; el layout lo vuelve a leer con la marca.
       setClinicCurrencyTexts(saved);
       onSaved(saved);

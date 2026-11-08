@@ -107,9 +107,23 @@ async function lookup(host: string): Promise<ServerBranding> {
 
 // Caché del PROCESO, por host normalizado (nunca una «marca actual» única:
 // el servidor atiende a todas las clínicas a la vez). Map en orden de
-// inserción → LRU acotado. `unknown` no se guarda.
-const entries = new Map<string, { expires: number; value: ServerBranding }>();
-const inflight = new Map<string, Promise<ServerBranding>>();
+// inserción → LRU acotado. `unknown` no se guarda. Vive en `globalThis` para
+// que el layout y la ruta que la invalida (`/api/branding-cache`) compartan la
+// misma aunque Next cargue este módulo en más de un bundle del proceso.
+interface Inflight {
+  promise: Promise<ServerBranding>;
+}
+interface BrandingStore {
+  entries: Map<string, { expires: number; value: ServerBranding }>;
+  inflight: Map<string, Inflight>;
+}
+const STORE_KEY = Symbol.for('dentalix.serverBrandingCache');
+function brandingStore(): BrandingStore {
+  const global = globalThis as { [STORE_KEY]?: BrandingStore };
+  global[STORE_KEY] ??= { entries: new Map(), inflight: new Map() };
+  return global[STORE_KEY];
+}
+const { entries, inflight } = brandingStore();
 
 function remember(key: string, value: ServerBranding): void {
   if (value.status === 'unknown') return;
@@ -143,15 +157,32 @@ export async function fetchBrandingForHost(rawHost: string | null | undefined): 
   if (hit) entries.delete(key);
 
   const running = inflight.get(key);
-  if (running) return running;
-  const promise = lookup(key)
-    .then((value) => {
+  if (running) return running.promise;
+  // Si `forgetBrandingForHost` borra esta consulta mientras va en vuelo (se
+  // guardó la marca), su respuesta, quizá anterior al guardado, no se guarda.
+  const flight: Inflight = { promise: Promise.resolve(NONE) };
+  flight.promise = lookup(key).then((value) => {
+    if (inflight.get(key) === flight) {
       remember(key, value);
-      return value;
-    })
-    .finally(() => inflight.delete(key));
-  inflight.set(key, promise);
-  return promise;
+      inflight.delete(key);
+    }
+    return value;
+  });
+  inflight.set(key, flight);
+  return flight.promise;
+}
+
+/**
+ * Olvida la marca guardada de UN host (el de la petición que lo pide, ver
+ * `/api/branding-cache`): tras guardar la marca o los textos de moneda, la
+ * siguiente página de ESTE proceso la vuelve a pedir a la API. Otras réplicas
+ * de la web pueden seguir sirviendo la anterior hasta 30 s.
+ */
+export function forgetBrandingForHost(rawHost: string | null | undefined): void {
+  const key = brandingHostKey(rawHost);
+  if (!key) return;
+  entries.delete(key);
+  inflight.delete(key);
 }
 
 /** Una sola consulta por petición (layout raíz + páginas de acceso). */

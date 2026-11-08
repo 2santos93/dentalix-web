@@ -17,6 +17,7 @@ import {
   type ClinicSettingsPatch,
 } from '@/lib/clinic/clinic-settings-api';
 import { HEX6 } from '@/lib/color/brand-color';
+import { forgetServerBranding } from '@/lib/branding-cache-client';
 import { useSetClinicBranding } from '@/components/brand/branding-context';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
@@ -272,6 +273,9 @@ function ClinicSettingsFields({
         if (value !== savedDraft[field].trim()) (patch as Record<string, string | null>)[field] = value === '' ? null : value;
       }
       if (Object.keys(patch).length > 0) next = await updateClinicSettings(token, patch);
+      // DX-517-ter: que el servidor olvide la marca de este host antes de dar
+      // el guardado por hecho, o el login y la recarga saldrían con la vieja.
+      await forgetServerBranding();
       resetLogo();
       onSaved(next);
       commit(toDraft(next));
