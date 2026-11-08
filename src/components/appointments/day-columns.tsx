@@ -54,6 +54,9 @@ import { cn } from '@/lib/utils';
 import { wallDay } from '@/lib/time/wall-clock';
 import { statusTone, TONE_CLASSES } from '@/lib/status/tones';
 
+/** DX-133-ter: por debajo de esto (64 px) la tarjeta no cabe en tres filas: tipo y estado van en la de la hora. */
+const COMPACT_CARD_MINUTES = 40;
+
 // Copy as constants (i18n-ready, es-first).
 const copy = {
   gridLabel: 'Agenda del día por profesional',
@@ -653,6 +656,22 @@ export function DayColumns({
                   // DX-247: también en las citas de 15 min (24 px de alto).
                   const hasMedicalAlert = medicalAlertSeverity(a.medicalAlerts) !== null;
                   const flowAction = end - start >= 25 ? renderFlowAction?.(a) : null;
+                  // DX-133-ter: hora + nombre + tipo piden 64 px (40 min a
+                  // PX_PER_MINUTE); en una cita más corta (la de 30 min mide
+                  // 48 px) la fila del tipo quedaba recortada. Ahí el punto de
+                  // estado y el tipo suben a la fila de la hora.
+                  const compact = end - start < COMPACT_CARD_MINUTES;
+                  const typeAndStatus = [a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ');
+                  const statusDot = (
+                    <span
+                      aria-hidden
+                      data-testid="day-column-status-dot"
+                      className={cn(
+                        'size-2 shrink-0 rounded-full ring-1 ring-surface',
+                        TONE_CLASSES[statusTone('appointment', a.status)].dot,
+                      )}
+                    />
+                  );
                   return (
                     <div
                       key={a.id}
@@ -718,6 +737,15 @@ export function DayColumns({
                             <OverbookedChip overbooked={a.overbooked} status={a.status} className="min-w-0 py-0" />{' '}
                             <WantsEarlierChip wantsEarlier={wantsEarlier} className="min-w-0 py-0" />
                             <CoverageMarker coverage={a.coverage} />
+                            {compact ? (
+                              <>
+                                {' '}
+                                {statusDot}
+                                <span data-testid="day-column-type" className="min-w-0 truncate text-xs">
+                                  {a.appointmentType?.name ?? STATUS_LABELS[a.status]}
+                                </span>
+                              </>
+                            ) : null}
                           </span>{' '}
                           <span
                             className={cn('w-full shrink-0 truncate text-sm font-semibold', inactive && 'line-through')}
@@ -726,19 +754,14 @@ export function DayColumns({
                           </span>{' '}
                           {/* El fondo es el color del tipo; el estado, su punto de
                               tono (nunca el acento) + la etiqueta. */}
-                          <span className="flex w-full min-w-0 items-center gap-1.5 text-xs">
-                            <span
-                              aria-hidden
-                              data-testid="day-column-status-dot"
-                              className={cn(
-                                'size-2 shrink-0 rounded-full ring-1 ring-surface',
-                                TONE_CLASSES[statusTone('appointment', a.status)].dot,
-                              )}
-                            />
-                            <span className="min-w-0 truncate">
-                              {[a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ')}
+                          {compact ? null : (
+                            <span className="flex w-full min-w-0 items-center gap-1.5 text-xs">
+                              {statusDot}
+                              <span data-testid="day-column-type" className="min-w-0 truncate">
+                                {typeAndStatus}
+                              </span>
                             </span>
-                          </span>{' '}
+                          )}{' '}
                           <OverdueChip balance={a.balance} compact fmt={fmt} />{' '}
                           {/* DX-279: inasistencias y cancelaciones tardías (12 meses). */}
                           <AttendanceBadge counts={a.attendance} compact />
