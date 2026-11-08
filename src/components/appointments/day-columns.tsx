@@ -54,7 +54,7 @@ import { cn } from '@/lib/utils';
 import { wallDay } from '@/lib/time/wall-clock';
 import { statusTone, TONE_CLASSES } from '@/lib/status/tones';
 
-/** DX-133-ter: por debajo de esto (64 px) la tarjeta no cabe en tres filas: tipo y estado van en la de la hora. */
+/** DX-133-ter: por debajo de esto (64 px) la tarjeta no cabe en tres filas: tipo y estado van en la del nombre. */
 const COMPACT_CARD_MINUTES = 40;
 
 // Copy as constants (i18n-ready, es-first).
@@ -659,7 +659,7 @@ export function DayColumns({
                   // DX-133-ter: hora + nombre + tipo piden 64 px (40 min a
                   // PX_PER_MINUTE); en una cita más corta (la de 30 min mide
                   // 48 px) la fila del tipo quedaba recortada. Ahí el punto de
-                  // estado y el tipo suben a la fila de la hora.
+                  // estado y el tipo suben a la fila del nombre.
                   const compact = end - start < COMPACT_CARD_MINUTES;
                   const compactLabel = a.appointmentType?.name ?? STATUS_LABELS[a.status];
                   const typeAndStatus = [a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ');
@@ -707,14 +707,9 @@ export function DayColumns({
                             range,
                             showsOverbooked(a) ? OVERBOOKED_LABEL : null,
                             wantsEarlier ? WANTS_EARLIER_LABEL : null,
-                            // DX-133-ter: en la compacta el tipo (o, sin tipo, el
-                            // estado) va en la fila de la hora, antes del nombre:
-                            // el nombre accesible sigue el orden visible (axe
-                            // label-content-name-mismatch).
-                            compact ? compactLabel : null,
                             patient,
-                            compact ? null : a.appointmentType?.name,
-                            compact && !a.appointmentType ? null : STATUS_LABELS[a.status],
+                            a.appointmentType?.name,
+                            STATUS_LABELS[a.status],
                             overdueChipText(a.balance, fmt),
                             attendanceBadgeText(a.attendance),
                             copy.detailFor(byChair ? providerName(a.providerId) : p.label),
@@ -743,21 +738,33 @@ export function DayColumns({
                             <OverbookedChip overbooked={a.overbooked} status={a.status} className="min-w-0 py-0" />{' '}
                             <WantsEarlierChip wantsEarlier={wantsEarlier} className="min-w-0 py-0" />
                             <CoverageMarker coverage={a.coverage} />
-                            {compact ? (
-                              <>
-                                {' '}
-                                {statusDot}
-                                <span data-testid="day-column-type" title={compactLabel} className="min-w-0 truncate text-xs">
-                                  {compactLabel}
-                                </span>
-                              </>
-                            ) : null}
                           </span>{' '}
-                          <span
-                            className={cn('w-full shrink-0 truncate text-sm font-semibold', inactive && 'line-through')}
-                          >
-                            {patient}
-                          </span>{' '}
+                          {compact ? (
+                            // DX-133-ter: en la compacta, tipo (o estado) detrás
+                            // del nombre en su fila, la más ancha; el nombre no
+                            // cede sitio, el tipo trunca. Orden visible = orden
+                            // del nombre accesible (hora · paciente · tipo).
+                            <span className="flex w-full min-w-0 shrink-0 items-center gap-1.5">
+                              <span
+                                className={cn(
+                                  'max-w-full shrink-0 truncate text-sm font-semibold',
+                                  inactive && 'line-through',
+                                )}
+                              >
+                                {patient}
+                              </span>{' '}
+                              {statusDot}
+                              <span data-testid="day-column-type" title={compactLabel} className="min-w-0 truncate text-xs">
+                                {compactLabel}
+                              </span>
+                            </span>
+                          ) : (
+                            <span
+                              className={cn('w-full shrink-0 truncate text-sm font-semibold', inactive && 'line-through')}
+                            >
+                              {patient}
+                            </span>
+                          )}{' '}
                           {/* El fondo es el color del tipo; el estado, su punto de
                               tono (nunca el acento) + la etiqueta. */}
                           {compact ? null : (
