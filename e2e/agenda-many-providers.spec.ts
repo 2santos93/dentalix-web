@@ -31,7 +31,10 @@ const DENTISTS = ['Bruno', 'Carla', 'Diego', 'Elena', 'Fabio', 'Gabriela', 'Héc
 }));
 const PROVIDERS = [admin, ...DENTISTS];
 const TYPE_NAME = 'Limpieza dental';
-const PATIENT_LAST = `Ocho${suffix}`.slice(0, 40);
+// Apellido corto y real: la clínica es nueva en cada corrida, así que no hace
+// falta el sufijo (alargaría el nombre y el «…» de un nombre largo es lo
+// previsto en una columna de 10rem, no lo que se prueba aquí).
+const PATIENT_LAST = 'Ruiz';
 const day = sedeDayFromToday(2);
 
 let session: ApiSession;
