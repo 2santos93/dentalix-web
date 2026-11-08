@@ -22,10 +22,15 @@ export function parseTenantFromHost(host: string | null): string | null {
  * también da null y sí tiene clínica (la resuelve la API por el host).
  */
 export function isPlatformHost(host: string): boolean {
-  const hostname = host.split(':')[0].toLowerCase();
+  // Sin puerto (también en IPv6 `[::1]:3001`), en minúsculas y sin el punto
+  // final del FQDN (`dentalix.app.` es el mismo host).
+  const hostname = (host.startsWith('[') ? host.slice(0, host.indexOf(']') + 1) : host.split(':')[0])
+    .toLowerCase()
+    .replace(/\.$/, '');
   return (
     hostname === 'localhost' ||
     hostname === '127.0.0.1' ||
+    hostname === '[::1]' ||
     hostname === ROOT_DOMAIN ||
     hostname === `www.${ROOT_DOMAIN}`
   );

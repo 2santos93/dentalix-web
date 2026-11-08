@@ -17,7 +17,7 @@ describe('parseTenantFromHost', () => {
 });
 
 describe('isPlatformHost', () => {
-  it.each(['localhost:3001', '127.0.0.1:3001', 'dentalix.local', 'www.dentalix.local', 'LOCALHOST'])(
+  it.each(['localhost:3001', '127.0.0.1:3001', 'dentalix.local', 'www.dentalix.local', 'LOCALHOST', '[::1]:3001', 'dentalix.local.', 'localhost.:3001'])(
     '%s es de la plataforma',
     (host) => expect(isPlatformHost(host)).toBe(true),
   );

@@ -59,4 +59,6 @@ test('dominio principal: «/» sigue siendo la landing de Dentalix', async ({ pa
   await page.goto(`${origin}/`);
   await expect(page).toHaveURL(`${origin}/`);
   await expect(page.getByRole('heading', { level: 1, name: LANDING_TITLE })).toBeVisible();
+  // La landing se indexa: el noindex es solo de la entrada de la clínica.
+  await expect(page.locator('meta[name="robots"][content*="noindex"]')).toHaveCount(0);
 });
