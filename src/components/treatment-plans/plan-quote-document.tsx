@@ -182,7 +182,7 @@ export function PlanQuoteDocument({ quote, format, secondCurrency = null }: Plan
           ) : null}
           <div className="min-w-0">
             <p className="break-words text-base font-semibold">{quote.clinicName}</p>
-            {/* DX-019: datos fiscales de la clínica (los de hoy, como el logo). */}
+            {/* DX-019: datos fiscales de la clínica y logo (DX-019-bis): los del momento de la firma si está firmado; si no, los de hoy. */}
             <ClinicFiscalLines fiscal={quote.clinicFiscal} />
             <p className="break-words text-sm text-[#4b5563]">
               {quote.location.name}
