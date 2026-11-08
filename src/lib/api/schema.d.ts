@@ -3389,7 +3389,7 @@ export interface paths {
         put?: never;
         /**
          * Sube el logo de la clínica
-         * @description DX-019. PNG, JPG o WebP de hasta 1 MB. El tipo se comprueba por los bytes y el fichero se re-escribe antes de guardarlo (sin metadatos). SVG no se admite. Es público por diseño (marca).
+         * @description DX-019. PNG, JPG o WebP de hasta 1 MB. El tipo se comprueba por los bytes y la imagen se re-codifica antes de guardarla: sin metadatos, estática (primer fotograma), con ≤ 1024 px de lado; un WebP se guarda como PNG. Lo que no decodifica se rechaza. SVG no se admite. Es público por diseño (marca).
          */
         post: operations["ClinicSettingsController_uploadLogo"];
         /** Quita el logo de la clínica (DX-019) */
@@ -30090,7 +30090,7 @@ export interface operations {
                     "application/json": components["schemas"]["ClinicSettingsDto"];
                 };
             };
-            /** @description El logo está vacío. / El logo supera el máximo de 1 MB. / El logo debe ser una imagen PNG, JPG o WebP. / El logo no es una imagen válida o está dañado. Expórtalo de nuevo y vuelve a subirlo. / El logo es demasiado grande: como mucho 8192 × 8192 píxeles. */
+            /** @description El logo está vacío. / El logo supera el máximo de 1 MB. / El logo debe ser una imagen PNG, JPG o WebP. / El logo no es una imagen válida o está dañado. Expórtalo de nuevo y vuelve a subirlo. / El logo es demasiado grande: como mucho 4096 × 4096 píxeles. / El logo pesa más de 1 MB una vez procesado. Usa una imagen más sencilla (pocos colores) o más pequeña. */
             400: {
                 headers: {
                     [name: string]: unknown;
