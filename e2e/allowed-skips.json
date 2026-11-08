@@ -266,6 +266,13 @@
       "annotation": "E2E_DATABASE_URL no definido: no se puede dar por verificado un dominio propio",
       "requiresUnset": "E2E_DATABASE_URL",
       "reason": "Sin E2E_DATABASE_URL no se puede insertar el dominio propio VERIFIED (el TXT real no se puede publicar en la CI)."
+    },
+    {
+      "file": "e2e/clinic-root-custom-domain.spec.ts",
+      "title": "dominio propio verificado: «/» lleva al login con la marca de la clínica, sin la landing",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede dar por verificado un dominio propio",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede insertar el dominio propio VERIFIED (el TXT real no se puede publicar en la CI)."
     }
   ]
 }
