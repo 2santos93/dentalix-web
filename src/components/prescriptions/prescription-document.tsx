@@ -88,7 +88,7 @@ export function PrescriptionDocument({ prescription: rx, format }: PrescriptionD
           ) : null}
           <div>
             <p className="text-base font-semibold">{rx.clinicName}</p>
-            {/* DX-019: datos fiscales de la clínica (los de hoy, como el logo). */}
+            {/* DX-019: datos fiscales de la clínica, congelados al emitir, como el logo (DX-019-bis): la reimpresión sale con los de entonces. */}
             <ClinicFiscalLines fiscal={rx.clinicFiscal} />
             <p className="text-sm text-[#4b5563]">
               {rx.locationName}
