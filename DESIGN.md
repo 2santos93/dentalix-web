@@ -195,9 +195,11 @@ hardcode a hue and never put text in `primary` on a surface — text uses
 preview of the derived family in both themes, because contrast is never at risk: only the
 exact hex may change. It warns (`lib/color/brand-color.ts`, never blocks) when white text
 misses AA on the chosen color, saying whether buttons get a darker tone or dark text, and
-when its OKLCH hue is < 30° from danger, warning or success (chroma ≥ .04). When the server
-can't resolve the clinic (`*.localhost`, some custom domains) `BrandingProvider` fetches the
-brand in the browser; after saving it swaps the brand in place, without a reload.
+when its OKLCH hue is < 30° from danger, warning or success (chroma ≥ .04). The server
+resolves the brand from the page's host on every host — subdomains, `*.localhost` and verified
+custom domains — so the first HTML already carries it (DX-517-ter). Only when the API did not
+answer in time (`status: 'unknown'`) does `BrandingProvider` fetch it in the browser; after
+saving it swaps the brand in place, without a reload (other users see it within 30 s).
 
 **The One Accent Rule.** The accent marks the primary action, the active item,
 selection and focus — ≤ 10% of any screen. If a screen reads as "the teal
@@ -396,9 +398,10 @@ position and with the spacing the locale gives the code** — «Bs. 1.234,50» i
 Without a text, nothing changes: the code, exactly as before.
 - The map arrives with the clinic's branding (root layout) and is set in the browser before
   any child paints (`CurrencyTextsSync`), so the ~170 call sites never thread it. It is never
-  set on the server (module state is shared by every clinic's requests). When the server
-  cannot resolve the clinic (custom domain, `*.localhost`) the tab paints with its last
-  copy and asks the branding from the browser; a different map remounts the tree once.
+  set on the server (module state is shared by every clinic's requests). Only when the server
+  could not tell (`status: 'unknown'`: the API did not answer in time) does the tab paint with
+  its last copy and ask the branding from the browser; a different map remounts the tree
+  once. With `clinic` or `none` there is no browser fetch and no remount (DX-517-ter).
 - A receipt **freezes** the map in its snapshot when issued; it is painted (screen, print,
   email) with the frozen map, never today's: reprinting an old receipt never changes it.
 - The API formats the same way (`fmt.money(amount, currency, texts)`): the receipt email

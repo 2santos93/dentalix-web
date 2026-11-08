@@ -5,7 +5,7 @@ import type { ClinicRole } from '@/lib/me/me-api';
 /**
  * DX-517: el texto propio de cada moneda de la clínica («VES» → «Bs.»). Sin
  * ninguno, los importes llevan el código ISO (DX-378). Lo lee toda la app con
- * la marca de la clínica (`fetchBranding`); aquí solo lo edita administración.
+ * la marca de la clínica (`brandingForRequest`); aquí solo lo edita administración.
  */
 export type ClinicCurrencyTexts = components['schemas']['ClinicCurrencyTextsDto'];
 export type CurrencyTextEntry = components['schemas']['CurrencyTextEntryDto'];

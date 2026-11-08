@@ -106,4 +106,64 @@ describe('BrandingProvider (DX-019)', () => {
     expect(screen.getByTestId('probe')).toHaveTextContent('B|#15803D|https://x.example/l.png');
     expect(screen.getByTestId('client-accent').textContent).toContain('--color-primary:#15803D');
   });
+
+  describe('DX-517-ter: el servidor dice clínica, ninguna o desconocida', () => {
+    it('status clinic: pinta la del servidor y no pide nada', () => {
+      render(
+        <BrandingProvider status="clinic" value={{ name: 'Clínica Ávila', logoUrl: null, primaryColor: '#0E7490' }}>
+          <Probe />
+        </BrandingProvider>,
+      );
+      expect(screen.getByTestId('probe')).toHaveTextContent('Clínica Ávila|#0E7490|null');
+      expect(mockedFetch).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('client-accent')).not.toBeInTheDocument();
+    });
+
+    it('status none: el host no tiene clínica, el navegador no la pide', () => {
+      render(
+        <BrandingProvider status="none" value={{ name: null, logoUrl: null, primaryColor: null }}>
+          <Probe />
+        </BrandingProvider>,
+      );
+      expect(screen.getByTestId('probe')).toHaveTextContent('null|null|null');
+      expect(mockedFetch).not.toHaveBeenCalled();
+    });
+
+    it('status unknown: la pide el navegador (la API no contestó a tiempo)', async () => {
+      mockedFetch.mockResolvedValue({ name: 'Clínica Norte', primaryColor: '#6D28D9', logoUrl: null });
+      render(
+        <BrandingProvider status="unknown" value={{ name: null, logoUrl: null, primaryColor: null }}>
+          <Probe />
+        </BrandingProvider>,
+      );
+      expect(mockedFetch).toHaveBeenCalledWith('/public/tenant/branding');
+      await waitFor(() => expect(screen.getByTestId('probe')).toHaveTextContent('Clínica Norte|#6D28D9|null'));
+    });
+
+    it('status none en el registro: al salir sin recargar la pide UNA vez (la clínica ya existe)', async () => {
+      jest.mocked(usePathname).mockReturnValue('/register');
+      mockedFetch.mockResolvedValue({ name: 'Clínica Nueva', primaryColor: '#15803D', logoUrl: null });
+      const { rerender } = render(
+        <BrandingProvider status="none" value={{ name: null, logoUrl: null, primaryColor: null }}>
+          <Probe />
+        </BrandingProvider>,
+      );
+      expect(mockedFetch).not.toHaveBeenCalled();
+      jest.mocked(usePathname).mockReturnValue('/login');
+      rerender(
+        <BrandingProvider status="none" value={{ name: null, logoUrl: null, primaryColor: null }}>
+          <Probe />
+        </BrandingProvider>,
+      );
+      await waitFor(() => expect(screen.getByTestId('probe')).toHaveTextContent('Clínica Nueva|#15803D|null'));
+      jest.mocked(usePathname).mockReturnValue('/dashboard');
+      rerender(
+        <BrandingProvider status="none" value={{ name: null, logoUrl: null, primaryColor: null }}>
+          <Probe />
+        </BrandingProvider>,
+      );
+      expect(mockedFetch).toHaveBeenCalledTimes(1);
+    });
+  });
 });
+

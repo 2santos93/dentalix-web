@@ -1,18 +1,12 @@
 import { API_PROXY_PATH } from '@/lib/api/api-base';
 
 /**
- * `GET /public/tenant/branding` — resolves the tenant the same way the rest
- * of the app does via `apiFetch` (`client.ts`): the browser's
- * `window.location.host` sent as `X-Tenant-Host` (the backend's
- * `select-host.ts` tries `x-tenant-host` first). `branding.ts`'s existing
- * `fetchBranding` sends the wrong header (`X-Tenant`, a tenant slug it
- * expects the caller to already know) and can't resolve the tenant from the
- * browser this way — rather than touching that (shared, unrelated call
- * sites), this is a small standalone fetch used only to get the clinic's
- * display name for the payment receipt (RECIBO-T1). No auth token needed —
- * the route is public. Fails soft to `null` (the receipt already handles a
- * missing `clinicName` with a fallback), same fail-soft shape as
- * `fetchBranding`.
+ * `GET /public/tenant/branding` desde el NAVEGADOR, por el proxy del mismo
+ * origen (la API resuelve la clínica por el host de la página, como el resto
+ * de `apiFetch`). Solo para el nombre de la clínica en el recibo (RECIBO-T1).
+ * La marca del render de servidor es otra cosa: `brandingForRequest` en
+ * `branding.ts` (DX-517-ter, por `?host=`). Sin token (la ruta es pública).
+ * Si falla, `null` (el recibo ya tiene un respaldo sin `clinicName`).
  */
 export async function fetchClinicName(): Promise<string | null> {
   if (typeof window === 'undefined') return null;

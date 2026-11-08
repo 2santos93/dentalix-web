@@ -3337,6 +3337,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/tenant/branding/by-host": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Marca pública de la clínica de un host
+         * @description La pide el servidor web con el host de la página para pintar la marca en el primer HTML. Mismos campos que GET /public/tenant/branding. Un host desconocido o mal formado da 404.
+         */
+        get: operations["PublicBrandingByHostController_branding"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/clinic/settings": {
         parameters: {
             query?: never;
@@ -29948,6 +29968,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["BrandingDto"];
                 };
+            };
+        };
+    };
+    PublicBrandingByHostController_branding: {
+        parameters: {
+            query: {
+                /** @description Host de la página (subdominio de la plataforma o dominio propio verificado); el puerto se ignora. */
+                host: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandingDto"];
+                };
+            };
+            /** @description Ninguna clínica en ese host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

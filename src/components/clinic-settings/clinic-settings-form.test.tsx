@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { forgetServerBranding } from '@/lib/branding-cache-client';
 import userEvent from '@testing-library/user-event';
 import { ClinicSettingsForm, validateClinicDraft } from './clinic-settings-form';
 import {
@@ -14,6 +15,7 @@ import { ApiError } from '@/lib/api/api-error';
 const refresh = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ refresh }), usePathname: () => '/settings/clinica' }));
 jest.mock('sonner', () => ({ toast: { success: jest.fn() } }));
+jest.mock('../../lib/branding-cache-client', () => ({ forgetServerBranding: jest.fn(() => Promise.resolve()) }));
 jest.mock('../../lib/clinic/clinic-settings-api', () => ({
   ...jest.requireActual('../../lib/clinic/clinic-settings-api'),
   getClinicSettings: jest.fn(),
@@ -25,6 +27,7 @@ const mockedGet = jest.mocked(getClinicSettings);
 const mockedPatch = jest.mocked(updateClinicSettings);
 const mockedUpload = jest.mocked(uploadClinicLogo);
 const mockedRemove = jest.mocked(removeClinicLogo);
+const mockedForget = jest.mocked(forgetServerBranding);
 
 const BASE: ClinicSettings = {
   name: 'Clínica Sonrisas',
@@ -114,6 +117,10 @@ describe('Ajustes › Datos de la clínica (DX-019)', () => {
     expect(screen.getByTestId('client-accent').textContent).toContain('--color-primary:#6D28D9');
     await waitFor(() => expect(bar()).not.toBeInTheDocument());
     expect(screen.queryByTestId('fiscal-pending-callout')).not.toBeInTheDocument();
+    // DX-517-ter: el servidor olvida la marca de este host antes de refrescar
+    // el layout (si no, el login y la recarga la sacarían de su caché de 30 s).
+    expect(mockedForget).toHaveBeenCalledTimes(1);
+    expect(mockedForget.mock.invocationCallOrder[0]).toBeLessThan(refresh.mock.invocationCallOrder[0]);
   });
 
   it('un color sin contraste AA o cerca de un estado se advierte; la familia se ve en claro y oscuro', async () => {
@@ -174,6 +181,7 @@ describe('Ajustes › Datos de la clínica (DX-019)', () => {
     expect(screen.getByText('Se quitará al guardar.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Guardar los datos de la clínica' }));
     expect(await within(bar()!).findByRole('alert')).toBeInTheDocument();
+    expect(mockedForget).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'Descartar' }));
     expect(screen.getByTestId('clinic-logo-preview')).toBeInTheDocument();
   });

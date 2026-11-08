@@ -100,4 +100,71 @@ describe('CurrencyTextsSync (DX-517)', () => {
     render(<CurrencyTextsSync value={null}>x</CurrencyTextsSync>);
     await waitFor(() => expect(mockedFetch).toHaveBeenCalledTimes(1));
   });
+
+  describe('DX-517-ter: el servidor dice clínica, ninguna o desconocida', () => {
+    it('status clinic: el primer importe ya sale con el texto, sin pedir nada ni volver a montar', async () => {
+      render(
+        <CurrencyTextsSync status="clinic" value={{ VES: 'Bs.', EUR: '€' }}>
+          <Amount />
+        </CurrencyTextsSync>,
+      );
+      expect(screen.getByText('10,00 €')).toBeInTheDocument();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(mockedFetch).not.toHaveBeenCalled();
+      expect(mounts).toBe(1);
+    });
+
+    it('status clinic con la copia de la pestaña distinta (primera visita): tampoco se vuelve a montar', async () => {
+      setClinicCurrencyTexts({ EUR: 'EUR€' });
+      render(
+        <CurrencyTextsSync status="clinic" value={{ EUR: '€' }}>
+          <Amount />
+        </CurrencyTextsSync>,
+      );
+      expect(screen.getByText('10,00 €')).toBeInTheDocument();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(mounts).toBe(1);
+      expect(clinicCurrencyTexts()).toEqual({ EUR: '€' });
+    });
+
+    it('status none: no pide nada y pinta sin textos (no hay clínica), aunque la pestaña guarde una copia', async () => {
+      setClinicCurrencyTexts({ EUR: '€' });
+      render(
+        <CurrencyTextsSync status="none" value={null}>
+          <Amount />
+        </CurrencyTextsSync>,
+      );
+      expect(screen.getByText('10,00 EUR')).toBeInTheDocument();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(mockedFetch).not.toHaveBeenCalled();
+      expect(mounts).toBe(1);
+    });
+
+    it('status unknown: es el único caso que pide la marca (y puede volver a montar una vez)', async () => {
+      mockedFetch.mockResolvedValue({ currencyTexts: { EUR: '€' } });
+      render(
+        <CurrencyTextsSync status="unknown" value={null}>
+          <Amount />
+        </CurrencyTextsSync>,
+      );
+      expect(await screen.findByText('10,00 €')).toBeInTheDocument();
+      expect(mockedFetch).toHaveBeenCalledTimes(1);
+      expect(mounts).toBe(2);
+    });
+
+    it('status none en el registro: al salir sin recargar la pide una vez', async () => {
+      jest.mocked(usePathname).mockReturnValue('/register');
+      mockedFetch.mockResolvedValue({ currencyTexts: {} });
+      const { rerender } = render(<CurrencyTextsSync status="none" value={null}>x</CurrencyTextsSync>);
+      expect(mockedFetch).not.toHaveBeenCalled();
+      jest.mocked(usePathname).mockReturnValue('/dashboard');
+      rerender(<CurrencyTextsSync status="none" value={null}>x</CurrencyTextsSync>);
+      await waitFor(() => expect(mockedFetch).toHaveBeenCalledTimes(1));
+      jest.mocked(usePathname).mockReturnValue('/patients');
+      rerender(<CurrencyTextsSync status="none" value={null}>x</CurrencyTextsSync>);
+      await new Promise((r) => setTimeout(r, 0));
+      expect(mockedFetch).toHaveBeenCalledTimes(1);
+    });
+  });
 });
+

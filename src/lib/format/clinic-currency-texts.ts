@@ -13,8 +13,8 @@ import { NO_CURRENCY_TEXTS, readCurrencyTexts, type CurrencyTexts } from '@/lib/
  * configurar: vacío, y todo se pinta como siempre (código ISO, DX-378).
  *
  * Copia en `sessionStorage` (por host): cuando el servidor no supo la clínica
- * (un dominio propio, `*.localhost`), la pestaña pinta con la última conocida
- * mientras la vuelve a pedir (`CurrencyTextsSync`).
+ * (DX-517-ter: la API no contestó a tiempo, `status: 'unknown'`), la pestaña
+ * pinta con la última conocida mientras la vuelve a pedir (`CurrencyTextsSync`).
  */
 let current: CurrencyTexts = NO_CURRENCY_TEXTS;
 
