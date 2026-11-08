@@ -89,12 +89,14 @@ test.beforeAll(async ({ request }) => {
   rateDay = sedeDay(new Date());
   const settings = await request.put(`${API_URL}/exchange/settings`, {
     headers: session.headers,
-    data: { source: 'MANUAL' },
+    // DX-513-ter (L1): el plazo de la tasa MANUAL (DX-384), explícito: con la
+    // de hoy, una ejecución que cruce la medianoche de la sede sigue con tasa.
+    data: { source: 'MANUAL', manualRateMaxAgeDays: 3 },
   });
   expect(settings.ok(), await settings.text()).toBeTruthy();
-  // DX-513-ter (L1): también la de mañana en la zona de la sede, como la e2e de
-  // la API: una ejecución que cruce la medianoche sigue teniendo tasa del día.
-  for (const date of [rateDay, sedeDay(new Date(Date.now() + DAY_MS))]) {
+  // La de ayer y la de hoy en la zona de la sede, como la e2e de la API (la API
+  // no admite días que aún no han llegado en la sede).
+  for (const date of [sedeDay(new Date(Date.now() - DAY_MS)), rateDay]) {
     await apiPost(request, session, '/exchange/manual-rates', { date, currency: 'VES', rate: VES_RATE });
   }
   ({ id: procedureId } = await apiPost<{ id: string }>(request, session, '/catalog/items', {
@@ -166,9 +168,9 @@ for (const viewport of [
     // hoy»: un test que cruce la medianoche de fin de mes no los pierde.
     const seededFrom = new Date();
     // Revisión de DX-513-ter: antes de dar de alta el ítem, la nota puede
-    // llevar la tasa de hoy o (si la prueba cruza la medianoche de la sede) la
-    // de mañana; después, el día es el que congeló el ítem, nunca uno calculado.
-    const possibleDays = [rateDay, sedeDay(new Date(Date.now() + DAY_MS))];
+    // llevar la tasa de hoy o la de ayer (sembradas las dos); después, el día
+    // es el que congeló el ítem, nunca uno calculado.
+    const possibleDays = [rateDay, sedeDay(new Date(new Date(`${rateDay}T12:00:00Z`).getTime() - DAY_MS))];
 
     // --- Plan en VES: 100 USD a 400 = 40.000 Bs., precargado y con la nota.
     const ves = await patientWithPlan(page, `v${tag}`, 'VES');
@@ -329,10 +331,12 @@ for (const viewport of [
       referenceRate: null,
       baseRate: { fromPerBase: 1, toPerBase: VES_RATE, source: 'MANUAL' },
     });
-    // L1: el día de la tasa es el que congeló el ítem (hoy o, si la prueba
-    // cruzó la medianoche de la sede, mañana), no uno calculado aquí.
+    // L1: el día de la tasa es el que congeló el ítem (la de hoy o, por el
+    // plazo MANUAL, la de ayer), no uno calculado aquí.
     const baseRateDay = measured.item.baseRate!.rateDate;
-    expect([rateDay, sedeDay(new Date(Date.now() + DAY_MS)), sedeDay(new Date())]).toContain(baseRateDay);
+    expect([rateDay, sedeDay(new Date(new Date(`${rateDay}T12:00:00Z`).getTime() - DAY_MS))]).toContain(
+      baseRateDay,
+    );
     const rateText = rateTextOn(baseRateDay);
     // Sin tasa de EUR: el alta funciona igual, sin base.
     const unmeasured = await listAgreementItem('e', 'EUR', 80);
