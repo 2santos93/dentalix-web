@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import Link from 'next/link';
-import { CircleCheck, PenLine, Printer, RefreshCw } from 'lucide-react';
+import { CircleCheck, ListChecks, PenLine, Printer, RefreshCw } from 'lucide-react';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { TreatmentPlan, TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
 import { canRepricePlan, isPlanRepriceable, type AppliedRepricing } from '@/lib/treatment-plans/plan-repricing-api';
@@ -10,12 +10,14 @@ import {
   canAcceptPlan,
   canPrintPlanQuote,
   isPlanAcceptable,
+  isPlanPartiallyAcceptable,
   planQuotePrintHref,
   SIGNABLE_PLAN_STATUSES,
   type PlanQuote,
 } from '@/lib/treatment-plans/plan-quote-api';
 import type { SedePainters } from '@/lib/locations/sede-stamp';
 import { Button } from '@/components/ui/button';
+import { AcceptPartialPlanModal } from './accept-partial-plan-modal';
 import { AcceptPlanModal } from './accept-plan-modal';
 import { RepricePlanModal } from './reprice-plan-modal';
 import { RemoteAcceptanceEvidence, RemoteBudgetPanel } from './remote-budget-panel';
@@ -24,6 +26,7 @@ const copy = {
   print: 'Imprimir presupuesto',
   newTab: '(se abre en otra pestaña)',
   accept: 'Aceptar con firma',
+  acceptPartial: 'Aceptar en parte',
   acceptedBy: (name: string, when: string) => `Aceptado y firmado por ${name} el ${when}`,
   acceptedRemotely: (name: string, when: string) => `Aceptado a distancia por ${name} el ${when}`,
   locked: 'Sus procedimientos y precios ya no se pueden cambiar.',
@@ -53,6 +56,11 @@ interface PlanQuoteActionsProps {
   onRepriced?: (result: AppliedRepricing) => void;
   /** DX-379 B: ¿«Actualizar precios» es LA primaria? (plan vencido, `planPrimaryAction`). */
   repricePrimary?: boolean;
+  /**
+   * DX-417: tras aceptar en parte (el presupuesto firmado de lo aceptado) o
+   * cuando otra firma ganó (`null`): el padre recarga. Sin él, no se ofrece.
+   */
+  onPartiallyAccepted?: (quote: PlanQuote | null) => void;
 }
 
 /**
@@ -73,14 +81,18 @@ export function PlanQuoteActions({
   procedureOf,
   onRepriced,
   repricePrimary = false,
+  onPartiallyAccepted,
 }: PlanQuoteActionsProps) {
   const [accepting, setAccepting] = useState(false);
+  const [acceptingPartial, setAcceptingPartial] = useState(false);
   const [repricing, setRepricing] = useState(false);
   // DX-379 B: recotizar es de los roles clínicos, en un borrador o presentado sin firma.
   const repriceable = Boolean(onRepriced) && canRepricePlan(role) && isPlanRepriceable(plan);
   const acceptance = plan.acceptance ?? null;
   const mayAccept = canAcceptPlan(role);
   const acceptable = mayAccept && isPlanAcceptable(plan);
+  // DX-417: solo un presentado sin aceptar con dos o más propuestos (abonos y cuotas: el 409 en el modal).
+  const partiallyAcceptable = Boolean(onPartiallyAccepted) && mayAccept && isPlanPartiallyAcceptable(plan);
   const needsItems =
     mayAccept &&
     !acceptance &&
@@ -133,6 +145,12 @@ export function PlanQuoteActions({
             {copy.accept}
           </Button>
         ) : null}
+        {partiallyAcceptable ? (
+          <Button type="button" variant="secondary" onClick={() => setAcceptingPartial(true)}>
+            <ListChecks aria-hidden />
+            {copy.acceptPartial}
+          </Button>
+        ) : null}
         {needsItems ? <p className="text-sm text-muted">{copy.needsItems}</p> : null}
       </div>
       {repriceable && plan.quoteExpired ? <p className="text-sm text-muted">{copy.expiredHint}</p> : null}
@@ -150,6 +168,18 @@ export function PlanQuoteActions({
           quoteExpired={plan.quoteExpired}
           role={role}
           locationId={plan.presentedLocationId}
+        />
+      ) : null}
+      {partiallyAcceptable && onPartiallyAccepted ? (
+        <AcceptPartialPlanModal
+          open={acceptingPartial}
+          onOpenChange={setAcceptingPartial}
+          token={token}
+          patientId={patientId}
+          plan={plan}
+          role={role}
+          onAccepted={onPartiallyAccepted}
+          onStale={() => onPartiallyAccepted(null)}
         />
       ) : null}
       {repriceable && onRepriced ? (
