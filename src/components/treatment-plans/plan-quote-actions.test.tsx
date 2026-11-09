@@ -1,9 +1,10 @@
 import { dateTimeIn, STAMP_SEDES, testStamp } from '@/lib/test/stamp';
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { stampPainters } from '@/lib/locations/sede-stamp';
 import { PlanQuoteActions } from './plan-quote-actions';
 import { getPlanQuote } from '@/lib/treatment-plans/plan-quote-api';
+import { previewRepricing } from '@/lib/treatment-plans/plan-repricing-api';
 import { planQuoteFixture } from './plan-quote-fixture';
 import type { TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
 import { ITEM_WITHOUT_DISCOUNT, PLAN_WITHOUT_OPTIONS } from './plan-fixture';
@@ -11,6 +12,11 @@ import { ITEM_WITHOUT_DISCOUNT, PLAN_WITHOUT_OPTIONS } from './plan-fixture';
 jest.mock('../../lib/treatment-plans/plan-quote-api', () => ({
   ...jest.requireActual('../../lib/treatment-plans/plan-quote-api'),
   getPlanQuote: jest.fn(),
+}));
+
+jest.mock('../../lib/treatment-plans/plan-repricing-api', () => ({
+  ...jest.requireActual('../../lib/treatment-plans/plan-repricing-api'),
+  previewRepricing: jest.fn(),
 }));
 
 const mockedGet = getPlanQuote as jest.MockedFunction<typeof getPlanQuote>;
@@ -163,5 +169,60 @@ describe('PlanQuoteActions (DX-012)', () => {
       stampPainters(null),
     );
     expect(screen.getByRole('status')).toHaveTextContent('Aceptado y firmado por Ana Pérez el —');
+  });
+});
+
+describe('PlanQuoteActions · «Actualizar precios» (DX-379 B)', () => {
+  function renderReprice(p: TreatmentPlan, role: 'ADMIN' | 'DENTIST' | 'ASSISTANT' | 'RECEPTION', repricePrimary = false) {
+    render(
+      <PlanQuoteActions
+        token="tok"
+        patientId="p1"
+        plan={p}
+        role={role}
+        onAccepted={jest.fn()}
+        onRepriced={jest.fn()}
+        procedureOf={() => 'Resina compuesta'}
+        repricePrimary={repricePrimary}
+        stamp={testStamp([STAMP_SEDES.caracas])}
+      />,
+    );
+  }
+
+  it('la ven ADMIN, odontólogo y asistente en un borrador o presentado; recepción no', () => {
+    for (const role of ['ADMIN', 'DENTIST', 'ASSISTANT'] as const) {
+      for (const status of ['DRAFT', 'PRESENTED'] as const) {
+        renderReprice(plan({ status }), role);
+        expect(screen.getByRole('button', { name: 'Actualizar precios' })).toBeInTheDocument();
+        cleanup();
+      }
+    }
+    renderReprice(plan({ status: 'PRESENTED' }), 'RECEPTION');
+    expect(screen.queryByRole('button', { name: 'Actualizar precios' })).not.toBeInTheDocument();
+  });
+
+  it('un plan aceptado (con o sin firma), rechazado o sin propuestos no la ofrece', () => {
+    const signed = { signerName: 'Ana', acceptedAt: '2026-10-16T15:00:00Z', remote: null };
+    for (const p of [
+      plan({ status: 'ACCEPTED' }),
+      plan({ status: 'PRESENTED', acceptance: signed }),
+      plan({ status: 'REJECTED' }),
+      plan({ status: 'DRAFT', items: [{ ...item, status: 'DONE' }] }),
+    ]) {
+      renderReprice(p, 'ADMIN');
+      expect(screen.queryByRole('button', { name: 'Actualizar precios' })).not.toBeInTheDocument();
+      cleanup();
+    }
+  });
+
+  it('vencido: es la primaria y explica que así se renueva; abre el asistente', async () => {
+    jest.mocked(previewRepricing).mockReturnValue(new Promise(() => {}));
+    renderReprice(plan({ status: 'PRESENTED', quoteExpired: true, quoteValidUntil: '2026-10-31' }), 'DENTIST', true);
+    const button = screen.getByRole('button', { name: 'Actualizar precios' });
+    expect(button.className).toMatch(/(^|\s)bg-primary(\s|$)/);
+    expect(screen.getByText('El presupuesto venció: actualiza los precios para renovar su validez.')).toBeInTheDocument();
+    await userEvent.click(button);
+    expect(await screen.findByRole('dialog', { name: 'Actualizar precios' })).toBeInTheDocument();
+    expect(previewRepricing).toHaveBeenCalledWith('tok', 'p1', 'plan-1');
   });
 });

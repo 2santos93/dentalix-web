@@ -65,6 +65,7 @@ import { PaymentPlanSection } from './payment-plan-section';
 import { PlanVisitsBoard } from './plan-visits-board';
 import { PlanQuoteActions } from './plan-quote-actions';
 import { planPrimaryAction } from '@/lib/treatment-plans/plan-primary-action';
+import { canRepricePlan, isPlanRepriceable } from '@/lib/treatment-plans/plan-repricing-api';
 import { PlanOptionsPanel } from './plan-options-panel';
 import { MarkDoneModal } from './mark-done-modal';
 import { ItemsTable } from './plan-items-table';
@@ -834,6 +835,14 @@ export function TreatmentPlansTab({
    * plan y, con una alternativa nueva, la lista de planes: se refrescan los
    * dos en su sitio. Y el saldo: rechazar libera todo lo imputado (DX-051).
    */
+  /**
+   * DX-379 B: actualizar precios cambia los ítems, el total y la validez del
+   * plan (y la de su opción en la lista y en la comparación).
+   */
+  function handlePlanRepriced() {
+    void Promise.all([refreshPlanDetail(), refreshPlansInPlace(), refreshBalanceAndPayments()]);
+  }
+
   async function handlePlanOptionsChanged(): Promise<void> {
     await Promise.all([refreshPlanDetail(), refreshPlansInPlace(), refreshBalanceAndPayments()]);
   }
@@ -885,6 +894,8 @@ export function TreatmentPlansTab({
         hasSchedulableVisit,
         canBill: canSeeBilling && billable,
         balance: planBalance?.balance ?? null,
+        // DX-379 B: vencido, la vía para renovarlo es «Actualizar precios».
+        expiredRepriceable: planDetail.quoteExpired && canRepricePlan(role) && isPlanRepriceable(planDetail),
       })
     : null;
 
@@ -965,7 +976,7 @@ export function TreatmentPlansTab({
                 {copy.detailHeading}
               </h2>
               {selectedPlan ? (
-                <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <p data-testid="tp-plan-status-line" className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <StatusBadge kind="treatmentPlan" status={selectedPlan.status} />
                   {/* DX-379: hasta qué día valen los precios (o desde cuándo no). */}
                   <QuoteValidity
@@ -1043,6 +1054,9 @@ export function TreatmentPlansTab({
                 onAccepted={handlePlanAccepted}
                 acceptPrimary={primary === 'accept'}
                 stamp={stamp}
+                procedureOf={(item) => procedureName(item, catalogById)}
+                onRepriced={handlePlanRepriced}
+                repricePrimary={primary === 'reprice'}
               />
 
               {/* La opción que se le presenta al paciente (DX-040): presentar,

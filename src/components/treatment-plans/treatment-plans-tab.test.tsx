@@ -104,6 +104,12 @@ jest.mock('../../lib/treatment-plans/plan-options-api', () => ({
   presentPlan: jest.fn(),
 }));
 // DX-050: los profesionales que pueden figurar como quien realizó un ítem.
+// DX-379 B: «Actualizar precios».
+jest.mock('../../lib/treatment-plans/plan-repricing-api', () => ({
+  ...jest.requireActual('../../lib/treatment-plans/plan-repricing-api'),
+  previewRepricing: jest.fn(),
+  applyRepricing: jest.fn(),
+}));
 jest.mock('../../lib/appointments/staff-api', () => ({
   listStaff: jest.fn(),
 }));
@@ -3705,6 +3711,82 @@ describe('TreatmentPlansTab · una primaria por estado del plan (D2)', () => {
     expect(isPrimary(accept)).toBe(true);
     expect(isPrimary(add)).toBe(false);
     expect(primaries()).toEqual([accept]);
+  });
+
+  it('DX-379 B: PRESENTED vencido (odontólogo): «Actualizar precios» es la única; «Aceptar con firma» en secundario', async () => {
+    const p = plan({ id: 'plan-1', status: 'PRESENTED', quoteExpired: true, quoteValidUntil: '2026-10-31' });
+    mockedListPlans.mockResolvedValue([p]);
+    mockedGetPlan.mockResolvedValue({ ...p, items: [item1, item2], total: 0 });
+    render(<TreatmentPlansTab patientId="pat-1" token={dentist} />);
+    const reprice = await screen.findByRole('button', { name: 'Actualizar precios' });
+    const accept = await screen.findByRole('button', { name: /aceptar con firma/i });
+    expect(isPrimary(accept)).toBe(false);
+    expect(primaries()).toEqual([reprice]);
+  });
+
+  it('DX-379 B: tras actualizar los precios se recargan el plan, la lista de planes y el saldo', async () => {
+    const { previewRepricing, applyRepricing } = jest.requireMock('../../lib/treatment-plans/plan-repricing-api') as {
+      previewRepricing: jest.Mock;
+      applyRepricing: jest.Mock;
+    };
+    const price = (total: number) => ({
+      price: total,
+      discount: 0,
+      total,
+      listPrice: total,
+      priceSource: 'CATALOG',
+      agreementId: null,
+      agreementName: null,
+    });
+    const preview = {
+      planId: 'plan-1',
+      currency: 'USD',
+      previewHash: 'a'.repeat(64),
+      lines: [
+        {
+          itemId: item1.id,
+          catalogItemId: item1.catalogItemId,
+          toothNumber: item1.toothNumber,
+          before: price(100),
+          after: price(120),
+          difference: 20,
+          changed: true,
+        },
+      ],
+      skipped: [],
+      rate: null,
+      previousValidity: null,
+      validityRenewed: true,
+      validityNote: null,
+      validity: { issuedOn: '2026-11-09', validUntil: '2026-12-09' },
+      totals: { before: 100, after: 120, difference: 20 },
+    };
+    previewRepricing.mockResolvedValue(preview);
+    applyRepricing.mockResolvedValue({ ...preview, repricingId: 'r1', appliedAt: '2026-11-09T15:00:00.000Z', replayed: false });
+    show('PRESENTED', [item1]);
+    // ADMIN: el que ve el saldo del plan (y lo recarga).
+    const user = userEvent.setup();
+    render(<TreatmentPlansTab patientId="pat-1" token={admin} />);
+    await user.click(await screen.findByRole('button', { name: 'Actualizar precios' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Actualizar precios' });
+    await user.click(await within(dialog).findByRole('button', { name: 'Continuar' }));
+    const confirm = within(dialog).getByRole('button', { name: 'Actualizar precios' });
+    await waitFor(() => expect(confirm).toBeEnabled());
+    const plansBefore = mockedListPlans.mock.calls.length;
+    const detailBefore = mockedGetPlan.mock.calls.length;
+    const balanceBefore = mockedGetPlanBalance.mock.calls.length;
+    await user.click(confirm);
+    await waitFor(() => expect(mockedGetPlan.mock.calls.length).toBeGreaterThan(detailBefore));
+    await waitFor(() => expect(mockedListPlans.mock.calls.length).toBeGreaterThan(plansBefore));
+    await waitFor(() => expect(mockedGetPlanBalance.mock.calls.length).toBeGreaterThan(balanceBefore));
+    expect(applyRepricing).toHaveBeenCalledTimes(1);
+  });
+
+  it('DX-379 B: PRESENTED vigente: «Actualizar precios» en secundario', async () => {
+    show('PRESENTED');
+    render(<TreatmentPlansTab patientId="pat-1" token={dentist} />);
+    const reprice = await screen.findByRole('button', { name: 'Actualizar precios' });
+    expect(isPrimary(reprice)).toBe(false);
   });
 
   it('PRESENTED (asistente, que no decide): «Agregar ítem» es la única', async () => {
