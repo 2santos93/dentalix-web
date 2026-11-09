@@ -3170,6 +3170,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/treatment-plans/{planId}/quote/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Imprime el presupuesto: la primera impresión fija su validez (DX-379)
+         * @description Devuelve lo mismo que GET quote. Si el plan está en borrador o presentado, sin firmar y sin validez guardada, la fija: emitido hoy (día de la sede) y válido los días del ajuste de la clínica (GET /treatment-plan-settings). Presentar el plan también la fija. Reimprimir otro día, o tras cambiar el ajuste, devuelve las mismas fechas. Idempotente; queda en la auditoría como PRINT.
+         */
+        post: operations["PlanQuoteController_issue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/treatment-plans/{planId}/acceptance": {
         parameters: {
             query?: never;
@@ -3196,6 +3216,27 @@ export interface paths {
         /** Precio que tendría un ítem nuevo: convenio vigente → lista de la sede → catálogo */
         get: operations["PriceQuoteController_quote"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/treatment-plan-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cuántos días vale un presupuesto en la clínica (DX-379) */
+        get: operations["QuoteSettingsController_settings"];
+        /**
+         * Cambia cuántos días vale un presupuesto; queda en la auditoría (DX-379)
+         * @description Aplica a los presupuestos que se emitan después (presentar el plan o imprimirlo por primera vez); los ya emitidos conservan sus fechas. Si nada cambia, responde 200 sin evento de auditoría.
+         */
+        put: operations["QuoteSettingsController_update"];
         post?: never;
         delete?: never;
         options?: never;
@@ -13076,6 +13117,14 @@ export interface components {
             presentedLocationId: string;
             /** @description Días completos desde la presentación */
             daysSincePresented: number;
+            /**
+             * Format: date
+             * @description DX-379: último día en que vale el presupuesto de esta opción (inclusive); null en planes presentados antes de DX-379 (nunca vencen)
+             * @example 2026-12-09
+             */
+            quoteValidUntil: string | null;
+            /** @description DX-379: hoy, en la zona de la sede de la presentación, es posterior a quoteValidUntil */
+            quoteExpired: boolean;
             /** @description Moneda del plan (código ISO 4217 de 3 letras). */
             currency: string;
             /** @description Σ (precio − descuento) de los ítems vivos, en `currency` */
@@ -13289,6 +13338,20 @@ export interface components {
              * @description Sede donde se presentó (la del request o la principal)
              */
             presentedLocationId: string | null;
+            /**
+             * Format: date
+             * @description DX-379: día de emisión del presupuesto (día civil de la sede), fijado al presentarlo o al imprimirlo por primera vez (POST …/quote/issue). null = plan anterior a DX-379 o borrador nunca impreso
+             * @example 2026-11-09
+             */
+            quoteIssuedOn: string | null;
+            /**
+             * Format: date
+             * @description DX-379: último día en que vale el presupuesto (inclusive). Lo fijan presentar (siempre) o la primera impresión; editar ítems o cambiar el ajuste de días no lo mueve. null = sin validez guardada (nunca vence)
+             * @example 2026-12-09
+             */
+            quoteValidUntil: string | null;
+            /** @description DX-379: el presupuesto venció — hoy, en la zona de la sede del plan (la de su presentación o, sin presentar, la del request), es posterior a quoteValidUntil. Solo puede ser true en borrador (DRAFT) o presentado (PRESENTED): aceptado (con o sin firma), completado, rechazado o cancelado es siempre false. También false si quoteValidUntil es null. Lo calcula el servidor: la web no lo recalcula con la fecha del navegador */
+            quoteExpired: boolean;
             /** Format: date-time */
             rejectedAt: string | null;
             rejectionReason: components["schemas"]["TreatmentPlanRejectionReason"] | null;
@@ -13622,6 +13685,13 @@ export interface components {
             rateMissing: boolean;
             /** @description DX-513-bis: con `rateMissing`, la moneda sin tasa (la que falta registrar); null si no falta. */
             missingRateCurrency: string | null;
+        };
+        QuoteSettingsDto: {
+            /**
+             * @description Días civiles que vale un presupuesto desde que se emite (al presentarlo o al imprimirlo por primera vez). 30 de plataforma. Cambiarlo no toca los presupuestos ya emitidos.
+             * @example 30
+             */
+            validityDays: number;
         };
         DiscountMaxPercentByRoleDto: {
             /** @description Administración (por defecto 100) */
@@ -29204,7 +29274,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Plan PRESENTED, con presentedAt (servidor) y la sede */
+            /** @description Plan PRESENTED, con presentedAt (servidor) y la sede. DX-379: fija también la validez del presupuesto (quoteIssuedOn = hoy en la sede, quoteValidUntil = hoy + los días de GET /treatment-plan-settings), aunque un borrador impreso ya la tuviera */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -29234,7 +29304,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED): solo se presenta un borrador */
+            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED): solo se presenta un borrador. DX-379: code LOCATION_TIMEZONE_REQUIRED si la sede de la presentación no tiene una zona horaria válida (hace falta para fijar el día de emisión del presupuesto); el plan no cambia */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -29562,6 +29632,38 @@ export interface operations {
             };
         };
     };
+    PlanQuoteController_issue: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede cuyos datos encabezan el presupuesto (y en la que se firma). Sin ella, la sede principal. Un plan ya aceptado muestra la sede en la que se firmó. */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                patientId: string;
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanQuoteDocumentDto"];
+                };
+            };
+            /** @description Paciente o plan no encontrados en esta clínica (o el plan es de otro paciente) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PlanQuoteController_accept: {
         parameters: {
             query?: never;
@@ -29656,6 +29758,62 @@ export interface operations {
             };
             /** @description Paciente o procedimiento no encontrado en esta clínica (inexistente o de otra clínica). */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    QuoteSettingsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteSettingsDto"];
+                };
+            };
+        };
+    };
+    QuoteSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuoteSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteSettingsDto"];
+                };
+            };
+            /** @description Falta la validez, o no es un entero de 1 a 365 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar la validez de los presupuestos. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
