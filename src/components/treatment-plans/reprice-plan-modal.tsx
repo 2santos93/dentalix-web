@@ -25,12 +25,12 @@ import { FormModal } from '@/components/shared/form-modal';
 import { SectionError } from '@/components/errors/section-error';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
-import { Checkbox } from '@/components/ui/checkbox';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Wizard } from '@/components/ui/wizard';
 import { cn } from '@/lib/utils';
+import { RowSelectCell } from './row-select-cell';
 
 export const repricePlanCopy = {
   title: 'Actualizar precios',
@@ -618,17 +618,12 @@ export function RepricingPreviewView({
           leading={
             selection
               ? (row) => (
-                  // I-4: la caja mide 20 px en táctil; la etiqueta que la envuelve da los 44 px.
-                  <label
-                    data-testid="reprice-line-select"
-                    className="-my-2 -ml-2 flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center"
-                  >
-                    <Checkbox
-                      aria-label={repricePlanCopy.select(name(row))}
-                      checked={selection.selected.has(row.itemId)}
-                      onChange={(e) => selection.onToggle(row.itemId, e.target.checked)}
-                    />
-                  </label>
+                  <RowSelectCell
+                    testId="reprice-line-select"
+                    label={repricePlanCopy.select(name(row))}
+                    checked={selection.selected.has(row.itemId)}
+                    onToggle={(checked) => selection.onToggle(row.itemId, checked)}
+                  />
                 )
               : undefined
           }
