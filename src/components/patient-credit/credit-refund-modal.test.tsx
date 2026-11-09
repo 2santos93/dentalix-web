@@ -64,6 +64,24 @@ describe('CreditRefundModal con el formato de la sede (DX-354b)', () => {
   });
 });
 
+describe('CreditRefundModal: las sedes de la sesión (DX-442)', () => {
+  it('si la lista de sedes falla, lo dice junto al medio de pago con reintento y vuelve a pedirla', async () => {
+    // La sede (sello) también lee las sedes: cae todo hasta que la red vuelve.
+    mockedLocations.mockReset().mockRejectedValue(new Error('red'));
+    renderModal();
+    const dialog = await screen.findByRole('dialog');
+    // El modal lleva otra región `status` (la nota de la sede): se busca el rótulo.
+    const label = await within(dialog).findByText('Sedes sin cargar');
+    const field = label.closest('[role="status"]') as HTMLElement;
+    expect(field).not.toBeNull();
+    const calls = mockedLocations.mock.calls.length;
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas]);
+    await userEvent.setup({ pointerEventsCheck: 0 }).click(within(field).getByRole('button', { name: 'Reintentar' }));
+    await waitFor(() => expect(mockedLocations.mock.calls.length).toBeGreaterThan(calls));
+    await waitFor(() => expect(within(dialog).queryByText('Sedes sin cargar')).not.toBeInTheDocument());
+  });
+});
+
 describe('CreditRefundModal: tope diario de RECEPCIÓN (DX-462)', () => {
   beforeEach(() => mockedLocations.mockReset().mockResolvedValue([STAMP_SEDES.caracas]));
 

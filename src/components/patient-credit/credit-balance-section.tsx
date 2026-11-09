@@ -13,8 +13,15 @@ import {
   transferTargets,
   type CreditSource,
 } from './credit-balance';
-import { CreditTransferModal } from './credit-transfer-modal';
-import { CreditRefundModal } from './credit-refund-modal';
+import dynamic from 'next/dynamic';
+
+// DX-442 (FE-021): los modales del saldo a favor entran en su trozo al abrirse.
+const CreditTransferModal = dynamic(() => import('./credit-transfer-modal').then((m) => m.CreditTransferModal), {
+  ssr: false,
+});
+const CreditRefundModal = dynamic(() => import('./credit-refund-modal').then((m) => m.CreditRefundModal), {
+  ssr: false,
+});
 
 const copy = {
   heading: 'Saldo a favor',

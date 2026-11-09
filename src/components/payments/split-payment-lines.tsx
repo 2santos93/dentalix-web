@@ -10,6 +10,7 @@ import { MoneyInput } from '@/components/shared/money-input';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { PaymentAdjustmentsPreview } from './payment-adjustments-preview';
 import { InlineError } from '@/components/errors/inline-error';
+import { FieldError } from '@/components/errors/field-error';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeMoney } from '@/lib/format/sede-number';
 import { parseMoneyInput } from '@/lib/format/money';
@@ -41,6 +42,9 @@ export const splitPaymentCopy = {
   loading: 'Calculando el total…',
   loadingPending: 'Calculando lo pendiente…',
   balanceUnavailable: 'No se pudo leer el saldo del plan: lo pendiente se verá al guardar.',
+  // DX-442: rótulos cortos del escalón 2 (el control falló; el resto sigue).
+  balanceError: 'No se pudo leer',
+  ratesError: 'No se pudo consultar',
   ratesUnavailable:
     'Sin la tasa de algún importe en otra moneda: el total se verá al guardar y esa forma de pago queda «sin tasa» hasta que la haya.',
   exceeds: (excess: string) =>
@@ -173,11 +177,13 @@ export function SplitLineFields({
             onValueChange={(amount) => onPatch({ amount, amountError: null })}
             aria-invalid={line.amountError ? true : undefined}
             aria-describedby={line.amountError ? fieldErrorId(`${prefix}-amount`) : undefined}
+            className="h-11 sm:h-10"
           />
         </FormField>
         <FormField htmlFor={`${prefix}-currency`} label="Moneda">
           <CurrencySelect
             id={`${prefix}-currency`}
+            className="h-11 sm:h-10"
             token={token}
             value={currency}
             disabled={disabled}
@@ -185,7 +191,7 @@ export function SplitLineFields({
           />
         </FormField>
       </div>
-      <PaymentMethodSelect fields={fields} id={`${prefix}-method`} disabled={disabled} />
+      <PaymentMethodSelect fields={fields} id={`${prefix}-method`} disabled={disabled} className="h-11 sm:h-10" />
       <PaymentReferenceFields fields={fields} idPrefix={prefix} disabled={disabled} />
       {/* DX-516: cada forma de pago, con los ajustes de su propio medio. */}
       <PaymentAdjustmentsPreview
@@ -209,7 +215,9 @@ export function lineAmount(text: string, currency: string): number | null {
 
 export type SplitTotal =
   | { status: 'loading' }
-  /** Alguna línea en otra moneda sin tasa de su día (o las tasas no cargaron). */
+  /** DX-442: las tasas no se pudieron consultar (red, servidor); se reintenta. */
+  | { status: 'error'; retry: () => void }
+  /** Alguna línea en otra moneda sin tasa de su día: no es un fallo, falta la tasa. */
   | { status: 'unavailable' }
   | { status: 'ready'; total: number };
 
@@ -231,6 +239,7 @@ export function splitTotalOf(
       continue;
     }
     if (rates.status === 'loading' || rates.status === 'idle') return { status: 'loading' };
+    if (rates.status === 'error') return { status: 'error', retry: rates.retry };
     if (rates.status !== 'ready') return { status: 'unavailable' };
     const quote = quoteFromRates(rates.rates, line.currency, planCurrency);
     if (quote === null) return { status: 'unavailable' };
@@ -261,10 +270,13 @@ export function SplitPaymentSummary({
   onConfirmCredit,
   confirmError,
   disabled,
+  onRetryBalance,
 }: {
   total: SplitTotal;
   /** Pendiente del plan antes del cobro; `'loading'` o `'error'` si no se sabe. */
   pending: number | 'loading' | 'error';
+  /** DX-442: vuelve a pedir el saldo del plan cuando `pending` es `'error'`. */
+  onRetryBalance: () => void;
   planCurrency: string;
   fmt: RegionalFormat | null;
   confirmCredit: boolean;
@@ -295,6 +307,8 @@ export function SplitPaymentSummary({
                 <Loader2 aria-hidden className="size-4 animate-spin" />
                 <span className="sr-only">{copy.loading}</span>
               </span>
+            ) : total.status === 'error' ? (
+              <FieldError label={copy.ratesError} onRetry={total.retry} className="h-8 font-normal" />
             ) : (
               '—'
             )}
@@ -311,7 +325,7 @@ export function SplitPaymentSummary({
                 <span className="sr-only">{copy.loadingPending}</span>
               </span>
             ) : (
-              '—'
+              <FieldError label={copy.balanceError} onRetry={onRetryBalance} className="h-8 font-normal" />
             )}
           </dd>
         </div>

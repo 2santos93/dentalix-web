@@ -81,10 +81,10 @@ export const sedationCopy = {
   dischargeHeading: 'Egreso',
   byAt: (name: string | null, time: string) => `${name ?? 'Usuario'} · ${time}`,
   // Aviso de intervalo
-  overdue: (minutes: number, interval: number) =>
-    minutes > 0
-      ? `Pasó el intervalo de ${interval} min sin toma: ${minutes} min de retraso. Registra las constantes.`
-      : `Pasó el intervalo de ${interval} min sin toma. Registra las constantes.`,
+  // DX-442: la frase del aviso no cambia con el reloj (se anuncia una vez); el
+  // retraso va aparte y se actualiza sin volver a interrumpir.
+  overdue: (interval: number) => `Pasó el intervalo de ${interval} min sin toma. Registra las constantes.`,
+  overdueBy: (minutes: number) => `${minutes} min de retraso.`,
   nextDue: (time: string) => `Próxima toma antes de las ${time}.`,
   // Intervalos vencidos sin toma (la regla está en la API: en cada hueco,
   // ⌈hueco / intervalo⌉ − 1; 20 min con intervalo de 5 son 3).
@@ -560,9 +560,14 @@ export function SedationModal({
     const live = liveOverdue(s.watch, now);
     if (live.overdue) {
       return (
-        <Callout tone="danger" role="alert" icon={AlertTriangle}>
-          {sedationCopy.overdue(live.overdueMinutes, s.watch.intervalMinutes)}
-        </Callout>
+        <div className="flex flex-col gap-1">
+          <Callout tone="danger" role="alert" icon={AlertTriangle}>
+            {sedationCopy.overdue(s.watch.intervalMinutes)}
+          </Callout>
+          {live.overdueMinutes > 0 ? (
+            <p className="text-sm tabular-nums text-danger-text">{sedationCopy.overdueBy(live.overdueMinutes)}</p>
+          ) : null}
+        </div>
       );
     }
     if (!s.watch.active || !s.watch.nextDueAt) {
@@ -907,12 +912,14 @@ export function SedationModal({
           </FormField>
           {numberInput('weight', sedationCopy.weight)}
           {numberInput('height', sedationCopy.height)}
-          <div className="flex flex-col gap-1">
+          {/* DX-442: rótulo y valor en un mismo texto, sin región viva (un
+              `<output>` es `status` y leería cada tecla). */}
+          <p className="flex flex-col gap-1">
             <span className="t-label text-ink">{sedationCopy.bmi}</span>
-            <output aria-live="polite" className="text-sm tabular-nums text-ink">
+            <span data-testid="sedation-bmi" className="text-sm tabular-nums text-ink">
               {bmi === null ? '—' : formatDecimal(bmi)}
-            </output>
-          </div>
+            </span>
+          </p>
         </div>
         <div className="rounded-lg border border-border p-3">
           <p className="t-label text-ink">{sedationCopy.reversal}</p>

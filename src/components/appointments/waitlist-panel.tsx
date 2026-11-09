@@ -1,5 +1,6 @@
 'use client';
 import { Textarea } from '@/components/ui/textarea';
+import { InlineError } from '@/components/errors/inline-error';
 import * as React from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -274,9 +275,7 @@ export function WaitlistPanel({
             </Button>
           ) : null}
           {moreError ? (
-            <p role="alert" className="text-xs text-danger-text">
-              {moreError}
-            </p>
+            <InlineError className="text-xs">{moreError}</InlineError>
           ) : null}
           <p role="status" aria-live="polite" className="sr-only">
             {announcement}
