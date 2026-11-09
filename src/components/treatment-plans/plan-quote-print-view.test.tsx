@@ -30,7 +30,7 @@ jest.mock('../../lib/locations/locations-api', () => ({
 
 // DX-379: la vista de impresión pide el presupuesto con POST …/quote/issue
 // (la primera impresión fija la validez); el GET queda para ver y aceptar.
-const mockedGet = issuePlanQuote as jest.MockedFunction<typeof issuePlanQuote>;
+const mockedIssue = issuePlanQuote as jest.MockedFunction<typeof issuePlanQuote>;
 const mockedPlainGet = jest.mocked(getPlanQuote);
 const mockedRates = getExchangeRates as jest.MockedFunction<typeof getExchangeRates>;
 
@@ -49,7 +49,7 @@ function renderView(props: Partial<React.ComponentProps<typeof PlanQuotePrintVie
 describe('PlanQuotePrintView (DX-012)', () => {
   const print = jest.fn();
   beforeEach(() => {
-    mockedGet.mockReset();
+    mockedIssue.mockReset();
     mockedPlainGet.mockReset();
     print.mockReset();
     window.print = print;
@@ -59,7 +59,7 @@ describe('PlanQuotePrintView (DX-012)', () => {
 
   describe('DX-376: segunda moneda opcional', () => {
     it('sin elegir no pide tasas; al elegir una pinta su total con la tasa de hoy en la sede', async () => {
-      mockedGet.mockResolvedValue(planQuoteFixture());
+      mockedIssue.mockResolvedValue(planQuoteFixture());
       mockedRates.mockImplementation((_token, date) =>
         Promise.resolve({
           base: 'USD',
@@ -81,7 +81,7 @@ describe('PlanQuotePrintView (DX-012)', () => {
     });
 
     it('sin tasa de hoy lo dice y no imprime la segunda moneda', async () => {
-      mockedGet.mockResolvedValue(planQuoteFixture());
+      mockedIssue.mockResolvedValue(planQuoteFixture());
       mockedRates.mockImplementation((_token, date) =>
         Promise.resolve({
           base: 'USD',
@@ -99,7 +99,7 @@ describe('PlanQuotePrintView (DX-012)', () => {
     });
 
     it('si falla la consulta lo dice con reintento', async () => {
-      mockedGet.mockResolvedValue(planQuoteFixture());
+      mockedIssue.mockResolvedValue(planQuoteFixture());
       mockedRates.mockRejectedValueOnce(new Error('red')).mockResolvedValueOnce({
         base: 'USD',
         source: 'AUTOMATIC',
@@ -115,7 +115,7 @@ describe('PlanQuotePrintView (DX-012)', () => {
     });
 
     it('sin la zona de la sede no se queda «consultando» para siempre: lo dice con reintento', async () => {
-      mockedGet.mockResolvedValue(planQuoteFixture());
+      mockedIssue.mockResolvedValue(planQuoteFixture());
       jest.mocked(listLocations).mockRejectedValue(new Error('red'));
       renderView();
       await screen.findByTestId('quote-header');
@@ -128,11 +128,11 @@ describe('PlanQuotePrintView (DX-012)', () => {
   });
 
   it('muestra la carga, pinta el documento y abre el diálogo de impresión una vez', async () => {
-    mockedGet.mockResolvedValue(planQuoteFixture());
+    mockedIssue.mockResolvedValue(planQuoteFixture());
     renderView();
     expect(screen.getByRole('status')).toHaveTextContent('Preparando el presupuesto…');
     expect(await screen.findByTestId('quote-header')).toBeInTheDocument();
-    expect(mockedGet).toHaveBeenCalledWith('tok', 'p1', 'plan-1');
+    expect(mockedIssue).toHaveBeenCalledWith('tok', 'p1', 'plan-1');
     // DX-379: imprimir fija la validez (POST issue), no el GET de solo lectura.
     expect(mockedPlainGet).not.toHaveBeenCalled();
     expect(print).toHaveBeenCalledTimes(1);
@@ -144,17 +144,17 @@ describe('PlanQuotePrintView (DX-012)', () => {
   });
 
   it('un fallo de red es un error de sección con reintento', async () => {
-    mockedGet.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(planQuoteFixture());
+    mockedIssue.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(planQuoteFixture());
     renderView();
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('No pudimos cargar el presupuesto.');
     await userEvent.click(screen.getByRole('button', { name: /reintentar|intentar de nuevo/i }));
     expect(await screen.findByTestId('quote-header')).toBeInTheDocument();
-    expect(mockedGet).toHaveBeenCalledTimes(2);
+    expect(mockedIssue).toHaveBeenCalledTimes(2);
   });
 
   it('404: aviso sin reintento (reintentar no lo arregla)', async () => {
-    mockedGet.mockRejectedValue(new ApiError(404, 'Plan de tratamiento no encontrado'));
+    mockedIssue.mockRejectedValue(new ApiError(404, 'Plan de tratamiento no encontrado'));
     renderView();
     expect(await screen.findByText('No encontramos este presupuesto.')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -162,7 +162,7 @@ describe('PlanQuotePrintView (DX-012)', () => {
   });
 
   it('403 de la API: aviso de acceso', async () => {
-    mockedGet.mockRejectedValue(new ApiError(403, 'Insufficient role'));
+    mockedIssue.mockRejectedValue(new ApiError(403, 'Insufficient role'));
     renderView();
     expect(await screen.findByText('Tu rol no tiene acceso a este presupuesto.')).toBeInTheDocument();
   });
@@ -170,11 +170,11 @@ describe('PlanQuotePrintView (DX-012)', () => {
   it('sin permiso no pide nada', () => {
     renderView({ allowed: false });
     expect(screen.getByText('Tu rol no tiene acceso a este presupuesto.')).toBeInTheDocument();
-    expect(mockedGet).not.toHaveBeenCalled();
+    expect(mockedIssue).not.toHaveBeenCalled();
   });
 
   it('si el presupuesto es de otro paciente no se imprime bajo esta ficha', async () => {
-    mockedGet.mockResolvedValue(planQuoteFixture({ patientId: 'otro' }));
+    mockedIssue.mockResolvedValue(planQuoteFixture({ patientId: 'otro' }));
     renderView();
     expect(await screen.findByText('No encontramos este presupuesto.')).toBeInTheDocument();
     await waitFor(() => expect(print).not.toHaveBeenCalled());
@@ -202,7 +202,7 @@ describe('PlanQuotePrintView (DX-012)', () => {
     const flat = (el: HTMLElement) => (el.textContent ?? '').replace(/\s/g, ' ');
 
     it('plan en EUR con el catálogo en VES: lo que se imprime lleva el precio de lista en VES y sin ahorro', async () => {
-      mockedGet.mockResolvedValue(eurQuote());
+      mockedIssue.mockResolvedValue(eurQuote());
       renderView();
       const table = await screen.findByRole('table', { name: 'Procedimientos del presupuesto' });
       expect(flat(table)).toContain('Precio de lista VES 80.000,00');
@@ -216,7 +216,7 @@ describe('PlanQuotePrintView (DX-012)', () => {
 
     it('no depende de las sedes: aunque no carguen o estén en otra moneda, imprime la moneda del presupuesto', async () => {
       jest.mocked(listLocations).mockRejectedValue(new Error('red'));
-      mockedGet.mockResolvedValue(eurQuote());
+      mockedIssue.mockResolvedValue(eurQuote());
       renderView();
       const table = await screen.findByRole('table', { name: 'Procedimientos del presupuesto' });
       expect(flat(table)).toContain('Precio de lista VES 80.000,00');
@@ -227,8 +227,8 @@ describe('PlanQuotePrintView (DX-012)', () => {
 
   describe('DX-354: el formato de la sede del presupuesto', () => {
     it('usa la sede del presupuesto, no la activa; sin ella «—», el aviso fuera del papel y Reintentar lo vuelve a leer', async () => {
-      mockedGet.mockResolvedValueOnce(planQuoteFixture({ regional: null }));
-      mockedGet.mockResolvedValueOnce(
+      mockedIssue.mockResolvedValueOnce(planQuoteFixture({ regional: null }));
+      mockedIssue.mockResolvedValueOnce(
         planQuoteFixture({ regional: { timeZone: 'America/New_York', locale: 'en-US', hourCycle: 'h12' } }),
       );
       renderView();

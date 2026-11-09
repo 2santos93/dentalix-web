@@ -69,6 +69,12 @@ interface PlanQuotePrintViewProps {
  * Vista imprimible del presupuesto (DX-012), fuera del shell, mismo patrón que
  * la del consentimiento y la receta: abre el diálogo de impresión UNA vez
  * cuando el presupuesto está en pantalla; la barra lleva `print:hidden`.
+ *
+ * DX-379: carga con `POST …/quote/issue`, así que abrirla fija la validez de un
+ * borrador o presentado sin fechas. Se llega desde «Imprimir presupuesto» (la
+ * ficha), «Ver el presupuesto completo» (el modal de aceptar) y «Presupuesto»
+ * (estado de cuenta): los tres imprimen al cargar, así que los tres cuentan
+ * como primera impresión. El modal de aceptar en sí sigue con el GET.
  */
 export function PlanQuotePrintView({
   token,
