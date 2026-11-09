@@ -69,6 +69,7 @@ export const copy = {
   partialPendingLink: (date: string) => `Lo no aceptado está en el presupuesto pendiente del ${date}`,
   partialRestLink: (date: string) => `Resto del plan aceptado el ${date}`,
   partiallyAccepted: 'Presupuesto aceptado en parte',
+  viewPendingPlan: 'Ver el pendiente',
   partiallyAcceptedHint: 'Lo no aceptado quedó en un presupuesto pendiente, enlazado desde este plan.',
   detailHeading: 'Detalle del plan',
   planStatusLabel: 'Estado del plan',

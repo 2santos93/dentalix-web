@@ -154,6 +154,20 @@ export function isPlanPartiallyAcceptable(plan: {
   return (plan.items ?? []).filter((item) => item.status === 'PROPOSED').length >= 2;
 }
 
+/**
+ * DX-417 (ronda 1, I-1): ¿es un presupuesto pendiente de una aceptación
+ * parcial que aún espera respuesta? `splitFromPlanId` es la procedencia y no
+ * cambia nunca; el chip «Pendiente de aceptación parcial» y el «· pendiente»
+ * del selector solo valen mientras siga presentado y sin aceptar.
+ */
+export function isPendingRest(plan: {
+  splitFromPlanId?: string | null;
+  status: TreatmentPlanStatus;
+  acceptance?: PlanAcceptanceSummary | null;
+}): boolean {
+  return Boolean(plan.splitFromPlanId) && plan.status === 'PRESENTED' && !plan.acceptance;
+}
+
 /** Ruta de la vista imprimible A4 (fuera del shell). */
 export function planQuotePrintHref(patientId: string, planId: string): string {
   return `/print/patients/${encodeURIComponent(patientId)}/treatment-plans/${encodeURIComponent(planId)}`;

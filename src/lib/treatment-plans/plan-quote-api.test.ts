@@ -5,6 +5,7 @@ import {
   canPrintPlanQuote,
   getPlanQuote,
   isPlanAcceptable,
+  isPendingRest,
   isPlanPartiallyAcceptable,
   issuePlanQuote,
   partialAcceptanceLine,
@@ -127,5 +128,20 @@ describe('plan-quote-api (DX-012)', () => {
     );
     expect(partialAcceptanceLine({ pendingItemIds: null, pendingTotal: null, pendingPlanId: null }, 'USD', money)).toBeNull();
     expect(partialRestLine('16/10/2026')).toBe('Resto de la aceptación parcial del 16/10/2026');
+  });
+
+  it('DX-417 (I-1): el pendiente solo es «pendiente» mientras siga presentado y sin aceptar', () => {
+    expect(isPendingRest({ splitFromPlanId: 'o', status: 'PRESENTED', acceptance: null })).toBe(true);
+    expect(isPendingRest({ splitFromPlanId: null, status: 'PRESENTED', acceptance: null })).toBe(false);
+    for (const status of ['ACCEPTED', 'REJECTED', 'CANCELLED', 'COMPLETED'] as const) {
+      expect(isPendingRest({ splitFromPlanId: 'o', status, acceptance: null })).toBe(false);
+    }
+    expect(
+      isPendingRest({
+        splitFromPlanId: 'o',
+        status: 'PRESENTED',
+        acceptance: { signerName: 'Ana', acceptedAt: '2026-10-16T15:00:00Z', remote: null },
+      }),
+    ).toBe(false);
   });
 });

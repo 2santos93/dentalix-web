@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { QUOTE_EXPIRED, type PlanQuote } from '@/lib/treatment-plans/plan-quote-api';
+import { isPendingRest, QUOTE_EXPIRED, type PlanQuote } from '@/lib/treatment-plans/plan-quote-api';
 import {
   createPlan,
   getPlan,
@@ -846,7 +846,14 @@ export function TreatmentPlansTab({
    */
   function handlePlanPartiallyAccepted(quote: PlanQuote | null) {
     if (quote) {
-      toast.success(copy.partiallyAccepted, { description: copy.partiallyAcceptedHint });
+      const pendingPlanId = quote.acceptance?.pendingPlanId ?? null;
+      // M-7: el aviso lleva al pendiente (el enlace sigue en la cabecera si el aviso se va).
+      toast.success(copy.partiallyAccepted, {
+        description: copy.partiallyAcceptedHint,
+        action: pendingPlanId
+          ? { label: copy.viewPendingPlan, onClick: () => setSelectedPlanId(pendingPlanId) }
+          : undefined,
+      });
       setSelectedPlanId(quote.planId);
     }
     void Promise.all([refreshPlanDetail(), refreshPlansInPlace(), refreshBalanceAndPayments()]);
@@ -886,27 +893,25 @@ export function TreatmentPlansTab({
   }
 
   const selectedPlan = plans.find((p) => p.id === selectedPlanId) ?? null;
-  // DX-417: el enlace entre el plan aceptado en parte y su presupuesto pendiente, con la fecha de la partición.
-  const splitLink = ((): { planId: string; label: string } | null => {
-    if (!selectedPlan) return null;
-    if (selectedPlan.partialPendingPlanId) {
-      const pending = plans.find((p) => p.id === selectedPlan.partialPendingPlanId);
-      const at = pending?.createdAt ?? selectedPlan.acceptedAt ?? null;
-      return {
-        planId: selectedPlan.partialPendingPlanId,
-        label: copy.partialPendingLink(stamp.date(at, selectedPlan.acceptedLocationId)),
-      };
-    }
-    if (selectedPlan.splitFromPlanId) {
-      const original = plans.find((p) => p.id === selectedPlan.splitFromPlanId);
-      const at = original?.acceptedAt ?? selectedPlan.createdAt;
-      return {
-        planId: selectedPlan.splitFromPlanId,
-        label: copy.partialRestLink(stamp.date(at, original?.acceptedLocationId ?? selectedPlan.presentedLocationId)),
-      };
-    }
-    return null;
-  })();
+  // DX-417: los enlaces entre el plan aceptado en parte y su presupuesto pendiente, con la fecha de la
+  // partición. Ronda 1 (M-5): un pendiente aceptado en parte otra vez lleva los dos.
+  const splitLinks: { planId: string; label: string }[] = [];
+  if (selectedPlan?.splitFromPlanId) {
+    const original = plans.find((p) => p.id === selectedPlan.splitFromPlanId);
+    const at = original?.acceptedAt ?? selectedPlan.createdAt;
+    splitLinks.push({
+      planId: selectedPlan.splitFromPlanId,
+      label: copy.partialRestLink(stamp.date(at, original?.acceptedLocationId ?? selectedPlan.presentedLocationId)),
+    });
+  }
+  if (selectedPlan?.partialPendingPlanId) {
+    const pending = plans.find((p) => p.id === selectedPlan.partialPendingPlanId);
+    const at = pending?.createdAt ?? selectedPlan.acceptedAt ?? null;
+    splitLinks.push({
+      planId: selectedPlan.partialPendingPlanId,
+      label: copy.partialPendingLink(stamp.date(at, selectedPlan.acceptedLocationId)),
+    });
+  }
   const signed = Boolean(planDetail?.acceptance);
   // DX-109: lo mismo que la API aplica con 409, para no ofrecerlo.
   const closed = planDetail ? isPlanClosed(planDetail.status) : false;
@@ -1012,7 +1017,7 @@ export function TreatmentPlansTab({
                     index + 1,
                     plan.optionLabel,
                     stamp,
-                    Boolean(plan.splitFromPlanId),
+                    isPendingRest(plan),
                   )}
                 </option>
               ))}
@@ -1045,24 +1050,24 @@ export function TreatmentPlansTab({
                   {/* DX-417: aceptado en parte, o el presupuesto pendiente que dejó. */}
                   {selectedPlan.partialPendingPlanId ? (
                     <StatusBadge kind="planSplit" status="PARTIAL" />
-                  ) : selectedPlan.splitFromPlanId ? (
+                  ) : isPendingRest(selectedPlan) ? (
                     <StatusBadge kind="planSplit" status="PENDING_REST" />
                   ) : null}
                 </p>
               ) : null}
-              {splitLink ? (
-                <p className="text-sm">
+              {splitLinks.map((link) => (
+                <p key={link.planId} className="text-sm">
                   <Button
                     type="button"
                     variant="link"
                     size="sm"
                     className="h-auto p-0 text-left whitespace-normal tabular-nums"
-                    onClick={() => setSelectedPlanId(splitLink.planId)}
+                    onClick={() => setSelectedPlanId(link.planId)}
                   >
-                    {splitLink.label}
+                    {link.label}
                   </Button>
                 </p>
-              ) : null}
+              ))}
             </div>
             {planDetail && (
               <FormField
