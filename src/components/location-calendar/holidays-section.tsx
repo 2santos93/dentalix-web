@@ -1,7 +1,8 @@
 'use client';
 import * as React from 'react';
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { CalendarDays, Pencil, Plus, Trash2, Upload } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { RegionalFormat } from '@/lib/format/regional-format';
@@ -69,6 +70,8 @@ interface HolidaysSectionProps {
 }
 
 type FormState = { holiday?: LocationHoliday; key: number } | null;
+/** Cuánto dura el resalte de la fila que chocó (DX-316-bis). */
+const HIGHLIGHT_MS = 4000;
 /** A dónde vuelve el foco cuando se cierra un modal: «Añadir festivo», «Importar» o las acciones de una fila. */
 type FocusTarget = { kind: 'add' } | { kind: 'import' } | { kind: 'row'; id: string };
 
@@ -97,6 +100,15 @@ export function HolidaysSection({ token, location, holidays, onChanged, noFormat
   const [importKey, setImportKey] = useState<number | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importSummary, setImportSummary] = useState<string | null>(null);
+  // DX-316-bis: la fila del festivo que chocó en el 409, resaltada un momento.
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    },
+    [],
+  );
   const addRef = useRef<HTMLButtonElement>(null);
   const importRef = useRef<HTMLButtonElement>(null);
   /** El resumen espera a que el diálogo se cierre (ver `importClosed`). */
@@ -157,6 +169,23 @@ export function HolidaysSection({ token, location, holidays, onChanged, noFormat
     focusTarget.current = { kind: 'add' };
     setForm((prev) => ({ key: (prev?.key ?? 0) + 1 }));
     setFormOpen(true);
+  }
+
+  /**
+   * DX-316-bis: «Ver el festivo existente» del 409. Cierra el modal, deja el
+   * foco en las acciones de esa fila (al cerrar, `restoreFocus`) y la resalta
+   * unos segundos para que se vea cuál es.
+   */
+  function showExisting(holidayId: string) {
+    focusTarget.current = { kind: 'row', id: holidayId };
+    setFormOpen(false);
+    setHighlightId(holidayId);
+    listRef.current
+      ?.querySelector(`[data-holiday-id="${CSS.escape(holidayId)}"]`)
+      ?.closest('tr')
+      ?.scrollIntoView?.({ block: 'center' });
+    if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    highlightTimer.current = setTimeout(() => setHighlightId(null), HIGHLIGHT_MS);
   }
 
   function openEdit(holiday: LocationHoliday) {
@@ -279,7 +308,14 @@ export function HolidaysSection({ token, location, holidays, onChanged, noFormat
                   </TableHeader>
                   <TableBody>
                     {block.items.map((holiday) => (
-                      <TableRow key={holiday.id} className="sm:h-11">
+                      <TableRow
+                        key={holiday.id}
+                        data-highlighted={highlightId === holiday.id || undefined}
+                        className={cn(
+                          'sm:h-11 transition-colors',
+                          highlightId === holiday.id && 'bg-primary-subtle',
+                        )}
+                      >
                         <TableCell className="whitespace-nowrap text-ink tabular-nums" data-label={copy.colDate}>
                           {dateText(holiday, fmt)}
                         </TableCell>
@@ -328,6 +364,7 @@ export function HolidaysSection({ token, location, holidays, onChanged, noFormat
           holiday={form.holiday}
           onSaved={saved}
           onCloseAutoFocus={restoreFocus}
+          onShowExisting={showExisting}
         />
       ) : null}
 

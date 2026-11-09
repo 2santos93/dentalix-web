@@ -184,6 +184,13 @@ describe('HolidaysSection (DX-316, spec §7.2)', () => {
     await user.click(screen.getByRole('button', { name: holidayFormCopy.create }));
     const dialog = screen.getByRole('dialog');
     expect(await within(dialog).findByText('Ese día ya es festivo cada año: «Día de la sede».')).toBeInTheDocument();
+    // DX-316-bis: «Ver el festivo existente» cierra el modal, resalta la fila
+    // del festivo que choca y deja el foco en sus acciones.
+    await user.click(within(dialog).getByRole('button', { name: 'Ver el festivo existente' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const row = screen.getByText('Día de la sede').closest('tr');
+    expect(row).toHaveAttribute('data-highlighted', 'true');
+    await waitFor(() => expect(within(row!).getByRole('button')).toHaveFocus());
   });
 
   it('delete asks «¿Eliminar «{nombre}»? Los plazos ya calculados no cambian.» and removes the row', async () => {
