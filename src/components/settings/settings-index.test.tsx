@@ -11,7 +11,7 @@ function tokenForRole(role: string): string {
 }
 
 describe('SettingsIndex (DX-282)', () => {
-  it('ADMIN: siete secciones y las 30 pantallas como enlaces', () => {
+  it('ADMIN: siete secciones y las 31 pantallas como enlaces', () => {
     render(<SettingsIndex token={tokenForRole('ADMIN')} />);
 
     const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
@@ -24,7 +24,7 @@ describe('SettingsIndex (DX-282)', () => {
       'Datos y seguridad',
       'Herramientas y registros',
     ]);
-    expect(screen.getAllByRole('link')).toHaveLength(30);
+    expect(screen.getAllByRole('link')).toHaveLength(31);
     expect(
       within(screen.getByRole('list', { name: 'Tu cuenta' })).getByRole('link', { name: /^Mi perfil Tu nombre/ }),
     ).toHaveAttribute('href', '/settings/profile');
@@ -51,8 +51,19 @@ describe('SettingsIndex (DX-282)', () => {
     render(<SettingsIndex token={tokenForRole(role)} />);
 
     const links = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
-    expect(links).toEqual(['/settings/profile', '/settings/sedes', '/settings/horarios', '/settings/privacidad']);
-    expect(screen.queryByRole('heading', { name: 'Cobro' })).not.toBeInTheDocument();
+    // DX-379: de Cobro solo «Presupuestos» (la validez la leen todos).
+    expect(links).toEqual([
+      '/settings/profile',
+      '/settings/sedes',
+      '/settings/horarios',
+      '/settings/presupuestos',
+      '/settings/privacidad',
+    ]);
+    expect(
+      within(screen.getByRole('list', { name: 'Cobro' }))
+        .getAllByRole('link')
+        .map((link) => link.getAttribute('href')),
+    ).toEqual(['/settings/presupuestos']);
     expect(screen.queryByRole('heading', { name: 'Historia clínica' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Consentimientos/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Accesos de soporte/ })).not.toBeInTheDocument();
@@ -81,7 +92,9 @@ describe('splitSettingsColumns', () => {
     const [left, right] = splitSettingsColumns(sections);
     expect([...left, ...right]).toEqual(sections);
     const rows = (column: typeof sections) => column.reduce((n, s) => n + s.entries.length + 1.5, 0);
-    expect(Math.abs(rows(left) - rows(right))).toBeLessThanOrEqual(8);
+    // Las secciones no se parten ni se reordenan: con «Cobro» en 8 entradas
+    // (DX-379) el mejor corte deja 8,5 filas de diferencia.
+    expect(Math.abs(rows(left) - rows(right))).toBeLessThanOrEqual(9);
     expect(left.length).toBeGreaterThan(0);
     expect(right.length).toBeGreaterThan(0);
   });
