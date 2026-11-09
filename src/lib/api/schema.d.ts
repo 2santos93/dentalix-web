@@ -2946,6 +2946,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/appointment-confirmations/{token}/wants-earlier": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * DX-437: el paciente pide (o quita) que le avisen si se libera un hueco antes
+         * @description Pone o quita «Adelantar si hay hueco» en la cita del enlace, con la franja (MORNING, AFTERNOON o ANY) y la marca de que lo pidió el paciente. Vale con el enlace pendiente o ya respondido; caducado o sin efecto, 410. La cita tiene que estar agendada o confirmada, en el futuro y en un día posterior a hoy en la sede (400 en español si no). Queda en la auditoría como UPDATE de APPOINTMENT, sin usuario, origen PUBLIC_LINK y `reason` CONFIRMATION_LINK_EARLIER_REQUESTED o CONFIRMATION_LINK_EARLIER_CLEARED. Mismo límite de peticiones por IP que el resto del enlace.
+         */
+        post: operations["PublicAppointmentConfirmationsController_wantsEarlier"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/treatment-plans/unscheduled": {
         parameters: {
             query?: never;
@@ -10734,6 +10754,11 @@ export interface components {
             color: string;
         };
         /**
+         * @description DX-437: franja en la que el paciente quiere adelantar la cita (solo con wantsEarlier). null = cualquiera / lo marcó el personal.
+         * @enum {string}
+         */
+        EarlierWindow: "MORNING" | "AFTERNOON" | "ANY";
+        /**
          * @description DX-279: quién canceló — PATIENT_LINK (enlace del paciente), STAFF_FOR_PATIENT (el personal por el paciente) o CLINIC (la clínica; nunca tardía).
          * @enum {string}
          */
@@ -10892,6 +10917,13 @@ export interface components {
             callbackRequestedAt: string | null;
             /** @description DX-210: «Adelantar si hay hueco». Se apaga al moverla a un hueco libre. */
             wantsEarlier: boolean;
+            /** @description DX-437: franja en la que el paciente quiere adelantar la cita (solo con wantsEarlier). null = cualquiera / lo marcó el personal. */
+            earlierWindow: components["schemas"]["EarlierWindow"] | null;
+            /**
+             * Format: date-time
+             * @description DX-437: cuándo pidió EL PACIENTE adelantar la cita desde el enlace de confirmación. null = lo marcó el personal o no está marcada.
+             */
+            earlierRequestedAt: string | null;
             /**
              * Format: date-time
              * @description DX-200: cuándo recepción marcó «Llegó» (reloj del servidor). null en las citas antiguas o si se deshizo la llegada.
@@ -11026,6 +11058,13 @@ export interface components {
             callbackRequestedAt: string | null;
             /** @description DX-210: «Adelantar si hay hueco». Se apaga al moverla a un hueco libre. */
             wantsEarlier: boolean;
+            /** @description DX-437: franja en la que el paciente quiere adelantar la cita (solo con wantsEarlier). null = cualquiera / lo marcó el personal. */
+            earlierWindow: components["schemas"]["EarlierWindow"] | null;
+            /**
+             * Format: date-time
+             * @description DX-437: cuándo pidió EL PACIENTE adelantar la cita desde el enlace de confirmación. null = lo marcó el personal o no está marcada.
+             */
+            earlierRequestedAt: string | null;
             /**
              * Format: date-time
              * @description DX-200: cuándo recepción marcó «Llegó» (reloj del servidor). null en las citas antiguas o si se deshizo la llegada.
@@ -11168,6 +11207,13 @@ export interface components {
             callbackRequestedAt: string | null;
             /** @description DX-210: «Adelantar si hay hueco». Se apaga al moverla a un hueco libre. */
             wantsEarlier: boolean;
+            /** @description DX-437: franja en la que el paciente quiere adelantar la cita (solo con wantsEarlier). null = cualquiera / lo marcó el personal. */
+            earlierWindow: components["schemas"]["EarlierWindow"] | null;
+            /**
+             * Format: date-time
+             * @description DX-437: cuándo pidió EL PACIENTE adelantar la cita desde el enlace de confirmación. null = lo marcó el personal o no está marcada.
+             */
+            earlierRequestedAt: string | null;
             /**
              * Format: date-time
              * @description DX-200: cuándo recepción marcó «Llegó» (reloj del servidor). null en las citas antiguas o si se deshizo la llegada.
@@ -11420,6 +11466,13 @@ export interface components {
             callbackRequestedAt: string | null;
             /** @description DX-210: «Adelantar si hay hueco». Se apaga al moverla a un hueco libre. */
             wantsEarlier: boolean;
+            /** @description DX-437: franja en la que el paciente quiere adelantar la cita (solo con wantsEarlier). null = cualquiera / lo marcó el personal. */
+            earlierWindow: components["schemas"]["EarlierWindow"] | null;
+            /**
+             * Format: date-time
+             * @description DX-437: cuándo pidió EL PACIENTE adelantar la cita desde el enlace de confirmación. null = lo marcó el personal o no está marcada.
+             */
+            earlierRequestedAt: string | null;
             /**
              * Format: date-time
              * @description DX-200: cuándo recepción marcó «Llegó» (reloj del servidor). null en las citas antiguas o si se deshizo la llegada.
@@ -13011,6 +13064,12 @@ export interface components {
              * @example h12
              */
             hourCycle: components["schemas"]["HourCycle"] | null;
+            /** @description DX-437: el paciente pidió que le avisen si se libera un hueco antes («Adelantar si hay hueco»). */
+            wantsEarlier: boolean;
+            /** @description DX-437: franja pedida (solo con wantsEarlier). null = cualquiera. */
+            earlierWindow: components["schemas"]["EarlierWindow"] | null;
+            /** @description DX-437: se puede pedir (o quitar) ahora: cita agendada o confirmada, futura y de un día posterior a hoy en la sede. */
+            earlierAllowed: boolean;
         };
         ConfirmationLinkDto: {
             /** @description URL pública en el host de la clínica. Contiene el token en claro: se entrega solo aquí. */
@@ -13071,6 +13130,12 @@ export interface components {
              * @description DX-291: versión de la política que mostró la página (null = ninguna). Si ya no es la vigente: 409 y la página se recarga.
              */
             policyVersionId?: string | null;
+        };
+        PublicWantsEarlierDto: {
+            /** @description `true` = avisarme si se libera un hueco antes; `false` = quitar la petición. */
+            wantsEarlier: boolean;
+            /** @description Franja preferida; sin ella, ANY. Se ignora con `wantsEarlier: false`. */
+            preferredWindow?: components["schemas"]["EarlierWindow"];
         };
         PlanVisitItemDetailDto: {
             /** Format: uuid */
@@ -29236,6 +29301,59 @@ export interface operations {
                 content?: never;
             };
             /** @description El enlace caducó o la cita cambió desde que se envió. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicAppointmentConfirmationsController_wantsEarlier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublicWantsEarlierDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicAppointmentConfirmationDto"];
+                };
+            };
+            /** @description La cita ya no se puede adelantar (cancelada, atendida…), ya pasó o es hoy. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token desconocido o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace caducó o la cita cambió. */
             410: {
                 headers: {
                     [name: string]: unknown;

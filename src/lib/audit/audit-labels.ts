@@ -208,6 +208,8 @@ const PATIENT_CONFIRMATION_REASONS = new Set([
   'CONFIRMATION_LINK_CONFIRMED',
   'CONFIRMATION_LINK_CANCELLED',
   'CONFIRMATION_LINK_CALL_REQUESTED',
+  'CONFIRMATION_LINK_EARLIER_REQUESTED',
+  'CONFIRMATION_LINK_EARLIER_CLEARED',
 ]);
 
 /**
@@ -638,12 +640,16 @@ const CONFIRMATION_LINK_REASONS: Record<string, string> = {
   CONFIRMATION_LINK_CONFIRMED: 'Cita confirmada',
   CONFIRMATION_LINK_CANCELLED: 'Cita cancelada',
   CONFIRMATION_LINK_CALL_REQUESTED: 'Pidió que lo llamen',
+  // DX-437
+  CONFIRMATION_LINK_EARLIER_REQUESTED: 'Pidió que le avisen si se libera un hueco antes',
+  CONFIRMATION_LINK_EARLIER_CLEARED: 'Quitó el aviso de hueco anterior',
 };
 
 /** De dónde salió: recepción con el botón de la agenda o el paciente con el enlace. */
 const CONFIRMATION_LINK_ORIGINS: Partial<Record<AuditOrigin, string>> = {
   STAFF: 'por el personal',
   LINK: 'desde el enlace del paciente',
+  PUBLIC_LINK: 'desde el enlace del paciente',
 };
 
 /**
