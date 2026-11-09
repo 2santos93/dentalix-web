@@ -5,7 +5,11 @@ import { apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { API_URL } from './support/urls';
 import { E2E_REGION } from './support/regional';
 import { axeInBothThemes } from './support/axe';
-import { expectNoHorizontalScroll } from './support/layout';
+import {
+  expectDialogInsideViewport,
+  expectNoHorizontalOverflowInDialog,
+  expectNoHorizontalScroll,
+} from './support/layout';
 import { shot } from './support/qa-shot';
 import { regionalFormat } from '../src/lib/format/regional-format';
 import { moneyWithCode } from '../src/lib/format/sede-number';
@@ -15,10 +19,12 @@ import { NO_CURRENCY_TEXTS } from '../src/lib/format/currency-text';
  * e2e (DX-379, porción B): «Actualizar precios».
  *
  * En una clínica nueva: un procedimiento del catálogo a 100 USD, un plan
- * presentado con él; el catálogo sube a 120 por la API. En la ficha,
- * «Actualizar precios» enseña 100 → 120 y la validez renovada; al aplicar, el
- * plan cuesta 120 y la API guarda la validez nueva. axe limpio en el asistente
- * y nada se desplaza en horizontal; capturas a 1440 y 390 px.
+ * presentado con él; el catálogo sube a 120 por la API. En la ficha, a 390 px
+ * (tarjetas) y a 1440 px (tabla), «Actualizar precios» enseña 100 → 120 y la
+ * validez renovada, con axe limpio, el diálogo dentro de la pantalla y sin
+ * desbordar en horizontal, en la vista previa y en la confirmación; a 1440 se
+ * aplica: el plan cuesta 120 y la API guarda la validez nueva. Después, el
+ * asistente dice que no hay precios que actualizar.
  */
 const suffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 12);
 const clinic = {
@@ -33,9 +39,10 @@ const usd = (amount: number) => moneyWithCode(amount, 'USD', fmt, NO_CURRENCY_TE
 /** `Intl` separa con espacios duros: se compara con espacios normales. */
 const norm = (text: string) => text.replace(/\s+/g, ' ').trim();
 
+// El teléfono primero (se cancela), el escritorio después (se aplica).
 const VIEWPORTS = [
-  { width: 1440, height: 900 },
   { width: 390, height: 844 },
+  { width: 1440, height: 900 },
 ] as const;
 
 async function apiPatch(request: APIRequestContext, s: ApiSession, path: string, body: object): Promise<void> {
@@ -86,38 +93,68 @@ test('el catálogo sube de 100 a 120 USD: «Actualizar precios» lo enseña, lo 
   await apiPatch(request, admin, `/catalog/items/${catalog.id}`, { defaultPrice: 120 });
 
   await loginAs(page, admin.origin, clinic.email, clinic.password);
-  await page.setViewportSize(VIEWPORTS[0]);
-  await page.goto(`${admin.origin}/patients/${patient.id}?tab=treatment-plans`);
   const panel = page.locator('#tabpanel-treatment-plans');
-  await panel.getByRole('button', { name: 'Actualizar precios' }).click({ timeout: 15_000 });
-
-  // --- Paso 1: vista previa 100 → 120 y la validez renovada.
   const dialog = page.getByRole('dialog', { name: 'Actualizar precios' });
-  const lines = dialog.getByRole('table', { name: 'Procedimientos a actualizar' });
-  const row = lines.getByRole('row', { name: new RegExp(`Resina ${suffix}`) });
-  await expect(row).toBeVisible({ timeout: 15_000 });
-  const rowText = norm((await row.textContent()) ?? '');
-  expect(rowText).toContain(norm(usd(100)));
-  expect(rowText).toContain(norm(usd(120)));
-  expect(rowText).toContain(norm(`Sube ${usd(20)}`));
-  await expect(dialog.getByTestId('reprice-validity')).toContainText('La validez se renueva hasta el');
-  const previewAxe = await axeInBothThemes(page, dialog);
-  expect(previewAxe.light, 'axe de la vista previa (claro)').toEqual([]);
-  expect(previewAxe.dark, 'axe de la vista previa (oscuro)').toEqual([]);
-  await expectNoHorizontalScroll(page);
-  await shot(page, 'dx379b-preview', VIEWPORTS[0].width);
 
-  // --- Paso 2: confirmar y aplicar.
-  await dialog.getByRole('button', { name: 'Continuar' }).click();
-  const summary = dialog.getByRole('region', { name: 'Resumen de la actualización' });
-  await expect(summary).toContainText('1 procedimiento');
-  const confirmAxe = await axeInBothThemes(page, dialog);
-  expect(confirmAxe.light, 'axe de la confirmación (claro)').toEqual([]);
-  expect(confirmAxe.dark, 'axe de la confirmación (oscuro)').toEqual([]);
-  await shot(page, 'dx379b-confirm', VIEWPORTS[0].width);
-  await dialog.getByRole('button', { name: 'Actualizar precios' }).click();
-  await expect(dialog).toBeHidden({ timeout: 15_000 });
-  await expect(page.getByText('Precios actualizados')).toBeVisible();
+  async function expectDialogClean(width: number, what: string): Promise<void> {
+    const found = await axeInBothThemes(page, dialog);
+    expect(found.light, `axe de ${what} a ${width} px (claro)`).toEqual([]);
+    expect(found.dark, `axe de ${what} a ${width} px (oscuro)`).toEqual([]);
+    await expectNoHorizontalOverflowInDialog(dialog);
+    await expectDialogInsideViewport(page, dialog);
+    await expectNoHorizontalScroll(page);
+  }
+
+  // --- 1. 390 y 1440 px, ANTES de aplicar: vista previa 100 → 120 y confirmación.
+  // A 390 px se cancela; a 1440 px se aplica.
+  for (const viewport of VIEWPORTS) {
+    await page.setViewportSize(viewport);
+    await page.goto(`${admin.origin}/patients/${patient.id}?tab=treatment-plans`);
+    await panel.getByRole('button', { name: 'Actualizar precios' }).click({ timeout: 15_000 });
+
+    // En el teléfono, la lista son tarjetas (`ul`); desde 640 px, una tabla.
+    const phone = viewport.width < 640;
+    const lines = phone
+      ? dialog.getByRole('list', { name: 'Procedimientos a actualizar' })
+      : dialog.getByRole('table', { name: 'Procedimientos a actualizar' });
+    const line = phone
+      ? lines.getByRole('listitem').filter({ hasText: `Resina ${suffix}` })
+      : lines.getByRole('row', { name: new RegExp(`Resina ${suffix}`) });
+    await expect(line).toBeVisible({ timeout: 15_000 });
+    await expect(dialog.getByRole(phone ? 'table' : 'list', { name: 'Procedimientos a actualizar' })).toHaveCount(0);
+    const lineText = norm((await line.textContent()) ?? '');
+    expect(lineText).toContain(norm(usd(100)));
+    expect(lineText).toContain(norm(usd(120)));
+    expect(lineText).toContain(norm(`Sube ${usd(20)}`));
+    const box = line.getByRole('checkbox', { name: new RegExp(`Actualizar Resina ${suffix}`) });
+    await expect(box).toBeChecked();
+    // I-4: el blanco táctil de la casilla (su etiqueta) mide al menos 44 px.
+    const target = await line.getByTestId('reprice-line-select').boundingBox();
+    expect(target?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expect(target?.width ?? 0).toBeGreaterThanOrEqual(44);
+    await expect(dialog.getByTestId('reprice-validity')).toContainText('La validez se renueva hasta el');
+    await expectDialogClean(viewport.width, 'la vista previa');
+    await shot(page, 'dx379b-preview', viewport.width);
+
+    await dialog.getByRole('button', { name: 'Continuar' }).click();
+    const summary = dialog.getByRole('region', { name: 'Resumen de la actualización' });
+    await expect(summary).toContainText('1 procedimiento');
+    expect(norm((await summary.textContent()) ?? '')).toContain(norm(`Sube ${usd(20)}`));
+    await expectDialogClean(viewport.width, 'la confirmación');
+    await shot(page, 'dx379b-confirm', viewport.width);
+
+    if (phone) {
+      await dialog.getByRole('button', { name: 'Cancelar' }).click();
+      await expect(dialog).toBeHidden();
+      continue;
+    }
+    // --- 2. Aplicar (1440 px).
+    const apply = dialog.getByRole('button', { name: 'Actualizar precios' });
+    await expect(apply).toBeEnabled();
+    await apply.click();
+    await expect(dialog).toBeHidden({ timeout: 15_000 });
+    await expect(page.getByText('Precios actualizados')).toBeVisible();
+  }
 
   // El plan cuesta 120 y la validez guardada es la renovada.
   const after = await storedPlan(request, admin, plan.id);
@@ -125,7 +162,7 @@ test('el catálogo sube de 100 a 120 USD: «Actualizar precios» lo enseña, lo 
   expect(after.quoteExpired).toBe(false);
   expect(after.quoteValidUntil).not.toBeNull();
   const until = fmt.civilDate(after.quoteValidUntil!);
-  await expect(panel.locator('#tp-detail-heading + p').getByTestId('quote-valid-until')).toHaveText(
+  await expect(panel.getByTestId('tp-plan-status-line').getByTestId('quote-valid-until')).toHaveText(
     `Válido hasta el ${until}`,
     { timeout: 15_000 },
   );
@@ -133,15 +170,12 @@ test('el catálogo sube de 100 a 120 USD: «Actualizar precios» lo enseña, lo 
     .poll(async () => norm((await panel.textContent()) ?? ''), { timeout: 15_000 })
     .toContain(norm(usd(120)));
 
-  // --- 1440 y 390 px: la ficha y el asistente (ya sin nada que cambiar).
-  for (const viewport of VIEWPORTS) {
-    await page.setViewportSize(viewport);
-    await page.goto(`${admin.origin}/patients/${patient.id}?tab=treatment-plans`);
-    await panel.getByRole('button', { name: 'Actualizar precios' }).click({ timeout: 15_000 });
-    await expect(dialog.getByText(/Resina/).first()).toBeVisible({ timeout: 15_000 });
-    await expectNoHorizontalScroll(page);
-    await shot(page, 'dx379b-after', viewport.width);
-    await dialog.getByRole('button', { name: 'Cancelar' }).click();
-    await expect(dialog).toBeHidden();
-  }
+  // --- 3. Ya aplicado, a 390 px: nada que actualizar en un plan vigente.
+  await page.setViewportSize(VIEWPORTS[1]);
+  await page.goto(`${admin.origin}/patients/${patient.id}?tab=treatment-plans`);
+  await panel.getByRole('button', { name: 'Actualizar precios' }).click({ timeout: 15_000 });
+  await expect(dialog.getByText('No hay precios que actualizar.')).toBeVisible({ timeout: 15_000 });
+  await expect(dialog.getByRole('button', { name: 'Continuar' })).toBeDisabled();
+  await expectNoHorizontalOverflowInDialog(dialog);
+  await shot(page, 'dx379b-after', VIEWPORTS[1].width);
 });

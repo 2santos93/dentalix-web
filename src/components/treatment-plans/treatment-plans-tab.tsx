@@ -976,7 +976,7 @@ export function TreatmentPlansTab({
                 {copy.detailHeading}
               </h2>
               {selectedPlan ? (
-                <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <p data-testid="tp-plan-status-line" className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <StatusBadge kind="treatmentPlan" status={selectedPlan.status} />
                   {/* DX-379: hasta qué día valen los precios (o desde cuándo no). */}
                   <QuoteValidity
