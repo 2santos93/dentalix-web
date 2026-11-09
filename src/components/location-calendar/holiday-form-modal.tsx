@@ -24,6 +24,8 @@ export const holidayFormCopy = {
   dateMissing: 'Elige la fecha del festivo.',
   nameMissing: 'Escribe el nombre del festivo.',
   genericError: 'No pudimos guardar el festivo. Intenta de nuevo.',
+  // DX-316-bis: el 409 trae el id del festivo que ocupa el día.
+  showExisting: 'Ver el festivo existente',
 };
 
 const copy = holidayFormCopy;
@@ -50,6 +52,8 @@ interface HolidayFormModalProps {
   onSaved: (saved: LocationHoliday) => void;
   /** Ver `FormModal`: quien llama decide a dónde vuelve el foco al cerrar. */
   onCloseAutoFocus?: (event: Event) => void;
+  /** DX-316-bis: «Ver el festivo existente» del 409 (`holidayId`): quien llama lo enseña. */
+  onShowExisting?: (holidayId: string) => void;
 }
 
 /**
@@ -68,6 +72,7 @@ export function HolidayFormModal({
   holiday,
   onSaved,
   onCloseAutoFocus,
+  onShowExisting,
 }: HolidayFormModalProps) {
   const editing = holiday !== undefined;
   const [date, setDate] = useState(holiday?.date ?? '');
@@ -75,6 +80,7 @@ export function HolidayFormModal({
   const [recurring, setRecurring] = useState(holiday?.recurring ?? false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [conflictId, setConflictId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   function focusField(field: Field) {
@@ -112,6 +118,7 @@ export function HolidayFormModal({
     }
     setSubmitting(true);
     setFormError(null);
+    setConflictId(null);
     try {
       const saved = holiday
         ? await updateHoliday(token, locationId, holiday.id, patch)
@@ -127,6 +134,7 @@ export function HolidayFormModal({
         return;
       }
       setFormError(text);
+      if (err instanceof ApiError && err.status === 409 && err.holidayId) setConflictId(err.holidayId);
     } finally {
       setSubmitting(false);
     }
@@ -153,6 +161,11 @@ export function HolidayFormModal({
       onSubmit={handleSubmit}
       submitLabel={editing ? copy.save : copy.create}
       submitting={submitting}
+      errorAction={
+        conflictId && onShowExisting
+          ? { label: copy.showExisting, onAction: () => onShowExisting(conflictId) }
+          : null
+      }
       error={formError}
       onCloseAutoFocus={onCloseAutoFocus}
     >
