@@ -101,6 +101,17 @@ const quoteValidity = {
 } satisfies Presentations<'EXPIRED'>;
 
 /**
+ * Aceptación parcial del presupuesto (DX-417), un chip junto al estado: el
+ * original queda «Aceptado parcialmente» (info, el tono de Aceptado) y el
+ * presupuesto nuevo con lo no aceptado espera la respuesta del paciente
+ * (warning, el tono de Presentado).
+ */
+const planSplit = {
+  PARTIAL: s('info', 'Aceptado parcialmente'),
+  PENDING_REST: s('warning', 'Pendiente de aceptación parcial'),
+} satisfies Presentations<'PARTIAL' | 'PENDING_REST'>;
+
+/**
  * Cómo cambia un precio al actualizarlo (DX-379 B): sube pide atención
  * (warning: el paciente pagará más), baja es a favor del paciente (success) y
  * sin cambio es neutro. Colorea la diferencia de la vista previa.
@@ -321,6 +332,7 @@ export const STATUS_PRESENTATION = {
   reminder,
   treatmentPlan,
   quoteValidity,
+  planSplit,
   priceChange,
   treatmentPlanItem,
   toothRecord,
