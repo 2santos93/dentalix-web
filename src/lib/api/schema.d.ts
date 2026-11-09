@@ -3246,6 +3246,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/treatment-plans/{planId}/acceptance/partial-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vista previa de aceptar solo algunos procedimientos del presupuesto (DX-417)
+         * @description Compone el presupuesto de lo aceptado como se firmaría (`accepted`, con su `contentHash`), lo que pasaría al presupuesto pendiente (`pending`) y los totales del plan entero (`original`); aceptado + pendiente = original, ítem a ítem. No escribe ni bloquea. Para firmar: POST …/acceptance con `partial.itemIds` (los mismos) y `contentHash` = `accepted.contentHash`. Con un presupuesto vencido que se acepta actualizando los precios, `reprice: true` recotiza TODO el plan (sin escribir) y parte el resultado: `repricing.previewHash` va en `expired.repricePreviewHash`.
+         */
+        post: operations["PlanQuoteController_partialAcceptancePreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/price-quote": {
         parameters: {
             query?: never;
@@ -13456,6 +13476,16 @@ export interface components {
             optionGroupId: string | null;
             /** @example Opción A: implante */
             optionLabel: string | null;
+            /**
+             * Format: uuid
+             * @description DX-417: este plan es el presupuesto pendiente que dejó la aceptación parcial de ese plan (con los procedimientos no aceptados); null si no. «Resto del plan aceptado el …»
+             */
+            splitFromPlanId: string | null;
+            /**
+             * Format: uuid
+             * @description DX-417: este plan se aceptó en parte («Aceptado parcialmente») y lo no aceptado está en ese plan pendiente; null si no. En la lista y en GET by id
+             */
+            partialPendingPlanId?: string | null;
             /** Format: date-time */
             presentedAt: string | null;
             /**
@@ -13754,6 +13784,15 @@ export interface components {
              * @description REPRICE: la recotización hecha en la firma (treatment_plan_repricings, source ACCEPT).
              */
             repricingId: string | null;
+            /**
+             * Format: uuid
+             * @description DX-417: aceptación PARCIAL. El presupuesto pendiente (plan PRESENTED) con los procedimientos no aceptados; null si se aceptó entero. Fuera del contenido firmado.
+             */
+            pendingPlanId: string | null;
+            /** @description DX-417: los procedimientos que quedaron pendientes al firmar (aunque luego se edite el pendiente); null si se aceptó entero. */
+            pendingItemIds: string[] | null;
+            /** @description DX-417: total de lo pendiente al firmar, en la moneda del plan. Línea del documento: «Aceptación parcial: N procedimientos ({moneda} {pendingTotal}) quedan en un presupuesto pendiente.». null si se aceptó entero. */
+            pendingTotal: number | null;
         };
         PlanQuoteDocumentDto: {
             /** @description Organización clínica actual; separada del contenido firmado. */
@@ -13812,6 +13851,10 @@ export interface components {
             /** @description REPRICE: el `repricing.previewHash` de POST …/acceptance/reprice-preview. Si los precios vigentes cambiaron desde entonces: 409 `REPRICE_PREVIEW_STALE`. */
             repricePreviewHash?: string;
         };
+        PartialAcceptanceItemsDto: {
+            /** @description Ítems vivos de ESTE plan que se aceptan (404 si alguno no lo es). Al menos uno y no todos (todos: 400, que se acepte entero). Los ítems ya aceptados o realizados tienen que estar (400). */
+            itemIds: string[];
+        };
         AcceptTreatmentPlanDto: {
             /** @description Nombre de quien firma (el paciente o su representante) */
             signerName: string;
@@ -13821,6 +13864,8 @@ export interface components {
             contentHash: string;
             /** @description DX-379 (C): obligatorio si el presupuesto está vencido (sin él: 409 `QUOTE_EXPIRED`); con un presupuesto no vencido: 400. */
             expired?: components["schemas"]["ExpiredAcceptanceDto"];
+            /** @description DX-417: aceptar solo estos procedimientos (presupuesto PRESENTED, sin abonos, plan de cuotas ni saldo a favor). Los demás pasan, con su mismo id, a un plan nuevo PRESENTED enlazado al original (`splitFromPlanId`). `contentHash` es entonces el de `accepted` en POST …/acceptance/partial-preview. Con `expired.mode = REPRICE` se recotiza TODO el plan y después se parte (la vista previa, con `reprice: true`). */
+            partial?: components["schemas"]["PartialAcceptanceItemsDto"];
         };
         /**
          * @description De dónde sale la referencia; null en un ítem libre.
@@ -13943,6 +13988,29 @@ export interface components {
             repricing: components["schemas"]["RepricingPreviewDto"];
             /** @description El presupuesto como se firmaría, con los precios y la validez nuevos. Su `contentHash` va en `contentHash` de la aceptación. */
             quote: components["schemas"]["PlanQuoteDocumentDto"];
+        };
+        PartialAcceptancePreviewRequestDto: {
+            /** @description Ítems vivos de ESTE plan que se aceptan (404 si alguno no lo es). Al menos uno y no todos (todos: 400, que se acepte entero). Los ítems ya aceptados o realizados tienen que estar (400). */
+            itemIds: string[];
+            /** @description Solo con un presupuesto vencido que se aceptará actualizando los precios (`expired.mode = REPRICE`): recotiza TODO el plan como …/acceptance/reprice-preview y parte el resultado. Con un presupuesto no vencido: 400. */
+            reprice?: boolean;
+        };
+        PartialAcceptancePendingDto: {
+            items: components["schemas"]["PlanQuoteItemDto"][];
+            /** @description Una fila por moneda (la del plan) */
+            totals: components["schemas"]["PlanQuoteTotalDto"][];
+        };
+        PartialAcceptanceOriginalDto: {
+            /** @description Aceptado + pendiente, ítem a ítem (sin repartos) */
+            totals: components["schemas"]["PlanQuoteTotalDto"][];
+        };
+        PartialAcceptancePreviewDto: {
+            /** @description El presupuesto de lo aceptado, como se firmaría. Su `contentHash` va en `contentHash` de la aceptación con `partial`. */
+            accepted: components["schemas"]["PlanQuoteDocumentDto"];
+            pending: components["schemas"]["PartialAcceptancePendingDto"];
+            original: components["schemas"]["PartialAcceptanceOriginalDto"];
+            /** @description Con `reprice: true`: la recotización de TODO el plan; su `previewHash` va en `expired.repricePreviewHash`. Si no, null. */
+            repricing: components["schemas"]["RepricingPreviewDto"] | null;
         };
         PriceQuoteDto: {
             /** @description Precio de catálogo (`defaultPrice`); null si no tiene */
@@ -30066,7 +30134,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Plan aceptado: ACCEPTED, sus ítems propuestos pasan a aceptados y quedan congelados; las demás opciones abiertas de su grupo pasan a REJECTED (otra opción aceptada) en la misma transacción */
+            /** @description Plan aceptado: ACCEPTED, sus ítems propuestos pasan a aceptados y quedan congelados; las demás opciones abiertas de su grupo pasan a REJECTED (otra opción aceptada) en la misma transacción. DX-417: con `partial`, el plan queda ACCEPTED solo con los elegidos (lo firmado es su presupuesto) y los demás pasan a un plan nuevo PRESENTED, fuera del grupo de opciones, enlazado (`splitFromPlanId`) y con la misma presentación, validez, moneda y profesional; `acceptance.pendingPlanId`, `pendingItemIds` y `pendingTotal` lo dicen */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -30075,7 +30143,7 @@ export interface operations {
                     "application/json": components["schemas"]["PlanQuoteDocumentDto"];
                 };
             };
-            /** @description Sin firma, firma no PNG o de más de 200 KB, sin nombre de quien firma, o plan sin ítems. DX-379 (C): `expired` con un presupuesto no vencido; ORIGINAL_PRICES sin motivo, OTHER sin nota, nota de más de 200; REPRICE sin `repricePreviewHash` o con motivo */
+            /** @description Sin firma, firma no PNG o de más de 200 KB, sin nombre de quien firma, o plan sin ítems. DX-379 (C): `expired` con un presupuesto no vencido; ORIGINAL_PRICES sin motivo, OTHER sin nota, nota de más de 200; REPRICE sin `repricePreviewHash` o con motivo. DX-417: `partial` sin elegir ninguno, eligiendo todos («Has elegido todos los procedimientos: acéptalo entero.»), más de 100, o dejando fuera uno ya aceptado o realizado */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -30089,14 +30157,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Paciente o plan no encontrados en esta clínica */
+            /** @description Paciente o plan no encontrados en esta clínica. DX-417: algún ítem de `partial` no es de este plan */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Ya estaba aceptado y firmado, el plan está rechazado, cancelado o completado, otra opción de su grupo ya está aceptada, o el presupuesto cambió desde que se mostró (contentHash). DX-379 (C): la sede de la presentación del plan sin zona válida → `LOCATION_TIMEZONE_REQUIRED` (también con un presupuesto no vencido si tiene validez guardada); `code: QUOTE_EXPIRED` («El presupuesto venció el {fecha}. Actualiza los precios o acepta con los precios originales indicando el motivo.», con `quoteValidUntil`) si está vencido y no llega `expired`; con REPRICE, `REPRICE_PREVIEW_STALE` (los precios vigentes cambiaron desde la vista previa), `REPRICE_INCOMPLETE` (algún propuesto sin precio vigente o sin tasa), `REPRICE_NOTHING_TO_APPLY` o el plan no se recotiza (abonos, plan de cuotas, saldo a favor); nada se escribe */
+            /** @description Ya estaba aceptado y firmado, el plan está rechazado, cancelado o completado, otra opción de su grupo ya está aceptada, o el presupuesto cambió desde que se mostró (contentHash). DX-379 (C): la sede de la presentación del plan sin zona válida → `LOCATION_TIMEZONE_REQUIRED` (también con un presupuesto no vencido si tiene validez guardada); `code: QUOTE_EXPIRED` («El presupuesto venció el {fecha}. Actualiza los precios o acepta con los precios originales indicando el motivo.», con `quoteValidUntil`) si está vencido y no llega `expired`; con REPRICE, `REPRICE_PREVIEW_STALE` (los precios vigentes cambiaron desde la vista previa), `REPRICE_INCOMPLETE` (algún propuesto sin precio vigente o sin tasa), `REPRICE_NOTHING_TO_APPLY` o el plan no se recotiza (abonos, plan de cuotas, saldo a favor); nada se escribe. DX-417 con `partial`: `PARTIAL_PLAN_NOT_PRESENTED` (solo un presupuesto presentado se acepta en parte), `PARTIAL_PLAN_ALREADY_ACCEPTED`, o el plan tiene abonos, plan de cuotas activo o saldo a favor */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -30150,6 +30218,63 @@ export interface operations {
                 content?: never;
             };
             /** @description Ya firmado, el plan no admite aceptarse o no se recotiza (aceptado, cerrado, con abonos, plan de cuotas o saldo a favor); `REPRICE_INCOMPLETE`: algún propuesto sin precio vigente o sin tasa de hoy (la validez no se renovaría); `REPRICE_NOTHING_TO_APPLY`; `LOCATION_TIMEZONE_REQUIRED` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlanQuoteController_partialAcceptancePreview: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede cuyos datos encabezan el presupuesto (y en la que se firma). Sin ella, la sede principal. Un plan ya aceptado muestra la sede en la que se firmó. */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                patientId: string;
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartialAcceptancePreviewRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartialAcceptancePreviewDto"];
+                };
+            };
+            /** @description Sin elegir ninguno, eligiendo todos («Has elegido todos los procedimientos: acéptalo entero.»), más de 100, ids que no son UUID, o dejando fuera uno ya aceptado o realizado («Los procedimientos ya aceptados o realizados forman parte de lo aceptado.»). `reprice: true` con un presupuesto no vencido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo odontólogo y ADMIN aceptan (DX-040): la asistente y recepción no */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o plan no encontrados en esta clínica (o el plan es de otro paciente), o algún ítem no es de este plan */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `PARTIAL_PLAN_NOT_PRESENTED` (solo un presupuesto presentado se acepta en parte), `PARTIAL_PLAN_ALREADY_ACCEPTED` (aceptado o firmado), o el plan tiene abonos, plan de cuotas activo o saldo a favor. Con `reprice: true`, los 409 de …/acceptance/reprice-preview (`REPRICE_INCOMPLETE`, `REPRICE_NOTHING_TO_APPLY`, `LOCATION_TIMEZONE_REQUIRED`) */
             409: {
                 headers: {
                     [name: string]: unknown;
