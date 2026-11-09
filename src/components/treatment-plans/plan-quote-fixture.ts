@@ -71,4 +71,8 @@ export const SIGNED_ACCEPTANCE: NonNullable<PlanQuote['acceptance']> = {
   expiredReason: null,
   expiredNote: null,
   repricingId: null,
+  // DX-417: aceptado entero.
+  pendingPlanId: null,
+  pendingItemIds: null,
+  pendingTotal: null,
 };

@@ -38,6 +38,7 @@ function plan(overrides: Partial<TreatmentPlan> = {}): TreatmentPlan {
     quoteIssuedOn: null,
     quoteValidUntil: null,
     quoteExpired: false,
+    splitFromPlanId: null,
     rejectedAt: null,
     rejectionReason: null,
     rejectionNote: null,
