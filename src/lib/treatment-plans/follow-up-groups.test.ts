@@ -12,6 +12,8 @@ function item(over: Partial<PendingFollowUpItem> = {}): PendingFollowUpItem {
     optionLabel: 'Opción A',
     presentedAt: '2026-10-10T00:00:00.000Z',
     presentedLocationId: 'l1',
+    quoteValidUntil: null,
+    quoteExpired: false,
     daysSincePresented: 10,
     currency: 'VES',
     total: 100,

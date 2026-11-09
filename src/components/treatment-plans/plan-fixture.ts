@@ -12,6 +12,10 @@ export const PLAN_WITHOUT_OPTIONS = {
   rejectedAt: null,
   rejectionReason: null,
   rejectionNote: null,
+  // DX-379: sin validez guardada (plan anterior o sin presentar ni imprimir).
+  quoteIssuedOn: null,
+  quoteValidUntil: null,
+  quoteExpired: false,
 } as const;
 
 /**
