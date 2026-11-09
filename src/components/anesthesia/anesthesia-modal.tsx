@@ -463,7 +463,7 @@ export function AnesthesiaModal({
         <FormField htmlFor={`${id}-anesthetic`} label={anesthesiaCopy.anesthetic} error={errors.anesthetic}>
           <NativeSelect
             id={`${id}-anesthetic`}
-            className="h-11 sm:h-10"
+            selectClassName="h-11 sm:h-10"
             value={anestheticId}
             onChange={(e) => {
               setAnestheticId(e.target.value);
@@ -502,7 +502,7 @@ export function AnesthesiaModal({
           <FormField htmlFor={`${id}-technique`} label={anesthesiaCopy.technique}>
             <NativeSelect
               id={`${id}-technique`}
-              className="h-11 sm:h-10"
+              selectClassName="h-11 sm:h-10"
               value={technique}
               onChange={(e) => setTechnique(e.target.value as AnesthesiaTechnique)}
             >

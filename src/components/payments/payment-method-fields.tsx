@@ -250,7 +250,7 @@ export function PaymentMethodSelect({
   id: string;
   label?: string;
   disabled?: boolean;
-  /** Clases del select (p. ej. su alto en el teléfono). */
+  /** Clases del `<select>` (p. ej. su alto en el teléfono). */
   className?: string;
 }) {
   const { methods, methodError, focusRequest } = fields;
@@ -272,7 +272,7 @@ export function PaymentMethodSelect({
         <NativeSelect
           id={id}
           ref={selectRef}
-          className={className}
+          selectClassName={className}
           value={fields.paymentMethodId}
           disabled={disabled || methods.status === 'loading'}
           onChange={(e) => fields.selectMethod(e.target.value)}

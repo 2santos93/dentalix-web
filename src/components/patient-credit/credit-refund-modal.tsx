@@ -223,7 +223,7 @@ export function CreditRefundModal({
         <FormField htmlFor="cr-method" label={copy.method}>
           <NativeSelect
             id="cr-method"
-            className="h-11 sm:h-10"
+            selectClassName="h-11 sm:h-10"
             value={method}
             disabled={submitting}
             onChange={(e) => setMethod(e.target.value as RefundMethod)}
