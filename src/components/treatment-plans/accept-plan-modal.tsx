@@ -1,17 +1,30 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ExternalLink } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import type { ClinicRole } from '@/lib/me/me-api';
 import {
   acceptPlan,
+  canAcceptPlan,
+  EXPIRED_ACCEPTANCE_NOTE_MAX,
+  EXPIRED_ACCEPTANCE_REASON_LABELS,
+  EXPIRED_ACCEPTANCE_REASONS,
   getPlanQuote,
   planQuotePrintHref,
+  previewAcceptanceRepricing,
+  QUOTE_EXPIRED,
+  type AcceptanceRepricePreview,
+  type AcceptPlanInput,
+  type ExpiredQuoteAcceptanceReason,
   type PlanQuote,
 } from '@/lib/treatment-plans/plan-quote-api';
+import { REPRICE_PREVIEW_STALE } from '@/lib/treatment-plans/plan-repricing-api';
+import { getPlan } from '@/lib/treatment-plans/treatment-plans-api';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
+import type { RegionalFormat } from '@/lib/format/regional-format';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
@@ -19,10 +32,16 @@ import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { SignaturePad } from '@/components/shared/signature-pad';
 import { SectionError } from '@/components/errors/section-error';
+import { Callout } from '@/components/ui/callout';
 import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
+import { RadioCard, RadioGroup } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
+import { Wizard } from '@/components/ui/wizard';
+import { RepricingPreviewView } from './reprice-plan-modal';
 
-const copy = {
+export const acceptPlanCopy = {
   title: 'Aceptar presupuesto con firma',
   description: 'Revisa el presupuesto con el paciente. Al firmar, queda aceptado tal como se muestra.',
   loading: 'Cargando el presupuesto…',
@@ -41,7 +60,51 @@ const copy = {
     'Al firmar se guardan la firma, la fecha y una huella del presupuesto; sus procedimientos y precios ya no se pueden cambiar.',
   submit: 'Aceptar y firmar',
   genericError: 'No pudimos guardar la aceptación. Intenta de nuevo.',
+  // DX-379 (C): aceptar un presupuesto vencido.
+  steps: { choose: 'Cómo aceptarlo', sign: 'Firma' },
+  next: 'Continuar',
+  expiredTitle: (date: string) => `El presupuesto venció el ${date}`,
+  expiredLead: 'Sus precios ya no están garantizados. Antes de firmar, elige cómo aceptarlo.',
+  modeLegend: 'Cómo aceptarlo',
+  modeReprice: 'Actualizar los precios y aceptar',
+  modeRepriceDescription:
+    'Recomendada. Todos los procedimientos propuestos pasan al precio vigente y la validez se renueva; antes de firmar verás los cambios.',
+  modeOriginal: 'Aceptar con los precios originales',
+  modeOriginalDescription: 'Se firma el presupuesto tal como se presentó y queda registrado el motivo.',
+  reasonLabel: 'Motivo',
+  reasonPlaceholder: 'Elige el motivo',
+  noteLabel: 'Nota (opcional)',
+  noteLabelRequired: 'Nota',
+  noteCount: (n: number) => `${n} de ${EXPIRED_ACCEPTANCE_NOTE_MAX} caracteres`,
+  modeRequired: 'Elige cómo aceptar el presupuesto vencido.',
+  reasonRequired: 'Elige el motivo para aceptarlo con los precios originales.',
+  noteRequired: `Con el motivo «Otro», escribe una nota (hasta ${EXPIRED_ACCEPTANCE_NOTE_MAX} caracteres).`,
+  suggestOriginal: 'Puedes aceptarlo con los precios originales indicando el motivo.',
+  repricing: 'Calculando los precios vigentes…',
+  repricingError: 'No pudimos calcular los precios vigentes.',
+  repricedSummary: 'Presupuesto con los precios actualizados, a firmar',
+  originalSummary: (reason: string) => `Se acepta con los precios del presupuesto vencido. Motivo: ${reason}.`,
+  notExpiredAnymore: 'El presupuesto ya no está vencido: revísalo con el paciente y fírmalo.',
+  cannotAccept: 'No se puede aceptar ahora',
 };
+
+/** 409: la sede de la presentación no tiene zona horaria válida (ninguna forma de aceptar sirve). */
+const LOCATION_TIMEZONE_REQUIRED = 'LOCATION_TIMEZONE_REQUIRED';
+
+const copy = acceptPlanCopy;
+
+type ExpiredMode = 'REPRICE' | 'ORIGINAL_PRICES';
+type Step = 'choose' | 'sign';
+
+interface RepriceLoadError {
+  message: string;
+  retryable: boolean;
+}
+
+/** Un error del que no se sale reintentando lo mismo (el plan no admite recotizarse). */
+function isFinalClientError(err: unknown): boolean {
+  return err instanceof ApiError && err.status >= 400 && err.status < 500 && err.status !== 408 && err.status !== 429;
+}
 
 interface AcceptPlanModalProps {
   open: boolean;
@@ -51,6 +114,12 @@ interface AcceptPlanModalProps {
   planId: string;
   /** El presupuesto ya aceptado (con la firma), para refrescar el plan. */
   onAccepted: (quote: PlanQuote) => void;
+  /** DX-379 (C): el plan tiene el presupuesto vencido (`quoteExpired`, lo decide el servidor). */
+  quoteExpired?: boolean;
+  /** Quien firma: solo quien decide el plan pide la vista previa de los precios actualizados. */
+  role: ClinicRole | null;
+  /** La sede de la presentación (los importes y la validez de la recotización). */
+  locationId?: string | null;
 }
 
 /**
@@ -59,6 +128,12 @@ interface AcceptPlanModalProps {
  * en el lienzo, y lo envía con la huella (`contentHash`) de lo mostrado. Si el
  * plan cambió entre medias, la API responde 409: se explica, se recarga el
  * presupuesto y se pide la firma de nuevo sobre lo nuevo.
+ *
+ * DX-379 (C): vencido, antes de la firma se elige cómo aceptarlo: con los
+ * precios actualizados (la vista previa de la firma: se firma el presupuesto
+ * recotizado) o con los originales (motivo y, con «Otro», nota). Si vence con
+ * el modal abierto, la API responde 409 `QUOTE_EXPIRED` y el modal vuelve a
+ * esa elección.
  */
 export function AcceptPlanModal({
   open,
@@ -67,6 +142,9 @@ export function AcceptPlanModal({
   patientId,
   planId,
   onAccepted,
+  quoteExpired = false,
+  role,
+  locationId = null,
 }: AcceptPlanModalProps) {
   // DX-522: importes con el formato de la sede y el código ISO; cargando, «—».
   const fmt = readyFormat(useSedeFormat(token));
@@ -79,6 +157,36 @@ export function AcceptPlanModal({
   const [signature, setSignature] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // DX-379 (C): el vencido que la API descubrió al firmar (409 QUOTE_EXPIRED).
+  const [expiredByServer, setExpiredByServer] = useState(false);
+  // M-1: el plan dejó de estar vencido con el modal abierto (otro lo volvió a presentar): la
+  // API responde 400 a `expired`. No se borra al cerrar: el padre sigue con `quoteExpired`
+  // hasta que recarga el plan.
+  const [notExpiredByServer, setNotExpiredByServer] = useState(false);
+  const expired = (quoteExpired && !notExpiredByServer) || expiredByServer;
+  // Ninguna forma de aceptar sirve (sede sin zona horaria, plan que ya no existe…): solo cerrar.
+  const [fatalError, setFatalError] = useState<string | null>(null);
+  const mayReprice = canAcceptPlan(role);
+  // La recotización no es posible (409/403 de la vista previa): queda solo «precios originales».
+  const [repriceBlocked, setRepriceBlocked] = useState<string | null>(null);
+  const repriceOffered = mayReprice && repriceBlocked === null;
+  // Sin tocar (null / undefined), el paso y la opción salen del plan al abrir: el modal sigue
+  // montado entre aperturas y el plan puede vencer entre medias.
+  const [stepState, setStep] = useState<Step | null>(null);
+  const step: Step = stepState ?? (expired ? 'choose' : 'sign');
+  const [modeState, setMode] = useState<ExpiredMode | null | undefined>(undefined);
+  // La recomendada va marcada de inicio.
+  const mode: ExpiredMode | null = modeState === undefined ? (repriceOffered ? 'REPRICE' : null) : modeState;
+  const [reason, setReason] = useState<ExpiredQuoteAcceptanceReason | ''>('');
+  const [note, setNote] = useState('');
+  const [choiceErrors, setChoiceErrors] = useState<{ mode?: string; reason?: string; note?: string }>({});
+  const [repriced, setRepriced] = useState<AcceptanceRepricePreview | null>(null);
+  const [repriceError, setRepriceError] = useState<RepriceLoadError | null>(null);
+  const [repriceKey, setRepriceKey] = useState(0);
+
+  const choosing = expired && step === 'choose';
+  const repricing = expired && step === 'sign' && mode === 'REPRICE';
 
   useEffect(() => {
     if (!open) return;
@@ -99,6 +207,99 @@ export function AcceptPlanModal({
     };
   }, [open, token, patientId, planId, reloadKey]);
 
+  // DX-379 (C): la vista previa de la firma con los precios actualizados (no escribe nada).
+  useEffect(() => {
+    if (!open || !repricing) return;
+    let cancelled = false;
+    previewAcceptanceRepricing(token, patientId, planId)
+      .then((res) => {
+        if (cancelled) return;
+        setRepriced(res);
+        setRepriceError(null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const message = apiErrorMessage(err, copy.repricingError);
+        if (isFinalClientError(err)) {
+          void handleFinalRepriceError(err as ApiError, message);
+        } else {
+          setRepriceError({ message, retryable: true });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+    // `handleFinalRepriceError` solo escribe estado y lee lo mismo que este efecto.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, repricing, token, patientId, planId, repriceKey]);
+
+  /**
+   * Un 4xx de la vista previa o de la firma con «Actualizar precios». Solo
+   * REPRICE_INCOMPLETE, NOTHING_TO_APPLY, el plan no recotizable (409 sin
+   * código) y el tope de descuento (403) dejan la salida de los precios
+   * originales; lo demás tiene su propio camino.
+   */
+  async function handleFinalRepriceError(err: ApiError, message: string) {
+    if (err.code === LOCATION_TIMEZONE_REQUIRED || err.status === 404) {
+      setFatalError(message);
+      return;
+    }
+    if (err.status === 400) {
+      await recheckExpiry(message);
+      return;
+    }
+    if (err.status === 409 && !err.code) {
+      // Puede que otra persona ya lo firmara: entonces no hay nada que elegir.
+      const fresh = await getPlanQuote(token, patientId, planId).catch(() => null);
+      if (fresh?.acceptance) {
+        onAccepted(fresh);
+        handleOpenChange(false);
+        return;
+      }
+    }
+    blockReprice(message);
+  }
+
+  /**
+   * M-1: un 400 con `expired` puede ser «El presupuesto no está vencido» (otro
+   * lo volvió a presentar). Se mira el plan: si ya no vence, se firma como
+   * siempre sobre el presupuesto recargado; si sigue vencido, era otra
+   * validación y se enseña tal cual.
+   */
+  async function recheckExpiry(message: string) {
+    const plan = await getPlan(token, planId).catch(() => null);
+    if (plan && !plan.quoteExpired && !plan.acceptance) {
+      setNotExpiredByServer(true);
+      setExpiredByServer(false);
+      setStep('sign');
+      setRepriced(null);
+      setRepriceError(null);
+      setSignature(null);
+      setReloadKey((k) => k + 1);
+      setSubmitError(copy.notExpiredAnymore);
+      return;
+    }
+    if (plan?.acceptance) {
+      const fresh = await getPlanQuote(token, patientId, planId).catch(() => null);
+      if (fresh?.acceptance) {
+        onAccepted(fresh);
+        handleOpenChange(false);
+        return;
+      }
+    }
+    setSubmitError(message);
+  }
+
+  function blockReprice(message: string) {
+    setRepriceBlocked(message);
+    setMode(null);
+    setStep('choose');
+    setRepriced(null);
+    setRepriceError(null);
+    setSignature(null);
+    setSubmitError(`${message} ${copy.suggestOriginal}`);
+  }
+
   function handleOpenChange(next: boolean) {
     if (!next) {
       // Cada apertura empieza en limpio: otro plan, otra firma.
@@ -107,25 +308,100 @@ export function AcceptPlanModal({
       setSignerName('');
       setSignature(null);
       setSubmitError(null);
+      setExpiredByServer(false);
+      setFatalError(null);
+      setRepriceBlocked(null);
+      setStep(null);
+      setMode(undefined);
+      setReason('');
+      setNote('');
+      setChoiceErrors({});
+      setRepriced(null);
+      setRepriceError(null);
     }
     onOpenChange(next);
   }
 
+  function validateChoice(): boolean {
+    const errors: typeof choiceErrors = {};
+    if (!mode) errors.mode = copy.modeRequired;
+    else if (mode === 'ORIGINAL_PRICES') {
+      if (!reason) errors.reason = copy.reasonRequired;
+      else if (reason === 'OTHER' && note.trim() === '') errors.note = copy.noteRequired;
+    }
+    setChoiceErrors(errors);
+    return Object.keys(errors).length === 0;
+  }
+
+  function goToChoice() {
+    setStep('choose');
+    setSignature(null);
+    setRepriced(null);
+    setRepriceError(null);
+  }
+
+  function expiredBody(): AcceptPlanInput['expired'] | undefined {
+    if (!expired) return undefined;
+    if (mode === 'REPRICE' && repriced) {
+      return { mode: 'REPRICE', repricePreviewHash: repriced.repricing.previewHash };
+    }
+    const trimmed = note.trim();
+    return {
+      mode: 'ORIGINAL_PRICES',
+      reason: reason as ExpiredQuoteAcceptanceReason,
+      ...(trimmed ? { note: trimmed } : {}),
+    };
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!quote || !signature || signerName.trim() === '') return;
+    if (choosing) {
+      if (!quote || !validateChoice()) return;
+      setSubmitError(null);
+      setRepriced(null);
+      setStep('sign');
+      return;
+    }
+    // Lo que se firma: el presupuesto recotizado (REPRICE) o el del GET de siempre.
+    const shown = repricing ? repriced?.quote : quote;
+    if (!shown || !signature || signerName.trim() === '') return;
     setSubmitting(true);
     setSubmitError(null);
+    const expiredChoice = expiredBody();
     try {
       const accepted = await acceptPlan(token, patientId, planId, {
         signerName: signerName.trim(),
         signature,
-        contentHash: quote.contentHash,
+        contentHash: shown.contentHash,
+        ...(expiredChoice ? { expired: expiredChoice } : {}),
       });
       onAccepted(accepted);
       handleOpenChange(false);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
+      const message = apiErrorMessage(err, copy.genericError);
+      if (err instanceof ApiError && err.code === LOCATION_TIMEZONE_REQUIRED) {
+        // Ni con los precios originales: la sede tiene que configurarse antes.
+        setFatalError(message);
+      } else if (expired && err instanceof ApiError && err.status === 400) {
+        await recheckExpiry(message);
+      } else if (err instanceof ApiError && err.status === 409 && err.code === QUOTE_EXPIRED) {
+        // Venció con el modal abierto: se vuelve a la elección con el presupuesto al día.
+        setNotExpiredByServer(false);
+        setExpiredByServer(true);
+        goToChoice();
+        setReloadKey((k) => k + 1);
+        setSubmitError(message);
+      } else if (repricing && err instanceof ApiError && err.status === 409 && err.code === REPRICE_PREVIEW_STALE) {
+        // Cambió un precio o la tasa: otra vista previa y otra firma sobre ella.
+        setSignature(null);
+        setRepriced(null);
+        setRepriceKey((k) => k + 1);
+        setSubmitError(message);
+      } else if (repricing && err instanceof ApiError && ((err.status === 409 && err.code) || err.status === 403)) {
+        // REPRICE_INCOMPLETE, REPRICE_NOTHING_TO_APPLY, el tope de descuento (403)…:
+        // recotizar ya no es posible; queda la salida de los precios originales.
+        blockReprice(message);
+      } else if (err instanceof ApiError && err.status === 409) {
         // Lo firmado tiene que ser lo mostrado: se recarga el presupuesto. Si
         // entre medias otra persona ya lo firmó, no hay nada que firmar: se
         // cierra y el plan se refresca con esa aceptación.
@@ -138,14 +414,25 @@ export function AcceptPlanModal({
         setSignature(null);
         if (fresh) setQuote(fresh);
         else setReloadKey((k) => k + 1);
+        if (repricing) {
+          // El presupuesto recotizado también se vuelve a componer.
+          setRepriced(null);
+          setRepriceKey((k) => k + 1);
+        }
+        setSubmitError(message);
+      } else {
+        setSubmitError(message);
       }
-      setSubmitError(apiErrorMessage(err, copy.genericError));
     } finally {
       setSubmitting(false);
     }
   }
 
   const ready = quote !== null && !loadError;
+  const signReady = repricing ? repriced !== null : ready;
+  const originalReasonLabel = reason ? EXPIRED_ACCEPTANCE_REASON_LABELS[reason] : '';
+  const quoteNames = useMemo(() => new Map((quote?.items ?? []).map((item) => [item.id, item.procedure])), [quote]);
+  const sedeOf = locationId ?? quote?.location.id ?? null;
 
   return (
     <FormModal
@@ -154,13 +441,18 @@ export function AcceptPlanModal({
       title={copy.title}
       description={copy.description}
       onSubmit={handleSubmit}
-      submitLabel={copy.submit}
+      submitLabel={choosing ? copy.next : copy.submit}
       submitting={submitting}
-      submitDisabled={!ready || !signature || signerName.trim() === ''}
-      error={submitError}
+      submitDisabled={choosing ? !ready : !signReady || !signature || signerName.trim() === ''}
+      submitBusy={repricing && repriced === null && repriceError === null}
+      error={fatalError ? null : submitError}
+      hideSubmit={fatalError !== null}
       size="lg"
     >
-      {loadError ? (
+      {fatalError ? (
+        // M-2: ninguna forma de aceptar sirve hoy (p. ej. la sede sin zona horaria): solo cerrar.
+        <SectionError title={copy.cannotAccept} description={fatalError} />
+      ) : loadError ? (
         <SectionError
           description={loadError}
           onRetry={() => {
@@ -174,73 +466,314 @@ export function AcceptPlanModal({
           <Skeleton className="h-5 w-1/2" />
           <Skeleton className="h-20 w-full rounded-lg" />
         </div>
-      ) : (
-        <>
-          <section
-            aria-label={copy.summary}
-            className="flex flex-col gap-3 rounded-lg border border-border p-4"
-          >
-            <ul className="max-h-48 divide-y divide-border-subtle overflow-y-auto text-sm">
-              {quote.items.map((item) => (
-                <li key={item.id} className="flex items-baseline justify-between gap-3 py-2">
-                  <span className="min-w-0">
-                    <span className="block text-ink">{item.procedure}</span>
-                    <span className="block t-caption text-muted tabular-nums">{copy.tooth(item.toothNumber)}</span>
-                  </span>
-                  <span className="shrink-0 font-medium text-ink tabular-nums">
-                    {sedeMoney(item.subtotal, quote.currency, fmt)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            {quote.totals.map((total) => (
-              <p
-                key={total.currency}
-                className="flex items-baseline justify-between gap-3 border-t border-border pt-2 font-semibold text-ink"
-              >
-                <span>{copy.total(total.currency)}</span>
-                <span className="tabular-nums">{sedeMoney(total.net, total.currency, fmt)}</span>
-              </p>
-            ))}
-            <p className="flex flex-wrap items-center justify-between gap-2 t-caption text-muted">
-              <span className="tabular-nums">
-                {copy.validity(quote.validityDays, sedeCivilDate(quote.validUntil, fmt))}
-              </span>
-              <Link
-                href={planQuotePrintHref(patientId, planId)}
-                target="_blank"
-                rel="noopener"
-                className="inline-flex items-center gap-1 font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
-              >
-                {copy.viewFull}
-                <ExternalLink aria-hidden className="size-3.5" />
-                <span className="sr-only">{copy.newTab}</span>
-              </Link>
-            </p>
-          </section>
-          <SedeStampNote stamp={stamp} />
-
-          <FormField htmlFor="accept-signer-name" label={copy.signerName} hint={copy.signerHint}>
-            <Input
-              id="accept-signer-name"
-              value={signerName}
-              maxLength={200}
-              autoComplete="off"
-              onChange={(e) => setSignerName(e.target.value)}
+      ) : expired ? (
+        <Wizard
+          steps={[
+            { key: 'choose', label: copy.steps.choose },
+            { key: 'sign', label: copy.steps.sign },
+          ]}
+          current={step === 'choose' ? 0 : 1}
+          disabled={submitting}
+          onStepChange={(i) => {
+            if (submitting) return;
+            if (i === 0 && step === 'sign') goToChoice();
+            else if (i === 1 && step === 'choose' && validateChoice()) {
+              setSubmitError(null);
+              setStep('sign');
+            }
+          }}
+        >
+          {step === 'choose' ? (
+            <ExpiredChoice
+              quote={quote}
+              fmt={fmt}
+              repriceOffered={repriceOffered}
+              mode={mode}
+              onModeChange={(next) => {
+                setMode(next);
+                setChoiceErrors({});
+              }}
+              reason={reason}
+              onReasonChange={(next) => {
+                setReason(next);
+                setChoiceErrors((e) => ({ ...e, reason: undefined, note: undefined }));
+              }}
+              note={note}
+              onNoteChange={(next) => {
+                setNote(next);
+                setChoiceErrors((e) => ({ ...e, note: undefined }));
+              }}
+              errors={choiceErrors}
               disabled={submitting}
             />
-          </FormField>
-
-          <SignaturePad
-            key={quote.contentHash}
-            label={copy.signature}
-            hint={copy.signatureHint}
-            onChange={setSignature}
+          ) : (
+            <div className="flex min-w-0 flex-col gap-4">
+              {mode === 'REPRICE' ? (
+                repriceError ? (
+                  <SectionError description={repriceError.message} onRetry={() => setRepriceKey((k) => k + 1)} />
+                ) : !repriced ? (
+                  <div role="status" className="flex flex-col gap-2">
+                    <span className="sr-only">{copy.repricing}</span>
+                    <Skeleton className="h-5 w-1/2" />
+                    <Skeleton className="h-24 w-full rounded-lg" />
+                  </div>
+                ) : (
+                  <>
+                    <RepricingPreviewView
+                      base={repriced.repricing}
+                      preview={repriced.repricing}
+                      fresh
+                      expired
+                      nameOf={(itemId) => quoteNames.get(itemId) ?? repriced.quote.items.find((i) => i.id === itemId)?.procedure ?? ''}
+                      role={role}
+                      stamp={stamp}
+                      locationId={sedeOf}
+                      planCurrency={repriced.quote.currency}
+                    />
+                    <QuoteSummary
+                      quote={repriced.quote}
+                      fmt={fmt}
+                      label={copy.repricedSummary}
+                      patientId={patientId}
+                      planId={planId}
+                      showPrintLink={false}
+                    />
+                  </>
+                )
+              ) : (
+                <>
+                  <QuoteSummary quote={quote} fmt={fmt} label={copy.summary} patientId={patientId} planId={planId} />
+                  <p data-testid="accept-original-reason" className="text-sm text-ink">
+                    {copy.originalSummary(originalReasonLabel)}
+                  </p>
+                </>
+              )}
+              <SedeStampNote stamp={stamp} />
+              {signReady ? (
+                <SignFields
+                  signerName={signerName}
+                  onSignerNameChange={setSignerName}
+                  signatureKey={(repricing ? repriced?.quote.contentHash : quote.contentHash) ?? ''}
+                  onSignature={setSignature}
+                  disabled={submitting}
+                />
+              ) : null}
+            </div>
+          )}
+        </Wizard>
+      ) : (
+        <>
+          <QuoteSummary quote={quote} fmt={fmt} label={copy.summary} patientId={patientId} planId={planId} />
+          <SedeStampNote stamp={stamp} />
+          <SignFields
+            signerName={signerName}
+            onSignerNameChange={setSignerName}
+            signatureKey={quote.contentHash}
+            onSignature={setSignature}
             disabled={submitting}
           />
-          <p className="t-caption text-muted">{copy.immutableNote}</p>
         </>
       )}
     </FormModal>
+  );
+}
+
+function QuoteSummary({
+  quote,
+  fmt,
+  label,
+  patientId,
+  planId,
+  showPrintLink = true,
+}: {
+  quote: PlanQuote;
+  fmt: RegionalFormat | null;
+  label: string;
+  patientId: string;
+  planId: string;
+  /** El enlace imprime (y fija) el presupuesto guardado: no el recotizado que aún no existe. */
+  showPrintLink?: boolean;
+}) {
+  return (
+    <section aria-label={label} className="flex flex-col gap-3 rounded-lg border border-border p-4">
+      <ul className="max-h-48 divide-y divide-border-subtle overflow-y-auto text-sm">
+        {quote.items.map((item) => (
+          <li key={item.id} className="flex items-baseline justify-between gap-3 py-2">
+            <span className="min-w-0">
+              <span className="block break-words text-ink">{item.procedure}</span>
+              <span className="block t-caption text-muted tabular-nums">{copy.tooth(item.toothNumber)}</span>
+            </span>
+            <span className="shrink-0 font-medium text-ink tabular-nums">
+              {sedeMoney(item.subtotal, quote.currency, fmt)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {quote.totals.map((total) => (
+        <p
+          key={total.currency}
+          className="flex items-baseline justify-between gap-3 border-t border-border pt-2 font-semibold text-ink"
+        >
+          <span>{copy.total(total.currency)}</span>
+          <span className="tabular-nums">{sedeMoney(total.net, total.currency, fmt)}</span>
+        </p>
+      ))}
+      <p className="flex flex-wrap items-center justify-between gap-2 t-caption text-muted">
+        <span className="tabular-nums">{copy.validity(quote.validityDays, sedeCivilDate(quote.validUntil, fmt))}</span>
+        {showPrintLink ? (
+          <Link
+            href={planQuotePrintHref(patientId, planId)}
+            target="_blank"
+            rel="noopener"
+            className="inline-flex items-center gap-1 font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
+          >
+            {copy.viewFull}
+            <ExternalLink aria-hidden className="size-3.5" />
+            <span className="sr-only">{copy.newTab}</span>
+          </Link>
+        ) : null}
+      </p>
+    </section>
+  );
+}
+
+function SignFields({
+  signerName,
+  onSignerNameChange,
+  signatureKey,
+  onSignature,
+  disabled,
+}: {
+  signerName: string;
+  onSignerNameChange: (name: string) => void;
+  /** La huella de lo que se firma: si cambia, el lienzo se vacía. */
+  signatureKey: string;
+  onSignature: (signature: string | null) => void;
+  disabled: boolean;
+}) {
+  return (
+    <>
+      <FormField htmlFor="accept-signer-name" label={copy.signerName} hint={copy.signerHint}>
+        <Input
+          id="accept-signer-name"
+          value={signerName}
+          maxLength={200}
+          autoComplete="off"
+          onChange={(e) => onSignerNameChange(e.target.value)}
+          disabled={disabled}
+        />
+      </FormField>
+
+      <SignaturePad
+        key={signatureKey}
+        label={copy.signature}
+        hint={copy.signatureHint}
+        onChange={onSignature}
+        disabled={disabled}
+      />
+      <p className="t-caption text-muted">{copy.immutableNote}</p>
+    </>
+  );
+}
+
+function ExpiredChoice({
+  quote,
+  fmt,
+  repriceOffered,
+  mode,
+  onModeChange,
+  reason,
+  onReasonChange,
+  note,
+  onNoteChange,
+  errors,
+  disabled,
+}: {
+  quote: PlanQuote;
+  fmt: RegionalFormat | null;
+  repriceOffered: boolean;
+  mode: ExpiredMode | null;
+  onModeChange: (mode: ExpiredMode) => void;
+  reason: ExpiredQuoteAcceptanceReason | '';
+  onReasonChange: (reason: ExpiredQuoteAcceptanceReason | '') => void;
+  note: string;
+  onNoteChange: (note: string) => void;
+  errors: { mode?: string; reason?: string; note?: string };
+  disabled: boolean;
+}) {
+  const noteRequired = reason === 'OTHER';
+  return (
+    <div className="flex min-w-0 flex-col gap-4">
+      <Callout tone="warning" title={copy.expiredTitle(sedeCivilDate(quote.validUntil, fmt))} titleAs="h3">
+        {copy.expiredLead}
+      </Callout>
+      <RadioGroup
+        id="accept-expired-mode"
+        legend={copy.modeLegend}
+        value={mode ?? ''}
+        onValueChange={(value) => onModeChange(value as ExpiredMode)}
+        error={errors.mode ?? null}
+        disabled={disabled}
+        optionsClassName="flex flex-col gap-2"
+      >
+        {repriceOffered ? (
+          <RadioCard
+            id="accept-expired-mode"
+            value="REPRICE"
+            title={copy.modeReprice}
+            description={copy.modeRepriceDescription}
+          />
+        ) : null}
+        <RadioCard
+          id={repriceOffered ? undefined : 'accept-expired-mode'}
+          value="ORIGINAL_PRICES"
+          title={copy.modeOriginal}
+          description={copy.modeOriginalDescription}
+        />
+      </RadioGroup>
+      {mode === 'ORIGINAL_PRICES' ? (
+        <>
+          <FormField htmlFor="accept-expired-reason" label={copy.reasonLabel} error={errors.reason ?? null}>
+            <NativeSelect
+              id="accept-expired-reason"
+              value={reason}
+              disabled={disabled}
+              aria-invalid={errors.reason ? true : undefined}
+              aria-describedby={errors.reason ? 'accept-expired-reason-error' : undefined}
+              onChange={(e) => onReasonChange(e.target.value as ExpiredQuoteAcceptanceReason | '')}
+            >
+              <option value="" disabled>
+                {copy.reasonPlaceholder}
+              </option>
+              {EXPIRED_ACCEPTANCE_REASONS.map((value) => (
+                <option key={value} value={value}>
+                  {EXPIRED_ACCEPTANCE_REASON_LABELS[value]}
+                </option>
+              ))}
+            </NativeSelect>
+          </FormField>
+          <FormField
+            htmlFor="accept-expired-note"
+            label={noteRequired ? copy.noteLabelRequired : copy.noteLabel}
+            error={errors.note ?? null}
+            hint={copy.noteCount(note.length)}
+            hintId="accept-expired-note-count"
+          >
+            <Textarea
+              id="accept-expired-note"
+              rows={3}
+              autoGrow
+              maxLength={EXPIRED_ACCEPTANCE_NOTE_MAX}
+              value={note}
+              disabled={disabled}
+              aria-required={noteRequired || undefined}
+              aria-invalid={errors.note ? true : undefined}
+              aria-describedby={errors.note ? 'accept-expired-note-error' : 'accept-expired-note-count'}
+              onChange={(e) => onNoteChange(e.target.value)}
+            />
+          </FormField>
+        </>
+      ) : null}
+    </div>
   );
 }

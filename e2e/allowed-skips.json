@@ -273,6 +273,13 @@
       "annotation": "E2E_DATABASE_URL no definido: no se puede dar por verificado un dominio propio",
       "requiresUnset": "E2E_DATABASE_URL",
       "reason": "Sin E2E_DATABASE_URL no se puede insertar el dominio propio VERIFIED (el TXT real no se puede publicar en la CI)."
+    },
+    {
+      "file": "e2e/accept-expired-quote.spec.ts",
+      "title": "un presupuesto vencido se acepta con firma y los precios originales: motivo en el modal y en el documento",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede vencer el presupuesto",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede vencer el presupuesto (la API fecha la emisión con el día de la sede)."
     }
   ]
 }

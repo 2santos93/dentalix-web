@@ -32,6 +32,7 @@ import {
   confirmationLinkDetail,
   appointmentMoveDetail,
   staffNameMap,
+  treatmentPlanAcceptanceDetail,
 } from './audit-labels';
 
 type AuditMetadata = AuditEvent['metadata'];
@@ -963,5 +964,21 @@ describe('appointmentMoveDetail (DX-133-bis)', () => {
     );
     expect(appointmentMoveDetail({ reason: 'APPOINTMENT_MOVED' }, VE, staff)).toBe('Cita movida');
     expect(appointmentMoveDetail({ reason: 'PATIENT_FLOW' }, VE, staff)).toBeNull();
+  });
+});
+
+describe('treatmentPlanAcceptanceDetail (DX-379 C)', () => {
+  it('nombra cómo se aceptó un presupuesto vencido y la vista previa de la firma', () => {
+    expect(treatmentPlanAcceptanceDetail({ reason: 'QUOTE_EXPIRED_ORIGINAL_PRICES' })).toBe(
+      'Presupuesto vencido aceptado con los precios originales',
+    );
+    expect(treatmentPlanAcceptanceDetail({ reason: 'QUOTE_EXPIRED_REPRICED' })).toBe(
+      'Presupuesto vencido aceptado con los precios actualizados',
+    );
+    expect(treatmentPlanAcceptanceDetail({ reason: 'ACCEPT_REPRICE_PREVIEW' })).toBe(
+      'Vista previa de los precios actualizados para aceptar',
+    );
+    expect(treatmentPlanAcceptanceDetail({ reason: 'CHAIR_ORDER' })).toBeNull();
+    expect(treatmentPlanAcceptanceDetail({})).toBeNull();
   });
 });

@@ -147,6 +147,9 @@ export function PlanQuoteActions({
           patientId={patientId}
           planId={plan.id}
           onAccepted={onAccepted}
+          quoteExpired={plan.quoteExpired}
+          role={role}
+          locationId={plan.presentedLocationId}
         />
       ) : null}
       {repriceable && onRepriced ? (
