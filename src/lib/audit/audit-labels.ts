@@ -257,6 +257,17 @@ export function signatureRequestDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && SIGNATURE_REASONS[metadata.reason]) ?? null;
 }
 
+const TREATMENT_PLAN_ACCEPTANCE_REASONS: Record<string, string> = {
+  QUOTE_EXPIRED_ORIGINAL_PRICES: 'Presupuesto vencido aceptado con los precios originales',
+  QUOTE_EXPIRED_REPRICED: 'Presupuesto vencido aceptado con los precios actualizados',
+  ACCEPT_REPRICE_PREVIEW: 'Vista previa de los precios actualizados para aceptar',
+};
+
+/** DX-379 (C): cómo se aceptó un presupuesto vencido (o su vista previa), o null si no es de ello. */
+export function treatmentPlanAcceptanceDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && TREATMENT_PLAN_ACCEPTANCE_REASONS[metadata.reason]) ?? null;
+}
+
 const STAFF_LOGIN_REASONS: Record<string, string> = {
   LOGIN_UNLOCKED: 'Desbloqueo del inicio de sesión',
   LOGIN_UNLOCK_REFUSED: 'Desbloqueo del inicio de sesión rechazado (sin cambios)',
