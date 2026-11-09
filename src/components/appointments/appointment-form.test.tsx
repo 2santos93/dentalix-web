@@ -343,6 +343,41 @@ describe('AppointmentForm', () => {
     expect(screen.getByRole('option', { name: /dr\. luis gómez/i })).toBeInTheDocument();
   });
 
+  // DX-118 (FE-035): combobox de verdad — flechas, Enter, aria-activedescendant
+  // y un `status` con el número de resultados; las opciones son hijas directas
+  // del listbox (sin botones dentro).
+  it('elige un paciente solo con teclado: flechas y Enter; la lista es un combobox válido', async () => {
+    const user = userEvent.setup();
+    await renderFormAndWaitForLoad();
+    const search = screen.getByLabelText(/^paciente$/i);
+    expect(search).toHaveAttribute('role', 'combobox');
+    expect(search).toHaveAttribute('aria-expanded', 'false');
+    await user.type(search, 'pérez');
+    const listbox = await screen.findByRole('listbox', { name: /paciente/i });
+    expect(search).toHaveAttribute('aria-expanded', 'true');
+    expect(search).toHaveAttribute('aria-controls', listbox.id);
+    const options = within(listbox).getAllByRole('option');
+    expect(Array.from(listbox.children).every((li) => li.getAttribute('role') === 'option')).toBe(true);
+    expect(within(listbox).queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.getByRole('status', { name: '' })).toHaveTextContent(`${options.length} pacientes`);
+    expect(search).not.toHaveAttribute('aria-activedescendant');
+
+    await user.keyboard('{ArrowDown}');
+    expect(search).toHaveAttribute('aria-activedescendant', options[0].id);
+    expect(options[0]).toHaveAttribute('aria-selected', 'true');
+    await user.keyboard('{ArrowDown}');
+    expect(search).toHaveAttribute('aria-activedescendant', options[1].id);
+    await user.keyboard('{ArrowUp}');
+    expect(search).toHaveAttribute('aria-activedescendant', options[0].id);
+    const chosenName = options[0].querySelector('span')?.textContent ?? '';
+    await user.keyboard('{Enter}');
+    // Elegido: la ficha del paciente con «Cambiar», sin lista ni envío del formulario.
+    expect(screen.getByRole('button', { name: 'Cambiar' })).toBeInTheDocument();
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(screen.getByText(chosenName)).toBeInTheDocument();
+    expect(mockedCreateAppointment).not.toHaveBeenCalled();
+  });
+
   it('loads the initial patient options from the server with a bounded pageSize (no query yet)', async () => {
     await renderFormAndWaitForLoad();
     expect(mockedListPatients).toHaveBeenCalledWith('tok', { pageSize: 20 });

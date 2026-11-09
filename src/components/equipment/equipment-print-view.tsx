@@ -11,6 +11,7 @@ import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Button } from '@/components/ui/button';
 import { EquipmentLifeSheet } from './equipment-life-sheet';
+import { usePrintDocumentTitle } from '@/lib/print/use-print-document-title';
 
 const copy = {
   toolbar: 'Acciones de la hoja de vida',
@@ -61,9 +62,10 @@ export function EquipmentPrintView({ token, equipmentId }: EquipmentPrintViewPro
 
   const formatReady = detail !== null && stamp.ready && stamp.notice === null;
 
+  // DX-118 (FE-033): título neutro en la pestaña; el del documento solo al imprimir.
+  usePrintDocumentTitle('Hoja de vida del equipo', detail ? copy.documentTitle(detail.name) : null);
   return (
     <div className="flex min-h-full flex-1 flex-col bg-surface-sunken print:min-h-0 print:bg-white">
-      {detail ? <title>{copy.documentTitle(detail.name)}</title> : null}
       <div
         role="toolbar"
         aria-label={copy.toolbar}

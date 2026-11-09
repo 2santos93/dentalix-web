@@ -13,6 +13,7 @@ import { PostOpDocument } from './postop-document';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Button } from '@/components/ui/button';
+import { usePrintDocumentTitle } from '@/lib/print/use-print-document-title';
 
 const copy = {
   toolbar: 'Acciones del documento',
@@ -93,9 +94,10 @@ export function PostOpPrintView({
 
   const backHref = `/patients/${encodeURIComponent(patientId)}?tab=clinical-history`;
 
+  // DX-118 (FE-033): título neutro en la pestaña; el del documento solo al imprimir.
+  usePrintDocumentTitle('Indicaciones', data ? copy.documentTitle(data.templateTitle, data.patientName) : null);
   return (
     <div className="postop-print-page flex min-h-full flex-1 flex-col bg-surface-sunken print:min-h-0 print:bg-white">
-      {data ? <title>{copy.documentTitle(data.templateTitle, data.patientName)}</title> : null}
       <div
         role="toolbar"
         aria-label={copy.toolbar}

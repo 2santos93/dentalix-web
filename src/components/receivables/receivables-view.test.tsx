@@ -183,7 +183,7 @@ describe('ReceivablesView (DX-145)', () => {
       'href',
       '/patients/pat-1?tab=account-statement',
     );
-    const whatsapp = within(tableRow).getByRole('link', { name: 'WhatsApp a Ana Pérez' });
+    const whatsapp = within(tableRow).getByRole('link', { name: /^WhatsApp a Ana Pérez/ });
     await waitFor(() => expect(whatsapp.getAttribute('href')).toContain('Cl%C3%ADnica%20Demo'));
     // Sin importes en el mensaje.
     expect(decodeURIComponent(whatsapp.getAttribute('href') ?? '')).not.toMatch(/\d{3}\.|VES|\$/);

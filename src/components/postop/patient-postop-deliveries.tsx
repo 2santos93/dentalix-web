@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
   empty: 'Todavía no se han entregado indicaciones',
@@ -116,11 +117,11 @@ export function PatientPostOpDeliveries({ token, patientId }: PatientPostOpDeliv
   function printLink(delivery: PostOpDeliverySummary) {
     return (
       <Button asChild variant="secondary" size="sm" className="w-full sm:w-auto">
-        <a href={postOpPrintHref(patientId, delivery.id)} target="_blank" rel="noopener">
+        <ExternalLink href={postOpPrintHref(patientId, delivery.id)}>
           <Printer aria-hidden />
           {copy.print}
           <span className="sr-only"> · {copy.printHint(delivery.templateTitle)}</span>
-        </a>
+        </ExternalLink>
       </Button>
     );
   }

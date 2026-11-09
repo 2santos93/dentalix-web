@@ -25,6 +25,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PatientSignatureRequestsSection } from '@/components/signature-requests/patient-signature-requests-section';
 import { CountersignConsentModal } from './countersign-consent-modal';
 import { NewConsentModal } from './new-consent-modal';
+import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
   heading: 'Consentimientos',
@@ -43,7 +44,6 @@ const copy = {
   signer: (name: string, type: string) => `${name} (${type.toLowerCase()})`,
   version: (v: number) => `Versión ${v} de la plantilla`,
   print: 'Ver e imprimir',
-  newTab: '(se abre en otra pestaña)',
   // DX-243: firma a distancia.
   receptionSupport:
     'Envía consentimientos a firmar a distancia y sigue su estado. El documento firmado lo ven los profesionales.',
@@ -207,16 +207,14 @@ function ClinicalConsents({
       // El documento es el enlace a su vista imprimible (otra pestaña).
       cell: (consent) => (
         <span className="flex flex-col">
-          <a
+          <ExternalLink
             href={consentPrintHref(patientId, consent.id)}
-            target="_blank"
-            rel="noopener"
             className="inline-flex items-center gap-1.5 font-medium text-ink underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
           >
             {consent.title}
             <Printer aria-hidden className="size-3.5 text-muted" />
-            <span className="sr-only"> · {copy.print} {copy.newTab}</span>
-          </a>
+            <span className="sr-only"> · {copy.print}</span>
+          </ExternalLink>
           <span className="t-caption">{copy.version(consent.templateVersion)}</span>
         </span>
       ),

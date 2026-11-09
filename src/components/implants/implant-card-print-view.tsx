@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { ImplantCardDocument } from './implant-card-document';
 import { documentFormat } from '@/lib/format/document-format';
 import { DocumentFormatNote } from '@/components/documents/document-format-note';
+import { usePrintDocumentTitle } from '@/lib/print/use-print-document-title';
 
 const copy = {
   toolbar: 'Acciones de la tarjeta de implante',
@@ -98,9 +99,10 @@ export function ImplantCardPrintView({ token, patientId, date }: ImplantCardPrin
 
   const backHref = `/patients/${encodeURIComponent(patientId)}?tab=implants`;
 
+  // DX-118 (FE-033): título neutro en la pestaña; el del documento solo al imprimir.
+  usePrintDocumentTitle('Tarjeta de implante', card ? copy.documentTitle(card.patientName) : null);
   return (
     <div className="implant-card-print-page flex min-h-full flex-1 flex-col bg-surface-sunken print:min-h-0 print:bg-white">
-      {card ? <title>{copy.documentTitle(card.patientName)}</title> : null}
       <div
         role="toolbar"
         aria-label={copy.toolbar}

@@ -10,6 +10,7 @@ import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Button } from '@/components/ui/button';
 import { PrescriptionDocument } from './prescription-document';
+import { usePrintDocumentTitle } from '@/lib/print/use-print-document-title';
 
 const copy = {
   toolbar: 'Acciones de la receta',
@@ -93,9 +94,10 @@ export function PrescriptionPrintView({
 
   const backHref = `/patients/${encodeURIComponent(patientId)}?tab=prescriptions`;
 
+  // DX-118 (FE-033): título neutro en la pestaña; el del documento solo al imprimir.
+  usePrintDocumentTitle('Receta', data ? copy.documentTitle(data.patientName) : null);
   return (
     <div className="prescription-print-page flex min-h-full flex-1 flex-col bg-surface-sunken print:min-h-0 print:bg-white">
-      {data ? <title>{copy.documentTitle(data.patientName)}</title> : null}
       <div
         role="toolbar"
         aria-label={copy.toolbar}

@@ -76,6 +76,9 @@ const copy = {
   patientLabel: 'Paciente',
   patientSearchPlaceholder: 'Buscar por documento o nombre…',
   patientSearchHint: 'Escribe el documento o el nombre del paciente.',
+  // DX-118 (FE-035): cuántos resultados hay, para el lector (role="status").
+  patientResults: (n: number) =>
+    n === 1 ? '1 paciente. Flechas para recorrer, Enter para elegir.' : `${n} pacientes. Flechas para recorrer, Enter para elegir.`,
   patientSearching: 'Buscando…',
   patientNoMatchTitle: 'No encontramos a nadie',
   patientNoMatch: 'Ningún paciente coincide con lo que escribiste.',
@@ -195,6 +198,11 @@ interface AppointmentFormProps {
  * with a "Cambiar" button, and a "Crear paciente" dialog covers the
  * not-yet-registered case.
  */
+/** id de una opción del combobox de pacientes (aria-activedescendant). */
+function patientOptionId(patientId: string): string {
+  return `appointment-patient-option-${patientId}`;
+}
+
 export function AppointmentForm({
   token,
   onCreated,
@@ -222,6 +230,9 @@ export function AppointmentForm({
   // the search box once someone is picked (manually, by exact-document
   // auto-select, or via inline-create).
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(defaultPatient ?? null);
+  // DX-118 (FE-035): la opción resaltada del combobox (aria-activedescendant);
+  // -1 = ninguna. Se acota a la lista actual al pintar.
+  const [activePatientIndex, setActivePatientIndex] = useState(-1);
 
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [staffLoading, setStaffLoading] = useState(true);
@@ -590,6 +601,11 @@ export function AppointmentForm({
   }
 
   const trimmedPatientQuery = patientQuery.trim();
+  // DX-118 (FE-035): la lista se muestra con resultados y sin paciente elegido.
+  const showPatientList =
+    !selectedPatient && !patientsError && trimmedPatientQuery !== '' && !patientsLoading && patients.length > 0;
+  const activeIndex = showPatientList ? Math.min(activePatientIndex, patients.length - 1) : -1;
+  const activePatient = activeIndex >= 0 ? patients[activeIndex] : null;
   // The "no match" empty state owns the create CTA, so we hide the header's
   // duplicate "Crear paciente" button while it's showing — one clear action.
   const showNoPatientMatch =
@@ -672,9 +688,36 @@ export function AppointmentForm({
               <input
                 id="appointment-patient-search"
                 type="text"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={showPatientList}
+                aria-controls="appointment-patient-listbox"
+                aria-activedescendant={activePatient ? patientOptionId(activePatient.id) : undefined}
+                autoComplete="off"
                 placeholder={copy.patientSearchPlaceholder}
                 value={patientQuery}
-                onChange={(e) => setPatientQuery(e.target.value)}
+                onChange={(e) => {
+                  setPatientQuery(e.target.value);
+                  setActivePatientIndex(-1);
+                }}
+                onKeyDown={(e) => {
+                  if (!showPatientList) return;
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setActivePatientIndex((i) => Math.min(i + 1, patients.length - 1));
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setActivePatientIndex((i) => Math.max(i - 1, 0));
+                  } else if (e.key === 'Enter' && activePatient) {
+                    e.preventDefault();
+                    handlePatientSelect(activePatient);
+                  } else if (e.key === 'Escape') {
+                    // Con la lista abierta, Escape la cierra sin cerrar el diálogo.
+                    e.preventDefault();
+                    setPatientQuery('');
+                    setActivePatientIndex(-1);
+                  }
+                }}
                 className={cn(fieldClass, controlHeight, 'pl-9 pr-9')}
               />
               {patientsLoading && (
@@ -717,26 +760,37 @@ export function AppointmentForm({
                 </Button>
               </div>
             ) : (
-              <ul
-                role="listbox"
-                aria-label={copy.patientLabel}
-                className="flex max-h-56 flex-col gap-0.5 overflow-y-auto rounded-lg border border-border bg-surface p-1"
-              >
-                {patients.map((p) => (
-                  <li key={p.id}>
-                    <button
-                      type="button"
+              <>
+                <p role="status" className="sr-only">
+                  {copy.patientResults(patients.length)}
+                </p>
+                <ul
+                  id="appointment-patient-listbox"
+                  role="listbox"
+                  aria-label={copy.patientLabel}
+                  className="flex max-h-56 flex-col gap-0.5 overflow-y-auto rounded-lg border border-border bg-surface p-1"
+                >
+                  {patients.map((p, index) => (
+                    <li
+                      key={p.id}
+                      id={patientOptionId(p.id)}
                       role="option"
-                      aria-selected={false}
+                      aria-selected={index === activeIndex}
+                      // El foco se queda en el campo (aria-activedescendant): el
+                      // mousedown no debe robarlo antes de que llegue el clic.
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => handlePatientSelect(p)}
-                      className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
+                      className={cn(
+                        'flex cursor-pointer items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-surface-sunken',
+                        index === activeIndex && 'bg-surface-sunken ring-2 ring-inset ring-primary-text',
+                      )}
                     >
                       <span className="truncate text-sm text-ink">{fullPatientName(p)}</span>
                       <span className="shrink-0 text-xs text-muted">{patientDocLabel(p)}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </>
         )}

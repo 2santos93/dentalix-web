@@ -5,6 +5,7 @@ import { loginAs } from './support/auth';
 import { sedeDayFromToday } from './support/clock';
 import { API_URL, tenantOrigin } from './support/urls';
 import { fillDate, fillTime, readDate } from './support/dates';
+import { axeViolations } from './support/axe';
 
 /**
  * e2e DX-446: huecos reservados para urgencias.
@@ -111,7 +112,14 @@ async function startBooking(page: Page, doc: string, start: string, type: string
   const form = page.getByRole('form', { name: 'Agendar cita' });
   await form.getByLabel('Profesional', { exact: true }).selectOption({ label: dentist.fullName });
   await expect.poll(() => readDate(form, 'Fecha')).toBe(DAY);
-  await form.getByLabel('Paciente', { exact: true }).fill(doc);
+  // DX-118 (FE-035): el buscador es un combobox válido para axe (opciones hijas
+  // del listbox, sin botones dentro) y se puede elegir solo con teclado.
+  const search = form.getByLabel('Paciente', { exact: true });
+  await search.fill('Reserva');
+  await expect(form.getByRole('listbox', { name: 'Paciente' })).toBeVisible({ timeout: 10_000 });
+  const violations = await axeViolations(page, form);
+  expect(violations.filter((v) => /^aria-required-(children|parent)$/.test(v.id))).toEqual([]);
+  await search.fill(doc);
   await expect(form.getByRole('button', { name: 'Cambiar' })).toBeVisible({ timeout: 10_000 });
   await form.getByLabel('Tipo de cita (opcional)').selectOption({ label: `${type} · 30 min` });
   await fillTime(form, 'Hora de inicio', start);

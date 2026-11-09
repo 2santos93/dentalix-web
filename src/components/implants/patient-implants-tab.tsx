@@ -25,6 +25,7 @@ import { RegisterImplantModal } from './register-implant-modal';
 import { VoidImplantModal } from './void-implant-modal';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
+import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
   heading: 'Implantes',
@@ -207,11 +208,11 @@ export function PatientImplantsTab({
         </div>
         <div className="flex items-center gap-2 sm:justify-end">
           <Button asChild variant="secondary" size="sm" className="flex-1 sm:flex-none">
-            <a href={implantCardPrintHref(patientId, implant.placedOn)} target="_blank" rel="noopener">
+            <ExternalLink href={implantCardPrintHref(patientId, implant.placedOn)}>
               <CreditCard aria-hidden />
               {copy.card}
               <span className="sr-only"> {copy.cardHint(stamp.maybe.civilDate(implant.placedOn, implant.locationId))}</span>
-            </a>
+            </ExternalLink>
           </Button>
           {/* Sin «Editar» ni «Borrar»: el registro es inmutable; solo se anula. */}
           {canVoidImplant(implant, { role, userId }) ? (

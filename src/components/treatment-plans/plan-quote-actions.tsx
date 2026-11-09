@@ -1,7 +1,6 @@
 'use client';
 import * as React from 'react';
 import { useState } from 'react';
-import Link from 'next/link';
 import { CircleCheck, PenLine, Printer } from 'lucide-react';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
@@ -17,10 +16,10 @@ import type { SedePainters } from '@/lib/locations/sede-stamp';
 import { Button } from '@/components/ui/button';
 import { AcceptPlanModal } from './accept-plan-modal';
 import { RemoteAcceptanceEvidence, RemoteBudgetPanel } from './remote-budget-panel';
+import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
   print: 'Imprimir presupuesto',
-  newTab: '(se abre en otra pestaña)',
   accept: 'Aceptar con firma',
   acceptedBy: (name: string, when: string) => `Aceptado y firmado por ${name} el ${when}`,
   acceptedRemotely: (name: string, when: string) => `Aceptado a distancia por ${name} el ${when}`,
@@ -94,11 +93,10 @@ export function PlanQuoteActions({
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         {canPrintPlanQuote(role) ? (
           <Button asChild variant="secondary">
-            <Link href={planQuotePrintHref(patientId, plan.id)} target="_blank" rel="noopener">
+            <ExternalLink href={planQuotePrintHref(patientId, plan.id)}>
               <Printer aria-hidden />
               {copy.print}
-              <span className="sr-only">{copy.newTab}</span>
-            </Link>
+            </ExternalLink>
           </Button>
         ) : null}
         {acceptable ? (

@@ -1,8 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink as ExternalLinkIcon } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -21,6 +20,7 @@ import { SignaturePad } from '@/components/shared/signature-pad';
 import { SectionError } from '@/components/errors/section-error';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
   title: 'Aceptar presupuesto con firma',
@@ -32,7 +32,6 @@ const copy = {
   total: (currency: string) => `Total (${currency})`,
   validity: (days: number, until: string) => `Válido ${days} días, hasta el ${until}`,
   viewFull: 'Ver el presupuesto completo',
-  newTab: '(se abre en otra pestaña)',
   signerName: 'Nombre de quien firma',
   signerHint: 'El paciente o su representante.',
   signature: 'Firma del paciente',
@@ -206,16 +205,13 @@ export function AcceptPlanModal({
               <span className="tabular-nums">
                 {copy.validity(quote.validityDays, sedeCivilDate(quote.validUntil, fmt))}
               </span>
-              <Link
+              <ExternalLink
                 href={planQuotePrintHref(patientId, planId)}
-                target="_blank"
-                rel="noopener"
                 className="inline-flex items-center gap-1 font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
               >
                 {copy.viewFull}
-                <ExternalLink aria-hidden className="size-3.5" />
-                <span className="sr-only">{copy.newTab}</span>
-              </Link>
+                <ExternalLinkIcon aria-hidden className="size-3.5" />
+              </ExternalLink>
             </p>
           </section>
           <SedeStampNote stamp={stamp} />

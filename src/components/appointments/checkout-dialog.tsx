@@ -1,6 +1,5 @@
 'use client';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import Link from 'next/link';
 import { CircleCheck, CircleAlert } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -12,6 +11,7 @@ import {
 import { SectionError } from '@/components/errors/section-error';
 import { FormModal } from '@/components/shared/form-modal';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ExternalLink } from '@/components/shared/external-link';
 
 export const checkoutCopy = {
   title: (name: string) => `Salida de ${name}`,
@@ -143,15 +143,13 @@ export function CheckoutDialog({
                   {done ? text.done : text.pending}
                 </span>
                 {done ? null : (
-                  <Link
+                  <ExternalLink
                     href={`/patients/${list.patientId}${text.tab}`}
-                    target="_blank"
-                    rel="noopener"
                     className="inline-flex min-h-11 shrink-0 items-center font-medium text-primary-text underline-offset-4 hover:underline sm:min-h-6"
                   >
                     {checkoutCopy.open}
                     <span className="sr-only">: {text.pending}</span>
-                  </Link>
+                  </ExternalLink>
                 )}
               </li>
             );

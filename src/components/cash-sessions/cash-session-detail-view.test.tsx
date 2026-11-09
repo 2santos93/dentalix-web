@@ -45,7 +45,7 @@ describe('CashSessionDetailView: acciones según `can` (DX-027, DX-252)', () => 
     expect(screen.queryByRole('button', { name: 'Reabrir' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Corregir con un ajuste' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Cerrar caja' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Informe imprimible' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^Informe imprimible/ })).toBeInTheDocument();
   });
 
   it('can.reopen sin can.adjust: solo Reabrir; can.adjust sin can.reopen: solo Corregir', async () => {

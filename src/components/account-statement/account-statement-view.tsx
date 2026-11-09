@@ -76,6 +76,7 @@ import {
   type CreditRefund,
 } from '@/lib/patient-credit/patient-credit-api';
 import { CREDIT_MOVEMENTS_HEADING_ID, CreditMovementsSection } from '@/components/patient-credit/credit-movements-section';
+import { ExternalLink } from '@/components/shared/external-link';
 
 // Copy como constantes (i18n-ready), igual que el resto de vistas.
 const copy = {
@@ -318,11 +319,11 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
             ) : null}
             {showPrint ? (
               <Button asChild variant="secondary" className="w-full max-sm:min-h-11 sm:w-auto">
-                <a href={accountStatementPrintHref(patientId)} target="_blank" rel="noopener">
+                <ExternalLink href={accountStatementPrintHref(patientId)}>
                   <Printer aria-hidden />
                   {copy.print}
                   <span className="sr-only"> {copy.printHint}</span>
-                </a>
+                </ExternalLink>
               </Button>
             ) : null}
           </div>
@@ -869,16 +870,14 @@ function PlanRows({
           </Button>
         </TableCell>
         <TableCell className="text-right" data-label={copy.colQuote}>
-          <a
+          <ExternalLink
             href={quoteHref}
-            target="_blank"
-            rel="noopener"
             className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text sm:min-h-0"
           >
             <FileText aria-hidden className="size-4" />
             {copy.quoteLink}
             <span className="sr-only">{copy.quoteLinkSuffix(planName)}</span>
-          </a>
+          </ExternalLink>
         </TableCell>
       </TableRow>
       <TableRow id={detailId} hidden={!open} className="bg-canvas hover:bg-canvas">

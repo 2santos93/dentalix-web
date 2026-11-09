@@ -530,6 +530,23 @@ it('DX-377: referencia repetida (409): avisa, pide motivo y reintenta con él y 
   expect(second[3]).toBe(first[3]);
 });
 
+// DX-118 (FE-032): el importe se valida en su campo: aria-invalid y el
+// mensaje asociado por aria-describedby, no solo un texto suelto.
+it('DX-118: un importe 0 deja aria-invalid en el campo y el mensaje asociado', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue([eurPlan]);
+  renderModal();
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+  const amount = within(dialog).getByLabelText('Importe');
+  await user.type(amount, '0');
+  await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+  await waitFor(() => expect(amount).toHaveAttribute('aria-invalid', 'true'));
+  // La descripción junta el error y la vista previa (vacía): se compara con regex.
+  expect(amount).toHaveAccessibleDescription(new RegExp(recordPaymentCopy.invalidAmount.replace(".", "\\.")));
+  expect(mockedRecord).not.toHaveBeenCalled();
+});
+
 it('DX-395: la referencia que falta marca aria-invalid, describe el error y recibe el foco', async () => {
   const user = userEvent.setup();
   mockedList.mockResolvedValue([eurPlan]);
