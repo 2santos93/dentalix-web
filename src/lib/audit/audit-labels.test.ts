@@ -981,4 +981,15 @@ describe('treatmentPlanAcceptanceDetail (DX-379 C)', () => {
     expect(treatmentPlanAcceptanceDetail({ reason: 'CHAIR_ORDER' })).toBeNull();
     expect(treatmentPlanAcceptanceDetail({})).toBeNull();
   });
+
+  it('DX-417: nombra la aceptación parcial, su vista previa y el alta del presupuesto pendiente', () => {
+    expect(treatmentPlanAcceptanceDetail({ reason: 'PLAN_PARTIALLY_ACCEPTED' })).toBe('Presupuesto aceptado en parte');
+    expect(treatmentPlanAcceptanceDetail({ reason: 'ACCEPT_PARTIAL_PREVIEW' })).toBe(
+      'Vista previa de la aceptación parcial',
+    );
+    expect(treatmentPlanAcceptanceDetail({ reason: 'PLAN_SPLIT_PENDING' })).toBe(
+      'Presupuesto pendiente creado por una aceptación parcial',
+    );
+    expect(treatmentPlanAcceptanceDetail({})).toBeNull();
+  });
 });
