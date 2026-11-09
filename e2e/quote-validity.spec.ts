@@ -48,6 +48,21 @@ async function expectSettingsClean(page: Page, width: number): Promise<void> {
   await expectNoHorizontalScrollIn(page);
 }
 
+/**
+ * La validez en sus dos sitios de la ficha (M-6): la cabecera del plan (la
+ * línea de estado bajo «#tp-detail-heading») y el panel de opciones (junto a
+ * «Presentado al paciente el …»). Una vez en cada uno.
+ */
+async function expectValidityInBothPlaces(page: Page, until: string): Promise<void> {
+  const panel = page.locator('#tabpanel-treatment-plans');
+  const text = `Válido hasta el ${until}`;
+  await expect(panel.getByTestId('quote-valid-until')).toHaveCount(2, { timeout: 15_000 });
+  await expect(panel.locator('#tp-detail-heading + p').getByTestId('quote-valid-until')).toHaveText(text);
+  await expect(
+    panel.locator('p', { hasText: /^Presentado al paciente el / }).getByTestId('quote-valid-until'),
+  ).toHaveText(text);
+}
+
 test('ADMIN fija 45 días; al presentar, el plan y el presupuesto impreso valen hasta hoy + 45 en la sede', async ({
   page,
   context,
@@ -120,7 +135,7 @@ test('ADMIN fija 45 días; al presentar, el plan y el presupuesto impreso valen 
   const until = fmt.civilDate(stored.quoteValidUntil);
 
   // Cabecera del plan y panel de opciones: «Válido hasta el …», sin «Vencido».
-  await expect(panel.getByTestId('quote-valid-until').first()).toHaveText(`Válido hasta el ${until}`);
+  await expectValidityInBothPlaces(page, until);
   await expect(panel.getByTestId('quote-expired')).toHaveCount(0);
 
   // --- 3. La vista A4: «Válido 45 días hasta el …».
@@ -142,9 +157,7 @@ test('ADMIN fija 45 días; al presentar, el plan y el presupuesto impreso valen 
     await shot(page, 'dx379-settings', viewport.width);
 
     await page.goto(`${admin.origin}/patients/${patient.id}?tab=treatment-plans`);
-    await expect(panel.getByTestId('quote-valid-until').first()).toHaveText(`Válido hasta el ${until}`, {
-      timeout: 15_000,
-    });
+    await expectValidityInBothPlaces(page, until);
     await expectNoHorizontalScroll(page);
     await shot(page, 'dx379-plan', viewport.width);
 
