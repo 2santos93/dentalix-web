@@ -568,6 +568,42 @@ describe('AgendaView', () => {
       expect(mockedUpdateAppointment).toHaveBeenCalledWith('tok', 'apt-c', { status: 'SCHEDULED' });
     });
 
+    it('mantenerla en sobrecupo al reactivar también enseña los avisos', async () => {
+      mockedListStaff.mockResolvedValue(staff);
+      const cancelled = appointment({ id: 'urg', overbooked: true, status: 'CANCELLED', cancelledByKind: 'STAFF_FOR_PATIENT' });
+      mockedListAppointments.mockResolvedValue([cancelled]);
+      mockedUpdateAppointment
+        .mockRejectedValueOnce(
+          new ApiError(409, 'Su hora ya la ocupa otra cita del profesional.', { code: 'OVERBOOK_SLOT_TAKEN' }),
+        )
+        .mockResolvedValueOnce({
+          ...cancelled,
+          status: 'SCHEDULED',
+          warnings: [OFF_SCHEDULE],
+          warningCodes: ['PROVIDER_OFF_SCHEDULE'],
+        } as Awaited<ReturnType<typeof updateAppointment>>);
+      const user = userEvent.setup();
+      await renderAgenda(
+        <>
+          <AgendaView token="tok" />
+          <Toaster />
+        </>,
+      );
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await user.click(screen.getByRole('button', { name: /^lista$/i }));
+      const table = await screen.findByRole('table', { name: /agenda del día/i });
+      await pickStatus(user, within(table).getByRole('combobox'), 'Agendada');
+      const dialog = await screen.findByRole('dialog', { name: 'Su hora ya está ocupada' });
+      await user.click(within(dialog).getByRole('button', { name: 'Mantener en sobrecupo' }));
+
+      expect(await screen.findByText('Cita fuera del horario del profesional')).toBeInTheDocument();
+      expect(screen.getByText(OFF_SCHEDULE)).toBeInTheDocument();
+      expect(mockedUpdateAppointment).toHaveBeenLastCalledWith('tok', 'urg', {
+        status: 'SCHEDULED',
+        keepOverbooked: true,
+      });
+    });
+
     it('una cita que ya pasó: el mensaje del servidor en el detalle, sin «Reintentar»', async () => {
       const tokenFor = (role: string) =>
         `h.${btoa(JSON.stringify({ sub: 'staff-1', tenantId: 't1', role }))}.s`;
