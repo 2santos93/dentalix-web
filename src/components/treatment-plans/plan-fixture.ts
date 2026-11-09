@@ -16,6 +16,8 @@ export const PLAN_WITHOUT_OPTIONS = {
   quoteIssuedOn: null,
   quoteValidUntil: null,
   quoteExpired: false,
+  // DX-417: no es el pendiente de una aceptación parcial.
+  splitFromPlanId: null,
 } as const;
 
 /**
