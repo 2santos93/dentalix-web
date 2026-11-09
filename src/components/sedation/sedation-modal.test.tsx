@@ -130,6 +130,12 @@ describe('SedationModal (DX-407)', () => {
     await user.type(screen.getByLabelText(sedationCopy.weight), '15');
     await user.type(screen.getByLabelText(sedationCopy.height), '100');
     expect(screen.getByText('Naloxona 1,5 mg · Flumazenil 0,15 mg')).toBeInTheDocument();
+    // DX-442: el IMC va con su rótulo en el mismo texto y no es una región viva.
+    const bmi = screen.getByTestId('sedation-bmi');
+    expect(bmi).toHaveTextContent('15');
+    expect(bmi.parentElement).toHaveTextContent(`${sedationCopy.bmi}15`);
+    expect(document.querySelector('output')).toBeNull();
+    expect(bmi.closest('[aria-live]')).toBeNull();
     await user.type(screen.getByLabelText(sedationCopy.escortName), 'Laura Ortiz');
     await user.type(screen.getByLabelText(sedationCopy.escortRelationship), 'Madre');
     await user.click(screen.getByLabelText(sedationCopy.consent));
@@ -246,7 +252,11 @@ describe('SedationModal (DX-407)', () => {
     });
     renderModal();
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('Pasó el intervalo de 5 min sin toma: 11 min de retraso');
+    // DX-442: la alerta no lleva los minutos (cambian con el reloj y se
+    // volverían a anunciar); van al lado.
+    expect(alert).toHaveTextContent('Pasó el intervalo de 5 min sin toma. Registra las constantes.');
+    expect(alert).not.toHaveTextContent('11 min');
+    expect(screen.getByText(sedationCopy.overdueBy(11))).toBeInTheDocument();
   });
 
   it('egreso en sedación moderada con el operador como monitor: pide justificación y envía criterios y monitor', async () => {
