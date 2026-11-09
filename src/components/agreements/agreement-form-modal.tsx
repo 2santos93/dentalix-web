@@ -357,6 +357,9 @@ export function AgreementFormModal({
                     id={`agreement-cat-${row.key}`}
                     value={row.category}
                     onChange={(e) => updateRow(row.key, { category: e.target.value })}
+                    // DX-105-bis: el error del bloque describe a cada fila (como el resto de campos).
+                    aria-invalid={errors.categories ? true : undefined}
+                    aria-describedby={errors.categories ? fieldErrorId('agreement-categories') : undefined}
                   >
                     <option value="">{copy.chooseCategory}</option>
                     {categoryChoices(row.category).map((c) => (
@@ -377,6 +380,8 @@ export function AgreementFormModal({
                     value={row.percent}
                     placeholder="20"
                     onChange={(e) => updateRow(row.key, { percent: e.target.value })}
+                    aria-invalid={errors.categories ? true : undefined}
+                    aria-describedby={errors.categories ? fieldErrorId('agreement-categories') : undefined}
                   />
                 </div>
                 <Button

@@ -171,6 +171,44 @@ describe('PatientAgreementSection (DX-105)', () => {
     expect(onChanged).toHaveBeenCalledTimes(1);
   });
 
+  it('DX-105-bis: asignar desde vacío deja el foco en «Cambiar» (el disparador «Asignar convenio» ya no existe)', async () => {
+    mockedGet.mockResolvedValueOnce({ current: null, history: [] });
+    mockedGet.mockResolvedValueOnce({ current: patientAgreement(), history: [] });
+    mockedAssign.mockResolvedValue(patientAgreement());
+    mockedCoverages.mockResolvedValue([coverageFor('c1', sanavida, 'Salud Plus')]);
+    renderSection();
+    const user = setupUser();
+
+    await user.click(await screen.findByRole('button', { name: 'Asignar convenio' }));
+    const dialog = await screen.findByRole('dialog');
+    await screen.findByRole('option', { name: /Sanavida 2026/ });
+    await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag1');
+    await user.click(within(dialog).getByRole('button', { name: 'Asignar' }));
+
+    await screen.findByTestId('agreement-current');
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Cambiar el convenio Sanavida 2026' })).toHaveFocus(),
+    );
+  });
+
+  it('DX-105-bis: si la relectura tras quitar falla, la bandera de foco se limpia y Reintentar no roba el foco', async () => {
+    mockedGet.mockResolvedValueOnce({ current: patientAgreement(), history: [] });
+    mockedGet.mockRejectedValueOnce(new ApiError(500, 'boom'));
+    mockedGet.mockResolvedValueOnce({ current: null, history: [] });
+    mockedRemove.mockResolvedValue(undefined);
+    renderSection();
+    const user = setupUser();
+
+    await user.click(await screen.findByRole('button', { name: 'Quitar el convenio Sanavida 2026' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Quitar' }));
+    await waitFor(() => expect(mockedRemove).toHaveBeenCalledTimes(1));
+    const retry = await screen.findByRole('button', { name: 'Reintentar' });
+    await user.click(retry);
+    const assign = await screen.findByRole('button', { name: 'Asignar convenio' });
+    // La bandera quedó limpia con el fallo: nadie mueve el foco a «Asignar convenio».
+    expect(assign).not.toHaveFocus();
+  });
+
   it('si quitar falla, el diálogo sigue abierto con el error y no notifica', async () => {
     mockedGet.mockResolvedValue({ current: patientAgreement(), history: [] });
     mockedRemove.mockRejectedValue(new ApiError(500, 'boom'));
