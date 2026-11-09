@@ -432,24 +432,25 @@ export function RepricePlanModal({
           }}
         >
           {step === 0 ? (
-            <PreviewStep
+            <RepricingPreviewView
               base={base}
               preview={fresh ?? current?.preview ?? base}
               fresh={fresh !== null}
               expired={expired}
-              selected={selected}
-              onToggle={(itemId, checked) => {
-                setRefreshError(null);
-                setSubmitError(null);
-                setSelected((prev) => {
-                  const next = new Set(prev ?? []);
-                  if (checked) next.add(itemId);
-                  else next.delete(itemId);
-                  return next;
-                });
+              selection={{
+                selected,
+                onToggle: (itemId, checked) => {
+                  setRefreshError(null);
+                  setSubmitError(null);
+                  setSelected((prev) => {
+                    const next = new Set(prev ?? []);
+                    if (checked) next.add(itemId);
+                    else next.delete(itemId);
+                    return next;
+                  });
+                },
               }}
-              itemsById={itemsById}
-              procedureOf={procedureOf}
+              nameOf={(itemId) => itemName(itemId, itemsById, procedureOf)}
               role={role}
               stamp={stamp}
               locationId={locationId}
@@ -525,13 +526,16 @@ function ValidityLine({
   return note ? <Callout tone="warning">{note}</Callout> : null;
 }
 
-interface PreviewStepProps {
+interface RepricingPreviewViewProps {
   base: RepricingPreview;
   preview: RepricingPreview;
-  selected: ReadonlySet<string>;
-  onToggle: (itemId: string, checked: boolean) => void;
-  itemsById: ReadonlyMap<string, TreatmentPlanItem>;
-  procedureOf: (item: TreatmentPlanItem) => string;
+  /** Las casillas de «Actualizar precios»; sin ella (la firma de un vencido, DX-379 C), solo lectura. */
+  selection?: {
+    selected: ReadonlySet<string>;
+    onToggle: (itemId: string, checked: boolean) => void;
+  };
+  /** El nombre del procedimiento de una línea (por id de ítem). */
+  nameOf: (itemId: string) => string;
   role: ClinicRole | null;
   stamp: SedePainters;
   locationId: string | null;
@@ -542,24 +546,28 @@ interface PreviewStepProps {
   expired: boolean;
 }
 
-function PreviewStep({
+/**
+ * La vista previa de una recotización (DX-379 B): líneas antes/después con la
+ * diferencia, los que no se tocan y por qué, los totales, la tasa y la
+ * validez. «Actualizar precios» la usa con casillas; la firma de un
+ * presupuesto vencido (DX-379 C), de solo lectura.
+ */
+export function RepricingPreviewView({
   base,
   preview,
-  selected,
-  onToggle,
-  itemsById,
-  procedureOf,
+  selection,
+  nameOf,
   role,
   stamp,
   locationId,
   planCurrency,
   fresh,
   expired,
-}: PreviewStepProps) {
+}: RepricingPreviewViewProps) {
   const money = (amount: number) => stamp.money(amount, preview.currency, locationId);
   // Los números de una línea elegida salen de la vista previa al día; los de una sin elegir, de la entera.
   const lineOf = (row: RepricingLine) => preview.lines.find((l) => l.itemId === row.itemId) ?? row;
-  const name = (row: { itemId: string }) => itemName(row.itemId, itemsById, procedureOf);
+  const name = (row: { itemId: string }) => nameOf(row.itemId);
   const rate = preview.rate ?? base.rate;
 
   const columns: DataListColumn<RepricingLine>[] = [
@@ -607,19 +615,23 @@ function PreviewStep({
           rows={base.lines}
           columns={columns}
           getRowKey={(row) => row.itemId}
-          leading={(row) => (
-            // I-4: la caja mide 20 px en táctil; la etiqueta que la envuelve da los 44 px.
-            <label
-              data-testid="reprice-line-select"
-              className="-my-2 -ml-2 flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center"
-            >
-              <Checkbox
-                aria-label={repricePlanCopy.select(name(row))}
-                checked={selected.has(row.itemId)}
-                onChange={(e) => onToggle(row.itemId, e.target.checked)}
-              />
-            </label>
-          )}
+          leading={
+            selection
+              ? (row) => (
+                  // I-4: la caja mide 20 px en táctil; la etiqueta que la envuelve da los 44 px.
+                  <label
+                    data-testid="reprice-line-select"
+                    className="-my-2 -ml-2 flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center"
+                  >
+                    <Checkbox
+                      aria-label={repricePlanCopy.select(name(row))}
+                      checked={selection.selected.has(row.itemId)}
+                      onChange={(e) => selection.onToggle(row.itemId, e.target.checked)}
+                    />
+                  </label>
+                )
+              : undefined
+          }
         />
       ) : null}
 
