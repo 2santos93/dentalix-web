@@ -250,7 +250,7 @@ export function PaymentMethodSelect({
   id: string;
   label?: string;
   disabled?: boolean;
-  /** Clases del `<select>` (p. ej. su alto en el teléfono). */
+  /** Clases del select nativo (p. ej. su alto en el teléfono). */
   className?: string;
 }) {
   const { methods, methodError, focusRequest } = fields;
