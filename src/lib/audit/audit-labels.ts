@@ -726,6 +726,12 @@ function ageOf(code: string): string | null {
   return match ? match[1] : null;
 }
 
+/** DX-379: `QT_V45` → `45`. */
+function quoteDaysOf(code: string): string | null {
+  const match = /^QT_V(\d+)$/.exec(code);
+  return match ? match[1] : null;
+}
+
 interface PrescriptionSettingsCode {
   words: boolean;
   record: boolean;
@@ -834,6 +840,12 @@ export function clinicSettingsDetail(metadata: AuditMetadata): string | null {
     return to === 'ADMIN_MFA_REQUIRED'
       ? 'Verificación en dos pasos: obligatoria para administradores'
       : 'Verificación en dos pasos: opcional para administradores';
+  }
+  // DX-379: Ajustes › Presupuestos, `QT_V{días}`.
+  if (metadata.reason === 'QUOTE_SETTINGS') {
+    const before = quoteDaysOf(from);
+    const after = quoteDaysOf(to);
+    return before === null || after === null ? null : `Validez del presupuesto: ${before} → ${after} días`;
   }
   if (metadata.reason !== 'MAJORITY_AGE_SETTINGS') return null;
   const before = ageOf(from);
