@@ -14,6 +14,9 @@ export type PlanAcceptanceSummary = components['schemas']['TreatmentPlanAcceptan
 export type ExpiredAcceptanceInput = components['schemas']['ExpiredAcceptanceDto'];
 export type ExpiredQuoteAcceptanceReason = components['schemas']['ExpiredQuoteAcceptanceReason'];
 export type AcceptanceRepricePreview = components['schemas']['AcceptanceRepricePreviewDto'];
+/** DX-417: la vista previa de una aceptación parcial (lo aceptado, lo pendiente y el total del original). */
+export type PartialAcceptancePreview = components['schemas']['PartialAcceptancePreviewDto'];
+export type PartialAcceptancePreviewInput = components['schemas']['PartialAcceptancePreviewRequestDto'];
 
 /**
  * DX-379 (C): 409 de la firma (o del PATCH a «Aceptado», o del envío a
@@ -24,6 +27,11 @@ export const QUOTE_EXPIRED = 'QUOTE_EXPIRED';
 export const REPRICE_INCOMPLETE = 'REPRICE_INCOMPLETE';
 /** 409: ningún precio cambia ni hay validez que renovar. */
 export const REPRICE_NOTHING_TO_APPLY = 'REPRICE_NOTHING_TO_APPLY';
+
+/** DX-417: 409 de la vista previa o de la firma parcial: el plan ya está aceptado (otra firma ganó). */
+export const PARTIAL_PLAN_ALREADY_ACCEPTED = 'PARTIAL_PLAN_ALREADY_ACCEPTED';
+/** DX-417: 409: solo un presupuesto presentado se acepta en parte. */
+export const PARTIAL_PLAN_NOT_PRESENTED = 'PARTIAL_PLAN_NOT_PRESENTED';
 
 /** Los motivos de aceptar un presupuesto vencido con sus precios, en el orden del selector. */
 export const EXPIRED_ACCEPTANCE_REASONS: readonly ExpiredQuoteAcceptanceReason[] = [
@@ -68,6 +76,32 @@ export function expiredAcceptanceLine(
 }
 
 /**
+ * DX-417: la línea del documento aceptado en parte, fuera del contenido
+ * firmado: cuántos procedimientos y por cuánto quedaron en el presupuesto
+ * pendiente. `null` si se aceptó entero.
+ */
+export function partialAcceptanceLine(
+  acceptance: Pick<PlanQuoteAcceptance, 'pendingPlanId' | 'pendingItemIds' | 'pendingTotal'>,
+  currency: string,
+  money: (amount: number, currency: string) => string,
+): string | null {
+  const ids = acceptance.pendingItemIds;
+  if (!acceptance.pendingPlanId || !ids || ids.length === 0 || acceptance.pendingTotal === null) return null;
+  const amount = money(acceptance.pendingTotal, currency);
+  return ids.length === 1
+    ? `Aceptación parcial: 1 procedimiento (${amount}) queda en un presupuesto pendiente.`
+    : `Aceptación parcial: ${ids.length} procedimientos (${amount}) quedan en un presupuesto pendiente.`;
+}
+
+/**
+ * DX-417: la línea del presupuesto pendiente (fuera del hash), con la fecha ya
+ * pintada en la sede; sin fecha (no se pudo leer el original), sin ella.
+ */
+export function partialRestLine(date: string | null): string {
+  return date ? `Resto de la aceptación parcial del ${date}` : 'Resto de una aceptación parcial';
+}
+
+/**
  * Quién imprime el presupuesto: los cuatro roles (DX-012). Recepción lo
  * imprime y lo archiva aunque no vea el resto del plan clínico. Solo decide
  * qué se PINTA; el endpoint vuelve a comprobarlo.
@@ -106,6 +140,35 @@ export function isPlanAcceptable(plan: {
     SIGNABLE_PLAN_STATUSES.includes(plan.status) &&
     (plan.items?.length ?? 0) > 0
   );
+}
+
+/**
+ * DX-417: ¿se le ofrece «Aceptar en parte»? Solo un presupuesto presentado,
+ * sin aceptación y con al menos dos procedimientos propuestos (uno se acepta y
+ * otro queda pendiente). Abonos, cuotas o saldo a favor los dice la API (409)
+ * dentro del modal.
+ */
+export function isPlanPartiallyAcceptable(plan: {
+  status: TreatmentPlanStatus;
+  acceptance?: PlanAcceptanceSummary | null;
+  items?: readonly { status?: string }[];
+}): boolean {
+  if (plan.acceptance || plan.status !== 'PRESENTED') return false;
+  return (plan.items ?? []).filter((item) => item.status === 'PROPOSED').length >= 2;
+}
+
+/**
+ * DX-417 (ronda 1, I-1): ¿es un presupuesto pendiente de una aceptación
+ * parcial que aún espera respuesta? `splitFromPlanId` es la procedencia y no
+ * cambia nunca; el chip «Pendiente de aceptación parcial» y el «· pendiente»
+ * del selector solo valen mientras siga presentado y sin aceptar.
+ */
+export function isPendingRest(plan: {
+  splitFromPlanId?: string | null;
+  status: TreatmentPlanStatus;
+  acceptance?: PlanAcceptanceSummary | null;
+}): boolean {
+  return Boolean(plan.splitFromPlanId) && plan.status === 'PRESENTED' && !plan.acceptance;
 }
 
 /** Ruta de la vista imprimible A4 (fuera del shell). */
@@ -180,5 +243,25 @@ export async function previewAcceptanceRepricing(
   return apiFetch<AcceptanceRepricePreview>(
     `/patients/${encodeURIComponent(patientId)}/treatment-plans/${encodeURIComponent(planId)}/acceptance/reprice-preview`,
     { method: 'POST', token },
+  );
+}
+
+/**
+ * `POST …/acceptance/partial-preview` (DX-417) — lo que se firmaría aceptando
+ * solo `itemIds`: el presupuesto de lo aceptado (su `contentHash` va en la
+ * firma), lo pendiente y el total del original. No escribe nada. Con un
+ * presupuesto vencido que se aceptará actualizando los precios, `reprice: true`
+ * recotiza TODO el plan (también lo no elegido) y su `repricing.previewHash`
+ * va en `expired.repricePreviewHash`: llámala con espera, nunca en cada tecla.
+ */
+export async function previewPartialAcceptance(
+  token: string,
+  patientId: string,
+  planId: string,
+  input: PartialAcceptancePreviewInput,
+): Promise<PartialAcceptancePreview> {
+  return apiFetch<PartialAcceptancePreview>(
+    `/patients/${encodeURIComponent(patientId)}/treatment-plans/${encodeURIComponent(planId)}/acceptance/partial-preview`,
+    { method: 'POST', body: input, token },
   );
 }

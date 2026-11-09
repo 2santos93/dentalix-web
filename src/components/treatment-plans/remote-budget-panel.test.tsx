@@ -239,6 +239,36 @@ describe('Enviar a aceptar el presupuesto (DX-415)', () => {
     });
   });
 
+  describe('DX-417: aceptado en parte', () => {
+    const partial = () =>
+      plan({
+        status: 'ACCEPTED',
+        partialPendingPlanId: 'plan-2',
+        acceptance: { signerName: 'Ana Pérez', acceptedAt: '2026-10-20T15:00:00.000Z', remote: null },
+      });
+
+    it('con un enlace pendiente del original: avisa de que ya no sirve, sin botón de enviar', async () => {
+      mockedList.mockResolvedValue([budgetRequest({ status: 'SENT' })]);
+      renderActions(partial());
+      expect(
+        await screen.findByText('El enlace enviado ya no sirve: el presupuesto se aceptó en parte.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /enviar/i })).not.toBeInTheDocument();
+    });
+
+    it('sin enlace pendiente (o de otro plan) no avisa', async () => {
+      mockedList.mockResolvedValue([budgetRequest({ status: 'COMPLETE' }), budgetRequest({ treatmentPlanId: 'otro' })]);
+      renderActions(partial());
+      await waitFor(() => expect(mockedList).toHaveBeenCalled());
+      expect(screen.queryByText(/El enlace enviado ya no sirve/)).not.toBeInTheDocument();
+    });
+
+    it('asistente: ni consulta ni aviso', () => {
+      renderActions(partial(), 'ASSISTANT');
+      expect(mockedList).not.toHaveBeenCalled();
+    });
+  });
+
   it('asistente y recepción no deciden el plan: no hay «Enviar a aceptar» (la API responde 403)', () => {
     renderActions(plan(), 'ASSISTANT');
     renderActions(plan(), 'RECEPTION');
