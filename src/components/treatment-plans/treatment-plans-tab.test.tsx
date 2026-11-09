@@ -1407,6 +1407,60 @@ describe('TreatmentPlansTab', () => {
       },
     );
 
+    describe('DX-379 (C): el selector de estado de un presupuesto vencido', () => {
+      const presented = { ...dated, status: 'PRESENTED' as const, presentedAt: '2026-10-07T12:00:00.000Z' };
+
+      it('vencido: no ofrece «Aceptado» y explica que se acepta con firma', async () => {
+        mockedListPlans.mockResolvedValue([{ ...presented, quoteExpired: true }]);
+        mockedGetPlan.mockResolvedValue({ ...plan1Detail, ...presented, quoteExpired: true });
+        render(<TreatmentPlansTab patientId="pat-1" token={discountDentistToken} />);
+        const select = await screen.findByLabelText<HTMLSelectElement>(/^estado del plan$/i);
+        const options = within(select).getAllByRole('option').map((o) => o.getAttribute('value'));
+        expect(options).not.toContain('ACCEPTED');
+        expect(options).toContain('CANCELLED');
+        expect(screen.getByText('Vencido: acéptalo con firma para elegir cómo.')).toHaveAttribute(
+          'id',
+          select.getAttribute('aria-describedby'),
+        );
+      });
+
+      it('vigente: «Aceptado» sigue en el selector, sin el aviso', async () => {
+        mockedListPlans.mockResolvedValue([{ ...presented, quoteExpired: false }]);
+        mockedGetPlan.mockResolvedValue({ ...plan1Detail, ...presented, quoteExpired: false });
+        render(<TreatmentPlansTab patientId="pat-1" token={discountDentistToken} />);
+        const select = await screen.findByLabelText<HTMLSelectElement>(/^estado del plan$/i);
+        expect(within(select).getAllByRole('option').map((o) => o.getAttribute('value'))).toContain('ACCEPTED');
+        expect(screen.queryByText('Vencido: acéptalo con firma para elegir cómo.')).not.toBeInTheDocument();
+      });
+
+      it('409 QUOTE_EXPIRED (venció con la pantalla abierta): dice el mensaje y recarga el plan, ya sin «Aceptado»', async () => {
+        const user = userEvent.setup();
+        mockedListPlans.mockResolvedValue([{ ...presented, quoteExpired: false }]);
+        mockedGetPlan
+          .mockResolvedValueOnce({ ...plan1Detail, ...presented, quoteExpired: false })
+          .mockResolvedValue({ ...plan1Detail, ...presented, quoteExpired: true });
+        mockedUpdatePlan.mockRejectedValueOnce(
+          new ApiError(409, 'El presupuesto venció el 06/11/2026: acéptalo con firma para elegir cómo.', {
+            code: 'QUOTE_EXPIRED',
+          }),
+        );
+        render(<TreatmentPlansTab patientId="pat-1" token={discountDentistToken} />);
+        const select = await screen.findByLabelText<HTMLSelectElement>(/^estado del plan$/i);
+        await user.selectOptions(select, 'ACCEPTED');
+        expect(
+          await screen.findByText('El presupuesto venció el 06/11/2026: acéptalo con firma para elegir cómo.'),
+        ).toBeInTheDocument();
+        await waitFor(() => expect(mockedGetPlan).toHaveBeenCalledTimes(2));
+        await waitFor(() =>
+          expect(
+            within(screen.getByLabelText<HTMLSelectElement>(/^estado del plan$/i))
+              .getAllByRole('option')
+              .map((o) => o.getAttribute('value')),
+          ).not.toContain('ACCEPTED'),
+        );
+      });
+    });
+
     it('sin fechas (plan anterior): nada', async () => {
       mockedListPlans.mockResolvedValue([plan1]);
       mockedGetPlan.mockResolvedValue(plan1Detail);

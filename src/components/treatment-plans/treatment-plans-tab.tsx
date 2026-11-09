@@ -2,7 +2,9 @@
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { QUOTE_EXPIRED } from '@/lib/treatment-plans/plan-quote-api';
 import {
   createPlan,
   getPlan,
@@ -765,6 +767,11 @@ export function TreatmentPlansTab({
       await Promise.all([refreshPlanDetail(), refreshPlansInPlace(), refreshBalanceAndPayments()]);
     } catch (err) {
       setPlanStatusError(apiErrorMessage(err, copy.genericPlanStatusError));
+      // DX-379 (C): venció sin que la pantalla lo supiera; al recargar, el plan
+      // sale `quoteExpired` y el selector deja de ofrecer «Aceptado».
+      if (err instanceof ApiError && err.code === QUOTE_EXPIRED) {
+        await Promise.all([refreshPlanDetail(), refreshPlansInPlace()]);
+      }
     } finally {
       setUpdatingPlanStatus(false);
     }
@@ -879,7 +886,10 @@ export function TreatmentPlansTab({
   // DX-204: un presupuesto aceptado (firmado o no) o cerrado no se vuelve a
   // descontar.
   const discountable = Boolean(planDetail) && !signed && !closed && planDetail?.status !== 'ACCEPTED';
-  const statusChoices = planDetail ? patchableStatuses(planDetail.status, role) : [];
+  const patchable = planDetail ? patchableStatuses(planDetail.status, role) : [];
+  // DX-379 (C): vencido, «Aceptado» solo con firma (el modal pide cómo); la API lo rechaza con 409.
+  const acceptHiddenByExpiry = Boolean(planDetail?.quoteExpired) && patchable.slice(1).includes('ACCEPTED');
+  const statusChoices = acceptHiddenByExpiry ? patchable.filter((s) => s !== 'ACCEPTED') : patchable;
   const optionGroup = selectedPlan ? optionGroupOf(plans, selectedPlan) : [];
   // D2: UNA primaria con el plan abierto, elegida por su estado (borrador →
   // «Agregar ítem», presentado → «Aceptar con firma», aceptado → «Agendar
@@ -993,7 +1003,13 @@ export function TreatmentPlansTab({
               ) : null}
             </div>
             {planDetail && (
-              <FormField htmlFor="tp-plan-status" label={copy.planStatusLabel} className="sm:w-56">
+              <FormField
+                htmlFor="tp-plan-status"
+                label={copy.planStatusLabel}
+                className="sm:w-56"
+                hint={acceptHiddenByExpiry ? copy.planStatusExpiredHint : undefined}
+                hintId="tp-plan-status-hint"
+              >
                 {/* Solo el estado actual y sus transiciones (máquina de
                     estados, DX-040): presentar y rechazar tienen botón
                     propio, y aceptar es de odontólogo y ADMIN. */}
@@ -1001,6 +1017,7 @@ export function TreatmentPlansTab({
                   id="tp-plan-status"
                   value={planDetail.status}
                   disabled={updatingPlanStatus || statusChoices.length === 1}
+                  aria-describedby={acceptHiddenByExpiry ? 'tp-plan-status-hint' : undefined}
                   onChange={(e) => handlePlanStatusChange(e.target.value as TreatmentPlanStatus)}
                 >
                   {statusChoices.map((status) => (

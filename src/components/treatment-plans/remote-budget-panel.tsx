@@ -17,6 +17,7 @@ import {
 import { canAcceptPlan } from '@/lib/treatment-plans/plan-quote-api';
 import type { TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { Skeleton } from '@/components/ui/skeleton';
 import { InlineError } from '@/components/errors/inline-error';
 import { SendBudgetModal } from '@/components/signature-requests/send-budget-modal';
@@ -34,6 +35,9 @@ export const remoteBudgetCopy = {
   evidenceOpened: 'Abierto',
   evidenceVerified: 'Código verificado',
   evidenceIp: 'IP de quien firmó',
+  // DX-379 (C): vencido, no se envía (la API: 409 QUOTE_EXPIRED); un enlace ya enviado deja de valer.
+  expiredSend: (date: string) => `El presupuesto venció el ${date}: actualiza sus precios antes de enviarlo.`,
+  expiredPending: 'El presupuesto venció: el enlace enviado ya no vale para el paciente.',
 };
 
 const copy = remoteBudgetCopy;
@@ -93,7 +97,9 @@ export function RemoteAcceptanceEvidence({
  * enlace de este plan (Enviado · Abierto · Bloqueado · Caducado · Anulado) y
  * el botón que abre la confirmación. Solo en un plan «Presentado», sin aceptar
  * y con ítems, y solo para quien decide el plan; el aceptado a distancia lo
- * pinta `PlanQuoteActions`.
+ * pinta `PlanQuoteActions`. DX-379 (C): un presupuesto vencido no se envía
+ * (botón deshabilitado con el porqué) y, si había un enlace pendiente, se
+ * avisa de que ya no vale.
  */
 export function RemoteBudgetPanel({ token, patientId, plan, role }: RemoteBudgetPanelProps) {
   const [request, setRequest] = useState<SignatureRequest | null>(null);
@@ -130,6 +136,14 @@ export function RemoteBudgetPanel({ token, patientId, plan, role }: RemoteBudget
   if (!sendable) return null;
 
   const pending = request ? canRevokeSignatureRequest(request.status) && request.status !== 'EXPIRED' : false;
+  // DX-379 (C): el día, en la sede de la presentación (la del dato); sin su reloj, la de la pantalla.
+  const expired = plan.quoteExpired;
+  const expiredClock = screenClock?.of(plan.presentedLocationId) ?? screenClock;
+  const expiredDay =
+    expired && plan.quoteValidUntil && expiredClock ? expiredClock.fmt.civilDate(plan.quoteValidUntil) : NO_SEDE_FORMAT;
+  const expiredHintId = `remote-budget-expired-${plan.id}`;
+  // La API no cambia el estado de la solicitud: el paciente que abra el enlace verá «Enlace no válido».
+  const linkVoided = expired && request !== null && (request.status === 'SENT' || request.status === 'OPENED');
 
   return (
     <div className="flex flex-col gap-2">
@@ -162,11 +176,25 @@ export function RemoteBudgetPanel({ token, patientId, plan, role }: RemoteBudget
           )}
         </p>
       ) : null}
-      <div>
-        <Button type="button" variant="secondary" disabled={loading} onClick={() => setSending(true)}>
-          <Send aria-hidden />
-          {request ? copy.sendAgain : copy.send}
-        </Button>
+      {linkVoided ? <Callout tone="warning">{copy.expiredPending}</Callout> : null}
+      <div className="flex flex-col gap-1">
+        <div>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={loading || expired}
+            aria-describedby={expired ? expiredHintId : undefined}
+            onClick={() => setSending(true)}
+          >
+            <Send aria-hidden />
+            {request ? copy.sendAgain : copy.send}
+          </Button>
+        </div>
+        {expired ? (
+          <p id={expiredHintId} className="text-sm text-muted tabular-nums">
+            {copy.expiredSend(expiredDay)}
+          </p>
+        ) : null}
       </div>
       {sending ? (
         <SendBudgetModal

@@ -48,6 +48,7 @@ import {
   planItemAttributionDetail,
   anamnesisDetail,
   signatureRequestDetail,
+  treatmentPlanAcceptanceDetail,
 } from '@/lib/audit/audit-labels';
 import { configChangeItems, type ConfigChangeItem } from '@/lib/audit/config-change';
 import { auditTime, auditZoneHint, type AuditSedeTime, type AuditTime } from '@/lib/audit/audit-time';
@@ -581,7 +582,8 @@ function eventDetail(
     exchangeRateDetail(event.metadata, clock?.fmt ?? null) ??
     paymentAllocationDetail(event.metadata, clock?.fmt ?? null) ??
     anamnesisDetail(event.metadata) ??
-    signatureRequestDetail(event.metadata)
+    signatureRequestDetail(event.metadata) ??
+    treatmentPlanAcceptanceDetail(event.metadata)
   );
 }
 

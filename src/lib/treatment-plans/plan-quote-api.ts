@@ -11,6 +11,61 @@ export type PlanQuoteItem = components['schemas']['PlanQuoteItemDto'];
 export type PlanQuoteAcceptance = components['schemas']['PlanQuoteAcceptanceDto'];
 export type AcceptPlanInput = components['schemas']['AcceptTreatmentPlanDto'];
 export type PlanAcceptanceSummary = components['schemas']['TreatmentPlanAcceptanceSummaryDto'];
+export type ExpiredAcceptanceInput = components['schemas']['ExpiredAcceptanceDto'];
+export type ExpiredQuoteAcceptanceReason = components['schemas']['ExpiredQuoteAcceptanceReason'];
+export type AcceptanceRepricePreview = components['schemas']['AcceptanceRepricePreviewDto'];
+
+/**
+ * DX-379 (C): 409 de la firma (o del PATCH a «Aceptado», o del envío a
+ * distancia) cuando el presupuesto está vencido y no se dijo cómo aceptarlo.
+ */
+export const QUOTE_EXPIRED = 'QUOTE_EXPIRED';
+/** 409: algún propuesto sin precio vigente o sin tasa de hoy (la validez no se renovaría). */
+export const REPRICE_INCOMPLETE = 'REPRICE_INCOMPLETE';
+/** 409: ningún precio cambia ni hay validez que renovar. */
+export const REPRICE_NOTHING_TO_APPLY = 'REPRICE_NOTHING_TO_APPLY';
+
+/** Los motivos de aceptar un presupuesto vencido con sus precios, en el orden del selector. */
+export const EXPIRED_ACCEPTANCE_REASONS: readonly ExpiredQuoteAcceptanceReason[] = [
+  'CLINIC_DELAY',
+  'PRICE_COMMITMENT',
+  'LOYALTY',
+  'FINANCIAL_HARDSHIP',
+  'OTHER',
+];
+
+/** Las etiquetas del contrato (las mismas que la API). */
+export const EXPIRED_ACCEPTANCE_REASON_LABELS: Record<ExpiredQuoteAcceptanceReason, string> = {
+  CLINIC_DELAY: 'La clínica tardó en cerrarlo',
+  PRICE_COMMITMENT: 'Se mantuvo el precio pactado',
+  LOYALTY: 'Paciente habitual',
+  FINANCIAL_HARDSHIP: 'Situación económica',
+  OTHER: 'Otro',
+};
+
+/** Mismo tope que `ExpiredAcceptanceDto.note` en la API. */
+export const EXPIRED_ACCEPTANCE_NOTE_MAX = 200;
+
+/**
+ * La línea del documento aceptado con el presupuesto vencido (DX-379 C), con
+ * las fechas ya pintadas en la sede: `civilDate` para el último día válido y
+ * `date` para el día de la firma. `null` si no estaba vencido.
+ */
+export function expiredAcceptanceLine(
+  acceptance: Pick<PlanQuoteAcceptance, 'expiredMode' | 'expiredReason' | 'expiredNote' | 'quoteValidUntil' | 'acceptedAt'>,
+  paint: { civilDate: (day: string | null) => string; date: (iso: string) => string },
+): string | null {
+  if (acceptance.expiredMode === 'REPRICE') {
+    return `Precios actualizados el ${paint.date(acceptance.acceptedAt)} antes de aceptar`;
+  }
+  if (acceptance.expiredMode === 'ORIGINAL_PRICES') {
+    const reason = acceptance.expiredReason ? EXPIRED_ACCEPTANCE_REASON_LABELS[acceptance.expiredReason] : null;
+    const note = acceptance.expiredNote?.trim();
+    const motive = reason ? ` Motivo: ${reason}${note ? `: ${note}` : ''}` : '';
+    return `Aceptado con los precios del presupuesto vencido el ${paint.civilDate(acceptance.quoteValidUntil)}.${motive}`;
+  }
+  return null;
+}
 
 /**
  * Quién imprime el presupuesto: los cuatro roles (DX-012). Recepción lo
@@ -108,5 +163,22 @@ export async function acceptPlan(
   return apiFetch<PlanQuote>(
     `/patients/${encodeURIComponent(patientId)}/treatment-plans/${encodeURIComponent(planId)}/acceptance`,
     { method: 'POST', body: input, token },
+  );
+}
+
+/**
+ * `POST …/acceptance/reprice-preview` (DX-379 C) — el presupuesto vencido con
+ * los precios vigentes de TODOS sus propuestos, como se firmaría. No escribe
+ * nada. Para firmarlo: `contentHash = quote.contentHash` y
+ * `expired = { mode: 'REPRICE', repricePreviewHash: repricing.previewHash }`.
+ */
+export async function previewAcceptanceRepricing(
+  token: string,
+  patientId: string,
+  planId: string,
+): Promise<AcceptanceRepricePreview> {
+  return apiFetch<AcceptanceRepricePreview>(
+    `/patients/${encodeURIComponent(patientId)}/treatment-plans/${encodeURIComponent(planId)}/acceptance/reprice-preview`,
+    { method: 'POST', token },
   );
 }

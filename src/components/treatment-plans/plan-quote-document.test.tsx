@@ -422,6 +422,63 @@ describe('DX-489/DX-502: plan en EUR con el catálogo en VES', () => {
 });
 
 describe('DX-354: el formato de la sede del presupuesto', () => {
+  describe('DX-379 (C): aceptado con el presupuesto vencido', () => {
+    const accepted = (acceptance: Partial<typeof SIGNED_ACCEPTANCE>) =>
+      planQuoteFixture({ planStatus: 'ACCEPTED', acceptance: { ...SIGNED_ACCEPTANCE, ...acceptance } });
+
+    it('con los precios originales: «Aceptado con los precios del presupuesto vencido el … Motivo: …»', () => {
+      render(
+        <PlanQuoteDocument
+          format={FORMAT_ES}
+          quote={accepted({ quoteValidUntil: '2026-10-01', expiredMode: 'ORIGINAL_PRICES', expiredReason: 'LOYALTY' })}
+        />,
+      );
+      expect(screen.getByTestId('quote-expired-acceptance')).toHaveTextContent(
+        'Aceptado con los precios del presupuesto vencido el 01/10/2026. Motivo: Paciente habitual',
+      );
+    });
+
+    it('con «Otro» y nota: el motivo lleva la nota detrás', () => {
+      render(
+        <PlanQuoteDocument
+          format={FORMAT_ES}
+          quote={accepted({
+            quoteValidUntil: '2026-10-01',
+            expiredMode: 'ORIGINAL_PRICES',
+            expiredReason: 'OTHER',
+            expiredNote: 'Se respetó el precio de la primera consulta',
+          })}
+        />,
+      );
+      expect(screen.getByTestId('quote-expired-acceptance')).toHaveTextContent(
+        'Aceptado con los precios del presupuesto vencido el 01/10/2026. Motivo: Otro: Se respetó el precio de la primera consulta',
+      );
+    });
+
+    it('con los precios actualizados: «Precios actualizados el … antes de aceptar», con el día de la sede', () => {
+      // 02:00 UTC del 17 es todavía el 16 en Caracas.
+      render(
+        <PlanQuoteDocument
+          format={documentFormat(REGIONAL_VE)}
+          quote={accepted({
+            acceptedAt: '2026-10-17T02:00:00.000Z',
+            quoteValidUntil: '2026-10-01',
+            expiredMode: 'REPRICE',
+            repricingId: '7f0c1d2e-0000-4000-8000-000000000001',
+          })}
+        />,
+      );
+      expect(screen.getByTestId('quote-expired-acceptance')).toHaveTextContent(
+        'Precios actualizados el 16/10/2026 antes de aceptar',
+      );
+    });
+
+    it('sin vencer no añade ninguna línea', () => {
+      render(<PlanQuoteDocument format={FORMAT_ES} quote={accepted({ quoteValidUntil: '2026-11-15' })} />);
+      expect(screen.queryByTestId('quote-expired-acceptance')).not.toBeInTheDocument();
+    });
+  });
+
   const signed = () => planQuoteFixture({ planStatus: 'ACCEPTED', acceptance: { ...SIGNED_ACCEPTANCE, acceptedAt: '2027-05-03T19:05:00.000Z' } });
 
   it('A: sede en-US h12, fechas mm/dd/yyyy, hora de la firma en 12 h e importes con código', () => {

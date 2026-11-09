@@ -86,3 +86,15 @@ export function ageRefreshRotation(refreshToken: string): void {
     input: `UPDATE refresh_sessions SET "rotatedAt" = "rotatedAt" - interval '5 minutes' WHERE id = :'sid'::uuid;`,
   });
 }
+
+/**
+ * DX-379 (C): el presupuesto del plan vence (su último día válido pasa a hace
+ * dos días en UTC, que en cualquier sede de América ya es pasado). La API no
+ * deja fechar la emisión: la pone el día de la sede al presentar.
+ */
+export function expirePlanQuote(planId: string): void {
+  if (!E2E_DATABASE_URL) throw new Error('E2E_DATABASE_URL no definido');
+  execFileSync('psql', [E2E_DATABASE_URL, '-v', 'ON_ERROR_STOP=1', '-v', `id=${planId}`], {
+    input: `UPDATE treatment_plans SET "quoteIssuedOn" = (timezone('UTC', now()))::date - 3, "quoteValidUntil" = (timezone('UTC', now()))::date - 2 WHERE id = :'id';`,
+  });
+}
