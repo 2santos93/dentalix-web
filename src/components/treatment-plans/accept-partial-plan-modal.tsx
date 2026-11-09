@@ -773,13 +773,13 @@ function PreviewTotals({
   return (
     <section aria-label={copy.totalsLabel} className="rounded-lg border border-border p-4">
       <DescriptionList columns={3}>
-        <DescriptionItem label={copy.accepted} numeric>
+        <DescriptionItem label={copy.accepted} numeric data-testid="partial-total-accepted">
           {money(netOf(preview.accepted.totals, currency))}
         </DescriptionItem>
-        <DescriptionItem label={copy.pending} numeric>
+        <DescriptionItem label={copy.pending} numeric data-testid="partial-total-pending">
           {money(netOf(preview.pending.totals, currency))}
         </DescriptionItem>
-        <DescriptionItem label={copy.total} numeric>
+        <DescriptionItem label={copy.total} numeric data-testid="partial-total-original">
           {money(netOf(preview.original.totals, currency))}
         </DescriptionItem>
       </DescriptionList>

@@ -19,7 +19,8 @@ import { moneyWithCode } from '../src/lib/format/sede-number';
  *
  * En una clínica nueva, un plan presentado con tres procedimientos (USD 300,
  * 150 y 50). A 390 px se abre «Aceptar en parte», se eligen dos, se ven los
- * totales del servidor y se cancela (axe y sin desbordar). A 1440 px se
+ * totales del servidor, se pasa a la firma y se cancela (axe y sin desbordar
+ * en los dos pasos). A 1440 px se
  * eligen los mismos dos, se firma: el original queda aceptado con los dos, un
  * presupuesto pendiente presentado con el tercero, enlazados en la ficha
  * («Aceptado parcialmente» ↔ «Pendiente de aceptación parcial»), y los
@@ -123,11 +124,25 @@ test('aceptar en parte: dos de tres procedimientos, el resto en un presupuesto p
     // --- 1. Procedimientos: dos de tres, con los totales del servidor.
     await dialog.getByLabel(`Aceptar ${procedures[0].name}`).check();
     await dialog.getByLabel(`Aceptar ${procedures[1].name}`).check();
-    await expect(totals).toContainText(usd(450), { timeout: 15_000 });
-    await expect(totals).toContainText(usd(50));
-    await expect(totals).toContainText(usd(500));
+    // M-9: cada importe con su etiqueta (450 + 50 = 500).
+    const cell = (id: string) => totals.getByTestId(id);
+    await expect(cell('partial-total-accepted').locator('dd')).toHaveText(usd(450), { timeout: 15_000 });
+    await expect(cell('partial-total-accepted').locator('dt')).toHaveText('Aceptado');
+    await expect(cell('partial-total-pending').locator('dd')).toHaveText(usd(50));
+    await expect(cell('partial-total-pending').locator('dt')).toHaveText('Pendiente');
+    await expect(cell('partial-total-original').locator('dd')).toHaveText(usd(500));
+    await expect(cell('partial-total-original').locator('dt')).toHaveText('Total del presupuesto');
     await expectDialogClean(viewport.width, 'los procedimientos');
     await shot(page, 'dx417-items', viewport.width);
+
+    // --- 2. La firma de lo aceptado (M-10: también a 390 px, dentro de la pantalla y sin desbordar).
+    await dialog.getByRole('button', { name: 'Continuar' }).click();
+    const summary = dialog.getByRole('region', { name: 'Lo que se acepta y se firma' });
+    await expect(summary).toContainText(procedures[0].name, { timeout: 15_000 });
+    await expect(summary).not.toContainText(procedures[2].name);
+    await expect(dialog.getByRole('img', { name: 'Firma del paciente' })).toBeVisible();
+    await expectDialogClean(viewport.width, 'la firma');
+    await shot(page, 'dx417-sign', viewport.width);
 
     if (viewport.width < 640) {
       await dialog.getByRole('button', { name: 'Cancelar' }).click();
@@ -135,13 +150,6 @@ test('aceptar en parte: dos de tres procedimientos, el resto en un presupuesto p
       continue;
     }
 
-    // --- 2. La firma de lo aceptado (1440 px).
-    await dialog.getByRole('button', { name: 'Continuar' }).click();
-    const summary = dialog.getByRole('region', { name: 'Lo que se acepta y se firma' });
-    await expect(summary).toContainText(procedures[0].name, { timeout: 15_000 });
-    await expect(summary).not.toContainText(procedures[2].name);
-    await expectDialogClean(viewport.width, 'la firma');
-    await shot(page, 'dx417-sign', viewport.width);
     const submit = dialog.getByRole('button', { name: 'Aceptar en parte y firmar' });
     await expect(submit).toBeDisabled();
     await signOn(page, dialog.getByRole('img', { name: 'Firma del paciente' }));
