@@ -76,7 +76,9 @@ const copy = {
   patientLabel: 'Paciente',
   patientSearchPlaceholder: 'Buscar por documento o nombre…',
   patientSearchHint: 'Escribe el documento o el nombre del paciente.',
-  // DX-118 (FE-035): cuántos resultados hay, para el lector (role="status").
+  // DX-118 (FE-035): la lista de resultados (distinta del campo «Paciente»,
+  // que ya lleva ese nombre) y cuántos hay, para el lector (role="status").
+  patientResultsLabel: 'Pacientes encontrados',
   patientResults: (n: number) =>
     n === 1 ? '1 paciente. Flechas para recorrer, Enter para elegir.' : `${n} pacientes. Flechas para recorrer, Enter para elegir.`,
   patientSearching: 'Buscando…',
@@ -767,7 +769,7 @@ export function AppointmentForm({
                 <ul
                   id="appointment-patient-listbox"
                   role="listbox"
-                  aria-label={copy.patientLabel}
+                  aria-label={copy.patientResultsLabel}
                   className="flex max-h-56 flex-col gap-0.5 overflow-y-auto rounded-lg border border-border bg-surface p-1"
                 >
                   {patients.map((p, index) => (

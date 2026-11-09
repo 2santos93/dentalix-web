@@ -353,7 +353,7 @@ describe('AppointmentForm', () => {
     expect(search).toHaveAttribute('role', 'combobox');
     expect(search).toHaveAttribute('aria-expanded', 'false');
     await user.type(search, 'pérez');
-    const listbox = await screen.findByRole('listbox', { name: /paciente/i });
+    const listbox = await screen.findByRole('listbox', { name: 'Pacientes encontrados' });
     expect(search).toHaveAttribute('aria-expanded', 'true');
     expect(search).toHaveAttribute('aria-controls', listbox.id);
     const options = within(listbox).getAllByRole('option');

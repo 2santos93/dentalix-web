@@ -393,7 +393,7 @@ describe('«Ocupar este hueco» (DX-210)', () => {
       const dialog = await screen.findByRole('dialog', { name: 'Enviar oferta con enlace' });
       await userEvent.click(within(dialog).getByRole('radio', { name: /WhatsApp/ }));
       await userEvent.click(within(dialog).getByRole('button', { name: 'Enviar oferta' }));
-      const open = await within(dialog).findByRole('link', { name: 'Abrir WhatsApp con la oferta para Ana Ríos' });
+      const open = await within(dialog).findByRole('link', { name: /^Abrir WhatsApp con la oferta para Ana Ríos/ });
       expect(decodeURIComponent(open.getAttribute('href') ?? '')).toContain('https://demo.dentalix.app/hueco/aaa');
       expect(decodeURIComponent(open.getAttribute('href') ?? '')).not.toMatch(/Endodoncia|Ríos/);
       expect(mockedLinkOffer).toHaveBeenCalledTimes(2);

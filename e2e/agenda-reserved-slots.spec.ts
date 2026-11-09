@@ -116,7 +116,7 @@ async function startBooking(page: Page, doc: string, start: string, type: string
   // del listbox, sin botones dentro) y se puede elegir solo con teclado.
   const search = form.getByLabel('Paciente', { exact: true });
   await search.fill('Reserva');
-  await expect(form.getByRole('listbox', { name: 'Paciente' })).toBeVisible({ timeout: 10_000 });
+  await expect(form.getByRole('listbox', { name: 'Pacientes encontrados' })).toBeVisible({ timeout: 10_000 });
   const violations = await axeViolations(page, form);
   expect(violations.filter((v) => /^aria-required-(children|parent)$/.test(v.id))).toEqual([]);
   await search.fill(doc);
