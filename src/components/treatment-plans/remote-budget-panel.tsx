@@ -38,6 +38,8 @@ export const remoteBudgetCopy = {
   // DX-379 (C): vencido, no se envía (la API: 409 QUOTE_EXPIRED); un enlace ya enviado deja de valer.
   expiredSend: (date: string) => `El presupuesto venció el ${date}: actualiza sus precios antes de enviarlo.`,
   expiredPending: 'El presupuesto venció: el enlace enviado ya no vale para el paciente.',
+  // DX-417: la API no cambia el estado de la solicitud; el paciente verá «Enlace no válido».
+  partialPending: 'El enlace enviado ya no sirve: el presupuesto se aceptó en parte.',
 };
 
 const copy = remoteBudgetCopy;
@@ -99,7 +101,8 @@ export function RemoteAcceptanceEvidence({
  * y con ítems, y solo para quien decide el plan; el aceptado a distancia lo
  * pinta `PlanQuoteActions`. DX-379 (C): un presupuesto vencido no se envía
  * (botón deshabilitado con el porqué) y, si había un enlace pendiente, se
- * avisa de que ya no vale.
+ * avisa de que ya no vale. DX-417: aceptado en parte, lo mismo con el enlace
+ * pendiente del original (y nada más: el pendiente nuevo tiene su propio panel).
  */
 export function RemoteBudgetPanel({ token, patientId, plan, role }: RemoteBudgetPanelProps) {
   const [request, setRequest] = useState<SignatureRequest | null>(null);
@@ -114,9 +117,12 @@ export function RemoteBudgetPanel({ token, patientId, plan, role }: RemoteBudget
   // plan queda aceptado a nombre de quien lo envió (la API lo exige, 403).
   const sendable =
     canAcceptPlan(role) && plan.status === 'PRESENTED' && !plan.acceptance && (plan.items?.length ?? 0) > 0;
+  // DX-417: aceptado en parte; si quedaba un enlace pendiente del original, ya no sirve.
+  const partiallyAccepted = canAcceptPlan(role) && Boolean(plan.partialPendingPlanId);
+  const watched = sendable || partiallyAccepted;
 
   useEffect(() => {
-    if (!sendable) return;
+    if (!watched) return;
     let cancelled = false;
     listSignatureRequests(token, patientId)
       .then((rows) => {
@@ -131,8 +137,12 @@ export function RemoteBudgetPanel({ token, patientId, plan, role }: RemoteBudget
     return () => {
       cancelled = true;
     };
-  }, [sendable, token, patientId, plan.id, reloadKey]);
+  }, [watched, token, patientId, plan.id, reloadKey]);
 
+  if (partiallyAccepted) {
+    const linkLeft = request !== null && (request.status === 'SENT' || request.status === 'OPENED');
+    return linkLeft ? <Callout tone="warning">{copy.partialPending}</Callout> : null;
+  }
   if (!sendable) return null;
 
   const pending = request ? canRevokeSignatureRequest(request.status) && request.status !== 'EXPIRED' : false;
