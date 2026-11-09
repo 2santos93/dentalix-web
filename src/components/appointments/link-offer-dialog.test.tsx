@@ -147,7 +147,7 @@ describe('LinkOfferDialog: resultados anunciados y reintento (DX-486, FE-102)', 
     const { dialog } = renderDialog([ana]);
     await userEvent.click(within(dialog).getByRole('radio', { name: /WhatsApp/ }));
     await userEvent.click(within(dialog).getByRole('button', { name: copy.submit }));
-    const link = await within(dialog).findByRole('link', { name: copy.openWhatsAppFor('Ana Ríos') });
+    const link = await within(dialog).findByRole('link', { name: new RegExp(`^${copy.openWhatsAppFor('Ana Ríos')}`) });
     expect(link).toHaveClass('min-h-11');
   });
 });

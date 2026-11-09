@@ -10,6 +10,7 @@ import { ConsentDocument } from './consent-document';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Button } from '@/components/ui/button';
+import { usePrintDocumentTitle } from '@/lib/print/use-print-document-title';
 
 const copy = {
   toolbar: 'Acciones del documento',
@@ -85,13 +86,10 @@ export function ConsentPrintView({
 
   const backHref = `/patients/${encodeURIComponent(patientId)}?tab=consents`;
 
+  // DX-118 (FE-033): título neutro en la pestaña; el del documento solo al imprimir.
+  usePrintDocumentTitle('Consentimiento informado', data ? copy.documentTitle(data.title, `${data.patient.firstName} ${data.patient.lastName}`) : null);
   return (
     <div className="consent-print-page flex min-h-full flex-1 flex-col bg-surface-sunken print:min-h-0 print:bg-white">
-      {data ? (
-        <title>
-          {copy.documentTitle(data.title, `${data.patient.firstName} ${data.patient.lastName}`)}
-        </title>
-      ) : null}
       <div
         role="toolbar"
         aria-label={copy.toolbar}

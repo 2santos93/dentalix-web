@@ -23,6 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { NewPrescriptionModal } from './new-prescription-modal';
 import { VoidPrescriptionModal } from './void-prescription-modal';
+import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
   heading: 'Recetas',
@@ -174,11 +175,11 @@ export function PatientPrescriptionsTab({ token, patientId }: PatientPrescriptio
   function printLink(rx: Prescription) {
     return (
       <Button asChild variant="secondary" size="sm">
-        <a href={prescriptionPrintHref(patientId, rx.id)} target="_blank" rel="noopener">
+        <ExternalLink href={prescriptionPrintHref(patientId, rx.id)}>
           <Printer aria-hidden />
           {copy.print}
           <span className="sr-only"> · {copy.printHint(stamp.maybe.dateTime(rx.issuedAt, rx.locationId))}</span>
-        </a>
+        </ExternalLink>
       </Button>
     );
   }

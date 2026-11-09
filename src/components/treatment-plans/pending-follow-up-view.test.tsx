@@ -87,7 +87,7 @@ describe('PendingFollowUpView (DX-040)', () => {
       'href',
       'tel:4121112222',
     );
-    const whatsapp = within(row).getByRole('link', { name: 'WhatsApp a Carolina Ruiz' });
+    const whatsapp = within(row).getByRole('link', { name: /^WhatsApp a Carolina Ruiz/ });
     expect(whatsapp.getAttribute('href')).toMatch(/^https:\/\/wa\.me\/584121112222\?text=Hola%20Carolina/);
     await waitFor(() => expect(whatsapp.getAttribute('href')).toContain('Cl%C3%ADnica%20Demo'));
     expect(screen.getByText('1 presupuesto')).toBeInTheDocument();

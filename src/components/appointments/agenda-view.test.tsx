@@ -1,10 +1,11 @@
 import type { ReactElement } from 'react';
 import { useAuthStore } from '@/lib/auth/auth-store';
-import { act, configure, render, screen, waitFor, within } from '@testing-library/react';
+import { act, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readDate, readTime, typeDate, typeTime } from './date-segments-for-tests';
 import { AgendaView } from './agenda-view';
 import { Toaster } from '@/components/errors/toaster';
+import { toast } from 'sonner';
 import { ApiError } from '@/lib/api/client';
 import { wallDayRange, wallWeekRange } from '@/lib/time/wall-clock';
 import { caracasSede, utcSede } from '@/lib/test/sede-clock';
@@ -1980,6 +1981,127 @@ describe('AgendaView con el reloj de la sede (DX-378)', () => {
       const { onRetry } = (notifyError as jest.Mock).mock.calls.at(-1)[1] as { onRetry: () => void };
       act(() => onRetry());
       expect(await screen.findByRole('region', { name: 'Agenda del día por sillón' })).toBeInTheDocument();
+    });
+
+    describe('arrastre entre sillones (DX-479)', () => {
+      // jsdom no trae PointerEvent (ver day-columns.test.tsx).
+      if (typeof window.PointerEvent === 'undefined') {
+        class PointerEventPolyfill extends MouseEvent {
+          pointerId: number;
+          pointerType: string;
+          constructor(type: string, init: PointerEventInit = {}) {
+            super(type, init);
+            this.pointerId = init.pointerId ?? 0;
+            this.pointerType = init.pointerType ?? '';
+          }
+        }
+        window.PointerEvent = PointerEventPolyfill as unknown as typeof PointerEvent;
+      }
+      // «Sillón 2» tiene al Dr. Luis Gómez por defecto; la cita es de la Dra. Ana Ríos en «Sillón 1».
+      const chairsWithDefault = [
+        { ...base, id: 'ch-1', name: 'Sillón 1', sortOrder: 0, active: true },
+        { ...base, id: 'ch-2', name: 'Sillón 2', sortOrder: 1, active: true, defaultProviderId: 'staff-2' },
+      ];
+      const seated = appointment({
+        id: 'apt-s',
+        providerId: 'staff-1',
+        chairId: 'ch-1',
+        chair: { id: 'ch-1', name: 'Sillón 1', active: true },
+      });
+      const columnIds = ['ch-1', 'ch-2', 'sin-sillon'];
+      let rectSpy: jest.SpyInstance;
+
+      beforeEach(() => {
+        window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+        window.localStorage.setItem('dentalix.agenda.columnsBy.u1', 'chairs');
+        mockedListStaff.mockResolvedValue(staff);
+        mockedListChairs.mockResolvedValue(chairsWithDefault);
+        mockedListAppointments.mockResolvedValue([seated]);
+        mockedUpdateAppointment.mockResolvedValue({ ...seated, notes: null } as Awaited<ReturnType<typeof updateAppointment>>);
+        // Cada columna ocupa 200 px desde x = 100; las tarjetas no maquetan.
+        rectSpy = jest
+          .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+          .mockImplementation(function (this: HTMLElement) {
+            const index = columnIds.indexOf(this.dataset.chairColumn ?? '');
+            return index >= 0
+              ? ({ left: 100 + index * 200, right: 300 + index * 200, top: 0, bottom: 4000 } as DOMRect)
+              : ({ left: 0, right: 0, top: 0, bottom: 0 } as DOMRect);
+          });
+      });
+      afterEach(() => {
+        rectSpy.mockRestore();
+        mockedUpdateAppointment.mockReset();
+      });
+
+      /** Arrastra la única tarjeta a la columna `columnIndex`, 160 px más abajo (otra hora). */
+      async function dropOn(columnIndex: number) {
+        await openDay();
+        const card = await screen.findByTestId('day-column-appointment');
+        fireEvent.pointerDown(card, { pointerId: 21, pointerType: 'mouse', button: 0, clientX: 150, clientY: 0 });
+        fireEvent.pointerMove(window, { pointerId: 21, clientX: 150 + columnIndex * 200, clientY: 160 });
+        fireEvent.pointerUp(window, { pointerId: 21, clientX: 150 + columnIndex * 200, clientY: 160 });
+      }
+
+      it('soltar en un sillón con otro profesional por defecto pregunta; «Mantener» (con el foco) mueve sin cambiarlo', async () => {
+        const user = userEvent.setup();
+        await dropOn(1);
+        const dialog = await screen.findByRole('dialog', { name: '¿Asignar a Dr. Luis Gómez?' });
+        expect(dialog).toHaveAccessibleDescription(
+          '«Sillón 2» tiene a Dr. Luis Gómez como profesional por defecto. La cita sigue con Dra. Ana Ríos salvo que la asignes.',
+        );
+        // Nada se mandó todavía: se pregunta ANTES de mover.
+        expect(mockedUpdateAppointment).not.toHaveBeenCalled();
+        const keep = within(dialog).getByRole('button', { name: 'Mantener a Dra. Ana Ríos' });
+        await waitFor(() => expect(keep).toHaveFocus());
+        await user.click(keep);
+        await waitFor(() =>
+          expect(mockedUpdateAppointment).toHaveBeenCalledWith(
+            token,
+            'apt-s',
+            expect.objectContaining({ chairId: 'ch-2', providerId: 'staff-1', start: expect.any(String) }),
+          ),
+        );
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      });
+
+      it('«Asignar a X» mueve la cita con el profesional del sillón', async () => {
+        const user = userEvent.setup();
+        await dropOn(1);
+        await user.click(await screen.findByRole('button', { name: 'Asignar a Dr. Luis Gómez' }));
+        await waitFor(() =>
+          expect(mockedUpdateAppointment).toHaveBeenCalledWith(
+            token,
+            'apt-s',
+            expect.objectContaining({ chairId: 'ch-2', providerId: 'staff-2', start: expect.any(String), end: expect.any(String) }),
+          ),
+        );
+      });
+
+      it('Cancelar no mueve nada: la tarjeta sigue en su sillón', async () => {
+        const user = userEvent.setup();
+        await dropOn(1);
+        await user.click(await screen.findByRole('button', { name: 'Cancelar' }));
+        expect(mockedUpdateAppointment).not.toHaveBeenCalled();
+        expect(screen.getByTestId('day-column-appointment').closest('[data-chair-column]')).toHaveAttribute(
+          'data-chair-column',
+          'ch-1',
+        );
+      });
+
+      it('a «Sin sillón» no hay nada que preguntar: el PATCH sale con chairId null y se anuncia', async () => {
+        const announced = jest.spyOn(toast, 'success');
+        await dropOn(2);
+        await waitFor(() =>
+          expect(mockedUpdateAppointment).toHaveBeenCalledWith(
+            token,
+            'apt-s',
+            expect.objectContaining({ chairId: null, providerId: 'staff-1' }),
+          ),
+        );
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        await waitFor(() => expect(announced).toHaveBeenCalledWith(expect.stringMatching(/^Cita movida a Sin sillón, .+\.$/)));
+        announced.mockRestore();
+      });
     });
 
     it('la preferencia guardada abre la vista por sillón', async () => {

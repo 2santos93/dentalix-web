@@ -435,7 +435,8 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
       kind,
       labelEs: name.trim(),
       color,
-      allowDiscount,
+      // DX-105-bis: la casilla solo existe en los procedimientos; un diagnóstico no la manda.
+      ...(kind === 'PROCEDURE' ? { allowDiscount } : {}),
       ...(defaultPrice !== undefined ? { defaultPrice } : {}),
       ...(trimmedCategory ? { category: trimmedCategory } : {}),
     };
@@ -742,13 +743,16 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
             </FormField>
           </div>
 
-          <Checkbox
-            id="catalog-allow-discount"
-            checked={allowDiscount}
-            onChange={(e) => setAllowDiscount(e.target.checked)}
-            label={copy.allowDiscountLabel}
-            description={copy.allowDiscountHint}
-          />
+          {/* DX-105-bis: un diagnóstico no tiene precio: nada que descontar. */}
+          {kind === 'PROCEDURE' ? (
+            <Checkbox
+              id="catalog-allow-discount"
+              checked={allowDiscount}
+              onChange={(e) => setAllowDiscount(e.target.checked)}
+              label={copy.allowDiscountLabel}
+              description={copy.allowDiscountHint}
+            />
+          ) : null}
         </FormModal>
 
         {currencyUnknown ? (

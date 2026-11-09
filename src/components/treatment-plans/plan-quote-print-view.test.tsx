@@ -189,7 +189,12 @@ describe('PlanQuotePrintView (DX-012)', () => {
     // DX-379: imprimir fija la validez (POST issue), no el GET de solo lectura.
     expect(mockedPlainGet).not.toHaveBeenCalled();
     expect(print).toHaveBeenCalledTimes(1);
+    // DX-118: en la pestaña el título es neutro; el del documento, solo al imprimir.
+    expect(document.title).toBe('Presupuesto');
+    window.dispatchEvent(new Event('beforeprint'));
     expect(document.title).toBe('Presupuesto · Ana Pérez');
+    window.dispatchEvent(new Event('afterprint'));
+    expect(document.title).toBe('Presupuesto');
     const back = screen.getByRole('link', { name: /Volver/ });
     expect(back).toHaveAttribute('href', '/patients/p1?tab=treatment-plans');
     await userEvent.click(screen.getByRole('button', { name: 'Imprimir o guardar como PDF' }));

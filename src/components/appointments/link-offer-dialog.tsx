@@ -17,6 +17,7 @@ import { FormModal } from '@/components/shared/form-modal';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { RadioGroup, RadioOption } from '@/components/ui/radio-group';
+import { ExternalLink } from '@/components/shared/external-link';
 
 // Copy as constants (i18n-ready, es-first).
 export const linkOfferCopy = {
@@ -230,17 +231,15 @@ export function LinkOfferDialog({
                   </span>
                 </span>
                 {r.waHref ? (
-                  <a
+                  <ExternalLink
                     href={r.waHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     aria-label={linkOfferCopy.openWhatsAppFor(r.name)}
                     // DX-486: 44 px también en el enlace (el `touchTargets`
                     // del modal solo alcanza a los botones).
                     className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'min-h-11')}
                   >
                     <MessageCircle aria-hidden /> {linkOfferCopy.openWhatsApp}
-                  </a>
+                  </ExternalLink>
                 ) : null}
               </li>
             ))}

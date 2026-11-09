@@ -1,6 +1,5 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import { Eye, Lock, Mail, Printer, ReceiptText } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApiError } from '@/lib/api/client';
@@ -27,6 +26,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
 import { notifyError } from '@/components/errors/notify';
+import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
   title: 'Recibo de caja',
@@ -38,7 +38,6 @@ const copy = {
   close: 'Cerrar',
   printA4: 'Imprimir A4',
   printRoll: 'Tirilla 80 mm',
-  newTab: '(se abre en otra pestaña)',
   send: 'Enviar por email',
   sending: 'Enviando…',
   sent: (to: string) => `Recibo enviado a ${to}.`,
@@ -206,18 +205,16 @@ function ReceiptBody({
           {sending ? copy.sending : copy.send}
         </Button>
         <Button asChild variant="secondary">
-          <Link href={receiptPrintHref(paymentId, '80mm')} target="_blank" rel="noopener">
+          <ExternalLink href={receiptPrintHref(paymentId, '80mm')}>
             <Printer aria-hidden />
             {copy.printRoll}
-            <span className="sr-only">{copy.newTab}</span>
-          </Link>
+          </ExternalLink>
         </Button>
         <Button asChild>
-          <Link href={receiptPrintHref(paymentId, 'a4')} target="_blank" rel="noopener">
+          <ExternalLink href={receiptPrintHref(paymentId, 'a4')}>
             <Printer aria-hidden />
             {copy.printA4}
-            <span className="sr-only">{copy.newTab}</span>
-          </Link>
+          </ExternalLink>
         </Button>
       </DialogFooter>
       {proofViewer.dialog}

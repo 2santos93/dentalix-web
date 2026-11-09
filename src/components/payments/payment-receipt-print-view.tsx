@@ -16,6 +16,7 @@ import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { usePrintDocumentTitle } from '@/lib/print/use-print-document-title';
 
 const copy = {
   toolbar: 'Acciones del recibo',
@@ -98,12 +99,13 @@ export function PaymentReceiptPrintView({
     ? `/patients/${encodeURIComponent(receipt.snapshot.patient.id)}?tab=treatment-plans`
     : '/patients';
 
+  // DX-118 (FE-033): título neutro en la pestaña; el del documento solo al imprimir.
+  usePrintDocumentTitle('Recibo de caja', receipt ? copy.documentTitle(receipt.reference) : null);
   return (
     <div
       data-format={format}
       className="receipt-print-page flex min-h-full flex-1 flex-col bg-surface-sunken print:bg-white"
     >
-      {receipt ? <title>{copy.documentTitle(receipt.reference)}</title> : null}
       <div
         role="toolbar"
         aria-label={copy.toolbar}

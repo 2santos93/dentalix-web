@@ -17,6 +17,7 @@ import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { Button } from '@/components/ui/button';
 import { SectionError } from '@/components/errors/section-error';
 import { familyStatementCopy } from './family-account-statement-document';
+import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
   ...familyStatementCopy,
@@ -83,11 +84,11 @@ export function FamilyAccountStatementSection({
         </div>
         {data ? (
           <Button asChild variant="secondary" className="max-sm:w-full">
-            <a href={familyAccountStatementPrintHref(patientId)} target="_blank" rel="noopener noreferrer">
+            <ExternalLink href={familyAccountStatementPrintHref(patientId)}>
               <Printer aria-hidden />
               {copy.print}
               <span className="sr-only"> {copy.printHint}</span>
-            </a>
+            </ExternalLink>
           </Button>
         ) : null}
       </div>

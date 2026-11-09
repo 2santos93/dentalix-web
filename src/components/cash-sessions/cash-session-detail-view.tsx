@@ -3,7 +3,6 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { documentFormat } from '@/lib/format/document-format';
 import { DocumentFormatNote } from '@/components/documents/document-format-note';
-import Link from 'next/link';
 import { Lock, Printer, Wallet } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -24,6 +23,7 @@ import { CashSessionReport } from './cash-session-report';
 import { CloseCashSessionModal } from './close-cash-session-modal';
 import { ReopenCashSessionModal } from './reopen-cash-session-modal';
 import { CashAdjustmentModal } from './cash-adjustment-modal';
+import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
   title: 'Turno de caja',
@@ -150,10 +150,10 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
             ) : null}
             {session.status === 'CLOSED' ? (
               <Button asChild variant={session.can.reopen || session.can.adjust ? 'secondary' : 'default'}>
-                <Link href={cashSessionReportHref(session.id)} target="_blank">
+                <ExternalLink href={cashSessionReportHref(session.id)}>
                   <Printer aria-hidden />
                   {copy.print}
-                </Link>
+                </ExternalLink>
               </Button>
             ) : null}
           </div>

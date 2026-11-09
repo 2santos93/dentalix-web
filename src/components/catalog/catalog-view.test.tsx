@@ -277,7 +277,10 @@ describe('CatalogView', () => {
 
     await user.click(screen.getByRole('button', { name: /agregar ítem/i }));
     await user.type(screen.getByLabelText(/^nombre$/i), 'Caries dental');
+    // DX-105-bis: «Admite descuentos» solo existe para los procedimientos.
+    expect(screen.getByLabelText('Admite descuentos')).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText(/^tipo$/i), 'DIAGNOSIS');
+    expect(screen.queryByLabelText('Admite descuentos')).not.toBeInTheDocument();
     await user.type(screen.getByLabelText(/^código$/i), 'DX-CARIES');
 
     await user.click(screen.getByRole('button', { name: /^crear$/i }));
@@ -288,7 +291,6 @@ describe('CatalogView', () => {
         kind: 'DIAGNOSIS',
         labelEs: 'Caries dental',
         color: '#0E7490',
-        allowDiscount: true,
       }),
     );
   });

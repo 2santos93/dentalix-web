@@ -2,6 +2,7 @@ import {
   agreementChipText,
   agreementStatusBadge,
   agreementValidityLabel,
+  effectiveValidity,
 } from './agreement-presentation';
 import { stampPainters } from '@/lib/locations/sede-stamp';
 import { testAgendaClock, utcSede } from '@/lib/test/sede-clock';
@@ -38,6 +39,40 @@ describe('agreement-presentation (DX-105)', () => {
     expect(agreementValidityLabel(a, sede('en-US', 'h12'))).toBe('Vigente hasta 01/31/2027');
     // Sin formato de la sede: «—», nunca dd/mm/aaaa.
     expect(agreementValidityLabel(a, stampPainters(null))).toBe('Vigente hasta —');
+  });
+
+  it('DX-105-bis: la fecha que se explica sale de la asignación Y del convenio (la última de inicio, la primera de fin)', () => {
+    // Venció el CONVENIO, no la asignación (antes: «Venció el —»).
+    expect(
+      agreementValidityLabel(
+        { status: 'EXPIRED', validFrom: null, validTo: null, agreement: { validFrom: null, validTo: '2026-01-31' } },
+        VE,
+      ),
+    ).toBe('Venció el 31/01/2026');
+    // Las dos con fin: la primera manda.
+    expect(
+      agreementValidityLabel(
+        { status: 'ACTIVE', validFrom: null, validTo: '2027-06-30', agreement: { validFrom: null, validTo: '2027-01-31' } },
+        VE,
+      ),
+    ).toBe('Vigente hasta 31/01/2027');
+    // Empieza cuando empiece el convenio, que es después que la asignación.
+    expect(
+      agreementValidityLabel(
+        { status: 'NOT_STARTED', validFrom: '2027-01-01', validTo: null, agreement: { validFrom: '2027-03-01', validTo: null } },
+        VE,
+      ),
+    ).toBe('Desde 01/03/2027');
+    // Sin ninguna fecha que explicar: el estado, sin inventar un día.
+    expect(
+      agreementValidityLabel({ status: 'EXPIRED', validFrom: null, validTo: null, agreement: null }, VE),
+    ).toBe('Vencido');
+    expect(
+      agreementValidityLabel({ status: 'NOT_STARTED', validFrom: null, validTo: null }, VE),
+    ).toBe('Todavía no vigente');
+    expect(
+      effectiveValidity({ validFrom: '2026-01-01', validTo: null, agreement: { validFrom: '2025-06-01', validTo: '2026-12-31' } }),
+    ).toEqual({ validFrom: '2026-01-01', validTo: '2026-12-31' });
   });
 
   it('insignia por estado', () => {

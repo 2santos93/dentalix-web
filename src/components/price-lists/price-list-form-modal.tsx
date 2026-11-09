@@ -169,6 +169,8 @@ export function PriceListFormModal({
           id="price-list-location"
           value={locationId}
           onChange={(e) => setLocationId(e.target.value)}
+          // DX-105-bis: 44 px en el teléfono (el `className` va al envoltorio).
+          selectClassName="h-11 sm:h-10"
         >
           <option value="">{copy.wholeClinic}</option>
           {options.map((l) => (

@@ -1,6 +1,5 @@
 'use client';
 import { useState } from 'react';
-import Link from 'next/link';
 import { Printer } from 'lucide-react';
 import {
   getCreditRefund,
@@ -21,6 +20,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { CreditRefundDocument } from './credit-refund-document';
+import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
   title: 'Devolución registrada',
@@ -30,7 +30,6 @@ const copy = {
   close: 'Cerrar',
   printA4: 'Imprimir A4',
   printRoll: 'Tirilla 80 mm',
-  newTab: '(se abre en otra pestaña)',
   rereadError: 'No pudimos volver a leer el comprobante.',
 };
 
@@ -80,18 +79,16 @@ export function CreditRefundDialog({
               {copy.close}
             </Button>
             <Button asChild variant="outline">
-              <Link href={refundPrintHref(refund.id, '80mm')} target="_blank" rel="noopener">
+              <ExternalLink href={refundPrintHref(refund.id, '80mm')}>
                 <Printer aria-hidden />
                 {copy.printRoll}
-                <span className="sr-only">{copy.newTab}</span>
-              </Link>
+              </ExternalLink>
             </Button>
             <Button asChild>
-              <Link href={refundPrintHref(refund.id, 'a4')} target="_blank" rel="noopener">
+              <ExternalLink href={refundPrintHref(refund.id, 'a4')}>
                 <Printer aria-hidden />
                 {copy.printA4}
-                <span className="sr-only">{copy.newTab}</span>
-              </Link>
+              </ExternalLink>
             </Button>
           </DialogFooter>
         </DialogContent>

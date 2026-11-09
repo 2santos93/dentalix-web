@@ -26,7 +26,7 @@ describe('ProfessionalLicenseNotice (DX-540)', () => {
     expect(link).toHaveAttribute('href', '/staff/u-admin');
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
-    expect(link).toHaveAccessibleName(/se abre en otra pestaña/i);
+    expect(link).toHaveAccessibleName(/se abre en una pestaña nueva/i);
   });
 
   it('sin permiso para editar Personal: sin enlace, dice a quién pedirlo', () => {

@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { documentFormat, documentTexts } from '@/lib/format/document-format';
 import { DocumentFormatNote } from '@/components/documents/document-format-note';
 import { CashSessionReport } from './cash-session-report';
+import { usePrintDocumentTitle } from '@/lib/print/use-print-document-title';
 
 const copy = {
   toolbar: 'Acciones del informe',
@@ -80,18 +81,17 @@ export function CashSessionPrintView({ token, sessionId, allowed = true }: CashS
 
   const forbidden = !allowed || status === 403;
 
+  // DX-118 (FE-033): título neutro en la pestaña; el del documento solo al imprimir.
+  usePrintDocumentTitle('Cierre de caja', session
+      ? docFormat
+        ? copy.documentTitle(
+            session.location.name,
+            documentTexts(docFormat).civilDate(session.closing?.suggestedLockDate ?? session.openedOn),
+          )
+        : copy.documentTitleNoDate(session.location.name)
+      : null);
   return (
     <div className="cash-report-print-page flex min-h-full flex-1 flex-col bg-canvas print:bg-white">
-      {session ? (
-        <title>
-          {docFormat
-            ? copy.documentTitle(
-                session.location.name,
-                documentTexts(docFormat).civilDate(session.closing?.suggestedLockDate ?? session.openedOn),
-              )
-            : copy.documentTitleNoDate(session.location.name)}
-        </title>
-      ) : null}
       <div
         role="toolbar"
         aria-label={copy.toolbar}

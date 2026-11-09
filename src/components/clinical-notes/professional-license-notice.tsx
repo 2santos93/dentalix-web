@@ -1,14 +1,13 @@
 'use client';
-import Link from 'next/link';
 import { toast } from 'sonner';
 import { Callout } from '@/components/ui/callout';
 import type { ClinicalEntryWarning } from '@/lib/patients/clinical-api';
+import { ExternalLink } from '@/components/shared/external-link';
 
 export const professionalLicenseCopy = {
   title: 'Vas a firmar sin registro profesional',
   body: 'La evolución se guardará sin tu número de registro profesional y no podrá añadirse después. Puedes guardarla igual.',
   editLink: 'Cargar mi registro en Personal',
-  newTab: '(se abre en otra pestaña)',
   askAdmin: 'Pide a un administrador que lo cargue en tu ficha de Personal.',
   savedWithout: 'Evolución guardada sin registro profesional',
 };
@@ -39,15 +38,13 @@ export function ProfessionalLicenseNotice({ canEditStaff, userId }: Professional
       <p>{copy.body}</p>
       {editable ? (
         <p className="mt-1">
-          <Link
+          <ExternalLink
             href={`/staff/${userId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`${copy.editLink} ${copy.newTab}`}
+            aria-label={copy.editLink}
             className="inline-flex min-h-11 items-center font-medium text-primary-text underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text sm:min-h-0"
           >
             {copy.editLink}
-          </Link>
+          </ExternalLink>
         </p>
       ) : (
         <p className="mt-1">{copy.askAdmin}</p>

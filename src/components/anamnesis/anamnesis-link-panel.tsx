@@ -9,6 +9,7 @@ import { useSedeClock } from '@/lib/locations/sede-clock';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { InlineError } from '@/components/errors/inline-error';
+import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
   heading: 'Anamnesis por enlace',
@@ -135,9 +136,9 @@ export function AnamnesisLinkPanel({
             </Button>
             {link.whatsapp ? (
               <Button asChild className="w-full sm:w-auto">
-                <a href={whatsAppUrl(link.whatsapp.phone, link.whatsapp.text)} target="_blank" rel="noopener noreferrer">
+                <ExternalLink href={whatsAppUrl(link.whatsapp.phone, link.whatsapp.text)}>
                   <MessageCircle aria-hidden /> {copy.whatsapp}
-                </a>
+                </ExternalLink>
               </Button>
             ) : (
               <Button type="button" disabled aria-describedby={noPhoneId} className="w-full sm:w-auto">

@@ -82,6 +82,31 @@ export function proposeProvider(
   return proposed !== null && staffIds.includes(proposed) ? proposed : currentProviderId;
 }
 
+/**
+ * DX-479: al MOVER una cita a un sillón, el profesional no cambia solo. Si el
+ * sillón destino tiene otro profesional por defecto (y sigue en el personal),
+ * se OFRECE asignarlo; quien mueve decide, y «Mantener» es lo de siempre.
+ * Devuelve el profesional a ofrecer, o `null` si no hay nada que ofrecer.
+ */
+export function offeredProvider(
+  currentProviderId: string,
+  chair: Pick<Chair, 'defaultProviderId'> | null,
+  staffIds: readonly string[],
+): string | null {
+  const proposed = chair?.defaultProviderId ?? null;
+  if (proposed === null || proposed === currentProviderId) return null;
+  return staffIds.includes(proposed) ? proposed : null;
+}
+
+/**
+ * DX-479: en la vista por sillón solo se arrastra lo que está por atender.
+ * Una completada, ausente o cancelada no se mueve de sillón ni de hora desde
+ * la rejilla (el detalle y «Mover a…» siguen sus propias reglas).
+ */
+export function canDragByChair(status: string): boolean {
+  return status === 'SCHEDULED' || status === 'CONFIRMED';
+}
+
 /** Sube (`-1`) o baja (`+1`) un sillón un puesto; en los bordes no cambia. */
 export function moveChairInOrder(ids: readonly string[], id: string, step: -1 | 1): string[] {
   const from = ids.indexOf(id);

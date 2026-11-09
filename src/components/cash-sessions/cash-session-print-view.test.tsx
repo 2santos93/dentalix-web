@@ -47,12 +47,19 @@ describe('CashSessionPrintView (DX-027)', () => {
     expect(note?.closest('.print\\:hidden')).not.toBeNull();
     expect(print).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: /imprimir/i })).toBeDisabled();
+    // DX-118: en la pestaña, el título neutro; el del documento solo al imprimir.
+    expect(document.title).toBe('Cierre de caja');
+    window.dispatchEvent(new Event('beforeprint'));
     expect(document.title).toBe('Cierre de caja Sede principal');
+    window.dispatchEvent(new Event('afterprint'));
 
     await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
     await waitFor(() => expect(screen.queryByText(SEDE_LOCALE_ERROR)).not.toBeInTheDocument());
     expect(screen.getByTestId('cash-session-report')).toHaveTextContent('10/17/2026');
     expect(print).toHaveBeenCalledTimes(1);
+    expect(document.title).toBe('Cierre de caja');
+    window.dispatchEvent(new Event('beforeprint'));
     expect(document.title).toMatch(/^Cierre de caja Sede principal \d{2}\/\d{2}\/\d{4}$/);
+    window.dispatchEvent(new Event('afterprint'));
   });
 });
