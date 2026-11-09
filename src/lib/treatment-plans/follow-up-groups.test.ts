@@ -1,4 +1,4 @@
-import { followUpAmount, groupFollowUp } from './follow-up-groups';
+import { followUpAmount, followUpValidity, groupFollowUp } from './follow-up-groups';
 import type { PendingFollowUpItem } from './plan-options-api';
 
 function item(over: Partial<PendingFollowUpItem> = {}): PendingFollowUpItem {
@@ -51,3 +51,29 @@ describe('followUpAmount (D2)', () => {
     );
   });
 });
+
+describe('followUpValidity (DX-379)', () => {
+  it('sin fechas en ninguna opción (planes anteriores), nada', () => {
+    expect(followUpValidity([item(), item({ planId: 'b' })])).toBeNull();
+  });
+
+  it('vigentes: la que vence antes, con su sede', () => {
+    expect(
+      followUpValidity([
+        item({ quoteValidUntil: '2026-12-09' }),
+        item({ planId: 'b', quoteValidUntil: '2026-11-30', presentedLocationId: 'l2' }),
+        item({ planId: 'c' }),
+      ]),
+    ).toEqual({ validUntil: '2026-11-30', expired: false, locationId: 'l2' });
+  });
+
+  it('si alguna venció, manda la vencida aunque otra venza antes en el calendario', () => {
+    expect(
+      followUpValidity([
+        item({ quoteValidUntil: '2026-11-01' }),
+        item({ planId: 'b', quoteValidUntil: '2026-11-03', quoteExpired: true }),
+      ]),
+    ).toEqual({ validUntil: '2026-11-03', expired: true, locationId: 'l1' });
+  });
+});
+

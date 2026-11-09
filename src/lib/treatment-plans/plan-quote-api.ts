@@ -74,6 +74,27 @@ export async function getPlanQuote(
 }
 
 /**
+ * `POST …/quote/issue` (DX-379) — imprimir el presupuesto. Devuelve lo mismo
+ * que el GET, pero la primera impresión de un borrador o presentado sin firmar
+ * fija su validez (emitido hoy en la sede + los días del ajuste); reimprimir
+ * devuelve las mismas fechas. Solo la vista de impresión lo usa (a la que se
+ * llega desde «Imprimir presupuesto», «Ver el presupuesto completo» del modal
+ * de aceptar y «Presupuesto» del estado de cuenta: las tres imprimen al
+ * cargar). Ver el presupuesto dentro del modal de aceptar sigue con el GET,
+ * que no fija nada.
+ */
+export async function issuePlanQuote(
+  token: string,
+  patientId: string,
+  planId: string,
+): Promise<PlanQuote> {
+  return apiFetch<PlanQuote>(
+    `/patients/${encodeURIComponent(patientId)}/treatment-plans/${encodeURIComponent(planId)}/quote/issue`,
+    { method: 'POST', token },
+  );
+}
+
+/**
  * `POST …/acceptance` — acepta el presupuesto que se mostró (`contentHash`)
  * con la firma. 400 sin firma; 409 si ya estaba firmado o si el presupuesto
  * cambió desde que se mostró.

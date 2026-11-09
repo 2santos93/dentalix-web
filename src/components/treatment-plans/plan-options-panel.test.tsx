@@ -1,4 +1,4 @@
-import { dateIn, STAMP_SEDES, testStamp } from '@/lib/test/stamp';
+import { dateIn, STAMP_FORMATS, STAMP_SEDES, testStamp } from '@/lib/test/stamp';
 import { stampPainters, type SedePainters } from '@/lib/locations/sede-stamp';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -118,6 +118,44 @@ describe('PlanOptionsPanel (DX-040)', () => {
     await user.click(screen.getByRole('button', { name: 'Marcar rechazado' }));
     await waitFor(() => expect(props.onChanged).toHaveBeenCalled());
     expect(mockedReject).toHaveBeenCalledWith('tok', 'a', { reason: 'PRICE' });
+  });
+
+  describe('DX-379: la validez junto a «Presentado el …»', () => {
+    const presented = { status: 'PRESENTED' as const, presentedAt: '2026-10-07T15:00:00.000Z' };
+
+    it('vencido: chip «Vencido · valía hasta el …» con el formato de la sede de la presentación', () => {
+      renderPanel(
+        plan({
+          ...presented,
+          presentedLocationId: STAMP_SEDES.berlin.id,
+          quoteIssuedOn: '2026-10-07',
+          quoteValidUntil: '2026-11-06',
+          quoteExpired: true,
+        }),
+        'DENTIST',
+      );
+      expect(screen.getByTestId('quote-expired')).toHaveTextContent(
+        `Vencido · valía hasta el ${STAMP_FORMATS.berlin.civilDate('2026-11-06')}`,
+      );
+      expect(screen.queryByTestId('quote-valid-until')).not.toBeInTheDocument();
+    });
+
+    it('vigente: «Válido hasta el …», sin chip', () => {
+      renderPanel(
+        plan({ ...presented, quoteIssuedOn: '2026-10-07', quoteValidUntil: '2026-11-06', quoteExpired: false }),
+        'DENTIST',
+      );
+      expect(screen.getByTestId('quote-valid-until')).toHaveTextContent(
+        `Válido hasta el ${STAMP_FORMATS.caracas.civilDate('2026-11-06')}`,
+      );
+      expect(screen.queryByTestId('quote-expired')).not.toBeInTheDocument();
+    });
+
+    it('sin fechas (presentado antes de DX-379): nada', () => {
+      renderPanel(plan(presented), 'DENTIST');
+      expect(screen.queryByTestId('quote-expired')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('quote-valid-until')).not.toBeInTheDocument();
+    });
   });
 
   it('un plan rechazado enseña el motivo y la nota', () => {

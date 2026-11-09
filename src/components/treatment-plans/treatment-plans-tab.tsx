@@ -35,6 +35,7 @@ import { useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
+import { QuoteValidity } from './quote-validity';
 import { getDiscountPolicy } from '@/lib/discounts/discounts-api';
 import type { DiscountRules } from '@/lib/discounts/discount-rules';
 import { Button } from '@/components/ui/button';
@@ -966,6 +967,14 @@ export function TreatmentPlansTab({
               {selectedPlan ? (
                 <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <StatusBadge kind="treatmentPlan" status={selectedPlan.status} />
+                  {/* DX-379: hasta qué día valen los precios (o desde cuándo no). */}
+                  <QuoteValidity
+                    status={selectedPlan.status}
+                    validUntil={selectedPlan.quoteValidUntil}
+                    expired={selectedPlan.quoteExpired}
+                    locationId={selectedPlan.presentedLocationId}
+                    stamp={stamp}
+                  />
                   {selectedPlan.optionLabel ? (
                     <span className="text-sm font-medium text-muted">{selectedPlan.optionLabel}</span>
                   ) : null}

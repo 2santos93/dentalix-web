@@ -86,3 +86,26 @@ export function followUpAmount(
     })
     .join(' · ');
 }
+
+/** La validez que enseña una fila de «Presupuestos por seguir» (DX-379). */
+export interface FollowUpValidity {
+  /** Último día válido (`YYYY-MM-DD`, inclusive). */
+  validUntil: string;
+  expired: boolean;
+  /** La sede de la opción, para pintar el día con su formato. */
+  locationId: string;
+}
+
+/**
+ * La validez de la fila: la de la opción que vence (o venció) antes. Si alguna
+ * opción ya venció, manda la vencida: es lo que hay que decirle al paciente.
+ * Sin fechas en ninguna opción (planes anteriores a DX-379), `null`.
+ */
+export function followUpValidity(options: readonly PendingFollowUpItem[]): FollowUpValidity | null {
+  const dated = options.filter((o): o is PendingFollowUpItem & { quoteValidUntil: string } => Boolean(o.quoteValidUntil));
+  if (dated.length === 0) return null;
+  const expired = dated.filter((o) => o.quoteExpired);
+  const pool = expired.length > 0 ? expired : dated;
+  const first = pool.reduce((a, b) => (b.quoteValidUntil < a.quoteValidUntil ? b : a));
+  return { validUntil: first.quoteValidUntil, expired: first.quoteExpired, locationId: first.presentedLocationId };
+}
