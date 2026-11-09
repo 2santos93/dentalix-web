@@ -1370,6 +1370,72 @@ describe('TreatmentPlansTab', () => {
 
   // Error-states ladder (Task 8): each `text-danger-text` site classified by what
   // the user can still do — see task-8-report.md for the full table.
+  describe('DX-417: aceptación parcial en la cabecera del plan', () => {
+    const original = plan({
+      id: 'plan-1',
+      status: 'ACCEPTED',
+      acceptedAt: '2026-10-20T15:00:00.000Z',
+      partialPendingPlanId: 'plan-2',
+    });
+    const pending = plan({
+      id: 'plan-2',
+      status: 'PRESENTED',
+      createdAt: '2026-10-20T15:00:00.000Z',
+      splitFromPlanId: 'plan-1',
+    });
+    const day = SEDE_FMT.civilDate('2026-10-20');
+
+    beforeEach(() => {
+      mockedListPlans.mockResolvedValue([original, pending]);
+      mockedGetPlan.mockImplementation(async (_t, id) =>
+        id === 'plan-2' ? { ...pending, items: [item1], total: item1.price } : { ...original, items: [item2], total: item2.price },
+      );
+    });
+
+    it('el original: chip «Aceptado parcialmente» y el enlace al pendiente, que lo selecciona', async () => {
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      const line = await screen.findByTestId('tp-plan-status-line');
+      await waitFor(() => expect(within(line).getByText('Aceptado parcialmente')).toBeInTheDocument());
+      expect(within(line).getByText('Aceptado parcialmente').closest('[data-status]')).toHaveAttribute(
+        'data-status',
+        'PARTIAL',
+      );
+      const link = await screen.findByRole('button', { name: /Lo no aceptado está en el presupuesto pendiente del/ });
+      await waitFor(() => expect(link).toHaveTextContent(`Lo no aceptado está en el presupuesto pendiente del ${day}`));
+      await user.click(link);
+      await waitFor(() => expect(screen.getByLabelText('Plan')).toHaveValue('plan-2'));
+      const pendingLine = await screen.findByTestId('tp-plan-status-line');
+      await waitFor(() => expect(within(pendingLine).getByText('Pendiente de aceptación parcial')).toBeInTheDocument());
+      expect(mockedGetPlan).toHaveBeenLastCalledWith(tok, 'plan-2');
+    });
+
+    it('el pendiente: chip propio, «Resto del plan aceptado el …» al original y el sufijo «· pendiente» en el selector', async () => {
+      const user = userEvent.setup();
+      mockedListPlans.mockResolvedValue([pending, original]);
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      const select = await screen.findByLabelText('Plan');
+      const options = within(select).getAllByRole('option');
+      expect(options[0].textContent).toMatch(/· pendiente$/);
+      expect(options[1].textContent).not.toMatch(/pendiente/);
+      const line = await screen.findByTestId('tp-plan-status-line');
+      expect(within(line).getByText('Pendiente de aceptación parcial')).toBeInTheDocument();
+      const back = await screen.findByRole('button', { name: /Resto del plan aceptado el/ });
+      await waitFor(() => expect(back).toHaveTextContent(`Resto del plan aceptado el ${day}`));
+      await user.click(back);
+      await waitFor(() => expect(select).toHaveValue('plan-1'));
+    });
+
+    it('un plan sin partir no lleva chip ni enlace', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      await screen.findByTestId('tp-plan-status-line');
+      expect(screen.queryByText('Aceptado parcialmente')).not.toBeInTheDocument();
+      expect(screen.queryByText(/presupuesto pendiente del/)).not.toBeInTheDocument();
+    });
+  });
+
   describe('DX-379: la validez del presupuesto en la cabecera del plan', () => {
     // Un borrador impreso también tiene validez; el panel de opciones solo la
     // repite en un plan presentado, así que aquí sale una sola vez.

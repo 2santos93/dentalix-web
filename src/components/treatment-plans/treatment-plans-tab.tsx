@@ -2,9 +2,10 @@
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { QUOTE_EXPIRED } from '@/lib/treatment-plans/plan-quote-api';
+import { QUOTE_EXPIRED, type PlanQuote } from '@/lib/treatment-plans/plan-quote-api';
 import {
   createPlan,
   getPlan,
@@ -838,6 +839,20 @@ export function TreatmentPlansTab({
   }
 
   /**
+   * DX-417: aceptado en parte. El plan original queda seleccionado (con el
+   * enlace a su presupuesto pendiente en la cabecera) y la lista se refresca
+   * con el pendiente nuevo. Sin presupuesto (`null`): otra firma ganó; solo
+   * se refresca.
+   */
+  function handlePlanPartiallyAccepted(quote: PlanQuote | null) {
+    if (quote) {
+      toast.success(copy.partiallyAccepted, { description: copy.partiallyAcceptedHint });
+      setSelectedPlanId(quote.planId);
+    }
+    void Promise.all([refreshPlanDetail(), refreshPlansInPlace(), refreshBalanceAndPayments()]);
+  }
+
+  /**
    * Presentar, rechazar o crear una alternativa (DX-040) cambian el estado del
    * plan y, con una alternativa nueva, la lista de planes: se refrescan los
    * dos en su sitio. Y el saldo: rechazar libera todo lo imputado (DX-051).
@@ -871,6 +886,27 @@ export function TreatmentPlansTab({
   }
 
   const selectedPlan = plans.find((p) => p.id === selectedPlanId) ?? null;
+  // DX-417: el enlace entre el plan aceptado en parte y su presupuesto pendiente, con la fecha de la partición.
+  const splitLink = ((): { planId: string; label: string } | null => {
+    if (!selectedPlan) return null;
+    if (selectedPlan.partialPendingPlanId) {
+      const pending = plans.find((p) => p.id === selectedPlan.partialPendingPlanId);
+      const at = pending?.createdAt ?? selectedPlan.acceptedAt ?? null;
+      return {
+        planId: selectedPlan.partialPendingPlanId,
+        label: copy.partialPendingLink(stamp.date(at, selectedPlan.acceptedLocationId)),
+      };
+    }
+    if (selectedPlan.splitFromPlanId) {
+      const original = plans.find((p) => p.id === selectedPlan.splitFromPlanId);
+      const at = original?.acceptedAt ?? selectedPlan.createdAt;
+      return {
+        planId: selectedPlan.splitFromPlanId,
+        label: copy.partialRestLink(stamp.date(at, original?.acceptedLocationId ?? selectedPlan.presentedLocationId)),
+      };
+    }
+    return null;
+  })();
   const signed = Boolean(planDetail?.acceptance);
   // DX-109: lo mismo que la API aplica con 409, para no ofrecerlo.
   const closed = planDetail ? isPlanClosed(planDetail.status) : false;
@@ -970,7 +1006,14 @@ export function TreatmentPlansTab({
             <NativeSelect id="tp-plan-select" value={selectedPlanId ?? ''} onChange={(e) => setSelectedPlanId(e.target.value)}>
               {plans.map((plan, index) => (
                 <option key={plan.id} value={plan.id}>
-                  {copy.planOptionLabel(plan.createdAt, plan.status, index + 1, plan.optionLabel, stamp)}
+                  {copy.planOptionLabel(
+                    plan.createdAt,
+                    plan.status,
+                    index + 1,
+                    plan.optionLabel,
+                    stamp,
+                    Boolean(plan.splitFromPlanId),
+                  )}
                 </option>
               ))}
             </NativeSelect>
@@ -999,6 +1042,25 @@ export function TreatmentPlansTab({
                   {selectedPlan.optionLabel ? (
                     <span className="text-sm font-medium text-muted">{selectedPlan.optionLabel}</span>
                   ) : null}
+                  {/* DX-417: aceptado en parte, o el presupuesto pendiente que dejó. */}
+                  {selectedPlan.partialPendingPlanId ? (
+                    <StatusBadge kind="planSplit" status="PARTIAL" />
+                  ) : selectedPlan.splitFromPlanId ? (
+                    <StatusBadge kind="planSplit" status="PENDING_REST" />
+                  ) : null}
+                </p>
+              ) : null}
+              {splitLink ? (
+                <p className="text-sm">
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0 text-left whitespace-normal tabular-nums"
+                    onClick={() => setSelectedPlanId(splitLink.planId)}
+                  >
+                    {splitLink.label}
+                  </Button>
                 </p>
               ) : null}
             </div>
@@ -1074,6 +1136,7 @@ export function TreatmentPlansTab({
                 procedureOf={(item) => procedureName(item, catalogById)}
                 onRepriced={handlePlanRepriced}
                 repricePrimary={primary === 'reprice'}
+                onPartiallyAccepted={handlePlanPartiallyAccepted}
               />
 
               {/* La opción que se le presenta al paciente (DX-040): presentar,
