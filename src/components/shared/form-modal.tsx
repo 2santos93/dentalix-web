@@ -56,6 +56,11 @@ interface FormModalProps {
    * Reenvía lo que ya está escrito; no aparece en errores de validación.
    */
   errorRetry?: { label: string; onRetry: () => void } | null;
+  /**
+   * DX-316-bis: una salida junto al banner que no es reintentar (p. ej. «Ver
+   * el festivo existente» en un 409): lleva a donde está lo que choca.
+   */
+  errorAction?: { label: string; onAction: () => void } | null;
   /** `lg` widens for denser, multi-column forms. */
   size?: 'default' | 'lg';
   /** Renders the submit as a destructive action. */
@@ -73,9 +78,10 @@ interface FormModalProps {
    */
   onCloseAutoFocus?: (event: Event) => void;
   /**
-   * Mientras `submitting`, la X tampoco cierra (y se ve deshabilitada), igual
-   * que Cancelar. Para envíos que no se pueden abandonar a medias; quien llama
-   * bloquea también Escape y el fondo en su `onOpenChange`.
+   * DX-316-bis: mientras `submitting` NINGÚN FormModal se cierra (ni la X, ni
+   * Cancelar, ni Escape, ni el fondo): un fallo que llegara con el modal ya
+   * cerrado se perdería sin aviso. Antes solo lo hacían los que pasaban esta
+   * prop; se conserva por compatibilidad y ya no cambia nada.
    */
   lockCloseWhileSubmitting?: boolean;
   /**
@@ -158,11 +164,13 @@ export function FormModal({
   hideSubmit = false,
   error,
   errorRetry = null,
+  errorAction = null,
   size = 'default',
   destructive = false,
   touchTargets = false,
   onCloseAutoFocus,
-  lockCloseWhileSubmitting = false,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- DX-316-bis: implícita para todos; se acepta por compatibilidad.
+  lockCloseWhileSubmitting: _lockCloseWhileSubmitting = false,
   fullScreenOnMobile = true,
   ownValidation = false,
 }: FormModalProps) {
@@ -186,11 +194,18 @@ export function FormModal({
   }, [error]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // DX-316-bis: con el envío en vuelo no se cierra (Escape, fondo, X, Cancelar).
+        if (!next && submitting) return;
+        onOpenChange(next);
+      }}
+    >
       <DialogContent
         className={cn(size === 'lg' && 'max-w-2xl', touchTargets && TOUCH_TARGETS)}
         onCloseAutoFocus={onCloseAutoFocus}
-        closeDisabled={lockCloseWhileSubmitting && submitting}
+        closeDisabled={submitting}
         fullScreenOnMobile={fullScreenOnMobile}
       >
         <DialogHeader>
@@ -236,6 +251,18 @@ export function FormModal({
                 >
                   <RotateCw aria-hidden="true" />
                   {errorRetry.label}
+                </Button>
+              ) : null}
+              {errorAction ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="mt-2"
+                  disabled={submitting}
+                  onClick={errorAction.onAction}
+                >
+                  {errorAction.label}
                 </Button>
               ) : null}
             </div>

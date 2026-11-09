@@ -129,6 +129,28 @@ describe('FormModal errorRetry (QA DX-470)', () => {
   });
 });
 
+describe('FormModal: no se cierra mientras envía (DX-316-bis)', () => {
+  it('con submitting, Escape y la X no cierran; sin él, Escape sí', async () => {
+    const onOpenChange = jest.fn();
+    const props = { open: true, onOpenChange, title: 'Festivo', onSubmit: jest.fn() };
+    const { rerender } = render(
+      <FormModal {...props} submitting>
+        Campos
+      </FormModal>,
+    );
+    const user = setupUser();
+    await user.keyboard('{Escape}');
+    const close = screen.getByRole('button', { name: 'Cerrar' });
+    expect(close).toHaveAttribute('aria-disabled', 'true');
+    await user.click(close);
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeDisabled();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    rerender(<FormModal {...props}>Campos</FormModal>);
+    await user.keyboard('{Escape}');
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});
+
 describe('FormModal touchTargets (DX-394)', () => {
   const props = { open: true, onOpenChange: jest.fn(), title: 'Registrar abono', onSubmit: jest.fn() };
 
