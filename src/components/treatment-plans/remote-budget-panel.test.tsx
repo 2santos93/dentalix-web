@@ -11,6 +11,7 @@ import {
 } from '@/lib/signature-requests/signature-requests-api';
 import type { TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
 import { setupUser } from '@/lib/test/user';
+import { ApiError } from '@/lib/api/client';
 import { ITEM_WITHOUT_DISCOUNT, PLAN_WITHOUT_OPTIONS } from './plan-fixture';
 
 jest.mock('../../lib/signature-requests/signature-requests-api', () => ({
@@ -180,6 +181,62 @@ describe('Enviar a aceptar el presupuesto (DX-415)', () => {
     expect(await screen.findByText('No pudimos cargar el estado del envío.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
     await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
+  });
+
+  describe('DX-379 (C): presupuesto vencido', () => {
+    const expired = () =>
+      plan({ quoteExpired: true, quoteValidUntil: '2026-11-06', presentedLocationId: 'loc-1' });
+
+    it('no deja enviarlo a firmar y explica por qué, con el día de la sede', async () => {
+      mockedList.mockResolvedValue([]);
+      renderActions(expired());
+      const button = await screen.findByRole('button', { name: 'Enviar a aceptar' });
+      await waitFor(() => expect(button).toBeDisabled());
+      const why = screen.getByText('El presupuesto venció el 06/11/2026: actualiza sus precios antes de enviarlo.');
+      expect(button).toHaveAttribute('aria-describedby', why.id);
+    });
+
+    it('con una solicitud pendiente: avisa de que el enlace enviado ya no vale', async () => {
+      mockedList.mockResolvedValue([budgetRequest({ status: 'OPENED' })]);
+      renderActions(expired());
+      expect(
+        await screen.findByText('El presupuesto venció: el enlace enviado ya no vale para el paciente.'),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Enviar de nuevo' })).toBeDisabled();
+    });
+
+    it('sin solicitud pendiente (caducada) no hay aviso del enlace', async () => {
+      mockedList.mockResolvedValue([budgetRequest({ status: 'EXPIRED' })]);
+      renderActions(expired());
+      await screen.findByText(/· Caducado$/);
+      expect(screen.queryByText(/el enlace enviado ya no vale/)).not.toBeInTheDocument();
+    });
+
+    it('vigente: ni aviso ni bloqueo', async () => {
+      mockedList.mockResolvedValue([budgetRequest({ status: 'SENT' })]);
+      renderActions(plan({ quoteValidUntil: '2026-12-06', presentedLocationId: 'loc-1' }));
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar de nuevo' })).toBeEnabled());
+      expect(screen.queryByText(/venció/)).not.toBeInTheDocument();
+    });
+
+    it('409 QUOTE_EXPIRED al enviar (venció con la pantalla abierta): enseña el mensaje de la API', async () => {
+      const user = setupUser();
+      mockedList.mockResolvedValue([]);
+      mockedOptions.mockResolvedValue(OPTIONS);
+      mockedCreate.mockRejectedValue(
+        new ApiError(409, 'El presupuesto venció el 06/11/2026: actualiza sus precios antes de enviarlo a firmar a distancia.', {
+          code: 'QUOTE_EXPIRED',
+        }),
+      );
+      renderActions(plan());
+      await user.click(await screen.findByRole('button', { name: 'Enviar a aceptar' }));
+      const dialog = await screen.findByRole('dialog');
+      await within(dialog).findByText('ma***@example.com · acepta Marta Ríos (paciente)');
+      await user.click(within(dialog).getByRole('button', { name: 'Enviar a aceptar' }));
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+        'El presupuesto venció el 06/11/2026: actualiza sus precios antes de enviarlo a firmar a distancia.',
+      );
+    });
   });
 
   it('asistente y recepción no deciden el plan: no hay «Enviar a aceptar» (la API responde 403)', () => {
