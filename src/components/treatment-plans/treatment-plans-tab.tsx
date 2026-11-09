@@ -969,6 +969,7 @@ export function TreatmentPlansTab({
                   <StatusBadge kind="treatmentPlan" status={selectedPlan.status} />
                   {/* DX-379: hasta qué día valen los precios (o desde cuándo no). */}
                   <QuoteValidity
+                    status={selectedPlan.status}
                     validUntil={selectedPlan.quoteValidUntil}
                     expired={selectedPlan.quoteExpired}
                     locationId={selectedPlan.presentedLocationId}

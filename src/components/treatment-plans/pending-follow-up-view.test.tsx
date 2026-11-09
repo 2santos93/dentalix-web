@@ -97,11 +97,11 @@ describe('PendingFollowUpView (DX-040)', () => {
   describe('DX-379: la validez de la fila', () => {
     const until = STAMP_FORMATS.caracas.civilDate('2026-11-06');
 
-    it('vencido: chip «Vencido el …» en la fila (y en la tarjeta del teléfono)', async () => {
+    it('vencido: chip «Vencido · valía hasta el …» en la fila (y en la tarjeta del teléfono)', async () => {
       mockedList.mockResolvedValue(page([item({ quoteValidUntil: '2026-11-06', quoteExpired: true })]));
       render(<PendingFollowUpView token="tok" />);
       const row = await screen.findByRole('row', { name: /Carolina Ruiz/ });
-      await waitFor(() => expect(within(row).getByTestId('quote-expired')).toHaveTextContent(`Vencido el ${until}`));
+      await waitFor(() => expect(within(row).getByTestId('quote-expired')).toHaveTextContent(`Vencido · valía hasta el ${until}`));
       expect(within(row).queryByTestId('quote-valid-until')).not.toBeInTheDocument();
       expect(screen.getAllByTestId('quote-expired').length).toBeGreaterThanOrEqual(1);
     });

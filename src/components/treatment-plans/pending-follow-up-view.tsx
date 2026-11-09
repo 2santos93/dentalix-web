@@ -262,6 +262,8 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
             {validity ? (
               <span className="mt-1 block">
                 <QuoteValidity
+                  // «Por seguir» solo lista presentados.
+                  status="PRESENTED"
                   validUntil={validity.validUntil}
                   expired={validity.expired}
                   locationId={validity.locationId}
@@ -281,6 +283,8 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
             <span>{copy.daysAgo(row.daysSincePresented)}</span>
             {validity ? (
               <QuoteValidity
+                // «Por seguir» solo lista presentados.
+                status="PRESENTED"
                 validUntil={validity.validUntil}
                 expired={validity.expired}
                 locationId={validity.locationId}

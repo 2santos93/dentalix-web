@@ -123,7 +123,7 @@ describe('PlanOptionsPanel (DX-040)', () => {
   describe('DX-379: la validez junto a «Presentado el …»', () => {
     const presented = { status: 'PRESENTED' as const, presentedAt: '2026-10-07T15:00:00.000Z' };
 
-    it('vencido: chip «Vencido el …» con el formato de la sede de la presentación', () => {
+    it('vencido: chip «Vencido · valía hasta el …» con el formato de la sede de la presentación', () => {
       renderPanel(
         plan({
           ...presented,
@@ -135,7 +135,7 @@ describe('PlanOptionsPanel (DX-040)', () => {
         'DENTIST',
       );
       expect(screen.getByTestId('quote-expired')).toHaveTextContent(
-        `Vencido el ${STAMP_FORMATS.berlin.civilDate('2026-11-06')}`,
+        `Vencido · valía hasta el ${STAMP_FORMATS.berlin.civilDate('2026-11-06')}`,
       );
       expect(screen.queryByTestId('quote-valid-until')).not.toBeInTheDocument();
     });

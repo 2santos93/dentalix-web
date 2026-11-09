@@ -8,32 +8,47 @@ const caracas = STAMP_FORMATS.caracas.civilDate('2026-12-09');
 const berlin = STAMP_FORMATS.berlin.civilDate('2026-12-09');
 
 describe('QuoteValidity (DX-379)', () => {
-  it('vencido: chip danger «Vencido el …» con el formato de la sede del dato', () => {
-    render(<QuoteValidity validUntil="2026-12-09" expired locationId="sede-berlin" stamp={stamp} />);
+  it('vencido: chip danger «Vencido · valía hasta el …» con el formato de la sede del dato', () => {
+    render(<QuoteValidity status="PRESENTED" validUntil="2026-12-09" expired locationId="sede-berlin" stamp={stamp} />);
     const chip = screen.getByTestId('quote-expired');
-    expect(chip).toHaveTextContent(`Vencido el ${berlin}`);
+    expect(chip).toHaveTextContent(`Vencido · valía hasta el ${berlin}`);
     expect(chip).toHaveAttribute('data-status', 'EXPIRED');
     expect(chip.className).toMatch(/danger/);
     expect(berlin).not.toBe(caracas);
   });
 
   it('vigente: línea secundaria «Válido hasta el …», sin chip', () => {
-    render(<QuoteValidity validUntil="2026-12-09" expired={false} locationId="sede-caracas" stamp={stamp} />);
+    render(<QuoteValidity status="PRESENTED" validUntil="2026-12-09" expired={false} locationId="sede-caracas" stamp={stamp} />);
     expect(screen.getByTestId('quote-valid-until')).toHaveTextContent(`Válido hasta el ${caracas}`);
     expect(screen.queryByTestId('quote-expired')).not.toBeInTheDocument();
   });
 
   it('sin fechas (plan anterior): nada', () => {
-    const { container } = render(<QuoteValidity validUntil={null} expired={false} stamp={stamp} />);
+    const { container } = render(<QuoteValidity status="PRESENTED" validUntil={null} expired={false} stamp={stamp} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it('sin formato de la sede: «—» en la frase; en una celda de móvil, nada', () => {
     const noClock = stampPainters(null);
-    const { unmount } = render(<QuoteValidity validUntil="2026-12-09" expired stamp={noClock} />);
-    expect(screen.getByTestId('quote-expired')).toHaveTextContent('Vencido el —');
+    const { unmount } = render(<QuoteValidity status="PRESENTED" validUntil="2026-12-09" expired stamp={noClock} />);
+    expect(screen.getByTestId('quote-expired')).toHaveTextContent('Vencido · valía hasta el —');
     unmount();
-    const { container } = render(<QuoteValidity validUntil="2026-12-09" expired stamp={noClock} omitWithoutFormat />);
+    const { container } = render(<QuoteValidity status="PRESENTED" validUntil="2026-12-09" expired stamp={noClock} omitWithoutFormat />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it.each(['ACCEPTED', 'COMPLETED', 'REJECTED', 'CANCELLED'] as const)(
+    '%s con una fecha ya pasada: nada (solo borrador y presentado tienen validez)',
+    (status) => {
+      const { container } = render(
+        <QuoteValidity status={status} validUntil="2026-10-01" expired={false} stamp={stamp} />,
+      );
+      expect(container).toBeEmptyDOMElement();
+    },
+  );
+
+  it('un borrador impreso sí la enseña', () => {
+    render(<QuoteValidity status="DRAFT" validUntil="2026-12-09" expired={false} stamp={stamp} />);
+    expect(screen.getByTestId('quote-valid-until')).toBeInTheDocument();
   });
 });

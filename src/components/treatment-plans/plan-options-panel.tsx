@@ -94,6 +94,7 @@ export function PlanOptionsPanel({
           <span>{copy.presentedOn(stamp.date(plan.presentedAt, plan.presentedLocationId))}</span>
           {/* DX-379: la validez que fijó la presentación. */}
           <QuoteValidity
+            status={plan.status}
             validUntil={plan.quoteValidUntil}
             expired={plan.quoteExpired}
             locationId={plan.presentedLocationId}

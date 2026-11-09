@@ -92,7 +92,7 @@ const treatmentPlan = {
 
 /**
  * Validez del presupuesto (DX-379). Solo el vencido lleva chip, con su fecha
- * como texto propio («Vencido el 03/11/2026»); el vigente es una línea
+ * como texto propio («Vencido · valía hasta el 03/11/2026»); el vigente es una línea
  * secundaria («Válido hasta el …»), sin chip. El servidor decide si venció
  * (`quoteExpired`, con el día de la sede): la web no lo recalcula.
  */

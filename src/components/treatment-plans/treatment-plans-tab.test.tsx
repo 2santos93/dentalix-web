@@ -1370,12 +1370,12 @@ describe('TreatmentPlansTab', () => {
     const day = SEDE_FMT.civilDate('2026-11-06');
     const dated = { ...plan1, quoteIssuedOn: '2026-10-07', quoteValidUntil: '2026-11-06' };
 
-    it('vencido: chip «Vencido el …» junto al estado', async () => {
+    it('vencido: chip «Vencido · valía hasta el …» junto al estado', async () => {
       mockedListPlans.mockResolvedValue([{ ...dated, quoteExpired: true }]);
       mockedGetPlan.mockResolvedValue({ ...plan1Detail, ...dated, quoteExpired: true });
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
       const chip = await screen.findByTestId('quote-expired');
-      await waitFor(() => expect(chip).toHaveTextContent(`Vencido el ${day}`));
+      await waitFor(() => expect(chip).toHaveTextContent(`Vencido · valía hasta el ${day}`));
       expect(chip).toHaveAttribute('data-status', 'EXPIRED');
     });
 
@@ -1387,6 +1387,19 @@ describe('TreatmentPlansTab', () => {
       await waitFor(() => expect(line).toHaveTextContent(`Válido hasta el ${day}`));
       expect(screen.queryByTestId('quote-expired')).not.toBeInTheDocument();
     });
+
+    it.each(['ACCEPTED', 'REJECTED'] as const)(
+      '%s con una validez ya pasada: nada en la cabecera (I-1)',
+      async (status) => {
+        const past = { ...dated, quoteValidUntil: '2026-10-01', quoteExpired: false, status };
+        mockedListPlans.mockResolvedValue([past]);
+        mockedGetPlan.mockResolvedValue({ ...plan1Detail, ...past });
+        render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+        await screen.findByRole('table', { name: /ítems de la visita/i });
+        expect(screen.queryByTestId('quote-valid-until')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('quote-expired')).not.toBeInTheDocument();
+      },
+    );
 
     it('sin fechas (plan anterior): nada', async () => {
       mockedListPlans.mockResolvedValue([plan1]);
