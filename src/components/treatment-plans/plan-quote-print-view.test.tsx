@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PlanQuotePrintView } from './plan-quote-print-view';
-import { getPlanQuote } from '@/lib/treatment-plans/plan-quote-api';
+import { getPlanQuote, issuePlanQuote } from '@/lib/treatment-plans/plan-quote-api';
 import { ApiError } from '@/lib/api/client';
 import { planQuoteFixture } from './plan-quote-fixture';
 import { getExchangeRates } from '@/lib/exchange/exchange-api';
@@ -12,6 +12,7 @@ import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
 jest.mock('../../lib/treatment-plans/plan-quote-api', () => ({
   ...jest.requireActual('../../lib/treatment-plans/plan-quote-api'),
   getPlanQuote: jest.fn(),
+  issuePlanQuote: jest.fn(),
 }));
 
 jest.mock('../../lib/exchange/exchange-api', () => ({
@@ -27,7 +28,10 @@ jest.mock('../../lib/locations/locations-api', () => ({
   listLocations: jest.fn(),
 }));
 
-const mockedGet = getPlanQuote as jest.MockedFunction<typeof getPlanQuote>;
+// DX-379: la vista de impresión pide el presupuesto con POST …/quote/issue
+// (la primera impresión fija la validez); el GET queda para ver y aceptar.
+const mockedGet = issuePlanQuote as jest.MockedFunction<typeof issuePlanQuote>;
+const mockedPlainGet = jest.mocked(getPlanQuote);
 const mockedRates = getExchangeRates as jest.MockedFunction<typeof getExchangeRates>;
 
 function renderView(props: Partial<React.ComponentProps<typeof PlanQuotePrintView>> = {}) {
@@ -46,6 +50,7 @@ describe('PlanQuotePrintView (DX-012)', () => {
   const print = jest.fn();
   beforeEach(() => {
     mockedGet.mockReset();
+    mockedPlainGet.mockReset();
     print.mockReset();
     window.print = print;
     jest.mocked(listLocations).mockResolvedValue([clinicLocation({ currency: 'VES' })]);
@@ -128,6 +133,8 @@ describe('PlanQuotePrintView (DX-012)', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Preparando el presupuesto…');
     expect(await screen.findByTestId('quote-header')).toBeInTheDocument();
     expect(mockedGet).toHaveBeenCalledWith('tok', 'p1', 'plan-1');
+    // DX-379: imprimir fija la validez (POST issue), no el GET de solo lectura.
+    expect(mockedPlainGet).not.toHaveBeenCalled();
     expect(print).toHaveBeenCalledTimes(1);
     expect(document.title).toBe('Presupuesto · Ana Pérez');
     const back = screen.getByRole('link', { name: /Volver/ });

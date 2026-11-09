@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, FileX, Lock, Printer } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
-import { getPlanQuote, type PlanQuote } from '@/lib/treatment-plans/plan-quote-api';
+import { issuePlanQuote, type PlanQuote } from '@/lib/treatment-plans/plan-quote-api';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Button } from '@/components/ui/button';
@@ -103,7 +103,8 @@ export function PlanQuotePrintView({
     let cancelled = false;
     async function load() {
       try {
-        const res = await getPlanQuote(token, patientId, planId);
+        // DX-379: imprimir fija la validez la primera vez (POST issue).
+        const res = await issuePlanQuote(token, patientId, planId);
         if (cancelled) return;
         // La URL nombra al paciente: si el plan es de otro, no se imprime bajo
         // su ficha (el «Volver» llevaría a quien no es).
