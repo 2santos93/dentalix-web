@@ -36,7 +36,7 @@ const copy = {
   readOnly: 'Lo cambia administración.',
   dialogTitle: 'Cambiar la validez del presupuesto',
   dialogDescription:
-    'Se aplica a los presupuestos que se presenten o se impriman por primera vez desde ahora, en todas las sedes. Los ya emitidos conservan sus fechas. El cambio queda en la auditoría.',
+    'Se aplica a los presupuestos que se presenten o se impriman por primera vez desde ahora, en todas las sedes. Los ya presentados conservan sus fechas. El cambio queda en la auditoría.',
   fieldLabel: 'Días',
   save: 'Guardar',
   cancel: 'Cancelar',

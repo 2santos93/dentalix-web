@@ -726,6 +726,11 @@ function ageOf(code: string): string | null {
   return match ? match[1] : null;
 }
 
+/** DX-379: «1 día», «45 días». */
+function quoteDays(days: string): string {
+  return days === '1' ? '1 día' : `${days} días`;
+}
+
 /** DX-379: `QT_V45` → `45`. */
 function quoteDaysOf(code: string): string | null {
   const match = /^QT_V(\d+)$/.exec(code);
@@ -845,7 +850,7 @@ export function clinicSettingsDetail(metadata: AuditMetadata): string | null {
   if (metadata.reason === 'QUOTE_SETTINGS') {
     const before = quoteDaysOf(from);
     const after = quoteDaysOf(to);
-    return before === null || after === null ? null : `Validez del presupuesto: ${before} → ${after} días`;
+    return before === null || after === null ? null : `Validez del presupuesto: ${quoteDays(before)} → ${quoteDays(after)}`;
   }
   if (metadata.reason !== 'MAJORITY_AGE_SETTINGS') return null;
   const before = ageOf(from);
