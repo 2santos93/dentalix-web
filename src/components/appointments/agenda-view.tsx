@@ -31,7 +31,7 @@ import {
   blockShownInColumn,
   type ScheduleBlockLike,
 } from '@/lib/appointments/schedule-blocks';
-import type { MoveTarget } from '@/lib/appointments/day-grid';
+import type { MovePatch, MoveTarget } from '@/lib/appointments/day-grid';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import { monthGridRange, addMonths, monthLabel } from '@/lib/appointments/calendar-grid';
 import { DayAgenda } from '@/components/appointments/day-agenda';
@@ -43,12 +43,14 @@ import {
   chairColumnOf,
   chairColumns as buildChairColumns,
   chairDisplayName,
+  offeredProvider,
   readColumnsBy,
   writeColumnsBy,
   type ColumnsBy,
 } from '@/lib/chairs/chair-columns';
 import { announceAppointmentWarnings } from '@/components/appointments/appointment-warnings';
 import { MoveAppointmentDialog } from '@/components/appointments/move-appointment-dialog';
+import { ChairProviderOfferDialog } from '@/components/appointments/chair-provider-offer-dialog';
 import { canOfferNextOpening } from '@/lib/appointments/next-opening';
 import { CompletedExitModal } from '@/components/appointments/completed-exit-modal';
 import { AppointmentStatusSelect } from '@/components/appointments/appointment-status-select';
@@ -207,6 +209,9 @@ const copy = {
   chairsError: 'No pudimos cargar los sillones de la sede: la agenda se ve por profesional.',
   genericMoveError: 'No pudimos mover la cita.',
   moved: 'Cita movida.',
+  // DX-479: por sillón se anuncia a dónde fue (el lector de pantalla no ve la columna).
+  movedTo: (where: string, range: string | null) => (range ? `Cita movida a ${where}, ${range}.` : `Cita movida a ${where}.`),
+  noChair: 'Sin sillón',
   // DX-210: «Ocupar este hueco» tras cancelar.
   cancelled: 'Cita cancelada.',
   cancelledBy: 'Canceló:',
@@ -446,6 +451,13 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
     null,
   );
   const [movePendingId, setMovePendingId] = useState<string | null>(null);
+  // DX-479: soltar en un sillón con otro profesional por defecto pregunta antes del PATCH.
+  const [chairProviderOffer, setChairProviderOffer] = useState<{
+    appointment: Appointment;
+    patch: MovePatch;
+    chair: Chair;
+    offeredProviderId: string;
+  } | null>(null);
   const role = getTokenRole(token);
   const canMove = canMoveAppointments(role);
   // DX-122: bloqueos de agenda (Día y Semana) y «Pendientes por agendar».
@@ -944,15 +956,43 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
    * fuera de horario...), la cita vuelve a su sitio y el mensaje sale en un
    * aviso con Reintentar: nunca queda a medias.
    */
-  async function handleDrop(appointment: Appointment, target: MoveTarget) {
+  async function handleDrop(appointment: Appointment, patch: MovePatch) {
     if (!token) return;
+    // DX-479: a un sillón con OTRO profesional por defecto: se pregunta antes
+    // de mover (el profesional nunca cambia solo); «Mantener» es lo de siempre.
+    const targetChair = typeof patch.chairId === 'string' ? chairs.find((c) => c.id === patch.chairId) : undefined;
+    const offered = targetChair
+      ? offeredProvider(patch.providerId ?? appointment.providerId, targetChair, staff.map((s) => s.userId))
+      : null;
+    if (targetChair && offered !== null) {
+      setChairProviderOffer({ appointment, patch, chair: targetChair, offeredProviderId: offered });
+      return;
+    }
+    await performDrop(appointment, patch);
+  }
+
+  /** El PATCH del arrastre, ya decidido el profesional. */
+  async function performDrop(appointment: Appointment, patch: MovePatch) {
+    if (!token) return;
+    // La tarjeta pasa YA a su destino; el sillón, con su nombre para la columna.
+    const chairPatch =
+      patch.chairId === undefined
+        ? {}
+        : { chairId: patch.chairId, chair: chairs.find((c) => c.id === patch.chairId) ?? null };
     setAppointments((prev) =>
-      prev.map((a) => (a.id === appointment.id ? { ...a, ...target } : a)),
+      prev.map((a) => (a.id === appointment.id ? { ...a, ...patch, ...chairPatch } : a)),
     );
     setMovePendingId(appointment.id);
     try {
-      const updated = await updateAppointment(token, appointment.id, target);
-      toast.success(copy.moved);
+      const updated = await updateAppointment(token, appointment.id, patch);
+      toast.success(
+        patch.chairId === undefined
+          ? copy.moved
+          : copy.movedTo(
+              patch.chairId === null ? copy.noChair : `«${chairPatch.chair?.name ?? ''}»`,
+              patch.start && patch.end ? sedeTimeRange(patch.start, patch.end, clock.of(appointment.locationId)) : null,
+            ),
+      );
       announceAppointmentWarnings(updated);
       await refreshAppointmentsInPlace();
     } catch (err) {
@@ -961,6 +1001,12 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
       );
       // DX-509-bis: un sobrecupo que no cabe ahí: «Mover a…» con el siguiente hueco libre.
       if (canOfferNextOpening(appointment, err) && clock.of(appointment.locationId)) {
+        const target: MoveTarget = {
+          start: patch.start ?? appointment.start,
+          end: patch.end ?? appointment.end,
+          providerId: patch.providerId ?? appointment.providerId,
+          ...(patch.chairId === undefined ? {} : { chairId: patch.chairId }),
+        };
         setMoveCollision({ target, error: err, message: apiErrorMessage(err, copy.genericMoveError) });
         setMovingAppointment(appointment);
         return;
@@ -968,11 +1014,24 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
       // DX-133: un 4xx (solape, fuera de horario) repetiría el mismo rechazo: sin «Reintentar».
       notifyError(
         apiErrorMessage(err, copy.genericMoveError),
-        isRejection(err) ? undefined : { onRetry: () => handleDrop(appointment, target) },
+        isRejection(err) ? undefined : { onRetry: () => performDrop(appointment, patch) },
       );
     } finally {
       setMovePendingId(null);
     }
+  }
+
+  /** DX-479: «Asignar a X» pasa la cita al profesional del sillón: eso ya es reagendar (hueco entero). */
+  function assignOfferedProvider() {
+    if (!chairProviderOffer) return;
+    const { appointment, patch, offeredProviderId } = chairProviderOffer;
+    setChairProviderOffer(null);
+    void performDrop(appointment, {
+      ...patch,
+      start: patch.start ?? appointment.start,
+      end: patch.end ?? appointment.end,
+      providerId: offeredProviderId,
+    });
   }
 
   /** «Mover a…»: sin el reloj de la sede de la cita no se puede elegir su hora. */
@@ -1694,6 +1753,22 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
             chairs={chairs.filter((c) => c.locationId === movingAppointment.locationId)}
           />
         )}
+
+        {chairProviderOffer ? (
+          <ChairProviderOfferDialog
+            open
+            chairName={chairProviderOffer.chair.name}
+            currentProviderName={staffName(chairProviderOffer.appointment.providerId) ?? ''}
+            offeredProviderName={staffName(chairProviderOffer.offeredProviderId) ?? ''}
+            onKeep={() => {
+              const { appointment, patch } = chairProviderOffer;
+              setChairProviderOffer(null);
+              void performDrop(appointment, patch);
+            }}
+            onAssign={assignOfferedProvider}
+            onCancel={() => setChairProviderOffer(null)}
+          />
+        ) : null}
 
         {/* Create-appointment form (centered dialog — protected focus for a
             multi-field task). */}
