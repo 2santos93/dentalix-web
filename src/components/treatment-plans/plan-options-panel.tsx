@@ -19,6 +19,7 @@ import { InlineError } from '@/components/errors/inline-error';
 import { RejectPlanModal } from './reject-plan-modal';
 import { CreateAlternativeModal } from './create-alternative-modal';
 import { PlanOptionsComparison } from './plan-options-comparison';
+import { QuoteValidity } from './quote-validity';
 
 const copy = {
   present: 'Presentar al paciente',
@@ -89,7 +90,16 @@ export function PlanOptionsPanel({
   return (
     <div className="flex flex-col gap-4">
       {plan.status === 'PRESENTED' && plan.presentedAt ? (
-        <p className="text-sm text-muted tabular-nums">{copy.presentedOn(stamp.date(plan.presentedAt, plan.presentedLocationId))}</p>
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted tabular-nums">
+          <span>{copy.presentedOn(stamp.date(plan.presentedAt, plan.presentedLocationId))}</span>
+          {/* DX-379: la validez que fijó la presentación. */}
+          <QuoteValidity
+            validUntil={plan.quoteValidUntil}
+            expired={plan.quoteExpired}
+            locationId={plan.presentedLocationId}
+            stamp={stamp}
+          />
+        </p>
       ) : null}
       {plan.status === 'REJECTED' && plan.rejectedAt && reason ? (
         <div className="text-sm">

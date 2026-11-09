@@ -1364,6 +1364,40 @@ describe('TreatmentPlansTab', () => {
 
   // Error-states ladder (Task 8): each `text-danger-text` site classified by what
   // the user can still do — see task-8-report.md for the full table.
+  describe('DX-379: la validez del presupuesto en la cabecera del plan', () => {
+    // Un borrador impreso también tiene validez; el panel de opciones solo la
+    // repite en un plan presentado, así que aquí sale una sola vez.
+    const day = SEDE_FMT.civilDate('2026-11-06');
+    const dated = { ...plan1, quoteIssuedOn: '2026-10-07', quoteValidUntil: '2026-11-06' };
+
+    it('vencido: chip «Vencido el …» junto al estado', async () => {
+      mockedListPlans.mockResolvedValue([{ ...dated, quoteExpired: true }]);
+      mockedGetPlan.mockResolvedValue({ ...plan1Detail, ...dated, quoteExpired: true });
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      const chip = await screen.findByTestId('quote-expired');
+      await waitFor(() => expect(chip).toHaveTextContent(`Vencido el ${day}`));
+      expect(chip).toHaveAttribute('data-status', 'EXPIRED');
+    });
+
+    it('vigente: «Válido hasta el …» junto al estado', async () => {
+      mockedListPlans.mockResolvedValue([{ ...dated, quoteExpired: false }]);
+      mockedGetPlan.mockResolvedValue({ ...plan1Detail, ...dated, quoteExpired: false });
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      const line = await screen.findByTestId('quote-valid-until');
+      await waitFor(() => expect(line).toHaveTextContent(`Válido hasta el ${day}`));
+      expect(screen.queryByTestId('quote-expired')).not.toBeInTheDocument();
+    });
+
+    it('sin fechas (plan anterior): nada', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      await screen.findByRole('table', { name: /ítems de la visita/i });
+      expect(screen.queryByTestId('quote-expired')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('quote-valid-until')).not.toBeInTheDocument();
+    });
+  });
+
   describe('DX-109: planes no cobrables o cerrados', () => {
     it('un plan rechazado deshabilita «Registrar abono» con el motivo, no ofrece plan de cuotas y congela los ítems', async () => {
       const rejected = { ...plan1Detail, status: 'REJECTED' as const };

@@ -11,7 +11,7 @@ import { getActiveLocationId } from '@/lib/locations/location-store';
 import { fetchClinicName } from '@/lib/clinic-branding';
 import { ApiError } from '@/lib/api/client';
 import { clinicLocation } from '@/lib/test/locations';
-import { dateIn, STAMP_SEDES } from '@/lib/test/stamp';
+import { dateIn, STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
 
 jest.mock('../../lib/treatment-plans/plan-options-api', () => ({
   listPendingFollowUp: jest.fn(),
@@ -92,6 +92,37 @@ describe('PendingFollowUpView (DX-040)', () => {
     await waitFor(() => expect(whatsapp.getAttribute('href')).toContain('Cl%C3%ADnica%20Demo'));
     expect(screen.getByText('1 presupuesto')).toBeInTheDocument();
     expect(mockedList).toHaveBeenCalledWith('tok', { olderThanDays: 7, page: 1 });
+  });
+
+  describe('DX-379: la validez de la fila', () => {
+    const until = STAMP_FORMATS.caracas.civilDate('2026-11-06');
+
+    it('vencido: chip «Vencido el …» en la fila (y en la tarjeta del teléfono)', async () => {
+      mockedList.mockResolvedValue(page([item({ quoteValidUntil: '2026-11-06', quoteExpired: true })]));
+      render(<PendingFollowUpView token="tok" />);
+      const row = await screen.findByRole('row', { name: /Carolina Ruiz/ });
+      await waitFor(() => expect(within(row).getByTestId('quote-expired')).toHaveTextContent(`Vencido el ${until}`));
+      expect(within(row).queryByTestId('quote-valid-until')).not.toBeInTheDocument();
+      expect(screen.getAllByTestId('quote-expired').length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('vigente: «Válido hasta el …», sin chip', async () => {
+      mockedList.mockResolvedValue(page([item({ quoteValidUntil: '2026-11-06', quoteExpired: false })]));
+      render(<PendingFollowUpView token="tok" />);
+      const row = await screen.findByRole('row', { name: /Carolina Ruiz/ });
+      await waitFor(() =>
+        expect(within(row).getByTestId('quote-valid-until')).toHaveTextContent(`Válido hasta el ${until}`),
+      );
+      expect(screen.queryByTestId('quote-expired')).not.toBeInTheDocument();
+    });
+
+    it('sin fechas (presentado antes de DX-379): nada', async () => {
+      mockedList.mockResolvedValue(page([item()]));
+      render(<PendingFollowUpView token="tok" />);
+      await screen.findByRole('row', { name: /Carolina Ruiz/ });
+      expect(screen.queryByTestId('quote-expired')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('quote-valid-until')).not.toBeInTheDocument();
+    });
   });
 
   it('alcance: «Todas las sedes» sin restricción, «Mis sedes» con claim acotado (DX-089)', async () => {
