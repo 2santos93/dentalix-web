@@ -92,9 +92,13 @@ describe('splitSettingsColumns', () => {
     const [left, right] = splitSettingsColumns(sections);
     expect([...left, ...right]).toEqual(sections);
     const rows = (column: typeof sections) => column.reduce((n, s) => n + s.entries.length + 1.5, 0);
-    // Las secciones no se parten ni se reordenan: con «Cobro» en 8 entradas
-    // (DX-379) el mejor corte deja 8,5 filas de diferencia.
-    expect(Math.abs(rows(left) - rows(right))).toBeLessThanOrEqual(9);
+    // Las secciones no se parten ni se reordenan: el corte elegido es el
+    // mejor de los posibles (sin tolerancia a mano que subir cuando crece una
+    // sección).
+    const total = rows(sections);
+    const cuts = Array.from({ length: sections.length + 1 }, (_, i) => rows(sections.slice(0, i)));
+    const best = Math.min(...cuts.map((leftRows) => Math.abs(total - 2 * leftRows)));
+    expect(Math.abs(rows(left) - rows(right))).toBe(best);
     expect(left.length).toBeGreaterThan(0);
     expect(right.length).toBeGreaterThan(0);
   });
