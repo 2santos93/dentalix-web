@@ -40,6 +40,7 @@ import { NativeSelect } from '@/components/ui/native-select';
 import { Tooltip } from '@/components/ui/tooltip';
 import { RecallContactDialog } from './recall-contact-dialog';
 import { RecallScheduleDialog } from './recall-schedule-dialog';
+import { ExternalLink } from '@/components/shared/external-link';
 
 export const recallCopy = {
   title: 'Recall',
@@ -102,9 +103,9 @@ function ContactButtons({ item, clinicName }: { item: RecallDueItem; clinicName:
       {whatsapp ? (
         <Tooltip content={copy.whatsapp}>
           <Button asChild variant="ghost" size="icon-sm">
-            <a href={whatsapp} target="_blank" rel="noopener noreferrer" aria-label={copy.whatsappLabel(item.patientName)}>
+            <ExternalLink href={whatsapp} aria-label={copy.whatsappLabel(item.patientName)}>
               <MessageCircle aria-hidden />
-            </a>
+            </ExternalLink>
           </Button>
         </Tooltip>
       ) : null}

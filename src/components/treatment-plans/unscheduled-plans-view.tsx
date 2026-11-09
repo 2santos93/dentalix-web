@@ -23,6 +23,7 @@ import { FormField } from "@/components/shared/form-field";
 import { cn } from "@/lib/utils";
 import { AsyncSection } from "@/components/shared/async-section";
 import { ScheduleVisitDialog } from "./schedule-visit-dialog";
+import { ExternalLink } from '@/components/shared/external-link';
 export function UnscheduledPlansView({ token }: { token: string }) {
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
   const [locationId, setLocationId] = useState(
@@ -218,15 +219,13 @@ export function UnscheduledPlansView({ token }: { token: string }) {
                   Agendar
                 </Button>
                 {item.patientWhatsApp ? (
-                  <a
+                  <ExternalLink
                     href={`https://wa.me/${item.patientWhatsApp}?text=${encodeURIComponent("Hola, te contactamos desde la clínica para coordinar tu próxima cita. ¿Qué horario te viene bien?")}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     aria-label={`WhatsApp a ${item.patientName}`}
                     className={cn(buttonVariants({ variant: "ghost" }), "min-h-11")}
                   >
                     WhatsApp
-                  </a>
+                  </ExternalLink>
                 ) : null}
               </div>
             </li>

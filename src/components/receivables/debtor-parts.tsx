@@ -17,6 +17,7 @@ import {
 import type { AgingCurrency, AgingRow } from '@/lib/receivables/receivables-api';
 import { cn } from '@/lib/utils';
 import { CHANNEL_LABELS, OUTCOME_LABELS } from '@/lib/collections/presentation';
+import { ExternalLink } from '@/components/shared/external-link';
 
 export const debtorCopy = {
   days: (n: number) => (n === 1 ? '1 día' : `${n} días`),
@@ -221,14 +222,9 @@ export function ContactButtons({ row, clinicName }: { row: AgingRow; clinicName:
       {whatsapp ? (
         <Tooltip content={debtorCopy.whatsapp}>
           <Button asChild variant="ghost" size="icon-sm">
-            <a
-              href={whatsapp}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={debtorCopy.whatsappLabel(patient.fullName)}
-            >
+            <ExternalLink href={whatsapp} aria-label={debtorCopy.whatsappLabel(patient.fullName)}>
               <MessageCircle aria-hidden />
-            </a>
+            </ExternalLink>
           </Button>
         </Tooltip>
       ) : null}

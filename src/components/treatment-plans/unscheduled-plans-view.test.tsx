@@ -71,7 +71,7 @@ it("muestra importe y moneda independientes, siguiente visita y enlace seguro Wh
     screen.getByRole("button", { name: "Agendar a Ana Pérez" }),
   ).toBeInTheDocument();
   const href = screen
-    .getByRole("link", { name: "WhatsApp a Ana Pérez" })
+    .getByRole("link", { name: /^WhatsApp a Ana Pérez/ })
     .getAttribute("href")!;
   expect(href).toContain("https://wa.me/584121234567");
   expect(decodeURIComponent(href)).not.toContain("Corona");

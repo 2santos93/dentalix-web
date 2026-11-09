@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { documentFormat } from '@/lib/format/document-format';
 import { DocumentFormatNote } from '@/components/documents/document-format-note';
 import { CreditRefundDocument } from './credit-refund-document';
+import { usePrintDocumentTitle } from '@/lib/print/use-print-document-title';
 
 const copy = {
   toolbar: 'Acciones del comprobante',
@@ -90,9 +91,10 @@ export function CreditRefundPrintView({
     ? `/patients/${encodeURIComponent(refund.patientId)}?tab=account-statement`
     : '/patients';
 
+  // DX-118 (FE-033): título neutro en la pestaña; el del documento solo al imprimir.
+  usePrintDocumentTitle('Comprobante de devolución', refund ? copy.documentTitle(refund.number) : null);
   return (
     <div data-format={format} className="receipt-print-page flex min-h-full flex-1 flex-col bg-surface-sunken print:bg-white">
-      {refund ? <title>{copy.documentTitle(refund.number)}</title> : null}
       <div
         role="toolbar"
         aria-label={copy.toolbar}

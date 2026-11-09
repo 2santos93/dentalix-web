@@ -11,8 +11,10 @@ const copy = {
   caption: 'Una contraseña nueva y listo',
 };
 
-// El token va en la URL: que no salga en el Referer hacia ningún otro sitio.
+// El token va en la URL: que no se indexe ni salga en el Referer hacia
+// ningún otro sitio (DX-118, FE-034).
 export const metadata: Metadata = {
+  robots: { index: false, follow: false },
   referrer: 'no-referrer',
 };
 

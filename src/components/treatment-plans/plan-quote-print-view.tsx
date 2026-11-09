@@ -17,6 +17,7 @@ import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { documentFormat } from '@/lib/format/document-format';
 import { DocumentFormatNote } from '@/components/documents/document-format-note';
 import { quoteFromRates, ratePerBase } from '@/lib/payments/payment-rate';
+import { usePrintDocumentTitle } from '@/lib/print/use-print-document-title';
 
 const copy = {
   toolbar: 'Acciones del presupuesto',
@@ -142,9 +143,10 @@ export function PlanQuotePrintView({
     }
   }, [autoPrint]);
 
+  // DX-118 (FE-033): título neutro en la pestaña; el del documento solo al imprimir.
+  usePrintDocumentTitle('Presupuesto', data ? copy.documentTitle(data.patient.name) : null);
   return (
     <div className="quote-print-page flex min-h-full flex-1 flex-col bg-surface-sunken print:min-h-0 print:bg-white">
-      {data ? <title>{copy.documentTitle(data.patient.name)}</title> : null}
       <div
         role="toolbar"
         aria-label={copy.toolbar}

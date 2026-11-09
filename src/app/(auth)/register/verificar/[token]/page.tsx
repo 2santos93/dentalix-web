@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { AuthLayout } from '@/components/auth/auth-layout';
 import { randomHeroImage } from '@/lib/auth/hero-images';
@@ -9,6 +10,13 @@ const copy = {
   caption: 'Gestiona tu clínica con confianza',
   loginPrompt: '¿Ya tienes cuenta?',
   loginLink: 'Inicia sesión',
+};
+
+// El token va en la URL: que no se indexe ni salga en el Referer hacia
+// terceros (DX-118, FE-034).
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+  referrer: 'no-referrer',
 };
 
 // DX-029: destino del enlace del email de verificación del registro. La

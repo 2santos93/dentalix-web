@@ -31,7 +31,7 @@ describe('DocumentViewerDialog (DX-151)', () => {
     const img = await screen.findByRole('img', { name: 'sonrisa.jpg' });
     expect(img).toHaveAttribute('src', URL_INLINE);
     expect(img).toHaveAttribute('referrerpolicy', 'no-referrer');
-    expect(screen.getByRole('link', { name: 'Abrir en otra pestaña' })).toHaveAttribute('href', URL_INLINE);
+    expect(screen.getByRole('link', { name: /^Abrir en otra pestaña/ })).toHaveAttribute('href', URL_INLINE);
     expect(mockedUrl).toHaveBeenCalledWith('T', 'p1', 'doc-1', 'inline');
   });
 
@@ -42,13 +42,13 @@ describe('DocumentViewerDialog (DX-151)', () => {
     expect(frame).not.toHaveAttribute('sandbox');
     expect(frame).toHaveAttribute('referrerpolicy', 'no-referrer');
     expect(frame).toHaveAttribute('src', URL_INLINE);
-    expect(screen.getByRole('link', { name: 'Abrir en otra pestaña' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^Abrir en otra pestaña/ })).toBeInTheDocument();
   });
 
   it('PDF en pantalla estrecha (< 640 px): sin iframe, botón «Abrir»', async () => {
     mockedWide.mockReturnValue(false);
     renderViewer();
-    const open = await screen.findByRole('link', { name: 'Abrir' });
+    const open = await screen.findByRole('link', { name: /^Abrir / });
     expect(open).toHaveAttribute('href', URL_INLINE);
     expect(open).toHaveAttribute('target', '_blank');
     expect(screen.queryByTitle('Vista previa de panoramica.pdf')).not.toBeInTheDocument();
@@ -78,7 +78,7 @@ describe('DocumentViewerDialog (DX-151)', () => {
     renderViewer();
     await screen.findByTitle('Vista previa de panoramica.pdf');
     mockedUrl.mockResolvedValueOnce({ url: 'http://files/fresca', expiresAt: '', disposition: 'inline' });
-    await user.click(screen.getByRole('link', { name: 'Abrir en otra pestaña' }));
+    await user.click(screen.getByRole('link', { name: /^Abrir en otra pestaña/ }));
     expect(openSpy).toHaveBeenCalledWith('', '_blank');
     expect(mockedUrl).toHaveBeenCalledTimes(2);
     expect(fakeTab.opener).toBeNull();
@@ -93,7 +93,7 @@ describe('DocumentViewerDialog (DX-151)', () => {
     renderViewer();
     await screen.findByTitle('Vista previa de panoramica.pdf');
     mockedUrl.mockRejectedValueOnce(new ApiError(500, 'boom'));
-    await user.click(screen.getByRole('link', { name: 'Abrir en otra pestaña' }));
+    await user.click(screen.getByRole('link', { name: /^Abrir en otra pestaña/ }));
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'No pudimos abrir el documento en otra pestaña. Intenta de nuevo.',
     );

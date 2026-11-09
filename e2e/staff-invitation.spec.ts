@@ -4,6 +4,7 @@ import { loginAs, sessionCookie } from './support/auth';
 import { registerClinicViaApi } from './support/api';
 import { invitationLinkFor } from './support/mail';
 import { E2E_BROWSER_LOCALE } from './support/regional';
+import { axeViolations } from './support/axe';
 
 /**
  * DX-070 (TST-004): invitar a una persona del equipo y que ACEPTE en otra
@@ -80,6 +81,11 @@ test('un ADMIN invita, otra sesión acepta en /invitacion/[token] y entra con su
     const other = await inviteeContext.newPage();
     await other.goto(link);
     await expect(other.getByText(clinic.clinicName).first()).toBeVisible({ timeout: 15_000 });
+    // DX-118 (FE-034): el token va en la URL: ni indexado ni en el Referer.
+    await expect(other.locator('meta[name="referrer"]')).toHaveAttribute('content', 'no-referrer');
+    await expect(other.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
+    // Y la página se puede rellenar con lector: sin violaciones de axe.
+    expect(await axeViolations(other, other.getByRole('main'))).toEqual([]);
     await expect(other.getByText('Te invitaron como Odontólogo/a')).toBeVisible();
     await expect(other.getByText('Crea tu contraseña para activar tu cuenta.')).toBeVisible();
     // El correo va enmascarado: nunca entero en una página pública.

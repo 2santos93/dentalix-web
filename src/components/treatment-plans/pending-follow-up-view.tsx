@@ -31,6 +31,7 @@ import { ResultCount } from '@/components/shared/list-toolbar';
 import { RejectPlanModal } from './reject-plan-modal';
 import { QuoteValidity } from './quote-validity';
 import { telHref } from '@/lib/receivables/presentation';
+import { ExternalLink } from '@/components/shared/external-link';
 
 export const pendingFollowUpCopy = {
   scopeAll: 'Todas las sedes',
@@ -430,16 +431,14 @@ function ContactLinks({
         <span className="tabular-nums">{row.patientPhone}</span>
       </a>
       {whatsapp ? (
-        <a
+        <ExternalLink
           href={whatsapp}
-          target="_blank"
-          rel="noopener noreferrer"
           aria-label={copy.whatsappLabel(row.patientName)}
           className={contactLinkClass}
         >
           <MessageCircle aria-hidden className="size-4 text-muted" />
           {copy.whatsapp}
-        </a>
+        </ExternalLink>
       ) : blockedByFormat ? (
         <button
           type="button"

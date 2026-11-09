@@ -99,8 +99,8 @@ describe('PatientPostOpDeliveries', () => {
     const link = within(rows[0]).getByRole('link', { name: /ver e imprimir/i });
     expect(link).toHaveAttribute('href', '/print/patients/pat-1/indicaciones/del-1');
     expect(link).toHaveAttribute('target', '_blank');
-    expect(link).toHaveAttribute('rel', 'noopener');
-    expect(link).toHaveTextContent('se abre en otra pestaña');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(link).toHaveTextContent('se abre en una pestaña nueva');
 
   });
 
