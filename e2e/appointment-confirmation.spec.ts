@@ -206,7 +206,9 @@ test('DX-437: el paciente pide «Avisarme antes · Mañanas» desde el enlace; l
   const earlier = patientPage.getByTestId('public-earlier-request');
   const box = earlier.getByRole('checkbox', { name: 'Si se libera un hueco antes, avísame' });
   await expect(box).toBeVisible({ timeout: 15_000 });
-  await box.check();
+  // Casilla controlada: se marca cuando la API confirma (check() exige el cambio inmediato).
+  await box.click();
+  await expect(box).toBeChecked();
   await expect(earlier.getByRole('status')).toHaveText('Listo. Te avisaremos si se libera un hueco antes.');
   const select = earlier.getByLabel('Franja');
   const selectBox = (await select.boundingBox())!;
