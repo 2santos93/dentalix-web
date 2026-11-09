@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ChevronLeft, FileX, Lock, Printer } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { issuePlanQuote, type PlanQuote } from '@/lib/treatment-plans/plan-quote-api';
+import { getPlan } from '@/lib/treatment-plans/treatment-plans-api';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Button } from '@/components/ui/button';
@@ -84,6 +85,8 @@ export function PlanQuotePrintView({
   allowed = true,
 }: PlanQuotePrintViewProps) {
   const [data, setData] = useState<PlanQuote | null>(null);
+  // DX-417: el instante en que se aceptó el original si este es su presupuesto pendiente.
+  const [partialRestOf, setPartialRestOf] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deniedByApi, setDeniedByApi] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -109,8 +112,12 @@ export function PlanQuotePrintView({
     let cancelled = false;
     async function load() {
       try {
-        // DX-379: imprimir fija la validez la primera vez (POST issue).
-        const res = await issuePlanQuote(token, patientId, planId);
+        // DX-379: imprimir fija la validez la primera vez (POST issue). DX-417: a la vez,
+        // si es el pendiente de una aceptación parcial (sin acceso al plan, sin la línea).
+        const [res, plan] = await Promise.all([
+          issuePlanQuote(token, patientId, planId),
+          getPlan(token, planId).catch(() => null),
+        ]);
         if (cancelled) return;
         // La URL nombra al paciente: si el plan es de otro, no se imprime bajo
         // su ficha (el «Volver» llevaría a quien no es).
@@ -119,6 +126,12 @@ export function PlanQuotePrintView({
           setError(copy.loadError);
           return;
         }
+        const original =
+          !res.acceptance && plan?.splitFromPlanId
+            ? await getPlan(token, plan.splitFromPlanId).catch(() => null)
+            : null;
+        if (cancelled) return;
+        setPartialRestOf(original?.acceptedAt ?? null);
         setData(res);
         setError(null);
       } catch (err) {
@@ -211,6 +224,7 @@ export function PlanQuotePrintView({
               <PlanQuoteDocument
                 quote={data}
                 format={format}
+                partialRestOf={partialRestOf}
                 secondCurrency={secondResult && 'value' in secondResult ? secondResult.value : null}
               />
             </div>

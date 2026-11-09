@@ -8,11 +8,18 @@ import { getExchangeRates } from '@/lib/exchange/exchange-api';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
 import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
+import { getPlan, type TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
+import { SIGNED_ACCEPTANCE } from './plan-quote-fixture';
 
 jest.mock('../../lib/treatment-plans/plan-quote-api', () => ({
   ...jest.requireActual('../../lib/treatment-plans/plan-quote-api'),
   getPlanQuote: jest.fn(),
   issuePlanQuote: jest.fn(),
+}));
+
+jest.mock('../../lib/treatment-plans/treatment-plans-api', () => ({
+  ...jest.requireActual('../../lib/treatment-plans/treatment-plans-api'),
+  getPlan: jest.fn(),
 }));
 
 jest.mock('../../lib/exchange/exchange-api', () => ({
@@ -55,6 +62,42 @@ describe('PlanQuotePrintView (DX-012)', () => {
     window.print = print;
     jest.mocked(listLocations).mockResolvedValue([clinicLocation({ currency: 'VES' })]);
     mockedRates.mockReset();
+    jest.mocked(getPlan).mockReset().mockResolvedValue({ splitFromPlanId: null } as TreatmentPlan);
+  });
+
+  describe('DX-417: el presupuesto pendiente de una aceptación parcial', () => {
+    it('lleva «Resto de la aceptación parcial del …» con el día de la aceptación del original, antes de imprimir', async () => {
+      mockedIssue.mockResolvedValue(planQuoteFixture({ planStatus: 'PRESENTED' }));
+      jest.mocked(getPlan).mockImplementation(async (_t, id) =>
+        (id === 'plan-1'
+          ? { id: 'plan-1', splitFromPlanId: 'plan-0' }
+          : { id: 'plan-0', acceptedAt: '2026-10-20T15:00:00.000Z' }) as TreatmentPlan,
+      );
+      renderView();
+      expect(await screen.findByTestId('quote-partial-rest')).toHaveTextContent(
+        'Resto de la aceptación parcial del 20/10/2026',
+      );
+      expect(getPlan).toHaveBeenCalledWith('tok', 'plan-0');
+      expect(print).toHaveBeenCalledTimes(1);
+    });
+
+    it('sin acceso al plan (recepción: 403) se imprime igual, sin la línea', async () => {
+      mockedIssue.mockResolvedValue(planQuoteFixture({ planStatus: 'PRESENTED' }));
+      jest.mocked(getPlan).mockRejectedValue(new ApiError(403, 'No'));
+      renderView();
+      expect(await screen.findByTestId('quote-header')).toBeInTheDocument();
+      await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
+      expect(screen.queryByTestId('quote-partial-rest')).not.toBeInTheDocument();
+    });
+
+    it('un pendiente ya firmado no busca el original ni lleva la línea', async () => {
+      mockedIssue.mockResolvedValue(planQuoteFixture({ planStatus: 'ACCEPTED', acceptance: SIGNED_ACCEPTANCE }));
+      jest.mocked(getPlan).mockResolvedValue({ id: 'plan-1', splitFromPlanId: 'plan-0' } as TreatmentPlan);
+      renderView();
+      expect(await screen.findByTestId('quote-header')).toBeInTheDocument();
+      expect(getPlan).not.toHaveBeenCalledWith('tok', 'plan-0');
+      expect(screen.queryByTestId('quote-partial-rest')).not.toBeInTheDocument();
+    });
   });
 
   describe('DX-376: segunda moneda opcional', () => {
