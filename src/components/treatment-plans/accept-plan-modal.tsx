@@ -22,6 +22,7 @@ import {
   type PlanQuote,
 } from '@/lib/treatment-plans/plan-quote-api';
 import { REPRICE_PREVIEW_STALE } from '@/lib/treatment-plans/plan-repricing-api';
+import { getPlan } from '@/lib/treatment-plans/treatment-plans-api';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
@@ -83,7 +84,12 @@ export const acceptPlanCopy = {
   repricingError: 'No pudimos calcular los precios vigentes.',
   repricedSummary: 'Presupuesto con los precios actualizados, a firmar',
   originalSummary: (reason: string) => `Se acepta con los precios del presupuesto vencido. Motivo: ${reason}.`,
+  notExpiredAnymore: 'El presupuesto ya no está vencido: revísalo con el paciente y fírmalo.',
+  cannotAccept: 'No se puede aceptar ahora',
 };
+
+/** 409: la sede de la presentación no tiene zona horaria válida (ninguna forma de aceptar sirve). */
+const LOCATION_TIMEZONE_REQUIRED = 'LOCATION_TIMEZONE_REQUIRED';
 
 const copy = acceptPlanCopy;
 
@@ -154,7 +160,13 @@ export function AcceptPlanModal({
 
   // DX-379 (C): el vencido que la API descubrió al firmar (409 QUOTE_EXPIRED).
   const [expiredByServer, setExpiredByServer] = useState(false);
-  const expired = quoteExpired || expiredByServer;
+  // M-1: el plan dejó de estar vencido con el modal abierto (otro lo volvió a presentar): la
+  // API responde 400 a `expired`. No se borra al cerrar: el padre sigue con `quoteExpired`
+  // hasta que recarga el plan.
+  const [notExpiredByServer, setNotExpiredByServer] = useState(false);
+  const expired = (quoteExpired && !notExpiredByServer) || expiredByServer;
+  // Ninguna forma de aceptar sirve (sede sin zona horaria, plan que ya no existe…): solo cerrar.
+  const [fatalError, setFatalError] = useState<string | null>(null);
   const mayReprice = canAcceptPlan(role);
   // La recotización no es posible (409/403 de la vista previa): queda solo «precios originales».
   const [repriceBlocked, setRepriceBlocked] = useState<string | null>(null);
@@ -209,9 +221,7 @@ export function AcceptPlanModal({
         if (cancelled) return;
         const message = apiErrorMessage(err, copy.repricingError);
         if (isFinalClientError(err)) {
-          // REPRICE_INCOMPLETE, REPRICE_NOTHING_TO_APPLY, plan con abonos, tope de descuento
-          // (403)…: recotizar no es posible; se vuelve a la elección con la otra salida.
-          blockReprice(message);
+          void handleFinalRepriceError(err as ApiError, message);
         } else {
           setRepriceError({ message, retryable: true });
         }
@@ -219,7 +229,66 @@ export function AcceptPlanModal({
     return () => {
       cancelled = true;
     };
+    // `handleFinalRepriceError` solo escribe estado y lee lo mismo que este efecto.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, repricing, token, patientId, planId, repriceKey]);
+
+  /**
+   * Un 4xx de la vista previa o de la firma con «Actualizar precios». Solo
+   * REPRICE_INCOMPLETE, NOTHING_TO_APPLY, el plan no recotizable (409 sin
+   * código) y el tope de descuento (403) dejan la salida de los precios
+   * originales; lo demás tiene su propio camino.
+   */
+  async function handleFinalRepriceError(err: ApiError, message: string) {
+    if (err.code === LOCATION_TIMEZONE_REQUIRED || err.status === 404) {
+      setFatalError(message);
+      return;
+    }
+    if (err.status === 400) {
+      await recheckExpiry(message);
+      return;
+    }
+    if (err.status === 409 && !err.code) {
+      // Puede que otra persona ya lo firmara: entonces no hay nada que elegir.
+      const fresh = await getPlanQuote(token, patientId, planId).catch(() => null);
+      if (fresh?.acceptance) {
+        onAccepted(fresh);
+        handleOpenChange(false);
+        return;
+      }
+    }
+    blockReprice(message);
+  }
+
+  /**
+   * M-1: un 400 con `expired` puede ser «El presupuesto no está vencido» (otro
+   * lo volvió a presentar). Se mira el plan: si ya no vence, se firma como
+   * siempre sobre el presupuesto recargado; si sigue vencido, era otra
+   * validación y se enseña tal cual.
+   */
+  async function recheckExpiry(message: string) {
+    const plan = await getPlan(token, planId).catch(() => null);
+    if (plan && !plan.quoteExpired && !plan.acceptance) {
+      setNotExpiredByServer(true);
+      setExpiredByServer(false);
+      setStep('sign');
+      setRepriced(null);
+      setRepriceError(null);
+      setSignature(null);
+      setReloadKey((k) => k + 1);
+      setSubmitError(copy.notExpiredAnymore);
+      return;
+    }
+    if (plan?.acceptance) {
+      const fresh = await getPlanQuote(token, patientId, planId).catch(() => null);
+      if (fresh?.acceptance) {
+        onAccepted(fresh);
+        handleOpenChange(false);
+        return;
+      }
+    }
+    setSubmitError(message);
+  }
 
   function blockReprice(message: string) {
     setRepriceBlocked(message);
@@ -240,6 +309,7 @@ export function AcceptPlanModal({
       setSignature(null);
       setSubmitError(null);
       setExpiredByServer(false);
+      setFatalError(null);
       setRepriceBlocked(null);
       setStep(null);
       setMode(undefined);
@@ -309,8 +379,14 @@ export function AcceptPlanModal({
       handleOpenChange(false);
     } catch (err) {
       const message = apiErrorMessage(err, copy.genericError);
-      if (err instanceof ApiError && err.status === 409 && err.code === QUOTE_EXPIRED) {
+      if (err instanceof ApiError && err.code === LOCATION_TIMEZONE_REQUIRED) {
+        // Ni con los precios originales: la sede tiene que configurarse antes.
+        setFatalError(message);
+      } else if (expired && err instanceof ApiError && err.status === 400) {
+        await recheckExpiry(message);
+      } else if (err instanceof ApiError && err.status === 409 && err.code === QUOTE_EXPIRED) {
         // Venció con el modal abierto: se vuelve a la elección con el presupuesto al día.
+        setNotExpiredByServer(false);
         setExpiredByServer(true);
         goToChoice();
         setReloadKey((k) => k + 1);
@@ -321,8 +397,9 @@ export function AcceptPlanModal({
         setRepriced(null);
         setRepriceKey((k) => k + 1);
         setSubmitError(message);
-      } else if (repricing && err instanceof ApiError && err.status === 409 && err.code) {
-        // REPRICE_INCOMPLETE, REPRICE_NOTHING_TO_APPLY…: recotizar ya no es posible.
+      } else if (repricing && err instanceof ApiError && ((err.status === 409 && err.code) || err.status === 403)) {
+        // REPRICE_INCOMPLETE, REPRICE_NOTHING_TO_APPLY, el tope de descuento (403)…:
+        // recotizar ya no es posible; queda la salida de los precios originales.
         blockReprice(message);
       } else if (err instanceof ApiError && err.status === 409) {
         // Lo firmado tiene que ser lo mostrado: se recarga el presupuesto. Si
@@ -368,10 +445,14 @@ export function AcceptPlanModal({
       submitting={submitting}
       submitDisabled={choosing ? !ready : !signReady || !signature || signerName.trim() === ''}
       submitBusy={repricing && repriced === null && repriceError === null}
-      error={submitError}
+      error={fatalError ? null : submitError}
+      hideSubmit={fatalError !== null}
       size="lg"
     >
-      {loadError ? (
+      {fatalError ? (
+        // M-2: ninguna forma de aceptar sirve hoy (p. ej. la sede sin zona horaria): solo cerrar.
+        <SectionError title={copy.cannotAccept} description={fatalError} />
+      ) : loadError ? (
         <SectionError
           description={loadError}
           onRetry={() => {

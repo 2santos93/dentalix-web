@@ -9,6 +9,7 @@ import {
   type AcceptanceRepricePreview,
 } from '@/lib/treatment-plans/plan-quote-api';
 import type { ClinicRole } from '@/lib/me/me-api';
+import { getPlan, type TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
 import { ApiError } from '@/lib/api/client';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
@@ -16,6 +17,10 @@ import { regionalFormat } from '@/lib/format/regional-format';
 import { planQuoteFixture, SIGNED_ACCEPTANCE } from './plan-quote-fixture';
 
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+jest.mock('../../lib/treatment-plans/treatment-plans-api', () => ({
+  ...jest.requireActual('../../lib/treatment-plans/treatment-plans-api'),
+  getPlan: jest.fn(),
+}));
 jest.mock('../../lib/treatment-plans/plan-quote-api', () => ({
   ...jest.requireActual('../../lib/treatment-plans/plan-quote-api'),
   getPlanQuote: jest.fn(),
@@ -487,5 +492,199 @@ describe('AcceptPlanModal — presupuesto vencido (DX-379 C)', () => {
     await user.click(screen.getAllByRole('button', { name: /Cómo aceptarlo/ })[0]);
     expect(await screen.findByRole('radiogroup', { name: 'Cómo aceptarlo' })).toBeInTheDocument();
     expect(screen.getByLabelText('Motivo')).toHaveValue('LOYALTY');
+  });
+});
+
+describe('AcceptPlanModal — presupuesto vencido, ronda 1 (DX-379 C)', () => {
+  const mockedGetPlan = jest.mocked(getPlan);
+  const NOT_EXPIRED = 'El presupuesto no está vencido: acéptalo sin elegir cómo.';
+
+  beforeEach(() => {
+    mockedGet.mockReset();
+    mockedAccept.mockReset();
+    mockedRepricePreview.mockReset();
+    mockedGetPlan.mockReset();
+    (listLocations as jest.Mock).mockResolvedValue([clinicLocation({ id: 'loc-1', locale: 'es-VE' })]);
+    mockedGet.mockResolvedValue(planQuoteFixture());
+  });
+
+  async function toSign(user: ReturnType<typeof userEvent.setup>, mode: 'REPRICE' | 'ORIGINAL_PRICES') {
+    await screen.findByRole('radiogroup', { name: 'Cómo aceptarlo' });
+    if (mode === 'ORIGINAL_PRICES') {
+      await user.click(screen.getByRole('radio', { name: /Aceptar con los precios originales/ }));
+      await user.selectOptions(screen.getByLabelText('Motivo'), 'LOYALTY');
+    }
+    await user.click(screen.getByRole('button', { name: 'Continuar' }));
+    await screen.findByRole('region', {
+      name: mode === 'REPRICE' ? 'Presupuesto con los precios actualizados, a firmar' : 'Presupuesto a firmar',
+    });
+  }
+
+  async function signAndSubmit(user: ReturnType<typeof userEvent.setup>) {
+    sign(screen.getByRole('img', { name: 'Firma del paciente' }));
+    await user.click(screen.getByRole('button', { name: 'Aceptar y firmar' }));
+  }
+
+  it('M-1: 400 «no está vencido» al firmar (otro lo volvió a presentar): pasa a la firma normal y firma sin `expired`', async () => {
+    const user = userEvent.setup();
+    mockedAccept.mockRejectedValueOnce(new ApiError(400, NOT_EXPIRED));
+    mockedGetPlan.mockResolvedValue({ quoteExpired: false, acceptance: null } as unknown as TreatmentPlan);
+    renderModal({ quoteExpired: true });
+    await toSign(user, 'ORIGINAL_PRICES');
+    await signAndSubmit(user);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'El presupuesto ya no está vencido: revísalo con el paciente y fírmalo.',
+    );
+    expect(mockedGetPlan).toHaveBeenCalledWith('tok', 'plan-1');
+    await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole('radiogroup', { name: 'Cómo aceptarlo' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Aceptar y firmar' })).toBeDisabled();
+
+    mockedAccept.mockResolvedValueOnce(planQuoteFixture({ planStatus: 'ACCEPTED', acceptance: SIGNED_ACCEPTANCE }));
+    await signAndSubmit(user);
+    expect(mockedAccept).toHaveBeenLastCalledWith('tok', 'p1', 'plan-1', {
+      signerName: 'Ana Pérez',
+      signature: 'data:image/png;base64,FIRMA',
+      contentHash: 'c'.repeat(64),
+    });
+  });
+
+  it('M-1: 400 «no está vencido» en la vista previa: también pasa a la firma normal', async () => {
+    const user = userEvent.setup();
+    mockedRepricePreview.mockRejectedValueOnce(new ApiError(400, NOT_EXPIRED));
+    mockedGetPlan.mockResolvedValue({ quoteExpired: false, acceptance: null } as unknown as TreatmentPlan);
+    renderModal({ quoteExpired: true });
+    await screen.findByRole('radiogroup', { name: 'Cómo aceptarlo' });
+    await user.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('El presupuesto ya no está vencido');
+    expect(await screen.findByRole('region', { name: 'Presupuesto a firmar' })).toBeInTheDocument();
+    expect(screen.queryByText(/Puedes aceptarlo con los precios originales/)).not.toBeInTheDocument();
+  });
+
+  it('M-1: un 400 de validación con el plan aún vencido se enseña tal cual, sin cambiar de paso', async () => {
+    const user = userEvent.setup();
+    mockedAccept.mockRejectedValueOnce(new ApiError(400, 'La nota del motivo admite hasta 200 caracteres.'));
+    mockedGetPlan.mockResolvedValue({ quoteExpired: true, acceptance: null } as unknown as TreatmentPlan);
+    renderModal({ quoteExpired: true });
+    await toSign(user, 'ORIGINAL_PRICES');
+    await signAndSubmit(user);
+    expect(await screen.findByRole('alert')).toHaveTextContent('La nota del motivo admite hasta 200 caracteres.');
+    expect(screen.getByTestId('accept-original-reason')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['la vista previa', 'REPRICE' as const],
+    ['la firma', 'ORIGINAL_PRICES' as const],
+  ])('M-2: LOCATION_TIMEZONE_REQUIRED en %s: el mensaje, sin sugerir los originales y sin botón de enviar', async (_where, mode) => {
+    const user = userEvent.setup();
+    const error = new ApiError(409, 'La sede no tiene una zona horaria válida: configúrala antes de aceptar.', {
+      code: 'LOCATION_TIMEZONE_REQUIRED',
+    });
+    mockedRepricePreview.mockRejectedValue(error);
+    mockedAccept.mockRejectedValue(error);
+    renderModal({ quoteExpired: true });
+    await screen.findByRole('radiogroup', { name: 'Cómo aceptarlo' });
+    if (mode === 'ORIGINAL_PRICES') {
+      await toSign(user, mode);
+      await signAndSubmit(user);
+    } else {
+      await user.click(screen.getByRole('button', { name: 'Continuar' }));
+    }
+    expect(await screen.findByText('No se puede aceptar ahora')).toBeInTheDocument();
+    expect(screen.getByText('La sede no tiene una zona horaria válida: configúrala antes de aceptar.')).toBeInTheDocument();
+    expect(screen.queryByText(/Puedes aceptarlo con los precios originales/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Continuar|Aceptar y firmar/ })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Cancelar|Cerrar/ }).length).toBeGreaterThan(0);
+  });
+
+  it('M-2: 409 sin código en la vista previa y el plan ya firmado por otro: cierra y refresca con esa aceptación', async () => {
+    const user = userEvent.setup();
+    const signed = planQuoteFixture({ planStatus: 'ACCEPTED', acceptance: SIGNED_ACCEPTANCE });
+    mockedGet.mockResolvedValueOnce(planQuoteFixture()).mockResolvedValueOnce(signed);
+    mockedRepricePreview.mockRejectedValue(
+      new ApiError(409, 'El plan ya fue aceptado y firmado: no se puede volver a firmar.'),
+    );
+    const props = renderModal({ quoteExpired: true });
+    await screen.findByRole('radiogroup', { name: 'Cómo aceptarlo' });
+    await user.click(screen.getByRole('button', { name: 'Continuar' }));
+    await waitFor(() => expect(props.onAccepted).toHaveBeenCalledWith(signed));
+    expect(props.onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('M-3: 403 en la FIRMA con «Actualizar precios»: vuelve a la elección sin esa opción y sugiere los originales', async () => {
+    const user = userEvent.setup();
+    mockedRepricePreview.mockResolvedValue(repricePreview());
+    mockedAccept.mockRejectedValueOnce(
+      new ApiError(403, 'El descuento supera el máximo que puedes aplicar.'),
+    );
+    renderModal({ quoteExpired: true });
+    await toSign(user, 'REPRICE');
+    await signAndSubmit(user);
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Puedes aceptarlo con los precios originales indicando el motivo.');
+    const group = screen.getByRole('radiogroup', { name: 'Cómo aceptarlo' });
+    expect(within(group).queryByRole('radio', { name: /Actualizar los precios/ })).not.toBeInTheDocument();
+  });
+
+  it('M-7: ir a la firma, volver y entrar otra vez con «Actualizar precios»: dos vistas previas y firma con la segunda', async () => {
+    const user = userEvent.setup();
+    const second = repricePreview({ previewHash: 'b'.repeat(64) });
+    second.quote = { ...second.quote, contentHash: 'e'.repeat(64) };
+    mockedRepricePreview.mockResolvedValueOnce(repricePreview()).mockResolvedValueOnce(second);
+    mockedAccept.mockResolvedValue(planQuoteFixture({ planStatus: 'ACCEPTED', acceptance: SIGNED_ACCEPTANCE }));
+    renderModal({ quoteExpired: true });
+    await toSign(user, 'REPRICE');
+    await user.click(screen.getAllByRole('button', { name: /Cómo aceptarlo/ })[0]);
+    await screen.findByRole('radiogroup', { name: 'Cómo aceptarlo' });
+    await user.click(screen.getByRole('button', { name: 'Continuar' }));
+    await screen.findByRole('region', { name: 'Presupuesto con los precios actualizados, a firmar' });
+    await waitFor(() => expect(mockedRepricePreview).toHaveBeenCalledTimes(2));
+    await signAndSubmit(user);
+    expect(mockedAccept).toHaveBeenCalledWith(
+      'tok',
+      'p1',
+      'plan-1',
+      expect.objectContaining({
+        contentHash: 'e'.repeat(64),
+        expired: { mode: 'REPRICE', repricePreviewHash: 'b'.repeat(64) },
+      }),
+    );
+  });
+
+  it('M-7: 409 sin código en la firma con «Actualizar precios» (el presupuesto cambió): otra vista previa, sin bloquear', async () => {
+    const user = userEvent.setup();
+    mockedRepricePreview.mockResolvedValue(repricePreview());
+    mockedAccept.mockRejectedValueOnce(
+      new ApiError(409, 'El presupuesto cambió desde que se mostró: revísalo de nuevo con el paciente antes de firmar.'),
+    );
+    renderModal({ quoteExpired: true });
+    await toSign(user, 'REPRICE');
+    await signAndSubmit(user);
+    expect(await screen.findByRole('alert')).toHaveTextContent('El presupuesto cambió');
+    await waitFor(() => expect(mockedRepricePreview).toHaveBeenCalledTimes(2));
+    expect(
+      await screen.findByRole('region', { name: 'Presupuesto con los precios actualizados, a firmar' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Puedes aceptarlo con los precios originales/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Aceptar y firmar' })).toBeDisabled();
+  });
+
+  it('M-7: REPRICE_INCOMPLETE en la firma: vuelve a la elección con la sugerencia', async () => {
+    const user = userEvent.setup();
+    mockedRepricePreview.mockResolvedValue(repricePreview());
+    mockedAccept.mockRejectedValueOnce(
+      new ApiError(409, 'Algún procedimiento no tiene precio vigente: no se pueden actualizar todos los precios.', {
+        code: 'REPRICE_INCOMPLETE',
+      }),
+    );
+    renderModal({ quoteExpired: true });
+    await toSign(user, 'REPRICE');
+    await signAndSubmit(user);
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Algún procedimiento no tiene precio vigente');
+    expect(alert).toHaveTextContent('Puedes aceptarlo con los precios originales indicando el motivo.');
+    const group = screen.getByRole('radiogroup', { name: 'Cómo aceptarlo' });
+    expect(within(group).queryByRole('radio', { name: /Actualizar los precios/ })).not.toBeInTheDocument();
   });
 });
