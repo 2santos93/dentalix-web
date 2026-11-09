@@ -24,7 +24,8 @@ import { API_URL, tenantOrigin } from './support/urls';
  * 1. excepción «no trabaja» el día de J1: el diálogo la enseña; «Volver» no
  *    guarda nada; «Guardar de todos modos» guarda y la cita sigue agendada;
  * 2. semanal sin jueves (con viernes): el diálogo, guardar, citas intactas;
- * 3. 390 px: el diálogo cabe en la pantalla y no se desplaza en horizontal;
+ * 3. 390 px: un cambio real (el viernes empieza más tarde que una cita) abre
+ *    el diálogo, que cabe en la pantalla sin desplazarse en horizontal;
  * 4. reactivar una cita cancelada con un bloqueo creado después: el mensaje
  *    del bloqueo, y sigue cancelada;
  * 5. reactivar una cita cancelada fuera del horario del profesional (sin
@@ -58,6 +59,8 @@ function plusDays(day: string, n: number): string {
 const MONDAY = mondayFrom(7);
 const J1 = plusDays(MONDAY, 3);
 const J2 = plusDays(MONDAY, 10);
+/** Viernes de la semana de J1: la cita del test de 390 px. */
+const FRIDAY_390 = plusDays(MONDAY, 4);
 /** Viernes tras J2: dentro del semanal nuevo (14:00–19:00). */
 const BLOCK_FRIDAY = plusDays(MONDAY, 11);
 /** Martes tras J2: no trabaja ese día. */
@@ -166,21 +169,17 @@ test('excepción que deja una cita fuera: «Volver» no guarda; «Guardar de tod
   await expect(rows).toContainText('15:00');
   await shot(page, 'dx267-affected-override', 1440);
 
-  // «Volver»: no se guarda nada.
+  // «Volver»: no se guarda nada y se vuelve al formulario de la excepción.
   await affected.getByRole('button', { name: 'Volver' }).click();
   await expect(affected).toBeHidden();
+  await expect(overrideDialog).toBeVisible();
   const none = await request.get(`${API_URL}/providers/${dentistId}/schedule-overrides?from=${J1}&to=${J1}`, {
     headers: session.headers,
   });
   expect(none.ok(), await none.text()).toBeTruthy();
-  expect(JSON.stringify(await none.json())).not.toContain(J1);
+  expect(await none.json()).toEqual([]);
 
   // Otra vez, y ahora se guarda a sabiendas.
-  if (!(await overrideDialog.isVisible())) {
-    await page.getByRole('button', { name: 'Añadir excepción' }).click();
-    await overrideDialog.getByLabel('Sede', { exact: true }).selectOption({ label: sedeName });
-    await fillDate(overrideDialog, 'Fecha', J1);
-  }
   await overrideDialog.getByRole('button', { name: 'Guardar excepción' }).click();
   await expect(affected).toBeVisible({ timeout: 10_000 });
   await affected.getByRole('button', { name: 'Guardar de todos modos' }).click();
@@ -217,14 +216,42 @@ test('semanal que deja citas fuera: el diálogo, «Guardar de todos modos» y la
   expect(await statusOf(request, j2Id)).toBe('SCHEDULED');
 });
 
-test('390 px: el diálogo de citas afectadas cabe en la pantalla, sin scroll horizontal', async ({ page }) => {
+test('390 px: un cambio real del horario abre el diálogo, que cabe en la pantalla sin scroll horizontal', async ({
+  page,
+  request,
+}) => {
+  // Fuera de juego las citas que ya quedaron fuera (J1 y J2): el diálogo
+  // solo puede salir por el cambio de este test.
+  await cancelViaApi(request, j1Id);
+  await cancelViaApi(request, j2Id);
+  // Una cita del viernes a las 15:00, dentro del semanal (14:00–19:00).
+  const carla = await apiPost<{ id: string }>(request, session, '/patients', {
+    firstName: 'Carla',
+    lastName: patientLast,
+    docType: 'NATIONAL_ID',
+    docNumber: `AFC${suffix}`.slice(0, 20),
+    sex: 'F',
+  });
+  const fridayId = (
+    await apiPost<{ id: string }>(request, session, '/appointments', {
+      patientId: carla.id,
+      providerId: dentistId,
+      start: atSede(FRIDAY_390, '15:00').toISOString(),
+      end: atSede(FRIDAY_390, '15:30').toISOString(),
+    })
+  ).id;
+
   await page.setViewportSize({ width: 390, height: 844 });
   await openScheduleEditor(page);
 
-  // Guardar el semanal otra vez: J2 sigue fuera (agendada con el horario viejo).
+  // El viernes empieza a las 16:00: la cita de las 15:00 queda fuera.
+  const viernes = page.getByRole('group', { name: 'Viernes', exact: true });
+  await viernes.getByRole('button', { name: /^Viernes/ }).click();
+  await fillTime(viernes, `Desde, Viernes, ${sedeName}, tramo 1`, '16:00');
   await page.getByRole('button', { name: 'Guardar horario' }).click();
-  const affected = page.getByRole('dialog', { name: /^(1 cita queda|\d+ citas quedan) fuera de este horario$/ });
+  const affected = page.getByRole('dialog', { name: '1 cita queda fuera de este horario' });
   await expect(affected).toBeVisible({ timeout: 10_000 });
+  await expect(affected.getByTestId('affected-appointments')).toContainText(`Carla ${patientLast}`);
   await expectDialogInsideViewport(page, affected);
   await expectNoHorizontalOverflowInDialog(affected);
   await expectNoHorizontalScroll(page);
@@ -232,19 +259,21 @@ test('390 px: el diálogo de citas afectadas cabe en la pantalla, sin scroll hor
   await affected.getByRole('button', { name: 'Volver' }).click();
   await expect(affected).toBeHidden();
 
-  // La excepción, igual (otra vez «no trabaja» el día de J2).
+  // La excepción, igual: ese viernes «no trabaja».
   await page.getByRole('button', { name: 'Añadir excepción' }).click();
   const overrideDialog = page.getByRole('dialog', { name: 'Nueva excepción' });
-  await fillDate(overrideDialog, 'Fecha', J2);
+  await fillDate(overrideDialog, 'Fecha', FRIDAY_390);
   await overrideDialog.getByRole('button', { name: 'Guardar excepción' }).click();
   const overrideAffected = page.getByRole('dialog', { name: '1 cita queda fuera de este horario' });
   await expect(overrideAffected).toBeVisible({ timeout: 10_000 });
+  await expect(overrideAffected.getByTestId('affected-appointments')).toContainText(`Carla ${patientLast}`);
   await expectDialogInsideViewport(page, overrideAffected);
   await expectNoHorizontalOverflowInDialog(overrideAffected);
   await expectNoHorizontalScroll(page);
   await shot(page, 'dx267-affected-override', 390);
   await overrideAffected.getByRole('button', { name: 'Volver' }).click();
   await expect(overrideAffected).toBeHidden();
+  expect(await statusOf(request, fridayId)).toBe('SCHEDULED');
 });
 
 async function reactivateInList(page: Page, day: string) {
