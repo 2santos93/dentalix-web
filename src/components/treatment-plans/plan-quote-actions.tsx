@@ -180,6 +180,7 @@ export function PlanQuoteActions({
           role={role}
           onAccepted={onPartiallyAccepted}
           onStale={() => onPartiallyAccepted(null)}
+          onAcceptWhole={acceptable ? () => setAccepting(true) : undefined}
         />
       ) : null}
       {repriceable && onRepriced ? (

@@ -1,6 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { ClinicRole } from '@/lib/me/me-api';
@@ -27,6 +28,7 @@ import { useSedeStamp, type SedePainters } from '@/lib/locations/sede-stamp';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { FormModal } from '@/components/shared/form-modal';
 import { SectionError } from '@/components/errors/section-error';
+import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
@@ -70,6 +72,15 @@ export const acceptPartialPlanCopy = {
   submit: 'Aceptar en parte y firmar',
   genericError: 'No pudimos guardar la aceptación. Intenta de nuevo.',
   cannotAccept: 'No se puede aceptar en parte',
+  // Ronda 1 (M-3): con abonos, cuotas o saldo a favor, la salida es aceptarlo entero.
+  acceptWhole: 'Aceptar entero con firma',
+  // Ronda 1 (M-2): los ya aceptados o realizados no cuentan como «aceptar en parte».
+  chooseProposed: 'Elige al menos un procedimiento pendiente de aceptar.',
+  // Ronda 1 (I-2): otra firma ganó; lo de este modal no se guardó.
+  staleAccepted:
+    'Otra persona aceptó el plan mientras tanto: no se guardó esta aceptación en parte ni la firma. Revisa el plan antes de seguir.',
+  // Ronda 1 (M-1): con «Actualizar los precios» la vista previa tiene que traer la recotización.
+  repricingMissing: 'No pudimos calcular los precios vigentes para firmar.',
 };
 
 const copy = acceptPartialPlanCopy;
@@ -102,6 +113,8 @@ interface AcceptPartialPlanModalProps {
   onAccepted: (quote: PlanQuote) => void;
   /** El plan cambió por otra vía (otra firma ganó): el padre lo recarga. */
   onStale: () => void;
+  /** Ronda 1 (M-3): abrir la aceptación entera con firma (sin él, no se ofrece). */
+  onAcceptWhole?: () => void;
 }
 
 function selectionKeyOf(ids: readonly string[], reprice: boolean): string {
@@ -133,6 +146,7 @@ export function AcceptPartialPlanModal({
   role,
   onAccepted,
   onStale,
+  onAcceptWhole,
 }: AcceptPartialPlanModalProps) {
   const planId = plan.id;
   const fmt = readyFormat(useSedeFormat(token));
@@ -156,6 +170,8 @@ export function AcceptPartialPlanModal({
   const submittingRef = useRef(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [fatalError, setFatalError] = useState<string | null>(null);
+  // El final es por abonos, cuotas o saldo a favor (409 sin código): se puede aceptar entero.
+  const [wholeOffered, setWholeOffered] = useState(false);
 
   // Vencido (DX-379 C): lo dice el plan o lo descubre la firma (409 QUOTE_EXPIRED).
   const [expiredByServer, setExpiredByServer] = useState(false);
@@ -184,7 +200,11 @@ export function AcceptPartialPlanModal({
   const reprice = step === 'sign' && expired && mode === 'REPRICE' && repriceOffered;
   const key = selectionKeyOf(selectedIds, reprice);
   const fresh = current && current.key === key ? current.preview : null;
-  const problemNow = problem && problem.key === key ? problem : null;
+  // M-2/M-4: sin ningún propuesto elegido no hay nada que aceptar en parte: se dice aquí, sin pedir nada.
+  const proposedChosen = selectedIds.some((id) => !forced.has(id));
+  const localHint: PreviewProblem | null =
+    quote && !proposedChosen ? { key, message: copy.chooseProposed, kind: 'hint' } : null;
+  const problemNow = localHint ?? (problem && problem.key === key ? problem : null);
   const sedeOf = plan.presentedLocationId ?? quote?.location.id ?? null;
 
   useEffect(() => {
@@ -209,7 +229,7 @@ export function AcceptPartialPlanModal({
   const currentKey = current?.key ?? null;
   const problemKey = problem?.key ?? null;
   useEffect(() => {
-    if (!open || !quote || fatalError || step === 'choose') return;
+    if (!open || !quote || fatalError || step === 'choose' || !proposedChosen) return;
     if (currentKey === key || problemKey === key) return;
     let cancelled = false;
     const ids = selectedIds;
@@ -228,6 +248,11 @@ export function AcceptPartialPlanModal({
         try {
           const res = await request;
           if (cancelled) return;
+          if (withReprice && !res.repricing) {
+            // M-1: sin la recotización no se firma «Actualizar los precios»; se vuelve a pedir.
+            setProblem({ key, message: copy.repricingMissing, kind: 'retry' });
+            return;
+          }
           setCurrent({ key, preview: res });
           setProblem(null);
         } catch (err) {
@@ -243,10 +268,12 @@ export function AcceptPartialPlanModal({
     };
     // La clave resume la selección y el modo; `handlePreviewError` solo escribe estado.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, quote, key, step, currentKey, problemKey, fatalError, patientId, planId]);
+  }, [open, quote, key, step, currentKey, problemKey, fatalError, proposedChosen, patientId, planId]);
 
   /** Otra firma ganó (o el plan ya está aceptado): se cierra y el padre recarga. */
   function closeStale() {
+    // I-2: lo que se eligió y firmó aquí no se guardó; el plan quedó aceptado por otra vía.
+    toast.warning(copy.staleAccepted, { duration: Infinity });
     onStale();
     handleOpenChange(false, true);
   }
@@ -277,6 +304,7 @@ export function AcceptPartialPlanModal({
       return;
     }
     // Saldo a favor, abonos, cuotas (409 sin código), no presentado, sede sin zona, 404…
+    setWholeOffered(err.status === 409 && !err.code);
     setFatalError(message);
   }
 
@@ -319,6 +347,7 @@ export function AcceptPartialPlanModal({
       setSignature(null);
       setSubmitError(null);
       setFatalError(null);
+      setWholeOffered(false);
       setExpiredByServer(false);
       setNotExpiredByServer(false);
       setRepriceBlocked(null);
@@ -349,7 +378,9 @@ export function AcceptPartialPlanModal({
 
   function expiredBody(preview: PartialAcceptancePreview): AcceptPlanInput['expired'] | undefined {
     if (!expired) return undefined;
-    if (mode === 'REPRICE' && preview.repricing) {
+    if (mode === 'REPRICE') {
+      // M-1: nunca se cae en «precios originales» sin que se eligiera (signReady ya lo impide).
+      if (!preview.repricing) throw new Error('vista previa sin recotización');
       return { mode: 'REPRICE', repricePreviewHash: preview.repricing.previewHash };
     }
     const trimmed = note.trim();
@@ -377,7 +408,7 @@ export function AcceptPartialPlanModal({
       goTo('sign');
       return;
     }
-    if (!fresh || !signature || signerName.trim() === '') return;
+    if (!fresh || !signReady || !signature || signerName.trim() === '') return;
     const preview = fresh;
     submittingRef.current = true;
     setSubmitting(true);
@@ -474,7 +505,7 @@ export function AcceptPartialPlanModal({
   }
 
   const previewing = quote !== null && !fresh && !problemNow && !fatalError && step !== 'choose';
-  const signReady = fresh !== null && !problemNow;
+  const signReady = fresh !== null && !problemNow && (!reprice || fresh.repricing !== null);
   const submitDisabled =
     step === 'items' ? !itemsReady : step === 'choose' ? false : !signReady || !signature || signerName.trim() === '';
   const submitHint = problemNow?.kind === 'hint' ? problemNow.message : step === 'items' ? null : undefined;
@@ -496,7 +527,24 @@ export function AcceptPartialPlanModal({
       size="lg"
     >
       {fatalError ? (
-        <SectionError title={copy.cannotAccept} description={fatalError} />
+        <SectionError
+          title={copy.cannotAccept}
+          description={fatalError}
+          secondaryAction={
+            wholeOffered && onAcceptWhole ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  handleOpenChange(false, true);
+                  onAcceptWhole();
+                }}
+              >
+                {copy.acceptWhole}
+              </Button>
+            ) : undefined
+          }
+        />
       ) : loadError ? (
         <SectionError
           description={loadError}

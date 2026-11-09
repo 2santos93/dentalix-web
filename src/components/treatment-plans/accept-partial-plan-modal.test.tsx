@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
+import { toast } from 'sonner';
 import { ApiError } from '@/lib/api/client';
 import type { ClinicRole } from '@/lib/me/me-api';
 import { listLocations } from '@/lib/locations/locations-api';
@@ -17,6 +18,7 @@ import { AcceptPartialPlanModal, PARTIAL_PREVIEW_DEBOUNCE_MS } from './accept-pa
 import { ITEM_WITHOUT_DISCOUNT, PLAN_WITHOUT_OPTIONS } from './plan-fixture';
 import { planQuoteFixture, SIGNED_ACCEPTANCE } from './plan-quote-fixture';
 
+jest.mock('sonner', () => ({ toast: { warning: jest.fn(), success: jest.fn() } }));
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../../lib/treatment-plans/treatment-plans-api', () => ({
   ...jest.requireActual('../../lib/treatment-plans/treatment-plans-api'),
@@ -163,7 +165,7 @@ function previewOf(
   };
 }
 
-function renderModal(extra: { plan?: TreatmentPlan; role?: ClinicRole } = {}) {
+function renderModal(extra: { plan?: TreatmentPlan; role?: ClinicRole; onAcceptWhole?: () => void } = {}) {
   const props = {
     open: true,
     onOpenChange: jest.fn(),
@@ -173,6 +175,7 @@ function renderModal(extra: { plan?: TreatmentPlan; role?: ClinicRole } = {}) {
     patientId: 'p1',
     plan: extra.plan ?? planOf(),
     role: extra.role ?? ('DENTIST' as ClinicRole),
+    onAcceptWhole: extra.onAcceptWhole,
   };
   render(<AcceptPartialPlanModal {...props} />);
   return props;
@@ -203,10 +206,11 @@ describe('AcceptPartialPlanModal (DX-417)', () => {
     const props = renderModal();
     const dialog = screen.getByRole('dialog', { name: 'Aceptar en parte' });
     await within(dialog).findByLabelText('Aceptar Implante');
-    // Sin elegir nada, el servidor lo dice (400) y no se continúa.
-    mockedPreview.mockRejectedValueOnce(new ApiError(400, 'Elige al menos un procedimiento para aceptar.'));
-    expect(await within(dialog).findByText('Elige al menos un procedimiento para aceptar.')).toBeInTheDocument();
+    // M-4: sin elegir nada se dice aquí y no se pide ninguna vista previa (daría 400).
+    expect(await within(dialog).findByText('Elige al menos un procedimiento pendiente de aceptar.')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Continuar' })).toBeDisabled();
+    await new Promise((r) => setTimeout(r, PARTIAL_PREVIEW_DEBOUNCE_MS + 50));
+    expect(mockedPreview).not.toHaveBeenCalled();
 
     await user.click(within(dialog).getByLabelText('Aceptar Resina'));
     await user.click(within(dialog).getByLabelText('Aceptar Implante'));
@@ -248,19 +252,33 @@ describe('AcceptPartialPlanModal (DX-417)', () => {
     expect(screen.getByLabelText('Aceptar Resina')).toBeDisabled();
     expect(screen.getByLabelText('Aceptar Limpieza')).not.toBeChecked();
     expect(screen.getByLabelText('Aceptar Limpieza')).toBeEnabled();
+    // M-2: solo con los ya aceptados o realizados no hay nada nuevo que aceptar.
+    expect(await screen.findByText('Elige al menos un procedimiento pendiente de aceptar.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continuar' })).toBeDisabled();
+    expect(mockedPreview).not.toHaveBeenCalled();
+  });
+
+  it('M-2: con un propuesto elegido, los forzosos van también en la vista previa', async () => {
+    const user = userEvent.setup();
+    mockedPreview.mockImplementation(async (_t, _p, _pl, input) => {
+      if (input.itemIds.length === 3) throw new ApiError(400, 'Has elegido todos los procedimientos: acéptalo entero.');
+      return previewOf(input.itemIds);
+    });
+    renderModal({ plan: planOf({ items: [planItem('i1', 'ACCEPTED'), planItem('i2'), planItem('i3')] }) });
+    await user.click(await screen.findByLabelText('Aceptar Resina'));
     await totals();
     expect(mockedPreview).toHaveBeenCalledWith('tok', 'p1', 'plan-1', { itemIds: ['i1', 'i2'] });
+    expect(screen.getByRole('button', { name: 'Continuar' })).toBeEnabled();
   });
 
   it('todos elegidos: el texto del servidor junto al botón y sin continuar', async () => {
     const user = userEvent.setup();
     mockedPreview.mockImplementation(async (_t, _p, _pl, input) => {
       if (input.itemIds.length === 3) throw new ApiError(400, 'Has elegido todos los procedimientos: acéptalo entero.');
-      if (input.itemIds.length === 0) throw new ApiError(400, 'Elige al menos un procedimiento para aceptar.');
       return previewOf(input.itemIds);
     });
     renderModal();
-    await screen.findByText('Elige al menos un procedimiento para aceptar.');
+    await screen.findByText('Elige al menos un procedimiento pendiente de aceptar.');
     for (const name of ['Implante', 'Resina', 'Limpieza']) await user.click(screen.getByLabelText(`Aceptar ${name}`));
     expect(await screen.findByText('Has elegido todos los procedimientos: acéptalo entero.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Continuar' })).toBeDisabled();
@@ -277,12 +295,14 @@ describe('AcceptPartialPlanModal (DX-417)', () => {
         }),
     );
     renderModal();
-    await screen.findByLabelText('Aceptar Implante');
-    await waitFor(() => expect(mockedPreview).toHaveBeenCalledTimes(1)); // la selección inicial (vacía)
-    await user.click(screen.getByLabelText('Aceptar Implante'));
+    await user.click(await screen.findByLabelText('Aceptar Implante'));
+    await waitFor(() => expect(mockedPreview).toHaveBeenCalledTimes(1));
+    expect(mockedPreview).toHaveBeenLastCalledWith('tok', 'p1', 'plan-1', { itemIds: ['i1'] });
+    // Dos clics seguidos: una sola vista previa nueva, y solo cuando termine la que está en vuelo.
     await user.click(screen.getByLabelText('Aceptar Resina'));
+    await user.click(screen.getByLabelText('Aceptar Limpieza'));
+    await user.click(screen.getByLabelText('Aceptar Limpieza'));
     await new Promise((r) => setTimeout(r, PARTIAL_PREVIEW_DEBOUNCE_MS + 100));
-    // La primera sigue en vuelo: la de la selección nueva no sale todavía.
     expect(mockedPreview).toHaveBeenCalledTimes(1);
     release!();
     await waitFor(() => expect(mockedPreview).toHaveBeenCalledTimes(2));
@@ -291,20 +311,38 @@ describe('AcceptPartialPlanModal (DX-417)', () => {
     await totals();
   });
 
-  it('409 por abonos en la vista previa: el mensaje del servidor dentro del modal y solo cerrar', async () => {
+  it('409 por abonos en la vista previa: el mensaje del servidor y la salida «Aceptar entero con firma» (M-3)', async () => {
+    const user = userEvent.setup();
     mockedPreview.mockRejectedValue(
       new ApiError(409, 'El plan tiene abonos registrados: no se acepta en parte. Anula los abonos o acéptalo entero.'),
     );
-    renderModal();
+    const onAcceptWhole = jest.fn();
+    const props = renderModal({ onAcceptWhole });
+    await user.click(await screen.findByLabelText('Aceptar Implante'));
     expect(await screen.findByText('No se puede aceptar en parte')).toBeInTheDocument();
     expect(screen.getByText(/tiene abonos registrados/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Continuar' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Aceptar entero con firma' }));
+    expect(props.onOpenChange).toHaveBeenCalledWith(false);
+    expect(onAcceptWhole).toHaveBeenCalled();
+  });
+
+  it('un final que no es por abonos (no presentado) no ofrece aceptarlo entero', async () => {
+    const user = userEvent.setup();
+    mockedPreview.mockRejectedValue(
+      new ApiError(409, 'Solo un presupuesto presentado se acepta en parte.', { code: 'PARTIAL_PLAN_NOT_PRESENTED' }),
+    );
+    renderModal({ onAcceptWhole: jest.fn() });
+    await user.click(await screen.findByLabelText('Aceptar Implante'));
+    expect(await screen.findByText('No se puede aceptar en parte')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Aceptar entero con firma' })).not.toBeInTheDocument();
   });
 
   it('un fallo de red en la vista previa se reintenta', async () => {
     const user = userEvent.setup();
     mockedPreview.mockRejectedValueOnce(new Error('red'));
     renderModal();
+    await user.click(await screen.findByLabelText('Aceptar Implante'));
     await screen.findByText('No pudimos calcular los totales.');
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
     await totals();
@@ -352,6 +390,26 @@ describe('AcceptPartialPlanModal (DX-417)', () => {
     await waitFor(() => expect(props.onStale).toHaveBeenCalled());
     expect(props.onOpenChange).toHaveBeenCalledWith(false);
     expect(props.onAccepted).not.toHaveBeenCalled();
+    // I-2: se dice que lo de este modal no se guardó (no es un éxito).
+    expect(toast.warning).toHaveBeenCalledWith(
+      'Otra persona aceptó el plan mientras tanto: no se guardó esta aceptación en parte ni la firma. Revisa el plan antes de seguir.',
+      expect.anything(),
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('409 QUOTE_EXPIRED al firmar (venció con el modal abierto): pasa a «Cómo aceptarlo» con el mensaje', async () => {
+    const user = userEvent.setup();
+    mockedAccept.mockRejectedValueOnce(
+      new ApiError(409, 'El presupuesto venció: elige cómo aceptarlo.', { code: 'QUOTE_EXPIRED' }),
+    );
+    renderModal();
+    await chooseAndContinue(user);
+    await screen.findByRole('region', { name: 'Lo que se acepta y se firma' });
+    sign();
+    await user.click(screen.getByRole('button', { name: 'Aceptar en parte y firmar' }));
+    expect(await screen.findByRole('radiogroup', { name: 'Cómo aceptarlo' })).toBeInTheDocument();
+    expect(screen.getByText('El presupuesto venció: elige cómo aceptarlo.')).toBeInTheDocument();
   });
 });
 
@@ -447,6 +505,64 @@ describe('AcceptPartialPlanModal — presupuesto vencido (DX-417 + DX-379 C)', (
       screen.getByText(/Algún procedimiento del presupuesto, también entre los que no se aceptan ahora, no tiene precio vigente/),
     ).toBeInTheDocument();
     expect(screen.getByText(/precios originales indicando el motivo/)).toBeInTheDocument();
+  });
+
+  it('REPRICE_PREVIEW_STALE al firmar: otra vista previa con `reprice` y firma con sus huellas nuevas', async () => {
+    const user = userEvent.setup();
+    mockedAccept.mockRejectedValueOnce(
+      new ApiError(409, 'Los precios vigentes cambiaron desde la vista previa: revísala de nuevo.', {
+        code: 'REPRICE_PREVIEW_STALE',
+      }),
+    );
+    renderModal({ plan: expiredPlan() });
+    await chooseAndContinueExpired(user);
+    await user.click(await screen.findByRole('button', { name: 'Continuar' }));
+    await screen.findByRole('region', { name: 'Lo que se acepta y se firma' });
+    mockedPreview.mockResolvedValueOnce(
+      previewOf(['i1'], { hash: 'repriced-2', repricing: { ...REPRICING, previewHash: 'q'.repeat(64) } }),
+    );
+    sign();
+    await user.click(screen.getByRole('button', { name: 'Aceptar en parte y firmar' }));
+    expect(await screen.findByText(/Los precios vigentes cambiaron/)).toBeInTheDocument();
+    await waitFor(() => expect(mockedPreview).toHaveBeenLastCalledWith('tok', 'p1', 'plan-1', { itemIds: ['i1'], reprice: true }));
+    await waitFor(() => expect(screen.getByRole('img', { name: 'Firma del paciente' })).toBeInTheDocument());
+    sign();
+    await user.click(screen.getByRole('button', { name: 'Aceptar en parte y firmar' }));
+    await waitFor(() =>
+      expect(mockedAccept).toHaveBeenLastCalledWith(
+        'tok',
+        'p1',
+        'plan-1',
+        expect.objectContaining({
+          contentHash: 'repriced-2',
+          expired: { mode: 'REPRICE', repricePreviewHash: 'q'.repeat(64) },
+        }),
+      ),
+    );
+  });
+
+  it('M-1: una vista previa con `reprice` sin recotización no deja firmar; se vuelve a pedir', async () => {
+    const user = userEvent.setup();
+    mockedPreview.mockImplementation(async (_t, _p, _pl, input) => previewOf(input.itemIds));
+    renderModal({ plan: expiredPlan() });
+    await chooseAndContinueExpired(user);
+    await user.click(await screen.findByRole('button', { name: 'Continuar' }));
+    expect(await screen.findByText('No pudimos calcular los precios vigentes para firmar.')).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: 'Firma del paciente' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Aceptar en parte y firmar' })).toBeDisabled();
+    mockedPreview.mockImplementation(async (_t, _p, _pl, input) =>
+      previewOf(input.itemIds, { hash: 'repriced', repricing: REPRICING }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+    await screen.findByRole('img', { name: 'Firma del paciente' });
+    sign();
+    await user.click(screen.getByRole('button', { name: 'Aceptar en parte y firmar' }));
+    expect(mockedAccept).toHaveBeenCalledWith(
+      'tok',
+      'p1',
+      'plan-1',
+      expect.objectContaining({ expired: { mode: 'REPRICE', repricePreviewHash: 'p'.repeat(64) } }),
+    );
   });
 
   async function chooseAndContinueExpired(user: ReturnType<typeof userEvent.setup>) {
