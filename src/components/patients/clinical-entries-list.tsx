@@ -18,7 +18,7 @@ import { AsyncSection } from '@/components/shared/async-section';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { SectionHeader } from '@/components/ui/section-header';
-import { AnesthesiaModal } from '@/components/anesthesia/anesthesia-modal';
+import dynamic from 'next/dynamic';
 import {
   TECHNIQUE_LABELS,
   formatDecimal,
@@ -27,7 +27,16 @@ import {
   type AnesthesiaAdministration,
 } from '@/lib/anesthesia/anesthesia-api';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
-import { SedationModal } from '@/components/sedation/sedation-modal';
+
+// DX-442 (FE-021): los modales de anestesia y sedación pesan y solo se abren a
+// veces: entran en su propio trozo al abrirse, no con la ficha.
+const AnesthesiaModal = dynamic(
+  () => import('@/components/anesthesia/anesthesia-modal').then((m) => m.AnesthesiaModal),
+  { ssr: false },
+);
+const SedationModal = dynamic(() => import('@/components/sedation/sedation-modal').then((m) => m.SedationModal), {
+  ssr: false,
+});
 import {
   GRADE_LABELS,
   STATUS_LABELS,

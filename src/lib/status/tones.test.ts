@@ -67,4 +67,9 @@ describe('vocabulario de estados (tones.ts)', () => {
     expect(statusTone('quoteValidity', 'EXPIRED')).toBe('danger');
     expect(statusLabel('quoteValidity', 'EXPIRED')).toBe('Vencido');
   });
+
+  it('DX-379 B: el precio que sube pide atención, el que baja favorece y el igual es neutro', () => {
+    expect(statusTones('priceChange')).toEqual({ UP: 'warning', DOWN: 'success', SAME: 'neutral' });
+    expect(statusLabels('priceChange')).toEqual({ UP: 'Sube', DOWN: 'Baja', SAME: 'Sin cambio' });
+  });
 });

@@ -19,7 +19,9 @@ import {
   type RefundMethod,
 } from '@/lib/patient-credit/patient-credit-api';
 import type { AccountStatementMovement } from '@/lib/account-statement/account-statement-api';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { useSessionLocations } from '@/lib/locations/session-locations';
+import { FieldError } from '@/components/errors/field-error';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
 import { creditPreviewCopy, type CreditSource } from './credit-balance';
@@ -54,6 +56,8 @@ const copy = {
   submit: 'Devolver',
   // D1 (QA): el efectivo sale del cajón de UNA sede.
   cashFrom: (name: string) => `El efectivo sale de tu caja en ${name}.`,
+  // DX-442: la lista de sedes no cargó; sin ella no se sabe de qué caja sale.
+  locationsError: 'Sedes sin cargar',
   cashNeedsLocation:
     'Elige la sede de la caja de la que sale el efectivo: cámbiala en el selector de sede de arriba.',
   failed: 'No pudimos registrar la devolución.',
@@ -102,23 +106,29 @@ export function CreditRefundModal({
   const value = parsed.ok ? parsed.value : 0;
   // D1: la sede activa (la de `X-Location-Id`) y las sedes posibles. Con
   // varias y ninguna elegida, el efectivo no se puede devolver.
+  // DX-442: las sedes de la sesión (una lectura compartida, no otra petición);
+  // si fallan, se dice junto al medio de pago con reintento.
+  const requestLocations = useSessionLocations(token);
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
+  const [locationsError, setLocationsError] = useState(false);
+  const [locationsKey, setLocationsKey] = useState(0);
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
-    listLocations(token)
+    requestLocations()
       .then((data) => {
         if (cancelled) return;
         setLocations(data ?? []);
         setActiveLocationId(getActiveLocationId());
+        setLocationsError(false);
       })
       .catch(() => {
-        /* sin la lista no se nombra la sede; la API decide con su 400 */
+        if (!cancelled) setLocationsError(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [requestLocations, locationsKey]);
   const allowed = getTokenAllowedLocationIds(token);
   const usable = locations.filter((l) => l.isActive && (allowed === null || allowed.includes(l.id)));
   const activeLocation = usable.find((l) => l.id === activeLocationId) ?? (usable.length === 1 ? usable[0] : null);
@@ -207,11 +217,13 @@ export function CreditRefundModal({
             }}
             aria-invalid={amountError ? true : undefined}
             aria-describedby={amountError ? fieldErrorId('cr-amount') : undefined}
+            className="h-11 sm:h-10"
           />
         </FormField>
         <FormField htmlFor="cr-method" label={copy.method}>
           <NativeSelect
             id="cr-method"
+            selectClassName="h-11 sm:h-10"
             value={method}
             disabled={submitting}
             onChange={(e) => setMethod(e.target.value as RefundMethod)}
@@ -225,7 +237,16 @@ export function CreditRefundModal({
         </FormField>
       </div>
       {method === 'CASH' ? (
-        cashBlocked ? (
+        locationsError ? (
+          <FieldError
+            label={copy.locationsError}
+            onRetry={() => {
+              requestLocations.invalidate();
+              setLocationsKey((n) => n + 1);
+            }}
+            className="self-start"
+          />
+        ) : cashBlocked ? (
           <Callout tone="warning" role="alert" data-testid="refund-cash-location">
             {copy.cashNeedsLocation}
           </Callout>

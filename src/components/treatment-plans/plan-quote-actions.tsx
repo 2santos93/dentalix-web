@@ -1,9 +1,10 @@
 'use client';
 import * as React from 'react';
 import { useState } from 'react';
-import { CircleCheck, PenLine, Printer } from 'lucide-react';
+import { CircleCheck, PenLine, Printer, RefreshCw } from 'lucide-react';
 import type { ClinicRole } from '@/lib/me/me-api';
-import type { TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
+import type { TreatmentPlan, TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
+import { canRepricePlan, isPlanRepriceable, type AppliedRepricing } from '@/lib/treatment-plans/plan-repricing-api';
 import {
   canAcceptPlan,
   canPrintPlanQuote,
@@ -15,6 +16,7 @@ import {
 import type { SedePainters } from '@/lib/locations/sede-stamp';
 import { Button } from '@/components/ui/button';
 import { AcceptPlanModal } from './accept-plan-modal';
+import { RepricePlanModal } from './reprice-plan-modal';
 import { RemoteAcceptanceEvidence, RemoteBudgetPanel } from './remote-budget-panel';
 import { ExternalLink } from '@/components/shared/external-link';
 
@@ -25,6 +27,8 @@ const copy = {
   acceptedRemotely: (name: string, when: string) => `Aceptado a distancia por ${name} el ${when}`,
   locked: 'Sus procedimientos y precios ya no se pueden cambiar.',
   needsItems: 'Agrega procedimientos para poder aceptarlo con firma.',
+  reprice: 'Actualizar precios',
+  expiredHint: 'El presupuesto venció: actualiza los precios para renovar su validez.',
 };
 
 interface PlanQuoteActionsProps {
@@ -42,6 +46,12 @@ interface PlanQuoteActionsProps {
   acceptPrimary?: boolean;
   /** El pintor de la pantalla (su dueño pinta el aviso de la sede, una vez). */
   stamp: SedePainters;
+  /** DX-379 B: el nombre del procedimiento de un ítem (para la vista previa de «Actualizar precios»). */
+  procedureOf?: (item: TreatmentPlanItem) => string;
+  /** DX-379 B: tras actualizar los precios, el padre recarga el plan. Sin él, no se ofrece. */
+  onRepriced?: (result: AppliedRepricing) => void;
+  /** DX-379 B: ¿«Actualizar precios» es LA primaria? (plan vencido, `planPrimaryAction`). */
+  repricePrimary?: boolean;
 }
 
 /**
@@ -59,8 +69,14 @@ export function PlanQuoteActions({
   onAccepted,
   acceptPrimary = true,
   stamp,
+  procedureOf,
+  onRepriced,
+  repricePrimary = false,
 }: PlanQuoteActionsProps) {
   const [accepting, setAccepting] = useState(false);
+  const [repricing, setRepricing] = useState(false);
+  // DX-379 B: recotizar es de los roles clínicos, en un borrador o presentado sin firma.
+  const repriceable = Boolean(onRepriced) && canRepricePlan(role) && isPlanRepriceable(plan);
   const acceptance = plan.acceptance ?? null;
   const mayAccept = canAcceptPlan(role);
   const acceptable = mayAccept && isPlanAcceptable(plan);
@@ -99,6 +115,12 @@ export function PlanQuoteActions({
             </ExternalLink>
           </Button>
         ) : null}
+        {repriceable ? (
+          <Button type="button" variant={repricePrimary ? 'default' : 'secondary'} onClick={() => setRepricing(true)}>
+            <RefreshCw aria-hidden />
+            {copy.reprice}
+          </Button>
+        ) : null}
         {acceptable ? (
           <Button
             type="button"
@@ -111,6 +133,7 @@ export function PlanQuoteActions({
         ) : null}
         {needsItems ? <p className="text-sm text-muted">{copy.needsItems}</p> : null}
       </div>
+      {repriceable && plan.quoteExpired ? <p className="text-sm text-muted">{copy.expiredHint}</p> : null}
 
       <RemoteBudgetPanel token={token} patientId={patientId} plan={plan} role={role} />
 
@@ -122,6 +145,19 @@ export function PlanQuoteActions({
           patientId={patientId}
           planId={plan.id}
           onAccepted={onAccepted}
+        />
+      ) : null}
+      {repriceable && onRepriced ? (
+        <RepricePlanModal
+          open={repricing}
+          onOpenChange={setRepricing}
+          token={token}
+          patientId={patientId}
+          plan={plan}
+          role={role}
+          procedureOf={procedureOf ?? ((item) => item.catalogItemId)}
+          stamp={stamp}
+          onRepriced={onRepriced}
         />
       ) : null}
     </div>

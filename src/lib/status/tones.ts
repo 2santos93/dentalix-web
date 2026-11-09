@@ -100,6 +100,17 @@ const quoteValidity = {
   EXPIRED: s('danger', 'Vencido'),
 } satisfies Presentations<'EXPIRED'>;
 
+/**
+ * Cómo cambia un precio al actualizarlo (DX-379 B): sube pide atención
+ * (warning: el paciente pagará más), baja es a favor del paciente (success) y
+ * sin cambio es neutro. Colorea la diferencia de la vista previa.
+ */
+const priceChange = {
+  UP: s('warning', 'Sube'),
+  DOWN: s('success', 'Baja'),
+  SAME: s('neutral', 'Sin cambio'),
+} satisfies Presentations<'UP' | 'DOWN' | 'SAME'>;
+
 const treatmentPlanItem = {
   PROPOSED: s('neutral', 'Propuesto'),
   ACCEPTED: s('info', 'Aceptado'),
@@ -310,6 +321,7 @@ export const STATUS_PRESENTATION = {
   reminder,
   treatmentPlan,
   quoteValidity,
+  priceChange,
   treatmentPlanItem,
   toothRecord,
   clinicalRecord,

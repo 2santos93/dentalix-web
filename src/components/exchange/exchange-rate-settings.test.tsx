@@ -1,5 +1,13 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
-import { ExchangeRateSettingsView, correctRateCopy, exchangeRateCopy, rateFormCopy } from './exchange-rate-settings';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import {
+  BACKUP_PREVIEW_DEBOUNCE_MS,
+  ExchangeRateSettingsView,
+  correctRateCopy,
+  exchangeRateCopy,
+  isQueryableBacklogDay,
+  rateFormCopy,
+} from './exchange-rate-settings';
 import {
   getExchangeRateSettings,
   listManualExchangeRates,
@@ -646,6 +654,47 @@ describe('Registrar una tasa de un día anterior a «manual desde» (DX-402)', (
     await waitFor(() => expect(notice).toHaveTextContent(backup.applies(2, 'VES')));
     expect(notice).toHaveTextContent(backup.heading(SINCE));
     expect(mockedDay).toHaveBeenLastCalledWith('tok', '2026-10-28', 'VES');
+  });
+
+  // DX-442 (FE-095): la fecha se teclea por segmentos. La consulta espera
+  // 300 ms tras el último cambio (una por fecha completa, no una por tecla) y
+  // no se hace con un año anterior a 1900.
+  it('consulta una sola vez, 300 ms después del último cambio de fecha', async () => {
+    jest.useFakeTimers();
+    try {
+      mockedDay.mockResolvedValue({ date: '2026-10-28', currency: 'VES', count: 1, providerRateSaved: false, otherRatesMissing: NO_OTHER });
+      mockedGet.mockResolvedValue(MANUAL);
+      mockedList.mockResolvedValue([]);
+      const user = userEvent.setup({ pointerEventsCheck: 0, advanceTimers: jest.advanceTimersByTime });
+      renderView();
+      await user.click(await screen.findByRole('button', { name: copy.register }));
+      const dialog = await screen.findByRole('dialog', { name: rateFormCopy.title });
+      const select = within(dialog).getByLabelText(rateFormCopy.currency);
+      await waitFor(() => expect(within(select).getByRole('option', { name: /Bolívar/ })).toBeInTheDocument());
+      await user.selectOptions(select, 'VES');
+      await typeDate(user, dialog, '28102026');
+      // Aún no: el último cambio acaba de ocurrir.
+      expect(mockedDay).not.toHaveBeenCalled();
+      await act(async () => {
+        jest.advanceTimersByTime(BACKUP_PREVIEW_DEBOUNCE_MS - 1);
+      });
+      expect(mockedDay).not.toHaveBeenCalled();
+      await act(async () => {
+        jest.advanceTimersByTime(1);
+      });
+      expect(mockedDay).toHaveBeenCalledTimes(1);
+      expect(mockedDay).toHaveBeenLastCalledWith('tok', '2026-10-28', 'VES');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('un año anterior a 1900 ni se consulta', () => {
+    expect(isQueryableBacklogDay('1899-12-31')).toBe(false);
+    expect(isQueryableBacklogDay('0019-10-28')).toBe(false);
+    expect(isQueryableBacklogDay('2026-10-2')).toBe(false);
+    expect(isQueryableBacklogDay('1900-01-01')).toBe(true);
+    expect(isQueryableBacklogDay('2026-10-28')).toBe(true);
   });
 
   it('sin abonos pendientes ese día, avisa de que la tasa no se usará', async () => {

@@ -12,9 +12,10 @@ import { canDecidePlan } from './plan-options';
  *  - `scheduleVisit` — «Agendar visita N» de la primera visita con ítems
  *    pendientes sin cita.
  *  - `registerPayment` — «Registrar abono».
+ *  - `reprice` — «Actualizar precios» (DX-379 B), cuando el presupuesto venció.
  *  - `null` — ninguna: el plan está cerrado y no queda nada que hacer en él.
  */
-export type PlanPrimaryAction = 'addItem' | 'accept' | 'scheduleVisit' | 'registerPayment';
+export type PlanPrimaryAction = 'addItem' | 'accept' | 'scheduleVisit' | 'registerPayment' | 'reprice';
 
 export interface PlanPrimaryFacts {
   status: TreatmentPlanStatus;
@@ -30,6 +31,12 @@ export interface PlanPrimaryFacts {
   canBill: boolean;
   /** Saldo del plan en su moneda; `null` si no se pidió o no ha llegado. */
   balance: number | null;
+  /**
+   * DX-379 B: ¿el presupuesto venció (`quoteExpired`, lo decide el servidor) y
+   * el rol puede «Actualizar precios» en este plan (`canRepricePlan` +
+   * `isPlanRepriceable`)? Sin el dato, `false`.
+   */
+  expiredRepriceable?: boolean;
 }
 
 /**
@@ -48,6 +55,9 @@ export interface PlanPrimaryFacts {
  *  - COMPLETED: solo queda cobrar lo pendiente.
  *  - REJECTED, CANCELLED: nada (cero primarias es mejor que una inventada).
  *
+ * Un borrador o presentado VENCIDO que el rol puede recotizar → «Actualizar
+ * precios»: firmarlo da 409 y la vía para renovarlo es esa (DX-379 B).
+ *
  * Si la primaria del estado no está al alcance del rol, se cae a la
  * siguiente que sí lo esté; nunca dos.
  */
@@ -56,6 +66,7 @@ export function planPrimaryAction(facts: PlanPrimaryFacts): PlanPrimaryAction | 
   const mayAddItems = facts.canAddItems && !facts.signed;
   const owes = facts.canBill && facts.balance !== null && facts.balance > 0;
 
+  if (facts.expiredRepriceable && (facts.status === 'DRAFT' || facts.status === 'PRESENTED')) return 'reprice';
   switch (facts.status) {
     case 'DRAFT':
       return mayAddItems ? 'addItem' : null;
