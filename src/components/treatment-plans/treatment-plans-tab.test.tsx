@@ -3707,6 +3707,24 @@ describe('TreatmentPlansTab · una primaria por estado del plan (D2)', () => {
     expect(primaries()).toEqual([accept]);
   });
 
+  it('DX-379 B: PRESENTED vencido (odontólogo): «Actualizar precios» es la única; «Aceptar con firma» en secundario', async () => {
+    const p = plan({ id: 'plan-1', status: 'PRESENTED', quoteExpired: true, quoteValidUntil: '2026-10-31' });
+    mockedListPlans.mockResolvedValue([p]);
+    mockedGetPlan.mockResolvedValue({ ...p, items: [item1, item2], total: 0 });
+    render(<TreatmentPlansTab patientId="pat-1" token={dentist} />);
+    const reprice = await screen.findByRole('button', { name: 'Actualizar precios' });
+    const accept = await screen.findByRole('button', { name: /aceptar con firma/i });
+    expect(isPrimary(accept)).toBe(false);
+    expect(primaries()).toEqual([reprice]);
+  });
+
+  it('DX-379 B: PRESENTED vigente: «Actualizar precios» en secundario', async () => {
+    show('PRESENTED');
+    render(<TreatmentPlansTab patientId="pat-1" token={dentist} />);
+    const reprice = await screen.findByRole('button', { name: 'Actualizar precios' });
+    expect(isPrimary(reprice)).toBe(false);
+  });
+
   it('PRESENTED (asistente, que no decide): «Agregar ítem» es la única', async () => {
     show('PRESENTED');
     render(<TreatmentPlansTab patientId="pat-1" token={assistant} />);
