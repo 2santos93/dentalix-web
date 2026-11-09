@@ -8,6 +8,7 @@ import { E2E_REGION } from './support/regional';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
+import { expectTouchTarget } from './support/touch-targets';
 import { API_URL, tenantOrigin } from './support/urls';
 
 /**
@@ -186,6 +187,12 @@ test('ADMIN crea la lista «Tarifa» en USD y le pone precio a un procedimiento;
   await page.goto(`${origin}/settings/listas-de-precios`);
   await expect(page.getByText(listName).locator('visible=true').first()).toBeVisible({ timeout: 10_000 });
   await expectNoHorizontalScroll(page);
+  // DX-105-bis: a 390 px el selector de sede de «Nueva lista» mide 44 px.
+  await page.getByRole('button', { name: 'Nueva lista' }).locator('visible=true').first().click();
+  const newList390 = page.getByRole('dialog', { name: 'Nueva lista de precios' });
+  await expectTouchTarget(newList390.getByLabel('Sede'), { scope: newList390, label: 'selector de sede' });
+  await newList390.getByRole('button', { name: 'Cancelar' }).click();
+  await expect(newList390).toBeHidden();
 });
 
 test('ADMIN crea el convenio «Surco −20 %» y lo ve activo; a 390 px sin scroll horizontal', async ({ page }) => {

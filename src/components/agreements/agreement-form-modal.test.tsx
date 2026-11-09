@@ -197,6 +197,12 @@ describe('AgreementFormModal (DX-105)', () => {
 
     await user.click(within(dialog).getByRole('button', { name: 'Crear convenio' }));
     expect(await within(dialog).findByText('Preventiva: Indica el porcentaje del convenio.')).toBeInTheDocument();
+    // DX-105-bis: el error del bloque describe a los campos de cada fila.
+    for (const label of ['Categoría 1', 'Porcentaje 1']) {
+      const field = within(dialog).getByLabelText(label);
+      expect(field).toHaveAttribute('aria-invalid', 'true');
+      expect(field).toHaveAccessibleDescription('Preventiva: Indica el porcentaje del convenio.');
+    }
 
     await user.type(within(dialog).getByLabelText('Porcentaje 1'), '120');
     await user.click(within(dialog).getByRole('button', { name: 'Crear convenio' }));

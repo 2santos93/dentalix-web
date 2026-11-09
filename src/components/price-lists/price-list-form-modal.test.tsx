@@ -69,6 +69,8 @@ describe('PriceListFormModal (DX-105)', () => {
     const user = setupUser();
     const { dialog, onSaved } = setup();
     const location = within(dialog).getByLabelText('Sede');
+    // DX-105-bis: 44 px en el teléfono, 40 px en escritorio.
+    expect(location).toHaveClass('h-11', 'sm:h-10');
     expect(within(location).getAllByRole('option').map((o) => o.textContent)).toEqual([
       'Toda la clínica',
       'Sede Norte',
