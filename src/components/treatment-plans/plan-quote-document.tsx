@@ -2,6 +2,8 @@ import { ClinicFiscalLines } from '@/components/brand/clinic-fiscal-lines';
 import * as React from 'react';
 import {
   expiredAcceptanceLine,
+  partialAcceptanceLine,
+  partialRestLine,
   type PlanQuote,
   type PlanQuoteAcceptance,
   type PlanQuoteItem,
@@ -135,6 +137,12 @@ interface PlanQuoteDocumentProps {
   format: DocumentFormat | null;
   /** DX-376: total orientativo en otra moneda; sin ella, el presupuesto no cambia. */
   secondCurrency?: QuoteSecondCurrency | null;
+  /**
+   * DX-417: este presupuesto es el pendiente de una aceptación parcial: el
+   * instante en que se aceptó el original («Resto de la aceptación parcial
+   * del …»), o `'unknown'` si no se pudo leer («Resto de una aceptación parcial»).
+   */
+  partialRestOf?: string | null;
 }
 
 /**
@@ -148,7 +156,7 @@ interface PlanQuoteDocumentProps {
  * papel blanco y tinta oscura explícitos, también en modo oscuro. En pantalla
  * estrecha la tabla se apila en tarjetas; en papel siempre es tabla.
  */
-export function PlanQuoteDocument({ quote, format, secondCurrency = null }: PlanQuoteDocumentProps) {
+export function PlanQuoteDocument({ quote, format, secondCurrency = null, partialRestOf = null }: PlanQuoteDocumentProps) {
   // DX-354: fechas, horas e importes con el formato de la sede del presupuesto y el código ISO.
   const doc = documentTexts(format);
   const money = doc.amount;
@@ -157,6 +165,8 @@ export function PlanQuoteDocument({ quote, format, secondCurrency = null }: Plan
   const listFormat = sedeListPriceFormat(format?.fmt ?? null);
   const { acceptance, currency } = quote;
   const expiredLine = acceptance ? expiredAcceptanceLine(acceptance, doc) : null;
+  // DX-417: fuera del contenido firmado (no entra en la huella).
+  const partialLine = acceptance ? partialAcceptanceLine(acceptance, currency, money) : null;
   // DX-502: cada precio de lista lleva la moneda del catálogo que congeló su
   // ítem (`listPriceCurrency`, de la API). Si alguno no está en la del plan
   // (o no se sabe), va con la nota y sin «Ahorro por convenio».
@@ -420,16 +430,28 @@ export function PlanQuoteDocument({ quote, format, secondCurrency = null }: Plan
                   {expiredLine}
                 </span>
               ) : null}
+              {partialLine ? (
+                <span data-testid="quote-partial-acceptance" className="mt-1 block text-[#4b5563] tabular-nums">
+                  {partialLine}
+                </span>
+              ) : null}
             </figcaption>
           </figure>
         ) : (
-          <div className="grid grid-cols-1 gap-8 text-sm text-[#4b5563] sm:grid-cols-3 print:grid-cols-3">
-            {[copy.blankSignature, copy.blankName, copy.blankDate].map((label) => (
-              <p key={label} className="border-t border-[#111827] pt-2 sm:mt-12 print:mt-12">
-                {label}
+          <>
+            {partialRestOf ? (
+              <p data-testid="quote-partial-rest" className="mb-4 text-sm text-[#4b5563] tabular-nums">
+                {partialRestLine(partialRestOf === 'unknown' ? null : doc.date(partialRestOf))}
               </p>
-            ))}
-          </div>
+            ) : null}
+            <div className="grid grid-cols-1 gap-8 text-sm text-[#4b5563] sm:grid-cols-3 print:grid-cols-3">
+              {[copy.blankSignature, copy.blankName, copy.blankDate].map((label) => (
+                <p key={label} className="border-t border-[#111827] pt-2 sm:mt-12 print:mt-12">
+                  {label}
+                </p>
+              ))}
+            </div>
+          </>
         )}
       </section>
 

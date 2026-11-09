@@ -24,4 +24,11 @@ describe('planOptionLabel (DX-354b)', () => {
   it('sin formato de la sede la fecha es «—» (el aviso de la pantalla explica por qué)', () => {
     expect(copy.planOptionLabel(createdAt, 'DRAFT', 1, null, stampPainters(null))).toBe('Plan 1 · — — Borrador');
   });
+
+  it('DX-417: el presupuesto pendiente de una aceptación parcial lleva «· pendiente» (no tiene etiqueta de opción)', () => {
+    const caracas = testStamp([STAMP_SEDES.caracas]);
+    expect(copy.planOptionLabel(createdAt, 'PRESENTED', 3, null, caracas, true)).toBe(
+      `Plan 3 · ${dateTimeIn('caracas', createdAt)} — Presentado · pendiente`,
+    );
+  });
 });

@@ -226,3 +226,58 @@ describe('PlanQuoteActions · «Actualizar precios» (DX-379 B)', () => {
     expect(previewRepricing).toHaveBeenCalledWith('tok', 'p1', 'plan-1');
   });
 });
+
+describe('PlanQuoteActions · «Aceptar en parte» (DX-417)', () => {
+  const two = [item, { ...item, id: 'i2' }];
+
+  function renderPartial(p: TreatmentPlan, role: 'ADMIN' | 'DENTIST' | 'ASSISTANT' | 'RECEPTION') {
+    render(
+      <PlanQuoteActions
+        token="tok"
+        patientId="p1"
+        plan={p}
+        role={role}
+        onAccepted={jest.fn()}
+        onPartiallyAccepted={jest.fn()}
+        stamp={testStamp([STAMP_SEDES.caracas])}
+      />,
+    );
+  }
+
+  it('la ven ADMIN y odontólogo en un presentado sin aceptar con dos o más propuestos; asistente y recepción no', () => {
+    for (const role of ['ADMIN', 'DENTIST'] as const) {
+      renderPartial(plan({ status: 'PRESENTED', items: two }), role);
+      const button = screen.getByRole('button', { name: 'Aceptar en parte' });
+      // Secundaria, junto a «Aceptar con firma».
+      expect(button.className).not.toMatch(/(^|\s)bg-primary(\s|$)/);
+      expect(screen.getByRole('button', { name: 'Aceptar con firma' })).toBeInTheDocument();
+      cleanup();
+    }
+    for (const role of ['ASSISTANT', 'RECEPTION'] as const) {
+      renderPartial(plan({ status: 'PRESENTED', items: two }), role);
+      expect(screen.queryByRole('button', { name: 'Aceptar en parte' })).not.toBeInTheDocument();
+      cleanup();
+    }
+  });
+
+  it('un borrador, un aceptado, uno firmado o uno con un solo propuesto no la ofrecen', () => {
+    const signed = { signerName: 'Ana', acceptedAt: '2026-10-16T15:00:00Z', remote: null };
+    for (const p of [
+      plan({ status: 'DRAFT', items: two }),
+      plan({ status: 'ACCEPTED', items: two }),
+      plan({ status: 'PRESENTED', items: two, acceptance: signed }),
+      plan({ status: 'PRESENTED', items: [item] }),
+    ]) {
+      renderPartial(p, 'ADMIN');
+      expect(screen.queryByRole('button', { name: 'Aceptar en parte' })).not.toBeInTheDocument();
+      cleanup();
+    }
+  });
+
+  it('abre el modal de los procedimientos', async () => {
+    mockedGet.mockReturnValue(new Promise(() => {}));
+    renderPartial(plan({ status: 'PRESENTED', items: two }), 'DENTIST');
+    await userEvent.click(screen.getByRole('button', { name: 'Aceptar en parte' }));
+    expect(await screen.findByRole('dialog', { name: 'Aceptar en parte' })).toBeInTheDocument();
+  });
+});

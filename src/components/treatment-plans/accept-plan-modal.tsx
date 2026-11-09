@@ -88,11 +88,11 @@ export const acceptPlanCopy = {
 };
 
 /** 409: la sede de la presentación no tiene zona horaria válida (ninguna forma de aceptar sirve). */
-const LOCATION_TIMEZONE_REQUIRED = 'LOCATION_TIMEZONE_REQUIRED';
+export const LOCATION_TIMEZONE_REQUIRED = 'LOCATION_TIMEZONE_REQUIRED';
 
 const copy = acceptPlanCopy;
 
-type ExpiredMode = 'REPRICE' | 'ORIGINAL_PRICES';
+export type ExpiredMode = 'REPRICE' | 'ORIGINAL_PRICES';
 type Step = 'choose' | 'sign';
 
 interface RepriceLoadError {
@@ -101,7 +101,7 @@ interface RepriceLoadError {
 }
 
 /** Un error del que no se sale reintentando lo mismo (el plan no admite recotizarse). */
-function isFinalClientError(err: unknown): boolean {
+export function isFinalClientError(err: unknown): boolean {
   return err instanceof ApiError && err.status >= 400 && err.status < 500 && err.status !== 408 && err.status !== 429;
 }
 
@@ -577,7 +577,8 @@ export function AcceptPlanModal({
   );
 }
 
-function QuoteSummary({
+/** DX-417: también lo usa «Aceptar en parte» (lo aceptado, antes de firmar). */
+export function QuoteSummary({
   quote,
   fmt,
   label,
@@ -633,7 +634,7 @@ function QuoteSummary({
   );
 }
 
-function SignFields({
+export function SignFields({
   signerName,
   onSignerNameChange,
   signatureKey,
@@ -672,7 +673,7 @@ function SignFields({
   );
 }
 
-function ExpiredChoice({
+export function ExpiredChoice({
   quote,
   fmt,
   repriceOffered,

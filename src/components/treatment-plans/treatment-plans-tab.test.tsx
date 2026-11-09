@@ -1,9 +1,11 @@
 import { moneyInputCopy } from '@/lib/format/money';
 import { regionalFormat } from '@/lib/format/regional-format';
 import { moneyWithCode } from '@/lib/format/sede-number';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TreatmentPlansTab } from './treatment-plans-tab';
+import { acceptPlan, getPlanQuote, previewPartialAcceptance } from '@/lib/treatment-plans/plan-quote-api';
+import { planQuoteFixture, SIGNED_ACCEPTANCE } from './plan-quote-fixture';
 import { ApiError } from '@/lib/api/client';
 import { Toaster } from '@/components/errors/toaster';
 import {
@@ -57,6 +59,16 @@ jest.mock('../../lib/treatment-plans/plan-visits-api', () => ({
   getPlanVisits: jest.fn().mockResolvedValue({planId:'plan-1',items:[],visitIntervals:{},visits:[]}),
   updatePlanVisits: jest.fn(),
 }));
+// DX-417 (ronda 1, M-8): la aceptación parcial desde la ficha; por defecto, lo de verdad.
+jest.mock('../../lib/treatment-plans/plan-quote-api', () => {
+  const actual = jest.requireActual('../../lib/treatment-plans/plan-quote-api');
+  return {
+    ...actual,
+    getPlanQuote: jest.fn(actual.getPlanQuote),
+    previewPartialAcceptance: jest.fn(actual.previewPartialAcceptance),
+    acceptPlan: jest.fn(actual.acceptPlan),
+  };
+});
 jest.mock('../../lib/treatment-plans/treatment-plans-api', () => ({
   createPlan: jest.fn(),
   listPlans: jest.fn(),
@@ -1370,6 +1382,212 @@ describe('TreatmentPlansTab', () => {
 
   // Error-states ladder (Task 8): each `text-danger-text` site classified by what
   // the user can still do — see task-8-report.md for the full table.
+  describe('DX-417: aceptación parcial en la cabecera del plan', () => {
+    const original = plan({
+      id: 'plan-1',
+      status: 'ACCEPTED',
+      acceptedAt: '2026-10-20T15:00:00.000Z',
+      partialPendingPlanId: 'plan-2',
+    });
+    const pending = plan({
+      id: 'plan-2',
+      status: 'PRESENTED',
+      createdAt: '2026-10-20T15:00:00.000Z',
+      splitFromPlanId: 'plan-1',
+    });
+    const day = SEDE_FMT.civilDate('2026-10-20');
+
+    beforeEach(() => {
+      mockedListPlans.mockResolvedValue([original, pending]);
+      mockedGetPlan.mockImplementation(async (_t, id) =>
+        id === 'plan-2' ? { ...pending, items: [item1], total: item1.price } : { ...original, items: [item2], total: item2.price },
+      );
+    });
+
+    it('el original: chip «Aceptado parcialmente» y el enlace al pendiente, que lo selecciona', async () => {
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      const line = await screen.findByTestId('tp-plan-status-line');
+      await waitFor(() => expect(within(line).getByText('Aceptado parcialmente')).toBeInTheDocument());
+      expect(within(line).getByText('Aceptado parcialmente').closest('[data-status]')).toHaveAttribute(
+        'data-status',
+        'PARTIAL',
+      );
+      const link = await screen.findByRole('button', { name: /Lo no aceptado está en el presupuesto pendiente del/ });
+      await waitFor(() => expect(link).toHaveTextContent(`Lo no aceptado está en el presupuesto pendiente del ${day}`));
+      await user.click(link);
+      await waitFor(() => expect(screen.getByLabelText('Plan')).toHaveValue('plan-2'));
+      const pendingLine = await screen.findByTestId('tp-plan-status-line');
+      await waitFor(() => expect(within(pendingLine).getByText('Pendiente de aceptación parcial')).toBeInTheDocument());
+      expect(mockedGetPlan).toHaveBeenLastCalledWith(tok, 'plan-2');
+    });
+
+    it('el pendiente: chip propio, «Resto del plan aceptado el …» al original y el sufijo «· pendiente» en el selector', async () => {
+      const user = userEvent.setup();
+      mockedListPlans.mockResolvedValue([pending, original]);
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      const select = await screen.findByLabelText('Plan');
+      const options = within(select).getAllByRole('option');
+      expect(options[0].textContent).toMatch(/· pendiente$/);
+      expect(options[1].textContent).not.toMatch(/pendiente/);
+      const line = await screen.findByTestId('tp-plan-status-line');
+      expect(within(line).getByText('Pendiente de aceptación parcial')).toBeInTheDocument();
+      const back = await screen.findByRole('button', { name: /Resto del plan aceptado el/ });
+      await waitFor(() => expect(back).toHaveTextContent(`Resto del plan aceptado el ${day}`));
+      await user.click(back);
+      await waitFor(() => expect(select).toHaveValue('plan-1'));
+    });
+
+    it('un plan sin partir no lleva chip ni enlace', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      await screen.findByTestId('tp-plan-status-line');
+      expect(screen.queryByText('Aceptado parcialmente')).not.toBeInTheDocument();
+      expect(screen.queryByText(/presupuesto pendiente del/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('DX-417 ronda 1: el pendiente ya respondido, la segunda partición y el éxito', () => {
+    const day = SEDE_FMT.civilDate('2026-10-20');
+    const original = plan({
+      id: 'plan-1',
+      status: 'ACCEPTED',
+      acceptedAt: '2026-10-20T15:00:00.000Z',
+      partialPendingPlanId: 'plan-2',
+    });
+
+    it('I-1: un pendiente ya aceptado lleva el chip normal, sin «pendiente», y conserva el enlace al original', async () => {
+      const accepted = plan({
+        id: 'plan-2',
+        status: 'ACCEPTED',
+        createdAt: '2026-10-20T15:00:00.000Z',
+        splitFromPlanId: 'plan-1',
+        acceptedAt: '2026-10-27T15:00:00.000Z',
+        acceptance: { signerName: 'Ana', acceptedAt: '2026-10-27T15:00:00.000Z', remote: null },
+      });
+      mockedListPlans.mockResolvedValue([accepted, original]);
+      mockedGetPlan.mockImplementation(async (_t, id) =>
+        id === 'plan-2' ? { ...accepted, items: [item2], total: item2.price } : { ...original, items: [item2], total: item2.price },
+      );
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      const select = await screen.findByLabelText('Plan');
+      expect(within(select).getAllByRole('option')[0].textContent).not.toMatch(/pendiente/);
+      const line = await screen.findByTestId('tp-plan-status-line');
+      expect(within(line).getByText('Aceptado')).toBeInTheDocument();
+      expect(within(line).queryByText('Pendiente de aceptación parcial')).not.toBeInTheDocument();
+      const back = await screen.findByRole('button', { name: /Resto del plan aceptado el/ });
+      await waitFor(() => expect(back).toHaveTextContent(`Resto del plan aceptado el ${day}`));
+    });
+
+    it('M-5: un pendiente aceptado otra vez en parte enlaza a su original y a su nuevo pendiente', async () => {
+      const middle = plan({
+        id: 'plan-2',
+        status: 'ACCEPTED',
+        createdAt: '2026-10-20T15:00:00.000Z',
+        splitFromPlanId: 'plan-1',
+        partialPendingPlanId: 'plan-3',
+        acceptedAt: '2026-10-27T15:00:00.000Z',
+      });
+      const last = plan({ id: 'plan-3', status: 'PRESENTED', createdAt: '2026-10-27T15:00:00.000Z', splitFromPlanId: 'plan-2' });
+      mockedListPlans.mockResolvedValue([middle, original, last]);
+      mockedGetPlan.mockImplementation(async (_t, id) => ({
+        ...[middle, original, last].find((p) => p.id === id)!,
+        items: [item2],
+        total: item2.price,
+      }));
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      const line = await screen.findByTestId('tp-plan-status-line');
+      expect(within(line).getByText('Aceptado parcialmente')).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: /Resto del plan aceptado el/ })).toBeInTheDocument();
+      const forward = screen.getByRole('button', { name: /Lo no aceptado está en el presupuesto pendiente del/ });
+      await waitFor(() =>
+        expect(forward).toHaveTextContent(`Lo no aceptado está en el presupuesto pendiente del ${SEDE_FMT.civilDate('2026-10-27')}`),
+      );
+      await user.click(forward);
+      await waitFor(() => expect(screen.getByLabelText('Plan')).toHaveValue('plan-3'));
+    });
+
+    describe('M-8: aceptar en parte desde la ficha', () => {
+      beforeAll(() => {
+        jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
+          () =>
+            ({
+              setTransform: jest.fn(),
+              clearRect: jest.fn(),
+              beginPath: jest.fn(),
+              moveTo: jest.fn(),
+              lineTo: jest.fn(),
+              stroke: jest.fn(),
+            }) as unknown as CanvasRenderingContext2D,
+        );
+        jest.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockImplementation(() => 'data:image/png;base64,FIRMA');
+      });
+      afterAll(() => jest.restoreAllMocks());
+      afterEach(() => {
+        const actual = jest.requireActual('../../lib/treatment-plans/plan-quote-api');
+        jest.mocked(getPlanQuote).mockImplementation(actual.getPlanQuote);
+        jest.mocked(previewPartialAcceptance).mockImplementation(actual.previewPartialAcceptance);
+        jest.mocked(acceptPlan).mockImplementation(actual.acceptPlan);
+      });
+
+      it('aviso de éxito con «Ver el pendiente», el original seleccionado y lista y detalle al día', async () => {
+        const user = userEvent.setup();
+        const presented = plan({ id: 'plan-1', status: 'PRESENTED', presentedAt: '2026-10-01T15:00:00.000Z' });
+        const proposed2 = { ...item2, status: 'PROPOSED' as const };
+        const pending = plan({ id: 'plan-2', status: 'PRESENTED', createdAt: '2026-10-20T15:00:00.000Z', splitFromPlanId: 'plan-1' });
+        mockedListPlans.mockResolvedValueOnce([presented]).mockResolvedValue([original, pending]);
+        mockedGetPlan.mockImplementation(async (_t, id) => {
+          const listed = await mockedListPlans.mock.results.at(-1)!.value;
+          const p = (listed as typeof original[]).find((x) => x.id === id) ?? presented;
+          return { ...p, items: p.id === 'plan-2' ? [proposed2] : [item1, proposed2], total: 0 };
+        });
+        const quote = planQuoteFixture({ planStatus: 'PRESENTED', currency: 'USD' });
+        jest.mocked(getPlanQuote).mockResolvedValue(quote);
+        jest.mocked(previewPartialAcceptance).mockResolvedValue({
+          accepted: planQuoteFixture({ currency: 'USD', items: [quote.items[0]], contentHash: 'h-i1' }),
+          pending: { items: [quote.items[1]], totals: [{ currency: 'USD', gross: 1, discount: 0, net: 1, agreementSaving: 0 }] },
+          original: { totals: [{ currency: 'USD', gross: 2, discount: 0, net: 2, agreementSaving: 0 }] },
+          repricing: null,
+        });
+        jest.mocked(acceptPlan).mockResolvedValue(
+          planQuoteFixture({
+            planStatus: 'ACCEPTED',
+            acceptance: { ...SIGNED_ACCEPTANCE, pendingPlanId: 'plan-2', pendingItemIds: ['item-2'], pendingTotal: 1 },
+          }),
+        );
+        render(
+          <>
+            <TreatmentPlansTab patientId="pat-1" token={discountDentistToken} />
+            <Toaster />
+          </>,
+        );
+        await user.click(await screen.findByRole('button', { name: 'Aceptar en parte' }));
+        const dialog = await screen.findByRole('dialog', { name: 'Aceptar en parte' });
+        await user.click(await within(dialog).findByLabelText('Aceptar Implante'));
+        await within(dialog).findByRole('region', { name: 'Totales de la aceptación parcial' });
+        await user.click(within(dialog).getByRole('button', { name: 'Continuar' }));
+        const canvas = await within(dialog).findByRole('img', { name: 'Firma del paciente' });
+        fireEvent.pointerDown(canvas, { clientX: 5, clientY: 5, pointerId: 1 });
+        fireEvent.pointerMove(canvas, { clientX: 50, clientY: 30, pointerId: 1 });
+        fireEvent.pointerUp(canvas, { pointerId: 1 });
+        const detailCalls = mockedGetPlan.mock.calls.length;
+        const listCalls = mockedListPlans.mock.calls.length;
+        await user.click(within(dialog).getByRole('button', { name: 'Aceptar en parte y firmar' }));
+
+        expect(await screen.findByText('Presupuesto aceptado en parte')).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByLabelText('Plan')).toHaveValue('plan-1'));
+        await waitFor(() => expect(within(screen.getByLabelText('Plan')).getAllByRole('option')).toHaveLength(2));
+        // Detalle y lista al día (el saldo, solo con un rol que cobra: el odontólogo no lo ve).
+        expect(mockedListPlans.mock.calls.length).toBeGreaterThan(listCalls);
+        expect(mockedGetPlan.mock.calls.length).toBeGreaterThan(detailCalls);
+        await user.click(screen.getByRole('button', { name: 'Ver el pendiente' }));
+        await waitFor(() => expect(screen.getByLabelText('Plan')).toHaveValue('plan-2'));
+      });
+    });
+  });
+
   describe('DX-379: la validez del presupuesto en la cabecera del plan', () => {
     // Un borrador impreso también tiene validez; el panel de opciones solo la
     // repite en un plan presentado, así que aquí sale una sola vez.

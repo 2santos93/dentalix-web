@@ -72,4 +72,12 @@ describe('vocabulario de estados (tones.ts)', () => {
     expect(statusTones('priceChange')).toEqual({ UP: 'warning', DOWN: 'success', SAME: 'neutral' });
     expect(statusLabels('priceChange')).toEqual({ UP: 'Sube', DOWN: 'Baja', SAME: 'Sin cambio' });
   });
+
+  it('DX-417: el aceptado en parte es info (como Aceptado) y su pendiente espera respuesta (warning)', () => {
+    expect(statusTones('planSplit')).toEqual({ PARTIAL: 'info', PENDING_REST: 'warning' });
+    expect(statusLabels('planSplit')).toEqual({
+      PARTIAL: 'Aceptado parcialmente',
+      PENDING_REST: 'Pendiente de aceptación parcial',
+    });
+  });
 });

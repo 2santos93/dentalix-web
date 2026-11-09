@@ -61,8 +61,16 @@ export const copy = {
     number: number,
     optionLabel: string | null | undefined,
     stamp: Pick<SedePainters, 'dateTime'>,
+    // DX-417: el presupuesto pendiente de una aceptación parcial (no tiene etiqueta de opción).
+    pendingRest = false,
   ) =>
-    `Plan ${number} · ${stamp.dateTime(createdAt)} — ${PLAN_STATUS_LABELS[status]}${optionLabel ? ` · ${optionLabel}` : ''}`,
+    `Plan ${number} · ${stamp.dateTime(createdAt)} — ${PLAN_STATUS_LABELS[status]}${optionLabel ? ` · ${optionLabel}` : ''}${pendingRest ? ' · pendiente' : ''}`,
+  // DX-417: los enlaces entre el plan aceptado en parte y su presupuesto pendiente.
+  partialPendingLink: (date: string) => `Lo no aceptado está en el presupuesto pendiente del ${date}`,
+  partialRestLink: (date: string) => `Resto del plan aceptado el ${date}`,
+  partiallyAccepted: 'Presupuesto aceptado en parte',
+  viewPendingPlan: 'Ver el pendiente',
+  partiallyAcceptedHint: 'Lo no aceptado quedó en un presupuesto pendiente, enlazado desde este plan.',
   detailHeading: 'Detalle del plan',
   planStatusLabel: 'Estado del plan',
   // DX-379 (C): un presupuesto vencido no pasa a «Aceptado» desde el selector (la API: 409 QUOTE_EXPIRED).

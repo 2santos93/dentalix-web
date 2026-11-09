@@ -514,3 +514,40 @@ describe('DX-354: el formato de la sede del presupuesto', () => {
     );
   });
 });
+
+describe('DX-417: aceptación parcial en el documento (fuera del hash)', () => {
+  it('el aceptado en parte dice cuántos procedimientos y por cuánto quedan en el pendiente', () => {
+    render(
+      <PlanQuoteDocument
+        format={FORMAT_ES}
+        quote={planQuoteFixture({
+          planStatus: 'ACCEPTED',
+          acceptance: { ...SIGNED_ACCEPTANCE, pendingPlanId: 'plan-2', pendingItemIds: ['i3', 'i4'], pendingTotal: 150000 },
+        })}
+      />,
+    );
+    expect(text(screen.getByTestId('quote-partial-acceptance'))).toBe(
+      'Aceptación parcial: 2 procedimientos (150.000,00 VES) quedan en un presupuesto pendiente.',
+    );
+    // Va en la aceptación, no entre lo firmado (procedimientos, totales, huella).
+    expect(within(screen.getByTestId('quote-signature')).getByTestId('quote-partial-acceptance')).toBeInTheDocument();
+  });
+
+  it('aceptado entero: sin línea', () => {
+    render(<PlanQuoteDocument format={FORMAT_ES} quote={planQuoteFixture({ planStatus: 'ACCEPTED', acceptance: SIGNED_ACCEPTANCE })} />);
+    expect(screen.queryByTestId('quote-partial-acceptance')).not.toBeInTheDocument();
+  });
+
+  it('el pendiente: «Resto de la aceptación parcial del …» con el día de la sede', () => {
+    // 02:00 UTC del 21 es todavía el 20 en Caracas.
+    render(
+      <PlanQuoteDocument
+        format={documentFormat(REGIONAL_VE)}
+        quote={planQuoteFixture({ planStatus: 'PRESENTED' })}
+        partialRestOf="2026-10-21T02:00:00.000Z"
+      />,
+    );
+    expect(screen.getByTestId('quote-partial-rest')).toHaveTextContent('Resto de la aceptación parcial del 20/10/2026');
+  });
+});
+

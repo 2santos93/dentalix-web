@@ -263,9 +263,16 @@ const TREATMENT_PLAN_ACCEPTANCE_REASONS: Record<string, string> = {
   QUOTE_EXPIRED_ORIGINAL_PRICES: 'Presupuesto vencido aceptado con los precios originales',
   QUOTE_EXPIRED_REPRICED: 'Presupuesto vencido aceptado con los precios actualizados',
   ACCEPT_REPRICE_PREVIEW: 'Vista previa de los precios actualizados para aceptar',
+  // DX-417: aceptación parcial (la firma, su vista previa y el alta del pendiente).
+  PLAN_PARTIALLY_ACCEPTED: 'Presupuesto aceptado en parte',
+  ACCEPT_PARTIAL_PREVIEW: 'Vista previa de la aceptación parcial',
+  PLAN_SPLIT_PENDING: 'Presupuesto pendiente creado por una aceptación parcial',
 };
 
-/** DX-379 (C): cómo se aceptó un presupuesto vencido (o su vista previa), o null si no es de ello. */
+/**
+ * DX-379 (C): cómo se aceptó un presupuesto vencido (o su vista previa); DX-417:
+ * la aceptación parcial. null si no es de ello.
+ */
 export function treatmentPlanAcceptanceDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && TREATMENT_PLAN_ACCEPTANCE_REASONS[metadata.reason]) ?? null;
 }
