@@ -65,6 +65,8 @@ export const copy = {
     `Plan ${number} · ${stamp.dateTime(createdAt)} — ${PLAN_STATUS_LABELS[status]}${optionLabel ? ` · ${optionLabel}` : ''}`,
   detailHeading: 'Detalle del plan',
   planStatusLabel: 'Estado del plan',
+  // DX-379 (C): un presupuesto vencido no pasa a «Aceptado» desde el selector (la API: 409 QUOTE_EXPIRED).
+  planStatusExpiredHint: 'Vencido: acéptalo con firma para elegir cómo.',
   loadingPlanDetail: 'Cargando plan…',
   // No «Intenta de nuevo.» — `SectionError` has its own retry button.
   genericPlanDetailError: 'No pudimos cargar el plan.',
