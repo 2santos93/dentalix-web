@@ -102,6 +102,45 @@ function psql(sql: string): void {
   execFileSync('psql', [process.env.E2E_DATABASE_URL as string, '-v', 'ON_ERROR_STOP=1', '-c', sql]);
 }
 
+/** Un valor escalar de la BD: sin cabecera, sin alinear y sin la etiqueta «UPDATE 1» (-q). */
+function psqlValue(sql: string): string {
+  return execFileSync('psql', [process.env.E2E_DATABASE_URL as string, '-v', 'ON_ERROR_STOP=1', '-qtAc', sql], {
+    encoding: 'utf8',
+  }).trim();
+}
+
+/**
+ * DX-541: el barrido de la API (`locations.regional-backfill`, cron cada 5 min)
+ * rellena el reloj NULL que pone la prueba de la sede sin reloj. Si caía entre
+ * el UPDATE y la carga (CI del 2026-11-06: UPDATE a las 02:49:58, barrido a las
+ * 02:50:01 con `hourCycleFilled: 1`), el aviso no salía. Mientras dura esa
+ * prueba se aplaza su programación y se espera a que termine la pasada que ya
+ * estuviera encolada o en curso; `resumeRegionalBackfill` la deja como estaba.
+ */
+const REGIONAL_BACKFILL_JOB = 'locations.regional-backfill';
+const REGIONAL_BACKFILL_SCHEDULE = 'locations.regional-backfill.every-5-min';
+
+async function pauseRegionalBackfill(): Promise<string> {
+  const nextRunAt = psqlValue(
+    `UPDATE job_schedules s SET "nextRunAt" = timezone('utc', now()) + interval '1 hour'
+       FROM (SELECT "nextRunAt" FROM job_schedules WHERE name = '${REGIONAL_BACKFILL_SCHEDULE}' FOR UPDATE) old
+      WHERE s.name = '${REGIONAL_BACKFILL_SCHEDULE}'
+      RETURNING old."nextRunAt"`,
+  );
+  expect(nextRunAt, 'la API registró la programación del barrido regional').not.toBe('');
+  await expect
+    .poll(
+      () => psqlValue(`SELECT count(*) FROM jobs WHERE name = '${REGIONAL_BACKFILL_JOB}' AND state IN ('PENDING', 'RUNNING')`),
+      { message: 'ninguna pasada del barrido regional pendiente ni en curso', timeout: 30_000 },
+    )
+    .toBe('0');
+  return nextRunAt;
+}
+
+function resumeRegionalBackfill(nextRunAt: string): void {
+  psql(`UPDATE job_schedules SET "nextRunAt" = '${nextRunAt}' WHERE name = '${REGIONAL_BACKFILL_SCHEDULE}'`);
+}
+
 /** Las llamadas de la sesión en una sede (`X-Location-Id`). */
 function at(sede: 'A' | 'B'): ApiSession {
   return { ...session, headers: { ...session.headers, 'X-Location-Id': ids[sede] } };
@@ -506,43 +545,49 @@ test('una sede con el reloj en NULL: el aviso de formato de sede en la importaci
   page,
 }) => {
   test.skip(!process.env.E2E_DATABASE_URL, DB_SKIP);
-  test.setTimeout(90_000);
-  for (const viewport of VIEWPORTS) {
-    await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    // Fixture por la BD: la sede de una réplica anterior a G1-B, aún sin barrer.
-    // El barrido (cada 5 min) la rellenaría: se pone justo antes de mirarla.
-    psql(`UPDATE locations SET "hourCycle" = NULL WHERE id = '${ids.C}'`);
-    await loginAt(page, 'C');
-    // La web no tiene el reloj de la sede: SedeConfigError kind="locale" (nota
-    // sobre la pantalla, que sigue sirviendo), con «Configurar sede» para ADMIN.
-    await page.goto(`${origin}/settings/importar-pacientes`);
-    const main = page.getByRole('main');
-    await expect(main.getByRole('status').filter({ hasText: 'No se pudo saber el formato regional o el reloj de la sede.' })).toContainText(
-      'No se pudo saber el formato regional o el reloj de la sede. Vuelve a intentarlo o revisa la sede en Ajustes → Sedes.',
-      { timeout: 15_000 },
-    );
-    // «Configurar sede» abre esa sede, no la lista.
-    await expect(main.getByRole('link', { name: 'Configurar sede' })).toHaveAttribute(
-      'href',
-      `/settings/sedes?sede=${encodeURIComponent(ids.C)}`,
-    );
-    if (viewport.width === 390) await expectNoHorizontalScroll(page);
-    await shoot(page, 'sede-sin-reloj-importacion', viewport.width);
-    // El panel pide sus horas a la API, que responde 409 LOCATION_LOCALE_REQUIRED:
-    // SedeConfigError en su variante de sección, con el texto de la API y la sede.
-    const panel = await openInClinic(page);
-    const sectionError = panel.getByRole('alert');
-    await expect(sectionError).toContainText('Falta un dato de la sede', { timeout: 15_000 });
-    await expect(sectionError).toContainText('Configura el formato regional y el reloj de la sede y vuelve a intentarlo.');
-    await expect(sectionError).not.toContainText('No se pudo cargar');
-    await expect(sectionError.getByRole('link', { name: 'Configurar sede' })).toHaveAttribute(
-      'href',
-      `/settings/sedes?sede=${encodeURIComponent(ids.C)}`,
-    );
-    await expect(panel.locator('[data-appointment-id]')).toHaveCount(0);
-    if (viewport.width === 390) await expectNoHorizontalScroll(page);
-    await shoot(page, 'sede-sin-reloj-panel', viewport.width);
+  test.setTimeout(120_000);
+  // DX-541: sin el barrido de por medio; ver pauseRegionalBackfill.
+  const backfillNextRunAt = await pauseRegionalBackfill();
+  try {
+    for (const viewport of VIEWPORTS) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      // Fixture por la BD: la sede de una réplica anterior a G1-B, aún sin barrer
+      // (el barrido está aplazado mientras dure la prueba).
+      psql(`UPDATE locations SET "hourCycle" = NULL WHERE id = '${ids.C}'`);
+      await loginAt(page, 'C');
+      // La web no tiene el reloj de la sede: SedeConfigError kind="locale" (nota
+      // sobre la pantalla, que sigue sirviendo), con «Configurar sede» para ADMIN.
+      await page.goto(`${origin}/settings/importar-pacientes`);
+      const main = page.getByRole('main');
+      await expect(main.getByRole('status').filter({ hasText: 'No se pudo saber el formato regional o el reloj de la sede.' })).toContainText(
+        'No se pudo saber el formato regional o el reloj de la sede. Vuelve a intentarlo o revisa la sede en Ajustes → Sedes.',
+        { timeout: 15_000 },
+      );
+      // «Configurar sede» abre esa sede, no la lista.
+      await expect(main.getByRole('link', { name: 'Configurar sede' })).toHaveAttribute(
+        'href',
+        `/settings/sedes?sede=${encodeURIComponent(ids.C)}`,
+      );
+      if (viewport.width === 390) await expectNoHorizontalScroll(page);
+      await shoot(page, 'sede-sin-reloj-importacion', viewport.width);
+      // El panel pide sus horas a la API, que responde 409 LOCATION_LOCALE_REQUIRED:
+      // SedeConfigError en su variante de sección, con el texto de la API y la sede.
+      const panel = await openInClinic(page);
+      const sectionError = panel.getByRole('alert');
+      await expect(sectionError).toContainText('Falta un dato de la sede', { timeout: 15_000 });
+      await expect(sectionError).toContainText('Configura el formato regional y el reloj de la sede y vuelve a intentarlo.');
+      await expect(sectionError).not.toContainText('No se pudo cargar');
+      await expect(sectionError.getByRole('link', { name: 'Configurar sede' })).toHaveAttribute(
+        'href',
+        `/settings/sedes?sede=${encodeURIComponent(ids.C)}`,
+      );
+      await expect(panel.locator('[data-appointment-id]')).toHaveCount(0);
+      if (viewport.width === 390) await expectNoHorizontalScroll(page);
+      await shoot(page, 'sede-sin-reloj-panel', viewport.width);
+    }
+  } finally {
+    // La deja como el barrido, también si falla: el resto de la suite no espera al job.
+    psql(`UPDATE locations SET "hourCycle" = 'h23' WHERE id = '${ids.C}' AND "hourCycle" IS NULL`);
+    resumeRegionalBackfill(backfillNextRunAt);
   }
-  // La deja como el barrido: no hay que esperar al job para el resto de la suite.
-  psql(`UPDATE locations SET "hourCycle" = 'h23' WHERE id = '${ids.C}' AND "hourCycle" IS NULL`);
 });
