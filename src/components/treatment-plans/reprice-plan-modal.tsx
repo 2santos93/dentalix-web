@@ -11,10 +11,10 @@ import { statusLabel, statusTone, TONE_CLASSES } from '@/lib/status/tones';
 import type { TreatmentPlan, TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
 import {
   applyRepricing,
-  hasSomethingToApply,
   IDEMPOTENCY_KEY_REUSED,
   previewRepricing,
   REPRICE_PREVIEW_STALE,
+  repricingOutcome,
   type AppliedRepricing,
   type RepricingLine,
   type RepricingPreview,
@@ -66,7 +66,13 @@ export const repricePlanCopy = {
   retry: 'Reintentar',
   hintEmpty: 'Elige al menos un procedimiento.',
   hintNoLines: 'Ningún procedimiento propuesto tiene precio vigente: no hay nada que actualizar.',
-  hintUpToDate: 'Los precios ya están al día: no hay nada que actualizar.',
+  hintNothing: 'No hay precios que actualizar.',
+  hintPartialExpired:
+    'Los precios elegidos no cambian y una selección parcial no renueva la validez: marca todos los procedimientos para renovarla.',
+  hintRenew: (date: string) => `Los precios no cambian: al confirmar se renueva la validez hasta el ${date}.`,
+  submitRenew: 'Renovar la validez con los precios vigentes',
+  successRenewed: 'Validez renovada',
+  stillExpired: 'El presupuesto sigue vencido.',
   confirmLabel: 'Resumen de la actualización',
   confirmCount: (n: number) => (n === 1 ? '1 procedimiento' : `${n} procedimientos`),
   confirmItems: 'Procedimientos',
@@ -109,6 +115,13 @@ interface LoadError {
   retryable: boolean;
 }
 
+/**
+ * I-1: tras «Continuar», el submit del paso 2 no responde hasta pasado este
+ * tiempo. Es el MISMO botón del pie: sin la espera, un doble clic o un doble
+ * Enter en «Continuar» aplicaría sin haber visto la confirmación.
+ */
+export const REPRICE_CONFIRM_ARM_MS = 400;
+
 interface RepricePlanModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -130,7 +143,8 @@ interface RepricePlanModalProps {
  * compara cada ítem propuesto con su precio vigente (y dice cuáles no se tocan
  * y por qué); las casillas eligen cuáles se actualizan y cada cambio vuelve a
  * pedir la vista previa con esos `itemIds`. Confirmar aplica con la huella de
- * la vista previa y una Idempotency-Key por apertura del modal.
+ * la vista previa y una Idempotency-Key por apertura del modal. Un plan
+ * vencido sin cambios de precio se puede confirmar para renovar su validez.
  */
 export function RepricePlanModal({
   open,
@@ -144,15 +158,24 @@ export function RepricePlanModal({
   onRepriced,
 }: RepricePlanModalProps) {
   const [step, setStep] = useState<0 | 1>(0);
+  // I-1: el submit del paso 2 solo responde tras pintar la confirmación y una pausa.
+  const [armed, setArmed] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState(newIdempotencyKey);
   // Ya se mandó un «aplicar» con esta clave: volver atrás estrena otra.
   const attemptedRef = useRef(false);
+  // M-2: cada apertura tiene su número; lo que llegue de una apertura anterior no pinta nada.
+  const openSeqRef = useRef(0);
+  // M-3: renovar la sesión no recalcula la vista previa en mitad del asistente.
+  const tokenRef = useRef(token);
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
   const [base, setBase] = useState<RepricingPreview | null>(null);
   const [current, setCurrent] = useState<{ key: string; preview: RepricingPreview } | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string> | null>(null);
   const [loadError, setLoadError] = useState<LoadError | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<LoadError | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -161,13 +184,14 @@ export function RepricePlanModal({
   const [stale, setStale] = useState(false);
 
   const locationId = plan.presentedLocationId;
+  const expired = plan.quoteExpired;
   const itemsById = useMemo(() => new Map((plan.items ?? []).map((item) => [item.id, item])), [plan.items]);
 
   // La vista previa entera (sin `itemIds`): la lista de líneas de las casillas.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    previewRepricing(token, patientId, plan.id)
+    previewRepricing(tokenRef.current, patientId, plan.id)
       .then((res) => {
         if (cancelled) return;
         setBase(res);
@@ -189,7 +213,7 @@ export function RepricePlanModal({
     return () => {
       cancelled = true;
     };
-  }, [open, token, patientId, plan.id, reloadKey]);
+  }, [open, patientId, plan.id, reloadKey]);
 
   const selectionKey = base && selected ? selectionKeyOf(selected, base.lines) : null;
 
@@ -199,14 +223,18 @@ export function RepricePlanModal({
     if (selected.size === 0 || current?.key === selectionKey) return;
     let cancelled = false;
     const timer = setTimeout(() => {
-      previewRepricing(token, patientId, plan.id, selectionKey === ALL ? undefined : [...selected].sort())
+      previewRepricing(tokenRef.current, patientId, plan.id, selectionKey === ALL ? undefined : [...selected].sort())
         .then((res) => {
           if (cancelled) return;
           setCurrent({ key: selectionKey, preview: res });
           setRefreshError(null);
         })
         .catch((err: unknown) => {
-          if (!cancelled) setRefreshError(apiErrorMessage(err, repricePlanCopy.loadError));
+          if (cancelled) return;
+          setRefreshError({
+            message: apiErrorMessage(err, repricePlanCopy.loadError),
+            retryable: !isFinalClientError(err),
+          });
         });
     }, REPRICE_SELECTION_DEBOUNCE_MS);
     return () => {
@@ -215,9 +243,20 @@ export function RepricePlanModal({
     };
     // `current` y `selected` se leen al dispararse; la clave de selección decide cuándo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, base, selectionKey, refreshKey, token, patientId, plan.id]);
+  }, [open, base, selectionKey, refreshKey, patientId, plan.id]);
+
+  // I-1: el paso 2 se arma tras pintarse y una pausa (el segundo clic de un doble clic no aplica).
+  useEffect(() => {
+    if (step !== 1) return;
+    const timer = setTimeout(() => setArmed(true), REPRICE_CONFIRM_ARM_MS);
+    return () => {
+      clearTimeout(timer);
+      setArmed(false);
+    };
+  }, [step]);
 
   function reset() {
+    openSeqRef.current += 1;
     setStep(0);
     setIdempotencyKey(newIdempotencyKey());
     attemptedRef.current = false;
@@ -232,12 +271,14 @@ export function RepricePlanModal({
   }
 
   function handleOpenChange(next: boolean) {
+    // M-2: mientras se aplica no se cierra (ni X, ni Escape, ni el fondo).
+    if (!next && submitting) return;
     // Cada apertura empieza en limpio, con su propia clave.
     if (!next) reset();
     onOpenChange(next);
   }
 
-  /** Vuelve al paso 1 con una vista previa nueva (y una clave nueva si ya se intentó aplicar). */
+  /** Vuelve al paso 1 (con una vista previa nueva si `reload`; con otra clave si ya se intentó aplicar). */
   function backToPreview({ reload }: { reload: boolean }) {
     if (attemptedRef.current) {
       setIdempotencyKey(newIdempotencyKey());
@@ -254,31 +295,43 @@ export function RepricePlanModal({
     }
   }
 
+  function retryRefresh() {
+    setRefreshError(null);
+    setRefreshKey((k) => k + 1);
+  }
+
   const fresh = current && current.key === selectionKey ? current.preview : null;
   const refreshing = base !== null && selected !== null && selected.size > 0 && fresh === null && !refreshError;
-  const ready = fresh !== null && selected !== null && selected.size > 0 && hasSomethingToApply(fresh);
+  const outcome = fresh ? repricingOutcome(fresh, { expired }) : null;
+  const ready = fresh !== null && selected !== null && selected.size > 0 && outcome !== null && outcome !== 'nothing';
 
   let hint: string | null = null;
   if (base && selected) {
     if (base.lines.length === 0) hint = repricePlanCopy.hintNoLines;
     else if (selected.size === 0) hint = repricePlanCopy.hintEmpty;
     else if (refreshing) hint = repricePlanCopy.refreshing;
-    else if (fresh && !hasSomethingToApply(fresh)) hint = repricePlanCopy.hintUpToDate;
+    else if (fresh && outcome === 'nothing') {
+      hint = expired && !fresh.validityRenewed ? repricePlanCopy.hintPartialExpired : repricePlanCopy.hintNothing;
+    } else if (fresh && outcome === 'renew' && fresh.validity) {
+      hint = repricePlanCopy.hintRenew(stamp.civilDate(fresh.validity.validUntil, locationId));
+    }
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!ready || !fresh) return;
+    if (!ready || !fresh || submitting) return;
     if (step === 0) {
       setStep(1);
       return;
     }
+    if (!armed || stale || blocked) return;
+    const seq = openSeqRef.current;
     setSubmitting(true);
     setSubmitError(null);
     attemptedRef.current = true;
     try {
       const result = await applyRepricing(
-        token,
+        tokenRef.current,
         patientId,
         plan.id,
         {
@@ -288,10 +341,18 @@ export function RepricePlanModal({
         idempotencyKey,
       );
       // `replayed: true` es lo ya aplicado con esta clave: también es éxito.
-      toast.success(repricePlanCopy.success);
+      toast.success(
+        result.lines.some((line) => line.changed) ? repricePlanCopy.success : repricePlanCopy.successRenewed,
+      );
       onRepriced(result);
-      handleOpenChange(false);
+      setSubmitting(false);
+      if (seq === openSeqRef.current) {
+        reset();
+        onOpenChange(false);
+      }
+      return;
     } catch (err) {
+      if (seq !== openSeqRef.current) return;
       const message = apiErrorMessage(err, repricePlanCopy.genericError);
       if (err instanceof ApiError && err.code === IDEMPOTENCY_KEY_REUSED) {
         // La clave ya sirvió para otra petición: otra clave y otra vista previa.
@@ -304,11 +365,11 @@ export function RepricePlanModal({
       } else {
         setSubmitError(message);
         // Estado del plan, abonos, topes de descuento…: reintentar lo mismo no sirve.
+        // Un fallo de red o 5xx se reenvía con la MISMA clave (si ya se aplicó, vuelve `replayed`).
         setBlocked(isFinalClientError(err));
       }
-    } finally {
-      setSubmitting(false);
     }
+    setSubmitting(false);
   }
 
   return (
@@ -318,16 +379,20 @@ export function RepricePlanModal({
       title={repricePlanCopy.title}
       description={repricePlanCopy.description}
       onSubmit={handleSubmit}
-      submitLabel={step === 0 ? repricePlanCopy.next : repricePlanCopy.submit}
+      submitLabel={
+        step === 0 ? repricePlanCopy.next : outcome === 'renew' ? repricePlanCopy.submitRenew : repricePlanCopy.submit
+      }
       submitting={submitting}
-      submitDisabled={!ready || blocked || stale}
+      submitDisabled={!ready || blocked || stale || (step === 1 && !armed)}
       submitBusy={refreshing}
       submitHint={step === 0 && base ? hint : undefined}
       hideSubmit={loadError !== null}
-      error={submitError}
+      lockCloseWhileSubmitting
+      // I-2: el fallo de una vista previa con casillas se nombra en el modal (escalón 4) con su reintento.
+      error={submitError ?? (step === 0 ? (refreshError?.message ?? null) : null)}
       errorRetry={
-        step === 0 && refreshError
-          ? { label: repricePlanCopy.retry, onRetry: () => setRefreshKey((k) => k + 1) }
+        !submitError && step === 0 && refreshError?.retryable
+          ? { label: repricePlanCopy.retry, onRetry: retryRefresh }
           : null
       }
       size="lg"
@@ -358,8 +423,11 @@ export function RepricePlanModal({
             { key: 'confirm', label: repricePlanCopy.steps.confirm },
           ]}
           current={step}
+          disabled={submitting}
           onStepChange={(i) => {
-            if (i === 0 && step === 1) backToPreview({ reload: false });
+            if (submitting) return;
+            // M-1: tras STALE, volver por el paso también pide una vista previa nueva.
+            if (i === 0 && step === 1) backToPreview({ reload: stale });
             else if (i === 1 && ready) setStep(1);
           }}
         >
@@ -368,9 +436,11 @@ export function RepricePlanModal({
               base={base}
               preview={fresh ?? current?.preview ?? base}
               fresh={fresh !== null}
+              expired={expired}
               selected={selected}
               onToggle={(itemId, checked) => {
                 setRefreshError(null);
+                setSubmitError(null);
                 setSelected((prev) => {
                   const next = new Set(prev ?? []);
                   if (checked) next.add(itemId);
@@ -389,6 +459,7 @@ export function RepricePlanModal({
             <ConfirmStep
               preview={fresh}
               count={fresh.lines.length}
+              expired={expired}
               stamp={stamp}
               locationId={locationId}
               onBack={() => backToPreview({ reload: stale })}
@@ -425,12 +496,20 @@ function DifferenceText({ amount, money }: { amount: number; money: (value: numb
   );
 }
 
+/** El aviso de una vista previa que no renueva; en un plan vencido dice también que sigue vencido. */
+function validityNoteText(preview: RepricingPreview, expired: boolean): string | null {
+  if (!preview.validityNote) return null;
+  return expired ? `${preview.validityNote} ${repricePlanCopy.stillExpired}` : preview.validityNote;
+}
+
 function ValidityLine({
   preview,
+  expired,
   stamp,
   locationId,
 }: {
   preview: RepricingPreview;
+  expired: boolean;
   stamp: SedePainters;
   locationId: string | null;
 }) {
@@ -441,11 +520,9 @@ function ValidityLine({
       </p>
     );
   }
-  if (preview.validityNote) {
-    // Un aviso, no un error: la selección parcial es válida, solo no renueva.
-    return <Callout tone="warning">{preview.validityNote}</Callout>;
-  }
-  return null;
+  const note = validityNoteText(preview, expired);
+  // Un aviso, no un error: la selección parcial es válida, solo no renueva.
+  return note ? <Callout tone="warning">{note}</Callout> : null;
 }
 
 interface PreviewStepProps {
@@ -461,6 +538,8 @@ interface PreviewStepProps {
   planCurrency: string;
   /** La vista previa es la de la selección actual (no una anterior mientras se recalcula). */
   fresh: boolean;
+  /** El presupuesto está vencido (`quoteExpired`). */
+  expired: boolean;
 }
 
 function PreviewStep({
@@ -475,6 +554,7 @@ function PreviewStep({
   locationId,
   planCurrency,
   fresh,
+  expired,
 }: PreviewStepProps) {
   const money = (amount: number) => stamp.money(amount, preview.currency, locationId);
   // Los números de una línea elegida salen de la vista previa al día; los de una sin elegir, de la entera.
@@ -528,11 +608,17 @@ function PreviewStep({
           columns={columns}
           getRowKey={(row) => row.itemId}
           leading={(row) => (
-            <Checkbox
-              aria-label={repricePlanCopy.select(name(row))}
-              checked={selected.has(row.itemId)}
-              onChange={(e) => onToggle(row.itemId, e.target.checked)}
-            />
+            // I-4: la caja mide 20 px en táctil; la etiqueta que la envuelve da los 44 px.
+            <label
+              data-testid="reprice-line-select"
+              className="-my-2 -ml-2 flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center"
+            >
+              <Checkbox
+                aria-label={repricePlanCopy.select(name(row))}
+                checked={selected.has(row.itemId)}
+                onChange={(e) => onToggle(row.itemId, e.target.checked)}
+              />
+            </label>
           )}
         />
       ) : null}
@@ -579,7 +665,7 @@ function PreviewStep({
         </section>
       ) : null}
 
-      {fresh ? <ValidityLine preview={preview} stamp={stamp} locationId={locationId} /> : null}
+      {fresh ? <ValidityLine preview={preview} expired={expired} stamp={stamp} locationId={locationId} /> : null}
     </div>
   );
 }
@@ -592,6 +678,7 @@ function skipReasonText(skip: RepricingSkip, planCurrency: string, role: ClinicR
 function ConfirmStep({
   preview,
   count,
+  expired,
   stamp,
   locationId,
   onBack,
@@ -599,6 +686,7 @@ function ConfirmStep({
 }: {
   preview: RepricingPreview;
   count: number;
+  expired: boolean;
   stamp: SedePainters;
   locationId: string | null;
   onBack: () => void;
@@ -627,7 +715,7 @@ function ConfirmStep({
           <DescriptionItem label={repricePlanCopy.confirmValidity}>{validity}</DescriptionItem>
         </DescriptionList>
       </section>
-      {preview.validityNote ? <Callout tone="warning">{preview.validityNote}</Callout> : null}
+      {validityNoteText(preview, expired) ? <Callout tone="warning">{validityNoteText(preview, expired)}</Callout> : null}
       <div>
         <Button type="button" variant="secondary" onClick={onBack} disabled={disabled}>
           {repricePlanCopy.back}

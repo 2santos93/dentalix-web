@@ -67,7 +67,7 @@ const PLAN: TreatmentPlan = {
   presentedLocationId: 'sede-caracas',
   quoteIssuedOn: '2026-10-01',
   quoteValidUntil: '2026-10-31',
-  quoteExpired: true,
+  quoteExpired: false,
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-01T00:00:00.000Z',
   items: [item('i1', 'c1', '11'), item('i2', 'c2', ''), item('i3', 'c3', '21')],
@@ -127,6 +127,10 @@ function applied(p: RepricingPreview, overrides: Partial<AppliedRepricing> = {})
   return { ...p, repricingId: 'r1', appliedAt: '2026-11-09T15:00:00.000Z', replayed: false, ...overrides };
 }
 
+const EXPIRED_PLAN: TreatmentPlan = { ...PLAN, quoteExpired: true };
+const NOTE = 'Quedan ítems con precios anteriores: la validez no se renueva.';
+const UNCHANGED = [line('i1', 'c1', '11', 100, 100), line('i2', 'c2', '', 100, 100)];
+
 function renderModal(plan: TreatmentPlan = PLAN) {
   const props = {
     open: true,
@@ -141,6 +145,13 @@ function renderModal(plan: TreatmentPlan = PLAN) {
   };
   const view = render(<RepricePlanModal {...props} />);
   return { props, ...view };
+}
+
+/** El submit del paso 2 (se arma tras una pausa: I-1). */
+async function confirmButton(dialog: HTMLElement, name: string | RegExp = 'Actualizar precios') {
+  const button = within(dialog).getByRole('button', { name });
+  await waitFor(() => expect(button).toBeEnabled());
+  return button;
 }
 
 async function openedDialog() {
@@ -198,13 +209,31 @@ describe('RepricePlanModal (DX-379 B)', () => {
     );
   });
 
-  it('validityNote es un aviso (no un error) y no impide continuar', async () => {
+  it('validityNote es un aviso (no un error) y no impide continuar; en un plan vencido dice que sigue vencido', async () => {
     mockedPreview.mockResolvedValue(preview());
-    renderModal();
-    const dialog = await openedDialog();
-    expect(within(dialog).getByText('Quedan ítems con precios anteriores: la validez no se renueva.')).toBeInTheDocument();
+    const { unmount } = renderModal();
+    let dialog = await openedDialog();
+    expect(within(dialog).getByText(NOTE)).toBeInTheDocument();
     expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Continuar' })).toBeEnabled();
+    unmount();
+
+    renderModal(EXPIRED_PLAN);
+    dialog = await openedDialog();
+    expect(within(dialog).getByText(`${NOTE} El presupuesto sigue vencido.`)).toBeInTheDocument();
+  });
+
+  it('casillas: la etiqueta que envuelve la casilla da 44 px y tocarla la cambia', async () => {
+    const user = userEvent.setup();
+    mockedPreview.mockResolvedValue(preview({ ...RENEWED }));
+    renderModal();
+    const dialog = await openedDialog();
+    const [target] = within(dialog).getAllByTestId('reprice-line-select');
+    expect(target.tagName).toBe('LABEL');
+    expect(target).toHaveClass('min-h-11', 'min-w-11');
+    const box = within(target).getByRole('checkbox', { name: 'Actualizar Resina compuesta' });
+    await user.click(target);
+    expect(box).not.toBeChecked();
   });
 
   it('selección parcial: vuelve a pedir la vista previa con los itemIds y aplica con la misma clave y huella', async () => {
@@ -216,7 +245,7 @@ describe('RepricePlanModal (DX-379 B)', () => {
     const dialog = await openedDialog();
     await user.click(within(dialog).getByRole('checkbox', { name: 'Actualizar Resina compuesta' }));
     await waitFor(() => expect(mockedPreview).toHaveBeenLastCalledWith('tok', 'p1', 'plan-1', ['i2']));
-    await within(dialog).findByText('Quedan ítems con precios anteriores: la validez no se renueva.');
+    await within(dialog).findByText(NOTE);
     expect(within(dialog).getByRole('region', { name: 'Totales del plan' })).toHaveTextContent(/290,00/);
 
     await user.click(within(dialog).getByRole('button', { name: 'Continuar' }));
@@ -225,13 +254,51 @@ describe('RepricePlanModal (DX-379 B)', () => {
     expect(summary).toHaveTextContent(/300,00.*→.*290,00/);
     expect(summary).toHaveTextContent('Se conserva la anterior');
 
-    await user.click(within(dialog).getByRole('button', { name: 'Actualizar precios' }));
+    await user.click(await confirmButton(dialog));
     await waitFor(() => expect(props.onRepriced).toHaveBeenCalled());
     const [, , , input, key] = mockedApply.mock.calls[0];
     expect(input).toEqual({ previewHash: 'b'.repeat(64), itemIds: ['i2'] });
     expect(key).toMatch(/^[0-9a-f-]{36}$/);
     expect(toast.success).toHaveBeenCalledWith('Precios actualizados');
     expect(props.onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('carrera del debounce: tocar una casilla y pulsar «Continuar» enseguida no avanza con la vista previa anterior', async () => {
+    const user = userEvent.setup();
+    mockedPreview.mockResolvedValueOnce(preview({ ...RENEWED })).mockReturnValueOnce(new Promise(() => {}));
+    renderModal();
+    const dialog = await openedDialog();
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Actualizar Resina compuesta' }));
+    const next = within(dialog).getByRole('button', { name: 'Continuar' });
+    expect(next).toBeDisabled();
+    await user.click(next);
+    expect(within(dialog).queryByRole('region', { name: 'Resumen de la actualización' })).not.toBeInTheDocument();
+    expect(within(dialog).getByText('Calculando la vista previa…')).toBeInTheDocument();
+    expect(mockedApply).not.toHaveBeenCalled();
+  });
+
+  it('I-1: un doble clic o un doble Enter en «Continuar» no aplica sin ver la confirmación', async () => {
+    const user = userEvent.setup();
+    mockedPreview.mockResolvedValue(preview({ ...RENEWED }));
+    mockedApply.mockResolvedValue(applied(preview({ ...RENEWED })));
+    const { unmount } = renderModal();
+    let dialog = await openedDialog();
+    await user.dblClick(within(dialog).getByRole('button', { name: 'Continuar' }));
+    expect(within(dialog).getByRole('region', { name: 'Resumen de la actualización' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Actualizar precios' })).toBeDisabled();
+    expect(mockedApply).not.toHaveBeenCalled();
+    // Ya armado, un clic aplica una sola vez.
+    await user.click(await confirmButton(dialog));
+    await waitFor(() => expect(mockedApply).toHaveBeenCalledTimes(1));
+    unmount();
+
+    mockedApply.mockClear();
+    renderModal();
+    dialog = await openedDialog();
+    within(dialog).getByRole('button', { name: 'Continuar' }).focus();
+    await user.keyboard('{Enter}{Enter}');
+    expect(within(dialog).getByRole('region', { name: 'Resumen de la actualización' })).toBeInTheDocument();
+    expect(mockedApply).not.toHaveBeenCalled();
   });
 
   it('todas elegidas: aplica sin itemIds; replayed también es éxito', async () => {
@@ -245,13 +312,13 @@ describe('RepricePlanModal (DX-379 B)', () => {
     expect(within(dialog).getByRole('region', { name: 'Resumen de la actualización' })).toHaveTextContent(
       'La validez se renueva hasta el 09/12/2026.',
     );
-    await user.click(within(dialog).getByRole('button', { name: 'Actualizar precios' }));
+    await user.click(await confirmButton(dialog));
     await waitFor(() => expect(props.onRepriced).toHaveBeenCalled());
     expect(mockedApply.mock.calls[0][3]).toEqual({ previewHash: 'a'.repeat(64) });
     expect(toast.success).toHaveBeenCalledWith('Precios actualizados');
   });
 
-  it('nada que actualizar (todo igual o todo saltado): aplicar deshabilitado con la explicación', async () => {
+  it('nada que actualizar (todo saltado): aplicar deshabilitado con la explicación', async () => {
     mockedPreview.mockResolvedValue(
       preview({
         lines: [],
@@ -268,19 +335,75 @@ describe('RepricePlanModal (DX-379 B)', () => {
     ).toBeInTheDocument();
   });
 
-  it('los precios ya al día y la validez ya es la de hoy: deshabilitado', async () => {
-    mockedPreview.mockResolvedValue(
-      preview({
-        ...RENEWED,
-        previousValidity: RENEWED.validity,
-        lines: [line('i1', 'c1', '11', 100, 100)],
-        skipped: [],
-      }),
-    );
+  it('I-3: plan VIGENTE sin cambios de precio → «No hay precios que actualizar.» y deshabilitado', async () => {
+    mockedPreview.mockResolvedValue(preview({ ...RENEWED, lines: UNCHANGED, skipped: [] }));
     renderModal();
     const dialog = await openedDialog();
     expect(within(dialog).getByRole('button', { name: 'Continuar' })).toBeDisabled();
-    expect(within(dialog).getByText('Los precios ya están al día: no hay nada que actualizar.')).toBeInTheDocument();
+    expect(within(dialog).getByText('No hay precios que actualizar.')).toBeInTheDocument();
+  });
+
+  it('I-3: plan VENCIDO sin cambios → se renueva la validez con los precios vigentes; toast «Validez renovada»', async () => {
+    const user = userEvent.setup();
+    const same = preview({ ...RENEWED, lines: UNCHANGED, skipped: [] });
+    mockedPreview.mockResolvedValue(same);
+    mockedApply.mockResolvedValue(applied(same));
+    const { props } = renderModal(EXPIRED_PLAN);
+    const dialog = await openedDialog();
+    expect(
+      within(dialog).getByText('Los precios no cambian: al confirmar se renueva la validez hasta el 09/12/2026.'),
+    ).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Continuar' }));
+    await user.click(await confirmButton(dialog, 'Renovar la validez con los precios vigentes'));
+    await waitFor(() => expect(props.onRepriced).toHaveBeenCalled());
+    expect(toast.success).toHaveBeenCalledWith('Validez renovada');
+  });
+
+  it('I-3: plan VENCIDO, sin cambios y selección parcial → deshabilitado y explica que así no se renueva', async () => {
+    const user = userEvent.setup();
+    mockedPreview
+      .mockResolvedValueOnce(preview({ ...RENEWED, lines: UNCHANGED, skipped: [] }))
+      .mockResolvedValueOnce(preview({ lines: [UNCHANGED[1]], skipped: [] }));
+    renderModal(EXPIRED_PLAN);
+    const dialog = await openedDialog();
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Actualizar Resina compuesta' }));
+    expect(
+      await within(dialog).findByText(
+        'Los precios elegidos no cambian y una selección parcial no renueva la validez: marca todos los procedimientos para renovarla.',
+      ),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Continuar' })).toBeDisabled();
+  });
+
+  it('I-2: la vista previa de una selección falla → banner con el mensaje y «Reintentar» con los mismos itemIds', async () => {
+    const user = userEvent.setup();
+    const partial = preview({ previewHash: 'b'.repeat(64), lines: [L2] });
+    mockedPreview
+      .mockResolvedValueOnce(preview({ ...RENEWED }))
+      .mockRejectedValueOnce(new ApiError(503, 'down'))
+      .mockResolvedValueOnce(partial);
+    renderModal();
+    const dialog = await openedDialog();
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Actualizar Resina compuesta' }));
+    expect(await within(dialog).findByText('No pudimos calcular los precios vigentes.')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Continuar' })).toBeDisabled();
+    await user.click(within(dialog).getByRole('button', { name: 'Reintentar' }));
+    await waitFor(() => expect(mockedPreview).toHaveBeenCalledTimes(3));
+    expect(mockedPreview).toHaveBeenLastCalledWith('tok', 'p1', 'plan-1', ['i2']);
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Continuar' })).toBeEnabled());
+    expect(within(dialog).queryByText('No pudimos calcular los precios vigentes.')).not.toBeInTheDocument();
+  });
+
+  it('I-2: un 4xx definitivo en la vista previa de una selección se nombra sin «Reintentar»', async () => {
+    const user = userEvent.setup();
+    mockedPreview
+      .mockResolvedValueOnce(preview({ ...RENEWED }))
+      .mockRejectedValueOnce(new ApiError(409, 'paid', { messages: ['El plan tiene abonos: sus precios ya no se actualizan.'] }));
+    renderModal();
+    const dialog = await openedDialog();
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Actualizar Resina compuesta' }));
+    expect(await within(dialog).findByText('El plan tiene abonos: sus precios ya no se actualizan.')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
   });
 
   it('409 REPRICE_PREVIEW_STALE: mensaje y «Volver a la vista previa» con otra clave', async () => {
@@ -295,7 +418,7 @@ describe('RepricePlanModal (DX-379 B)', () => {
     renderModal();
     const dialog = await openedDialog();
     await user.click(within(dialog).getByRole('button', { name: 'Continuar' }));
-    await user.click(within(dialog).getByRole('button', { name: 'Actualizar precios' }));
+    await user.click(await confirmButton(dialog));
     expect(
       await within(dialog).findByText('Los precios vigentes cambiaron desde la vista previa: revísala de nuevo.'),
     ).toBeInTheDocument();
@@ -305,9 +428,63 @@ describe('RepricePlanModal (DX-379 B)', () => {
     await within(dialog).findByRole('table', { name: 'Procedimientos a actualizar' });
     mockedApply.mockResolvedValueOnce(applied(preview({ ...RENEWED })));
     await user.click(within(dialog).getByRole('button', { name: 'Continuar' }));
-    await user.click(within(dialog).getByRole('button', { name: 'Actualizar precios' }));
+    await user.click(await confirmButton(dialog));
     await waitFor(() => expect(mockedApply).toHaveBeenCalledTimes(2));
     expect(mockedApply.mock.calls[1][4]).not.toBe(mockedApply.mock.calls[0][4]);
+  });
+
+  it('M-1: tras STALE, volver por el paso «Vista previa» del asistente también pide una vista previa nueva', async () => {
+    const user = userEvent.setup();
+    mockedPreview.mockResolvedValue(preview({ ...RENEWED }));
+    mockedApply.mockRejectedValueOnce(
+      new ApiError(409, 'stale', { code: 'REPRICE_PREVIEW_STALE', messages: ['Los precios vigentes cambiaron.'] }),
+    );
+    renderModal();
+    const dialog = await openedDialog();
+    await user.click(within(dialog).getByRole('button', { name: 'Continuar' }));
+    await user.click(await confirmButton(dialog));
+    await within(dialog).findByText('Los precios vigentes cambiaron.');
+    await user.click(within(dialog).getByRole('button', { name: /^1\s*Vista previa$/ }));
+    await waitFor(() => expect(mockedPreview).toHaveBeenCalledTimes(2));
+  });
+
+  it('M-1/M-2: durante el aplicar, los pasos del asistente no responden y el modal no se cierra', async () => {
+    const user = userEvent.setup();
+    mockedPreview.mockResolvedValue(preview({ ...RENEWED }));
+    mockedApply.mockReturnValue(new Promise(() => {}));
+    const { props } = renderModal();
+    const dialog = await openedDialog();
+    await user.click(within(dialog).getByRole('button', { name: 'Continuar' }));
+    await user.click(await confirmButton(dialog));
+    expect(within(dialog).getByRole('button', { name: /^1\s*Vista previa$/ })).toBeDisabled();
+    await user.keyboard('{Escape}');
+    expect(props.onOpenChange).not.toHaveBeenCalledWith(false);
+    expect(screen.getByRole('dialog', { name: 'Actualizar precios' })).toBeInTheDocument();
+  });
+
+  it('M-4: un 5xx al aplicar se reenvía con la MISMA clave', async () => {
+    const user = userEvent.setup();
+    const full = preview({ ...RENEWED });
+    mockedPreview.mockResolvedValue(full);
+    mockedApply.mockRejectedValueOnce(new ApiError(503, 'down')).mockResolvedValueOnce(applied(full, { replayed: true }));
+    const { props } = renderModal();
+    const dialog = await openedDialog();
+    await user.click(within(dialog).getByRole('button', { name: 'Continuar' }));
+    await user.click(await confirmButton(dialog));
+    await waitFor(() => expect(mockedApply).toHaveBeenCalledTimes(1));
+    await user.click(await confirmButton(dialog));
+    await waitFor(() => expect(props.onRepriced).toHaveBeenCalled());
+    expect(mockedApply.mock.calls[1][4]).toBe(mockedApply.mock.calls[0][4]);
+    expect(mockedApply.mock.calls[1][3]).toEqual(mockedApply.mock.calls[0][3]);
+  });
+
+  it('M-3: renovar la sesión (otro token) no recalcula la vista previa', async () => {
+    mockedPreview.mockResolvedValue(preview({ ...RENEWED }));
+    const { props, rerender } = renderModal();
+    await openedDialog();
+    rerender(<RepricePlanModal {...props} token="tok-2" />);
+    await screen.findByRole('table', { name: 'Procedimientos a actualizar' });
+    expect(mockedPreview).toHaveBeenCalledTimes(1);
   });
 
   it('422 IDEMPOTENCY_KEY_REUSED: otra clave y de vuelta al paso 1', async () => {
@@ -321,12 +498,12 @@ describe('RepricePlanModal (DX-379 B)', () => {
     renderModal();
     const dialog = await openedDialog();
     await user.click(within(dialog).getByRole('button', { name: 'Continuar' }));
-    await user.click(within(dialog).getByRole('button', { name: 'Actualizar precios' }));
+    await user.click(await confirmButton(dialog));
     expect(await within(dialog).findByText('La clave ya se usó para otra petición.')).toBeInTheDocument();
     await within(dialog).findByRole('table', { name: 'Procedimientos a actualizar' });
     expect(mockedPreview).toHaveBeenCalledTimes(2);
     await user.click(within(dialog).getByRole('button', { name: 'Continuar' }));
-    await user.click(within(dialog).getByRole('button', { name: 'Actualizar precios' }));
+    await user.click(await confirmButton(dialog));
     await waitFor(() => expect(mockedApply).toHaveBeenCalledTimes(2));
     expect(mockedApply.mock.calls[1][4]).not.toBe(mockedApply.mock.calls[0][4]);
   });
@@ -340,7 +517,7 @@ describe('RepricePlanModal (DX-379 B)', () => {
     renderModal();
     const dialog = await openedDialog();
     await user.click(within(dialog).getByRole('button', { name: 'Continuar' }));
-    await user.click(within(dialog).getByRole('button', { name: 'Actualizar precios' }));
+    await user.click(await confirmButton(dialog));
     expect(await within(dialog).findByText('El plan tiene abonos: sus precios ya no se actualizan.')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Actualizar precios' })).toBeDisabled();
   });
@@ -372,25 +549,53 @@ describe('RepricePlanModal (DX-379 B)', () => {
     expect(await violations(dialog)).toEqual([]);
   });
 
-  it('a 390 px: los nombres largos se parten y la tabla pasa a tarjetas (sin scroll horizontal)', async () => {
-    // jsdom no mide: se comprueba que las cajas pueden encogerse y partir palabras.
-    const long = 'Rehabilitación-implantosoportada-con-pilar-personalizado-de-zirconio';
-    mockedPreview.mockResolvedValue(preview());
-    render(
-      <RepricePlanModal
-        open
-        onOpenChange={jest.fn()}
-        onRepriced={jest.fn()}
-        token="tok"
-        patientId="p1"
-        plan={PLAN}
-        role="DENTIST"
-        procedureOf={(i) => (i.catalogItemId === 'c1' ? long : NAMES[i.catalogItemId])}
-        stamp={testStamp([STAMP_SEDES.caracas])}
-      />,
-    );
-    const dialog = await openedDialog();
-    const name = within(dialog).getByText(long);
-    expect(name.parentElement).toHaveClass('min-w-0', 'break-words');
+  describe('teléfono (<640 px): tarjetas en vez de tabla', () => {
+    let restore: () => void = () => {};
+    beforeEach(() => {
+      const original = window.matchMedia;
+      window.matchMedia = ((query: string) => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      })) as unknown as typeof window.matchMedia;
+      restore = () => {
+        window.matchMedia = original;
+      };
+    });
+    afterEach(() => restore());
+
+    it('cada línea es una tarjeta con su casilla, la diferencia y los dos precios; los nombres largos se parten', async () => {
+      const long = 'Rehabilitación-implantosoportada-con-pilar-personalizado-de-zirconio';
+      mockedPreview.mockResolvedValue(preview({ ...RENEWED }));
+      render(
+        <RepricePlanModal
+          open
+          onOpenChange={jest.fn()}
+          onRepriced={jest.fn()}
+          token="tok"
+          patientId="p1"
+          plan={PLAN}
+          role="DENTIST"
+          procedureOf={(i) => (i.catalogItemId === 'c1' ? long : NAMES[i.catalogItemId])}
+          stamp={testStamp([STAMP_SEDES.caracas])}
+        />,
+      );
+      const dialog = await screen.findByRole('dialog', { name: 'Actualizar precios' });
+      const cards = await within(dialog).findByRole('list', { name: 'Procedimientos a actualizar' });
+      expect(within(dialog).queryByRole('table')).not.toBeInTheDocument();
+      const items = within(cards).getAllByRole('listitem');
+      expect(items).toHaveLength(2);
+      expect(within(items[0]).getByRole('checkbox', { name: `Actualizar ${long}` })).toBeChecked();
+      expect(items[0]).toHaveTextContent('Sube USD 20,00');
+      expect(items[0]).toHaveTextContent('Actual USD 100,00');
+      expect(items[0]).toHaveTextContent('Vigente USD 120,00');
+      expect(within(items[0]).getByText(long).parentElement).toHaveClass('min-w-0', 'break-words');
+      expect(await violations(dialog)).toEqual([]);
+    });
   });
 });

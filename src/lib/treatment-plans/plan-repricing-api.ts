@@ -46,20 +46,21 @@ export function isPlanRepriceable(plan: {
 }
 
 /**
- * ¿Aplicar cambia algo? Un precio que cambia o una validez que se renueva a
- * otra fecha (un plan vencido con los mismos precios se renueva aplicando).
- * Sin líneas, o con todo igual y la misma validez, no hay nada que actualizar.
+ * Qué hace aplicar esta vista previa (DX-379 B, I-3):
+ *  - `reprice`: algún precio cambia.
+ *  - `renew`: ningún precio cambia, pero el plan está VENCIDO y la vista previa
+ *    renueva la validez (todos los propuestos elegidos): aplicar renueva la
+ *    validez con los precios vigentes.
+ *  - `nothing`: no hay líneas, o ningún precio cambia en un plan vigente (no se
+ *    alarga en silencio la garantía de un presupuesto), o en uno vencido con una
+ *    selección parcial (que no renueva).
  */
-export function hasSomethingToApply(preview: RepricingPreview): boolean {
-  if (preview.lines.length === 0) return false;
-  if (preview.lines.some((line) => line.changed)) return true;
-  if (!preview.validityRenewed || !preview.validity) return false;
-  const before = preview.previousValidity;
-  return (
-    !before ||
-    before.issuedOn !== preview.validity.issuedOn ||
-    before.validUntil !== preview.validity.validUntil
-  );
+export type RepricingOutcome = 'reprice' | 'renew' | 'nothing';
+
+export function repricingOutcome(preview: RepricingPreview, { expired }: { expired: boolean }): RepricingOutcome {
+  if (preview.lines.length === 0) return 'nothing';
+  if (preview.lines.some((line) => line.changed)) return 'reprice';
+  return expired && preview.validityRenewed && preview.validity ? 'renew' : 'nothing';
 }
 
 function repricePath(patientId: string, planId: string, action: 'preview' | 'apply'): string {

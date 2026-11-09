@@ -2,9 +2,9 @@ import { apiFetch } from '../api/client';
 import {
   applyRepricing,
   canRepricePlan,
-  hasSomethingToApply,
   isPlanRepriceable,
   previewRepricing,
+  repricingOutcome,
   type RepricingPreview,
 } from './plan-repricing-api';
 
@@ -74,23 +74,23 @@ describe('plan-repricing-api (DX-379 B)', () => {
     expect(isPlanRepriceable({ status: 'DRAFT', acceptance: null, items: [{ status: 'DONE' }] })).toBe(false);
   });
 
-  it('hay algo que aplicar si cambia un precio o si se renueva la validez a otra fecha', () => {
-    expect(hasSomethingToApply(preview())).toBe(true);
+  it('qué hace aplicar: actualizar precios, renovar la validez de un vencido o nada', () => {
     const unchanged = preview().lines.map((l) => ({ ...l, after: l.before, difference: 0, changed: false }));
-    // Mismos precios pero el plan vencido se renueva: aplicar sí hace algo.
-    expect(hasSomethingToApply(preview({ lines: unchanged }))).toBe(true);
-    // Mismos precios y la validez ya es la de hoy: nada.
+    // Algún precio cambia: se actualizan, vencido o no.
+    expect(repricingOutcome(preview(), { expired: false })).toBe('reprice');
+    expect(repricingOutcome(preview(), { expired: true })).toBe('reprice');
+    // Vigente y sin cambios: nada (no se alarga la validez en silencio).
+    expect(repricingOutcome(preview({ lines: unchanged }), { expired: false })).toBe('nothing');
+    // Vencido y sin cambios, con todos los propuestos: se renueva la validez.
+    expect(repricingOutcome(preview({ lines: unchanged }), { expired: true })).toBe('renew');
+    // Vencido, sin cambios y una selección parcial (no renueva): nada.
     expect(
-      hasSomethingToApply(
-        preview({ lines: unchanged, previousValidity: { issuedOn: '2026-11-09', validUntil: '2026-12-09' } }),
-      ),
-    ).toBe(false);
-    // Mismos precios y una selección parcial (no renueva): nada.
-    expect(
-      hasSomethingToApply(preview({ lines: unchanged, validityRenewed: false, validity: preview().previousValidity })),
-    ).toBe(false);
+      repricingOutcome(preview({ lines: unchanged, validityRenewed: false, validity: preview().previousValidity }), {
+        expired: true,
+      }),
+    ).toBe('nothing');
     // Todo saltado: nada.
-    expect(hasSomethingToApply(preview({ lines: [], validityRenewed: false }))).toBe(false);
+    expect(repricingOutcome(preview({ lines: [], validityRenewed: false }), { expired: true })).toBe('nothing');
   });
 
   it('POST …/reprice/preview con los ítems elegidos (o sin ellos: todos)', async () => {
