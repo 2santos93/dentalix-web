@@ -222,6 +222,49 @@ describe('MoveAppointmentDialog con sillones (DX-211)', () => {
     expect(mockedUpdate.mock.calls[0][2]).not.toHaveProperty('chairId');
   });
 
+  it('DX-479: otro sillón con otro profesional por defecto lo OFRECE sin cambiar el selector; «Asignar» lo pone y el PATCH va con ambos', async () => {
+    const user = userEvent.setup();
+    const seated: Appointment = {
+      ...appointment,
+      providerId: 'prov-1',
+      chairId: 'ch-1',
+      chair: { id: 'ch-1', name: 'Sillón 1', active: true },
+    };
+    mockedUpdate.mockResolvedValue({ ...seated, notes: null });
+    render(
+      <MoveAppointmentDialog clock={CLOCK}
+        open
+        onOpenChange={jest.fn()}
+        token="tok"
+        appointment={seated}
+        providers={providers}
+        hours={null}
+        onMoved={jest.fn()}
+        chairs={[chairs[0], { ...chairs[1], defaultProviderId: 'prov-2' }]}
+      />,
+    );
+    expect(screen.queryByTestId('move-chair-provider-offer')).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('Sillón'), 'ch-2');
+    const offer = screen.getByTestId('move-chair-provider-offer');
+    expect(offer).toHaveTextContent(
+      '«Sillón 2» tiene a Dr. Luis Gómez como profesional por defecto. La cita sigue con Dra. Ana Ríos salvo que la asignes.',
+    );
+    // «Mantener» es no tocar nada: el profesional sigue siendo el de la cita.
+    expect(screen.getByLabelText('Profesional')).toHaveValue('prov-1');
+
+    await user.click(screen.getByRole('button', { name: 'Asignar a Dr. Luis Gómez' }));
+    expect(screen.getByLabelText('Profesional')).toHaveValue('prov-2');
+    expect(screen.queryByTestId('move-chair-provider-offer')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Mover cita' }));
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith(
+        'tok',
+        'apt-1',
+        expect.objectContaining({ chairId: 'ch-2', providerId: 'prov-2', start: expect.any(String), end: expect.any(String) }),
+      ),
+    );
+  });
+
   it('revisión A1: si solo cambia el sillón, manda solo {chairId} (sin hora ni profesional), también en una cita ya empezada', async () => {
     const user = userEvent.setup();
     const started = new Date(Date.now() - 10 * 60_000);

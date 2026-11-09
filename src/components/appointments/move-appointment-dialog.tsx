@@ -25,7 +25,7 @@ import { TimeField } from '@/components/ui/date-field';
 import { NativeSelect } from '@/components/ui/native-select';
 import { isCivilDay } from '@/lib/time/civil-day';
 import type { Chair } from '@/lib/chairs/chairs-api';
-import { chairDisplayName } from '@/lib/chairs/chair-columns';
+import { chairDisplayName, offeredProvider } from '@/lib/chairs/chair-columns';
 import { endSentence } from '@/lib/format/text';
 import { defaultHoursNote } from '@/lib/locations/default-business-hours';
 import { HolidayNotice } from './holiday-notice';
@@ -43,6 +43,10 @@ const copy = {
   // DX-211: cambiar o quitar el sillón al mover (o solo eso).
   chair: 'Sillón',
   chairNone: 'Sin sillón',
+  // DX-479: otro sillón con otro profesional por defecto: se ofrece, no se cambia solo.
+  chairProviderOffer: (chair: string, offered: string, current: string) =>
+    `«${chair}» tiene a ${offered} como profesional por defecto. La cita sigue con ${current} salvo que la asignes.`,
+  assignProvider: (offered: string) => `Asignar a ${offered}`,
   submit: 'Mover cita',
   duration: (minutes: number, end: string) => endSentence(`Dura ${minutes} min: terminaría a las ${end}`),
   missing: 'Completa la fecha, la hora y el profesional.',
@@ -65,6 +69,11 @@ const copy = {
       : `No hay huecos libres de ese profesional en los próximos ${NEXT_OPENING_DAYS} días. Prueba con otro profesional o mantenla donde está.`,
   nextOpeningError: 'No pudimos buscar el siguiente hueco libre. Elige otra hora a mano.',
 };
+
+/** El reloj se lee al enviar (en el manejador), nunca al pintar. */
+function isPast(iso: string): boolean {
+  return new Date(iso).getTime() < Date.now();
+}
 
 /** `chair`: el nombre del sillón con el que se buscó (DX-492-bis); sin él, null. */
 type NextOpening =
@@ -125,9 +134,22 @@ export function MoveAppointmentDialog({
   );
   // Solo cuenta la última búsqueda (cambiar de hora y reenviar la deja vieja).
   const search = useRef(0);
-  const [chairId, setChairId] = useState(appointment.chairId ?? '');
+  // DX-479: si el arrastre que chocó llevaba sillón, el modal parte de ese sillón.
+  const [chairId, setChairId] = useState(
+    collision?.target.chairId !== undefined ? (collision.target.chairId ?? '') : (appointment.chairId ?? ''),
+  );
   const chairOptions = chairs.filter((c) => c.active || c.id === appointment.chairId);
   const showChair = chairOptions.length > 0 || !!appointment.chair;
+  // DX-479: al elegir OTRO sillón con otro profesional por defecto se ofrece
+  // asignarlo; el selector de profesional no cambia solo («Mantener» es no tocarlo).
+  const offeredProviderId =
+    chairId !== (appointment.chairId ?? '')
+      ? offeredProvider(
+          providerId,
+          chairOptions.find((c) => c.id === chairId) ?? null,
+          providers.map((p) => p.userId),
+        )
+      : null;
   const [error, setError] = useState<string | null>(collision?.message ?? null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -232,7 +254,7 @@ export function MoveAppointmentDialog({
       return;
     }
     const target = { ...slot, ...chairChange };
-    if (new Date(target.start).getTime() < Date.now()) {
+    if (isPast(target.start)) {
       setError(copy.past);
       return;
     }
@@ -338,6 +360,24 @@ export function MoveAppointmentDialog({
             ) : null}
           </NativeSelect>
         </FormField>
+      ) : null}
+      {offeredProviderId !== null ? (
+        <Callout
+          tone="info"
+          role="status"
+          data-testid="move-chair-provider-offer"
+          action={
+            <Button type="button" size="sm" variant="outline" onClick={() => setProviderId(offeredProviderId)}>
+              {copy.assignProvider(providerName(offeredProviderId))}
+            </Button>
+          }
+        >
+          {copy.chairProviderOffer(
+            chairOptions.find((c) => c.id === chairId)?.name ?? '',
+            providerName(offeredProviderId),
+            providerName(providerId),
+          )}
+        </Callout>
       ) : null}
     </FormModal>
   );

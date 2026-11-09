@@ -720,3 +720,94 @@ describe('DayColumns por sillón (DX-211)', () => {
   });
 });
 
+
+describe('DayColumns por sillón: arrastre (DX-479)', () => {
+  const chairColumns = {
+    columns: [
+      { id: 'ch-1', label: 'Sillón 1' },
+      { id: 'ch-2', label: 'Sillón 2' },
+      { id: 'sin-sillon', label: 'Sin sillón' },
+    ],
+    columnOf: (a: Appointment) => a.chairId ?? 'sin-sillon',
+  };
+  // 09:00–10:30 con la Dra. Ana Ríos, en «Sillón 1».
+  const seated = appointment({ id: 'apt-s', chairId: 'ch-1', chair: { id: 'ch-1', name: 'Sillón 1', active: true } });
+  const done = appointment({
+    id: 'apt-d',
+    status: 'COMPLETED',
+    chairId: 'ch-2',
+    chair: { id: 'ch-2', name: 'Sillón 2', active: true },
+    start: new Date(`${DATE}T11:00:00`).toISOString(),
+    end: new Date(`${DATE}T11:30:00`).toISOString(),
+  });
+  // La franja visible empieza a las 08:30: 09:00 está 30 min más abajo.
+  const Y_0900 = 30 * PX_PER_MINUTE;
+  const Y_1100 = 150 * PX_PER_MINUTE;
+
+  let rectSpy: jest.SpyInstance;
+  beforeEach(() => {
+    rectSpy = jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const index = chairColumns.columns.findIndex((c) => c.id === this.dataset.chairColumn);
+      if (index >= 0) {
+        return { left: 100 + index * 200, right: 300 + index * 200, top: 0, bottom: 2000 } as DOMRect;
+      }
+      return { left: 0, right: 0, top: 0, bottom: 0 } as DOMRect;
+    });
+  });
+  afterEach(() => rectSpy.mockRestore());
+
+  function drag(card: HTMLElement, clientX: number, clientY: number, pointerId = 11) {
+    fireEvent.pointerDown(card, { pointerId, pointerType: 'mouse', button: 0, clientX: 150, clientY: 0 });
+    fireEvent.pointerMove(window, { pointerId, clientX, clientY });
+    const preview = screen.queryByTestId('drag-preview')?.textContent ?? null;
+    fireEvent.pointerUp(window, { pointerId, clientX, clientY });
+    return preview;
+  }
+
+  it('a otro sillón a la misma hora manda SOLO el sillón (el profesional no cambia), y lo dice la vista previa', () => {
+    const { onDrop } = renderColumns({ chairColumns, appointments: [seated, done] });
+    const card = screen.getAllByTestId('day-column-appointment')[0];
+    expect(card).toHaveClass('cursor-grab');
+    expect(drag(card, 350, Y_0900)).toBe('Mover a las 09:00 · Sillón 2');
+    expect(onDrop).toHaveBeenCalledWith(seated, { chairId: 'ch-2' });
+  });
+
+  it('a otra hora en el mismo sillón manda el hueco con SU profesional y sin sillón', () => {
+    const { onDrop } = renderColumns({ chairColumns, appointments: [seated, done] });
+    drag(screen.getAllByTestId('day-column-appointment')[0], 150, Y_1100);
+    expect(onDrop).toHaveBeenCalledWith(seated, {
+      start: new Date(`${DATE}T11:00:00`).toISOString(),
+      end: new Date(`${DATE}T12:30:00`).toISOString(),
+      providerId: 'prov-1',
+    });
+  });
+
+  it('a «Sin sillón» a otra hora manda el hueco y chairId null', () => {
+    const { onDrop } = renderColumns({ chairColumns, appointments: [seated, done] });
+    expect(drag(screen.getAllByTestId('day-column-appointment')[0], 550, Y_1100)).toBe(
+      'Mover a las 11:00 · Sin sillón',
+    );
+    expect(onDrop).toHaveBeenCalledWith(seated, {
+      start: new Date(`${DATE}T11:00:00`).toISOString(),
+      end: new Date(`${DATE}T12:30:00`).toISOString(),
+      providerId: 'prov-1',
+      chairId: null,
+    });
+  });
+
+  it('soltar donde estaba no hace nada', () => {
+    const { onDrop } = renderColumns({ chairColumns, appointments: [seated, done] });
+    drag(screen.getAllByTestId('day-column-appointment')[0], 150, Y_0900);
+    expect(onDrop).not.toHaveBeenCalled();
+  });
+
+  it('una cita completada no se arrastra (ni vista previa ni onDrop); su clic sigue abriendo el detalle', () => {
+    const { onDrop, onSelectAppointment } = renderColumns({ chairColumns, appointments: [seated, done] });
+    const completed = screen.getAllByTestId('day-column-appointment')[1];
+    expect(completed).not.toHaveClass('cursor-grab');
+    expect(drag(completed, 150, Y_0900, 12)).toBeNull();
+    expect(onDrop).not.toHaveBeenCalled();
+    fireEvent.click(within(completed).getAllByRole('button')[0]);
+    expect(onSelectAppointment).toHaveBeenCalledWith(done);
+  });
+});
