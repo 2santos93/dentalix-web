@@ -11,6 +11,7 @@ import {
 import { followUpWhatsAppHref } from '@/lib/treatment-plans/plan-options';
 import {
   followUpAmount,
+  followUpValidity,
   groupFollowUp,
   type FollowUpGroup,
 } from '@/lib/treatment-plans/follow-up-groups';
@@ -28,6 +29,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { Pagination } from '@/components/shared/pagination';
 import { ResultCount } from '@/components/shared/list-toolbar';
 import { RejectPlanModal } from './reject-plan-modal';
+import { QuoteValidity } from './quote-validity';
 import { telHref } from '@/lib/receivables/presentation';
 
 export const pendingFollowUpCopy = {
@@ -250,14 +252,49 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
     {
       id: 'presented',
       header: copy.colPresented,
-      cell: (row) => (
-        <span className="tabular-nums">
-          {stamp.date(row.presentedAt, row.presentedLocationId)}
-          <span className="t-caption block text-muted">{copy.daysAgo(row.daysSincePresented)}</span>
-        </span>
-      ),
-      // En el teléfono, la antigüedad es lo que decide a quién llamar.
-      mobileCell: (row) => copy.daysAgo(row.daysSincePresented),
+      cell: (row) => {
+        const validity = followUpValidity(row.options);
+        return (
+          <span className="tabular-nums">
+            {stamp.date(row.presentedAt, row.presentedLocationId)}
+            <span className="t-caption block text-muted">{copy.daysAgo(row.daysSincePresented)}</span>
+            {/* DX-379: si los precios siguen valiendo, o desde cuándo no. */}
+            {validity ? (
+              <span className="mt-1 block">
+                <QuoteValidity
+                  // «Por seguir» solo lista presentados.
+                  status="PRESENTED"
+                  validUntil={validity.validUntil}
+                  expired={validity.expired}
+                  locationId={validity.locationId}
+                  stamp={stamp}
+                />
+              </span>
+            ) : null}
+          </span>
+        );
+      },
+      // En el teléfono, la antigüedad es lo que decide a quién llamar; el
+      // vencido también (sin formato de la sede, la celda no lleva «—»).
+      mobileCell: (row) => {
+        const validity = followUpValidity(row.options);
+        return (
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>{copy.daysAgo(row.daysSincePresented)}</span>
+            {validity ? (
+              <QuoteValidity
+                // «Por seguir» solo lista presentados.
+                status="PRESENTED"
+                validUntil={validity.validUntil}
+                expired={validity.expired}
+                locationId={validity.locationId}
+                stamp={stamp}
+                omitWithoutFormat
+              />
+            ) : null}
+          </span>
+        );
+      },
     },
     {
       id: 'contact',

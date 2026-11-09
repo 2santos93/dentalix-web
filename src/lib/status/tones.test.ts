@@ -62,4 +62,9 @@ describe('vocabulario de estados (tones.ts)', () => {
       expect(Object.values(classes).join(' ')).not.toMatch(/primary|accent/);
     }
   });
+
+  it('DX-379: un presupuesto vencido es danger, como todo «Vencido»', () => {
+    expect(statusTone('quoteValidity', 'EXPIRED')).toBe('danger');
+    expect(statusLabel('quoteValidity', 'EXPIRED')).toBe('Vencido');
+  });
 });

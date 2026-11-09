@@ -462,6 +462,17 @@ describe('clinicSettingsDetail (DX-328)', () => {
     ).toBe('Mayoría de edad: 18 → 21 años');
   });
 
+  it('DX-379: QUOTE_SETTINGS → «Validez del presupuesto: 30 días → 45 días» (y «1 día»); un código raro → null', () => {
+    expect(
+      clinicSettingsDetail({ reason: 'QUOTE_SETTINGS', statusChange: { from: 'QT_V30', to: 'QT_V45' } }),
+    ).toBe('Validez del presupuesto: 30 días → 45 días');
+    expect(
+      clinicSettingsDetail({ reason: 'QUOTE_SETTINGS', statusChange: { from: 'QT_V30', to: 'QT_V1' } }),
+    ).toBe('Validez del presupuesto: 30 días → 1 día');
+    expect(clinicSettingsDetail({ reason: 'QUOTE_SETTINGS', statusChange: { from: 'AGE_18', to: 'QT_V45' } })).toBeNull();
+    expect(clinicSettingsDetail({ reason: 'QUOTE_SETTINGS' })).toBeNull();
+  });
+
   describe('CLINICAL_RECORD_RETENTION_SETTINGS (DX-330)', () => {
     const event = (direction: 'UP' | 'DOWN', n: number, win = false) => ({
       reason: 'CLINICAL_RECORD_RETENTION_SETTINGS',

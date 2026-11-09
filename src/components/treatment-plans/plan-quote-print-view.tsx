@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, FileX, Lock, Printer } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
-import { getPlanQuote, type PlanQuote } from '@/lib/treatment-plans/plan-quote-api';
+import { issuePlanQuote, type PlanQuote } from '@/lib/treatment-plans/plan-quote-api';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Button } from '@/components/ui/button';
@@ -69,6 +69,12 @@ interface PlanQuotePrintViewProps {
  * Vista imprimible del presupuesto (DX-012), fuera del shell, mismo patrón que
  * la del consentimiento y la receta: abre el diálogo de impresión UNA vez
  * cuando el presupuesto está en pantalla; la barra lleva `print:hidden`.
+ *
+ * DX-379: carga con `POST …/quote/issue`, así que abrirla fija la validez de un
+ * borrador o presentado sin fechas. Se llega desde «Imprimir presupuesto» (la
+ * ficha), «Ver el presupuesto completo» (el modal de aceptar) y «Presupuesto»
+ * (estado de cuenta): los tres imprimen al cargar, así que los tres cuentan
+ * como primera impresión. El modal de aceptar en sí sigue con el GET.
  */
 export function PlanQuotePrintView({
   token,
@@ -103,7 +109,8 @@ export function PlanQuotePrintView({
     let cancelled = false;
     async function load() {
       try {
-        const res = await getPlanQuote(token, patientId, planId);
+        // DX-379: imprimir fija la validez la primera vez (POST issue).
+        const res = await issuePlanQuote(token, patientId, planId);
         if (cancelled) return;
         // La URL nombra al paciente: si el plan es de otro, no se imprime bajo
         // su ficha (el «Volver» llevaría a quien no es).

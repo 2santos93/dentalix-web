@@ -3244,6 +3244,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/treatment-plans/{planId}/reprice/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vista previa de «Actualizar precios» (DX-379), sin escribir
+         * @description Cada ítem propuesto con el precio que tendría hoy (la misma resolución que el alta: convenio → lista de la sede → catálogo, convertido con la tasa de hoy si el catálogo está en otra moneda), conservando la proporción precio / lista y descuento / precio. Los que no tienen precio vigente o tasa se listan sin tocarlos. Devuelve la huella que exige `/reprice/apply`.
+         */
+        post: operations["PlanRepricingController_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/treatment-plans/{planId}/reprice/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Aplica «Actualizar precios» (DX-379) con la huella de la vista previa
+         * @description Recalcula la recotización con el plan bloqueado (la misma función que la vista previa) y, si su huella es `previewHash`, escribe en una transacción los precios y la foto de cada ítem, reinicia la validez del presupuesto solo si se recotizan TODOS los ítems propuestos vivos (`validityRenewed`; emitido hoy en la sede del plan + días del ajuste; un borrador sin fechas queda con fechas; si no, conserva la que tenía) y guarda la recotización con el antes y el después. Un enlace de firma a distancia (DX-415) pendiente deja de valer si el presupuesto cambió.
+         */
+        post: operations["PlanRepricingController_apply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/discount-policy": {
         parameters: {
             query?: never;
@@ -13692,6 +13732,164 @@ export interface components {
              * @example 30
              */
             validityDays: number;
+        };
+        RepricePlanDto: {
+            /** @description Ítems vivos de ESTE plan a recotizar (404 si alguno no lo es; 409 si alguno no está propuesto o es un cargo por inasistencia). Sin ellos (o vacío), todos los propuestos; el resto sale en `skipped`. */
+            itemIds?: string[];
+        };
+        /**
+         * @description De dónde sale la referencia; null en un ítem libre.
+         * @enum {string}
+         */
+        PriceSource: "CATALOG" | "PRICE_LIST" | "AGREEMENT_PERCENT" | "AGREEMENT_PRICE_LIST";
+        RepricingPriceDto: {
+            /** @description Precio del ítem, en la moneda del plan. */
+            price: number;
+            /** @description Descuento del ítem, en la moneda del plan. */
+            discount: number;
+            /** @description Importe de la línea: precio − descuento. */
+            total: number;
+            /** @description Precio de lista (la referencia) en la moneda del plan; null en un ítem libre o anterior sin foto. */
+            listPrice: number | null;
+            /** @description De dónde sale la referencia; null en un ítem libre. */
+            priceSource: components["schemas"]["PriceSource"] | null;
+            /** Format: uuid */
+            agreementId: string | null;
+            agreementName: string | null;
+        };
+        RepricingLineDto: {
+            /** Format: uuid */
+            itemId: string;
+            /** Format: uuid */
+            catalogItemId: string;
+            /** @description Pieza (FDI); vacía en un ítem sin pieza. */
+            toothNumber: string;
+            /** @description Cómo está ahora. */
+            before: components["schemas"]["RepricingPriceDto"];
+            /** @description Cómo queda con el precio vigente (D-4: guarda la proporción precio / lista y descuento / precio, redondeado una vez a la moneda del plan). */
+            after: components["schemas"]["RepricingPriceDto"];
+            /** @description after.total − before.total (puede ser negativa o 0). */
+            difference: number;
+            /** @description false = el precio y su foto no cambian (se aplica igual: la validez se reinicia). */
+            changed: boolean;
+        };
+        /**
+         * @description NOT_PROPOSED: aceptado, realizado o descartado. CANCELLATION_FEE: cargo vigente por inasistencia. NO_CURRENT_PRICE: el procedimiento no tiene precio vigente (o es 0, o ya no está en el catálogo): no se pone a 0. NO_RATE: el precio vigente está en otra moneda y no hay tasa de hoy (`currency`).
+         * @enum {string}
+         */
+        RepricingSkipReason: "NOT_PROPOSED" | "CANCELLATION_FEE" | "NO_CURRENT_PRICE" | "NO_RATE";
+        RepricingSkipDto: {
+            /** Format: uuid */
+            itemId: string;
+            /** Format: uuid */
+            catalogItemId: string;
+            toothNumber: string;
+            /** @description NOT_PROPOSED: aceptado, realizado o descartado. CANCELLATION_FEE: cargo vigente por inasistencia. NO_CURRENT_PRICE: el procedimiento no tiene precio vigente (o es 0, o ya no está en el catálogo): no se pone a 0. NO_RATE: el precio vigente está en otra moneda y no hay tasa de hoy (`currency`). */
+            reason: components["schemas"]["RepricingSkipReason"];
+            /** @description Con NO_RATE, la moneda sin tasa; null en el resto. */
+            currency: string | null;
+        };
+        RepricingRateDto: {
+            /**
+             * @description Unidades de la moneda de la referencia (`referenceCurrency`) por 1 USD.
+             * @example 880
+             */
+            fromPerBase: number;
+            /**
+             * @description Unidades de la moneda del plan por 1 USD.
+             * @example 1
+             */
+            toPerBase: number;
+            /** @description De dónde salió la tasa: del proveedor o la manual de la clínica. */
+            source: components["schemas"]["ExchangeRateSource"];
+            /**
+             * @description Día civil (AAAA-MM-DD) de la tasa usada; con tasa manual puede ser anterior al del ítem (DX-384).
+             * @example 2026-11-07
+             */
+            rateDate: string;
+            /** @description Moneda del catálogo (de la que se convirtió) en ISO 4217; `fromPerBase` es de esta moneda. */
+            currency: string;
+        };
+        RepricingValidityDto: {
+            /**
+             * @description Día de emisión (AAAA-MM-DD, día civil de la sede del plan).
+             * @example 2026-11-09
+             */
+            issuedOn: string;
+            /**
+             * @description Último día válido (AAAA-MM-DD, inclusive).
+             * @example 2026-12-09
+             */
+            validUntil: string;
+        };
+        RepricingTotalsDto: {
+            /** @description Total del plan (todas sus líneas vivas) ahora. */
+            before: number;
+            /** @description Total del plan recotizado. */
+            after: number;
+            /** @description after − before. */
+            difference: number;
+        };
+        RepricingPreviewDto: {
+            /** Format: uuid */
+            planId: string;
+            /** @description Moneda del plan (ISO 4217). */
+            currency: string;
+            /** @description SHA-256 de lo que se aplicaría (líneas antes y después, saltados, tasa y validez nueva): se manda tal cual a `/reprice/apply`. */
+            previewHash: string;
+            /** @description Ítems que se recotizan (por id). */
+            lines: components["schemas"]["RepricingLineDto"][];
+            /** @description Ítems que no se tocan y por qué (por id). */
+            skipped: components["schemas"]["RepricingSkipDto"][];
+            /** @description La tasa de hoy usada (de la moneda del catálogo a la del plan); null si no hizo falta convertir. */
+            rate: components["schemas"]["RepricingRateDto"] | null;
+            /** @description La validez guardada antes de recotizar; null si el plan no tenía (borrador nunca emitido). */
+            previousValidity: components["schemas"]["RepricingValidityDto"] | null;
+            /** @description true = se recotizan TODOS los ítems propuestos vivos del plan y la validez se renueva (emitido hoy en la sede del plan + días del ajuste). false = selección parcial o algún propuesto saltado (sin precio vigente o sin tasa): la validez no cambia. */
+            validityRenewed: boolean;
+            /** @description Con `validityRenewed: false`, por qué, para la pantalla («Quedan ítems con precios anteriores: la validez no se renueva.»); null si se renueva. */
+            validityNote: string | null;
+            /** @description La validez con la que queda el plan: la nueva si `validityRenewed`, si no la que ya tenía (null en un borrador nunca emitido). */
+            validity: components["schemas"]["RepricingValidityDto"] | null;
+            totals: components["schemas"]["RepricingTotalsDto"];
+        };
+        ApplyRepricingDto: {
+            /** @description Ítems vivos de ESTE plan a recotizar (404 si alguno no lo es; 409 si alguno no está propuesto o es un cargo por inasistencia). Sin ellos (o vacío), todos los propuestos; el resto sale en `skipped`. */
+            itemIds?: string[];
+            /** @description La huella (`previewHash`) que devolvió la vista previa. Si los precios vigentes, la tasa, los ítems o la validez cambiaron desde entonces, 409 `REPRICE_PREVIEW_STALE` y nada cambia. */
+            previewHash: string;
+        };
+        AppliedRepricingDto: {
+            /** Format: uuid */
+            planId: string;
+            /** @description Moneda del plan (ISO 4217). */
+            currency: string;
+            /** @description SHA-256 de lo que se aplicaría (líneas antes y después, saltados, tasa y validez nueva): se manda tal cual a `/reprice/apply`. */
+            previewHash: string;
+            /** @description Ítems que se recotizan (por id). */
+            lines: components["schemas"]["RepricingLineDto"][];
+            /** @description Ítems que no se tocan y por qué (por id). */
+            skipped: components["schemas"]["RepricingSkipDto"][];
+            /** @description La tasa de hoy usada (de la moneda del catálogo a la del plan); null si no hizo falta convertir. */
+            rate: components["schemas"]["RepricingRateDto"] | null;
+            /** @description La validez guardada antes de recotizar; null si el plan no tenía (borrador nunca emitido). */
+            previousValidity: components["schemas"]["RepricingValidityDto"] | null;
+            /** @description true = se recotizan TODOS los ítems propuestos vivos del plan y la validez se renueva (emitido hoy en la sede del plan + días del ajuste). false = selección parcial o algún propuesto saltado (sin precio vigente o sin tasa): la validez no cambia. */
+            validityRenewed: boolean;
+            /** @description Con `validityRenewed: false`, por qué, para la pantalla («Quedan ítems con precios anteriores: la validez no se renueva.»); null si se renueva. */
+            validityNote: string | null;
+            /** @description La validez con la que queda el plan: la nueva si `validityRenewed`, si no la que ya tenía (null en un borrador nunca emitido). */
+            validity: components["schemas"]["RepricingValidityDto"] | null;
+            totals: components["schemas"]["RepricingTotalsDto"];
+            /**
+             * Format: uuid
+             * @description La recotización guardada (`treatment_plan_repricings`); la auditoría la enlaza en `params.repricingId`.
+             */
+            repricingId: string;
+            /** Format: date-time */
+            appliedAt: string;
+            /** @description true = repetición con la misma Idempotency-Key: devuelve lo ya aplicado, sin volver a escribir. */
+            replayed: boolean;
         };
         DiscountMaxPercentByRoleDto: {
             /** @description Administración (por defecto 100) */
@@ -29814,6 +30012,129 @@ export interface operations {
             };
             /** @description Solo un administrador puede cambiar la validez de los presupuestos. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlanRepricingController_preview: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede de escritura: la de la lista de precios y la tasa de hoy (como al dar de alta un ítem) y la que firma un descuento. Sin ella, la principal. La validez se fecha con la sede del plan (la de su presentación o, sin presentar, esta). */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                patientId: string;
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepricePlanDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepricingPreviewDto"];
+                };
+            };
+            /** @description Recepción no recotiza (dato clínico). SEC-041: el redondeo del precio nuevo sube el % de descuento efectivo de un ítem por encima del tope del rol de quien recotiza (nada cambia). Si no lo sube, el descuento conserva su motivo y la firma de quien lo dio */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o plan no encontrados en esta clínica, el plan es de otro paciente, o algún ítem pedido no es de este plan */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El plan no se puede recotizar: aceptado (con o sin firma), cancelado, rechazado o completado; con abonos vivos, plan de cuotas activo o saldo a favor; un ítem pedido no está propuesto o es el cargo vigente por inasistencia (SEC-050); o `LOCATION_TIMEZONE_REQUIRED` (la sede del plan no tiene zona horaria válida) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description SEC-041: el redondeo sube el % efectivo por encima del umbral y el ítem no tiene motivo de descuento */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlanRepricingController_apply: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Sede de escritura: la de la lista de precios y la tasa de hoy (como al dar de alta un ítem) y la que firma un descuento. Sin ella, la principal. La validez se fecha con la sede del plan (la de su presentación o, sin presentar, esta). */
+                "X-Location-Id"?: string;
+                /** @description UUID por intento (uno por apertura de la vista previa). Repetir la MISMA petición con la misma clave devuelve la recotización ya aplicada (`replayed: true`) sin volver a escribir ni auditar; otra petición con la misma clave es 422 `IDEMPOTENCY_KEY_REUSED`. Por clínica; vive con la recotización. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                patientId: string;
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyRepricingDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppliedRepricingDto"];
+                };
+            };
+            /** @description Falta la cabecera Idempotency-Key o no es un UUID; `previewHash` no es una huella; ítems inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Recepción no recotiza (dato clínico). SEC-041: el redondeo del precio nuevo sube el % de descuento efectivo de un ítem por encima del tope del rol de quien recotiza (nada cambia). Si no lo sube, el descuento conserva su motivo y la firma de quien lo dio */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o plan no encontrados en esta clínica, el plan es de otro paciente, o algún ítem pedido no es de este plan */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El plan no se puede recotizar: aceptado (con o sin firma), cancelado, rechazado o completado; con abonos vivos, plan de cuotas activo o saldo a favor; un ítem pedido no está propuesto o es el cargo vigente por inasistencia (SEC-050); o `LOCATION_TIMEZONE_REQUIRED` (la sede del plan no tiene zona horaria válida); `REPRICE_PREVIEW_STALE` («Los precios vigentes cambiaron desde la vista previa: revísala de nuevo.»): la huella ya no coincide (cambió un precio, la tasa, un ítem o el día) y nada cambia; `REPRICE_NOTHING_TO_APPLY`: ningún ítem propuesto tiene precio vigente */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `IDEMPOTENCY_KEY_REUSED`: la clave ya se usó para otra petición (otro paciente en la ruta, otro plan, otra vista previa u otros ítems); o SEC-041: el redondeo sube el % efectivo por encima del umbral y el ítem no tiene motivo */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -5,6 +5,7 @@ import {
   canPrintPlanQuote,
   getPlanQuote,
   isPlanAcceptable,
+  issuePlanQuote,
   planQuotePrintHref,
   SIGNABLE_PLAN_STATUSES,
 } from './plan-quote-api';
@@ -65,6 +66,15 @@ describe('plan-quote-api (DX-012)', () => {
     expect(mockedFetch).toHaveBeenLastCalledWith('/patients/p1/treatment-plans/plan1/acceptance', {
       method: 'POST',
       body,
+      token: 'tok',
+    });
+  });
+
+  it('DX-379: imprimir es POST …/quote/issue, sin cuerpo (fija la validez la primera vez)', async () => {
+    mockedFetch.mockResolvedValue({});
+    await issuePlanQuote('tok', 'p 1', 'plan/1');
+    expect(mockedFetch).toHaveBeenCalledWith('/patients/p%201/treatment-plans/plan%2F1/quote/issue', {
+      method: 'POST',
       token: 'tok',
     });
   });

@@ -214,7 +214,7 @@ test('ADMIN: el menú de cuenta cabe en 1366×768, 1440×900 y 390×844, tambié
   await page.getByRole('button', { name: 'Expandir menú' }).click();
 });
 
-test('ADMIN: Ajustes agrupa las 30 pantallas; de ahí a Horarios y Sedes y de vuelta con «← Ajustes»', async ({
+test('ADMIN: Ajustes agrupa las 31 pantallas; de ahí a Horarios y Sedes y de vuelta con «← Ajustes»', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
@@ -231,8 +231,8 @@ test('ADMIN: Ajustes agrupa las 30 pantallas; de ahí a Horarios y Sedes y de vu
     'Datos y seguridad',
     'Herramientas y registros',
   ]);
-  // 30: «Equipos biomédicos» (DX-542) es la 30.ª pantalla (TST-060).
-  await expect(main.getByRole('listitem').getByRole('link')).toHaveCount(30);
+  // 31: «Equipos biomédicos» (DX-542) fue la 30.ª (TST-060) y «Presupuestos» (DX-379) la 31.ª.
+  await expect(main.getByRole('listitem').getByRole('link')).toHaveCount(31);
 
   await main.getByRole('list', { name: 'Agenda' }).getByRole('link', { name: 'Horarios' }).click();
   await expect(page).toHaveURL(`${origin}/settings/horarios`);
@@ -255,8 +255,8 @@ test('ADMIN a 390 px: filas del índice y «← Ajustes» de 44 px, sin scroll h
   await signIn(page, admin.email);
   await openSettings(page, admin.fullName);
   const links = page.getByRole('main').getByRole('listitem').getByRole('link');
-  // 30: «Equipos biomédicos» (DX-542) es la 30.ª pantalla (TST-060).
-  await expect(links).toHaveCount(30, { timeout: 15_000 });
+  // 31: «Equipos biomédicos» (DX-542) fue la 30.ª (TST-060) y «Presupuestos» (DX-379) la 31.ª.
+  await expect(links).toHaveCount(31, { timeout: 15_000 });
   await expectTouchTargets(links, '/settings a 390');
   await expectNoHorizontalScroll(page);
 
@@ -271,16 +271,17 @@ for (const person of [
   { role: 'RECEPTION', account: reception },
   { role: 'DENTIST', account: dentist },
 ]) {
-  test(`${person.role}: en Ajustes solo Mi perfil, Sedes, Horarios y Privacidad de datos`, async ({ page }) => {
+  test(`${person.role}: en Ajustes solo Mi perfil, Sedes, Horarios, Presupuestos y Privacidad de datos`, async ({ page }) => {
     await page.setViewportSize({ width: 1366, height: 768 });
     await signIn(page, person.account.email);
     await openSettings(page, person.account.fullName);
 
     const links = page.getByRole('main').getByRole('listitem').getByRole('link');
-    await expect(links).toHaveText(['Mi perfil', 'Sedes', 'Horarios', 'Privacidad de datos'].map((t) => new RegExp(`^${t}`)), {
-      timeout: 15_000,
-    });
-    await expect(page.getByRole('heading', { name: 'Cobro' })).toHaveCount(0);
+    // DX-379: «Presupuestos» (la validez) la leen todos; de Cobro, solo esa.
+    const expected = ['Mi perfil', 'Sedes', 'Horarios', 'Presupuestos', 'Privacidad de datos'];
+    await expect(links).toHaveText(expected.map((t) => new RegExp(`^${t}`)), { timeout: 15_000 });
+    const cobro = page.getByRole('main').getByRole('list', { name: 'Cobro' });
+    await expect(cobro.getByRole('link')).toHaveText([/^Presupuestos/]);
     await expect(page.getByRole('link', { name: 'Convenios' })).toHaveCount(0);
   });
 }
@@ -342,8 +343,8 @@ test('axe: /settings y el menú abierto, a 390 y 1440 px, en claro y oscuro', as
       // Mismo documento: cambian la ventana y el esquema, sin recargar.
       await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
       await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${colorScheme}\\b`));
-      // 30: «Equipos biomédicos» (DX-542) es la 30.ª pantalla (TST-060).
-      await expect(page.getByRole('main').getByRole('listitem').getByRole('link')).toHaveCount(30);
+      // 31: «Equipos biomédicos» (DX-542) fue la 30.ª (TST-060) y «Presupuestos» (DX-379) la 31.ª.
+      await expect(page.getByRole('main').getByRole('listitem').getByRole('link')).toHaveCount(31);
       expect.soft(await serious(`settings-${width}-${colorScheme}`), `/settings ${width} ${colorScheme}`).toEqual([]);
 
       await openAccountMenu(page, admin.fullName);

@@ -12,6 +12,7 @@ import {
   ClipboardList,
   Stethoscope,
   Coins,
+  FileClock,
   Clock,
   FileSignature,
   FileUp,
@@ -258,6 +259,13 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Precios propios por sede o por convenio.',
         icon: ListOrdered,
         visible: canManagePriceLists,
+      },
+      // DX-379: la leen todos; solo ADMIN la cambia (la pantalla y la API).
+      {
+        href: '/settings/presupuestos',
+        label: 'Presupuestos',
+        description: 'Cuántos días valen los precios de un presupuesto.',
+        icon: FileClock,
       },
     ],
   },
