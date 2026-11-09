@@ -30,9 +30,9 @@ jobs:
       # build de CI no depende del default del código.
       NEXT_PUBLIC_ROOT_DOMAIN: dentalix.local
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -65,7 +65,7 @@ jobs:
       - name: Navegadores de Playwright (restaurar la caché)
         id: playwright-cache
         timeout-minutes: 2
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ steps.playwright-version.outputs.os }}-${{ steps.playwright-version.outputs.version }}
@@ -109,7 +109,7 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         timeout-minutes: 2
         continue-on-error: true
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.cache/ms-playwright
           key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
@@ -128,9 +128,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # node del runner: solo para las APIs falsas de la prueba de humo.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: docker build (sin publicar)
