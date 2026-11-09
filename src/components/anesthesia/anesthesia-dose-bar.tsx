@@ -13,7 +13,7 @@ import {
 } from '@/lib/anesthesia/anesthesia-api';
 import { sedeTime, type SedeClock } from '@/lib/locations/sede-clock';
 import { wallDay } from '@/lib/time/wall-clock';
-import { Button } from '@/components/ui/button';
+import { SectionError } from '@/components/errors/section-error';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Callout } from '@/components/ui/callout';
 
@@ -327,13 +327,13 @@ export function AnesthesiaDoseBarError({
   return (
     <BarFrame id={id}>
       <BarTitle id={id} />
-      <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-danger-text">
-        <ShieldAlert aria-hidden className="size-4 shrink-0" />
-        <span className="min-w-0 flex-1 break-words">{message}</span>
-        <Button type="button" variant="secondary" size="sm" onClick={onRetry}>
-          {doseBarCopy.retry}
-        </Button>
-      </div>
+      {/* DX-442: escalón 1 de la escalera (nada que enseñar en su sitio), compacto. */}
+      <SectionError
+        description={message}
+        onRetry={onRetry}
+        retryLabel={doseBarCopy.retry}
+        className="gap-1 px-3 py-3 [&>span]:hidden [&_button]:mt-0"
+      />
     </BarFrame>
   );
 }

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
 import { openPatientTab } from './support/patient-tabs';
+import { expectTouchTarget } from './support/touch-targets';
 import { E2E_REGION } from './support/regional';
 import { regionalFormat } from '../src/lib/format/regional-format';
 import { moneyWithCode } from '../src/lib/format/sede-number';
@@ -122,6 +123,12 @@ for (const viewport of [
     await credit.getByRole('button', { name: /^Acciones de/ }).click();
     await page.getByRole('menuitem', { name: /Devolver/ }).click();
     const refund = page.getByRole('dialog');
+    // DX-442 (FE-093): a 390 px los controles de «Devolver» miden al menos 44 px.
+    if (viewport.width === 390) {
+      for (const name of ['Importe a devolver', 'Cómo se devuelve', 'Motivo']) {
+        await expectTouchTarget(refund.getByLabel(name), { scope: refund, label: name });
+      }
+    }
     await refund.getByLabel('Importe a devolver').fill('40');
     await refund.getByLabel('Cómo se devuelve').selectOption('TRANSFER');
     await refund.getByLabel('Motivo').fill('El paciente se muda de ciudad');

@@ -957,6 +957,14 @@ type BackupPreview =
  * el formulario sigue sirviendo igual). `role="status"`: el lector la anuncia
  * al cambiar el día o la moneda, sin interrumpir.
  */
+export const BACKUP_PREVIEW_DEBOUNCE_MS = 300;
+
+/** Un día `YYYY-MM-DD` completo y de 1900 en adelante: lo demás ni se pregunta. */
+export function isQueryableBacklogDay(date: string): boolean {
+  const match = /^(\d{4})-\d{2}-\d{2}$/.exec(date);
+  return match !== null && Number(match[1]) >= 1900;
+}
+
 function BackupRateNotice({
   token,
   date,
@@ -973,17 +981,22 @@ function BackupRateNotice({
   const key = `${date}|${currency}`;
 
   useEffect(() => {
-    if (currency === '') return;
+    // DX-442: la fecha se teclea por segmentos; se consulta 300 ms después del
+    // último cambio y nunca un año anterior a 1900 (un «19» a medio escribir).
+    if (currency === '' || !isQueryableBacklogDay(date)) return;
     let cancelled = false;
-    getRateBacklogDay(token, date, currency)
-      .then((day) => {
-        if (!cancelled) setPreview({ key: `${date}|${currency}`, value: { status: 'ready', day } });
-      })
-      .catch(() => {
-        if (!cancelled) setPreview({ key: `${date}|${currency}`, value: { status: 'error' } });
-      });
+    const timer = setTimeout(() => {
+      getRateBacklogDay(token, date, currency)
+        .then((day) => {
+          if (!cancelled) setPreview({ key: `${date}|${currency}`, value: { status: 'ready', day } });
+        })
+        .catch(() => {
+          if (!cancelled) setPreview({ key: `${date}|${currency}`, value: { status: 'error' } });
+        });
+    }, BACKUP_PREVIEW_DEBOUNCE_MS);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [token, date, currency]);
 

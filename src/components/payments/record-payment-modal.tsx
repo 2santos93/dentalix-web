@@ -819,6 +819,7 @@ export function RecordPaymentModal({
                   }}
                   confirmError={confirmError}
                   disabled={submitting}
+                  onRetryBalance={() => setBalanceRefresh((n) => n + 1)}
                 />
               ) : null}
             </>

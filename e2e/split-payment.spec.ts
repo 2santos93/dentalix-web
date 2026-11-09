@@ -128,6 +128,12 @@ for (const viewport of [
     }
     await add.click();
     const second = dialog.getByTestId('split-line-2');
+    // DX-442 (FE-093): a 390 px los controles de la línea miden al menos 44 px.
+    if (viewport.width === 390) {
+      for (const name of ['Importe', 'Moneda', 'Método']) {
+        await expectTouchTarget(second.getByLabel(name), { scope: dialog, label: `línea 2 · ${name}` });
+      }
+    }
     await second.getByLabel('Importe').fill('5000');
     await second.getByLabel('Moneda').selectOption('VES');
     await second.getByLabel('Método').selectOption({ label: 'Pago móvil' });
