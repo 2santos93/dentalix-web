@@ -1,6 +1,11 @@
 import { ClinicFiscalLines } from '@/components/brand/clinic-fiscal-lines';
 import * as React from 'react';
-import type { PlanQuote, PlanQuoteAcceptance, PlanQuoteItem } from '@/lib/treatment-plans/plan-quote-api';
+import {
+  expiredAcceptanceLine,
+  type PlanQuote,
+  type PlanQuoteAcceptance,
+  type PlanQuoteItem,
+} from '@/lib/treatment-plans/plan-quote-api';
 import { SURFACE_LABELS } from '@/lib/odontogram/surface-labels';
 import { documentTexts, type DocumentFormat } from '@/lib/format/document-format';
 import { convertWithRate, paymentRateCopy, ratePairLabel } from '@/lib/payments/payment-rate';
@@ -151,6 +156,7 @@ export function PlanQuoteDocument({ quote, format, secondCurrency = null }: Plan
     value > 0 ? `−${money(value, currency)}` : copy.noDiscount;
   const listFormat = sedeListPriceFormat(format?.fmt ?? null);
   const { acceptance, currency } = quote;
+  const expiredLine = acceptance ? expiredAcceptanceLine(acceptance, doc) : null;
   // DX-502: cada precio de lista lleva la moneda del catálogo que congeló su
   // ítem (`listPriceCurrency`, de la API). Si alguno no está en la del plan
   // (o no se sabe), va con la nota y sin «Ahorro por convenio».
@@ -408,6 +414,12 @@ export function PlanQuoteDocument({ quote, format, secondCurrency = null }: Plan
                   <span className="text-[#4b5563]">{copy.recordedBy(acceptance.acceptedByName)}</span>
                 </>
               )}
+              {/* DX-379 (C): cómo se aceptó un presupuesto vencido, con las fechas de la sede. */}
+              {expiredLine ? (
+                <span data-testid="quote-expired-acceptance" className="mt-1 block text-[#4b5563] tabular-nums">
+                  {expiredLine}
+                </span>
+              ) : null}
             </figcaption>
           </figure>
         ) : (
