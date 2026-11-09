@@ -1447,7 +1447,9 @@ describe('TreatmentPlansTab', () => {
         render(<TreatmentPlansTab patientId="pat-1" token={discountDentistToken} />);
         const select = await screen.findByLabelText<HTMLSelectElement>(/^estado del plan$/i);
         await user.selectOptions(select, 'ACCEPTED');
-        expect(await screen.findByText(/El presupuesto venció el 06\/11\/2026/)).toBeInTheDocument();
+        expect(
+          await screen.findByText('El presupuesto venció el 06/11/2026: acéptalo con firma para elegir cómo.'),
+        ).toBeInTheDocument();
         await waitFor(() => expect(mockedGetPlan).toHaveBeenCalledTimes(2));
         await waitFor(() =>
           expect(
