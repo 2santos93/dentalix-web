@@ -41,6 +41,8 @@ function item(overrides: Partial<PendingFollowUpItem> = {}): PendingFollowUpItem
     optionLabel: 'Opción A: implante',
     presentedAt: '2026-10-07T15:00:00.000Z',
     presentedLocationId: 'loc-1',
+    quoteValidUntil: null,
+    quoteExpired: false,
     daysSincePresented: 9,
     currency: 'USD',
     total: 5300000,
