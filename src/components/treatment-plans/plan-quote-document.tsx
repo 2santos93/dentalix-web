@@ -138,8 +138,9 @@ interface PlanQuoteDocumentProps {
   /** DX-376: total orientativo en otra moneda; sin ella, el presupuesto no cambia. */
   secondCurrency?: QuoteSecondCurrency | null;
   /**
-   * DX-417: este presupuesto es el pendiente de una aceptación parcial; el
-   * instante en que se aceptó el original («Resto de la aceptación parcial del …»).
+   * DX-417: este presupuesto es el pendiente de una aceptación parcial: el
+   * instante en que se aceptó el original («Resto de la aceptación parcial
+   * del …»), o `'unknown'` si no se pudo leer («Resto de una aceptación parcial»).
    */
   partialRestOf?: string | null;
 }
@@ -440,7 +441,7 @@ export function PlanQuoteDocument({ quote, format, secondCurrency = null, partia
           <>
             {partialRestOf ? (
               <p data-testid="quote-partial-rest" className="mb-4 text-sm text-[#4b5563] tabular-nums">
-                {partialRestLine(doc.date(partialRestOf))}
+                {partialRestLine(partialRestOf === 'unknown' ? null : doc.date(partialRestOf))}
               </p>
             ) : null}
             <div className="grid grid-cols-1 gap-8 text-sm text-[#4b5563] sm:grid-cols-3 print:grid-cols-3">

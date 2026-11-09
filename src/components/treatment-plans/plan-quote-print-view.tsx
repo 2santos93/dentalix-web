@@ -64,6 +64,12 @@ interface PlanQuotePrintViewProps {
   backHref: string;
   /** En `false` no se pide nada y se muestra el aviso de acceso (la API daría 403). */
   allowed?: boolean;
+  /**
+   * DX-417 (ronda 1, M-6): el rol lee el plan clínico (`GET /treatment-plans/:id`,
+   * roles clínicos). Sin él (recepción) no se pide (sería un 403) y el pendiente
+   * se imprime sin su línea: el presupuesto no dice de dónde viene.
+   */
+  canReadPlan?: boolean;
 }
 
 /**
@@ -83,6 +89,7 @@ export function PlanQuotePrintView({
   planId,
   backHref,
   allowed = true,
+  canReadPlan = false,
 }: PlanQuotePrintViewProps) {
   const [data, setData] = useState<PlanQuote | null>(null);
   // DX-417: el instante en que se aceptó el original si este es su presupuesto pendiente.
@@ -116,7 +123,7 @@ export function PlanQuotePrintView({
         // si es el pendiente de una aceptación parcial (sin acceso al plan, sin la línea).
         const [res, plan] = await Promise.all([
           issuePlanQuote(token, patientId, planId),
-          getPlan(token, planId).catch(() => null),
+          canReadPlan ? getPlan(token, planId).catch(() => null) : Promise.resolve(null),
         ]);
         if (cancelled) return;
         // La URL nombra al paciente: si el plan es de otro, no se imprime bajo
@@ -131,7 +138,10 @@ export function PlanQuotePrintView({
             ? await getPlan(token, plan.splitFromPlanId).catch(() => null)
             : null;
         if (cancelled) return;
-        setPartialRestOf(original?.acceptedAt ?? null);
+        // El original sin fecha legible (o sin acceso): la línea sin fecha.
+        setPartialRestOf(
+          !res.acceptance && plan?.splitFromPlanId ? (original?.acceptedAt ?? 'unknown') : null,
+        );
         setData(res);
         setError(null);
       } catch (err) {
@@ -146,7 +156,7 @@ export function PlanQuotePrintView({
     return () => {
       cancelled = true;
     };
-  }, [token, patientId, planId, reloadKey, allowed]);
+  }, [token, patientId, planId, reloadKey, allowed, canReadPlan]);
 
   useEffect(() => {
     if (autoPrint && !printed.current) {

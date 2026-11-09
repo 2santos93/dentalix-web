@@ -73,7 +73,7 @@ describe('PlanQuotePrintView (DX-012)', () => {
           ? { id: 'plan-1', splitFromPlanId: 'plan-0' }
           : { id: 'plan-0', acceptedAt: '2026-10-20T15:00:00.000Z' }) as TreatmentPlan,
       );
-      renderView();
+      renderView({ canReadPlan: true });
       expect(await screen.findByTestId('quote-partial-rest')).toHaveTextContent(
         'Resto de la aceptación parcial del 20/10/2026',
       );
@@ -81,19 +81,29 @@ describe('PlanQuotePrintView (DX-012)', () => {
       expect(print).toHaveBeenCalledTimes(1);
     });
 
-    it('sin acceso al plan (recepción: 403) se imprime igual, sin la línea', async () => {
+    it('M-6: un rol que no lee el plan (recepción) no lo pide (nada de 403) y se imprime igual', async () => {
       mockedIssue.mockResolvedValue(planQuoteFixture({ planStatus: 'PRESENTED' }));
-      jest.mocked(getPlan).mockRejectedValue(new ApiError(403, 'No'));
-      renderView();
+      renderView({ canReadPlan: false });
       expect(await screen.findByTestId('quote-header')).toBeInTheDocument();
       await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
+      expect(getPlan).not.toHaveBeenCalled();
       expect(screen.queryByTestId('quote-partial-rest')).not.toBeInTheDocument();
+    });
+
+    it('M-6: el original no se puede leer: «Resto de una aceptación parcial», sin fecha', async () => {
+      mockedIssue.mockResolvedValue(planQuoteFixture({ planStatus: 'PRESENTED' }));
+      jest.mocked(getPlan).mockImplementation(async (_t, id) => {
+        if (id === 'plan-1') return { id: 'plan-1', splitFromPlanId: 'plan-0' } as TreatmentPlan;
+        throw new ApiError(404, 'No');
+      });
+      renderView({ canReadPlan: true });
+      expect(await screen.findByTestId('quote-partial-rest')).toHaveTextContent(/^Resto de una aceptación parcial$/);
     });
 
     it('un pendiente ya firmado no busca el original ni lleva la línea', async () => {
       mockedIssue.mockResolvedValue(planQuoteFixture({ planStatus: 'ACCEPTED', acceptance: SIGNED_ACCEPTANCE }));
       jest.mocked(getPlan).mockResolvedValue({ id: 'plan-1', splitFromPlanId: 'plan-0' } as TreatmentPlan);
-      renderView();
+      renderView({ canReadPlan: true });
       expect(await screen.findByTestId('quote-header')).toBeInTheDocument();
       expect(getPlan).not.toHaveBeenCalledWith('tok', 'plan-0');
       expect(screen.queryByTestId('quote-partial-rest')).not.toBeInTheDocument();

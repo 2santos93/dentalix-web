@@ -93,9 +93,12 @@ export function partialAcceptanceLine(
     : `Aceptación parcial: ${ids.length} procedimientos (${amount}) quedan en un presupuesto pendiente.`;
 }
 
-/** DX-417: la línea del presupuesto pendiente (fuera del hash), con la fecha ya pintada en la sede. */
-export function partialRestLine(date: string): string {
-  return `Resto de la aceptación parcial del ${date}`;
+/**
+ * DX-417: la línea del presupuesto pendiente (fuera del hash), con la fecha ya
+ * pintada en la sede; sin fecha (no se pudo leer el original), sin ella.
+ */
+export function partialRestLine(date: string | null): string {
+  return date ? `Resto de la aceptación parcial del ${date}` : 'Resto de una aceptación parcial';
 }
 
 /**

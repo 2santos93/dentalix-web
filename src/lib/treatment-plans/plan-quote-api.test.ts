@@ -128,6 +128,7 @@ describe('plan-quote-api (DX-012)', () => {
     );
     expect(partialAcceptanceLine({ pendingItemIds: null, pendingTotal: null, pendingPlanId: null }, 'USD', money)).toBeNull();
     expect(partialRestLine('16/10/2026')).toBe('Resto de la aceptación parcial del 16/10/2026');
+    expect(partialRestLine(null)).toBe('Resto de una aceptación parcial');
   });
 
   it('DX-417 (I-1): el pendiente solo es «pendiente» mientras siga presentado y sin aceptar', () => {
