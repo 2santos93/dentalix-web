@@ -1095,7 +1095,9 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
     }
     setUpdatingId(id);
     try {
-      await updateAppointment(token, id, { status });
+      // DX-267-bis: reactivar pasa por las reglas de mover; sus avisos (fuera
+      // del horario del profesional, bloqueo que deja agendar) se enseñan.
+      announceAppointmentWarnings(await updateAppointment(token, id, { status }));
       await afterStatusChange();
     } catch (err) {
       // DX-509: reactivar una urgencia en sobrecupo cuya hora ya ocupa otra
@@ -1104,8 +1106,9 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
         setKeepOverbooked({
           message: apiErrorMessage(err, copy.genericStatusChangeError),
           confirm: async () => {
-            await updateAppointment(token, id, { status, keepOverbooked: true });
+            const kept = await updateAppointment(token, id, { status, keepOverbooked: true });
             toast.success(copy.reactivatedOverbooked);
+            announceAppointmentWarnings(kept);
             await afterStatusChange();
           },
         });

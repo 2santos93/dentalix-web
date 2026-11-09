@@ -537,6 +537,61 @@ describe('AgendaView', () => {
     });
   });
 
+  describe('reactivar con las reglas de mover (DX-267-bis)', () => {
+    const OFF_SCHEDULE =
+      'Fuera del horario del profesional: no trabaja en Sede principal el martes 10 de marzo.';
+
+    it('fuera del horario del profesional: la cita se reactiva y sale el aviso', async () => {
+      mockedListStaff.mockResolvedValue(staff);
+      const cancelled = appointment({ id: 'apt-c', status: 'CANCELLED', cancelledByKind: 'STAFF_FOR_PATIENT' });
+      mockedListAppointments.mockResolvedValue([cancelled]);
+      mockedUpdateAppointment.mockResolvedValueOnce({
+        ...cancelled,
+        status: 'SCHEDULED',
+        warnings: [OFF_SCHEDULE],
+        warningCodes: ['PROVIDER_OFF_SCHEDULE'],
+      } as Awaited<ReturnType<typeof updateAppointment>>);
+      const user = userEvent.setup();
+      await renderAgenda(
+        <>
+          <AgendaView token="tok" />
+          <Toaster />
+        </>,
+      );
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await user.click(screen.getByRole('button', { name: /^lista$/i }));
+      const table = await screen.findByRole('table', { name: /agenda del día/i });
+      await pickStatus(user, within(table).getByRole('combobox'), 'Agendada');
+
+      expect(await screen.findByText('Cita fuera del horario del profesional')).toBeInTheDocument();
+      expect(screen.getByText(OFF_SCHEDULE)).toBeInTheDocument();
+      expect(mockedUpdateAppointment).toHaveBeenCalledWith('tok', 'apt-c', { status: 'SCHEDULED' });
+    });
+
+    it('una cita que ya pasó: el mensaje del servidor en el detalle, sin «Reintentar»', async () => {
+      const tokenFor = (role: string) =>
+        `h.${btoa(JSON.stringify({ sub: 'staff-1', tenantId: 't1', role }))}.s`;
+      const cancelled = appointment({ id: 'apt-p', status: 'CANCELLED', cancelledByKind: 'STAFF_FOR_PATIENT' });
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListAppointments.mockResolvedValue([cancelled]);
+      mockedUpdateAppointment.mockRejectedValueOnce(
+        new ApiError(409, 'La cita ya pasó: agenda una nueva', { code: 'APPOINTMENT_PAST' }),
+      );
+      const user = userEvent.setup();
+      await renderAgenda(<AgendaView token={tokenFor('RECEPTION')} />);
+      await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+      await goToDate(user, '2026-03-11');
+      await user.click(screen.getByRole('button', { name: /^semana$/i }));
+      await screen.findByLabelText(/agenda de la semana/i);
+      await user.click(screen.getByTestId('week-grid-appointment'));
+      await pickStatus(user, await screen.findByRole('combobox', { name: /^Estado: / }), 'Agendada');
+
+      const dialog = screen.getByRole('dialog');
+      expect(await within(dialog).findByText('La cita ya pasó: agenda una nueva')).toBeInTheDocument();
+      expect(within(dialog).queryByRole('button', { name: /reintentar/i })).not.toBeInTheDocument();
+    });
+  });
+
   it('keeps the row\'s status select disabled until the in-place refresh actually resolves, not just until the PATCH settles (review fix)', async () => {
     mockedListStaff.mockResolvedValue(staff);
 
