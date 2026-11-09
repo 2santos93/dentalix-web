@@ -3206,6 +3206,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/treatment-plans/{planId}/acceptance/reprice-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vista previa del presupuesto con los precios actualizados para aceptarlo vencido (DX-379)
+         * @description Recotiza TODOS los ítems propuestos con el precio vigente (la misma función que …/reprice/preview) y compone el presupuesto como se firmaría (precios y validez nuevos), sin escribir nada. Para aceptar con `expired.mode = REPRICE` se envían `repricing.previewHash` (como `expired.repricePreviewHash`) y `quote.contentHash` (como `contentHash`).
+         */
+        post: operations["PlanQuoteController_acceptanceRepricePreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/price-quote": {
         parameters: {
             query?: never;
@@ -13623,6 +13643,16 @@ export interface components {
             verifiedAt: string;
             signerType?: components["schemas"]["ConsentSignerType"];
         };
+        /**
+         * @description DX-379 (C): null si el presupuesto no estaba vencido. ORIGINAL_PRICES: «Aceptado con los precios del presupuesto vencido el {quoteValidUntil}. Motivo: {expiredReason}[: {expiredNote}]». REPRICE: «Precios actualizados el {acceptedAt} antes de aceptar».
+         * @enum {string}
+         */
+        ExpiredQuoteAcceptanceMode: "REPRICE" | "ORIGINAL_PRICES";
+        /**
+         * @description Motivo de ORIGINAL_PRICES; null en el resto.
+         * @enum {string}
+         */
+        ExpiredQuoteAcceptanceReason: "CLINIC_DELAY" | "PRICE_COMMITMENT" | "LOYALTY" | "FINANCIAL_HARDSHIP" | "OTHER";
         PlanQuoteAcceptanceDto: {
             signerName: string;
             /** @description data:image/png;base64,… */
@@ -13643,6 +13673,22 @@ export interface components {
             userAgent: string | null;
             /** @description DX-415: «Aceptado a distancia» por el paciente con enlace y código; null si se firmó en la clínica. */
             remote: components["schemas"]["PlanQuoteRemoteAcceptanceDto"] | null;
+            /**
+             * Format: date
+             * @description DX-379 (C): último día válido del presupuesto al firmar (antes de actualizar precios). Null en aceptaciones anteriores o sin validez guardada. Fuera del contenido firmado.
+             * @example 2026-11-03
+             */
+            quoteValidUntil: string | null;
+            /** @description DX-379 (C): null si el presupuesto no estaba vencido. ORIGINAL_PRICES: «Aceptado con los precios del presupuesto vencido el {quoteValidUntil}. Motivo: {expiredReason}[: {expiredNote}]». REPRICE: «Precios actualizados el {acceptedAt} antes de aceptar». */
+            expiredMode: components["schemas"]["ExpiredQuoteAcceptanceMode"] | null;
+            /** @description Motivo de ORIGINAL_PRICES; null en el resto. */
+            expiredReason: components["schemas"]["ExpiredQuoteAcceptanceReason"] | null;
+            expiredNote: string | null;
+            /**
+             * Format: uuid
+             * @description REPRICE: la recotización hecha en la firma (treatment_plan_repricings, source ACCEPT).
+             */
+            repricingId: string | null;
         };
         PlanQuoteDocumentDto: {
             /** @description Organización clínica actual; separada del contenido firmado. */
@@ -13688,6 +13734,19 @@ export interface components {
             contentHash: string;
             acceptance: components["schemas"]["PlanQuoteAcceptanceDto"] | null;
         };
+        ExpiredAcceptanceDto: {
+            /** @description REPRICE: actualizar los precios de TODOS los ítems propuestos antes de firmar (exige `repricePreviewHash`; `contentHash` es el del presupuesto recotizado de POST …/acceptance/reprice-preview). ORIGINAL_PRICES: aceptar con los precios del presupuesto vencido (exige `reason`). */
+            mode: components["schemas"]["ExpiredQuoteAcceptanceMode"];
+            /** @description Motivo de ORIGINAL_PRICES (obligatorio). OTHER exige `note`. Con REPRICE no se envía. */
+            reason?: components["schemas"]["ExpiredQuoteAcceptanceReason"];
+            /**
+             * @description Obligatoria con OTHER. Con REPRICE no se envía.
+             * @example Se respetó el precio acordado en la primera consulta
+             */
+            note?: string;
+            /** @description REPRICE: el `repricing.previewHash` de POST …/acceptance/reprice-preview. Si los precios vigentes cambiaron desde entonces: 409 `REPRICE_PREVIEW_STALE`. */
+            repricePreviewHash?: string;
+        };
         AcceptTreatmentPlanDto: {
             /** @description Nombre de quien firma (el paciente o su representante) */
             signerName: string;
@@ -13695,47 +13754,8 @@ export interface components {
             signature: string;
             /** @description El contentHash del presupuesto que se mostró (GET …/quote). Si el presupuesto cambió desde entonces: 409. */
             contentHash: string;
-        };
-        PriceQuoteDto: {
-            /** @description Precio de catálogo (`defaultPrice`); null si no tiene */
-            basePrice: number | null;
-            /** @description DX-502: moneda de `basePrice`: la del catálogo, común a todas las sedes activas de la clínica (no solo las del usuario). Null si no hay una común. Puede no ser la del plan (`currency`): no se convierte. */
-            catalogCurrency: string | null;
-            /** @description Precio de referencia resuelto (el `catalogPrice` que tendría el ítem); null = sin precio: hay que indicarlo */
-            price: number | null;
-            /**
-             * @description De dónde sale `price`
-             * @enum {string}
-             */
-            source: "CATALOG" | "PRICE_LIST" | "AGREEMENT_PERCENT" | "AGREEMENT_PRICE_LIST";
-            /** Format: uuid */
-            agreementId: string | null;
-            agreementName: string | null;
-            /** @description false = la prestación no admite descuentos (ni % del convenio ni discrecionales) */
-            allowDiscount: boolean;
-            /** @description Código ISO 4217 de 3 letras. */
-            currency: string;
-            /** @description DX-513-bis: moneda de `price` (la del plan para las listas, la del catálogo para el resto). Null si no se sabe o no hay precio. */
-            referenceCurrency: string | null;
-            /** @description DX-513-bis: `price` en la moneda del plan (convertido con `rate` si está en otra): el precio que se propone y la referencia del descuento. Null sin precio o sin tasa (`rateMissing`). */
-            referencePriceInPlan: number | null;
-            /** @description DX-513-bis: la tasa de hoy en la sede con la que se convertiría; null si no hace falta. */
-            rate: components["schemas"]["ReferenceRateDto"] | null;
-            /** @description DX-513-bis: hace falta una tasa (referencia en otra moneda) y no la hay hoy: el alta respondería 422 `DISCOUNT_REFERENCE_RATE_MISSING`. */
-            rateMissing: boolean;
-            /** @description DX-513-bis: con `rateMissing`, la moneda sin tasa (la que falta registrar); null si no falta. */
-            missingRateCurrency: string | null;
-        };
-        QuoteSettingsDto: {
-            /**
-             * @description Días civiles que vale un presupuesto desde que se emite (al presentarlo o al imprimirlo por primera vez). 30 de plataforma. Cambiarlo no toca los presupuestos ya emitidos.
-             * @example 30
-             */
-            validityDays: number;
-        };
-        RepricePlanDto: {
-            /** @description Ítems vivos de ESTE plan a recotizar (404 si alguno no lo es; 409 si alguno no está propuesto o es un cargo por inasistencia). Sin ellos (o vacío), todos los propuestos; el resto sale en `skipped`. */
-            itemIds?: string[];
+            /** @description DX-379 (C): obligatorio si el presupuesto está vencido (sin él: 409 `QUOTE_EXPIRED`); con un presupuesto no vencido: 400. */
+            expired?: components["schemas"]["ExpiredAcceptanceDto"];
         };
         /**
          * @description De dónde sale la referencia; null en un ítem libre.
@@ -13852,6 +13872,53 @@ export interface components {
             /** @description La validez con la que queda el plan: la nueva si `validityRenewed`, si no la que ya tenía (null en un borrador nunca emitido). */
             validity: components["schemas"]["RepricingValidityDto"] | null;
             totals: components["schemas"]["RepricingTotalsDto"];
+        };
+        AcceptanceRepricePreviewDto: {
+            /** @description La recotización de todos los ítems propuestos. Su `previewHash` va en `expired.repricePreviewHash` de la aceptación. */
+            repricing: components["schemas"]["RepricingPreviewDto"];
+            /** @description El presupuesto como se firmaría, con los precios y la validez nuevos. Su `contentHash` va en `contentHash` de la aceptación. */
+            quote: components["schemas"]["PlanQuoteDocumentDto"];
+        };
+        PriceQuoteDto: {
+            /** @description Precio de catálogo (`defaultPrice`); null si no tiene */
+            basePrice: number | null;
+            /** @description DX-502: moneda de `basePrice`: la del catálogo, común a todas las sedes activas de la clínica (no solo las del usuario). Null si no hay una común. Puede no ser la del plan (`currency`): no se convierte. */
+            catalogCurrency: string | null;
+            /** @description Precio de referencia resuelto (el `catalogPrice` que tendría el ítem); null = sin precio: hay que indicarlo */
+            price: number | null;
+            /**
+             * @description De dónde sale `price`
+             * @enum {string}
+             */
+            source: "CATALOG" | "PRICE_LIST" | "AGREEMENT_PERCENT" | "AGREEMENT_PRICE_LIST";
+            /** Format: uuid */
+            agreementId: string | null;
+            agreementName: string | null;
+            /** @description false = la prestación no admite descuentos (ni % del convenio ni discrecionales) */
+            allowDiscount: boolean;
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @description DX-513-bis: moneda de `price` (la del plan para las listas, la del catálogo para el resto). Null si no se sabe o no hay precio. */
+            referenceCurrency: string | null;
+            /** @description DX-513-bis: `price` en la moneda del plan (convertido con `rate` si está en otra): el precio que se propone y la referencia del descuento. Null sin precio o sin tasa (`rateMissing`). */
+            referencePriceInPlan: number | null;
+            /** @description DX-513-bis: la tasa de hoy en la sede con la que se convertiría; null si no hace falta. */
+            rate: components["schemas"]["ReferenceRateDto"] | null;
+            /** @description DX-513-bis: hace falta una tasa (referencia en otra moneda) y no la hay hoy: el alta respondería 422 `DISCOUNT_REFERENCE_RATE_MISSING`. */
+            rateMissing: boolean;
+            /** @description DX-513-bis: con `rateMissing`, la moneda sin tasa (la que falta registrar); null si no falta. */
+            missingRateCurrency: string | null;
+        };
+        QuoteSettingsDto: {
+            /**
+             * @description Días civiles que vale un presupuesto desde que se emite (al presentarlo o al imprimirlo por primera vez). 30 de plataforma. Cambiarlo no toca los presupuestos ya emitidos.
+             * @example 30
+             */
+            validityDays: number;
+        };
+        RepricePlanDto: {
+            /** @description Ítems vivos de ESTE plan a recotizar (404 si alguno no lo es; 409 si alguno no está propuesto o es un cargo por inasistencia). Sin ellos (o vacío), todos los propuestos; el resto sale en `skipped`. */
+            itemIds?: string[];
         };
         ApplyRepricingDto: {
             /** @description Ítems vivos de ESTE plan a recotizar (404 si alguno no lo es; 409 si alguno no está propuesto o es un cargo por inasistencia). Sin ellos (o vacío), todos los propuestos; el resto sale en `skipped`. */
@@ -29442,7 +29509,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED); DX-513-bis: la moneda no cambia si el plan tiene algún ítem vivo con precio de referencia (catálogo, lista o convenio): code PLAN_CURRENCY_LOCKED_BY_PRICED_ITEMS (los ítems libres no bloquean); DX-513: la moneda no cambia si con ella un ítem pasaría a contar como descuento sin firmar, o si una rebaja frente al catálogo que cuenta hoy dejaría de verse en el informe de descuentos (nada cambia: ni el plan ni sus ítems); plan aceptado con firma: no cambia de moneda ni vuelve atrás (DX-012); otra opción del grupo ya aceptada; la moneda no cambia si el plan tiene abonos vivos, un plan de cuotas activo o está cerrado (DX-109), ni si tiene asientos de saldo a favor (traspaso dado o recibido, o devolución), aunque no tenga abonos: code PLAN_CURRENCY_LOCKED_BY_CREDIT (DX-438). SEC-050: el plan que lleva un cargo vigente por inasistencia no se cancela ni cambia de moneda (completarlo sí). Aceptar pasa los ítems propuestos a aceptados, igual que la aceptación firmada, y cancela el plan de cuotas activo de las hermanas que rechaza; cancelar cancela también el plan de cuotas activo */
+            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED); DX-513-bis: la moneda no cambia si el plan tiene algún ítem vivo con precio de referencia (catálogo, lista o convenio): code PLAN_CURRENCY_LOCKED_BY_PRICED_ITEMS (los ítems libres no bloquean); DX-513: la moneda no cambia si con ella un ítem pasaría a contar como descuento sin firmar, o si una rebaja frente al catálogo que cuenta hoy dejaría de verse en el informe de descuentos (nada cambia: ni el plan ni sus ítems); plan aceptado con firma: no cambia de moneda ni vuelve atrás (DX-012); otra opción del grupo ya aceptada; la moneda no cambia si el plan tiene abonos vivos, un plan de cuotas activo o está cerrado (DX-109), ni si tiene asientos de saldo a favor (traspaso dado o recibido, o devolución), aunque no tenga abonos: code PLAN_CURRENCY_LOCKED_BY_CREDIT (DX-438). SEC-050: el plan que lleva un cargo vigente por inasistencia no se cancela ni cambia de moneda (completarlo sí). Aceptar pasa los ítems propuestos a aceptados, igual que la aceptación firmada, y cancela el plan de cuotas activo de las hermanas que rechaza; cancelar cancela también el plan de cuotas activo. DX-379 (C): status ACCEPTED con el presupuesto vencido (quoteExpired): code QUOTE_EXPIRED («El presupuesto venció el {fecha}: acéptalo con firma para elegir cómo.», con quoteValidUntil); la sede del plan sin zona válida: LOCATION_TIMEZONE_REQUIRED */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -29890,7 +29957,7 @@ export interface operations {
                     "application/json": components["schemas"]["PlanQuoteDocumentDto"];
                 };
             };
-            /** @description Sin firma, firma no PNG o de más de 200 KB, sin nombre de quien firma, o plan sin ítems */
+            /** @description Sin firma, firma no PNG o de más de 200 KB, sin nombre de quien firma, o plan sin ítems. DX-379 (C): `expired` con un presupuesto no vencido; ORIGINAL_PRICES sin motivo, OTHER sin nota, nota de más de 200; REPRICE sin `repricePreviewHash` o con motivo */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -29911,7 +29978,60 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Ya estaba aceptado y firmado, el plan está rechazado, cancelado o completado, otra opción de su grupo ya está aceptada, o el presupuesto cambió desde que se mostró (contentHash) */
+            /** @description Ya estaba aceptado y firmado, el plan está rechazado, cancelado o completado, otra opción de su grupo ya está aceptada, o el presupuesto cambió desde que se mostró (contentHash). DX-379 (C): la sede de la presentación del plan sin zona válida → `LOCATION_TIMEZONE_REQUIRED` (también con un presupuesto no vencido si tiene validez guardada); `code: QUOTE_EXPIRED` («El presupuesto venció el {fecha}. Actualiza los precios o acepta con los precios originales indicando el motivo.», con `quoteValidUntil`) si está vencido y no llega `expired`; con REPRICE, `REPRICE_PREVIEW_STALE` (los precios vigentes cambiaron desde la vista previa), `REPRICE_INCOMPLETE` (algún propuesto sin precio vigente o sin tasa), `REPRICE_NOTHING_TO_APPLY` o el plan no se recotiza (abonos, plan de cuotas, saldo a favor); nada se escribe */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlanQuoteController_acceptanceRepricePreview: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede cuyos datos encabezan el presupuesto (y en la que se firma). Sin ella, la sede principal. Un plan ya aceptado muestra la sede en la que se firmó. */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                patientId: string;
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptanceRepricePreviewDto"];
+                };
+            };
+            /** @description El plan no tiene ítems, o el presupuesto no está vencido («El presupuesto no está vencido: acéptalo sin elegir cómo.», como la firma) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo odontólogo y ADMIN aceptan (DX-040); SEC-041: el redondeo sube el % efectivo por encima del tope de quien firma */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o plan no encontrados en esta clínica (o el plan es de otro paciente) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya firmado, el plan no admite aceptarse o no se recotiza (aceptado, cerrado, con abonos, plan de cuotas o saldo a favor); `REPRICE_INCOMPLETE`: algún propuesto sin precio vigente o sin tasa de hoy (la validez no se renovaría); `REPRICE_NOTHING_TO_APPLY`; `LOCATION_TIMEZONE_REQUIRED` */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -36719,7 +36839,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description La sede no tiene formato regional, o BUDGET de un plan que no está «Presentado» (o ya aceptado) */
+            /** @description La sede no tiene formato regional, o BUDGET de un plan que no está «Presentado» (o ya aceptado). DX-379 (C): BUDGET de un presupuesto vencido: code QUOTE_EXPIRED («El presupuesto venció el {fecha}: actualiza sus precios antes de enviarlo a firmar a distancia.», con quoteValidUntil) */
             409: {
                 headers: {
                     [name: string]: unknown;
