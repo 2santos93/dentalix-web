@@ -51,24 +51,62 @@ permissions:
   # de las runs anteriores de main con el GITHUB_TOKEN (solo lectura).
   actions: read
 
+# Lo que lee scripts/e2e-ci.sh, igual en cada shard y en el job de fusión
+# (este último solo lo usa en `skips`). Los JWT no van aquí: el script los
+# genera con `openssl rand` en cada ejecución. No se usa ningún secreto del repo.
+env:
+  API_DIR: ${{ github.workspace }}/dentalix-api
+  PG_HOST: localhost
+  PG_PORT: '5432'
+  PG_SUPERUSER: dentalix
+  PG_SUPERPASS: dentalix
+  E2E_DB_NAME: dentalix_test
+  E2E_API_PORT: '3000'
+  E2E_WEB_PORT: '3001'
+  # OPS-057: Chromium y sus dependencias no los instala `e2e-ci.sh setup`
+  # (E2E_INSTALL_BROWSERS queda en 0) sino el paso «Dependencias y
+  # Chromium», que usa la caché de navegadores.
+  NEXT_TELEMETRY_DISABLED: '1'
+
+defaults:
+  run:
+    working-directory: dentalix-web
+
 jobs:
+  # DX-457 (OPS-053): la suite se reparte en N shards (`--shard=i/N`), cada
+  # uno en su runner con su Postgres, su API, su demo, su esquema y su web; el
+  # job `playwright-merge` («Playwright (web + API + Postgres 16)», el check de
+  # siempre) comprueba el reparto, fusiona los informes (blob) y pasa las
+  # guardias de saltos y de flaky una sola vez por run.
   playwright:
-    name: Playwright (web + API + Postgres 16)
+    name: Playwright ${{ matrix.shard }}/${{ matrix.total }} (web + API + Postgres 16)
     runs-on: ubuntu-24.04
+    strategy:
+      # Un shard rojo no cancela los otros: el informe fusionado dice todo
+      # lo que falló en la run, no solo lo del primero.
+      fail-fast: false
+      # N (`shard` y `total`) y el tope del paso «Playwright» (`timeout`)
+      # viven SOLO aquí. `total` y `timeout` son listas de un solo valor,
+      # como en la API (DX-396). Con 3 shards el más lento tarda ~15-19 min
+      # (DX-457): el 55 % de 35, con margen para que la suite crezca; cuando
+      # el aviso del 70 % empiece a saltar, se sube N (4: [1,2,3,4] y [4]).
+      # DX-413: `grep` o `repeat_each` > 1 (solo workflow_dispatch) corren en
+      # UN shard (`total` 1) con la semántica de siempre: todas las
+      # repeticiones de un test en el mismo runner (repartidas, las de un
+      # mismo fichero caerían en shards distintos), sin reintentos y con los
+      # topes largos (50 min filtrado; 200 repetido).
+      matrix:
+        shard: ${{ fromJSON((inputs.grep != '' || (inputs.repeat_each != '' && inputs.repeat_each != '1')) && '[1]' || '[1, 2, 3]') }}
+        total: ${{ fromJSON((inputs.grep != '' || (inputs.repeat_each != '' && inputs.repeat_each != '1')) && '[1]' || '[3]') }}
+        timeout: ${{ fromJSON((inputs.repeat_each != '' && inputs.repeat_each != '1') && '[200]' || inputs.grep != '' && '[50]' || '[35]') }}
     # DX-292 (TST-033): cada paso lleva su propio tope y la suma cabe aquí.
     # Si un paso se pasa, falla ESE paso (la run queda `failure`) y el informe
     # se sube igual; si se pasara el job, GitHub la marcaría `cancelled` y el
-    # rojo no se vería. Pasos: ~3 min de checkout y Node + 1 (web_sha) + 1
-    # (referencias compartidas con la API) + 1 + 2 + 1 + 5 + 1 + 15 + 1 + 2
-    # (versión y caché de Playwright, Poppler, dependencias, su duración y
-    # guardar la caché; OPS-057) + 5 + 5 + 2 + 8 + 1 + 50 + 1 + 2 + 2 + 2 + 2
-    # + 5 + 1 = 119, y caben en 120 (Playwright: ~40 min la suite entera;
-    # DX-452 avisa al pasar del 70 % de su tope). Lo comprueba
-    # scripts/workflows-playwright-deps.test.ts.
-    # DX-413: un run de repetición (repeat_each > 1, solo workflow_dispatch)
-    # corre muchas veces los mismos tests y sin reintentos: Playwright sube a
-    # 200 min y el job a 4 h 30 min (269 de la misma suma).
-    timeout-minutes: ${{ (inputs.repeat_each != '' && inputs.repeat_each != '1') && 270 || 120 }}
+    # rojo no se vería. ~3 min de checkout y Node más la suma de los topes de
+    # los pasos, con el de «Playwright» = `matrix.timeout` (35, 50 o 200): 107,
+    # 122 o 272, y caben en 110, 125 y 275. Lo comprueba
+    # scripts/workflows-playwright-deps.test.ts para las tres variantes.
+    timeout-minutes: ${{ (inputs.repeat_each != '' && inputs.repeat_each != '1') && 275 || inputs.grep != '' && 125 || 110 }}
     services:
       postgres:
         image: postgres:16
@@ -84,24 +122,6 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-    env:
-      # Lo que lee scripts/e2e-ci.sh. Los JWT no van aquí: el script los genera
-      # con `openssl rand` en cada ejecución. No se usa ningún secreto del repo.
-      API_DIR: ${{ github.workspace }}/dentalix-api
-      PG_HOST: localhost
-      PG_PORT: '5432'
-      PG_SUPERUSER: dentalix
-      PG_SUPERPASS: dentalix
-      E2E_DB_NAME: dentalix_test
-      E2E_API_PORT: '3000'
-      E2E_WEB_PORT: '3001'
-      # OPS-057: Chromium y sus dependencias no los instala `e2e-ci.sh setup`
-      # (E2E_INSTALL_BROWSERS queda en 0) sino el paso «Dependencias y
-      # Chromium», que usa la caché de navegadores.
-      NEXT_TELEMETRY_DISABLED: '1'
-    defaults:
-      run:
-        working-directory: dentalix-web
     steps:
       # Los dos repos, hermanos en el workspace: la API no queda dentro del
       # árbol de la web (el `next build` no debe ver su código).
@@ -284,6 +304,78 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
 
+      # DX-413: `grep` y `repeat_each` (solo en workflow_dispatch) se pasan a
+      # Playwright únicamente si se dieron; por defecto, la suite completa. Un
+      # run filtrado o repetido va SIN reintentos (`--retries 0`): una
+      # repetición que falla es un fallo, no un flaky que el reintento de CI
+      # esconde, así que «10 seguidas» en verde significa 10 pasadas a la
+      # primera (0 flaky y 0 fallidos en el resumen). Entran por `env`, no por
+      # interpolación en el script. DX-457: los argumentos se calculan una vez
+      # (separados por NUL en $RUNNER_TEMP) y los usan «Specs del shard» y
+      # «Playwright», para que la lista y la ejecución vean los mismos tests.
+      # El job de fusión tiene una copia idéntica de este paso.
+      - name: Argumentos de Playwright (grep y repeat_each)
+        id: playwright-args
+        timeout-minutes: 1
+        env:
+          E2E_GREP: ${{ inputs.grep }}
+          E2E_REPEAT_EACH: ${{ inputs.repeat_each }}
+        run: |
+          args=()
+          if [[ -n "${E2E_GREP}" ]]; then
+            args+=(--grep "${E2E_GREP}")
+          fi
+          if [[ -n "${E2E_REPEAT_EACH}" && "${E2E_REPEAT_EACH}" != "1" ]]; then
+            if ! [[ "${E2E_REPEAT_EACH}" =~ ^[1-9][0-9]{0,2}$ ]]; then
+              echo "::error::repeat_each debe ser un entero positivo de hasta 3 cifras"
+              exit 1
+            fi
+            args+=(--repeat-each "${E2E_REPEAT_EACH}")
+          fi
+          # Filtrado o repetido: sin reintentos (ver arriba).
+          if [[ ${#args[@]} -gt 0 ]]; then
+            args+=(--retries 0)
+          fi
+          : > "${RUNNER_TEMP}/playwright-args"
+          if [[ ${#args[@]} -gt 0 ]]; then
+            printf '%s\0' "${args[@]}" > "${RUNNER_TEMP}/playwright-args"
+          fi
+          echo "Argumentos de Playwright: ${args[*]:-ninguno (la suite completa)}"
+
+      # DX-457: los ficheros que corre ESTE shard (`proyecto fichero`, uno por
+      # línea), con los mismos argumentos que «Playwright». `--list` no
+      # ejecuta nada ni necesita los servidores; `--reporter=null` (el listado
+      # sale igual) para que los reporters del config en CI no escriban un
+      # playwright-report/ ni un playwright-results.json de «no ejecutados». El job de fusión junta las
+      # listas y comprueba que cada fichero de la suite está en un shard y
+      # solo en uno. Playwright reparte por fichero mientras `fullyParallel`
+      # sea false y no haya bloques `parallel` (un grupo `serial` no se parte).
+      - name: Specs del shard
+        id: shard-specs
+        timeout-minutes: 1
+        env:
+          SHARD: ${{ matrix.shard }}
+          TOTAL: ${{ matrix.total }}
+        run: |
+          mapfile -d '' -t args < "${RUNNER_TEMP}/playwright-args"
+          mkdir -p .e2e
+          E2E_WEB_SERVER=none npx playwright test --list --reporter=null --shard="${SHARD}/${TOTAL}" ${args[@]+"${args[@]}"} > .e2e/list-raw.txt
+          perl -ne 'print "$1 $2\n" if /^\s+\[([\w-]+)\] › ([^:]+):\d+:\d+ › /' .e2e/list-raw.txt | sort -u > ".e2e/e2e-shard-${SHARD}.txt"
+          echo "Shard ${SHARD}/${TOTAL}: $(wc -l < ".e2e/e2e-shard-${SHARD}.txt") ficheros"
+
+      - name: Subir la lista de specs del shard
+        if: steps.shard-specs.outcome == 'success'
+        timeout-minutes: 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-shard-${{ matrix.shard }}
+          path: dentalix-web/.e2e/e2e-shard-${{ matrix.shard }}.txt
+          include-hidden-files: true
+          if-no-files-found: error
+          # Un «Re-run failed jobs» vuelve a subirla en la misma run.
+          overwrite: true
+          retention-days: 7
+
       - name: Base de datos (rol de la app, migrate deploy y siembra)
         timeout-minutes: 5
         run: scripts/e2e-ci.sh db
@@ -311,108 +403,67 @@ jobs:
         timeout-minutes: 1
         run: echo "at=$(date +%s)" >> "$GITHUB_OUTPUT"
 
-      # DX-413: `grep` y `repeat_each` (solo en workflow_dispatch) se pasan a
-      # Playwright únicamente si se dieron; por defecto, la suite completa. La
-      # guardia de saltados/flaky de abajo no cambia: lee el informe de lo que
-      # corrió, así que un run filtrado no falla por tests no ejecutados.
-      # Un run filtrado o repetido va SIN reintentos (`--retries 0`): una
-      # repetición que falla es un fallo, no un flaky que el reintento de CI
-      # esconde, así que «10 seguidas» en verde significa 10 pasadas a la
-      # primera (0 flaky y 0 fallidos en el resumen). Entran por `env`, no por
-      # interpolación en el script. Con repeat_each > 1 el tope del job sube
-      # (4 h; Playwright 200 min): un test de 4 min × 20 repeticiones cabe.
+
+      # DX-457: solo los tests de este shard (`--shard=i/N`). Los reporters de
+      # la CLI sustituyen a los del config: `list` para el log y `blob`
+      # (blob-report/report-<i>.zip) para el informe fusionado del job de
+      # fusión, que es el que tiene el HTML, el JSON y las guardias. El tope es
+      # `matrix.timeout` (35; 50 filtrado y 200 repetido, DX-413).
       - name: Playwright
         id: playwright
-        timeout-minutes: ${{ (inputs.repeat_each != '' && inputs.repeat_each != '1') && 200 || 50 }}
+        timeout-minutes: ${{ matrix.timeout }}
         env:
-          E2E_GREP: ${{ inputs.grep }}
-          E2E_REPEAT_EACH: ${{ inputs.repeat_each }}
+          SHARD: ${{ matrix.shard }}
+          TOTAL: ${{ matrix.total }}
         run: |
-          args=()
-          if [[ -n "${E2E_GREP}" ]]; then
-            args+=(--grep "${E2E_GREP}")
-          fi
-          if [[ -n "${E2E_REPEAT_EACH}" && "${E2E_REPEAT_EACH}" != "1" ]]; then
-            if ! [[ "${E2E_REPEAT_EACH}" =~ ^[1-9][0-9]{0,2}$ ]]; then
-              echo "::error::repeat_each debe ser un entero positivo de hasta 3 cifras"
-              exit 1
-            fi
-            args+=(--repeat-each "${E2E_REPEAT_EACH}")
-          fi
-          # Filtrado o repetido: sin reintentos (ver arriba).
-          if [[ ${#args[@]} -gt 0 ]]; then
-            args+=(--retries 0)
-          fi
-          scripts/e2e-ci.sh test ${args[@]+"${args[@]}"}
+          mapfile -d '' -t args < "${RUNNER_TEMP}/playwright-args"
+          scripts/e2e-ci.sh test --shard="${SHARD}/${TOTAL}" --reporter=list,blob ${args[@]+"${args[@]}"}
 
       # DX-452 (TST-056): la duración del paso de Playwright en el resumen del
       # job y un aviso (::warning::) al pasar del 70 % de su `timeout-minutes`,
-      # como hace la API (DX-396). El tope es el mismo de la expresión del paso.
+      # como hace la API (DX-396). DX-457: una por shard, con su etiqueta.
       - name: Duración de Playwright
-        # `hashFiles`: un relanzamiento con `web_sha` anterior a este ticket no tiene el script.
+        # `hashFiles`: un relanzamiento con `web_sha` anterior a DX-452 no tiene el script.
         if: always() && steps.playwright.outcome != 'skipped' && hashFiles('dentalix-web/scripts/report-step-duration.sh') != ''
         timeout-minutes: 1
         env:
           STEP_STARTED_AT: ${{ steps.playwright-start.outputs.at }}
-          STEP_LIMIT_MIN: ${{ (inputs.repeat_each != '' && inputs.repeat_each != '1') && 200 || 50 }}
-        run: scripts/report-step-duration.sh "Playwright" "${STEP_LIMIT_MIN}"
-
-      # DX-252 (TST-030): la E2E no sale verde con tests sin ejecutar. Falla,
-      # nombrando cada test, si el informe tiene «skipped» fuera de la lista
-      # versionada e2e/allowed-skips.json. También corre si Playwright falló,
-      # para que el resumen diga qué no se llegó a ejecutar.
-      # DX-292 (TST-033): nombra los flaky (rojo si hay más de 2) y deja en el
-      # resumen del job el recuento y los fallidos, flaky y saltados.
-      - name: Sin tests saltados fuera de e2e/allowed-skips.json ni flaky de más
-        if: always() && (steps.playwright.outcome == 'success' || steps.playwright.outcome == 'failure')
-        timeout-minutes: 2
-        env:
-          # DX-452: la guardia deja aquí los flaky de la run, para la tendencia.
-          E2E_FLAKY_OUT: ${{ github.workspace }}/dentalix-web/e2e-flaky.json
-        run: scripts/e2e-ci.sh skips
-
-      # DX-452 (TST-056): tendencia de flaky. Un spec flaky en 3 o más de las
-      # últimas 10 runs de main (esta y las 9 anteriores) pone en rojo la run y
-      # se nombra: el reintento no puede esconder un fallo que se repite. Solo
-      # en el push a main (los PR y los relanzamientos no escriben ni cuentan en
-      # el historial). Lista (1 llamada) y descarga los artefactos `e2e-flaky`
-      # de las anteriores, de unos cientos de bytes; si GitHub no responde,
-      # avisa y sigue. Ver scripts/check-e2e-flaky-trend.mjs.
-      - name: Tendencia de flaky en main (3 de las últimas 10 runs)
-        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && hashFiles('dentalix-web/e2e-flaky.json') != ''
-        timeout-minutes: 2
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: node scripts/check-e2e-flaky-trend.mjs e2e-flaky.json
-
-      # Los flaky de esta run, para la tendencia de las siguientes (DX-452).
-      # `overwrite`: un relanzamiento de la misma run sustituye el suyo.
-      - name: Subir los flaky de la run (tendencia)
-        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && hashFiles('dentalix-web/e2e-flaky.json') != ''
-        timeout-minutes: 2
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-flaky
-          path: dentalix-web/e2e-flaky.json
-          overwrite: true
-          retention-days: 30
+          STEP_LIMIT_MIN: ${{ matrix.timeout }}
+          SHARD_LABEL: Playwright ${{ matrix.shard }}/${{ matrix.total }}
+          DURATION_HINT: Sube el número de shards (matrix.shard y matrix.total de e2e.yml) o acorta la suite antes de que GitHub corte el paso.
+        run: scripts/report-step-duration.sh "${SHARD_LABEL}" "${STEP_LIMIT_MIN}"
 
       - name: Parar los servidores
         if: always()
         timeout-minutes: 2
         run: scripts/e2e-ci.sh stop
 
-      # Siempre, también en verde (el informe trae los flaky) y si un paso
-      # anterior agotó su tope; con su propio margen dentro del del job.
-      - name: Subir informe, trazas y logs
+
+      # DX-457: el informe del shard (blob) para el job de fusión. Solo lo lee
+      # ese job: retención corta. El nombre lleva el intento para que un
+      # «Re-run failed jobs» no pise el de un shard que no se relanza; el job
+      # de fusión se queda con el intento más alto de cada shard.
+      - name: Subir el informe del shard (blob)
         if: always()
         timeout-minutes: 5
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-${{ github.run_id }}-${{ github.run_attempt }}
+          name: blob-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: dentalix-web/blob-report/
+          if-no-files-found: ignore
+          retention-days: 3
+
+      # Siempre, también en verde y si un paso anterior agotó su tope: lo que
+      # dejan los tests en test-results/ (trazas, capturas, axe) y los logs de
+      # la API y de la web de ESTE shard. El HTML y el JSON fusionados de la
+      # run van en `playwright-<run_id>-<attempt>` (job de fusión).
+      - name: Subir trazas y logs del shard
+        if: always()
+        timeout-minutes: 5
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-${{ github.run_id }}-${{ github.run_attempt }}-shard-${{ matrix.shard }}
           path: |
-            dentalix-web/playwright-report/
-            dentalix-web/playwright-results.json
             dentalix-web/test-results/
             dentalix-web/.e2e/logs/
           include-hidden-files: true
@@ -448,4 +499,317 @@ jobs:
             echo "Cuando la API vuelva a verde, relanza esta E2E: README, «Relanzar la E2E de un merge web bloqueado»."
           } >> "${GITHUB_STEP_SUMMARY}"
           echo "::error title=Bloqueado por la API::${msg}"
+          exit 1
+
+  # DX-457: el check de siempre, «Playwright (web + API + Postgres 16)». Corre
+  # siempre que acaben los shards (también si alguno falla o se cancela, para
+  # decir qué faltó) y es rojo si cualquiera de ellos lo es. Las comprobaciones
+  # del reparto y de los blobs van en línea y no en un script: con `web_sha`
+  # los scripts del checkout son los de un commit viejo (como «Poppler» y
+  # «Bloqueado por la API»). Lo prueba scripts/workflows-e2e-shards.test.ts.
+  playwright-merge:
+    name: Playwright (web + API + Postgres 16)
+    needs: playwright
+    if: always()
+    runs-on: ubuntu-24.04
+    # ~3 min de checkout y Node más la suma de los topes de los pasos (36):
+    # 39, y caben en 40. Lo comprueba scripts/workflows-playwright-deps.test.ts.
+    timeout-minutes: 40
+    env:
+      # El mismo N que la matriz de `playwright` (1 con grep o repeat_each).
+      SHARD_TOTAL: ${{ (inputs.grep != '' || (inputs.repeat_each != '' && inputs.repeat_each != '1')) && 1 || 3 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.web_sha || github.sha }}
+          path: dentalix-web
+          persist-credentials: false
+
+      # Sin `npm ci`: `e2e-ci.sh skips` exige `$API_DIR/package.json`, y así
+      # la guardia de saltos ve las mismas variables (`playwright_env`) que
+      # en los shards; sin E2E_DATABASE_URL ni E2E_MAIL_DIR, los saltos
+      # permitidos por su ausencia pasarían en silencio.
+      - name: Checkout de dentalix-api
+        uses: actions/checkout@v4
+        with:
+          repository: 2santos93/dentalix-api
+          ref: ${{ inputs.api_ref || 'main' }}
+          path: dentalix-api
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: dentalix-web/package-lock.json
+
+      # @playwright/test (`--list` y `merge-reports`) y el config de la web.
+      - name: Dependencias de la web
+        timeout-minutes: 10
+        run: npm ci --no-audit --no-fund
+
+      # Copia idéntica del paso del mismo nombre de `playwright`.
+      - name: Argumentos de Playwright (grep y repeat_each)
+        id: playwright-args
+        timeout-minutes: 1
+        env:
+          E2E_GREP: ${{ inputs.grep }}
+          E2E_REPEAT_EACH: ${{ inputs.repeat_each }}
+        run: |
+          args=()
+          if [[ -n "${E2E_GREP}" ]]; then
+            args+=(--grep "${E2E_GREP}")
+          fi
+          if [[ -n "${E2E_REPEAT_EACH}" && "${E2E_REPEAT_EACH}" != "1" ]]; then
+            if ! [[ "${E2E_REPEAT_EACH}" =~ ^[1-9][0-9]{0,2}$ ]]; then
+              echo "::error::repeat_each debe ser un entero positivo de hasta 3 cifras"
+              exit 1
+            fi
+            args+=(--repeat-each "${E2E_REPEAT_EACH}")
+          fi
+          # Filtrado o repetido: sin reintentos (ver arriba).
+          if [[ ${#args[@]} -gt 0 ]]; then
+            args+=(--retries 0)
+          fi
+          : > "${RUNNER_TEMP}/playwright-args"
+          if [[ ${#args[@]} -gt 0 ]]; then
+            printf '%s\0' "${args[@]}" > "${RUNNER_TEMP}/playwright-args"
+          fi
+          echo "Argumentos de Playwright: ${args[*]:-ninguno (la suite completa)}"
+
+      # La lista completa, sin `--shard` y con los mismos argumentos, en el
+      # formato de «Specs del shard».
+      - name: Lista completa de specs
+        id: all-specs
+        timeout-minutes: 2
+        run: |
+          mapfile -d '' -t args < "${RUNNER_TEMP}/playwright-args"
+          mkdir -p .e2e
+          E2E_WEB_SERVER=none npx playwright test --list --reporter=null ${args[@]+"${args[@]}"} > .e2e/list-raw.txt
+          perl -ne 'print "$1 $2\n" if /^\s+\[([\w-]+)\] › ([^:]+):\d+:\d+ › /' .e2e/list-raw.txt | sort -u > .e2e/e2e-all.txt
+          echo "La suite: $(wc -l < .e2e/e2e-all.txt) ficheros"
+
+      # `continue-on-error`: si falta el artefacto de un shard, lo nombran los
+      # pasos siguientes.
+      - name: Descargar las listas de los shards
+        timeout-minutes: 2
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: e2e-shard-*
+          path: dentalix-web/.e2e/shards
+          merge-multiple: true
+
+      # DX-457: cada fichero de la suite en un shard y solo en uno (la regla
+      # de la API, DX-396), ningún shard vacío y ninguna lista de más.
+      - name: Reparto de specs entre shards
+        id: reparto
+        if: always() && steps.all-specs.outcome == 'success'
+        timeout-minutes: 1
+        env:
+          FULL_LIST: .e2e/e2e-all.txt
+          SHARDS_DIR: .e2e/shards
+        run: |
+          title="Reparto de la e2e"
+          if ! [[ "${SHARD_TOTAL}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error title=${title}::SHARD_TOTAL no es un entero positivo (es «${SHARD_TOTAL}»)"
+            exit 1
+          fi
+          if [[ ! -s "${FULL_LIST}" ]]; then
+            echo "::error title=${title}::la lista completa de specs (${FULL_LIST}) está vacía o no existe"
+            exit 1
+          fi
+          status=0
+          lists=()
+          for ((i = 1; i <= SHARD_TOTAL; i++)); do
+            list="${SHARDS_DIR}/e2e-shard-${i}.txt"
+            if [[ ! -f "${list}" ]]; then
+              echo "::error title=${title}::falta la lista del shard ${i}/${SHARD_TOTAL} (artefacto e2e-shard-${i}): no llegó a «Specs del shard»"
+              status=1
+              continue
+            fi
+            if [[ ! -s "${list}" ]]; then
+              echo "::error title=${title}::el shard ${i}/${SHARD_TOTAL} no tiene specs"
+              status=1
+            fi
+            lists+=("${list}")
+          done
+          for list in "${SHARDS_DIR}"/e2e-shard-*.txt; do
+            [[ -e "${list}" ]] || continue
+            n="${list##*/e2e-shard-}"
+            n="${n%.txt}"
+            if ! [[ "${n}" =~ ^[1-9][0-9]*$ ]] || [[ "${n}" -gt "${SHARD_TOTAL}" ]]; then
+              echo "::error title=${title}::lista de un shard que no existe en esta run (${SHARD_TOTAL} shards): ${list##*/}"
+              status=1
+            fi
+          done
+          union="$(mktemp)"
+          expected="$(mktemp)"
+          if [[ ${#lists[@]} -gt 0 ]]; then
+            sort "${lists[@]}" > "${union}"
+          else
+            : > "${union}"
+          fi
+          sort -u "${FULL_LIST}" > "${expected}"
+          repeated="$(uniq -d "${union}")"
+          missing="$(comm -23 "${expected}" <(sort -u "${union}"))"
+          extra="$(comm -13 "${expected}" <(sort -u "${union}"))"
+          if [[ -n "${repeated}" ]]; then
+            echo "::error title=${title}::specs en más de un shard (abajo, con sus shards)"
+            while IFS= read -r spec; do
+              echo "  ${spec}: $(grep -lxF -- "${spec}" "${lists[@]}" | sed 's|.*/e2e-shard-||; s|\.txt$||' | paste -sd, -)"
+            done <<< "${repeated}"
+            status=1
+          fi
+          if [[ -n "${missing}" ]]; then
+            echo "::error title=${title}::specs que no corre ningún shard (abajo)"
+            echo "${missing}"
+            status=1
+          fi
+          if [[ -n "${extra}" ]]; then
+            echo "::error title=${title}::specs de los shards que no están en la lista completa (abajo)"
+            echo "${extra}"
+            status=1
+          fi
+          rm -f "${union}" "${expected}"
+          if [[ "${status}" -eq 0 ]]; then
+            {
+              echo "### Reparto de la e2e"
+              echo
+              echo "$(wc -l < "${FULL_LIST}" | tr -d ' ') ficheros en ${SHARD_TOTAL} shards, cada uno una sola vez:"
+              for list in "${lists[@]}"; do
+                echo "- ${list##*/}: $(wc -l < "${list}" | tr -d ' ')"
+              done
+            } | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
+          fi
+          exit "${status}"
+
+      - name: Descargar los informes de los shards (blob)
+        if: always()
+        timeout-minutes: 2
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: blob-${{ github.run_id }}-*
+          path: dentalix-web/.e2e/blobs-raw
+
+      # DX-457: un informe (blob) por shard, del intento más alto de cada uno
+      # (un «Re-run failed jobs» solo relanza los shards rojos). Si falta
+      # alguno, rojo nombrándolo: si no, la guardia de saltos daría verde
+      # sobre un informe parcial.
+      - name: Informes de todos los shards
+        id: blobs
+        if: always()
+        timeout-minutes: 1
+        env:
+          RUN_ID: ${{ github.run_id }}
+          BLOBS_RAW: .e2e/blobs-raw
+          BLOBS_DIR: .e2e/blobs
+        run: |
+          title="Informes de los shards"
+          if ! [[ "${SHARD_TOTAL}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error title=${title}::SHARD_TOTAL no es un entero positivo (es «${SHARD_TOTAL}»)"
+            exit 1
+          fi
+          rm -rf "${BLOBS_DIR}"
+          mkdir -p "${BLOBS_DIR}"
+          status=0
+          width="${#SHARD_TOTAL}"
+          for ((i = 1; i <= SHARD_TOTAL; i++)); do
+            best=""
+            best_attempt=0
+            for dir in "${BLOBS_RAW}/blob-${RUN_ID}-"*"-${i}"; do
+              [[ -d "${dir}" ]] || continue
+              attempt="${dir##*/blob-"${RUN_ID}"-}"
+              attempt="${attempt%-"${i}"}"
+              [[ "${attempt}" =~ ^[1-9][0-9]*$ ]] || continue
+              if [[ "${attempt}" -gt "${best_attempt}" ]]; then
+                best="${dir}"
+                best_attempt="${attempt}"
+              fi
+            done
+            zip="report-$(printf "%0${width}d" "${i}").zip"
+            if [[ -z "${best}" || ! -s "${best}/${zip}" ]]; then
+              echo "::error title=${title}::falta el informe (blob) del shard ${i}/${SHARD_TOTAL}: mira su job «Playwright ${i}/${SHARD_TOTAL}»"
+              status=1
+              continue
+            fi
+            cp "${best}/${zip}" "${BLOBS_DIR}/${zip}"
+            echo "Shard ${i}/${SHARD_TOTAL}: ${zip} (intento ${best_attempt})"
+          done
+          exit "${status}"
+
+      # El config de la web en CI (`-c`) da los reporters de siempre: github,
+      # list, html (playwright-report/) y json (playwright-results.json).
+      - name: Fusionar los informes de los shards
+        id: merge
+        if: always() && steps.blobs.outcome == 'success'
+        timeout-minutes: 5
+        run: npx playwright merge-reports -c playwright.config.ts .e2e/blobs
+
+      # DX-252 (TST-030): la E2E no sale verde con tests sin ejecutar. Falla,
+      # nombrando cada test, si el informe fusionado tiene «skipped» fuera de
+      # la lista versionada e2e/allowed-skips.json.
+      # DX-292 (TST-033): nombra los flaky (rojo si hay más de 2) y deja en el
+      # resumen del job el recuento y los fallidos, flaky y saltados.
+      # DX-457: una sola vez por run, sobre el informe de todos los shards.
+      - name: Sin tests saltados fuera de e2e/allowed-skips.json ni flaky de más
+        if: always() && steps.merge.outcome == 'success'
+        timeout-minutes: 2
+        env:
+          # DX-452: la guardia deja aquí los flaky de la run, para la tendencia.
+          E2E_FLAKY_OUT: ${{ github.workspace }}/dentalix-web/e2e-flaky.json
+        run: scripts/e2e-ci.sh skips
+
+      # DX-452 (TST-056): tendencia de flaky. Un spec flaky en 3 o más de las
+      # últimas 10 runs de main (esta y las 9 anteriores) pone en rojo la run y
+      # se nombra: el reintento no puede esconder un fallo que se repite. Solo
+      # en el push a main (los PR y los relanzamientos no escriben ni cuentan en
+      # el historial). Lista (1 llamada) y descarga los artefactos `e2e-flaky`
+      # de las anteriores, de unos cientos de bytes; si GitHub no responde,
+      # avisa y sigue. Ver scripts/check-e2e-flaky-trend.mjs.
+      - name: Tendencia de flaky en main (3 de las últimas 10 runs)
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && hashFiles('dentalix-web/e2e-flaky.json') != ''
+        timeout-minutes: 2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/check-e2e-flaky-trend.mjs e2e-flaky.json
+
+      # Los flaky de esta run, para la tendencia de las siguientes (DX-452).
+      # `overwrite`: un relanzamiento de la misma run sustituye el suyo.
+      - name: Subir los flaky de la run (tendencia)
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && hashFiles('dentalix-web/e2e-flaky.json') != ''
+        timeout-minutes: 2
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-flaky
+          path: dentalix-web/e2e-flaky.json
+          overwrite: true
+          retention-days: 30
+
+      # Siempre, también en verde (el informe trae los flaky). El HTML lleva
+      # los adjuntos de los fallos (trazas y capturas); el resto de
+      # test-results/ y los logs de servidores van en `…-shard-<i>`.
+      - name: Subir el informe fusionado
+        if: always()
+        timeout-minutes: 5
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            dentalix-web/playwright-report/
+            dentalix-web/playwright-results.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # El check es rojo si algún shard lo es (o se canceló o no llegó a
+      # correr), aunque el informe fusionado esté completo.
+      - name: Resultado de los shards
+        if: always() && needs.playwright.result != 'success'
+        working-directory: .
+        timeout-minutes: 1
+        env:
+          RESULT: ${{ needs.playwright.result }}
+        run: |
+          echo "::error title=Shards de Playwright::los shards terminaron «${RESULT}»: mira el job «Playwright i/N» en rojo"
           exit 1
