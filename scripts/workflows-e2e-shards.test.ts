@@ -73,12 +73,17 @@ describe('e2e.yml: la matriz de shards (DX-457)', () => {
     expect(timeouts).toEqual([[200], [50], [35]]);
   });
 
-  it('el job de fusión usa el mismo N y la misma condición de un solo shard', () => {
-    const single = "(inputs.grep != '' || (inputs.repeat_each != '' && inputs.repeat_each != '1'))";
-    expect(matrix.shard).toContain(`fromJSON(${single} && '[1]'`);
-    expect(matrix.total).toContain(`fromJSON(${single} && '[1]'`);
+  it('las cinco copias de la condición (un shard; repetido; filtrado) son la misma', () => {
+    const repeat = "(inputs.repeat_each != '' && inputs.repeat_each != '1')";
+    const single = `(inputs.grep != '' || ${repeat})`;
     const n = jsonLists(matrix.total)[1][0];
+    expect(matrix.shard).toBe(`\${{ fromJSON(${single} && '[1]' || '${JSON.stringify(jsonLists(matrix.shard)[1]).replace(/,/g, ', ')}') }}`);
+    expect(matrix.total).toBe(`\${{ fromJSON(${single} && '[1]' || '[${n}]') }}`);
     expect(mergeJob.env?.SHARD_TOTAL).toBe(`\${{ ${single} && 1 || ${n} }}`);
+    expect(matrix.timeout).toBe(`\${{ fromJSON(${repeat} && '[200]' || inputs.grep != '' && '[50]' || '[35]') }}`);
+    expect(shardJob['timeout-minutes' as keyof Job]).toMatch(
+      new RegExp(`^\\$\\{\\{ ${repeat.replace(/[()|.']/g, '\\$&')} && \\d+ \\|\\| inputs\\.grep != '' && \\d+ \\|\\| \\d+ \\}\\}$`),
+    );
   });
 
   it('cada shard lista y corre su parte con los mismos argumentos', () => {
@@ -88,6 +93,10 @@ describe('e2e.yml: la matriz de shards (DX-457)', () => {
     const run = step(shardJob, 'playwright');
     expect(run['timeout-minutes' as keyof Step]).toBe('${{ matrix.timeout }}');
     expect(run.run).toContain('scripts/e2e-ci.sh test --shard="${SHARD}/${TOTAL}" --reporter=list,blob');
+    // Con --grep, Playwright mete un hash en el nombre del blob si no se fija.
+    expect(run.env?.PLAYWRIGHT_BLOB_OUTPUT_FILE).toBe(
+      '${{ github.workspace }}/dentalix-web/blob-report/report-${{ matrix.shard }}.zip',
+    );
     for (const s of [list, run.run!]) expect(s).toContain(`mapfile -d '' -t args < "\${RUNNER_TEMP}/playwright-args"`);
     const duration = shardJob.steps.find((s) => s.name === 'Duración de Playwright')!;
     expect(duration.env?.SHARD_LABEL).toBe('Playwright ${{ matrix.shard }}/${{ matrix.total }}');
@@ -102,11 +111,39 @@ describe('e2e.yml: la matriz de shards (DX-457)', () => {
   });
 });
 
+describe('e2e.yml: de la salida de `--list` a la lista de ficheros', () => {
+  const FIXTURE = path.join(__dirname, 'fixtures', 'playwright-list.txt');
+
+  it('el perl y el `sort -u` del YAML dan `proyecto fichero`, sin repetidos (repeat_each) ni cabecera ni Total', () => {
+    const run = step(shardJob, 'shard-specs').run!;
+    const pipeline = /(perl -ne '[^']+') \.e2e\/list-raw\.txt \| sort -u/.exec(run);
+    expect(pipeline).not.toBeNull();
+    const res = runStep(`${pipeline![1]} "$0" | sort -u`.replace('"$0"', JSON.stringify(FIXTURE)), __dirname, {});
+    expect(res.status).toBe(0);
+    expect(res.out.trim().split('\n')).toEqual([
+      'chromium account-statement.spec.ts',
+      'chromium cartera-converted.spec.ts',
+      'touch touch-targets.spec.ts',
+    ]);
+  });
+});
+
 describe('e2e.yml: el job de fusión (DX-457)', () => {
   it('conserva el nombre del check, espera a los shards y corre siempre', () => {
     expect(mergeJob.name).toBe('Playwright (web + API + Postgres 16)');
     expect(mergeJob.needs).toBe('playwright');
     expect(mergeJob.if).toBe('always()');
+  });
+
+  it('con los shards cancelados sale en el acto y no gasta el runner', () => {
+    const first = mergeJob.steps[0];
+    expect(first.if).toBe("needs.playwright.result == 'cancelled'");
+    expect(first.run).toContain('exit 1');
+    // Fuera del último, ningún paso corre con always(): todos llevan !cancelled()
+    // y no corren si los shards se cancelaron.
+    const rest = mergeJob.steps.slice(1, -1).filter((s) => s.if !== undefined);
+    expect(rest.length).toBeGreaterThanOrEqual(8);
+    for (const s of rest) expect({ step: s.name, if: s.if!.startsWith("${{ !cancelled() && needs.playwright.result != 'cancelled'") }).toEqual({ step: s.name, if: true });
   });
 
   it('es rojo si algún shard no terminó en verde', () => {
@@ -116,10 +153,10 @@ describe('e2e.yml: el job de fusión (DX-457)', () => {
   });
 
   it('fusiona solo con todos los blobs y pasa la guardia sobre el informe fusionado', () => {
-    expect(step(mergeJob, 'merge').if).toBe("always() && steps.blobs.outcome == 'success'");
+    expect(step(mergeJob, 'merge').if).toBe("${{ !cancelled() && needs.playwright.result != 'cancelled' && steps.blobs.outcome == 'success' }}");
     expect(step(mergeJob, 'merge').run).toBe('npx playwright merge-reports -c playwright.config.ts .e2e/blobs');
     const skips = mergeJob.steps.find((s) => s.run === 'scripts/e2e-ci.sh skips')!;
-    expect(skips.if).toBe("always() && steps.merge.outcome == 'success'");
+    expect(skips.if).toBe("${{ !cancelled() && needs.playwright.result != 'cancelled' && steps.merge.outcome == 'success' }}");
     expect(skips.env?.E2E_FLAKY_OUT).toBe('${{ github.workspace }}/dentalix-web/e2e-flaky.json');
     // `e2e-ci.sh skips` exige el checkout de la API (y define E2E_DATABASE_URL y E2E_MAIL_DIR).
     expect(mergeJob.steps.some((s) => s.with?.repository === '2santos93/dentalix-api')).toBe(true);
@@ -133,6 +170,12 @@ describe('e2e.yml: el job de fusión (DX-457)', () => {
     expect(uploads).toHaveLength(1);
     expect(uploads[0].if).toContain("github.event_name == 'push' && github.ref == 'refs/heads/main'");
     expect(mergeJob.steps.filter(touchesFlaky)).toHaveLength(3);
+  });
+
+  it('los blobs y las listas duran 7 días (Re-run failed jobs de una run de días)', () => {
+    const retention = (name: string) => shardJob.steps.find((s) => s.with?.name === name)?.with?.['retention-days'];
+    expect(retention('blob-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}')).toBe(7);
+    expect(retention('e2e-shard-${{ matrix.shard }}')).toBe(7);
   });
 
   it('los nombres de los artefactos', () => {
@@ -236,43 +279,83 @@ describe('e2e.yml: «Informes de todos los shards» (bash en línea)', () => {
   const script = step(mergeJob, 'blobs').run!;
   const RUN = '4242';
 
-  /** `artifacts`: nombre del artefacto → nombre del zip que trae dentro. */
-  function check(total: number, artifacts: Record<string, string>) {
+  /** `artifacts`: nombre del artefacto → el zip (o los zips) que trae dentro. */
+  function check(total: number, artifacts: Record<string, string | string[]>, attempt = 1) {
     const dir = mkdtempSync(path.join(tmpdir(), 'dx457-blobs-'));
-    for (const [name, zip] of Object.entries(artifacts)) {
+    for (const [name, zips] of Object.entries(artifacts)) {
       mkdirSync(path.join(dir, 'raw', name), { recursive: true });
-      writeFileSync(path.join(dir, 'raw', name, zip), `${name}\n`);
+      for (const zip of [zips].flat()) writeFileSync(path.join(dir, 'raw', name, zip), `${name}\n`);
     }
-    const res = runStep(script, dir, { SHARD_TOTAL: String(total), RUN_ID: RUN, BLOBS_RAW: 'raw', BLOBS_DIR: 'blobs' });
-    const read = (zip: string) => {
+    const summary = path.join(dir, 'summary.md');
+    const res = runStep(script, dir, {
+      SHARD_TOTAL: String(total),
+      RUN_ID: RUN,
+      RUN_ATTEMPT: String(attempt),
+      BLOBS_RAW: 'raw',
+      BLOBS_DIR: 'blobs',
+      GITHUB_STEP_SUMMARY: summary,
+    });
+    const read = (file: string) => {
       try {
-        return readFileSync(path.join(dir, 'blobs', zip), 'utf8').trim();
+        return readFileSync(path.join(dir, file), 'utf8').trim();
       } catch {
         return null;
       }
     };
-    return { ...res, read };
+    return { ...res, blob: (zip: string) => read(path.join('blobs', zip)), summary: () => read('summary.md') };
   }
 
-  it('verde con un blob por shard, y del intento más alto de cada uno (Re-run failed jobs)', () => {
+  it('verde con un blob por shard, sin aviso si todos son de este intento', () => {
     const res = check(3, {
       [`blob-${RUN}-1-1`]: 'report-1.zip',
-      // 10 va antes que 2 en el orden del glob: gana por número, no por orden.
-      [`blob-${RUN}-2-2`]: 'report-2.zip',
-      [`blob-${RUN}-10-2`]: 'report-2.zip',
+      [`blob-${RUN}-1-2`]: 'report-2.zip',
       [`blob-${RUN}-1-3`]: 'report-3.zip',
     });
     expect(res.status).toBe(0);
-    expect(res.read('report-1.zip')).toBe(`blob-${RUN}-1-1`);
-    expect(res.read('report-2.zip')).toBe(`blob-${RUN}-10-2`);
-    expect(res.read('report-3.zip')).toBe(`blob-${RUN}-1-3`);
+    expect(res.blob('report-2.zip')).toBe(`blob-${RUN}-1-2`);
+    expect(res.out).not.toContain('mezcla intentos');
+    expect(res.summary()).toBeNull();
+  });
+
+  it('del intento más alto de cada shard (Re-run failed jobs), y avisa de que mezcla intentos', () => {
+    const res = check(
+      3,
+      {
+        [`blob-${RUN}-1-1`]: 'report-1.zip',
+        // 10 va antes que 2 en el orden del glob: gana por número, no por orden.
+        [`blob-${RUN}-2-2`]: 'report-2.zip',
+        [`blob-${RUN}-10-2`]: 'report-2.zip',
+        [`blob-${RUN}-1-3`]: 'report-3.zip',
+      },
+      10,
+    );
+    expect(res.status).toBe(0);
+    expect(res.blob('report-1.zip')).toBe(`blob-${RUN}-1-1`);
+    expect(res.blob('report-2.zip')).toBe(`blob-${RUN}-10-2`);
+    expect(res.blob('report-3.zip')).toBe(`blob-${RUN}-1-3`);
+    expect(res.out).toContain('::warning title=Informes de los shards::el informe fusionado mezcla intentos (esta run es el 10): shard 1/3: intento 1 shard 3/3: intento 1');
+    expect(res.summary()).toContain('- shard 1/3: intento 1');
+    expect(res.summary()).not.toContain('shard 2/3');
+  });
+
+  it('acepta el blob con el hash que pone Playwright con --grep (report-<hash>-<i>.zip)', () => {
+    const res = check(1, { [`blob-${RUN}-1-1`]: 'report-086392f-1.zip' });
+    expect(res.status).toBe(0);
+    expect(res.out).toContain('Shard 1/1: report-086392f-1.zip (intento 1)');
+    expect(res.blob('report-1.zip')).toBe(`blob-${RUN}-1-1`);
+  });
+
+  it('rojo si el artefacto de un shard trae dos informes', () => {
+    const res = check(2, { [`blob-${RUN}-1-1`]: 'report-1.zip', [`blob-${RUN}-1-2`]: ['report-2.zip', 'report-abc1234-2.zip'] });
+    expect(res.status).toBe(1);
+    expect(res.out).toContain(`el artefacto blob-${RUN}-1-2 del shard 2/2 tiene 2 informes (.zip) y debe tener uno`);
   });
 
   it('rojo nombrando el shard al que le falta el blob', () => {
     const res = check(3, { [`blob-${RUN}-1-1`]: 'report-1.zip', [`blob-${RUN}-1-3`]: 'report-3.zip' });
     expect(res.status).toBe(1);
     expect(res.out).toContain('falta el informe (blob) del shard 2/3');
-    expect(res.out).not.toContain('shard 1/3:');
+    expect(res.out).not.toContain('del shard 1/3');
   });
 
   it('el nombre del zip va relleno a la anchura de N (report-01.zip con 10 shards)', () => {
@@ -281,13 +364,49 @@ describe('e2e.yml: «Informes de todos los shards» (bash en línea)', () => {
     );
     const res = check(10, artifacts);
     expect(res.status).toBe(0);
-    expect(res.read('report-01.zip')).toBe(`blob-${RUN}-1-1`);
-    expect(res.read('report-10.zip')).toBe(`blob-${RUN}-1-10`);
+    expect(res.blob('report-01.zip')).toBe(`blob-${RUN}-1-1`);
+    expect(res.blob('report-10.zip')).toBe(`blob-${RUN}-1-10`);
   });
 
   it('un blob de otra run no cuenta', () => {
     const res = check(1, { 'blob-999-1-1': 'report-1.zip' });
     expect(res.status).toBe(1);
     expect(res.out).toContain('falta el informe (blob) del shard 1/1');
+  });
+});
+
+describe('e2e.yml: «Tests del informe fusionado frente a la lista completa» (bash en línea)', () => {
+  const script = step(mergeJob, 'count').run!;
+
+  function check(listTotal: string | null, stats: Record<string, number> | null) {
+    const dir = mkdtempSync(path.join(tmpdir(), 'dx457-count-'));
+    const lines = ['Listing tests:', '  [chromium] › a.spec.ts:1:1 › x'];
+    if (listTotal !== null) lines.push(listTotal);
+    writeFileSync(path.join(dir, 'list.txt'), `${lines.join('\n')}\n`);
+    if (stats) writeFileSync(path.join(dir, 'results.json'), JSON.stringify({ stats: { startTime: 'x', duration: 1, ...stats } }));
+    return runStep(script, dir, { FULL_RAW: 'list.txt', RESULTS_JSON: 'results.json' });
+  }
+
+  it('verde si pasados + fallidos + flaky + saltados = el Total de la lista', () => {
+    const res = check('Total: 609 tests in 164 files', { expected: 560, unexpected: 2, flaky: 7, skipped: 40 });
+    expect(res.status).toBe(0);
+    expect(res.out).toContain('609 tests, los mismos que la lista completa');
+  });
+
+  it('con un solo test («1 test in 1 file»)', () => {
+    expect(check('Total: 1 test in 1 file', { expected: 1, unexpected: 0, flaky: 0, skipped: 0 }).status).toBe(0);
+  });
+
+  it('rojo con los dos números si difieren', () => {
+    const res = check('Total: 609 tests in 164 files', { expected: 400, unexpected: 0, flaky: 1, skipped: 4 });
+    expect(res.status).toBe(1);
+    expect(res.out).toContain('el informe fusionado tiene 405 tests y la lista completa 609');
+  });
+
+  it('rojo si la lista no tiene la línea Total o no hay informe', () => {
+    expect(check(null, { expected: 1 }).out).toContain('no tiene la línea «Total: N tests»');
+    const res = check('Total: 3 tests in 1 file', null);
+    expect(res.status).toBe(1);
+    expect(res.out).toContain('la fusión no dejó results.json');
   });
 });
