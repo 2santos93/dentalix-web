@@ -4,10 +4,6 @@ import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigat
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getPatient, replacePatientKeepingDerived, type Patient } from '@/lib/patients/patients-api';
-import { MedicalHistoryPanel } from '@/components/patients/medical-history-panel';
-import { ClinicalEntriesList } from '@/components/patients/clinical-entries-list';
-import { PatientPostOpDeliveries } from '@/components/postop/patient-postop-deliveries';
-import { ClinicalAlertBanner } from '@/components/patients/clinical-alert-banner';
 import { AnamnesisReviewLine } from '@/components/clinical/anamnesis-review-line';
 import { usePatientMedicalAlerts } from '@/components/clinical/use-patient-medical-alerts';
 import { usePatientAttendance } from '@/components/patients/use-patient-attendance';
@@ -18,7 +14,6 @@ import {
 } from '@/components/patients/patient-detail-tabs';
 import { PatientDataPanel } from '@/components/patients/patient-data-panel';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
-import { PatientEditModal } from '@/components/patients/patient-edit-modal';
 import { PatientRecordHeader } from '@/components/patients/patient-record-header';
 import { ImagingExportDialog, imagingExportMenuAction } from '@/components/patients/imaging-export-dialog';
 import {
@@ -28,7 +23,6 @@ import {
   retentionChip,
   type RetentionDialog,
 } from '@/components/patients/patient-retention-section';
-import { AnamnesisSendDialog } from '@/components/anamnesis/anamnesis-send-dialog';
 import type { RowAction } from '@/components/shared/row-actions';
 import { Archive, ClipboardList, Eraser, ShieldCheck } from 'lucide-react';
 import { PatientCommunicationSection } from '@/components/patients/patient-communication-section';
@@ -38,29 +32,39 @@ import { PatientResponsiblePartiesSection } from '@/components/patients/patient-
 import { PatientAgreementSection } from '@/components/patients/patient-agreement-section';
 import { PatientCoverageSection } from '@/components/patients/patient-coverage-section';
 import { canEditCommunication, withCommunication } from '@/lib/patients/communication-api';
-import { OdontogramTab } from '@/components/odontogram/odontogram-tab';
-import { TreatmentPlansTab } from '@/components/treatment-plans/treatment-plans-tab';
 import { SectionError } from '@/components/errors/section-error';
-import { AccountStatementView } from '@/components/account-statement/account-statement-view';
-import { PatientCollectionsSection } from '@/components/collections/patient-collections-section';
-import { FamilyAccountStatementSection } from '@/components/account-statement/family-account-statement-section';
 import { canManageCollections } from '@/lib/collections/presentation';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { patientTabAccess, resolvePatientTab } from '@/lib/patients/patient-tab-access';
-import { DataConsentsTab } from '@/components/data-consents/data-consents-tab';
-import { PatientConsentsTab } from '@/components/consents/patient-consents-tab';
-import { PerioTab } from '@/components/perio/perio-tab';
-import { PatientPrescriptionsTab } from '@/components/prescriptions/patient-prescriptions-tab';
-import { PatientImplantsTab } from '@/components/implants/patient-implants-tab';
-import { PatientDocumentsTab } from '@/components/patient-documents/patient-documents-tab';
 import { SedeNoticeOwner } from '@/components/locations/sede-stamp-note';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { PatientTabPanel as TabPanel } from '@/components/patients/patient-tab-panel';
 import { canRegisterImplants } from '@/lib/implants/implants-api';
-import { AuditLogView } from '@/components/audit/audit-log-view';
 import { PatientAnamnesisSection } from '@/components/anamnesis/patient-anamnesis-section';
 import { canSeeAnamnesisInbox } from '@/lib/anamnesis/anamnesis-api';
+import { MedicalHistoryPanel } from '@/components/patients/medical-history-panel';
+// DX-117 (FE-021): todo lo que no es la pestaña «Datos» llega en su propio
+// trozo de JS al abrir su pestaña (ver `patient-lazy-tabs`).
+import {
+  AccountStatementView,
+  AnamnesisSendDialog,
+  AuditLogView,
+  ClinicalAlertBanner,
+  ClinicalEntriesList,
+  DataConsentsTab,
+  FamilyAccountStatementSection,
+  OdontogramTab,
+  PatientCollectionsSection,
+  PatientConsentsTab,
+  PatientDocumentsTab,
+  PatientEditModal,
+  PatientImplantsTab,
+  PatientPostOpDeliveries,
+  PatientPrescriptionsTab,
+  PerioTab,
+  TreatmentPlansTab,
+} from '@/components/patients/patient-lazy-tabs';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
