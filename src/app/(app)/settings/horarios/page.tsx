@@ -1,5 +1,5 @@
 'use client';
-import { Suspense, useEffect } from 'react';
+import { Suspense } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
@@ -27,7 +27,6 @@ const copy = {
       'En qué sede atiende cada profesional cada día, y las fechas con un horario distinto.',
     cuadrante: 'La semana de cada profesional, con la sede en la que está cada día.',
   } satisfies Record<ScheduleTabKey, string>,
-  checkingSession: 'Verificando sesión…',
 };
 
 /** `useSearchParams` exige un límite de Suspense (como la Caja). */
@@ -51,24 +50,11 @@ function SchedulesRoute() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const accessToken = useAuthStore((s) => s.accessToken);
-  const hasHydrated = useAuthStore((s) => s._hasHydrated);
   const tab = resolveScheduleTab(searchParams.get('tab'));
   // DX-354b (E9): el «hoy» del cuadrante es el de la sede de la pantalla, no el del navegador.
   const zone = useSedeTimeZone(accessToken ?? '');
   const timeZone = readyTimeZone(zone);
 
-  useEffect(() => {
-    if (!hasHydrated) return;
-    if (!accessToken) router.replace('/login');
-  }, [accessToken, router, hasHydrated]);
-
-  if (!hasHydrated) {
-    return (
-      <p role="status" className="text-sm text-muted">
-        {copy.checkingSession}
-      </p>
-    );
-  }
   if (!accessToken) return null;
 
   function changeTab(next: ScheduleTabKey) {

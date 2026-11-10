@@ -9,7 +9,7 @@ import { clearSessionStore } from '@/lib/session/session-store';
  * Recupera la sesión al cargar una pantalla que la necesita (DX-062): pide un
  * access token con la cookie HttpOnly y deja `_hasHydrated` resuelto. Además,
  * si se cierra la sesión en otra pestaña del host, esta olvida su access token
- * (las páginas mandan entonces a /login) y vacía la caché de sesión.
+ * (`RequireSession` y las imprimibles mandan entonces a /login) y vacía la caché de sesión.
  *
  * Se usa solo donde hace falta sesión (el shell de la app, las imprimibles y el
  * área de plataforma), no en las páginas públicas: allí un 401 sería ruido.

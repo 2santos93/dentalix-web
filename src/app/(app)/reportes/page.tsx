@@ -1,5 +1,5 @@
 'use client';
-import { Suspense, useEffect } from 'react';
+import { Suspense } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { PageHeader } from '@/components/shared/page-header';
@@ -22,7 +22,6 @@ import {
 // procedimiento»; DX-399: recepción, solo «Cobrado sin imputar»). Un rol sin acceso que llegue por URL ve el aviso de la
 // propia vista (la API responde 403): la frontera es el servidor.
 const copy = {
-  checkingSession: 'Verificando sesión…',
   title: 'Reportes',
   description: 'Cómo van tus sedes: producción, cobros, citas y ocupación, y qué procedimientos sostienen la clínica.',
   descriptionOwn: 'Tu producción: qué procedimientos realizaste y a qué honorario frente al de catálogo.',
@@ -43,24 +42,8 @@ function ReportesRoute() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const accessToken = useAuthStore((s) => s.accessToken);
-  const hasHydrated = useAuthStore((s) => s._hasHydrated);
   const tabs = reportTabsFor(getTokenRole(accessToken));
   const tab = resolveReportTab(searchParams.get('tab'), tabs);
-
-  useEffect(() => {
-    if (!hasHydrated) return;
-    if (!accessToken) {
-      router.replace('/login');
-    }
-  }, [accessToken, router, hasHydrated]);
-
-  if (!hasHydrated) {
-    return (
-      <p role="status" className="text-sm text-muted">
-        {copy.checkingSession}
-      </p>
-    );
-  }
 
   if (!accessToken) {
     return null;

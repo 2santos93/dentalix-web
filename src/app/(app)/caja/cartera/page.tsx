@@ -17,10 +17,6 @@ import {
 // rol sin acceso que llegue por URL ve el aviso de la propia vista (la API
 // responde 403 en español). La pestaña viaja en `?tab=saldo-a-favor`, como la
 // Caja y los gastos; sin ella, «Por cobrar» (la URL de siempre).
-const copy = {
-  checkingSession: 'Verificando sesión…',
-};
-
 /** `useSearchParams` exige un límite de Suspense (como la Caja). */
 export default function CarteraPage() {
   return (
@@ -36,7 +32,6 @@ function CarteraRoute() {
   const searchParams = useSearchParams();
   const tab = resolveCarteraTab(searchParams.get('tab'));
   const accessToken = useAuthStore((s) => s.accessToken);
-  const hasHydrated = useAuthStore((s) => s._hasHydrated);
   const pendingFocus = useRef<{ tab: CarteraTabKey; trigger: Element } | null>(null);
 
   useEffect(() => {
@@ -49,21 +44,6 @@ function CarteraRoute() {
       document.getElementById(carteraTabId(tab))?.focus();
     }
   }, [tab]);
-
-  useEffect(() => {
-    if (!hasHydrated) return;
-    if (!accessToken) {
-      router.replace('/login');
-    }
-  }, [accessToken, router, hasHydrated]);
-
-  if (!hasHydrated) {
-    return (
-      <p role="status" className="text-sm text-muted">
-        {copy.checkingSession}
-      </p>
-    );
-  }
 
   if (!accessToken) {
     return null;
