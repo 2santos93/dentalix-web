@@ -56,9 +56,28 @@ describe('AuthLayout', () => {
     // El panel es el único con foto, y la frase sigue ahí, en blanco.
     expect(container.querySelectorAll('img')).toHaveLength(1);
     expect(screen.getByText('Tu clínica, siempre al día')).toHaveClass('text-white');
-    expect(img.parentElement).toHaveClass('hidden', 'lg:flex');
+    expect(img.closest('div')).toHaveClass('hidden', 'lg:flex');
     // Velo neutro, sin color de marca.
     expect(container.querySelector('[aria-hidden].bg-gradient-to-t')?.className).toMatch(/from-black\//);
+  });
+
+  it('DX-117 (FE-023): la foto es un <picture>: bajo lg un GIF en línea (sin petición) y desde lg AVIF, WebP y el JPG de respaldo', () => {
+    const hero = HERO_IMAGES[0];
+    const { container } = render(
+      <AuthLayout clinic={null} task="Inicia sesión" heroImage={hero}>
+        <form />
+      </AuthLayout>,
+    );
+    const picture = container.querySelector('picture');
+    expect(picture).not.toBeNull();
+    const sources = Array.from(picture!.querySelectorAll('source'));
+    // El orden importa: el navegador usa la primera que encaja.
+    expect(sources.map((s) => [s.getAttribute('media'), s.getAttribute('type'), s.getAttribute('srcset')])).toEqual([
+      ['not all and (min-width: 1024px)', null, expect.stringMatching(/^data:image\/gif;base64,/)],
+      ['(min-width: 1024px)', 'image/avif', hero.avif],
+      ['(min-width: 1024px)', 'image/webp', hero.webp],
+    ]);
+    expect(picture!.querySelector('img')).toHaveAttribute('src', hero.src);
   });
 
   it('the H1 and header are unchanged by the photo', () => {

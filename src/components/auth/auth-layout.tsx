@@ -44,6 +44,40 @@ interface AuthLayoutProps {
   footer?: React.ReactNode;
 }
 
+/**
+ * El ancho desde el que se ve el panel lateral: el `lg` de Tailwind (64rem).
+ * Las `media` de `<picture>` deben coincidir con él.
+ */
+const HERO_MEDIA = '(min-width: 1024px)';
+/** GIF transparente de 1×1 en línea: lo que «descarga» la foto bajo lg (ninguna petición). */
+const BLANK_GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+/**
+ * DX-117 (FE-023): la foto del panel como `<picture>`. El navegador elige la
+ * PRIMERA `<source>` cuya `media` (y `type`) encaja y no mira `src` del
+ * `<img>`; por eso va primero la del móvil, un GIF en línea que no hace
+ * ninguna petición — el `display: none` del panel y `loading="lazy"` no bastan:
+ * hay navegadores que descargan igual la imagen de un contenedor oculto. Desde
+ * lg, AVIF y si no WebP; el JPG solo para quien no entienda ninguna.
+ */
+function HeroPicture({ image }: { image: HeroImage }) {
+  return (
+    <picture>
+      <source media={`not all and ${HERO_MEDIA}`} srcSet={BLANK_GIF} />
+      <source media={HERO_MEDIA} type="image/avif" srcSet={image.avif} />
+      <source media={HERO_MEDIA} type="image/webp" srcSet={image.webp} />
+      {/* `<img>` y no `next/image`: foto local de public/auth, sin optimizador (images.unoptimized, DX-080). */}
+      <img
+        src={image.src}
+        alt={image.alt}
+        loading="lazy"
+        decoding="async"
+        className="absolute inset-0 size-full object-cover"
+      />
+    </picture>
+  );
+}
+
 /** Ritmo común de los formularios de auth: 16 px entre campos. */
 export const AUTH_FORM_CLASS = 'flex flex-col gap-4';
 /** El botón principal cierra el formulario a 8 px más del ritmo, a todo el ancho. */
@@ -62,8 +96,7 @@ export const AUTH_LINK_CLASS =
  * Panel lateral (≥ lg): una fotografía a sangre que rota en cada carga (decisión
  * del dueño, 2026-11-04), con un velo neutro y la frase en blanco encima. Sin
  * `heroImage`, una superficie hundida con la frase. Bajo lg el panel está
- * oculto y la foto, `loading="lazy"` dentro de un `display: none`, no se
- * descarga.
+ * oculto y, además, la foto no se descarga (DX-117, FE-023): `HeroPicture`.
  */
 export function AuthLayout({ clinic: serverClinic, fromHost = false, task, description, caption, heroImage, children, footer }: AuthLayoutProps) {
   const branding = useClinicBranding();
@@ -108,14 +141,7 @@ export function AuthLayout({ clinic: serverClinic, fromHost = false, task, descr
       >
         {heroImage ? (
           <>
-            {/* eslint-disable-next-line @next/next/no-img-element -- foto local de public/auth, sin optimizador (images.unoptimized) */}
-            <img
-              src={heroImage.src}
-              alt={heroImage.alt}
-              loading="lazy"
-              decoding="async"
-              className="absolute inset-0 size-full object-cover"
-            />
+            <HeroPicture image={heroImage} />
             {/* Velo neutro (negro con opacidad, sin color de marca): AA para la frase sobre cualquier foto. */}
             <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/20" />
           </>

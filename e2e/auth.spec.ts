@@ -1,4 +1,4 @@
-import { test, expect } from './support/test';
+import { test, expect, type Page } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin, sessionCookie } from './support/auth';
 import { registerClinicViaApi } from './support/api';
@@ -87,4 +87,35 @@ test('login: el panel lateral muestra una foto del banco a 1440 px y ninguna a 3
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(hero).toBeHidden();
+});
+
+// DX-117 (FE-023): la foto (167–248 KB en JPG) no se descarga en el móvil, y
+// en escritorio llega en AVIF, no en JPG. Se miran las peticiones reales.
+test('login: a 390 px no se pide ninguna foto del panel; a 1440 px se pide la AVIF y ningún JPG', async ({ page, context }) => {
+  // Cada carga en una pestaña nueva con su ancho desde el principio (un cambio
+  // de tamaño a mitad no dice nada de la primera descarga).
+  async function heroRequests(target: Page, viewport: { width: number; height: number }) {
+    await target.setViewportSize(viewport);
+    const requested: string[] = [];
+    target.on('request', (req) => {
+      const { pathname } = new URL(req.url());
+      if (/hero-/.test(pathname)) requested.push(pathname);
+    });
+    await target.goto('/login');
+    await expect(target.getByRole('heading', { level: 1 })).toBeVisible();
+    return requested;
+  }
+
+  const mobile = await heroRequests(page, { width: 390, height: 844 });
+  // Dar tiempo a una descarga perezosa que no debería llegar.
+  await page.waitForLoadState('networkidle');
+  expect(mobile).toEqual([]);
+
+  const desktopPage = await context.newPage();
+  const desktop = await heroRequests(desktopPage, { width: 1440, height: 900 });
+  const hero = desktopPage.locator('picture img');
+  await expect(hero).toBeVisible();
+  await expect.poll(() => hero.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
+  expect(desktop.some((path) => /^\/auth\/hero-\d+\.avif$/.test(path))).toBe(true);
+  expect(desktop.filter((path) => /\.(jpe?g|webp)$/.test(path))).toEqual([]);
 });

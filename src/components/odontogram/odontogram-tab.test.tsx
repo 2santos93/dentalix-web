@@ -412,6 +412,41 @@ describe('OdontogramTab', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar el odontograma.');
   });
 
+  it('DX-117 (FE-022): abrir el odontograma y elegir un diente pide el catálogo una sola vez (y no otra al guardar)', async () => {
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetOdontogram.mockResolvedValue(initialGroups);
+    mockedGetTimeline.mockResolvedValue([]);
+    mockedAddRecord.mockResolvedValue(createdRecord);
+    const user = userEvent.setup();
+    render(<OdontogramTab token="tok" patientId="p1" />);
+
+    await screen.findByRole('group', { name: /odontograma/i });
+    await user.click(screen.getByRole('button', { name: '11' }));
+    expect(await screen.findByRole('radio', { name: /caries/i })).toBeInTheDocument();
+    expect(mockedListCatalog).toHaveBeenCalledTimes(1);
+
+    // Guardar recarga la carta, pero el catálogo de la clínica no cambia: no se vuelve a pedir.
+    await user.click(screen.getByRole('radio', { name: /caries/i }));
+    await user.click(screen.getByRole('checkbox', { name: /oclusal/i }));
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await waitFor(() => expect(mockedGetOdontogram).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText(/actualizando/i)).not.toBeInTheDocument());
+    expect(mockedListCatalog).toHaveBeenCalledTimes(1);
+  });
+
+  it('DX-117 (FE-022): si falla la carga inicial, Reintentar vuelve a pedir el catálogo', async () => {
+    const { ApiError } = jest.requireActual('../../lib/api/client');
+    mockedListCatalog.mockRejectedValueOnce(new ApiError(500, 'Error del servidor')).mockResolvedValue(catalog);
+    mockedGetOdontogram.mockResolvedValue(initialGroups);
+    const user = userEvent.setup();
+    render(<OdontogramTab token="tok" patientId="p1" />);
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /reintentar/i }));
+    await screen.findByRole('group', { name: /odontograma/i });
+    expect(mockedListCatalog).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps the chart and the tooth-record panel mounted (no full-page reload flash) on the refetch after a successful add', async () => {
     mockedListCatalog.mockResolvedValue(catalog);
     mockedGetTimeline.mockResolvedValue([]);
