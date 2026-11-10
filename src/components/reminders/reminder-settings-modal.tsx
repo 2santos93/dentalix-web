@@ -13,7 +13,11 @@ import {
 import { FormModal } from '@/components/shared/form-modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { FormField, fieldErrorId, fieldHintId } from '@/components/shared/form-field';
 import { Checkbox } from '@/components/ui/checkbox';
+
+/** DX-469: mismo tope que la API (7 días). */
+const MAX_ALARM_HOURS = 168;
 
 const copy = {
   title: (location: string) => `Recordatorios de ${location}`,
@@ -32,6 +36,10 @@ const copy = {
   invalidLead: `Cada recordatorio debe ser de ${MIN_LEAD_HOURS} a ${MAX_LEAD_HOURS} horas antes (7 días).`,
   duplicate: 'No repitas la misma antelación: cada recordatorio sale a una hora distinta.',
   genericError: 'No pudimos guardar los recordatorios. Intenta de nuevo.',
+  // DX-469: alarma del evento «Añadir a mi calendario» (enlace y email).
+  alarmLabel: 'Aviso en el calendario del paciente',
+  alarmHint: `Cuando el paciente añade la cita a su calendario, su móvil le avisa estas horas antes. De 0 a ${MAX_ALARM_HOURS}; 0 lo quita.`,
+  alarmInvalid: `La alarma del calendario debe ser de 0 a ${MAX_ALARM_HOURS} horas antes (0 la quita).`,
 };
 
 /** Lo que se propone al activar una sede que nunca se configuró. */
@@ -73,19 +81,29 @@ export function ReminderSettingsModal({
   const [leads, setLeads] = useState<string[]>(
     settings.leadHours.length > 0 ? settings.leadHours.map(String) : SUGGESTED,
   );
+  const [alarm, setAlarm] = useState(String(settings.calendarAlarmHours));
+  const [alarmError, setAlarmError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    setAlarmError(null);
     const parsed = parseLeads(leads, enabled);
     if (typeof parsed === 'string') return setError(parsed);
+    const alarmHours = Number(alarm);
+    if (alarm.trim() === '' || !Number.isInteger(alarmHours) || alarmHours < 0 || alarmHours > MAX_ALARM_HOURS) {
+      setAlarmError(copy.alarmInvalid);
+      document.getElementById(alarmId)?.focus();
+      return;
+    }
     setSubmitting(true);
     try {
       const saved = await updateReminderSettings(token, settings.locationId, {
         enabled,
         leadHours: parsed,
+        calendarAlarmHours: alarmHours,
       });
       onSaved(saved);
       onOpenChange(false);
@@ -98,6 +116,7 @@ export function ReminderSettingsModal({
 
   const enabledId = `${ids}-enabled`;
   const hintId = `${ids}-leads-hint`;
+  const alarmId = `${ids}-alarm`;
 
   return (
     <FormModal
@@ -165,6 +184,25 @@ export function ReminderSettingsModal({
           </Button>
         )}
       </fieldset>
+
+      <FormField htmlFor={alarmId} label={copy.alarmLabel} hint={copy.alarmHint} error={alarmError ?? undefined}>
+        <div className="flex items-center gap-2">
+          <Input
+            id={alarmId}
+            type="number"
+            inputMode="numeric"
+            value={alarm}
+            onChange={(e) => {
+              setAlarm(e.target.value);
+              setAlarmError(null);
+            }}
+            aria-invalid={alarmError ? true : undefined}
+            aria-describedby={[fieldHintId(alarmId), alarmError ? fieldErrorId(alarmId) : null].filter(Boolean).join(' ')}
+            className="w-28 tabular-nums h-11 sm:h-10"
+          />
+          <span className="text-sm text-muted">{copy.hoursSuffix}</span>
+        </div>
+      </FormField>
     </FormModal>
   );
 }

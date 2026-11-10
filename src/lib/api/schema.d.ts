@@ -2926,6 +2926,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/appointment-confirmations/{token}/calendar.ics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * DX-469: la cita del enlace como evento de calendario (.ics)
+         * @description RFC 5545: inicio y fin en UTC (el instante de la sede), clínica y profesional en el título, la sede y su dirección; sin motivo ni tratamiento. UID estable por cita (reprogramar actualiza, no duplica); una cancelada lleva STATUS:CANCELLED; VALARM con la antelación de la sede (`calendarAlarmHours` de los ajustes de recordatorio, 24 por defecto, 0 sin alarma). Vale con el enlace pendiente o ya respondido mientras la cita no haya terminado; caducado, revocado o cita pasada, 410. Solo lee: no se audita.
+         */
+        get: operations["PublicAppointmentConfirmationsController_calendarIcs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/appointment-confirmations/{token}": {
         parameters: {
             query?: never;
@@ -13123,6 +13143,10 @@ export interface components {
             currency: string | null;
         };
         PublicAppointmentConfirmationDto: {
+            /** @description DX-469: se puede añadir la cita al calendario (enlace válido, cita no cancelada y aún no terminada): `GET …/:token/calendar.ics` y `googleCalendarUrl`. */
+            calendarAvailable: boolean;
+            /** @description DX-469: «Añadir a Google Calendar» (plantilla de evento, sin datos clínicos). null si `calendarAvailable` es false. */
+            googleCalendarUrl: string | null;
             /**
              * @description PENDING: puede responder. RESPONDED: ya respondió (ver `response`). EXPIRED: caducado o sin efecto.
              * @enum {string}
@@ -20858,6 +20882,11 @@ export interface components {
              */
             leadHours: number[];
             /**
+             * @description DX-469: horas antes de la cita de la alarma del evento «Añadir a mi calendario» (0 = sin alarma). Por defecto 24.
+             * @example 24
+             */
+            calendarAlarmHours: number;
+            /**
              * Format: date-time
              * @description null = la sede nunca se configuró
              */
@@ -20874,6 +20903,11 @@ export interface components {
              *     ]
              */
             leadHours: number[];
+            /**
+             * @description DX-469: horas antes de la alarma de «Añadir a mi calendario» (0 la quita). Sin el campo, se conserva.
+             * @example 24
+             */
+            calendarAlarmHours?: number;
         };
         /**
          * @description DX-128: por qué el paciente no recibe el email automático (se dio de baja, o su canal es NONE o WHATSAPP). Con él no hay recordatorios pendientes.
@@ -29286,6 +29320,49 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ConfirmationLinkDto"];
                 };
+            };
+        };
+    };
+    PublicAppointmentConfirmationsController_calendarIcs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description text/calendar */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/calendar": string;
+                };
+            };
+            /** @description Token desconocido o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace caducó o la cita ya pasó. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

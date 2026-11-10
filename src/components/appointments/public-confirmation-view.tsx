@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import {
   BellRing,
   CalendarCheck,
+  CalendarPlus,
   CalendarX,
   Clock,
   FileText,
@@ -34,6 +35,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { ClinicBrand } from '@/components/brand/clinic-brand';
+import { ExternalLink } from '@/components/shared/external-link';
+import { API_PROXY_PATH } from '@/lib/api/api-base';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -96,6 +99,10 @@ const copy = {
       : `Listo. Te avisaremos si se libera un hueco antes (${copy.earlierWindows[window].toLowerCase()}).`,
   earlierCleared: 'Listo. No te avisaremos de huecos anteriores.',
   earlierError: 'No pudimos guardar tu preferencia. Revisa tu conexión e intenta de nuevo.',
+  // DX-469: «Añadir a mi calendario».
+  calendarTitle: 'Añadir a mi calendario',
+  calendarIcs: 'Apple, Outlook u otro (.ics)',
+  calendarGoogle: 'Google Calendar',
 };
 
 type LoadState =
@@ -241,6 +248,39 @@ function CancellationPolicyNotice({
           {copy.lateMessage}
         </Callout>
       ) : null}
+    </section>
+  );
+}
+
+/**
+ * DX-469: «Añadir a mi calendario»: el .ics del enlace (descarga, lo abre el
+ * calendario del móvil) y Google Calendar en una pestaña nueva. Solo con
+ * `calendarAvailable` (enlace válido, cita no cancelada y aún no terminada).
+ */
+function CalendarLinks({ token, googleUrl }: { token: string; googleUrl: string | null }) {
+  const ics = `${API_PROXY_PATH}/public/appointment-confirmations/${encodeURIComponent(token)}/calendar.ics`;
+  const linkClass =
+    'inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-surface px-4 text-sm font-medium text-ink hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text';
+  return (
+    <section
+      aria-labelledby="calendar-links-title"
+      data-testid="public-calendar-links"
+      className="flex flex-col gap-3 rounded-xl border border-border bg-surface px-4 py-4"
+    >
+      <h2 id="calendar-links-title" className="t-title flex items-center gap-2 text-ink">
+        <CalendarPlus aria-hidden className="size-4 shrink-0 text-muted" />
+        {copy.calendarTitle}
+      </h2>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <a href={ics} download="cita.ics" className={linkClass}>
+          {copy.calendarIcs}
+        </a>
+        {googleUrl ? (
+          <ExternalLink href={googleUrl} className={linkClass}>
+            {copy.calendarGoogle}
+          </ExternalLink>
+        ) : null}
+      </div>
     </section>
   );
 }
@@ -426,6 +466,10 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
 
   const clinic = state.kind === 'ready' ? state.data.clinic : null;
   /** DX-437: con la cita a la vista, no cancelada, y si la API lo permite. */
+  const calendarSection =
+    state.kind === 'ready' && state.data.calendarAvailable ? (
+      <CalendarLinks token={confirmationToken} googleUrl={state.data.googleCalendarUrl} />
+    ) : null;
   const earlierSection =
     state.kind === 'ready' &&
     state.data.appointment &&
@@ -491,6 +535,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                     format={appointmentFormat(state.data.appointment)}
                   />
                 )}
+                {calendarSection}
                 {earlierSection}
               </section>
             )}
@@ -507,6 +552,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                   appointment={state.data.appointment}
                   format={appointmentFormat(state.data.appointment)}
                 />
+                {calendarSection}
                 {earlierSection}
                 {state.data.cancellationPolicy ? (
                   <CancellationPolicyNotice
