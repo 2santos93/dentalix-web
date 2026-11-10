@@ -80,8 +80,8 @@ export default defineConfig({
     {
       // DX-485 (FE-098): un teléfono con dedo (`hasTouch` + `isMobile`, que
       // activan `pointer: coarse`) a 390 px. SOLO el spec de objetivos
-      // táctiles: la suite entera no se repite aquí (la E2E de CI ya va
-      // justa de tiempo, OPS-053).
+      // táctiles: la suite entera no se repite aquí (duplicaría el tiempo de
+      // cada shard de la E2E de CI, que tiene 35 min de tope; OPS-053, DX-457).
       name: 'touch',
       testMatch: TOUCH_SPEC,
       use: {

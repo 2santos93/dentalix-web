@@ -28,6 +28,7 @@ interface Step {
 }
 interface Job {
   'timeout-minutes': number | string;
+  strategy?: { matrix?: Record<string, unknown> };
   steps: Step[];
 }
 
@@ -42,12 +43,26 @@ function step(j: Job, id: string): Step {
   return found;
 }
 
-/** El tope de una run normal: el valor tras `||` de una expresión `cond && a || b`. */
-function normalTimeout(value: number | string | undefined): number | undefined {
-  if (typeof value === 'number' || value === undefined) return value;
-  const m = /\|\|\s*(\d+)\s*\}\}$/.exec(value);
+/** Las tres variantes de run de la E2E (DX-413, DX-457): repetida, filtrada y normal. */
+const VARIANTS = ['repeat_each', 'grep', 'normal'] as const;
+
+/**
+ * El tope en cada variante, en el orden de VARIANTS. Un número vale para las
+ * tres; una expresión es la cadena `repetida && A || filtrada && B || C`
+ * (con valores sueltos o listas de un valor, `'[A]'`, como en la matriz) y
+ * `${{ matrix.timeout }}` se lee de la matriz del job.
+ */
+function timeouts(value: number | string | undefined, j: Job): [number, number, number] | undefined {
+  if (typeof value === 'number') return [value, value, value];
+  if (value === undefined) return undefined;
+  if (value.trim() === '${{ matrix.timeout }}') {
+    const matrixTimeout = j.strategy?.matrix?.timeout;
+    if (typeof matrixTimeout !== 'string') throw new Error('el tope es matrix.timeout y la matriz no lo define');
+    return timeouts(matrixTimeout, j);
+  }
+  const m = /&&\s*'?\[?(\d+)\]?'?\s*\|\|\s*inputs\.grep != '' &&\s*'?\[?(\d+)\]?'?\s*\|\|\s*'?\[?(\d+)\]?'?\s*\)?\s*\}\}$/.exec(value);
   if (!m) throw new Error(`tope no reconocido: ${value}`);
-  return Number(m[1]);
+  return [Number(m[1]), Number(m[2]), Number(m[3])];
 }
 
 const CACHE_KEY = 'playwright-${{ steps.playwright-version.outputs.os }}-${{ steps.playwright-version.outputs.version }}';
@@ -115,11 +130,24 @@ describe('e2e.yml: topes y duración de los pasos con apt (OPS-057)', () => {
     expect(report?.env?.DEPS_STARTED_AT).toBe('${{ steps.deps-start.outputs.at }}');
   });
 
-  it('la suma de los topes de los pasos (~3 min sin tope: checkout y Node) cabe en el del job', () => {
-    const untimed = j.steps.filter((s) => s['timeout-minutes'] === undefined);
-    expect(untimed.map((s) => s.uses)).toEqual(['actions/checkout@v4', 'actions/checkout@v4', 'actions/setup-node@v4']);
-    const sum = 3 + j.steps.reduce((acc, s) => acc + (normalTimeout(s['timeout-minutes']) ?? 0), 0);
-    expect(sum).toBeLessThanOrEqual(normalTimeout(j['timeout-minutes'])!);
+  it.each(['playwright', 'playwright-merge'])(
+    '%s: la suma de los topes de los pasos (~3 min sin tope: checkout y Node) cabe en el del job, en cada variante',
+    (jobName) => {
+      const jj = job('e2e.yml', jobName);
+      const untimed = jj.steps.filter((s) => s['timeout-minutes'] === undefined);
+      expect(untimed.map((s) => s.uses)).toEqual(['actions/checkout@v4', 'actions/checkout@v4', 'actions/setup-node@v4']);
+      const jobLimit = timeouts(jj['timeout-minutes'], jj)!;
+      VARIANTS.forEach((variant, i) => {
+        const sum = 3 + jj.steps.reduce((acc, s) => acc + (timeouts(s['timeout-minutes'], jj)?.[i] ?? 0), 0);
+        expect({ variant, sum: sum <= jobLimit[i] ? 'cabe' : `${sum} > ${jobLimit[i]}` }).toEqual({ variant, sum: 'cabe' });
+      });
+    },
+  );
+
+  it('DX-457: Playwright tiene 35 min por shard (50 filtrado y 200 repetido, DX-413)', () => {
+    const playwright = step(j, 'playwright');
+    expect(playwright['timeout-minutes']).toBe('${{ matrix.timeout }}');
+    expect(timeouts(playwright['timeout-minutes'], j)).toEqual([200, 50, 35]);
   });
 });
 
