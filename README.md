@@ -109,17 +109,29 @@ cada fichero de la suite corrió en un shard y solo en uno, que llegaron los
 informes de todos, los fusiona y pasa la guardia de saltos y de flaky. Es rojo si
 cualquier shard lo es.
 
-Artefactos de cada run:
+Artefactos de cada run (entre paréntesis, cuánto duran):
 
-- `playwright-<run_id>-<intento>`: el informe HTML y `playwright-results.json`
-  fusionados (el HTML trae las trazas y capturas de los fallos).
-- `playwright-<run_id>-<intento>-shard-<i>`: `test-results/` y los logs de la API
-  y de la web (`.e2e/logs/`) de ese shard.
-- `e2e-shard-<i>`: los ficheros que corrió el shard (`proyecto fichero`).
-- `blob-<run_id>-<intento>-<i>`: el informe del shard para la fusión (3 días).
-- `e2e-flaky`: solo en `main`, los flaky de la run para la tendencia.
+- `playwright-<run_id>-<intento>` (14 días): el informe HTML y
+  `playwright-results.json` fusionados (el HTML trae las trazas y capturas de
+  los fallos).
+- `playwright-<run_id>-<intento>-shard-<i>` (14 días): `test-results/` y los
+  logs de la API y de la web (`.e2e/logs/`) de ese shard.
+- `e2e-shard-<i>` (7 días): los ficheros que corrió el shard (`proyecto fichero`).
+- `blob-<run_id>-<intento>-<i>` (7 días): el informe del shard para la fusión.
+- `e2e-flaky` (30 días): solo en `main`, los flaky de la run para la tendencia.
 
-Para reproducir un shard en local, con la misma lista que la CI:
+La fusión también comprueba que el informe fusionado tiene tantos tests como la
+lista completa (`Total: N tests` de `--list`).
+
+«Re-run failed jobs» solo relanza los shards rojos y la fusión: se queda con el
+blob del intento más alto de cada shard (y avisa en el resumen si mezcla
+intentos). Pasados 7 días los blobs de los shards que no se relanzan ya no
+existen y la fusión sale en rojo con «falta el informe (blob) del shard i/3»:
+entonces hay que usar «Re-run all jobs». Si los shards se cancelan (un push
+nuevo al PR), la fusión sale en rojo en el acto, sin fusionar nada.
+
+Para reproducir un shard en local, con el mismo reparto que la CI (en local no
+hay `CI`: sin el reintento de la CI y con los reporters `list` y `json`):
 
 ```bash
 scripts/e2e-ci.sh all --shard=2/3
@@ -130,8 +142,9 @@ E2E_WEB_SERVER=none npx playwright test --list --shard=2/3
 Con `grep` o `repeat_each` (lanzamiento manual, DX-413) la run va en un solo shard
 (`Playwright 1/1`), sin reintentos y con los topes largos (50 min filtrada, 200
 repetida): repartidas, las repeticiones de un mismo test caerían en runners
-distintos. Para pasar a 4 shards basta con cambiar `matrix.shard`, `matrix.total`
-y el `SHARD_TOTAL` del job de fusión.
+distintos. Para pasar a 4 shards hay que cambiar el `[1, 2, 3]` de
+`matrix.shard`, el `[3]` de `matrix.total` y el `|| 3` del `SHARD_TOTAL` del
+job de fusión; `scripts/workflows-e2e-shards.test.ts` exige que coincidan.
 
 ### Relanzar la E2E de un merge web bloqueado
 
