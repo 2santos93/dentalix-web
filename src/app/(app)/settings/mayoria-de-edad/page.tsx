@@ -1,6 +1,4 @@
 'use client';
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManagePatientSettings } from '@/lib/patients/patient-settings-api';
@@ -10,27 +8,12 @@ import { MajorityAgeSettingsSection } from '@/components/patients/majority-age-s
 const copy = {
   title: 'Mayoría de edad',
   description: 'Desde qué edad un paciente recibe sus propios avisos.',
-  checkingSession: 'Verificando sesión…',
 };
 
 /** Ajustes de mayoría de edad de la clínica (DX-328). Solo ADMIN. */
 export default function MajorityAgeSettingsPage() {
-  const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
-  const hasHydrated = useAuthStore((s) => s._hasHydrated);
 
-  useEffect(() => {
-    if (!hasHydrated) return;
-    if (!accessToken) router.replace('/login');
-  }, [accessToken, router, hasHydrated]);
-
-  if (!hasHydrated) {
-    return (
-      <p role="status" className="text-sm text-muted">
-        {copy.checkingSession}
-      </p>
-    );
-  }
   if (!accessToken) return null;
 
   return (

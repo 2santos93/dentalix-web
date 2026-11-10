@@ -1,6 +1,4 @@
 'use client';
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { SettingsPage } from '@/components/settings/settings-page';
 import { PrivacyPolicySettings } from '@/components/data-consents/privacy-policy-settings';
@@ -9,7 +7,6 @@ const copy = {
   title: 'Privacidad de datos',
   description:
     'La política de tratamiento de datos que ven y autorizan los pacientes. Cada versión publicada queda fija.',
-  checkingSession: 'Verificando sesión…',
 };
 
 /**
@@ -18,22 +15,8 @@ const copy = {
  * le muestra el botón a ese rol).
  */
 export default function PrivacySettingsPage() {
-  const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
-  const hasHydrated = useAuthStore((s) => s._hasHydrated);
 
-  useEffect(() => {
-    if (!hasHydrated) return;
-    if (!accessToken) router.replace('/login');
-  }, [accessToken, router, hasHydrated]);
-
-  if (!hasHydrated) {
-    return (
-      <p role="status" className="text-sm text-muted">
-        {copy.checkingSession}
-      </p>
-    );
-  }
   if (!accessToken) return null;
 
   return (

@@ -1,6 +1,4 @@
 'use client';
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { Lock } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
@@ -18,7 +16,6 @@ const copy = {
     'Se aplican a las recetas que se emitan desde ahora. Las ya emitidas no cambian.',
   forbiddenTitle: 'Solo administración cambia los datos de la receta.',
   forbiddenHint: 'Las recetas se emiten con los ajustes que fije administración.',
-  checkingSession: 'Verificando sesión…',
 };
 
 /**
@@ -27,22 +24,8 @@ const copy = {
  * el formulario ni las plantillas (que traen su propio candado).
  */
 export default function PrescriptionSettingsPage() {
-  const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
-  const hasHydrated = useAuthStore((s) => s._hasHydrated);
 
-  useEffect(() => {
-    if (!hasHydrated) return;
-    if (!accessToken) router.replace('/login');
-  }, [accessToken, router, hasHydrated]);
-
-  if (!hasHydrated) {
-    return (
-      <p role="status" className="text-sm text-muted">
-        {copy.checkingSession}
-      </p>
-    );
-  }
   if (!accessToken) return null;
 
   const allowed = canManagePrescriptionSettings(getTokenRole(accessToken));

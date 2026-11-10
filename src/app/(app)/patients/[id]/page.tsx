@@ -65,7 +65,6 @@ import { canSeeAnamnesisInbox } from '@/lib/anamnesis/anamnesis-api';
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
-  checkingSession: 'Verificando sesión…',
   loading: 'Cargando paciente…',
   genericError: 'No pudimos cargar el paciente.',
   notFound: 'No se encontró el paciente: puede que se haya eliminado o que el enlace sea incorrecto.',
@@ -114,7 +113,6 @@ function PatientDetailView() {
   const params = useParams<{ id: string }>();
   const patientId = params.id;
   const accessToken = useAuthStore((s) => s.accessToken);
-  const hasHydrated = useAuthStore((s) => s._hasHydrated);
   const [patient, setPatient] = useState<Patient | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -250,15 +248,8 @@ function PatientDetailView() {
   }, [activeTab]);
 
   useEffect(() => {
-    // Don't decide anything until the session bootstrap has resolved —
-    // accessToken is null until then, and redirecting on that would bounce
-    // an already-authenticated user.
-    if (!hasHydrated) return;
-
-    if (!accessToken) {
-      router.replace('/login');
-      return;
-    }
+    // La sesión la decide `RequireSession` (layout): aquí siempre hay token.
+    if (!accessToken) return;
 
     let cancelled = false;
     async function load() {
@@ -282,7 +273,7 @@ function PatientDetailView() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, router, hasHydrated, patientId, retryCount]);
+  }, [accessToken, patientId, retryCount]);
 
   const role = getTokenRole(accessToken);
   const isAdmin = role === 'ADMIN';
@@ -363,16 +354,6 @@ function PatientDetailView() {
           ) : null
         }
       />
-    );
-  }
-
-  if (!hasHydrated) {
-    return (
-      <div className="flex min-h-full flex-1 items-center justify-center bg-bg px-4 py-8">
-        <p role="status" className="text-sm text-muted">
-          {copy.checkingSession}
-        </p>
-      </div>
     );
   }
 

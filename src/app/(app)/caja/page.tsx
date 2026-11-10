@@ -1,5 +1,5 @@
 'use client';
-import { Suspense, useEffect } from 'react';
+import { Suspense } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { CashRegisterView } from '@/components/payments/cash-register-view';
@@ -17,10 +17,6 @@ import {
 // (`?tab=turnos`, DX-027). Un rol sin acceso que llegue por URL ve el aviso de
 // la propia vista (la API responde 403): el menú ya no le enseña la entrada,
 // pero la frontera es el servidor.
-const copy = {
-  checkingSession: 'Verificando sesión…',
-};
-
 /** `useSearchParams` exige un límite de Suspense (como la ficha del paciente). */
 export default function CajaPage() {
   return (
@@ -35,23 +31,7 @@ function CajaRoute() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const accessToken = useAuthStore((s) => s.accessToken);
-  const hasHydrated = useAuthStore((s) => s._hasHydrated);
   const tab = resolveCashTab(searchParams.get('tab'));
-
-  useEffect(() => {
-    if (!hasHydrated) return;
-    if (!accessToken) {
-      router.replace('/login');
-    }
-  }, [accessToken, router, hasHydrated]);
-
-  if (!hasHydrated) {
-    return (
-      <p role="status" className="text-sm text-muted">
-        {copy.checkingSession}
-      </p>
-    );
-  }
 
   if (!accessToken) {
     return null;

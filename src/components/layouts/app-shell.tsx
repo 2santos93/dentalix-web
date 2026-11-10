@@ -78,8 +78,8 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
   const accessToken = useAuthStore((s) => s.accessToken);
   const branding = useClinicBranding();
   // Todas las pantallas de la app pasan por aquí: al cargar, la sesión se
-  // recupera de la cookie HttpOnly (DX-062). Las páginas esperan a que esté
-  // resuelta (`_hasHydrated`) antes de mandar a /login.
+  // recupera de la cookie HttpOnly (DX-062). `RequireSession` (en el layout de
+  // `(app)`) espera a que esté resuelta (`_hasHydrated`) antes de mandar a /login.
   useSessionBootstrap();
   // El rol se resuelve en un efecto y no en el render: el token sale del store
   // en memoria, que en SSR está vacío, y leerlo durante el render haría que el
