@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { StaffMemberProfile } from './staff-member-profile';
 import {
@@ -267,6 +268,7 @@ describe('StaffMemberProfile', () => {
     await screen.findByText('Ana Ríos');
     expect(screen.queryByRole('button', { name: 'Bloquear agenda' })).not.toBeInTheDocument();
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     const admin = `h.${btoa(JSON.stringify({ sub: 'adm', tenantId: 't1', role: 'ADMIN' }))}.s`;
     render(<StaffMemberProfile token={admin} userId="u1" />);
@@ -305,6 +307,7 @@ describe('StaffMemberProfile', () => {
     await screen.findByText('Ana Ríos');
     expect(screen.queryByRole('heading', { name: 'Sedes' })).not.toBeInTheDocument();
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     const admin = `h.${btoa(JSON.stringify({ sub: 'adm', tenantId: 't1', role: 'ADMIN' }))}.s`;
     render(<StaffMemberProfile token={admin} userId="u1" />);

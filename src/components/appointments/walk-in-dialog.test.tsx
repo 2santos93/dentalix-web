@@ -1,4 +1,5 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { ApiError, NetworkError } from '@/lib/api/api-error';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
@@ -667,6 +668,7 @@ describe('WalkInDialog (DX-470)', () => {
       await fillAndSubmit(user);
       await waitFor(() => expect(first.onOpenChange).toHaveBeenCalledWith(false));
       cleanup();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
       renderDialog();
       await fillAndSubmit(user);
       await waitFor(() => expect(createMock).toHaveBeenCalledTimes(2));

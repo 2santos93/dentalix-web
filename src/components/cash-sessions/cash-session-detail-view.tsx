@@ -11,7 +11,7 @@ import {
   getCashSession,
   type CashSessionDetail,
 } from '@/lib/cash-sessions/cash-sessions-api';
-import { listLocations } from '@/lib/locations/locations-api';
+import { invalidateLocations, loadLocations } from '@/lib/session/session-store';
 import { locationCurrency } from '@/lib/locations/location-settings';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { PageHeader } from '@/components/shared/page-header';
@@ -72,7 +72,7 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
       try {
         const [res, locations] = await Promise.all([
           getCashSession(token, sessionId),
-          listLocations(token).catch(() => []),
+          loadLocations(token).catch(() => []),
         ]);
         if (cancelled) return;
         setSession(res);
@@ -90,6 +90,12 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
       cancelled = true;
     };
   }, [token, sessionId, reloadKey]);
+
+  /** La sede no traía moneda o formato: la lista cacheada de la sesión no sirve, se relee. */
+  function retryLocations() {
+    invalidateLocations();
+    setReloadKey((k) => k + 1);
+  }
 
   function done(message: string) {
     setModal(null);
@@ -165,14 +171,14 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
       {currency === null && session.can.adjust ? (
         <SedeConfigError
           kind="currency"
-          onRetry={() => setReloadKey((k) => k + 1)}
+          onRetry={retryLocations}
           locationId={session.location.id}
           className="mb-4"
         />
       ) : null}
       <DocumentFormatNote
         locationId={session.location.id}
-        onRetry={() => setReloadKey((k) => k + 1)}
+        onRetry={retryLocations}
         className="mb-4"
         active={documentFormat(session.regional) === null}
       />

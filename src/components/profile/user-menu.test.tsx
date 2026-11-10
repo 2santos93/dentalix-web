@@ -1,5 +1,6 @@
 import { auditRenderedControls } from '@/lib/test/rendered-a11y';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { setupUser } from '@/lib/test/user';
 import { UserMenu } from './user-menu';
 
@@ -66,6 +67,8 @@ describe('UserMenu', () => {
     expect(screen.getByRole('button', { name: 'Cuenta' })).toHaveTextContent('·');
     auditRenderedControls([{ html: loading.container.innerHTML, selector: 'button' }]);
     loading.unmount();
+    // FE-031: el perfil vive en la caché de la sesión; otra sesión lo vuelve a leer.
+    act(() => clearSessionStore());
     (getMe as jest.Mock).mockResolvedValueOnce({ id: 'u1', fullName: 'Ana Gómez', avatarUrl: '/synthetic-avatar.png', memberships: [] });
     const image = render(<UserMenu variant="compact" />);
     await waitFor(() => expect(image.container.querySelector('img')).not.toBeNull());

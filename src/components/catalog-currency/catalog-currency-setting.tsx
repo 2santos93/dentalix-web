@@ -3,7 +3,8 @@ import { useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getClinicSettings, updateClinicSettings } from '@/lib/clinic/clinic-settings-api';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { loadLocations } from '@/lib/session/session-store';
 import { clinicBaseCurrency } from '@/lib/locations/location-settings';
 import { listCurrencies, type Currency } from '@/lib/reference/currencies-api';
 import { SectionError } from '@/components/errors/section-error';
@@ -76,7 +77,7 @@ export function CatalogCurrencySetting({ token }: { token: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getClinicSettings(token), listLocations(token), listCurrencies(token)])
+    Promise.all([getClinicSettings(token), loadLocations(token), listCurrencies(token)])
       .then(([settings, locations, currencies]) => {
         if (cancelled) return;
         setLoaded({ catalogCurrency: settings.catalogCurrency ?? null, locations, currencies });

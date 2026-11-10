@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { FollowUpScopeMarker, PendingFollowUpView } from './pending-follow-up-view';
 import {
@@ -131,6 +132,7 @@ describe('PendingFollowUpView (DX-040)', () => {
     const { unmount } = render(<FollowUpScopeMarker token="tok" />);
     expect(await screen.findByText('Todas las sedes')).toBeInTheDocument();
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
     const b64 = (v: string) => btoa(v).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     const restricted = `${b64('{"alg":"HS256"}')}.${b64(JSON.stringify({ sub: 'u1', loc: ['loc-1'] }))}.firma`;
     render(<FollowUpScopeMarker token={restricted} />);

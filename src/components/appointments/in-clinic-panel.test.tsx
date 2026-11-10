@@ -1,4 +1,5 @@
 import { getCheckoutChecklist } from '@/lib/appointments/checkout-checklist';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
@@ -287,6 +288,7 @@ describe('InClinicPanel (DX-200)', () => {
     expect(screen.getByText('Cita 3:00 p. m. · Dra. Lina')).toBeInTheDocument();
     expect(screen.getByText('Llegó 2:55 p. m. · a tiempo')).toBeInTheDocument();
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
     render(
       <InClinicPanel
         state={staticState({ view: view({ timeZone: 'Asia/Tokyo', locale: 'ja-JP', hourCycle: 'h23', waiting }) })}
@@ -700,6 +702,7 @@ describe('InClinicPanel (DX-200)', () => {
         expect.anything(),
       );
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
       await act(async () => {
         jest.advanceTimersByTime(5 * 45_000);
       });

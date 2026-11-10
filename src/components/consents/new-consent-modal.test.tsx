@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { NewConsentModal } from './new-consent-modal';
 import {
   listConsentTemplates,
@@ -184,6 +185,7 @@ describe('NewConsentModal', () => {
       const day = regionalFormat({ locale, hourCycle }).date(new Date('2026-09-01T00:00:00.000Z'), timeZone);
       expect(await screen.findByRole('option', { name: new RegExp(`· ${day.replace(/[./]/g, '\\$&')}$`) })).toBeInTheDocument();
       cleanup();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
     }
   });
 

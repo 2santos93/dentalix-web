@@ -1,4 +1,5 @@
 import { dateIn, STAMP_SEDES } from '@/lib/test/stamp';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { listLocations } from '@/lib/locations/locations-api';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { PatientCommunicationSection } from './patient-communication-section';
@@ -351,6 +352,7 @@ describe('PatientCommunicationSection (DX-128)', () => {
     expect(await screen.findByText('+58 414 1234567')).toBeInTheDocument();
     expect(screen.queryByText('Destinatario de los avisos')).not.toBeInTheDocument();
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     mockedGet.mockResolvedValueOnce(
       comms({

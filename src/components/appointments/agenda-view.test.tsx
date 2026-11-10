@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { act, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -309,6 +310,7 @@ describe('AgendaView', () => {
     const { unmount } = await renderAgenda(<AgendaView token={tokenFor('DENTIST')} />);
     expect(screen.queryByRole('button', { name: 'Agenda de contingencia' })).not.toBeInTheDocument();
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     await renderAgenda(<AgendaView token={tokenFor('RECEPTION')} />);
     await user.click(screen.getByRole('button', { name: 'Agenda de contingencia' }));
@@ -1510,6 +1512,7 @@ describe('AgendaView', () => {
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
       expect(screen.queryByRole('button', { name: 'Bloquear horario' })).not.toBeInTheDocument();
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
       const user = userEvent.setup();
       await renderAgenda(<AgendaView token={tokenFor('RECEPTION')} />);
@@ -1827,6 +1830,7 @@ describe('AgendaView', () => {
       const gaps = await screen.findAllByTestId('free-gap');
       expect(gaps.every((g) => /Dr\. Luis Gómez$/.test(g.getAttribute('aria-label') ?? ''))).toBe(true);
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
       await renderAgenda(<AgendaView token={tokenFor('ASSISTANT')} />);
       await user.click(screen.getByRole('button', { name: /^día$/i }));

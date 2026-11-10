@@ -1,4 +1,5 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { CashAdjustmentModal } from './cash-adjustment-modal';
 import { addCashAdjustment, type CashAdjustment } from '@/lib/cash-sessions/cash-sessions-api';
@@ -74,6 +75,7 @@ describe('CashAdjustmentModal (DX-027, DX-252)', () => {
         await user.type(screen.getByLabelText('Importe'), '1234,5');
         await waitFor(() => expect(document.body.textContent?.replace(/\s/g, ' ')).toContain(`Se guardará: ${expected}`), { timeout: 3000 });
         cleanup();
+        clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
       }
     } finally {
       jest.useRealTimers();

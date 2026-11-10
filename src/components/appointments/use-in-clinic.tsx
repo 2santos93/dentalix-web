@@ -2,7 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getActiveLocationId, onLocationChange } from '@/lib/locations/location-store';
-import { useSessionLocations } from '@/lib/locations/session-locations';
+import { useSessionLocations } from '@/lib/session/session-store';
 import { IN_CLINIC_POLL_MS, getInClinic, onInClinicChanged, type InClinicView } from '@/lib/appointments/patient-flow';
 import { notifyError } from '@/components/errors/notify';
 import { ApiError } from '@/lib/api/api-error';

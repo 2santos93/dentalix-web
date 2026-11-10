@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { PatientDocumentsTab } from './patient-documents-tab';
@@ -131,6 +132,7 @@ describe('PatientDocumentsTab (DX-151)', () => {
     const first = render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
     expect(await screen.findByText('Dra. Laura Ruiz · 05/03/2027 3:05 p. m.')).toBeInTheDocument();
     first.unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     // Sede A: de-DE, 24 h, Berlín: la misma subida, con otro reloj y otro orden.
     mockedLocations.mockResolvedValue([
@@ -233,6 +235,7 @@ describe('PatientDocumentsTab (DX-151)', () => {
     expect(await menuItems(user, 'panoramica.pdf')).toEqual(['Ver', 'Descargar']);
     expect(await menuItems(user, 'informe.docx')).toEqual(['Descargar']);
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     render(<PatientDocumentsTab token={RECEPTION} patientId="p1" />);
     await screen.findByText('panoramica.pdf', VISIBLE);
@@ -338,6 +341,7 @@ describe('PatientDocumentsTab (DX-151)', () => {
       expect(seg).toHaveAttribute('aria-disabled', 'true');
     }
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
     mockedLocations.mockResolvedValue([clinicLocation()]);
     render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
     await screen.findByText('Sin documentos');

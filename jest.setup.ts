@@ -37,3 +37,10 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
     disconnect() {}
   } as unknown as typeof ResizeObserver;
 }
+
+// FE-031: la caché de sesión (`/me`, `/locations`) vive en un módulo y
+// sobreviviría de un test al siguiente del mismo fichero. El registro no
+// importa nada, así que no carga el store antes de que cada test mockee sus
+// APIs.
+import { runTestResets } from './src/lib/session/test-resets';
+afterEach(() => runTestResets());

@@ -4,12 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { AvatarResizeError } from '@/lib/me/avatar-resize';
 import {
-  getMe,
   updateName,
   uploadAvatar,
   removeAvatar,
   type MyProfile,
 } from '@/lib/me/me-api';
+import { invalidateMe, loadMe, putMe } from '@/lib/session/session-store';
 import { readJwtClaims } from '@/lib/auth/jwt-claims';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -90,7 +90,8 @@ export function ProfileView({ token }: ProfileViewProps) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setLoadError(null);
-    getMe(token)
+    // FE-031: la misma lectura de `/me` que el menú de cuenta.
+    loadMe(token)
       .then((p) => {
         if (!active) return;
         setProfile(p);
@@ -115,6 +116,7 @@ export function ProfileView({ token }: ProfileViewProps) {
     try {
       const updated = await updateName(token, name.trim());
       setProfile(updated);
+      putMe(token, updated); // El menú de cuenta pinta el nombre nuevo.
       commitName(updated.fullName);
     } catch (err) {
       setNameError(apiErrorMessage(err, copy.saveError));
@@ -130,6 +132,7 @@ export function ProfileView({ token }: ProfileViewProps) {
     setAvatarBusy(true);
     try {
       await uploadAvatar(token, file);
+      invalidateMe();
       setReloadKey((k) => k + 1);
     } catch (err) {
       setAvatarError(err instanceof AvatarResizeError ? copy.avatarTooLarge : apiErrorMessage(err, copy.avatarError));
@@ -144,6 +147,7 @@ export function ProfileView({ token }: ProfileViewProps) {
     setAvatarBusy(true);
     try {
       await removeAvatar(token);
+      invalidateMe();
       setReloadKey((k) => k + 1);
     } catch (err) {
       setAvatarError(apiErrorMessage(err, copy.avatarError));

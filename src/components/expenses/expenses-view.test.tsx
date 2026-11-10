@@ -37,7 +37,7 @@ jest.mock('../../lib/locations/location-store', () => ({
   ...jest.requireActual('../../lib/locations/location-store'),
   getActiveLocationId: jest.fn(),
 }));
-jest.mock('../../lib/locations/session-locations', () => ({
+jest.mock('../../lib/session/session-store', () => ({
   useSessionLocations: () => mockRequestLocations,
 }));
 jest.mock('../../lib/locations/schedule-api', () => ({ getLocationSchedule: jest.fn().mockResolvedValue({ timezone: 'Pacific/Auckland', ranges: [] }) }));

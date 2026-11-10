@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { useSessionLocations } from "@/lib/locations/session-locations";
+import { useSessionLocations } from "@/lib/session/session-store";
 import { FieldError } from "@/components/errors/field-error";
 import { useEffect, useState } from "react";
 import Link from "next/link";

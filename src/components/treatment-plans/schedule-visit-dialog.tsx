@@ -3,7 +3,7 @@ import * as React from "react";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { getPatient, type Patient } from "@/lib/patients/patients-api";
 import { listStaff, type StaffMember } from "@/lib/appointments/staff-api";
-import { useSessionLocations } from "@/lib/locations/session-locations";
+import { useSessionLocations } from "@/lib/session/session-store";
 import { getActiveLocationId } from "@/lib/locations/location-store";
 import { findOpenings, type Opening } from "@/lib/appointments/waitlist-api";
 import type { PlanVisit } from "@/lib/treatment-plans/plan-visits-api";

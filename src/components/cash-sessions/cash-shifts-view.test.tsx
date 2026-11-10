@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { CashShiftsView } from './cash-shifts-view';
 import { ApiError } from '@/lib/api/client';
@@ -392,6 +393,7 @@ describe('CashShiftsView: cada turno con la hora y el importe de SU sede (DX-354
     expect(within(row).getAllByText('Sin dato').length).toBeGreaterThan(0);
     expect(await screen.findAllByRole('button', { name: 'Reintentar' })).toHaveLength(1);
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     mockedLocations.mockReturnValue(new Promise(() => undefined));
     render(<CashShiftsView token={token} />);

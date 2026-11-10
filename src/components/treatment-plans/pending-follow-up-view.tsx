@@ -15,7 +15,8 @@ import {
   groupFollowUp,
   type FollowUpGroup,
 } from '@/lib/treatment-plans/follow-up-groups';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { loadLocations } from '@/lib/session/session-store';
 import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { fetchClinicName } from '@/lib/clinic-branding';
@@ -469,7 +470,7 @@ export function FollowUpScopeMarker({ token }: { token: string }) {
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
-    listLocations(token)
+    loadLocations(token)
       .then((list) => {
         if (cancelled) return;
         setLocations(list ?? []);

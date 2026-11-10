@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { CreatePaymentPlanModal } from './create-payment-plan-modal';
 import { ApiError } from '@/lib/api/client';
@@ -86,6 +87,7 @@ it('la vista previa sale con el formato de cada sede: Caracas «VES 100.000,00»
     expect(screen.getByRole('dialog').textContent).toContain(`Cuota: ${moneyWithCode(100000, 'VES', STAMP_FORMATS.caracas)}`),
   );
   unmount();
+  clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
   renderModal({ money: berlinMoney });
   await waitFor(() =>
     expect(screen.getByRole('dialog').textContent).toContain(`Cuota: ${moneyWithCode(100000, 'VES', STAMP_FORMATS.berlin)}`),

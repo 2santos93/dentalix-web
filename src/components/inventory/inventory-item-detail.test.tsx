@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { InventoryItem } from './inventory-item-detail';
 import { listLocations } from '@/lib/locations/locations-api';
@@ -193,6 +194,7 @@ describe('InventoryItem', () => {
       await screen.findByText('Jeringas');
       expect(await screen.findByText(dateIn('caracas', at))).toBeInTheDocument();
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
       mockedLocations.mockResolvedValue([STAMP_SEDES.berlin]);
       render(<InventoryItem token="tok" id="item1" />);
       await screen.findByText('Jeringas');
@@ -208,6 +210,7 @@ describe('InventoryItem', () => {
       expect(await screen.findAllByText(/No se pudo saber el formato regional o el reloj de la sede/)).toHaveLength(1);
       expect(screen.getByText('Sin dato')).toBeInTheDocument();
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
       mockedLocations.mockReturnValue(new Promise(() => undefined));
       render(<InventoryItem token="tok" id="item1" />);
       await screen.findByText('Jeringas');

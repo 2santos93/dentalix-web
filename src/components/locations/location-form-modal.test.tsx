@@ -1,4 +1,5 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { LocationFormModal, phoneRegionFollowsCountry } from './location-form-modal';
 import { createLocation, updateLocationSettings, type ClinicLocation } from '@/lib/locations/locations-api';
 import { listCurrencies } from '@/lib/reference/currencies-api';
@@ -734,6 +735,7 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
 
       // «Sin prefijo por defecto» elegido a mano sobre un país que sí lo tiene: también null.
       cleanup();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
       view = setup();
       await fillCreate(view.dialog, view.user);
       await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'VE');
@@ -743,6 +745,8 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
       expect(mockedCreate.mock.calls[1][1]).toHaveProperty('defaultPhoneRegion', null);
 
       cleanup();
+
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
       view = setup();
       await fillCreate(view.dialog, view.user);
       await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'VE');
@@ -768,6 +772,7 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
 
       // La región no era la del país: no se toca.
       cleanup();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
       view = setup(clinicLocation({ country: 'VE', defaultPhoneRegion: 'PT' }));
       prefix = within(view.dialog).getByLabelText(PREFIX);
       await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'ES');
@@ -782,6 +787,7 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
 
       // Sin prefijo guardado: tampoco.
       cleanup();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
       view = setup(clinicLocation({ country: 'VE', defaultPhoneRegion: null }));
       prefix = within(view.dialog).getByLabelText(PREFIX);
       expect(prefix).toHaveValue(NO_PREFIX);
@@ -819,6 +825,8 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
       expect(mockedUpdate.mock.calls[0][2]).not.toHaveProperty('defaultPhoneRegion');
 
       cleanup();
+
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
       view = setup(sede);
       await currenciesLoaded(view.dialog);
       await choosePrefix(view.user, view.dialog, '', NO_PREFIX);
@@ -828,6 +836,7 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
 
       // La propuesta al cambiar el país también es un cambio.
       cleanup();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
       view = setup(sede);
       await currenciesLoaded(view.dialog);
       await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'ES');

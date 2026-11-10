@@ -1,4 +1,5 @@
 import { moneyInputCopy } from '@/lib/format/money';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { regionalFormat } from '@/lib/format/regional-format';
 import { moneyWithCode } from '@/lib/format/sede-number';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -2524,6 +2525,7 @@ describe('TreatmentPlansTab', () => {
       ]);
       expect(screen.getByRole('button', { name: 'Presentar al paciente' })).toBeInTheDocument();
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
       render(<TreatmentPlansTab patientId="pat-1" token={assistantToken} />);
       const forAssistant = await screen.findByLabelText(/^estado del plan$/i);
@@ -3516,6 +3518,7 @@ describe('TreatmentPlansTab', () => {
       await within(await itemsTable()).findAllByText('Cobrado');
       expect(within(moneySummary()).queryByText('Sin imputar')).not.toBeInTheDocument();
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
       mockedGetPlanBalance.mockResolvedValue({ ...balanceWithItems, unallocated: 12500 });
       render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
@@ -3570,6 +3573,7 @@ describe('TreatmentPlansTab', () => {
         await screen.findByText('1 abono todavía sin convertir a la moneda del plan: no se imputa a ítems.'),
       ).toBeInTheDocument();
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
       mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
       render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
@@ -3704,6 +3708,7 @@ describe('TreatmentPlansTab', () => {
       expect(await screen.findByRole('menuitem', { name: 'Imputación' })).toBeInTheDocument();
       await user.keyboard('{Escape}');
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
       const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u-r', tenantId: 't1', role: 'RECEPTION' }))}.s`;
       render(<TreatmentPlansTab patientId="pat-1" token={receptionToken} />);

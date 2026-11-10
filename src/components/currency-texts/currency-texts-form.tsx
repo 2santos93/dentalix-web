@@ -8,7 +8,8 @@ import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getCurrencyTexts, saveCurrencyTexts } from '@/lib/exchange/currency-texts-api';
 import { listCurrencies, type Currency } from '@/lib/reference/currencies-api';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { invalidateLocations, loadLocations } from '@/lib/session/session-store';
 import { locationRegionalFormat } from '@/lib/locations/location-settings';
 import { CURRENCY_TEXT_MAX, isCurrencyText } from '@/lib/format/currency-text';
 import { setClinicCurrencyTexts } from '@/lib/format/clinic-currency-texts';
@@ -84,7 +85,7 @@ export function CurrencyTextsForm({ token, allowed }: { token: string; allowed: 
   useEffect(() => {
     if (!allowed) return;
     let cancelled = false;
-    Promise.all([getCurrencyTexts(token), listLocations(token), listCurrencies(token)])
+    Promise.all([getCurrencyTexts(token), loadLocations(token), listCurrencies(token)])
       .then(([texts, locations, currencies]) => {
         if (cancelled) return;
         setLoaded({
@@ -120,7 +121,11 @@ export function CurrencyTextsForm({ token, allowed }: { token: string; allowed: 
           token={token}
           loaded={loaded}
           onSaved={(saved) => setLoaded({ ...loaded, saved })}
-          onRetryLocations={() => setReloadKey((k) => k + 1)}
+          onRetryLocations={() => {
+            // La sede no traía formato: la lista cacheada de la sesión no sirve.
+            invalidateLocations();
+            setReloadKey((k) => k + 1);
+          }}
         />
       )}
     </SettingsSection>

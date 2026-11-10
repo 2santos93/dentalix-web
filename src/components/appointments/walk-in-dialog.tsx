@@ -9,7 +9,7 @@ import { getPatient, listPatients, type Patient, type DocType } from '@/lib/pati
 import { DOC_TYPES, docTypeOptionLabel } from '@/lib/patients/doc-type';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
-import { useSessionLocations } from '@/lib/locations/session-locations';
+import { useSessionLocations } from '@/lib/session/session-store';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
 import {
