@@ -26,6 +26,7 @@ const colsanavida = { id: 'py2', name: 'Colsanavida' } as Payer;
 const maria: Patient = {
   id: 'p1',
   tenantId: 't1',
+  patientCode: '1029',
   firstName: 'María',
   lastName: 'López',
   docType: 'NATIONAL_ID',

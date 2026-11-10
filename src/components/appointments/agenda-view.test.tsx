@@ -176,6 +176,7 @@ const patientsPage = {
     {
       id: 'pat-1',
       tenantId: 't1',
+      patientCode: '1179',
       firstName: 'María',
       lastName: 'López',
       docType: 'NATIONAL_ID' as const,
@@ -199,6 +200,7 @@ const patientsPage = {
 function appointment(overrides: Partial<import('@/lib/appointments/appointments-api').Appointment> & { id: string }) {
   return {
     tenantId: 't1',
+    patientCode: '1202',
     patientId: 'pat-1',
     patientFirstName: null,
     patientLastName: null,
@@ -1453,6 +1455,7 @@ describe('AgendaView', () => {
     const lunch = {
       id: 'b-1',
       tenantId: 't1',
+      patientCode: '2456',
       providerId: null,
       locationId: null,
       start: new Date(`${today}T13:00:00`).toISOString(),
@@ -1910,6 +1913,7 @@ describe('AgendaView con el reloj de la sede (DX-378)', () => {
     const token = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'RECEPTION' }))}.s`;
     const base = {
       tenantId: 't1',
+      patientCode: '2913',
       locationId: 'loc-1',
       defaultProviderId: null,
       createdAt: '2026-01-01T00:00:00.000Z',

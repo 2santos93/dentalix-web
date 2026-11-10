@@ -790,6 +790,26 @@ export interface paths {
         patch: operations["PatientsController_update"];
         trace?: never;
     };
+    "/api/v1/patients/{id}/imaging-export.txt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Datos del paciente para el software de imagen (texto)
+         * @description DX-484. Fichero de texto UTF-8 con fin de línea CRLF y una línea «Etiqueta: valor» por dato: código del paciente, apellidos y nombre (también sin tildes), fecha de nacimiento (dd.mm.aaaa y aaaa-mm-dd) y sexo; «Sin indicar» si falta. Solo identificación: ni documento, ni contacto, ni datos clínicos. Solo el personal clínico (DENTIST, ASSISTANT, ADMIN); cada descarga deja un evento EXPORT en la auditoría. 404 como `GET /patients/:id`.
+         */
+        get: operations["PatientsController_imagingExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{id}/live-public-links": {
         parameters: {
             query?: never;
@@ -7831,6 +7851,11 @@ export interface components {
             id: string;
             /** Format: uuid */
             tenantId: string;
+            /**
+             * @description DX-484: código del paciente en su clínica (dígitos, sin ceros a la izquierda). Lo asigna el sistema en el alta, es único en la clínica y no cambia nunca, ni al archivar; es el que se da al software de imagen.
+             * @example 1042
+             */
+            patientCode: string;
             firstName: string;
             lastName: string;
             docType: components["schemas"]["DocType"];
@@ -7957,6 +7982,11 @@ export interface components {
             id: string;
             /** Format: uuid */
             tenantId: string;
+            /**
+             * @description DX-484: código del paciente en su clínica (dígitos, sin ceros a la izquierda). Lo asigna el sistema en el alta, es único en la clínica y no cambia nunca, ni al archivar; es el que se da al software de imagen.
+             * @example 1042
+             */
+            patientCode: string;
             firstName: string;
             lastName: string;
             docType: components["schemas"]["DocType"];
@@ -8217,6 +8247,11 @@ export interface components {
             id: string;
             /** Format: uuid */
             tenantId: string;
+            /**
+             * @description DX-484: código del paciente en su clínica (dígitos, sin ceros a la izquierda). Lo asigna el sistema en el alta, es único en la clínica y no cambia nunca, ni al archivar; es el que se da al software de imagen.
+             * @example 1042
+             */
+            patientCode: string;
             firstName: string;
             lastName: string;
             docType: components["schemas"]["DocType"];
@@ -22901,6 +22936,49 @@ export interface operations {
             };
             /** @description Id que no es UUID */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientsController_imagingExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero de texto `paciente-<código>.txt` */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo el personal clínico puede exportar los datos para el software de imagen. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente inexistente en la clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

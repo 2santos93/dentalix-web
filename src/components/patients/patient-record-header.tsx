@@ -1,7 +1,8 @@
 'use client';
 import Link from 'next/link';
 import * as React from 'react';
-import { Building2, ChevronLeft, MoreHorizontal, Pencil, ShieldCheck } from 'lucide-react';
+import { Building2, Check, ChevronLeft, Copy, MoreHorizontal, Pencil, ShieldCheck } from 'lucide-react';
+import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import type { Patient } from '@/lib/patients/patients-api';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
@@ -68,6 +69,12 @@ const copy = {
   alertsFailed: 'Alertas sin comprobar',
   attendanceLoading: 'Comprobando inasistencias…',
   attendanceFailed: 'Asistencia sin comprobar',
+  // DX-484: el código estable del paciente (el ID del software de imagen).
+  codeLabel: 'Código',
+  copyCode: 'Copiar',
+  copyCodeAria: (code: string) => `Copiar el código del paciente ${code}`,
+  codeCopied: 'Código copiado',
+  codeCopyFailed: 'No se pudo copiar: selecciona el código y cópialo a mano.',
 };
 
 function fullName(patient: Patient): string {
@@ -271,6 +278,7 @@ export function PatientRecordHeader({
               </ul>
             </div>
           ) : null}
+          {patient?.patientCode ? <PatientCodeItem code={patient.patientCode} /> : null}
           {/* Siempre visible, también mientras carga: es una propiedad de la
               ficha, no del paciente que se esté cargando. Mismo término que el
               selector de sede. Ninguna lectura de esta página filtra por sede
@@ -336,6 +344,52 @@ export function PatientRecordHeader({
         </div>
       ) : null}
     </header>
+  );
+}
+
+/**
+ * DX-484: «Código 1042» con «Copiar». Copia SOLO el código (lo que se pega en
+ * el campo de ID del software de imagen), lo anuncia con educación y marca ✓
+ * unos 2 s. Si el navegador no deja copiar, lo dice y el código queda
+ * seleccionable a mano (`select-all`: un toque lo selecciona entero). Lo ven
+ * los cuatro roles: recepción también da de alta en el software de imagen.
+ */
+function PatientCodeItem({ code }: { code: string }) {
+  const { state, copy: copyText } = useCopyToClipboard();
+  const statusId = React.useId();
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-1.5 text-sm text-muted">
+        <span>{copy.codeLabel}</span>
+        <span data-testid="patient-code" className="t-id select-all text-ink">
+          {code}
+        </span>
+        <Tooltip content={copy.copyCode}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={copy.copyCodeAria(code)}
+            aria-describedby={state === 'failed' ? statusId : undefined}
+            onClick={() => void copyText(code)}
+            className="max-sm:min-h-11 max-sm:min-w-11"
+          >
+            {state === 'copied' ? <Check aria-hidden className="text-success-text" /> : <Copy aria-hidden />}
+          </Button>
+        </Tooltip>
+      </div>
+      {/* Siempre montada (vacía en reposo) para que el lector la anuncie al
+          llenarse. `aria-live` sin `role="status"`: la cabecera ya tiene sus
+          regiones de estado (alertas, inasistencias) y esta no es una carga. */}
+      <p
+        id={statusId}
+        data-testid="patient-code-status"
+        aria-live="polite"
+        className={cn('text-xs', state === 'failed' ? 'text-danger-text' : 'sr-only')}
+      >
+        {state === 'copied' ? copy.codeCopied : state === 'failed' ? copy.codeCopyFailed : ''}
+      </p>
+    </div>
   );
 }
 

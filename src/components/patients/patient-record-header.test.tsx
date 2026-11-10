@@ -5,11 +5,15 @@ import type { Patient } from '@/lib/patients/patients-api';
 import { retentionChip } from './patient-retention-section';
 import { testStamp } from '@/lib/test/stamp';
 import { FORMAT_ES } from '@/lib/test/document-regional';
+import { act } from 'react';
+import { setupUser } from '@/lib/test/user';
+import { imagingExportMenuAction } from './imaging-export-dialog';
 
 function patient(overrides: Partial<Patient> = {}): Patient {
   return {
     id: 'p1',
     tenantId: 't1',
+    patientCode: '1013',
     firstName: 'Carlos',
     lastName: 'Mejía',
     docType: 'NATIONAL_ID',
@@ -512,5 +516,104 @@ describe('PatientRecordHeader: cabecera compacta (UX v2 · K3)', () => {
       'Se conserva hasta el 28/02/2039 por el plazo anterior de la clínica. Mientras dure, el paciente no se puede archivar.',
     );
     expect(previous?.hint).not.toMatch(/15 años|legal/);
+  });
+});
+
+describe('PatientRecordHeader: código del paciente (DX-484)', () => {
+  function mockClipboard(writeText: jest.Mock) {
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  }
+
+  it('muestra «Código 1042» y «Copiar» copia SOLO el código, con anuncio y marca ✓', async () => {
+    const user = setupUser();
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    mockClipboard(writeText);
+    render(
+      <PatientRecordHeader fmt={FORMAT_ES.fmt} patient={patient({ patientCode: '1042' })} loading={false} onEdit={() => {}} />,
+    );
+    const code = screen.getByTestId('patient-code');
+    expect(code).toHaveTextContent('1042');
+    expect(code).toHaveClass('t-id');
+    expect(code.parentElement).toHaveTextContent('Código1042');
+    const status = screen.getByTestId('patient-code-status');
+    expect(status).toHaveAttribute('aria-live', 'polite');
+    expect(status).toBeEmptyDOMElement();
+
+    await user.click(screen.getByRole('button', { name: 'Copiar el código del paciente 1042' }));
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith('1042');
+    expect(status).toHaveTextContent('Código copiado');
+  });
+
+  it('la marca de «copiado» se va a los ~2 s', async () => {
+    jest.useFakeTimers();
+    try {
+      const writeText = jest.fn().mockResolvedValue(undefined);
+      mockClipboard(writeText);
+      render(
+        <PatientRecordHeader fmt={FORMAT_ES.fmt} patient={patient({ patientCode: '1042' })} loading={false} onEdit={() => {}} />,
+      );
+      await act(async () => {
+        screen.getByRole('button', { name: 'Copiar el código del paciente 1042' }).click();
+      });
+      expect(screen.getByText('Código copiado')).toBeInTheDocument();
+      act(() => {
+        jest.advanceTimersByTime(2000);
+      });
+      expect(screen.queryByText('Código copiado')).not.toBeInTheDocument();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('si el navegador no deja copiar, dice que se seleccione a mano y el código es seleccionable', async () => {
+    const user = setupUser();
+    mockClipboard(jest.fn().mockRejectedValue(new Error('denied')));
+    render(
+      <PatientRecordHeader fmt={FORMAT_ES.fmt} patient={patient({ patientCode: '1042' })} loading={false} onEdit={() => {}} />,
+    );
+    const button = screen.getByRole('button', { name: 'Copiar el código del paciente 1042' });
+    await user.click(button);
+    const message = await screen.findByText(/selecciona el código y cópialo a mano/);
+    expect(message).toHaveAttribute('aria-live', 'polite');
+    expect(button).toHaveAccessibleDescription(/cópialo a mano/);
+    expect(screen.getByTestId('patient-code')).toHaveClass('select-all');
+  });
+
+  it('el código no entra en la tira de identidad (que sigue sin pintarse vacía)', () => {
+    render(
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
+        patient={patient({ patientCode: '1042', birthDate: null, docNumber: null, phone: null })}
+        loading={false}
+        onEdit={() => {}}
+      />,
+    );
+    expect(screen.queryByRole('list', { name: /datos de identificación/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId('patient-code')).toHaveTextContent('1042');
+  });
+});
+
+describe('PatientRecordHeader: «Datos para el software de imagen» en el «⋯» (DX-484)', () => {
+  it.each(['DENTIST', 'ASSISTANT', 'ADMIN'] as const)('%s la ve en el menú, con icono', async (role) => {
+    const user = setupUser();
+    const onSelect = jest.fn();
+    const action = imagingExportMenuAction(role, onSelect);
+    render(
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
+        patient={patient()}
+        loading={false}
+        onEdit={() => {}}
+        menuActions={action ? [action] : []}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Más acciones' }));
+    const item = await screen.findByRole('menuitem', { name: 'Datos para el software de imagen' });
+    expect(item.querySelector('svg')).not.toBeNull();
+    await user.click(item);
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['RECEPTION', null] as const)('%s no la ve', (role) => {
+    expect(imagingExportMenuAction(role, () => {})).toBeNull();
   });
 });
