@@ -16,6 +16,8 @@ import { listLocations, type ClinicLocation } from '@/lib/locations/locations-ap
 import { ApiError } from '@/lib/api/client';
 import { tokenFor } from '@/lib/test/prescriptions';
 import { clinicLocation } from '@/lib/test/locations';
+import { listNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
+import { prophylaxisTemplate, resinTemplate } from '@/components/clinical-notes/fixtures';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC transform
 // (only real import/require specifiers are) — use a relative path here, same
@@ -27,6 +29,13 @@ jest.mock('../../lib/odontogram/catalog-api', () => ({
   createCatalogItem: jest.fn(),
   updateCatalogItem: jest.fn(),
 }));
+
+// DX-455: el formulario pide las plantillas de evolución al abrirse.
+jest.mock('../../lib/clinical-notes/note-templates-api', () => ({
+  ...jest.requireActual('../../lib/clinical-notes/note-templates-api'),
+  listNoteTemplates: jest.fn(() => Promise.resolve([])),
+}));
+const mockedTemplates = listNoteTemplates as jest.MockedFunction<typeof listNoteTemplates>;
 
 // Las sedes deciden la moneda base de la clínica (DX-063): una clínica con
 // la moneda del fixture por defecto.
@@ -102,6 +111,7 @@ describe('CatalogView', () => {
     mockedCreate.mockReset();
     mockedUpdate.mockReset();
     mockedLocations.mockReset().mockResolvedValue(clinicIn('VE'));
+    mockedTemplates.mockReset().mockResolvedValue([]);
     // La sede activa vive en localStorage y persiste entre tests del mismo
     // fichero: sin limpiarla, el aviso de alcance se filtra a los demás casos.
     window.localStorage.clear();
@@ -855,5 +865,103 @@ describe('CatalogView · admite descuentos (DX-105)', () => {
   it('un ítem sin el campo (respuesta antigua) se trata como que admite descuentos', async () => {
     render(<CatalogView token={admin} initialItemId="c1" />);
     expect(await screen.findByRole('checkbox', { name: 'Admite descuentos' })).toBeChecked();
+  });
+});
+
+describe('CatalogView · plantilla de evolución del procedimiento (DX-455)', () => {
+  const inactiveResin = { ...resinTemplate, active: false };
+
+  beforeEach(() => {
+    mockedList.mockReset();
+    mockedUpdate.mockReset().mockResolvedValue(item1);
+    mockedCreate.mockReset();
+    mockedLocations.mockReset().mockResolvedValue(clinicIn('VE'));
+    mockedTemplates.mockReset();
+    window.localStorage.clear();
+  });
+
+  async function openEditOf(item: DentalCatalogItem) {
+    mockedList.mockResolvedValue(page([item]));
+    const user = setupUser();
+    render(<CatalogView token={ADMIN_TOKEN} />);
+    await screen.findByRole('table', { name: /catálogo/i });
+    const menu = await openRowMenu(user, /acciones de profilaxis/i);
+    await user.click(within(menu).getByRole('menuitem', { name: /editar/i }));
+    return user;
+  }
+
+  it('ofrece las activas y «Sin plantilla», y guarda el vínculo elegido', async () => {
+    mockedTemplates.mockResolvedValue([resinTemplate, prophylaxisTemplate, { ...resinTemplate, id: 'x', name: 'Vieja', active: false }]);
+    const user = await openEditOf(item1);
+    const select = await screen.findByRole('combobox', { name: 'Plantilla de evolución' });
+    expect(mockedTemplates).toHaveBeenCalledWith(ADMIN_TOKEN, { includeInactive: true });
+    const options = within(select).getAllByRole('option').map((o) => o.textContent);
+    expect(options).toEqual(['Sin plantilla', 'Profilaxis', 'Resina']);
+    await user.selectOptions(select, 'tpl-resina');
+    await user.click(screen.getByRole('button', { name: /^guardar$/i }));
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith(
+        ADMIN_TOKEN,
+        'c1',
+        expect.objectContaining({ clinicalNoteTemplateId: 'tpl-resina' }),
+      ),
+    );
+  });
+
+  it('sin tocar la plantilla no la manda; «Sin plantilla» la desliga con null', async () => {
+    mockedTemplates.mockResolvedValue([resinTemplate]);
+    const linked = { ...item1, clinicalNoteTemplateId: 'tpl-resina', suggestedClinicalNoteTemplateId: 'tpl-resina' };
+    const user = await openEditOf(linked);
+    const select = await screen.findByRole('combobox', { name: 'Plantilla de evolución' });
+    expect(select).toHaveValue('tpl-resina');
+    await user.click(screen.getByRole('button', { name: /^guardar$/i }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).not.toHaveProperty('clinicalNoteTemplateId');
+  });
+
+  it('una ligada que se desactivó se ve como «(desactivada)», no elegible, y explica por qué no se sugiere', async () => {
+    mockedTemplates.mockResolvedValue([inactiveResin, prophylaxisTemplate]);
+    const linked = { ...item1, clinicalNoteTemplateId: 'tpl-resina', suggestedClinicalNoteTemplateId: null };
+    const user = await openEditOf(linked);
+    const select = await screen.findByRole('combobox', { name: 'Plantilla de evolución' });
+    expect(select).toHaveValue('tpl-resina');
+    const inactive = within(select).getByRole('option', { name: 'Resina (desactivada)' });
+    expect(inactive).toBeDisabled();
+    expect(screen.getByText(/«Resina» está desactivada: no se sugiere al marcar hecho/)).toBeInTheDocument();
+    await user.selectOptions(select, '');
+    await user.click(screen.getByRole('button', { name: /^guardar$/i }));
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith(ADMIN_TOKEN, 'c1', expect.objectContaining({ clinicalNoteTemplateId: null })),
+    );
+  });
+
+  it('el error de la API sobre la plantilla sale junto al campo, con el foco', async () => {
+    mockedTemplates.mockResolvedValue([resinTemplate]);
+    mockedUpdate.mockReset().mockRejectedValue(
+      new ApiError(400, 'La plantilla «Resina» está desactivada: actívala en Ajustes → Plantillas de evolución o elige otra.'),
+    );
+    const user = await openEditOf(item1);
+    const select = await screen.findByRole('combobox', { name: 'Plantilla de evolución' });
+    await user.selectOptions(select, 'tpl-resina');
+    await user.click(screen.getByRole('button', { name: /^guardar$/i }));
+    expect(await screen.findByText(/La plantilla «Resina» está desactivada/)).toBeInTheDocument();
+    expect(select).toHaveAttribute('aria-invalid', 'true');
+    expect(select).toHaveFocus();
+  });
+
+  it('si las plantillas no cargan, el campo se sustituye por su error con reintento (escalón 2)', async () => {
+    mockedTemplates.mockRejectedValueOnce(new Error('boom')).mockResolvedValue([resinTemplate]);
+    const user = await openEditOf(item1);
+    expect(await screen.findByText('Plantillas no disponibles')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(await screen.findByRole('combobox', { name: 'Plantilla de evolución' })).toBeInTheDocument();
+  });
+
+  it('un diagnóstico no ofrece plantilla', async () => {
+    mockedTemplates.mockResolvedValue([resinTemplate]);
+    const user = await openEditOf(item1);
+    await screen.findByRole('combobox', { name: 'Plantilla de evolución' });
+    await user.selectOptions(screen.getByLabelText('Tipo'), 'DIAGNOSIS');
+    expect(screen.queryByRole('combobox', { name: 'Plantilla de evolución' })).not.toBeInTheDocument();
   });
 });

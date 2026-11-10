@@ -130,6 +130,8 @@ export const copy = {
   attributeItem: 'Atribuir',
   attributeItemFor: (item: ItemRef) => `Atribuir quién, cuándo y dónde se realizó el ${itemRefText(item)}`,
   markDoneSubject: (procedure: string, tooth: string) => `${procedure} · diente ${tooth}`,
+  // DX-455: la evolución que se abre tras marcar hecho un procedimiento con plantilla.
+  evolutionSaved: 'Evolución guardada en la historia clínica.',
   addItemHeading: 'Agregar ítem',
   invalidToothNumber: 'Número de diente inválido. Usa la notación FDI (ej. 11, 26, 55).',
   procedureLabel: 'Procedimiento',

@@ -39,6 +39,17 @@ export interface DentalCatalogItem {
    * sabe. La traen las lecturas de `GET /catalog/items`; no las altas ni las ediciones.
    */
   catalogCurrency?: string | null;
+  /**
+   * DX-455: plantilla de evolución ligada al procedimiento, aunque esté
+   * desactivada (es lo que edita el catálogo). La API la manda siempre; es
+   * opcional aquí para no obligar a cada fixture a llevarla.
+   */
+  clinicalNoteTemplateId?: string | null;
+  /**
+   * DX-455: la misma, pero solo si está ACTIVA (si no, `null`): la que se
+   * sugiere al marcar hecho un ítem del plan con este procedimiento.
+   */
+  suggestedClinicalNoteTemplateId?: string | null;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -128,6 +139,8 @@ export interface CreateCatalogItemInput {
   /** DX-105: por defecto true. */
   allowDiscount?: boolean;
   active?: boolean;
+  /** DX-455: `null` la desliga; ausente, no cambia. Solo procedimientos. */
+  clinicalNoteTemplateId?: string | null;
 }
 
 export async function createCatalogItem(
@@ -160,6 +173,7 @@ export interface UpdateCatalogItemInput {
   defaultPrice?: number;
   allowDiscount?: boolean;
   active?: boolean;
+  clinicalNoteTemplateId?: string | null;
 }
 
 export async function updateCatalogItem(

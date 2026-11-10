@@ -4,7 +4,7 @@ import { NewEvolutionModal } from './new-evolution-modal';
 import { listNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
 import { createClinicalEntry, getClinicalEntrySigning } from '@/lib/patients/clinical-api';
 import { toast } from 'sonner';
-import { prophylaxisTemplate, resinTemplate } from './fixtures';
+import { controlTemplate, prophylaxisTemplate, resinTemplate } from './fixtures';
 import { searchIcd10 } from '@/lib/reference/icd10-api';
 
 // DX-378: el día de la cita sale con la zona y el formato de la sede (Caracas, es-VE).
@@ -437,5 +437,174 @@ describe('NewEvolutionModal · registro profesional (DX-540)', () => {
     await waitFor(() => expect(onCreated).toHaveBeenCalled());
     expect(screen.queryByText(/vas a firmar sin registro profesional/i)).toBeNull();
     expect(mockedWarning).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('NewEvolutionModal · atajos de plantilla (DX-455)', () => {
+  const resinWithShortcut = { ...resinTemplate, shortcut: '#resina' };
+
+  beforeEach(() => {
+    mockedList.mockReset();
+    mockedCreate.mockReset();
+    mockedList.mockResolvedValue([resinWithShortcut, controlTemplate, prophylaxisTemplate]);
+    mockedCreate.mockResolvedValue(created);
+    mockedSigning.mockReset();
+    mockedSigning.mockResolvedValue(SIGNED_OK);
+  });
+
+  async function notesField() {
+    await screen.findByRole('radio', { name: /resina/i });
+    return screen.getByLabelText(/texto de la evolución/i) as HTMLTextAreaElement;
+  }
+
+  it('«#control » se sustituye por el texto de la plantilla, sin distinguir mayúsculas, y se anuncia', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    const notes = await notesField();
+    await user.type(notes, 'Paciente acude. #CONTROL ');
+    expect(notes).toHaveValue('Paciente acude. Control sin dolor ni sangrado. Cicatrización normal.');
+    expect(notes.selectionStart).toBe(notes.value.length);
+    expect(notes).toHaveFocus();
+    expect(screen.getByText('Plantilla «Control postoperatorio» insertada.')).toBeInTheDocument();
+    // La inserción es texto: no cambia la plantilla elegida (sigue «Sin plantilla»).
+    expect(screen.getByRole('radio', { name: /sin plantilla/i })).toBeChecked();
+  });
+
+  it('el cursor queda al final de lo insertado aunque haya texto detrás', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    const notes = await notesField();
+    await user.type(notes, 'Antes . Después');
+    await user.type(notes, '#control ', { initialSelectionStart: 6, initialSelectionEnd: 6 });
+    const body = controlTemplate.body;
+    expect(notes).toHaveValue(`Antes ${body}. Después`);
+    expect(notes.selectionStart).toBe(6 + body.length);
+    expect(notes.selectionEnd).toBe(6 + body.length);
+  });
+
+  it('un atajo desconocido se queda como texto', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    const notes = await notesField();
+    await user.type(notes, '#otro y #control.');
+    expect(notes).toHaveValue('#otro y #control.');
+  });
+
+  it('una plantilla desactivada nunca se inserta por atajo', async () => {
+    mockedList.mockResolvedValue([resinWithShortcut, { ...controlTemplate, active: false }]);
+    const user = userEvent.setup();
+    renderModal();
+    const notes = await notesField();
+    await user.type(notes, '#control ');
+    expect(notes).toHaveValue('#control ');
+  });
+
+  it('con preguntas abre las mismas preguntas de la plantilla e inserta el texto compuesto', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    const notes = await notesField();
+    await user.type(notes, 'Pieza 16: #resina ');
+    const panel = screen.getByRole('group', { name: 'Preguntas de «Resina»' });
+    expect(panel).toHaveFocus();
+    // Mientras se contesta, el atajo sigue escrito y no se puede guardar.
+    expect(notes).toHaveValue('Pieza 16: #resina ');
+    expect(screen.getByRole('button', { name: /guardar evolución/i })).toBeDisabled();
+    await user.click(within(panel).getByRole('radio', { name: 'O' }));
+    await user.type(within(panel).getByRole('textbox', { name: 'Observaciones' }), 'Sin sensibilidad');
+    await user.click(within(panel).getByRole('button', { name: 'Insertar en el texto' }));
+
+    const text = 'Pieza 16: Resina en superficie O con Resina A2. Observaciones: Sin sensibilidad.';
+    expect(notes).toHaveValue(text);
+    expect(notes).toHaveFocus();
+    expect(notes.selectionStart).toBe(text.length);
+    expect(screen.queryByRole('group', { name: 'Preguntas de «Resina»' })).not.toBeInTheDocument();
+    expect(screen.getByText('Plantilla «Resina» insertada.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /guardar evolución/i }));
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalledWith('tok', 'p1', { notes: text }));
+  });
+
+  it('«Cancelar» en las preguntas deja el atajo como texto', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    const notes = await notesField();
+    await user.type(notes, '#Resina ');
+    const panel = screen.getByRole('group', { name: 'Preguntas de «Resina»' });
+    await user.click(within(panel).getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByRole('group', { name: 'Preguntas de «Resina»' })).not.toBeInTheDocument();
+    expect(notes).toHaveValue('#Resina ');
+    expect(notes).toHaveFocus();
+  });
+
+  it('un {{marcador}} sin rellenar desactiva «Guardar» y dice cuál falta', async () => {
+    mockedList.mockResolvedValue([{ ...controlTemplate, body: 'Control del diente {{Diente}}.' }]);
+    const user = userEvent.setup();
+    renderModal();
+    await screen.findByRole('radio', { name: /control/i });
+    const notes = screen.getByLabelText(/texto de la evolución/i);
+    await user.type(notes, '#control ');
+    expect(notes).toHaveValue('Control del diente {{Diente}}.');
+    const save = screen.getByRole('button', { name: /guardar evolución/i });
+    expect(save).toBeDisabled();
+    expect(notes).toHaveAccessibleDescription('Falta rellenar {{Diente}}.');
+    expect(notes).toHaveAttribute('aria-invalid', 'true');
+
+    await user.clear(notes);
+    await user.type(notes, 'Control del diente 16.');
+    expect(save).toBeEnabled();
+    expect(screen.queryByText(/falta rellenar/i)).not.toBeInTheDocument();
+  });
+
+  it('varios marcadores sin rellenar se nombran todos', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    const notes = await notesField();
+    await user.type(notes, '{{{{Diente}} y {{{{Cara}}');
+    expect(notes).toHaveAccessibleDescription('Faltan por rellenar {{Diente}} y {{Cara}}.');
+  });
+
+  describe('plantilla sugerida por el procedimiento', () => {
+    it('viene elegida con sus preguntas y lo dice; se puede cambiar', async () => {
+      const user = userEvent.setup();
+      renderModal({ suggestedTemplateId: 'tpl-resina', suggestedBy: 'Resina compuesta' });
+      expect(await screen.findByRole('button', { name: 'Cambiar la plantilla «Resina»' })).toBeInTheDocument();
+      expect(screen.getByText(/sugerida por el procedimiento «Resina compuesta»/i)).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: /preguntas de la plantilla/i })).toBeInTheDocument();
+      expect(screen.getByLabelText(/texto de la evolución/i)).toHaveValue(
+        'Resina en superficie [sin respuesta] con Resina A2. Observaciones: [sin respuesta].',
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Cambiar la plantilla «Resina»' }));
+      await user.click(screen.getByRole('radio', { name: /profilaxis/i }));
+      expect(screen.getByLabelText(/texto de la evolución/i)).toHaveValue('Profilaxis con Ultrasonido.');
+      expect(screen.queryByText(/sugerida por el procedimiento/i)).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /guardar evolución/i }));
+      await waitFor(() =>
+        expect(mockedCreate).toHaveBeenCalledWith('tok', 'p1', {
+          notes: 'Profilaxis con Ultrasonido.',
+          templateId: 'tpl-profilaxis',
+        }),
+      );
+    });
+
+    it('«Quitar plantilla» la quita junto con su texto antes de guardar', async () => {
+      const user = userEvent.setup();
+      renderModal({ suggestedTemplateId: 'tpl-resina', suggestedBy: 'Resina compuesta' });
+      await user.click(await screen.findByRole('button', { name: 'Quitar plantilla' }));
+      expect(screen.getByRole('radio', { name: /sin plantilla/i })).toBeChecked();
+      expect(screen.getByLabelText(/texto de la evolución/i)).toHaveValue('');
+      expect(screen.queryByRole('region', { name: /preguntas de la plantilla/i })).not.toBeInTheDocument();
+      await user.type(screen.getByLabelText(/texto de la evolución/i), 'Hecho sin incidencias.');
+      await user.click(screen.getByRole('button', { name: /guardar evolución/i }));
+      await waitFor(() =>
+        expect(mockedCreate).toHaveBeenCalledWith('tok', 'p1', { notes: 'Hecho sin incidencias.' }),
+      );
+    });
+
+    it('una sugerida que no está entre las activas no se elige', async () => {
+      renderModal({ suggestedTemplateId: 'tpl-desactivada', suggestedBy: 'Resina compuesta' });
+      expect(await screen.findByRole('radio', { name: /sin plantilla/i })).toBeChecked();
+      expect(screen.queryByText(/sugerida por el procedimiento/i)).not.toBeInTheDocument();
+    });
   });
 });

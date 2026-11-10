@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -12,6 +12,11 @@ import {
   type NoteTemplate,
 } from '@/lib/clinical-notes/note-templates-api';
 import { composeNote, initialAnswer } from '@/lib/clinical-notes/compose';
+import {
+  SHORTCUT_FORMAT_MESSAGE,
+  isValidShortcut,
+  normalizeShortcut,
+} from '@/lib/clinical-notes/shortcuts';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { Button } from '@/components/ui/button';
@@ -28,6 +33,9 @@ export const noteTemplateFormCopy = {
   namePlaceholder: 'Por ejemplo, Resina',
   category: 'Carpeta',
   categoryHint: 'Opcional. Agrupa las plantillas en el selector (Operatoria, Cirugía…).',
+  // DX-455
+  shortcut: 'Atajo',
+  shortcutHint: 'Opcional. Empieza por #, sin espacios. Ej.: #resina',
   body: 'Texto de la plantilla',
   bodyHint: 'Escribe {{Etiqueta}} donde va la respuesta de cada pregunta.',
   prompts: 'Preguntas',
@@ -67,6 +75,15 @@ const copy = noteTemplateFormCopy;
 
 /** Código del 409 de versión optimista de la API (DX-231). */
 const STALE_TEMPLATE_CODE = 'NOTE_TEMPLATE_STALE';
+/** DX-455: el atajo choca con el de otra plantilla (409). */
+const SHORTCUT_CONFLICT_CODE = 'NOTE_SHORTCUT_CONFLICT';
+
+/** ¿El error de la API es del atajo? El 409 trae código; el 400 de formato, su texto. */
+function isShortcutError(err: unknown): boolean {
+  if (!(err instanceof ApiError)) return false;
+  if (err.status === 409) return err.code === SHORTCUT_CONFLICT_CODE;
+  return err.status === 400 && /\batajo\b/i.test(apiErrorMessage(err, ''));
+}
 
 interface PromptDraft {
   key: number;
@@ -131,6 +148,19 @@ export function NoteTemplateFormModal({
   const [name, setName] = useState(template?.name ?? '');
   const [category, setCategory] = useState(template?.category ?? '');
   const [body, setBody] = useState(template?.body ?? '');
+  const [shortcut, setShortcut] = useState(template?.shortcut ?? '');
+  const [shortcutError, setShortcutError] = useState<string | null>(null);
+  // Cada error del atajo lleva el foco al campo (también si se repite el mismo).
+  const [shortcutFocus, setShortcutFocus] = useState(0);
+  const shortcutRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (shortcutFocus > 0) shortcutRef.current?.focus();
+  }, [shortcutFocus]);
+
+  function failShortcut(message: string) {
+    setShortcutError(message);
+    setShortcutFocus((n) => n + 1);
+  }
   const [nextKey, setNextKey] = useState(template?.prompts.length ?? 0);
   const [prompts, setPrompts] = useState<PromptDraft[]>(draftsOf(template));
   const [submitting, setSubmitting] = useState(false);
@@ -144,6 +174,8 @@ export function NoteTemplateFormModal({
     setName(t.name);
     setCategory(t.category ?? '');
     setBody(t.body);
+    setShortcut(t.shortcut ?? '');
+    setShortcutError(null);
     setNextKey(t.prompts.length);
     setPrompts(draftsOf(t));
   }
@@ -220,6 +252,11 @@ export function NoteTemplateFormModal({
     const trimmed = name.trim();
     if (trimmed === '' || trimmed.length > 80) return setError(copy.invalidName);
     if (body.trim() === '') return setError(copy.invalidBody);
+    // DX-455: el mismo formato que la API; si aun así responde 400/409, su
+    // texto (más concreto) es el que se enseña junto al campo.
+    const shortcutValue = normalizeShortcut(shortcut);
+    if (shortcutValue !== '' && !isValidShortcut(shortcutValue)) return failShortcut(SHORTCUT_FORMAT_MESSAGE);
+    setShortcutError(null);
     setSubmitting(true);
     try {
       const input = {
@@ -228,13 +265,21 @@ export function NoteTemplateFormModal({
         body: body.trim(),
         prompts: payloadPrompts,
       };
+      // Al editar, vacío quita el atajo (`null`); al crear, vacío no se manda.
       const saved = current
-        ? await updateNoteTemplate(token, current.id, { ...input, version: current.version })
-        : await createNoteTemplate(token, input);
+        ? await updateNoteTemplate(token, current.id, {
+            ...input,
+            shortcut: shortcutValue === '' ? null : shortcutValue,
+            version: current.version,
+          })
+        : await createNoteTemplate(token, { ...input, ...(shortcutValue ? { shortcut: shortcutValue } : {}) });
       onSaved(saved);
       onOpenChange(false);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409 && err.code === STALE_TEMPLATE_CODE) {
+      if (isShortcutError(err)) {
+        setStale(false);
+        failShortcut(apiErrorMessage(err, SHORTCUT_FORMAT_MESSAGE));
+      } else if (err instanceof ApiError && err.status === 409 && err.code === STALE_TEMPLATE_CODE) {
         setStale(true);
         setError(copy.stale);
       } else {
@@ -283,6 +328,24 @@ export function NoteTemplateFormModal({
               <option key={c} value={c} />
             ))}
           </datalist>
+        </FormField>
+        <FormField htmlFor="tpl-shortcut" label={copy.shortcut} hint={copy.shortcutHint} error={shortcutError}>
+          <Input
+            id="tpl-shortcut"
+            ref={shortcutRef}
+            value={shortcut}
+            maxLength={31}
+            placeholder="#resina"
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            aria-invalid={shortcutError ? true : undefined}
+            onChange={(e) => {
+              setShortcut(e.target.value);
+              setShortcutError(null);
+            }}
+            className="font-mono"
+          />
         </FormField>
       </div>
 
