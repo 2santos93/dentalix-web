@@ -10,6 +10,7 @@ import {
   expectNoHorizontalOverflowInDialog,
   expectNoHorizontalScroll,
 } from './support/layout';
+import { expectTouchTarget } from './support/touch-targets';
 import { shot } from './support/qa-shot';
 import { regionalFormat } from '../src/lib/format/regional-format';
 import { moneyWithCode } from '../src/lib/format/sede-number';
@@ -128,10 +129,13 @@ test('el catálogo sube de 100 a 120 USD: «Actualizar precios» lo enseña, lo 
     expect(lineText).toContain(norm(`Sube ${usd(20)}`));
     const box = line.getByRole('checkbox', { name: new RegExp(`Actualizar Resina ${suffix}`) });
     await expect(box).toBeChecked();
-    // I-4: el blanco táctil de la casilla (su etiqueta) mide al menos 44 px.
-    const target = await line.getByTestId('reprice-line-select').boundingBox();
-    expect(target?.height ?? 0).toBeGreaterThanOrEqual(44);
-    expect(target?.width ?? 0).toBeGreaterThanOrEqual(44);
+    // I-4: el blanco táctil de la casilla (su etiqueta) mide al menos 44 px,
+    // medido con el diálogo en reposo (la entrada escala la caja: 43.99 px).
+    await expectTouchTarget(line.getByTestId('reprice-line-select'), {
+      scope: dialog,
+      width: true,
+      label: 'casilla de la línea',
+    });
     await expect(dialog.getByTestId('reprice-validity')).toContainText('La validez se renueva hasta el');
     await expectDialogClean(viewport.width, 'la vista previa');
     await shot(page, 'dx379b-preview', viewport.width);
