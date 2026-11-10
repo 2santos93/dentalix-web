@@ -95,9 +95,10 @@ export function entryJsFilesFromManifestSource(source, appPath, fileForErrors = 
 
 /**
  * Filas del informe. `routes` = [{ route, group, files }] (rutas relativas a
- * dist); `sizeOf(file)` = bytes gzip. Ordenadas por total descendente.
+ * dist); `sizeOf(file)` = bytes gzip y `rawOf(file)` = bytes sin comprimir
+ * (la auditoría daba las dos cifras). Ordenadas por total descendente.
  */
-export function buildRows(routes, sizeOf) {
+export function buildRows(routes, sizeOf, rawOf = () => 0) {
   const sets = routes.map((r) => new Set(r.files.filter((f) => f.endsWith('.js'))));
   const intersect = (list) =>
     list.length === 0 ? new Set() : new Set([...list[0]].filter((f) => list.every((s) => s.has(f))));
@@ -114,6 +115,7 @@ export function buildRows(routes, sizeOf) {
     const total = sumSizes(files, sizeOf);
     const sharedBytes = sumSizes(files.filter((f) => shared.has(f)), sizeOf);
     const groupBytes = sumSizes(files.filter((f) => gShared.has(f)), sizeOf);
+    const own = files.filter((f) => !gShared.has(f));
     return {
       route: r.route,
       group: r.group,
@@ -121,8 +123,13 @@ export function buildRows(routes, sizeOf) {
       sharedGzipBytes: sharedBytes,
       groupGzipBytes: groupBytes,
       ownGzipBytes: total - groupBytes,
+      totalRawBytes: sumSizes(files, rawOf),
+      ownRawBytes: sumSizes(own, rawOf),
       chunks: files.length,
-      ownChunks: files.filter((f) => !gShared.has(f)),
+      // Los chunks propios, del más pesado al más ligero.
+      ownChunks: own
+        .map((file) => ({ file, gzipBytes: sizeOf(file), rawBytes: rawOf(file) }))
+        .sort((a, b) => b.gzipBytes - a.gzipBytes || a.file.localeCompare(b.file)),
     };
   });
   rows.sort((a, b) => b.totalGzipBytes - a.totalGzipBytes || a.route.localeCompare(b.route));
@@ -167,13 +174,15 @@ export function checkBudgets(rows, budgets) {
 const kb = (n) => (n / 1024).toFixed(1);
 
 export function formatTable(rows) {
-  const head = ['Ruta', 'Total KB', 'Compartido', 'Grupo', 'Propio KB', 'Chunks'];
+  const head = ['Ruta', 'Total KB', 'Compartido', 'Grupo', 'Propio KB', 'Total sin gzip', 'Propio sin gzip', 'Chunks'];
   const body = rows.map((r) => [
     `${r.group ? `${r.group} ` : ''}${r.route}`,
     kb(r.totalGzipBytes),
     kb(r.sharedGzipBytes),
     kb(r.groupGzipBytes),
     kb(r.ownGzipBytes),
+    kb(r.totalRawBytes),
+    kb(r.ownRawBytes),
     String(r.chunks),
   ]);
   const widths = head.map((h, i) => Math.max(h.length, ...body.map((row) => row[i].length)));
@@ -247,15 +256,16 @@ function main(argv) {
 
   const routes = collectRoutes(distDir);
   const cache = new Map();
-  const sizeOf = (f) => {
+  const measure = (f) => {
     if (cache.has(f)) return cache.get(f);
     const abs = path.join(distDir, f);
     if (!existsSync(abs)) throw new ManifestError(`el manifest nombra ${f} pero no existe en ${distDir}`);
-    const n = gzipBytes(readFileSync(abs));
-    cache.set(f, n);
-    return n;
+    const buf = readFileSync(abs);
+    const m = { gzip: gzipBytes(buf), raw: buf.length };
+    cache.set(f, m);
+    return m;
   };
-  const rows = buildRows(routes, sizeOf);
+  const rows = buildRows(routes, (f) => measure(f).gzip, (f) => measure(f).raw);
   const problems = checkBudgets(rows, budgets);
   const report = {
     method: 'unión de entryJSFiles (todos los segmentos) + rootMainFiles; gzip nivel 9 por chunk; propio = total − chunks comunes a su grupo de rutas',
@@ -269,6 +279,10 @@ function main(argv) {
   const table = formatTable(rows);
   console.log('JS de primera carga por ruta (KB gzip, nivel 9)\n');
   console.log(table);
+  for (const r of rows.slice(0, 3)) {
+    console.log(`\nChunks propios de ${r.route} (KB gzip / sin gzip):`);
+    for (const c of r.ownChunks.slice(0, 12)) console.log(`  ${kb(c.gzipBytes).padStart(7)}  ${kb(c.rawBytes).padStart(8)}  ${c.file}`);
+  }
   console.log(`\nInforme: ${out}`);
   if (process.env.GITHUB_STEP_SUMMARY) {
     appendFileSync(

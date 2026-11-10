@@ -91,7 +91,17 @@ function run(dist: string, args: string[] = []) {
   }
 }
 
-type Row = { route: string; group: string; totalGzipBytes: number; sharedGzipBytes: number; groupGzipBytes: number; ownGzipBytes: number; chunks: number };
+type Row = {
+  route: string;
+  group: string;
+  totalGzipBytes: number;
+  sharedGzipBytes: number;
+  groupGzipBytes: number;
+  ownGzipBytes: number;
+  totalRawBytes: number;
+  ownRawBytes: number;
+  chunks: number;
+};
 const readRows = (dist: string): Row[] => JSON.parse(readFileSync(path.join(dist, 'bundle-report.json'), 'utf8')).rows;
 
 describe('scripts/bundle-report.mjs (DX-117)', () => {
@@ -114,6 +124,9 @@ describe('scripts/bundle-report.mjs (DX-117)', () => {
       sharedGzipBytes: common,
       groupGzipBytes: common + gz('static/chunks/app-shell.js'),
       ownGzipBytes: gz('static/chunks/patient.js'),
+      totalRawBytes: 4000 + 1000 + 2000 + 3000,
+      ownRawBytes: 3000,
+      ownChunks: [{ file: 'static/chunks/patient.js', gzipBytes: gz('static/chunks/patient.js'), rawBytes: 3000 }],
     });
     expect(agenda.ownGzipBytes).toBe(gz('static/chunks/agenda.js'));
     expect(login).toMatchObject({ group: '(auth)', sharedGzipBytes: common, ownGzipBytes: 0 });
