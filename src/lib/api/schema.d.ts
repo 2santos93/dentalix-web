@@ -9170,6 +9170,11 @@ export interface components {
             allowDiscount: boolean;
             /** @default true */
             active: boolean;
+            /**
+             * Format: uuid
+             * @description DX-455: plantilla de evolución que se sugiere al marcar hecho el procedimiento; null = ninguna (quitarla no cambia las evoluciones guardadas). Debe ser de esta clínica (404) y estar activa (400); solo en procedimientos (400 en un diagnóstico).
+             */
+            clinicalNoteTemplateId?: string | null;
         };
         DentalCatalogItemDto: {
             /** Format: uuid */
@@ -9190,6 +9195,16 @@ export interface components {
             /** @description DX-502-ter: moneda del `defaultPrice`, la del catálogo de la clínica; null si no se sabe. Solo la traen las lecturas (`GET /catalog/items`); es la misma en todos los ítems. */
             catalogCurrency?: string | null;
             active: boolean;
+            /**
+             * Format: uuid
+             * @description DX-455: plantilla de evolución ligada al procedimiento (el vínculo guardado, aunque la plantilla esté desactivada); null = ninguna. Es lo que edita la pantalla del catálogo.
+             */
+            clinicalNoteTemplateId: string | null;
+            /**
+             * Format: uuid
+             * @description DX-455: plantilla a sugerir al marcar hecho el procedimiento: `clinicalNoteTemplateId` si la plantilla está activa; null si no hay o está desactivada.
+             */
+            suggestedClinicalNoteTemplateId: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -9219,6 +9234,11 @@ export interface components {
             /** @description DX-105: false = la prestación no admite descuentos. */
             allowDiscount?: boolean;
             active?: boolean;
+            /**
+             * Format: uuid
+             * @description DX-455: plantilla de evolución que se sugiere al marcar hecho el procedimiento; null = ninguna (quitarla no cambia las evoluciones guardadas). Debe ser de esta clínica (404) y estar activa (400); solo en procedimientos (400 en un diagnóstico).
+             */
+            clinicalNoteTemplateId?: string | null;
         };
         LocationDto: {
             /** Format: uuid */
@@ -9856,6 +9876,11 @@ export interface components {
             category: string | null;
             /** @example Resina en superficie {{Superficie}} con {{Material}}. */
             body: string;
+            /**
+             * @description DX-455: atajo («#resina») tal como se escribió; null = sin atajo. Se compara sin distinguir mayúsculas.
+             * @example #resina
+             */
+            shortcut: string | null;
             active: boolean;
             /** @description Versión optimista: se envía de vuelta en el PATCH; sube en 1 con cada edición */
             version: number;
@@ -9887,6 +9912,11 @@ export interface components {
             prompts: components["schemas"]["NotePromptInputDto"][];
             /** @description Por defecto, true */
             active?: boolean;
+            /**
+             * @description DX-455: atajo para insertar la plantilla escribiendo en la nota: «#» y de 2 a 30 letras (cualquier alfabeto, con tildes), números, «-» o «_», sin espacios. Se guarda tal como se escribe y se compara sin distinguir mayúsculas. Único por clínica (también frente a las desactivadas, que conservan el suyo) y ninguno puede empezar por otro (#re choca con #resina): 409 con `code` NOTE_SHORTCUT_CONFLICT. null o "" = sin atajo.
+             * @example #resina
+             */
+            shortcut?: string | null;
         };
         UpdateClinicalNoteTemplateDto: {
             name?: string;
@@ -9896,6 +9926,11 @@ export interface components {
             prompts?: components["schemas"]["NotePromptInputDto"][];
             /** @description false = desactivarla (sale del selector) */
             active?: boolean;
+            /**
+             * @description DX-455: atajo para insertar la plantilla escribiendo en la nota: «#» y de 2 a 30 letras (cualquier alfabeto, con tildes), números, «-» o «_», sin espacios. Se guarda tal como se escribe y se compara sin distinguir mayúsculas. Único por clínica (también frente a las desactivadas, que conservan el suyo) y ninguno puede empezar por otro (#re choca con #resina): 409 con `code` NOTE_SHORTCUT_CONFLICT. null o "" = sin atajo.
+             * @example #resina
+             */
+            shortcut?: string | null;
             /** @description Versión que el cliente leyó (la `version` de la plantilla). Si la plantilla ya cambió: 409 «La plantilla cambió, recárgala». Obligatoria. */
             version: number;
         };
@@ -25467,7 +25502,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Ya existe una plantilla con ese nombre */
+            /** @description Ya existe una plantilla con ese nombre, o DX-455: el atajo choca con el de otra plantilla (`code` NOTE_SHORTCUT_CONFLICT: «El atajo #resina ya lo usa la plantilla «Resina compuesta».» o «El atajo #re choca con #resina: uno no puede empezar por el otro.») */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -25546,7 +25581,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Ya existe una plantilla con ese nombre, o `version` ya no es la actual (`code` NOTE_TEMPLATE_STALE: «La plantilla cambió, recárgala») */
+            /** @description Ya existe una plantilla con ese nombre; `version` ya no es la actual (`code` NOTE_TEMPLATE_STALE: «La plantilla cambió, recárgala»); o DX-455: el atajo choca con el de otra plantilla (`code` NOTE_SHORTCUT_CONFLICT) */
             409: {
                 headers: {
                     [name: string]: unknown;
