@@ -306,7 +306,9 @@ test('DX-480: el clic en un hueco de «Sillón 2» precarga el sillón y su prof
   await expect(form).toBeHidden();
 
   // 390 px: una columna con selector; el hueco de «Sillón 2» precarga lo mismo.
+  // En móvil la agenda abre en «Lista»: se vuelve a la vista por sillón.
   await page.setViewportSize({ width: 390, height: 844 });
+  await openChairDay(page);
   await page.getByRole('group', { name: 'Sillón visible' }).getByRole('button', { name: 'Sillón 2' }).click();
   await expect(chairColumn(page, 'Sillón 2')).toBeVisible();
   await expectSlotPrefill(page, 'Sillón 2', admin.fullName);
