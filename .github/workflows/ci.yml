@@ -119,8 +119,11 @@ jobs:
       - run: npm run build
       # DX-117 (FE-021): JS de primera carga por ruta en KB gzip (método en el
       # script), en el log, en el resumen del job y como artefacto.
+      # Presupuesto de la ficha: lo medido tras partirla (propio 68,8 KB y
+      # total 442,1 KB en la CI de la porción 4) + ~5 %. El total lo domina el
+      # shell de `(app)` (373 KB, común a todas sus rutas).
       - name: Informe de JS por ruta
-        run: node scripts/bundle-report.mjs
+        run: node scripts/bundle-report.mjs --budget '/patients/[id]:total=465,own=72'
       - name: Subir el informe de JS por ruta
         if: always() && hashFiles('.next/bundle-report.json') != ''
         uses: actions/upload-artifact@v4
