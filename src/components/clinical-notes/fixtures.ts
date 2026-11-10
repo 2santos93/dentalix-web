@@ -7,6 +7,7 @@ export const resinTemplate: NoteTemplate = {
   name: 'Resina',
   category: 'Operatoria',
   body: 'Resina en superficie {{Superficie}} con {{Material}}. Observaciones: {{Observaciones}}.',
+  shortcut: null,
   active: true,
   version: 1,
   prompts: [
@@ -55,4 +56,15 @@ export const prophylaxisTemplate: NoteTemplate = {
       position: 0,
     },
   ],
+};
+
+/** DX-455: plantilla sin preguntas con atajo (se inserta tal cual). */
+export const controlTemplate: NoteTemplate = {
+  ...resinTemplate,
+  id: 'tpl-control',
+  name: 'Control postoperatorio',
+  category: 'Cirugía',
+  body: 'Control sin dolor ni sangrado. Cicatrización normal.',
+  shortcut: '#Control',
+  prompts: [],
 };

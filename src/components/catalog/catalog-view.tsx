@@ -2,6 +2,9 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { ApiError } from '@/lib/api/api-error';
+import { listNoteTemplates, type NoteTemplate } from '@/lib/clinical-notes/note-templates-api';
+import { FieldError } from '@/components/errors/field-error';
 import { getTokenRole } from '@/lib/auth/token-role';
 import {
   canWriteCatalog,
@@ -129,7 +132,30 @@ const copy = {
   // diagnóstico no se cobra, así que su «sin precio» es lo normal y va en «—».
   noPrice: 'Sin precio',
   priceFallback: '—',
+  // DX-455: la plantilla que se sugiere al marcar hecho el procedimiento.
+  templateLabel: 'Plantilla de evolución',
+  templateHint: 'Opcional. Al marcar hecho este procedimiento en un plan, la evolución se abre con esta plantilla.',
+  templateNone: 'Sin plantilla',
+  templateInactive: (name: string) => `${name} (desactivada)`,
+  templateMissing: 'Plantilla no disponible',
+  templateInactiveHint: (name: string) =>
+    `«${name}» está desactivada: no se sugiere al marcar hecho. Actívala en Ajustes → Plantillas de evolución o elige otra.`,
+  templatesLoading: 'Cargando plantillas…',
+  templatesError: 'Plantillas no disponibles',
 };
+
+/**
+ * ¿El 400/404 de la API es de la plantilla ligada? Va junto a su campo. La API
+ * no manda código para estos: se reconoce su texto en español (el que ya
+ * filtra `apiErrorMessage`), que siempre nombra la plantilla.
+ */
+function isTemplateLinkError(err: unknown): boolean {
+  return (
+    err instanceof ApiError &&
+    (err.status === 400 || err.status === 404) &&
+    /plantilla/i.test(apiErrorMessage(err, ''))
+  );
+}
 
 /**
  * `label` es el nombre a secas: sirve para el filtro de la barra y para la
@@ -242,6 +268,14 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [category, setCategory] = useState('');
   const [allowDiscount, setAllowDiscount] = useState(true);
+  // DX-455: '' = sin plantilla.
+  const [templateLink, setTemplateLink] = useState('');
+  const [templateError, setTemplateError] = useState<string | null>(null);
+  const templateSelectRef = React.useRef<HTMLSelectElement>(null);
+  // Todas las plantillas (también las desactivadas, para nombrar la ligada).
+  const [noteTemplates, setNoteTemplates] = useState<NoteTemplate[] | null>(null);
+  const [noteTemplatesFailed, setNoteTemplatesFailed] = useState(false);
+  const [noteTemplatesKey, setNoteTemplatesKey] = useState(0);
   const [priceError, setPriceError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -372,7 +406,27 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
       });
   }
 
+  // DX-455: las plantillas se piden al abrir el formulario (solo ADMIN lo abre).
+  useEffect(() => {
+    if (!showForm || !token) return;
+    let cancelled = false;
+    listNoteTemplates(token, { includeInactive: true })
+      .then((data) => {
+        if (cancelled) return;
+        setNoteTemplates(data);
+        setNoteTemplatesFailed(false);
+      })
+      .catch(() => {
+        if (!cancelled) setNoteTemplatesFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showForm, token, noteTemplatesKey]);
+
   function resetForm() {
+    setTemplateLink('');
+    setTemplateError(null);
     setName('');
     setKind('PROCEDURE');
     setCode('');
@@ -398,6 +452,8 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
     setColor(item.color);
     setCategory(item.category ?? '');
     setAllowDiscount(item.allowDiscount ?? true);
+    setTemplateLink(item.clinicalNoteTemplateId ?? '');
+    setTemplateError(null);
     setEditingItem(item);
     setFormError(null);
     setShowForm(true);
@@ -439,13 +495,26 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
       ...(kind === 'PROCEDURE' ? { allowDiscount } : {}),
       ...(defaultPrice !== undefined ? { defaultPrice } : {}),
       ...(trimmedCategory ? { category: trimmedCategory } : {}),
+      ...templateLinkPatch(),
     };
+  }
+
+  /**
+   * DX-455: la plantilla solo se manda si cambió (una ligada que se desactivó
+   * después daría 400 al volver a mandarla). Un diagnóstico no lleva: si el
+   * ítem pasa a diagnóstico, se desliga.
+   */
+  function templateLinkPatch(): { clinicalNoteTemplateId?: string | null } {
+    const stored = editingItem?.clinicalNoteTemplateId ?? null;
+    const wanted = kind === 'PROCEDURE' && templateLink !== '' ? templateLink : null;
+    return wanted === stored ? {} : { clinicalNoteTemplateId: wanted };
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setFormError(null);
     setPriceError(null);
+    setTemplateError(null);
     // DX-241: la lectura común de los campos de dinero, en la moneda de la
     // clínica (la de los precios del catálogo).
     const parsedPrice = price.trim() === '' ? null : parseMoneyInput(price, currency ?? '');
@@ -471,7 +540,13 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
       const fallback = editingItem
         ? copy.genericUpdateError
         : copy.genericCreateError;
-      setFormError(apiErrorMessage(err, fallback));
+      if (isTemplateLinkError(err)) {
+        // DX-455: el error de la plantilla va junto a su campo, con el foco.
+        setTemplateError(apiErrorMessage(err, fallback));
+        templateSelectRef.current?.focus();
+      } else {
+        setFormError(apiErrorMessage(err, fallback));
+      }
     } finally {
       setSaving(false);
     }
@@ -753,6 +828,24 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
               description={copy.allowDiscountHint}
             />
           ) : null}
+          {kind === 'PROCEDURE' ? (
+            <TemplateLinkField
+              templates={noteTemplates}
+              failed={noteTemplatesFailed}
+              onRetry={() => {
+                setNoteTemplatesFailed(false);
+                setNoteTemplates(null);
+                setNoteTemplatesKey((k) => k + 1);
+              }}
+              value={templateLink}
+              onChange={(next) => {
+                setTemplateLink(next);
+                setTemplateError(null);
+              }}
+              error={templateError}
+              selectRef={templateSelectRef}
+            />
+          ) : null}
         </FormModal>
 
         {currencyUnknown ? (
@@ -821,5 +914,77 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
         />
       </div>
     </>
+  );
+}
+
+/**
+ * DX-455: «Plantilla de evolución» del procedimiento: las activas y «Sin
+ * plantilla». Si la ligada se desactivó, se sigue viendo («… (desactivada)»,
+ * no elegible) para que la administración entienda por qué no se sugiere.
+ */
+function TemplateLinkField({
+  templates,
+  failed,
+  onRetry,
+  value,
+  onChange,
+  error,
+  selectRef,
+}: {
+  templates: NoteTemplate[] | null;
+  failed: boolean;
+  onRetry: () => void;
+  value: string;
+  onChange: (next: string) => void;
+  error: string | null;
+  selectRef: React.Ref<HTMLSelectElement>;
+}) {
+  const id = 'catalog-note-template';
+  const active = (templates ?? [])
+    .filter((t) => t.active)
+    .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  const linked = value ? (templates ?? []).find((t) => t.id === value) ?? null : null;
+  const linkedUnavailable = value !== '' && templates !== null && (!linked || !linked.active);
+  const hint =
+    linkedUnavailable && linked ? copy.templateInactiveHint(linked.name) : copy.templateHint;
+
+  if (failed) {
+    return (
+      <FormField htmlFor={id} label={copy.templateLabel}>
+        <FieldError label={copy.templatesError} onRetry={onRetry} retryId={id} className="h-11 sm:h-10" />
+      </FormField>
+    );
+  }
+  if (templates === null) {
+    return (
+      <FormField htmlFor={id} label={copy.templateLabel}>
+        <p id={id} role="status" className="flex h-11 items-center text-sm text-muted sm:h-10">
+          {copy.templatesLoading}
+        </p>
+      </FormField>
+    );
+  }
+  return (
+    <FormField htmlFor={id} label={copy.templateLabel} hint={hint} error={error}>
+      <NativeSelect
+        id={id}
+        ref={selectRef}
+        value={value}
+        aria-invalid={error ? true : undefined}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option value="">{copy.templateNone}</option>
+        {linkedUnavailable ? (
+          <option value={value} disabled>
+            {linked ? copy.templateInactive(linked.name) : copy.templateMissing}
+          </option>
+        ) : null}
+        {active.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+          </option>
+        ))}
+      </NativeSelect>
+    </FormField>
   );
 }

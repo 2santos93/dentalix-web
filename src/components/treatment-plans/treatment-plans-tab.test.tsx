@@ -49,6 +49,9 @@ import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
 import { dateIn, dateTimeIn, STAMP_SEDES } from '@/lib/test/stamp';
 import { getPlanVisits } from '@/lib/treatment-plans/plan-visits-api';
+import { listNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
+import { createClinicalEntry } from '@/lib/patients/clinical-api';
+import { prophylaxisTemplate, resinTemplate } from '@/components/clinical-notes/fixtures';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -121,6 +124,18 @@ jest.mock('../../lib/treatment-plans/plan-repricing-api', () => ({
   ...jest.requireActual('../../lib/treatment-plans/plan-repricing-api'),
   previewRepricing: jest.fn(),
   applyRepricing: jest.fn(),
+}));
+// DX-455: «Nueva evolución» (el real) tras marcar hecho un procedimiento con plantilla.
+jest.mock('../../lib/clinical-notes/note-templates-api', () => ({
+  ...jest.requireActual('../../lib/clinical-notes/note-templates-api'),
+  listNoteTemplates: jest.fn(() => Promise.resolve([])),
+}));
+jest.mock('../../lib/patients/clinical-api', () => ({
+  ...jest.requireActual('../../lib/patients/clinical-api'),
+  createClinicalEntry: jest.fn(),
+  getClinicalEntrySigning: jest.fn(() =>
+    Promise.resolve({ professionalLicense: 'RP-1', warnMissingProfessionalLicense: true, warnings: [] }),
+  ),
 }));
 jest.mock('../../lib/appointments/staff-api', () => ({
   listStaff: jest.fn(),
@@ -4109,5 +4124,119 @@ describe('TreatmentPlansTab · una primaria por estado del plan (D2)', () => {
     render(<TreatmentPlansTab patientId="pat-1" token={dentist} />);
     await screen.findByRole('table', { name: /ítems de la visita/i });
     expect(primaries()).toEqual([]);
+  });
+});
+
+describe('TreatmentPlansTab · evolución sugerida al marcar hecho (DX-455)', () => {
+  const dentistToken = `h.${btoa(JSON.stringify({ sub: 'u-laura', tenantId: 't1', role: 'DENTIST' }))}.s`;
+  const withTemplate = catalog.map((c) =>
+    c.id === 'cat-2'
+      ? { ...c, clinicalNoteTemplateId: 'tpl-resina', suggestedClinicalNoteTemplateId: 'tpl-resina' }
+      : { ...c, clinicalNoteTemplateId: null, suggestedClinicalNoteTemplateId: null },
+  );
+
+  beforeEach(() => {
+    mockedListPlans.mockReset().mockResolvedValue([plan1]);
+    mockedGetPlan.mockReset().mockResolvedValue(plan1Detail);
+    mockedUpdateItem.mockReset().mockResolvedValue({ ...item2, status: 'DONE', performedById: 'u-laura' });
+    mockedListCatalogItems.mockReset().mockResolvedValue(withTemplate);
+    mockedListCurrencies.mockResolvedValue([{ code: 'USD', name: 'Dólar estadounidense', symbol: '$' }]);
+    jest.mocked(getPlanVisits).mockResolvedValue({ planId: 'plan-1', items: [], visitIntervals: {}, visits: [] });
+    mockedGetPaymentPlan.mockResolvedValue(null);
+    mockedGetPriceQuote.mockImplementation(async (_t, _p, { catalogItemId, currency }) =>
+      quoteOf(catalogItemId, {}, currency),
+    );
+    mockedGetPlanBalance.mockReset().mockResolvedValue(emptyBalance());
+    mockedListPayments.mockReset().mockResolvedValue([]);
+    mockedGetDiscountPolicy.mockReset().mockRejectedValue(new Error('sin política en este test'));
+    jest.mocked(listStaff).mockReset().mockResolvedValue([
+      { userId: 'u-laura', fullName: 'Dra. Laura Gómez', role: 'DENTIST', locationIds: null },
+    ]);
+    jest.mocked(listNoteTemplates).mockReset().mockResolvedValue([resinTemplate, prophylaxisTemplate]);
+    jest.mocked(createClinicalEntry).mockReset();
+  });
+
+  async function markItem2Done(token: string) {
+    const user = userEvent.setup();
+    render(
+      <>
+        <TreatmentPlansTab patientId="pat-1" token={token} />
+        <Toaster />
+      </>,
+    );
+    const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+    await user.selectOptions(within(table).getByRole('combobox', { name: /estado del ítem del diente 26/i }), 'DONE');
+    const dialog = await screen.findByRole('dialog', { name: 'Marcar como realizado' });
+    await waitFor(() =>
+      expect(within(dialog).getByRole('combobox', { name: 'Profesional que lo realizó' })).toHaveValue('u-laura'),
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Marcar realizado' }));
+    await waitFor(() => expect(mockedUpdateItem).toHaveBeenCalledTimes(1));
+    return user;
+  }
+
+  it('con plantilla en el procedimiento abre «Nueva evolución» con ella elegida, y guarda', async () => {
+    jest.mocked(createClinicalEntry).mockResolvedValue({
+      id: 'ce-1',
+      tenantId: 't1',
+      patientId: 'pat-1',
+      entryDate: '2026-10-17T00:00:00.000Z',
+      reason: null,
+      notes: 'x',
+      performedById: 'u-laura',
+      createdAt: '2026-10-17T15:00:00.000Z',
+      addenda: [],
+    } as never);
+    const user = await markItem2Done(dentistToken);
+    const evolution = await screen.findByRole('dialog', { name: 'Nueva evolución' });
+    expect(
+      await within(evolution).findByRole('button', { name: 'Cambiar la plantilla «Resina»' }),
+    ).toBeInTheDocument();
+    expect(within(evolution).getByText(/sugerida por el procedimiento «Limpieza»/i)).toBeInTheDocument();
+    await user.click(within(evolution).getByRole('radio', { name: 'O' }));
+    await user.click(within(evolution).getByRole('button', { name: /guardar evolución/i }));
+    await waitFor(() =>
+      expect(createClinicalEntry).toHaveBeenCalledWith(dentistToken, 'pat-1', {
+        notes: 'Resina en superficie O con Resina A2. Observaciones: [sin respuesta].',
+        templateId: 'tpl-resina',
+      }),
+    );
+    expect(await screen.findByText('Evolución guardada en la historia clínica.')).toBeInTheDocument();
+  });
+
+  it('antes de guardar se puede quitar la plantilla', async () => {
+    const user = await markItem2Done(dentistToken);
+    const evolution = await screen.findByRole('dialog', { name: 'Nueva evolución' });
+    await user.click(await within(evolution).findByRole('button', { name: 'Quitar plantilla' }));
+    expect(within(evolution).getByRole('radio', { name: /sin plantilla/i })).toBeChecked();
+    expect(within(evolution).getByLabelText(/texto de la evolución/i)).toHaveValue('');
+  });
+
+  it('sin plantilla en el procedimiento todo sigue como antes: no se abre nada', async () => {
+    mockedListCatalogItems.mockResolvedValue(
+      withTemplate.map((c) => ({ ...c, clinicalNoteTemplateId: null, suggestedClinicalNoteTemplateId: null })),
+    );
+    await markItem2Done(dentistToken);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Marcar como realizado' })).not.toBeInTheDocument());
+    expect(screen.queryByRole('dialog', { name: 'Nueva evolución' })).not.toBeInTheDocument();
+    expect(listNoteTemplates).not.toHaveBeenCalled();
+  });
+
+  it('una plantilla desactivada (sugerida null aunque siga ligada) no se sugiere', async () => {
+    mockedListCatalogItems.mockResolvedValue(
+      withTemplate.map((c) => ({ ...c, suggestedClinicalNoteTemplateId: null })),
+    );
+    await markItem2Done(dentistToken);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Marcar como realizado' })).not.toBeInTheDocument());
+    expect(screen.queryByRole('dialog', { name: 'Nueva evolución' })).not.toBeInTheDocument();
+  });
+
+  it('recepción (no escribe historia clínica) no ve la evolución', async () => {
+    jest.mocked(listStaff).mockResolvedValue([
+      { userId: 'u-laura', fullName: 'Dra. Laura Gómez', role: 'DENTIST', locationIds: null },
+    ]);
+    await markItem2Done(tok);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Marcar como realizado' })).not.toBeInTheDocument());
+    expect(screen.queryByRole('dialog', { name: 'Nueva evolución' })).not.toBeInTheDocument();
   });
 });

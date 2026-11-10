@@ -71,6 +71,8 @@ import { planPrimaryAction } from '@/lib/treatment-plans/plan-primary-action';
 import { canRepricePlan, isPlanRepriceable } from '@/lib/treatment-plans/plan-repricing-api';
 import { PlanOptionsPanel } from './plan-options-panel';
 import { MarkDoneModal } from './mark-done-modal';
+import { NewEvolutionModal } from '@/components/clinical-notes/new-evolution-modal';
+import { canWriteClinicalHistory } from '@/lib/clinical/clinical-roles';
 import { ItemsTable } from './plan-items-table';
 import { PlanItemForm } from './plan-item-form';
 import { PlanMoneySummary } from './plan-money-summary';
@@ -237,6 +239,12 @@ export function TreatmentPlansTab({
   // DX-050: el ítem que se marca como realizado (eligiendo quién lo hizo) o
   // cuya atribución corrige un ADMIN.
   const [markDone, setMarkDone] = useState<{ itemId: string; mode: 'done' | 'correct' } | null>(null);
+  // DX-455: tras marcar hecho un procedimiento con plantilla, su evolución.
+  const [suggestedEvolution, setSuggestedEvolution] = useState<{
+    key: string;
+    templateId: string;
+    procedure: string;
+  } | null>(null);
   const [removeItemError, setRemoveItemError] = useState<string | null>(null);
 
   // Balance + abonos (PAY-T4) — a genuinely separate resource from
@@ -799,11 +807,24 @@ export function TreatmentPlansTab({
     }
   }
 
-  /** DX-050: el modal guardó; el ítem (y lo facturable) se refrescan. */
-  function handleMarkDoneSaved() {
+  /**
+   * DX-050: el modal guardó; el ítem (y lo facturable) se refrescan.
+   * DX-455: si se acaba de marcar HECHO y su procedimiento tiene plantilla
+   * activa (`suggestedClinicalNoteTemplateId`, que la API deja en null si
+   * está desactivada), se abre «Nueva evolución» con ella elegida; sin
+   * plantilla, todo sigue como antes. Corregir quién lo hizo no abre nada.
+   */
+  function handleMarkDoneSaved(saved: TreatmentPlanItem) {
+    const justDone = markDone?.mode === 'done';
     setMarkDone(null);
     setItemActionError(null);
     void Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()]);
+    if (!justDone || !canWriteClinicalHistory(getTokenRole(token))) return;
+    const procedure = catalogById.get(saved.catalogItemId);
+    const templateId = procedure?.suggestedClinicalNoteTemplateId ?? null;
+    if (procedure && templateId) {
+      setSuggestedEvolution({ key: `${saved.id}-${Date.now()}`, templateId, procedure: procedure.labelEs });
+    }
   }
 
   /** La fila ya no quita: abre la confirmación. */
@@ -1541,6 +1562,21 @@ export function TreatmentPlansTab({
           locations={locations}
           onRetryLocations={() => setLocationsReloadKey((k) => k + 1)}
           onSaved={handleMarkDoneSaved}
+        />
+      ) : null}
+
+      {suggestedEvolution ? (
+        <NewEvolutionModal
+          key={suggestedEvolution.key}
+          open
+          onOpenChange={(open) => {
+            if (!open) setSuggestedEvolution(null);
+          }}
+          token={token}
+          patientId={patientId}
+          suggestedTemplateId={suggestedEvolution.templateId}
+          suggestedBy={suggestedEvolution.procedure}
+          onCreated={() => toast.success(copy.evolutionSaved)}
         />
       ) : null}
 
