@@ -254,6 +254,75 @@ test('DX-437: el paciente pide «Avisarme antes · Mañanas» desde el enlace; l
   );
 });
 
+test('DX-469: «Añadir a mi calendario» en el enlace: .ics de la cita y Google Calendar, a 390 px y 44 px; cancelada ya no lo ofrece', async ({
+  browser,
+  request,
+}) => {
+  const sub = `test-confirma-cal-${suffix}`.slice(0, 40);
+  const session = await registerClinicViaApi(request, {
+    subdomain: sub,
+    clinicName: `Clinica Calendario ${suffix}`,
+    fullName: 'Dra. Calendario',
+    email: `confirma.cal.${suffix}@example.com`,
+    password,
+  });
+  const staff = (await (await request.get(`${API_URL}/staff`, { headers: session.headers })).json()) as {
+    userId: string;
+  }[];
+  await request.put(`${API_URL}/locations/schedule`, { headers: session.headers, data: { ranges: [] } });
+  const patient = await apiPost<{ id: string }>(request, session, '/patients', {
+    firstName: 'Lucía',
+    lastName: `Calendario${suffix}`.slice(0, 40),
+    docType: 'NATIONAL_ID',
+    docNumber: `CAL${suffix}`.slice(0, 20),
+    sex: 'F',
+    phone: '+58 414 555 0404',
+  });
+  const day = sedeDayFromToday(2);
+  const start = atSede(day, '10:00');
+  const appt = await apiPost<{ id: string }>(request, session, '/appointments', {
+    patientId: patient.id,
+    providerId: staff[0].userId,
+    start: start.toISOString(),
+    end: atSede(day, '10:30').toISOString(),
+    reason: `Endodoncia ${suffix}`,
+  });
+  const link = await apiPost<{ url: string }>(request, session, `/appointments/${appt.id}/confirmation-link`, {});
+
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const patientPage = await context.newPage();
+  await patientPage.goto(link.url);
+  const section = patientPage.getByTestId('public-calendar-links');
+  await expect(section).toBeVisible({ timeout: 15_000 });
+  const ics = section.getByRole('link', { name: 'Apple, Outlook u otro (.ics)' });
+  const google = section.getByRole('link', { name: /^Google Calendar/ });
+  for (const control of [ics, google]) {
+    expect((await control.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  }
+  await expect(google).toHaveAttribute('href', /^https:\/\/calendar\.google\.com\/calendar\/render\?action=TEMPLATE/);
+  await expect(google).not.toHaveAttribute('href', /Endodoncia/);
+
+  // El .ics, por el mismo origen de la clínica (la web reenvía /api/v1).
+  const href = (await ics.getAttribute('href'))!;
+  const res = await patientPage.request.get(new URL(href, link.url).toString());
+  expect(res.status()).toBe(200);
+  expect(res.headers()['content-type']).toMatch(/^text\/calendar/);
+  const body = (await res.text()).replace(/\r\n /g, '');
+  const utc = start.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  expect(body).toContain(`DTSTART:${utc}`);
+  expect(body).toContain('SUMMARY:Cita en');
+  expect(body).toContain('STATUS:CONFIRMED');
+  expect(body).not.toContain('Endodoncia');
+
+  // Cancelada desde el enlace: la página deja de ofrecerlo; el .ics la marca CANCELLED.
+  await patientPage.getByRole('button', { name: 'Cancelar cita' }).click();
+  await expect(patientPage.getByText('Ya respondiste')).toBeVisible({ timeout: 10_000 });
+  await expect(patientPage.getByTestId('public-calendar-links')).toHaveCount(0);
+  const cancelled = await patientPage.request.get(new URL(href, link.url).toString());
+  expect((await cancelled.text()).replace(/\r\n /g, '')).toContain('STATUS:CANCELLED');
+  await context.close();
+});
+
 test('con el navegador del paciente en otra zona, el día y la hora son los de la sede (Tokio, 24 h)', async ({
   browser,
   request,

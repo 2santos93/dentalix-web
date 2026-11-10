@@ -22,6 +22,7 @@ const principal: LocationReminderSettings = {
   locationName: 'Sede principal',
   enabled: true,
   leadHours: [48, 2],
+  calendarAlarmHours: 24,
   updatedAt: '2026-10-10T12:00:00.000Z',
 };
 const norte: LocationReminderSettings = {
@@ -29,6 +30,7 @@ const norte: LocationReminderSettings = {
   locationName: 'Sede Norte',
   enabled: false,
   leadHours: [],
+  calendarAlarmHours: 24,
   updatedAt: null,
 };
 
@@ -130,7 +132,12 @@ describe('ReminderSettingsManager (DX-026)', () => {
     await user.click(within(dialog).getByLabelText('Enviar recordatorios por email'));
     await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
 
-    expect(mockedUpdate).toHaveBeenCalledWith('tok', 'loc-2', { enabled: true, leadHours: [48, 2] });
+    expect(mockedUpdate).toHaveBeenCalledWith('tok', 'loc-2', {
+      enabled: true,
+      leadHours: [48, 2],
+      // DX-469: la alarma del calendario viaja con el resto (24 por defecto).
+      calendarAlarmHours: 24,
+    });
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     const table = screen.getByRole('table', { name: 'Recordatorios por sede' });
     expect(within(table).getAllByRole('row')[2]).toHaveTextContent('Activos');

@@ -48,6 +48,9 @@ function view(overrides: Partial<PublicConfirmation> = {}): PublicConfirmation {
     respondedAt: null,
     cancellationPolicy: null,
     isLate: false,
+    // DX-469
+    calendarAvailable: false,
+    googleCalendarUrl: null,
     ...overrides,
   };
 }
@@ -427,5 +430,40 @@ describe('PublicConfirmationView · «Avisarme si se libera un hueco antes» (DX
     ).toBeInTheDocument();
     fireEvent.click(box);
     expect(await screen.findByText('Listo. Te avisaremos si se libera un hueco antes.')).toBeInTheDocument();
+  });
+});
+
+describe('PublicConfirmationView · «Añadir a mi calendario» (DX-469)', () => {
+  const GOOGLE = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=Cita';
+  beforeEach(() => get.mockReset());
+
+  it('con calendarAvailable: el .ics del mismo origen (descarga) y Google en pestaña nueva, de 44 px', async () => {
+    get.mockResolvedValue(view({ calendarAvailable: true, googleCalendarUrl: GOOGLE }));
+    render(<PublicConfirmationView confirmationToken="tok/1" />);
+    const section = await screen.findByTestId('public-calendar-links');
+    expect(section).toHaveAccessibleName('Añadir a mi calendario');
+    const ics = screen.getByRole('link', { name: 'Apple, Outlook u otro (.ics)' });
+    expect(ics).toHaveAttribute('href', '/api/v1/public/appointment-confirmations/tok%2F1/calendar.ics');
+    expect(ics).toHaveAttribute('download', 'cita.ics');
+    expect(ics).toHaveClass('min-h-11');
+    const google = screen.getByRole('link', { name: /^Google Calendar/ });
+    expect(google).toHaveAttribute('href', GOOGLE);
+    expect(google).toHaveAttribute('target', '_blank');
+    expect(google).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('sin calendarAvailable (cancelada, pasada o caducada) no se ofrece', async () => {
+    get.mockResolvedValue(view());
+    render(<PublicConfirmationView confirmationToken="tok" />);
+    await screen.findByText('Hola Ana,');
+    expect(screen.queryByTestId('public-calendar-links')).not.toBeInTheDocument();
+  });
+
+  it('ya respondida y vigente, también se ofrece', async () => {
+    get.mockResolvedValue(
+      view({ status: 'RESPONDED', response: 'confirm', respondedAt: '2026-10-01T00:00:00.000Z', calendarAvailable: true, googleCalendarUrl: GOOGLE }),
+    );
+    render(<PublicConfirmationView confirmationToken="tok" />);
+    expect(await screen.findByTestId('public-calendar-links')).toBeInTheDocument();
   });
 });
