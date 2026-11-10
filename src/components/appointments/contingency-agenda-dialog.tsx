@@ -12,7 +12,7 @@ import {
 import { saveBlob } from '@/lib/files/save-blob';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { locationRegionalFormat, locationTimeZone } from '@/lib/locations/location-settings';
-import { useSessionLocations } from '@/lib/locations/session-locations';
+import { useSessionLocations } from '@/lib/session/session-store';
 import { Button } from '@/components/ui/button';
 import { NativeSelect } from '@/components/ui/native-select';
 import {

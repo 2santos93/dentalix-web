@@ -2,7 +2,6 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type * as React from "react";
 import { ScheduleVisitDialog } from "./schedule-visit-dialog";
-import { SessionLocationsProvider } from "@/lib/locations/session-locations";
 import { getPatient, type Patient } from "@/lib/patients/patients-api";
 import { listStaff } from "@/lib/appointments/staff-api";
 import { listLocations } from "@/lib/locations/locations-api";
@@ -82,7 +81,7 @@ beforeEach(() => {
 function mount(sessionCache = false) {
   const Wrapper = sessionCache
     ? ({ children }: { children: React.ReactNode }) => (
-        <SessionLocationsProvider token="tok">{children}</SessionLocationsProvider>
+        <>{children}</>
       )
     : undefined;
   render(

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { AccountStatementView } from './account-statement-view';
 import { AccountStatementPrintView } from './account-statement-print-view';
@@ -463,6 +464,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
     await screen.findByRole('region', { name: /resumen en VES/i });
     expect(screen.queryByRole('button', { name: 'Registrar abono' })).not.toBeInTheDocument();
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     mockedGet.mockRejectedValue(new ApiError(403, 'Forbidden'));
     render(<AccountStatementView token={RECEPTION} patientId="pat-1" />);
@@ -877,6 +879,7 @@ describe('saldo a favor en el estado de cuenta (DX-432)', () => {
     expect(screen.queryByTestId('credit-balance')).not.toBeInTheDocument();
     expect(getCreditMovements).toHaveBeenCalledWith(expect.any(String), 'pat-1');
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
     (getCreditMovements as jest.Mock).mockClear();
     render(<AccountStatementView token={tokenForRole('DENTIST')} patientId="pat-1" />);
     await screen.findByRole('region', { name: /resumen en VES/i });

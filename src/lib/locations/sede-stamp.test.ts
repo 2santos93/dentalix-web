@@ -9,6 +9,8 @@ import { setActiveLocationId } from './location-store';
 import { stampPainters, useSedeStamp } from './sede-stamp';
 import { SEDE_LOCALE_ERROR } from './use-sede-format';
 
+import { invalidateLocations } from '@/lib/session/session-store';
+
 jest.mock('./locations-api', () => ({ listLocations: jest.fn() }));
 const listLocationsMock = listLocations as jest.MockedFunction<typeof listLocations>;
 
@@ -123,6 +125,8 @@ describe('useSedeStamp', () => {
     await waitFor(() => expect(row.result.current.notice).not.toBeNull());
     expect(row.result.current.notice?.scope).toBe('row');
     listLocationsMock.mockRejectedValue(new Error('red'));
+    // La lista ya está en la caché de la sesión (FE-031): se fuerza otra lectura.
+    act(() => invalidateLocations());
     const screen = renderHook(() => useSedeStamp('tok'));
     await waitFor(() => expect(screen.result.current.notice).not.toBeNull());
     expect(screen.result.current.notice?.scope).toBe('screen');

@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { DiscountPolicyManager } from './discount-policy-manager';
 import { listLocations } from '@/lib/locations/locations-api';
@@ -98,6 +99,7 @@ describe('DiscountPolicyManager (DX-204)', () => {
       const { unmount } = render(<DiscountPolicyManager token="tok" allowed />);
       expect(await screen.findByText(`Cambiada el ${dateTimeIn('caracas', CHANGED.updatedAt!)}.`)).toBeInTheDocument();
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
       mockedLocations.mockResolvedValue([STAMP_SEDES.berlin]);
       render(<DiscountPolicyManager token="tok" allowed />);
       expect(await screen.findByText(`Cambiada el ${dateTimeIn('berlin', CHANGED.updatedAt!)}.`)).toBeInTheDocument();

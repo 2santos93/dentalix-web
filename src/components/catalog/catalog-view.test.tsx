@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { tokenForRole } from '@/lib/test/data-consents';
 import type userEvent from '@testing-library/user-event';
 import { setupUser } from '@/lib/test/user';
@@ -760,6 +761,7 @@ describe('CatalogView', () => {
     const first = render(<CatalogView token={ADMIN_TOKEN} />);
     await waitFor(() => expect(within(first.container).getAllByText('80.000,00 EUR').length).toBeGreaterThan(0));
     first.unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
     mockedLocations.mockResolvedValue([clinicLocation({ id: 'l1', currency: 'USD', locale: 'en-US', hourCycle: 'h12', timeZone: 'America/New_York' })]);
     const second = render(<CatalogView token={ADMIN_TOKEN} />);
     await waitFor(() => expect(within(second.container).getAllByText('USD 80,000.00').length).toBeGreaterThan(0));

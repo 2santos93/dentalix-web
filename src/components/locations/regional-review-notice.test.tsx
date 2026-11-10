@@ -2,7 +2,6 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { RegionalReviewNotice } from './regional-review-notice';
 import { LocationsList } from './locations-list';
 import { listLocations, updateLocationSettings } from '@/lib/locations/locations-api';
-import { SessionLocationsProvider } from '@/lib/locations/session-locations';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import { clinicLocation } from '@/lib/test/locations';
 import { tokenFor } from '@/lib/test/prescriptions';
@@ -135,10 +134,10 @@ describe('RegionalReviewNotice (aviso D5, spec §7)', () => {
     jest.mocked(updateLocationSettings).mockResolvedValue(confirmed);
     const user = setupUser();
     render(
-      <SessionLocationsProvider token={ADMIN}>
+      <>
         <RegionalReviewNotice token={ADMIN} showReviewLink={false} />
         <LocationsList token={ADMIN} canEdit />
-      </SessionLocationsProvider>,
+      </>,
     );
     const notice = await screen.findByRole('region', { name: 'Sedes por revisar' });
     expect(within(notice).queryByRole('link')).not.toBeInTheDocument();
@@ -185,10 +184,10 @@ describe('RegionalReviewNotice (aviso D5, spec §7)', () => {
     jest.mocked(updateLocationSettings).mockResolvedValue(confirmed);
     const user = setupUser();
     render(
-      <SessionLocationsProvider token={ADMIN}>
+      <>
         <RegionalReviewNotice token={ADMIN} showReviewLink={false} />
         <LocationsList token={ADMIN} canEdit />
-      </SessionLocationsProvider>,
+      </>,
     );
     const notice = await screen.findByRole('region', { name: 'Sedes por revisar' });
     expect(notice).toHaveTextContent('el formato y el reloj de 2 sedes.');

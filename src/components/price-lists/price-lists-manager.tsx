@@ -9,7 +9,8 @@ import {
   updatePriceList,
   type PriceList,
 } from '@/lib/price-lists/price-lists-api';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { invalidateLocations, loadLocations } from '@/lib/session/session-store';
 import { AsyncSection } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -85,7 +86,7 @@ export function PriceListsManager({ token, allowed }: PriceListsManagerProps) {
       try {
         const [data, sedes] = await Promise.all([
           listPriceLists(token, { includeInactive: true }),
-          listLocations(token),
+          loadLocations(token),
         ]);
         if (cancelled) return;
         setLists(data);
@@ -265,7 +266,9 @@ export function PriceListsManager({ token, allowed }: PriceListsManagerProps) {
         onRetryLocations={() => {
           // Solo relee las sedes (la elegida no tenía moneda); el formulario
           // sigue abierto. Si vuelve a fallar, el campo conserva su reintento.
-          listLocations(token)
+          // La lista cacheada de la sesión no sirve: se invalida y se relee.
+          invalidateLocations();
+          loadLocations(token)
             .then(setLocations)
             .catch(() => {});
         }}

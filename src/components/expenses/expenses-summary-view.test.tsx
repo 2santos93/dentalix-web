@@ -21,7 +21,7 @@ jest.mock('../../lib/locations/location-store', () => ({
   ...jest.requireActual('../../lib/locations/location-store'),
   getActiveLocationId: jest.fn(),
 }));
-jest.mock('../../lib/locations/session-locations', () => ({
+jest.mock('../../lib/session/session-store', () => ({
   useSessionLocations: () => mockRequestLocations,
 }));
 const mockRequestLocations = jest.fn();

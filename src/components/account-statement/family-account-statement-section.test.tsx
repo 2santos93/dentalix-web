@@ -1,4 +1,5 @@
 import { EMPTY_CLINIC_FISCAL } from '@/lib/clinic/clinic-settings-api';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { FamilyAccountStatementSection } from './family-account-statement-section';
 import { FamilyAccountStatementDocument } from './family-account-statement-document';
@@ -134,6 +135,7 @@ describe('Estado de cuenta familiar (DX-203)', () => {
     render(<FamilyAccountStatementSection token="tok" patientId="mother" />);
     expect(await screen.findByText('El saldo incluye el saldo migrado del programa anterior.')).toBeInTheDocument();
     cleanup();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
     render(<FamilyAccountStatementDocument statement={withOpening} format={FORMAT_ES} />);
     expect(screen.getByText('El saldo incluye el saldo migrado del programa anterior.')).toBeInTheDocument();
   });
@@ -145,6 +147,8 @@ describe('Estado de cuenta familiar (DX-203)', () => {
     expect(await screen.findByText(text)).toBeInTheDocument();
 
     cleanup();
+
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
     render(<FamilyAccountStatementDocument statement={{ ...family, paymentsWithoutRateCount: 2 }} format={FORMAT_ES} />);
     expect(screen.getByTestId('family-without-rate')).toHaveTextContent(text);
   });

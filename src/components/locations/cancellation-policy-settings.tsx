@@ -5,7 +5,7 @@ import { History, Mail, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
-import { useSessionLocations } from '@/lib/locations/session-locations';
+import { useSessionLocations } from '@/lib/session/session-store';
 import { locationCurrency } from '@/lib/locations/location-settings';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import {

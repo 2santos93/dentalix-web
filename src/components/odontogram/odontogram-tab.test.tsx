@@ -1,4 +1,5 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { OdontogramTab } from './odontogram-tab';
 import { Toaster } from '@/components/errors/toaster';
@@ -324,6 +325,7 @@ describe('OdontogramTab', () => {
       const day = regionalFormat({ locale, hourCycle }).civilDate('2026-10-05');
       expect(await screen.findByText(new RegExp(`carta al ${day.replace(/\./g, '\\.')} · solo lectura`, 'i'))).toBeInTheDocument();
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
     }
     mockedLocations.mockResolvedValue([clinicLocation()]);
   });

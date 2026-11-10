@@ -20,7 +20,7 @@ import {
 } from '@/lib/patient-credit/patient-credit-api';
 import type { AccountStatementMovement } from '@/lib/account-statement/account-statement-api';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
-import { useSessionLocations } from '@/lib/locations/session-locations';
+import { useSessionLocations } from '@/lib/session/session-store';
 import { FieldError } from '@/components/errors/field-error';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';

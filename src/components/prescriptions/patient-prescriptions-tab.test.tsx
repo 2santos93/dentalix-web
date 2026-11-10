@@ -1,4 +1,5 @@
 import { dateTimeIn, STAMP_SEDES } from '@/lib/test/stamp';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { listLocations } from '@/lib/locations/locations-api';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { PatientPrescriptionsTab } from './patient-prescriptions-tab';
@@ -122,6 +123,7 @@ describe('PatientPrescriptionsTab', () => {
     await screen.findByRole('table', { name: 'Recetas del paciente' });
     expect(screen.queryByRole('button', { name: /^Acciones de receta del/ })).not.toBeInTheDocument();
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
     render(<PatientPrescriptionsTab token={tokenFor('ADMIN', 'u-admin')} patientId="p1" />);
     await screen.findByRole('table', { name: 'Recetas del paciente' });
     await user.click(screen.getAllByRole('button', { name: /^Acciones de receta del/ })[0]);

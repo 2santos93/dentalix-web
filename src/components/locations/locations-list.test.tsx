@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { LocationsList } from './locations-list';
 import { LocationSwitcher } from './location-switcher';
 import {
@@ -6,7 +7,6 @@ import {
   listLocations,
   updateLocationSettings,
 } from '@/lib/locations/locations-api';
-import { SessionLocationsProvider } from '@/lib/locations/session-locations';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { clinicLocation } from '@/lib/test/locations';
@@ -117,6 +117,7 @@ describe('LocationsList (G1, spec §6.3)', () => {
     expect(screen.queryByRole('button', { name: 'Nueva sede' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Editar Sede Norte' })).not.toBeInTheDocument();
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     render(<LocationsList token={ADMIN} canEdit />);
     await screen.findByText('Sede Norte');
@@ -134,8 +135,10 @@ describe('LocationsList (G1, spec §6.3)', () => {
   });
 
   it('a location with null regional fields is listed «Por configurar» and the modal completes it', async () => {
-    mockedList.mockResolvedValue([legacy]);
     const completed = { ...legacy, currency: 'JPY', timeZone: 'Asia/Tokyo', locale: 'ja-JP', hourCycle: 'h23' as const, regionalSettingsReviewedAt: '2026-10-27T10:00:00.000Z' };
+    // FE-031: guardar invalida la caché de sesión y la lista se relee de la API,
+    // que ya devuelve la sede completa.
+    mockedList.mockResolvedValueOnce([legacy]).mockResolvedValue([completed]);
     jest.mocked(updateLocationSettings).mockResolvedValue(completed);
     const user = setupUser();
     render(<LocationsList token={ADMIN} canEdit />);
@@ -173,10 +176,10 @@ describe('LocationsList (G1, spec §6.3)', () => {
     useAuthStore.setState({ accessToken: ADMIN });
     const user = setupUser();
     const { unmount } = render(
-      <SessionLocationsProvider token={ADMIN}>
+      <>
         <LocationSwitcher />
         <LocationsList token={ADMIN} canEdit />
-      </SessionLocationsProvider>,
+      </>,
     );
     await screen.findByRole('button', { name: 'Editar Sede Norte' });
     const switcher = await screen.findByRole('combobox', { name: 'Sede' });
@@ -201,6 +204,7 @@ describe('LocationsList (G1, spec §6.3)', () => {
     const list = screen.getByRole('region', { name: 'Sedes de la clínica' });
     expect(within(list).getByText('Sede Tokio').closest('li')).toHaveTextContent('JPY');
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
     useAuthStore.setState({ accessToken: null });
   });
 

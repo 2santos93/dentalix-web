@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
 import { REGIONAL_US } from '@/lib/test/document-regional';
@@ -54,6 +55,7 @@ describe('CashSessionDetailView: acciones según `can` (DX-027, DX-252)', () => 
     expect(await screen.findByRole('button', { name: 'Reabrir' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Corregir con un ajuste' })).not.toBeInTheDocument();
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     mockedGet.mockResolvedValue(closedCashSessionFixture({ can: { close: false, reopen: false, adjust: true } }));
     await renderDetail();

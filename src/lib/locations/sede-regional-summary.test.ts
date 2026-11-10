@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { listLocations } from './locations-api';
 import { setActiveLocationId } from './location-store';
 import { clinicLocation } from '@/lib/test/locations';
@@ -84,6 +85,7 @@ describe('useDashboardCurrency', () => {
     expect(result.current).toMatchObject({ currency: 'USD', source: 'chosen', defaultCurrency: 'VES' });
     expect(window.localStorage.getItem(dashboardCurrencyKey(token('u1'), 'ccs')!)).toBe('USD');
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     // Vuelve a entrar: recordada.
     const again = renderHook(() => useDashboardCurrency(token('u1')));
@@ -92,6 +94,7 @@ describe('useDashboardCurrency', () => {
     act(() => setActiveLocationId('val'));
     await waitFor(() => expect(again.result.current).toMatchObject({ currency: 'USD', source: 'sede' }));
     again.unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     // Otro usuario: la suya.
     setActiveLocationId('ccs');

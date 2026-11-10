@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { AcceptPlanModal } from './accept-plan-modal';
@@ -88,6 +89,7 @@ describe('AcceptPlanModal (DX-012)', () => {
       const day = regionalFormat({ locale, hourCycle }).civilDate('2026-11-15');
       await waitFor(() => expect(summary).toHaveTextContent(`Válido 30 días, hasta el ${day}`));
       cleanup();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
     }
     (listLocations as jest.Mock).mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
     renderModal();

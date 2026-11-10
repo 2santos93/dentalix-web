@@ -27,7 +27,8 @@ import {
   type PlanBalance,
 } from '@/lib/payments/payments-api';
 import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catalog-api';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { invalidateLocations, loadLocations } from '@/lib/session/session-store';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { activeSedeCurrency } from '@/lib/locations/location-settings';
 import { paymentLocationHint } from '@/lib/payments/payment-location';
@@ -403,7 +404,7 @@ export function TreatmentPlansTab({
     // sedes el id no se puede convertir en nombre, así que antes de que
     // resuelva no sirve de nada — y un setState síncrono en el cuerpo de un
     // efecto encadena renders.
-    listLocations(token)
+    loadLocations(token)
       .then((data) => {
         if (cancelled) return;
         setLocations(data ?? []);
@@ -1560,7 +1561,11 @@ export function TreatmentPlansTab({
           activeLocationId={getActiveLocationId()}
           locationName={locations.find((l) => l.id === getActiveLocationId())?.name ?? null}
           locations={locations}
-          onRetryLocations={() => setLocationsReloadKey((k) => k + 1)}
+          onRetryLocations={() => {
+            // Releer de verdad: la lista cacheada de la sesión no sirve.
+            invalidateLocations();
+            setLocationsReloadKey((k) => k + 1);
+          }}
           onSaved={handleMarkDoneSaved}
         />
       ) : null}

@@ -7,7 +7,7 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { getExchangeRates, type ExchangeRates } from '@/lib/exchange/exchange-api';
 import type { ExchangeRateSource } from '@/lib/exchange/exchange-settings-api';
 import type { RegionalFormat } from '@/lib/format/regional-format';
-import { listLocations } from '@/lib/locations/locations-api';
+import { loadLocations } from '@/lib/session/session-store';
 import { locationCurrency } from '@/lib/locations/location-settings';
 import { SectionError } from '@/components/errors/section-error';
 import { Button } from '@/components/ui/button';
@@ -76,7 +76,7 @@ export function TodayRates({ token, baseCurrency, source, today, fmt, version }:
     if (!today) return;
     let cancelled = false;
     const requestKey = `${today}|${source}|${version}|${reloadKey}`;
-    Promise.all([getExchangeRates(token, today), listLocations(token)])
+    Promise.all([getExchangeRates(token, today), loadLocations(token)])
       .then(([rates, locations]) => {
         if (cancelled) return;
         let currencies = sedeCurrencies(

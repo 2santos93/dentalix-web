@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { useSessionLocations } from '@/lib/locations/session-locations';
+import { useSessionLocations } from '@/lib/session/session-store';
 import type { ClinicLocation } from './locations-api';
 import { getActiveLocationId, onLocationChange } from './location-store';
 

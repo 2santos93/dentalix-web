@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Pencil } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
-import { useSessionLocations } from '@/lib/locations/session-locations';
+import { useSessionLocations } from '@/lib/session/session-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageLocationCalendar } from '@/lib/locations/location-calendar';
 import { countryName } from '@/lib/locations/countries';

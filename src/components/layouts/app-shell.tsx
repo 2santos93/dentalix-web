@@ -11,7 +11,6 @@ import type { ClinicRole } from '@/lib/me/me-api';
 import { LocationSwitcher } from '@/components/locations/location-switcher';
 import { getSidebarCollapsed, setSidebarCollapsed } from '@/lib/ui/sidebar-store';
 import { cn } from '@/lib/utils';
-import { SessionLocationsProvider } from '@/lib/locations/session-locations';
 import { SedeDateLocaleProvider } from '@/components/locations/sede-date-locale-provider';
 import { InClinicProvider, useInClinic } from '@/components/appointments/use-in-clinic';
 import { waitingForYouLabel } from '@/lib/appointments/patient-flow';
@@ -62,16 +61,16 @@ const copy = {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.accessToken);
   const pathname = usePathname();
-  return <SessionLocationsProvider token={token}>
-    <InClinicProvider token={token} enabled={getTokenRole(token) === 'DENTIST' || pathname.startsWith('/agenda')}>
+  // FE-031: `/me` y `/locations` salen de la caché de sesión
+  // (`session-store.ts`), no de un proveedor: renovar el token no los relee.
+  return <InClinicProvider token={token} enabled={getTokenRole(token) === 'DENTIST' || pathname.startsWith('/agenda')}>
       <SedeDateLocaleProvider token={token}>
         {/* DX-503: una sola lectura de las listas de trabajo para el menú, la Agenda e Inicio. */}
         <WorkQueuesProvider token={token} pathname={pathname}>
           <AppShellContent>{children}</AppShellContent>
         </WorkQueuesProvider>
       </SedeDateLocaleProvider>
-    </InClinicProvider>
-  </SessionLocationsProvider>;
+    </InClinicProvider>;
 }
 
 function AppShellContent({ children }: { children: React.ReactNode }) {

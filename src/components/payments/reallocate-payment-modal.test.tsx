@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '@/lib/api/client';
 import { Toaster } from '@/components/errors/toaster';
@@ -187,6 +188,7 @@ describe('ReallocatePaymentModal (DX-051)', () => {
     );
     expect(await loaded()).toBeChecked();
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     mockedGet.mockResolvedValue({ ...DATA, manual: false });
     renderModal();

@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { ImplantLotSearch } from './implant-lot-search';
 import { downloadImplantLotCsv, searchImplantLots } from '@/lib/implants/implants-api';
 import { ApiError } from '@/lib/api/client';
@@ -40,6 +41,7 @@ describe('ImplantLotSearch (DX-191)', () => {
       const day = regionalFormat({ locale, hourCycle }).civilDate(match.placedOn.slice(0, 10));
       await waitFor(() => expect(within(table).getAllByRole('row')[1]).toHaveTextContent(day));
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
     }
   });
 

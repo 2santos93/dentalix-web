@@ -1,4 +1,5 @@
 import { dateTimeIn, STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { PatientImplantsTab } from './patient-implants-tab';
@@ -48,6 +49,7 @@ describe('PatientImplantsTab (DX-191)', () => {
     const { unmount } = render(<PatientImplantsTab token={DENTIST} patientId="p1" />);
     expect(await screen.findByText('4,1 × 10 mm')).toBeInTheDocument();
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
     mockedLocations.mockResolvedValue([clinicLocation({ locale: 'en-US', hourCycle: 'h12' })]);
     render(<PatientImplantsTab token={DENTIST} patientId="p1" />);
     expect(await screen.findByText('4.1 × 10 mm')).toBeInTheDocument();

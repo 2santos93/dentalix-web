@@ -23,7 +23,8 @@ import {
   moneyList,
   sessionStatusKey,
 } from '@/lib/cash-sessions/presentation';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { invalidateLocations, loadLocations } from '@/lib/session/session-store';
 import { onLocationChange } from '@/lib/locations/location-store';
 import { locationCurrency, locationRegionalFormat } from '@/lib/locations/location-settings';
 import { useSedeStamp, type SedeStamp } from '@/lib/locations/sede-stamp';
@@ -145,7 +146,7 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
       try {
         const [cur, locs] = await Promise.all([
           getCurrentCashSession(token),
-          listLocations(token).catch(() => [] as ClinicLocation[]),
+          loadLocations(token).catch(() => [] as ClinicLocation[]),
         ]);
         if (cancelled) return;
         setCurrent(cur);
@@ -247,7 +248,11 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
             sedeName={sedeName}
             stamp={stamp}
             currencyMissing={currencyMissing}
-            onRetryLocations={() => setCurrentKey((k) => k + 1)}
+            onRetryLocations={() => {
+              // La sede no traía moneda: la lista cacheada de la sesión no sirve.
+              invalidateLocations();
+              setCurrentKey((k) => k + 1);
+            }}
             onOpen={() => {
               setModalKey((k) => k + 1);
               setOpening(true);

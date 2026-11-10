@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { ImplantCardPrintView } from './implant-card-print-view';
 import { getImplantCard, printImplantCard } from '@/lib/implants/implants-api';
@@ -111,6 +112,7 @@ describe('ImplantCardPrintView (DX-191)', () => {
     expect(noteRegion()).toBeDefined();
     expect(noteRegion()).toBeEmptyDOMElement();
     first.unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     mockedGet.mockResolvedValueOnce(makeImplantCard({ regional: null }));
     render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);

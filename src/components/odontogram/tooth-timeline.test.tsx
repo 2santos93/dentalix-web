@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { ToothTimeline } from './tooth-timeline';
 import { getToothTimeline, voidToothRecord } from '@/lib/odontogram/odontogram-api';
@@ -317,6 +318,7 @@ describe('ToothTimeline — origen y anulación (DX-120)', () => {
       const expected = STAMP_FORMATS[key].date(new Date(instant), STAMP_SEDES[key].timeZone!);
       await waitFor(() => expect(screen.getByRole('listitem').querySelector('time')).toHaveTextContent(expected));
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
     }
     // El 1 de febrero a las 02:30Z: en Caracas y Miami aún es el 31 de enero; en Berlín, el 1.
     expect(dateIn('caracas', instant)).not.toBe(dateIn('berlin', instant));

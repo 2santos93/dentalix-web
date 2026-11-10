@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from "@testing-library/user-event";
 import { PlanVisitsBoard } from "./plan-visits-board";
 import { listLocations } from "@/lib/locations/locations-api";
@@ -234,6 +235,7 @@ it("DX-354b: la fecha mínima sugerida sale con el formato de la sede (en-US, de
     );
     expect(await screen.findByText(regionalFormat({ locale, hourCycle }).civilDate("2027-04-01"))).toBeInTheDocument();
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
   }
 });
 it("DX-291: un ítem sin diente (cargo administrativo) no deja «diente ,» en la etiqueta", () => {

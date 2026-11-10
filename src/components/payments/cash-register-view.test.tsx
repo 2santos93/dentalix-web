@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { CashRegisterView } from './cash-register-view';
 import { ApiError, NetworkError } from '@/lib/api/client';
@@ -259,6 +260,7 @@ it('arqueo ciego (SEC-043): la fila de una caja abierta sale sin importe, con su
   // La otra fila conserva su importe.
   expect(within(within(table).getByRole('row', { name: /beto ruiz/i })).getByText(/50,25/)).toBeInTheDocument();
   unmount();
+  clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
   mockedList.mockResolvedValue(response());
   render(<CashRegisterView token="tok" />);
@@ -291,6 +293,7 @@ it('DX-516: sin ajustes no hay bloque nuevo; con ellos, lo cobrado por fila y en
   expect(within(plain).queryByRole('list', { name: 'Ajustes por medio de pago' })).not.toBeInTheDocument();
   expect(screen.queryByText(/^Cobrado /)).not.toBeInTheDocument();
   unmount();
+  clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
   const taxed = {
     ...betoCard,
@@ -349,6 +352,7 @@ it('marca el alcance de sede: "Todas las sedes" sin sede activa, el nombre con u
   const { unmount } = render(<CashRegisterView token="tok" />);
   expect(await screen.findByText('Todas las sedes')).toBeInTheDocument();
   unmount();
+  clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
   mockedList.mockResolvedValueOnce(
     response({ scope: { location: { id: 'loc-2', name: 'Sede Norte' } } }),
@@ -1031,15 +1035,17 @@ describe('días de la sede (DX-097)', () => {
     mockedList.mockResolvedValue(response());
     render(<CashRegisterView token="tok" />);
 
+    // FE-031: todos los consumidores de la pantalla leen la MISMA lista de
+    // sedes (la caché de sesión), así que el aviso puede salir en más de uno.
     expect(
-      await screen.findByText('No se pudo saber la zona horaria de la sede. Vuelve a intentarlo.'),
-    ).toBeInTheDocument();
+      (await screen.findAllByText('No se pudo saber la zona horaria de la sede. Vuelve a intentarlo.')).length,
+    ).toBeGreaterThan(0);
     // Nunca se consulta «hoy» con otra zona (ni la del fixture ni la del navegador).
     expect(mockedList).not.toHaveBeenCalled();
 
     // Reintentar relee las sedes; ya configurada, la caja carga.
     mockedLocations.mockResolvedValueOnce([clinicLocation()]);
-    await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+    await userEvent.click(screen.getAllByRole('button', { name: 'Reintentar' })[0]);
     await waitFor(() => expect(mockedList).toHaveBeenCalledWith('tok', { ...presetRange('today'), page: 1 }));
   });
 

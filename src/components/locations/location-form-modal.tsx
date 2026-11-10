@@ -23,7 +23,7 @@ import {
 import { getClinicDocumentTypeNames } from '@/lib/patients/document-type-names-api';
 import type { DocType } from '@/lib/patients/patients-api';
 import { isPhoneRegion, PHONE_REGIONS, phoneRegionLabel, searchPhoneRegions, type PhoneRegionOption } from '@/lib/locations/phone-regions';
-import { useSessionLocations } from '@/lib/locations/session-locations';
+import { useSessionLocations } from '@/lib/session/session-store';
 import {
   canonicalLocale,
   canonicalTimeZone,

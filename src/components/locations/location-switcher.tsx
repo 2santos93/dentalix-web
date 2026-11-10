@@ -1,9 +1,8 @@
 'use client';
-import { useSessionLocations } from '@/lib/locations/session-locations';
-import { useEffect, useState } from 'react';
+import { useLocations } from '@/lib/session/session-store';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
-import type { ClinicLocation } from '@/lib/locations/locations-api';
 import {
   getActiveLocationId,
   onLocationChange,
@@ -80,8 +79,12 @@ export function LocationSwitcher({
   variant?: 'inline' | 'block' | 'rail' | 'compact' | 'phone';
 }) {
   const token = useAuthStore((s) => s.accessToken);
-  const requestLocations = useSessionLocations(token);
-  const [locations, setLocations] = useState<ClinicLocation[]>([]);
+  // FE-031: la lista sale de la caché de la sesión. Las copias del selector
+  // (barra lateral y barra del teléfono) comparten una lectura, renovar el
+  // token no la repite y cambiar de sede (aquí, en otra pestaña o porque el
+  // cliente HTTP la soltó, SEC-014) la invalida y la relee sola.
+  const sessionLocations = useLocations();
+  const data = sessionLocations.status === 'ready' ? sessionLocations.data : null;
   const [active, setActive] = useState<string | null>(null);
   // `null` = sin restricción. Se lee del token: cambia justo al renovarlo, que
   // es cuando la API empieza a aplicar un cambio de sedes.
@@ -89,94 +92,65 @@ export function LocationSwitcher({
   const restricted = allowed !== null;
   const allowedKey = allowed?.join(',') ?? null;
 
+  // La API ya filtra `GET /locations` para un miembro acotado; filtrar
+  // también aquí por el claim evita ofrecer una sede que daría 403 si
+  // las dos fuentes no van a la par (p. ej. lista cacheada).
+  //
+  // Si la lista no carga, simplemente no se ofrece el selector. No merece un
+  // error en pantalla — la app sigue funcionando en modo consolidado, que es
+  // el comportamiento por defecto.
+  const locations = useMemo(() => {
+    if (!data) return [];
+    const permitidas = allowedKey === null ? null : allowedKey.split(',');
+    return data.filter((l) => l.isActive && (permitidas === null || permitidas.includes(l.id)));
+  }, [data, allowedKey]);
+
   // Rehidratar la sede elegida: localStorage solo existe en el cliente, así
   // que no puede leerse como estado inicial sin romper la hidratación. La
   // lectura va dentro de una función, como el resto de vistas del proyecto.
+  // Otra pestaña o el cliente HTTP pueden cambiarla: se muestra al momento.
   useEffect(() => {
     function hydrate() {
       setActive(getActiveLocationId());
     }
     hydrate();
+    return onLocationChange(hydrate);
   }, []);
 
-  // SEC-014: el cliente HTTP puede soltar la sede por su cuenta (la API dijo
-  // que está desactivada, borrada o ya no es del miembro), y otra pestaña
-  // puede cambiarla. El selector no espera a una recarga: muestra la sede
-  // guardada al momento y vuelve a pedir la lista, que ya no trae la sede
-  // desactivada (y la reconciliación de abajo coloca a un miembro acotado en
-  // una de las suyas).
-  const [reload, setReload] = useState(0);
-  useEffect(
-    () =>
-      onLocationChange(() => {
-        setActive(getActiveLocationId());
-        // Con el proveedor de sesión, olvida su lectura en memoria; sin él
-        // (tests, vistas sueltas) basta con volver a pedirla.
-        requestLocations.invalidate();
-        setReload((n) => n + 1);
-      }),
-    [requestLocations],
-  );
-
   useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    async function load() {
-      try {
-        const data = await requestLocations();
-        if (cancelled) return;
-        // La API ya filtra `GET /locations` para un miembro acotado; filtrar
-        // también aquí por el claim evita ofrecer una sede que daría 403 si
-        // las dos fuentes no van a la par (p. ej. lista cacheada).
-        const permitidas = allowedKey === null ? null : allowedKey.split(',');
-        const usables = data.filter(
-          (l) => l.isActive && (permitidas === null || permitidas.includes(l.id)),
-        );
-        setLocations(usables);
-
-        // Reconciliar la sede guardada contra las que existen DE VERDAD.
-        //
-        // La elección vive en localStorage y sobrevive a la sede: si se borra
-        // o se desactiva —o si se reseedea la base y cambian los ids— queda un
-        // id huérfano que `api/client.ts` sigue mandando como `X-Location-Id`
-        // en CADA petición, y el backend contesta 400 "Unknown location for
-        // this clinic" a todas. La app entera queda inutilizable hasta que
-        // alguien limpia localStorage a mano, sin nada en pantalla que explique
-        // por qué. Soltarla aquí devuelve al usuario a la vista consolidada,
-        // que es el comportamiento por defecto y siempre es válido.
-        const guardada = getActiveLocationId();
-        const guardadaValida = guardada !== null && usables.some((l) => l.id === guardada);
-        if (permitidas !== null && usables.length > 0) {
-          // Acotado: una sede no permitida no se suelta a «todas» (no existe
-          // para él) sino a la primera de las suyas; y con una sola, esa queda
-          // siempre elegida.
-          const siguiente =
-            usables.length === 1
-              ? usables[0].id
-              : guardada === null || guardadaValida
-                ? guardada
-                : usables[0].id;
-          if (siguiente !== guardada) setActiveLocationId(siguiente);
-          setActive(siguiente);
-        } else if (guardada && !guardadaValida) {
-          setActiveLocationId(null);
-          setActive(null);
-        }
-      } catch {
-        // Best-effort: si falla, simplemente no se ofrece el selector. No
-        // merece un error en pantalla — la app sigue funcionando en modo
-        // consolidado, que es el comportamiento por defecto.
-        //
-        // Y NO se descarta la sede guardada: un fallo de red no es prueba de
-        // que haya desaparecido, y tirarla aquí sacaría al usuario de su sede
-        // cada vez que la petición falle.
-      }
+    // Sin lista (cargando o fallida) NO se descarta la sede guardada: un fallo
+    // de red no es prueba de que haya desaparecido, y tirarla aquí sacaría al
+    // usuario de su sede cada vez que la petición falle.
+    if (!data) return;
+    const permitidas = allowedKey === null ? null : allowedKey.split(',');
+    // Reconciliar la sede guardada contra las que existen DE VERDAD.
+    //
+    // La elección vive en localStorage y sobrevive a la sede: si se borra
+    // o se desactiva —o si se reseedea la base y cambian los ids— queda un
+    // id huérfano que `api/client.ts` sigue mandando como `X-Location-Id`
+    // en CADA petición, y el backend contesta 400 "Unknown location for
+    // this clinic" a todas. La app entera queda inutilizable hasta que
+    // alguien limpia localStorage a mano, sin nada en pantalla que explique
+    // por qué. Soltarla aquí devuelve al usuario a la vista consolidada,
+    // que es el comportamiento por defecto y siempre es válido.
+    const guardada = getActiveLocationId();
+    const guardadaValida = guardada !== null && locations.some((l) => l.id === guardada);
+    if (permitidas !== null && locations.length > 0) {
+      // Acotado: una sede no permitida no se suelta a «todas» (no existe
+      // para él) sino a la primera de las suyas; y con una sola, esa queda
+      // siempre elegida.
+      const siguiente =
+        locations.length === 1
+          ? locations[0].id
+          : guardada === null || guardadaValida
+            ? guardada
+            : locations[0].id;
+      if (siguiente !== guardada) setActiveLocationId(siguiente);
+    } else if (guardada && !guardadaValida) {
+      setActiveLocationId(null);
     }
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [token, allowedKey, requestLocations, reload]);
+    // `setActiveLocationId` avisa por `onLocationChange`: `active` se pone al día arriba.
+  }, [data, locations, allowedKey]);
 
   // Sin ninguna sede sí se esconde: un selector vacío no ofrece nada. Con una
   // o más, se muestra (ver la nota de arriba).

@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { ReceivablesView } from './receivables-view';
 import {
@@ -131,6 +132,7 @@ describe('ReceivablesView · pestañas de la cartera (DX-430, M4)', () => {
       const { unmount } = render(<ReceivablesView token="tok" tabs={tabs} />);
       expect(screen.getByRole('tablist')).toBeInTheDocument();
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
     }
   });
 
@@ -140,6 +142,7 @@ describe('ReceivablesView · pestañas de la cartera (DX-430, M4)', () => {
       const { unmount } = render(<ReceivablesView token="tok" tabs={tabs} />);
       expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
     }
   });
 });
@@ -201,6 +204,7 @@ describe('ReceivablesView (DX-145)', () => {
       const day = regionalFormat({ locale, hourCycle }).civilDate('2026-10-17');
       expect(await screen.findByText(`Antigüedad contada al ${day}, en días del calendario de la sede.`)).toBeInTheDocument();
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
     }
     jest.mocked(listLocations).mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
     render(<ReceivablesView token="tok" />);
@@ -313,6 +317,7 @@ describe('ReceivablesView (DX-145)', () => {
     await screen.findByRole('table');
     expect(screen.queryByRole('button', { name: 'Exportar CSV' })).not.toBeInTheDocument();
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     mockedRole.mockReturnValue('ADMIN');
     mockedCsv.mockResolvedValue('\uFEFFPaciente');

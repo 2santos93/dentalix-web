@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { PlanItemsBalance } from './plan-items-balance';
 import { getPlanBalance, type PlanBalance } from '@/lib/payments/payments-api';
@@ -193,6 +194,7 @@ it('unconverted notice explains abonos without a rate, in singular or plural', a
     await screen.findByText('2 abonos todavía sin convertir a la moneda del plan: no se imputan a ítems.'),
   ).toBeInTheDocument();
   unmount();
+  clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
   mockedBalance.mockResolvedValue(balanceFixture({ unconvertedPaymentsCount: 1 }));
   render(<PlanItemsBalance token="tok" planId="plan-1" />);

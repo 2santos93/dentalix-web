@@ -36,7 +36,8 @@ import {
   blocksOwnAgendaOnly,
   canWriteScheduleBlocks,
 } from '@/lib/appointments/schedule-blocks-api';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { loadLocations } from '@/lib/session/session-store';
 import { useSedeClock } from '@/lib/locations/sede-clock';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { toast } from 'sonner';
@@ -169,7 +170,7 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
     }
     // Las sedes solo hacen falta aquí; sin ellas se bloquea en todas.
     if (locations.length === 0) {
-      setLocations(await listLocations(token).catch(() => []));
+      setLocations(await loadLocations(token).catch(() => []));
     }
     setBlocking(true);
   }

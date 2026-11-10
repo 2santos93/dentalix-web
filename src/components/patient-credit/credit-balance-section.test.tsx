@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { CreditBalanceSection } from './credit-balance-section';
 import { accountStatementFixture } from '@/lib/test/account-statement';
@@ -110,6 +111,7 @@ it('sin permiso (DENTIST/ASSISTANT) no pinta las acciones; sin saldo a favor, na
   );
   expect(screen.queryByRole('button', { name: /^Acciones de/ })).not.toBeInTheDocument();
   unmount();
+  clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
   const statement = vesCredit();
   renderSection({ ...statement, plans: [statement.plans[0]] });
   expect(screen.queryByTestId('credit-balance')).not.toBeInTheDocument();

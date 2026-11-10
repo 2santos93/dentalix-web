@@ -7,7 +7,10 @@ import { ChevronUp, LogOut, Moon, Settings, UserRound } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { logout } from '@/lib/auth/auth-api';
-import { getMe, type ClinicRole } from '@/lib/me/me-api';
+import type { ClinicRole, MyProfile } from '@/lib/me/me-api';
+import { clearSessionStore, useMe } from '@/lib/session/session-store';
+import { getTokenRole } from '@/lib/auth/token-role';
+import { readJwtClaims } from '@/lib/auth/jwt-claims';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -61,6 +64,8 @@ export function useLogout(): { loggingOut: boolean; logout: () => Promise<void> 
     // se pide el logout (sin cookie, la API responde 204 igual).
     await revokeSession();
     useAuthStore.getState().clear();
+    // FE-031: el perfil y las sedes de esta sesión no sobreviven al logout.
+    clearSessionStore();
     router.push('/login');
   }, [router]);
   return { loggingOut, logout: doLogout };
@@ -83,6 +88,19 @@ const ROLE_LABEL: Record<ClinicRole, string> = {
   ASSISTANT: 'Asistente',
   RECEPTION: 'Recepción',
 };
+
+/**
+ * El rol de ESTA clínica: el del token (`GET /me` trae todas las membresías sin
+ * decir cuál es la de este host); sin token legible, la membresía de su
+ * clínica y, en último término, la primera.
+ */
+function sessionRole(token: string | null, profile: MyProfile): ClinicRole | null {
+  const fromToken = getTokenRole(token);
+  if (fromToken) return fromToken;
+  const tenantId = readJwtClaims(token)?.tenantId;
+  const own = profile.memberships.find((m) => m.tenantId === tenantId) ?? profile.memberships[0];
+  return own?.role ?? null;
+}
 
 /**
  * Clases de los ítems del menú de cuenta. Bajo `md` llegan a 44 px de alto
@@ -167,28 +185,15 @@ export function UserMenu({
 }) {
   const accessToken = useAuthStore((s) => s.accessToken);
   const { loggingOut, logout: handleLogout } = useLogout();
-  const [name, setName] = useState<string | null>(null);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [role, setRole] = useState<ClinicRole | null>(null);
+  // FE-031: el perfil sale de la caché de la sesión; las dos copias del menú
+  // (barra lateral y barra del teléfono) comparten una sola lectura de `/me`.
+  // Si falla, el menú simplemente no muestra datos (como antes).
+  const me = useMe();
+  const profile = me.status === 'ready' ? me.data : null;
+  const name = profile?.fullName ?? null;
+  const avatarUrl = profile?.avatarUrl ?? null;
+  const role = profile ? sessionRole(accessToken, profile) : null;
   const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (!accessToken) return;
-    let active = true;
-    getMe(accessToken)
-      .then((p) => {
-        if (!active) return;
-        setName(p.fullName);
-        setAvatarUrl(p.avatarUrl);
-        setRole(p.memberships[0]?.role ?? null);
-      })
-      .catch(() => {
-        /* silencioso: el menú simplemente no muestra datos */
-      });
-    return () => {
-      active = false;
-    };
-  }, [accessToken]);
 
   if (!accessToken) return null;
 
