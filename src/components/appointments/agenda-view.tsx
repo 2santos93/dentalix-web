@@ -934,7 +934,13 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
     setShowForm(true);
   }
 
-  /** DX-211: «Nueva cita» de la columna de un sillón (sin profesional: lo propone el sillón). */
+  /**
+   * DX-211: «Nueva cita» de la columna de un sillón, o clic en uno de sus
+   * huecos (DX-480). Solo se pasa el sillón: el formulario, con el profesional
+   * vacío, propone el del sillón por defecto (`proposeProvider`); los dos
+   * quedan editables y cambiar el sillón a mano nunca pisa al profesional ya
+   * elegido.
+   */
   function handleNewFromChair(columnId: string, startTime?: string) {
     setSlotPrefill({
       date: selectedDate,

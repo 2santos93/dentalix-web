@@ -2111,6 +2111,82 @@ describe('AgendaView con el reloj de la sede (DX-378)', () => {
       });
     });
 
+    // DX-480: el clic en un hueco de la columna de un sillón precarga el
+    // sillón y su profesional por defecto, y los dos se pueden cambiar.
+    describe('clic en un hueco (DX-480)', () => {
+      // «Sillón 2» tiene al Dr. Luis Gómez por defecto; «Sillón 1», a nadie.
+      const chairsWithDefault = [
+        { ...base, id: 'ch-1', name: 'Sillón 1', sortOrder: 0, active: true },
+        { ...base, id: 'ch-2', name: 'Sillón 2', sortOrder: 1, active: true, defaultProviderId: 'staff-2' },
+      ];
+      // Una cita en cada sillón: el clic es en el hueco libre de la columna,
+      // no en «Nueva cita» de una columna vacía.
+      const seated = [
+        appointment({ id: 'apt-1', chairId: 'ch-1', chair: { id: 'ch-1', name: 'Sillón 1', active: true } }),
+        appointment({ id: 'apt-2', chairId: 'ch-2', chair: { id: 'ch-2', name: 'Sillón 2', active: true } }),
+      ];
+
+      beforeEach(() => {
+        window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+        mockedListStaff.mockResolvedValue(staff);
+        mockedListChairs.mockResolvedValue(chairsWithDefault);
+        mockedListAppointments.mockResolvedValue(seated);
+      });
+
+      /** Abre la vista Día (por sillón o por profesional) y hace clic en el hueco de la columna `columnId`. */
+      async function clickSlot(by: 'chairs' | 'providers', columnId: string) {
+        if (by === 'chairs') window.localStorage.setItem('dentalix.agenda.columnsBy.u1', 'chairs');
+        const user = await openDay();
+        if (by === 'chairs') await screen.findByRole('region', { name: 'Agenda del día por sillón' });
+        const selector = by === 'chairs' ? `[data-chair-column="${columnId}"]` : `[data-provider-id="${columnId}"]`;
+        const column = await waitFor(() => {
+          const el = document.querySelector<HTMLElement>(selector);
+          expect(el).not.toBeNull();
+          return el!;
+        });
+        fireEvent.click(column, { clientY: 0 });
+        const dialog = await screen.findByRole('dialog', { name: 'Nueva cita' });
+        // El formulario ya cargó los sillones y el personal.
+        await within(dialog).findByRole('option', { name: 'Sillón 2' });
+        await within(dialog).findByRole('option', { name: 'Dr. Luis Gómez' });
+        return { user, dialog };
+      }
+
+      it('en un sillón con profesional por defecto, el formulario abre con el sillón, su profesional y la hora', async () => {
+        const { dialog } = await clickSlot('chairs', 'ch-2');
+        expect(within(dialog).getByLabelText('Sillón (opcional)')).toHaveValue('ch-2');
+        await waitFor(() => expect(within(dialog).getByLabelText(/^profesional$/i)).toHaveValue('staff-2'));
+        expect(readTime(/hora de inicio/i, dialog)).toMatch(/^\d{2}:\d{2}$/);
+      });
+
+      it('los dos siguen editables, y cambiar el sillón no cambia solo el profesional elegido', async () => {
+        const { user, dialog } = await clickSlot('chairs', 'ch-2');
+        const provider = within(dialog).getByLabelText(/^profesional$/i);
+        const chair = within(dialog).getByLabelText('Sillón (opcional)');
+        await waitFor(() => expect(provider).toHaveValue('staff-2'));
+        await user.selectOptions(provider, 'staff-1');
+        expect(provider).toHaveValue('staff-1');
+        await user.selectOptions(chair, 'ch-1');
+        expect(chair).toHaveValue('ch-1');
+        expect(provider).toHaveValue('staff-1');
+        // Volver al sillón con profesional por defecto tampoco pisa la elección.
+        await user.selectOptions(chair, 'ch-2');
+        expect(provider).toHaveValue('staff-1');
+      });
+
+      it('en un sillón sin profesional por defecto, trae el sillón y el profesional queda por elegir, como antes', async () => {
+        const { dialog } = await clickSlot('chairs', 'ch-1');
+        expect(within(dialog).getByLabelText('Sillón (opcional)')).toHaveValue('ch-1');
+        expect(within(dialog).getByLabelText(/^profesional$/i)).toHaveValue('');
+      });
+
+      it('en la columna de un profesional no cambia nada: ese profesional y sin sillón', async () => {
+        const { dialog } = await clickSlot('providers', 'staff-1');
+        expect(within(dialog).getByLabelText(/^profesional$/i)).toHaveValue('staff-1');
+        expect(within(dialog).getByLabelText('Sillón (opcional)')).toHaveValue('');
+      });
+    });
+
     it('la preferencia guardada abre la vista por sillón', async () => {
       window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
       window.localStorage.setItem('dentalix.agenda.columnsBy.u1', 'chairs');
