@@ -1096,6 +1096,9 @@ describe('AgendaView', () => {
         providerName: 'Dra. Ana Ríos',
         locationName: 'Sede principal',
         locationAddress: null,
+        wantsEarlier: false,
+        earlierWindow: null,
+        earlierAllowed: true,
         ...PUBLIC_REGIONAL_VE,
       },
     });

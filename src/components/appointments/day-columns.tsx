@@ -41,7 +41,7 @@ import {
 } from '@/lib/appointments/schedule-blocks';
 import { appointmentTypeTextColor, isAppointmentTypeColor } from '@/lib/color/contrast';
 import { freeGaps } from '@/lib/appointments/opening-candidates';
-import { WANTS_EARLIER_LABEL, WantsEarlierChip } from '@/components/appointments/wants-earlier-chip';
+import { WantsEarlierChip, wantsEarlierText } from '@/components/appointments/wants-earlier-chip';
 import { OVERBOOKED_LABEL, OverbookedChip, showsOverbooked } from '@/components/appointments/overbooked-chip';
 import {
   STATUS_LABELS,
@@ -727,7 +727,7 @@ export function DayColumns({
                             // Visible card words first; append supporting context after them.
                             range,
                             showsOverbooked(a) ? OVERBOOKED_LABEL : null,
-                            wantsEarlier ? WANTS_EARLIER_LABEL : null,
+                            wantsEarlier ? wantsEarlierText(a) : null,
                             patient,
                             a.appointmentType?.name,
                             STATUS_LABELS[a.status],
@@ -757,7 +757,12 @@ export function DayColumns({
                             <span className="shrink-0 text-xs font-medium tabular-nums">{range}</span>{' '}
                             {/* DX-509: solo mientras es sobrecupo. */}
                             <OverbookedChip overbooked={a.overbooked} status={a.status} className="min-w-0 py-0" />{' '}
-                            <WantsEarlierChip wantsEarlier={wantsEarlier} className="min-w-0 py-0" />
+                            <WantsEarlierChip
+                              wantsEarlier={wantsEarlier}
+                              earlierWindow={a.earlierWindow}
+                              earlierRequestedAt={a.earlierRequestedAt}
+                              className="min-w-0 py-0"
+                            />
                             <CoverageMarker coverage={a.coverage} />
                           </span>{' '}
                           {compact ? (

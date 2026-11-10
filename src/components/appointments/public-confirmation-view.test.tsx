@@ -3,6 +3,7 @@ import { PublicConfirmationView } from './public-confirmation-view';
 import {
   getPublicConfirmation,
   respondPublicConfirmation,
+  setPublicWantsEarlier,
   type PublicConfirmation,
 } from '../../lib/appointments/confirmations-api';
 import { ApiError } from '../../lib/api/client';
@@ -12,6 +13,7 @@ import { PUBLIC_REGIONAL_VE } from '@/lib/test/document-regional';
 jest.mock('../../lib/appointments/confirmations-api', () => ({
   getPublicConfirmation: jest.fn(),
   respondPublicConfirmation: jest.fn(),
+  setPublicWantsEarlier: jest.fn(),
 }));
 jest.mock('../../lib/api/client', () => ({
   // La clase real: `apiErrorMessage` la reconoce con `instanceof`.
@@ -20,6 +22,7 @@ jest.mock('../../lib/api/client', () => ({
 
 const get = getPublicConfirmation as jest.Mock;
 const respond = respondPublicConfirmation as jest.Mock;
+const setEarlier = setPublicWantsEarlier as jest.Mock;
 
 const APPOINTMENT = {
   patientFirstName: 'Ana',
@@ -29,6 +32,10 @@ const APPOINTMENT = {
   locationName: 'Sede Norte',
   locationAddress: 'Av. Libertador 100',
   ...PUBLIC_REGIONAL_VE,
+  // DX-437
+  wantsEarlier: false,
+  earlierWindow: null,
+  earlierAllowed: true,
 };
 const CLINIC = { name: 'Clínica Sonrisa', primaryColor: '#7C3AED', logoUrl: null };
 
@@ -137,7 +144,7 @@ describe('PublicConfirmationView', () => {
       await screen.findByRole('heading', { name: 'Clínica Sonrisa' });
       expect(screen.getByTestId('public-fee-needs-clinic')).toHaveTextContent(/llama a la clínica para cancelar/i);
       expect(screen.queryByRole('button', { name: 'Cancelar cita' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+      expect(screen.queryByRole('checkbox', { name: /acepto la política/i })).not.toBeInTheDocument();
       expect(screen.queryByText(/Cargo por inasistencia/)).not.toBeInTheDocument();
       expect(screen.queryByTestId('public-late-cancellation')).not.toBeInTheDocument();
       // Confirmar y pedir que lo llamen siguen disponibles.
@@ -289,7 +296,7 @@ describe('PublicConfirmationView', () => {
       expect(section).toHaveTextContent('Las citas no avisadas se cobran.');
       expect(section).toHaveTextContent(/50\.000/);
       expect(screen.queryByText(/menos de 24 h de aviso/i)).not.toBeInTheDocument();
-      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+      expect(screen.queryByRole('checkbox', { name: /acepto la política/i })).not.toBeInTheDocument();
     });
 
     it('tarde: avisa «Cancelación con menos de 24 h de aviso» y cancelar sin aceptar no envía nada', async () => {
@@ -337,5 +344,88 @@ describe('PublicConfirmationView', () => {
         }),
       );
     });
+  });
+});
+
+describe('PublicConfirmationView · «Avisarme si se libera un hueco antes» (DX-437)', () => {
+  beforeEach(() => {
+    get.mockReset();
+    setEarlier.mockReset();
+  });
+
+  it('con la cita pendiente: la casilla manda wantsEarlier true (franja ANY), enseña el selector y lo anuncia; «Mañanas» manda MORNING', async () => {
+    get.mockResolvedValue(view());
+    setEarlier
+      .mockResolvedValueOnce(view({ appointment: { ...APPOINTMENT, wantsEarlier: true, earlierWindow: 'ANY' } }))
+      .mockResolvedValueOnce(view({ appointment: { ...APPOINTMENT, wantsEarlier: true, earlierWindow: 'MORNING' } }));
+    render(<PublicConfirmationView confirmationToken="tok" />);
+    const box = await screen.findByRole('checkbox', { name: 'Si se libera un hueco antes, avísame' });
+    expect(screen.queryByLabelText('Franja')).not.toBeInTheDocument();
+    fireEvent.click(box);
+    await waitFor(() => expect(setEarlier).toHaveBeenCalledWith('tok', { wantsEarlier: true, preferredWindow: 'ANY' }));
+    expect(await screen.findByText('Listo. Te avisaremos si se libera un hueco antes.')).toBeInTheDocument();
+    const select = screen.getByLabelText('Franja');
+    expect(select).toHaveValue('ANY');
+    expect(select).toHaveClass('h-11');
+    fireEvent.change(select, { target: { value: 'MORNING' } });
+    await waitFor(() =>
+      expect(setEarlier).toHaveBeenLastCalledWith('tok', { wantsEarlier: true, preferredWindow: 'MORNING' }),
+    );
+    expect(await screen.findByText('Listo. Te avisaremos si se libera un hueco antes (mañanas).')).toBeInTheDocument();
+  });
+
+  it('quitar la marca manda wantsEarlier false sin franja y lo anuncia', async () => {
+    get.mockResolvedValue(view({ appointment: { ...APPOINTMENT, wantsEarlier: true, earlierWindow: 'AFTERNOON' } }));
+    setEarlier.mockResolvedValue(view());
+    render(<PublicConfirmationView confirmationToken="tok" />);
+    const box = await screen.findByRole('checkbox', { name: 'Si se libera un hueco antes, avísame' });
+    expect(box).toBeChecked();
+    expect(screen.getByLabelText('Franja')).toHaveValue('AFTERNOON');
+    fireEvent.click(box);
+    await waitFor(() => expect(setEarlier).toHaveBeenCalledWith('tok', { wantsEarlier: false }));
+    expect(await screen.findByText('Listo. No te avisaremos de huecos anteriores.')).toBeInTheDocument();
+  });
+
+  it('sin permiso de la API (earlierAllowed false) o con la cita cancelada no se ofrece; ya confirmada, sí', async () => {
+    get.mockResolvedValueOnce(view({ appointment: { ...APPOINTMENT, earlierAllowed: false } }));
+    const { unmount } = render(<PublicConfirmationView confirmationToken="tok" />);
+    await screen.findByText('Hola Ana,');
+    expect(screen.queryByTestId('public-earlier-request')).not.toBeInTheDocument();
+    unmount();
+
+    get.mockResolvedValueOnce(view({ status: 'RESPONDED', response: 'cancel', respondedAt: '2026-10-01T00:00:00.000Z' }));
+    const second = render(<PublicConfirmationView confirmationToken="tok" />);
+    await screen.findByText('Ya respondiste');
+    expect(screen.queryByTestId('public-earlier-request')).not.toBeInTheDocument();
+    second.unmount();
+
+    get.mockResolvedValueOnce(view({ status: 'RESPONDED', response: 'confirm', respondedAt: '2026-10-01T00:00:00.000Z' }));
+    render(<PublicConfirmationView confirmationToken="tok" />);
+    await screen.findByText('Ya respondiste');
+    expect(screen.getByTestId('public-earlier-request')).toBeInTheDocument();
+  });
+
+  it('un 400 (la cita ya no se puede adelantar) muestra el motivo de la API y relee', async () => {
+    get.mockResolvedValue(view());
+    setEarlier.mockRejectedValue(new ApiError(400, 'La cita es hoy: ya no hay huecos anteriores.'));
+    render(<PublicConfirmationView confirmationToken="tok" />);
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Si se libera un hueco antes, avísame' }));
+    expect(await screen.findByText('La cita es hoy: ya no hay huecos anteriores.')).toBeInTheDocument();
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+  });
+
+  it('un fallo de red lo dice y deja volver a intentar', async () => {
+    get.mockResolvedValue(view());
+    setEarlier.mockRejectedValueOnce(new Error('red')).mockResolvedValueOnce(
+      view({ appointment: { ...APPOINTMENT, wantsEarlier: true, earlierWindow: 'ANY' } }),
+    );
+    render(<PublicConfirmationView confirmationToken="tok" />);
+    const box = await screen.findByRole('checkbox', { name: 'Si se libera un hueco antes, avísame' });
+    fireEvent.click(box);
+    expect(
+      await screen.findByText('No pudimos guardar tu preferencia. Revisa tu conexión e intenta de nuevo.'),
+    ).toBeInTheDocument();
+    fireEvent.click(box);
+    expect(await screen.findByText('Listo. Te avisaremos si se libera un hueco antes.')).toBeInTheDocument();
   });
 });
