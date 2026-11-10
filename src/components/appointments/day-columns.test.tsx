@@ -811,3 +811,21 @@ describe('DayColumns por sillón: arrastre (DX-479)', () => {
     expect(onSelectAppointment).toHaveBeenCalledWith(done);
   });
 });
+
+describe('DX-437: el chip «Adelantar si hay hueco» dice si lo pidió el paciente y su franja', () => {
+  it('con earlierRequestedAt y franja: «Adelantar si hay hueco · Pedido por el paciente · Mañanas»; sin ellos, solo la marca', () => {
+    const asked = appointment({
+      id: 'apt-ask',
+      wantsEarlier: true,
+      earlierWindow: 'MORNING',
+      earlierRequestedAt: '2026-11-01T12:00:00.000Z',
+    });
+    const staffMarked = appointment({ id: 'apt-staff', wantsEarlier: true, start: new Date(`${DATE}T11:00:00`).toISOString(), end: new Date(`${DATE}T11:30:00`).toISOString() });
+    renderColumns({ appointments: [asked, staffMarked] });
+    const chips = screen.getAllByTestId('wants-earlier-chip').map((c) => c.textContent);
+    expect(chips).toEqual(['Adelantar si hay hueco · Pedido por el paciente · Mañanas', 'Adelantar si hay hueco']);
+    expect(
+      screen.getByRole('button', { name: /Adelantar si hay hueco · Pedido por el paciente · Mañanas/ }),
+    ).toBeInTheDocument();
+  });
+});

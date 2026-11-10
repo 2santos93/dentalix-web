@@ -1,9 +1,9 @@
 import { test, expect, type Page } from './support/test';
 import { fillDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
-import { accessTokenOf, registerAndLogin } from './support/auth';
+import { accessTokenOf, loginAs, registerAndLogin } from './support/auth';
 import { disableBusinessHours } from './support/business-hours';
-import { API_URL } from './support/urls';
+import { API_URL, tenantOrigin } from './support/urls';
 import { atSede, sedeDayFromToday } from './support/clock';
 import { apiPost, createLocationViaApi, registerClinicViaApi } from './support/api';
 import { regionalFormat } from '../src/lib/format/regional-format';
@@ -156,6 +156,104 @@ test('recepción genera el enlace -> el paciente confirma desde el móvil -> la 
 });
 
 // DX-354: la página pública pinta con la sede de la cita, no con la zona del navegador del paciente.
+test('DX-437: el paciente pide «Avisarme antes · Mañanas» desde el enlace; la agenda lo marca «Pedido por el paciente» y solo es candidato para huecos de mañana', async ({
+  browser,
+  request,
+  page,
+}) => {
+  const sub = `test-confirma-ad-${suffix}`.slice(0, 40);
+  const adminEmail = `confirma.ad.${suffix}@example.com`;
+  const session = await registerClinicViaApi(request, {
+    subdomain: sub,
+    clinicName: `Clinica Adelanta ${suffix}`,
+    fullName: 'Dra. Adelanta',
+    email: adminEmail,
+    password,
+  });
+  const locations = (await (await request.get(`${API_URL}/locations`, { headers: session.headers })).json()) as {
+    id: string;
+  }[];
+  const locationId = locations[0].id;
+  const staff = (await (await request.get(`${API_URL}/staff`, { headers: session.headers })).json()) as {
+    userId: string;
+  }[];
+  const providerId = staff[0].userId;
+  await request.put(`${API_URL}/locations/schedule`, { headers: session.headers, data: { ranges: [] } });
+  const patient = await apiPost<{ id: string }>(request, session, '/patients', {
+    firstName: 'Rosa',
+    lastName: `Adelanta${suffix}`.slice(0, 40),
+    docType: 'NATIONAL_ID',
+    docNumber: `ADE${suffix}`.slice(0, 20),
+    sex: 'F',
+    phone: '+58 414 555 0303',
+  });
+  // La cita, dentro de tres días a las 10:00 de la sede; los huecos a probar, el día anterior.
+  const apptDay = sedeDayFromToday(3);
+  const slotDay = sedeDayFromToday(2);
+  const appt = await apiPost<{ id: string }>(request, session, '/appointments', {
+    patientId: patient.id,
+    providerId,
+    start: atSede(apptDay, '10:00').toISOString(),
+    end: atSede(apptDay, '10:30').toISOString(),
+    reason: `Control ${suffix}`,
+  });
+  const link = await apiPost<{ url: string }>(request, session, `/appointments/${appt.id}/confirmation-link`, {});
+
+  // El paciente, en el móvil: marca y elige «Mañanas». La casilla y el selector miden 44 px.
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const patientPage = await context.newPage();
+  await patientPage.goto(link.url);
+  const earlier = patientPage.getByTestId('public-earlier-request');
+  const box = earlier.getByRole('checkbox', { name: 'Si se libera un hueco antes, avísame' });
+  await expect(box).toBeVisible({ timeout: 15_000 });
+  // Casilla controlada: se marca cuando la API confirma (check() exige el cambio inmediato).
+  await box.click();
+  await expect(box).toBeChecked();
+  await expect(earlier.getByRole('status')).toHaveText('Listo. Te avisaremos si se libera un hueco antes.');
+  const select = earlier.getByLabel('Franja');
+  const selectBox = (await select.boundingBox())!;
+  expect(selectBox.height).toBeGreaterThanOrEqual(44);
+  await select.selectOption('MORNING');
+  await expect(earlier.getByRole('status')).toHaveText('Listo. Te avisaremos si se libera un hueco antes (mañanas).');
+  await context.close();
+
+  // La cita queda marcada por el paciente, con su franja.
+  const stored = (await (
+    await request.get(`${API_URL}/appointments/${appt.id}`, { headers: session.headers })
+  ).json()) as { wantsEarlier: boolean; earlierWindow: string; earlierRequestedAt: string | null };
+  expect(stored).toMatchObject({ wantsEarlier: true, earlierWindow: 'MORNING' });
+  expect(stored.earlierRequestedAt).not.toBeNull();
+
+  // Candidatos de «Ocupar este hueco»: un hueco de mañana la lista; uno de tarde, no.
+  const candidates = async (time: string) => {
+    const start = atSede(slotDay, time).toISOString();
+    const end = atSede(slotDay, time.replace(/^(\d\d):(\d\d)$/, (_, h, m) => `${h}:${Number(m) + 30}`)).toISOString();
+    const res = await request.get(
+      `${API_URL}/appointments/openings/${locationId}/candidates?start=${start}&end=${end}&providerId=${providerId}`,
+      { headers: session.headers },
+    );
+    expect(res.ok(), await res.text()).toBeTruthy();
+    return (await res.json()) as { items: { appointmentId: string | null; preferredWindow: string | null }[] };
+  };
+  const morning = await candidates('09:00');
+  expect(morning.items.map((i) => i.appointmentId)).toContain(appt.id);
+  expect(morning.items.find((i) => i.appointmentId === appt.id)?.preferredWindow).toBe('Mañanas');
+  const afternoon = await candidates('15:00');
+  expect(afternoon.items.map((i) => i.appointmentId)).not.toContain(appt.id);
+
+  // Recepción ve el chip en la agenda del día de la cita.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await loginAs(page, tenantOrigin(sub), adminEmail, password);
+  await page.goto(`${tenantOrigin(sub)}/agenda`);
+  await page.getByRole('button', { name: 'Día', exact: true }).click();
+  await page.getByRole('button', { name: 'Columnas', exact: true }).click();
+  await fillDate(page, 'Fecha', apptDay);
+  await expect(page.getByTestId('wants-earlier-chip')).toHaveText(
+    'Adelantar si hay hueco · Pedido por el paciente · Mañanas',
+    { timeout: 15_000 },
+  );
+});
+
 test('con el navegador del paciente en otra zona, el día y la hora son los de la sede (Tokio, 24 h)', async ({
   browser,
   request,

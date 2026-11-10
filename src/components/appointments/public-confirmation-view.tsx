@@ -1,7 +1,8 @@
 'use client';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useEffect, useId, useRef, useState } from 'react';
-import { 
+import {
+  BellRing,
   CalendarCheck,
   CalendarX,
   Clock,
@@ -9,18 +10,21 @@ import {
   LinkIcon,
   MapPin,
   Phone,
-  UserRound
+  UserRound,
 } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   getPublicConfirmation,
   respondPublicConfirmation,
+  setPublicWantsEarlier,
   type ConfirmationAction,
   type ConfirmationAppointment,
+  type EarlierWindow,
   type PublicCancellationPolicy,
   type PublicConfirmation,
 } from '@/lib/appointments/confirmations-api';
+import { NativeSelect } from '@/components/ui/native-select';
 import { documentFormat, documentTexts, type DocumentFormat } from '@/lib/format/document-format';
 import { PublicNotice as Notice, publicBrandStyle } from '@/components/shared/public-page';
 import { Button } from '@/components/ui/button';
@@ -76,6 +80,22 @@ const copy = {
     'Cancelar con tan poco aviso tiene un cargo según la política de la clínica y aquí no podemos mostrártelo. Llama a la clínica para cancelar o para que te llamemos a ti.',
   acknowledgeRequired: (hours: number) =>
     `Para cancelar con menos de ${hours} h de aviso, marca que aceptas la política de cancelación.`,
+  // DX-437: «Avisarme si se libera un hueco antes».
+  earlierTitle: '¿Quieres venir antes?',
+  earlierLabel: 'Si se libera un hueco antes, avísame',
+  earlierHint: 'Tu cita de ahora se mantiene. Te avisaremos solo si queda un hueco que te sirva.',
+  earlierWindowLabel: 'Franja',
+  earlierWindows: {
+    ANY: 'Cualquier hora',
+    MORNING: 'Mañanas',
+    AFTERNOON: 'Tardes',
+  } satisfies Record<EarlierWindow, string>,
+  earlierSaved: (window: EarlierWindow) =>
+    window === 'ANY'
+      ? 'Listo. Te avisaremos si se libera un hueco antes.'
+      : `Listo. Te avisaremos si se libera un hueco antes (${copy.earlierWindows[window].toLowerCase()}).`,
+  earlierCleared: 'Listo. No te avisaremos de huecos anteriores.',
+  earlierError: 'No pudimos guardar tu preferencia. Revisa tu conexión e intenta de nuevo.',
 };
 
 type LoadState =
@@ -225,6 +245,79 @@ function CancellationPolicyNotice({
   );
 }
 
+/** Franjas en el orden del selector (DX-437). */
+const EARLIER_WINDOWS: readonly EarlierWindow[] = ['ANY', 'MORNING', 'AFTERNOON'];
+
+/**
+ * DX-437: «Si se libera un hueco antes, avísame», con la franja. Cada cambio
+ * se guarda al momento y se anuncia (región viva); la cita de ahora no cambia.
+ * Solo si la API dice que se puede (`earlierAllowed`): cita agendada o
+ * confirmada, futura y de un día posterior a hoy en la sede.
+ */
+function EarlierRequestSection({
+  appointment,
+  pending,
+  notice,
+  error,
+  onChange,
+}: {
+  appointment: ConfirmationAppointment;
+  pending: boolean;
+  notice: string | null;
+  error: string | null;
+  onChange: (wantsEarlier: boolean, window: EarlierWindow) => void;
+}) {
+  const checkboxId = useId();
+  const selectId = useId();
+  const window: EarlierWindow = appointment.earlierWindow ?? 'ANY';
+  return (
+    <section
+      aria-labelledby="earlier-request-title"
+      data-testid="public-earlier-request"
+      className="flex flex-col gap-3 rounded-xl border border-border bg-surface px-4 py-4"
+    >
+      <h2 id="earlier-request-title" className="t-title flex items-center gap-2 text-ink">
+        <BellRing aria-hidden className="size-4 shrink-0 text-muted" />
+        {copy.earlierTitle}
+      </h2>
+      {/* 44 px: la casilla y el selector se tocan con el dedo. */}
+      <Checkbox
+        id={checkboxId}
+        checked={appointment.wantsEarlier}
+        disabled={pending}
+        onChange={(e) => onChange(e.target.checked, window)}
+        label={copy.earlierLabel}
+        description={copy.earlierHint}
+        className="min-h-11"
+      />
+      {appointment.wantsEarlier ? (
+        <div className="flex flex-col gap-1">
+          <label htmlFor={selectId} className="t-caption text-muted">
+            {copy.earlierWindowLabel}
+          </label>
+          <NativeSelect
+            id={selectId}
+            value={window}
+            disabled={pending}
+            onChange={(e) => onChange(true, e.target.value as EarlierWindow)}
+            selectClassName="h-11"
+          >
+            {EARLIER_WINDOWS.map((w) => (
+              <option key={w} value={w}>
+                {copy.earlierWindows[w]}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+      ) : null}
+      <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
+        {notice}
+      </p>
+      {error ? <InlineError>{error}</InlineError> : null}
+    </section>
+  );
+}
+
 /**
  * Página pública `/confirmar/[token]` (DX-005): el paciente ve su cita y, con
  * un SEGUNDO clic, confirma, cancela o pide que lo llamen. Abrir el enlace
@@ -241,6 +334,10 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
   const [ackError, setAckError] = useState(false);
   const ackRef = useRef<HTMLInputElement>(null);
   const ackId = useId();
+  // DX-437: «Avisarme si se libera un hueco antes».
+  const [earlierPending, setEarlierPending] = useState(false);
+  const [earlierNotice, setEarlierNotice] = useState<string | null>(null);
+  const [earlierError, setEarlierError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -297,7 +394,51 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
     }
   }
 
+  async function handleEarlierChange(wantsEarlier: boolean, window: EarlierWindow) {
+    if (state.kind !== 'ready') return;
+    setEarlierPending(true);
+    setEarlierError(null);
+    // Se vacía antes de anunciar: el mismo texto dos veces no se volvería a leer.
+    setEarlierNotice(null);
+    try {
+      const data = await setPublicWantsEarlier(confirmationToken, {
+        wantsEarlier,
+        ...(wantsEarlier ? { preferredWindow: window } : {}),
+      });
+      setState({ kind: 'ready', data });
+      setEarlierNotice(wantsEarlier ? copy.earlierSaved(window) : copy.earlierCleared);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 410) {
+        setState({ kind: 'ready', data: { ...state.data, status: 'EXPIRED', appointment: null } });
+      } else if (err instanceof ApiError && err.status === 404) {
+        setState({ kind: 'invalid' });
+      } else if (err instanceof ApiError && err.status === 400) {
+        // Ya no se puede (la cita cambió o es hoy): el motivo de la API y se relee.
+        setEarlierError(apiErrorMessage(err, copy.earlierError));
+        setReloadKey((k) => k + 1);
+      } else {
+        setEarlierError(copy.earlierError);
+      }
+    } finally {
+      setEarlierPending(false);
+    }
+  }
+
   const clinic = state.kind === 'ready' ? state.data.clinic : null;
+  /** DX-437: con la cita a la vista, no cancelada, y si la API lo permite. */
+  const earlierSection =
+    state.kind === 'ready' &&
+    state.data.appointment &&
+    state.data.appointment.earlierAllowed &&
+    state.data.response !== 'cancel' ? (
+      <EarlierRequestSection
+        appointment={state.data.appointment}
+        pending={earlierPending}
+        notice={earlierNotice}
+        error={earlierError}
+        onChange={(wantsEarlier, window) => void handleEarlierChange(wantsEarlier, window)}
+      />
+    ) : null;
 
   return (
     <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-canvas">
@@ -350,6 +491,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                     format={appointmentFormat(state.data.appointment)}
                   />
                 )}
+                {earlierSection}
               </section>
             )}
 
@@ -365,6 +507,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                   appointment={state.data.appointment}
                   format={appointmentFormat(state.data.appointment)}
                 />
+                {earlierSection}
                 {state.data.cancellationPolicy ? (
                   <CancellationPolicyNotice
                     policy={state.data.cancellationPolicy}

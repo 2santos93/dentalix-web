@@ -76,6 +76,9 @@ export interface Appointment {
    * `active: false` si se desactivó después. Opcionales aquí solo para no
    * obligar a los dobles de los tests a llevarlos.
    */
+  /** DX-437: franja pedida y cuándo lo pidió el paciente desde el enlace (null = lo marcó el personal). */
+  earlierWindow?: 'MORNING' | 'AFTERNOON' | 'ANY' | null;
+  earlierRequestedAt?: string | null;
   chairId?: string | null;
   chair?: ChairSummary | null;
   /**

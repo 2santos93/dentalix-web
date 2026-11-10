@@ -82,7 +82,11 @@ import {
 } from '@/components/appointments/waitlist-panel';
 import { useWaitlist } from '@/components/appointments/use-waitlist';
 import { FillOpeningPanel } from '@/components/appointments/fill-opening-panel';
-import { WANTS_EARLIER_LABEL } from '@/components/appointments/wants-earlier-chip';
+import {
+  EARLIER_WINDOW_LABELS,
+  REQUESTED_BY_PATIENT_LABEL,
+  WANTS_EARLIER_LABEL,
+} from '@/components/appointments/wants-earlier-chip';
 import { canChangeWantsEarlier } from '@/lib/appointments/wants-earlier';
 import {
   canOfferOpenings,
@@ -1937,7 +1941,22 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                       void handleWantsEarlierChange(liveDetailAppointment.id, e.target.checked)
                     }
                     label={WANTS_EARLIER_LABEL}
-                    description={copy.wantsEarlierHint}
+                    description={
+                      // DX-437: lo pidió el paciente desde el enlace, con su franja.
+                      liveDetailAppointment.earlierRequestedAt
+                        ? [
+                            copy.wantsEarlierHint,
+                            [
+                              REQUESTED_BY_PATIENT_LABEL,
+                              liveDetailAppointment.earlierWindow
+                                ? EARLIER_WINDOW_LABELS[liveDetailAppointment.earlierWindow]
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ') + '.',
+                          ].join(' ')
+                        : copy.wantsEarlierHint
+                    }
                   />
                 ) : null}
                 {liveDetailAppointment.status === 'CANCELLED' &&
