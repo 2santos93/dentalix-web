@@ -259,6 +259,62 @@ test('DX-479: arrastrar entre sillones mantiene el profesional salvo «Asignar»
   await expect(chairColumn(page, 'Sillón 2').getByTestId('day-column-appointment')).toHaveCount(1);
 });
 
+/**
+ * DX-480: clic en un hueco libre de la columna de un sillón (no el botón de
+ * columna vacía): el formulario trae ese sillón y su profesional por defecto,
+ * y los dos se pueden cambiar sin que el sillón pise al profesional elegido.
+ */
+async function expectSlotPrefill(page: Page, chairName: string, providerName: string) {
+  // Arriba del todo de la columna no hay citas (la de Bruno es a las 11:00).
+  await chairColumn(page, chairName).click({ position: { x: 20, y: 8 } });
+  const form = page.getByRole('form', { name: 'Agendar cita' });
+  const chair = form.getByLabel('Sillón (opcional)');
+  const provider = form.getByLabel('Profesional', { exact: true });
+  await expect(chair.locator('option:checked')).toHaveText(chairName);
+  await expect(provider.locator('option:checked')).toHaveText(providerName, { timeout: 10_000 });
+  return { form, chair, provider };
+}
+
+test('DX-480: el clic en un hueco de «Sillón 2» precarga el sillón y su profesional por defecto, editables', async ({
+  page,
+  request,
+}) => {
+  const chairs = await request.get(`${API_URL}/chairs?locationId=${locationId}`, { headers: session.headers });
+  const two = ((await chairs.json()) as { id: string; name: string }[]).find((c) => c.name === 'Sillón 2')!;
+  const staff = await request.get(`${API_URL}/staff`, { headers: session.headers });
+  const adminId = ((await staff.json()) as { userId: string; fullName: string }[]).find(
+    (m) => m.fullName === admin.fullName,
+  )!.userId;
+  const patched = await request.patch(`${API_URL}/chairs/${two.id}`, {
+    headers: session.headers,
+    data: { defaultProviderId: adminId },
+  });
+  expect(patched.ok()).toBeTruthy();
+
+  await loginInSede(page);
+  await openChairDay(page);
+  const { form, chair, provider } = await expectSlotPrefill(page, 'Sillón 2', admin.fullName);
+
+  // Los dos se cambian a mano; cambiar el sillón no cambia al profesional.
+  await provider.selectOption({ label: dentist.fullName });
+  await chair.selectOption({ label: 'Sillón 1' });
+  await expect(chair.locator('option:checked')).toHaveText('Sillón 1');
+  await expect(provider.locator('option:checked')).toHaveText(dentist.fullName);
+  await chair.selectOption({ label: 'Sillón 2' });
+  await expect(provider.locator('option:checked')).toHaveText(dentist.fullName);
+  await page.keyboard.press('Escape');
+  await expect(form).toBeHidden();
+
+  // 390 px: una columna con selector; el hueco de «Sillón 2» precarga lo mismo.
+  // En móvil la agenda abre en «Lista»: se vuelve a la vista por sillón.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openChairDay(page);
+  await page.getByRole('group', { name: 'Sillón visible' }).getByRole('button', { name: 'Sillón 2' }).click();
+  await expect(chairColumn(page, 'Sillón 2')).toBeVisible();
+  await expectSlotPrefill(page, 'Sillón 2', admin.fullName);
+  await expectNoHorizontalScroll(page);
+});
+
 test('móvil (390 px): Ajustes → Sillones y la vista por sillón (una columna con selector) sin scroll horizontal', async ({
   page,
 }) => {
