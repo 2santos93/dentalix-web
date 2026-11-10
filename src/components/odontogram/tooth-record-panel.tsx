@@ -1,8 +1,8 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catalog-api';
+import type { DentalCatalogItem } from '@/lib/odontogram/catalog-api';
 import {
   addToothRecord,
   type AddToothRecordInput,
@@ -11,7 +11,6 @@ import {
   type ToothSurface,
 } from '@/lib/odontogram/odontogram-api';
 import { ORIGIN_LABELS, ORIGIN_ORDER } from '@/lib/odontogram/origin';
-import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { CatalogPicker } from '@/components/odontogram/catalog-picker';
 import { Button } from '@/components/ui/button';
@@ -23,9 +22,7 @@ import { SURFACE_LABELS, SURFACE_ORDER } from '@/lib/odontogram/surface-labels';
 
 // Copy as constants (i18n-ready, es-first) — matches medical-history-panel.tsx convention.
 const copy = {
-  loadingCatalog: 'Cargando catálogo…',
   emptyCatalog: 'No hay procedimientos ni diagnósticos en el catálogo.',
-  genericCatalogError: 'No pudimos cargar el catálogo.',
   formTitle: (fdi: string) => `Registrar en el diente ${fdi}`,
   catalogItemLegend: 'Diagnóstico o procedimiento',
   surfacesLegend: 'Caras',
@@ -53,6 +50,13 @@ interface ToothRecordPanelProps {
   token: string;
   patientId: string;
   toothNumber: string;
+  /**
+   * Catálogo activo de la clínica (DX-117, FE-022). Lo carga `OdontogramTab`
+   * una sola vez —ya lo necesita para pintar la carta— y lo pasa aquí: el panel
+   * no lo vuelve a pedir. Su carga y su error (con Reintentar) los resuelve la
+   * pestaña; aquí solo queda el estado vacío.
+   */
+  catalog: DentalCatalogItem[];
   /** Pre-checks this surface when the panel opens (e.g. the user clicked a surface, not the tooth number). */
   initialSurface?: ToothSurface;
   onRecordAdded: (record: ToothRecord) => void;
@@ -72,14 +76,10 @@ export function ToothRecordPanel({
   token,
   patientId,
   toothNumber,
+  catalog,
   initialSurface,
   onRecordAdded,
 }: ToothRecordPanelProps) {
-  const [catalog, setCatalog] = useState<DentalCatalogItem[]>([]);
-  const [catalogLoading, setCatalogLoading] = useState(true);
-  const [catalogError, setCatalogError] = useState<string | null>(null);
-  const [catalogReloadKey, setCatalogReloadKey] = useState(0);
-
   const [catalogItemId, setCatalogItemId] = useState<string | null>(null);
   const [wholeTooth, setWholeTooth] = useState(false);
   const [surfaces, setSurfaces] = useState<Record<ToothSurface, boolean>>(() =>
@@ -130,30 +130,6 @@ export function ToothRecordPanel({
     setWholeTooth(false);
     setSavedSummary(null);
   }
-
-  // Catalog is tenant-wide, not per-tooth — fetched once (and on explicit
-  // retry), not re-fetched every time the selected tooth changes.
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setCatalogLoading(true);
-      try {
-        const data = await listCatalogItems(token, { activeOnly: true });
-        if (cancelled) return;
-        setCatalog(data);
-        setCatalogError(null);
-      } catch (err) {
-        if (cancelled) return;
-        setCatalogError(apiErrorMessage(err, copy.genericCatalogError));
-      } finally {
-        if (!cancelled) setCatalogLoading(false);
-      }
-    }
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [token, catalogReloadKey]);
 
   function resetForm() {
     setCatalogItemId(null);
@@ -227,18 +203,6 @@ export function ToothRecordPanel({
     } finally {
       setSubmitting(false);
     }
-  }
-
-  if (catalogLoading) {
-    return (
-      <p role="status" className="text-sm text-muted">
-        {copy.loadingCatalog}
-      </p>
-    );
-  }
-
-  if (catalogError) {
-    return <SectionError description={catalogError} onRetry={() => setCatalogReloadKey((k) => k + 1)} />;
   }
 
   if (catalog.length === 0) {

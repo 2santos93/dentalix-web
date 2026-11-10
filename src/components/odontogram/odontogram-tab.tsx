@@ -157,6 +157,11 @@ export function OdontogramTab({
   const [toothGroups, setToothGroups] = useState<ToothGroup[]>([]);
   const [dentition, setDentition] = useState<DentitionView | null>(null);
   const [catalogItems, setCatalogItems] = useState<DentalCatalogItem[]>([]);
+  // DX-117 (FE-022): el catálogo es de la clínica, no de la carta ni de la
+  // fecha. Se pide una vez por token y se reutiliza en cada recarga de la carta
+  // (alta de un registro, cambio de dentición, «Ver la carta al»); el panel del
+  // diente lo recibe por prop en vez de pedirlo otra vez.
+  const catalogCache = useRef<{ token: string; items: DentalCatalogItem[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
@@ -227,8 +232,11 @@ export function OdontogramTab({
         const [groups, dentitionView, catalog] = await Promise.all([
           getOdontogram(token, patientId, asOf ?? undefined),
           getDentition(token, patientId, asOf ?? undefined),
-          listCatalogItems(token, { activeOnly: true }),
+          catalogCache.current?.token === token
+            ? catalogCache.current.items
+            : listCatalogItems(token, { activeOnly: true }),
         ]);
+        catalogCache.current = { token, items: catalog };
         if (cancelled) return;
         setToothGroups(groups);
         setDentition(dentitionView);
@@ -542,6 +550,7 @@ export function OdontogramTab({
                     token={token}
                     patientId={patientId}
                     toothNumber={selectedTooth}
+                    catalog={catalogItems}
                     initialSurface={initialSurface ?? undefined}
                     onRecordAdded={handleChartChanged}
                   />
