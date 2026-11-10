@@ -117,6 +117,17 @@ jobs:
         run: npm run check:country-assumptions
       - run: npx jest --ci
       - run: npm run build
+      # DX-117 (FE-021): JS de primera carga por ruta en KB gzip (método en el
+      # script), en el log, en el resumen del job y como artefacto.
+      - name: Informe de JS por ruta
+        run: node scripts/bundle-report.mjs
+      - name: Subir el informe de JS por ruta
+        if: always() && hashFiles('.next/bundle-report.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-report
+          path: .next/bundle-report.json
+          if-no-files-found: error
 
   # DX-083: la imagen de producción (Dockerfile, `output: 'standalone'`) se
   # construye UNA vez en cada PR, sin publicarla, y la prueba de humo la
