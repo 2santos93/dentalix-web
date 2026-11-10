@@ -5,6 +5,9 @@ describe('hero-images', () => {
     expect(HERO_IMAGES).toHaveLength(5);
     for (const img of HERO_IMAGES) {
       expect(img.src).toMatch(/^\/auth\/hero-\d+\.jpg$/);
+      // DX-117 (FE-023): las versiones ligeras comparten nombre con el JPG.
+      expect(img.avif).toBe(img.src.replace(/\.jpg$/, '.avif'));
+      expect(img.webp).toBe(img.src.replace(/\.jpg$/, '.webp'));
       expect(img.alt.length).toBeGreaterThan(0);
     }
   });

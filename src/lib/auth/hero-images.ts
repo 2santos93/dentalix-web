@@ -5,18 +5,31 @@
  * (login, registro, verificación, contraseña, invitación), dinámicas porque el
  * layout raíz y `authContext()` usan `headers()`: rota en cada carga y viaja
  * como prop a `AuthLayout`, sin hydration mismatch.
+ *
+ * DX-117 (FE-023): cada foto existe también en AVIF y WebP (generadas una vez
+ * con sharp desde el JPG, calidad 60 y 75). `AuthLayout` las sirve con
+ * `<picture>` solo desde `lg`; el JPG queda como respaldo del navegador que no
+ * entienda ninguna de las dos.
  */
 export interface HeroImage {
+  /** JPG original: respaldo del `<img>`. */
   src: string;
+  avif: string;
+  webp: string;
   alt: string;
 }
 
+function hero(n: number, alt: string): HeroImage {
+  const base = `/auth/hero-${n}`;
+  return { src: `${base}.jpg`, avif: `${base}.avif`, webp: `${base}.webp`, alt };
+}
+
 export const HERO_IMAGES: HeroImage[] = [
-  { src: '/auth/hero-1.jpg', alt: 'Odontólogo revisando radiografías dentales' },
-  { src: '/auth/hero-2.jpg', alt: 'Dentista mostrando una radiografía a su paciente' },
-  { src: '/auth/hero-3.jpg', alt: 'Paciente con un alineador dental transparente' },
-  { src: '/auth/hero-4.jpg', alt: 'Consultorio odontológico moderno' },
-  { src: '/auth/hero-5.jpg', alt: 'Clínica dental con sillones y equipo profesional' },
+  hero(1, 'Odontólogo revisando radiografías dentales'),
+  hero(2, 'Dentista mostrando una radiografía a su paciente'),
+  hero(3, 'Paciente con un alineador dental transparente'),
+  hero(4, 'Consultorio odontológico moderno'),
+  hero(5, 'Clínica dental con sillones y equipo profesional'),
 ];
 
 /** Normaliza cualquier índice entero al rango válido del banco. */
