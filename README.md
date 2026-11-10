@@ -98,10 +98,45 @@ difiere. En `push` y `pull_request` el `api_ref` es siempre `main`: solo
   esquema con los pasos de arriba (API de `main` en :3002, `npm run codegen`) y
   lo commitee. El fallo llega unos 20 minutos después de arrancar, tras el build.
 
+### La E2E en CI: shards y artefactos
+
+La E2E (`.github/workflows/e2e.yml`) reparte la suite en 3 shards (DX-457). Cada
+job `Playwright i/3 (web + API + Postgres 16)` levanta su propio Postgres, su API,
+su demo, su esquema y su web y corre `--shard=i/3`; el paso «Playwright» tiene
+35 min de tope y su duración (con aviso al 70 %) sale en el resumen del shard.
+El check `Playwright (web + API + Postgres 16)` es el job de fusión: comprueba que
+cada fichero de la suite corrió en un shard y solo en uno, que llegaron los
+informes de todos, los fusiona y pasa la guardia de saltos y de flaky. Es rojo si
+cualquier shard lo es.
+
+Artefactos de cada run:
+
+- `playwright-<run_id>-<intento>`: el informe HTML y `playwright-results.json`
+  fusionados (el HTML trae las trazas y capturas de los fallos).
+- `playwright-<run_id>-<intento>-shard-<i>`: `test-results/` y los logs de la API
+  y de la web (`.e2e/logs/`) de ese shard.
+- `e2e-shard-<i>`: los ficheros que corrió el shard (`proyecto fichero`).
+- `blob-<run_id>-<intento>-<i>`: el informe del shard para la fusión (3 días).
+- `e2e-flaky`: solo en `main`, los flaky de la run para la tendencia.
+
+Para reproducir un shard en local, con la misma lista que la CI:
+
+```bash
+scripts/e2e-ci.sh all --shard=2/3
+# qué ficheros le tocan, sin ejecutar nada
+E2E_WEB_SERVER=none npx playwright test --list --shard=2/3
+```
+
+Con `grep` o `repeat_each` (lanzamiento manual, DX-413) la run va en un solo shard
+(`Playwright 1/1`), sin reintentos y con los topes largos (50 min filtrada, 200
+repetida): repartidas, las repeticiones de un mismo test caerían en runners
+distintos. Para pasar a 4 shards basta con cambiar `matrix.shard`, `matrix.total`
+y el `SHARD_TOTAL` del job de fusión.
+
 ### Relanzar la E2E de un merge web bloqueado
 
 Si el paso «API (build y start:prod)» de la E2E de `main` falla, el job termina
-con el paso final «Bloqueado por la API (dentalix-api)» y el resumen del job dice
+con el paso final «Bloqueado por la API (dentalix-api)» (en cada shard) y el resumen del job dice
 `bloqueado por dentalix-api@<sha>`: la web no se probó (no hubo Playwright), pero
 el fallo es de la API, no de la web. Los push a `main` no cancelan la CI ni la
 E2E de otro (cada merge tiene la suya).
