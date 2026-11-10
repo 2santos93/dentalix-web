@@ -348,15 +348,19 @@ export function DayAgenda({
                 </time>
                 {!onStatusChange && <StatusBadge status={appointment.status} />}
               </div>
+              {/* Un nombre largo sin espacios se parte en vez de empujar la
+                  alerta médica fuera de la tarjeta a 390 px. */}
               <p className="mt-2 flex items-center gap-2 font-medium text-ink">
-                {patientLabel(appointment, patientNames)}
-                <MedicalAlertIndicator
-                  flags={appointment.medicalAlerts}
-                  patientName={patientLabel(appointment, patientNames)}
-                  size="default"
-                />
+                <span className="min-w-0 [overflow-wrap:anywhere]">{patientLabel(appointment, patientNames)}</span>
+                <span className="shrink-0">
+                  <MedicalAlertIndicator
+                    flags={appointment.medicalAlerts}
+                    patientName={patientLabel(appointment, patientNames)}
+                    size="default"
+                  />
+                </span>
               </p>
-              <p className="mt-0.5 text-muted">
+              <p className="mt-0.5 text-muted [overflow-wrap:anywhere]">
                 {[
                   providerName?.(appointment.providerId),
                   appointment.chair ? chairDisplayName(appointment.chair) : null,
