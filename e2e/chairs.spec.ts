@@ -326,4 +326,20 @@ test('móvil (390 px): Ajustes → Sillones y la vista por sillón (una columna 
   await openChairDay(page);
   await expect(page.getByRole('group', { name: 'Sillón visible' })).toBeVisible();
   await expectNoHorizontalScroll(page);
+
+  // «Lista» a 390 px: un nombre largo sin espacios (lleva el sufijo de la
+  // corrida) se parte dentro de la tarjeta; nada sobresale por su borde.
+  await page.getByRole('button', { name: 'Lista', exact: true }).click();
+  const list = page.getByRole('list', { name: 'Agenda del día' });
+  await expect(list.getByRole('listitem').first()).toBeVisible();
+  const overflowing = await list.evaluate((ul) =>
+    [...ul.querySelectorAll(':scope > li')].flatMap((li) => {
+      const edge = li.getBoundingClientRect().right;
+      return [...li.querySelectorAll('*')]
+        .filter((el) => el.getBoundingClientRect().right > edge + 0.5)
+        .map((el) => `${el.tagName}.${el.className}`.slice(0, 80));
+    }),
+  );
+  expect(overflowing).toEqual([]);
+  await expectNoHorizontalScroll(page);
 });
