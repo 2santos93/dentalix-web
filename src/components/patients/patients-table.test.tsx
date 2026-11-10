@@ -6,6 +6,7 @@ const patients: Patient[] = [
   {
     id: '1',
     tenantId: 't1',
+    patientCode: '1009',
     firstName: 'Ana',
     lastName: 'García',
     docType: 'NATIONAL_ID',
@@ -25,6 +26,7 @@ const patients: Patient[] = [
   {
     id: '2',
     tenantId: 't1',
+    patientCode: '1028',
     firstName: 'Luis',
     lastName: 'Pérez',
     docType: 'NATIONAL_ID',

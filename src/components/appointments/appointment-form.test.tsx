@@ -87,6 +87,7 @@ const mockedListTypes = listAppointmentTypes as jest.MockedFunction<typeof listA
 const endodoncia = {
   id: 'type-endo',
   tenantId: 't1',
+  patientCode: '1090',
   name: 'Endodoncia',
   durationMinutes: 90,
   color: '#7C3AED',
@@ -106,6 +107,7 @@ const patientsPage = {
     {
       id: 'pat-1',
       tenantId: 't1',
+      patientCode: '1109',
       firstName: 'María',
       lastName: 'López',
       docType: 'NATIONAL_ID' as const,
@@ -125,6 +127,7 @@ const patientsPage = {
     {
       id: 'pat-2',
       tenantId: 't1',
+      patientCode: '1128',
       firstName: 'Carlos',
       lastName: 'Pérez',
       docType: 'NATIONAL_ID' as const,
@@ -148,6 +151,7 @@ const patientsPage = {
 const newPatient = {
   id: 'pat-new',
   tenantId: 't1',
+  patientCode: '1151',
   firstName: 'Sofía',
   lastName: 'Ramírez',
   docType: 'NATIONAL_ID' as const,
@@ -166,6 +170,7 @@ const newPatient = {
 const createdAppointment = {
   id: 'apt-1',
   tenantId: 't1',
+  patientCode: '1169',
   patientId: 'pat-1',
   patientFirstName: null,
   patientLastName: null,
@@ -1007,6 +1012,7 @@ describe('AppointmentForm con el reloj de la sede (DX-378)', () => {
   describe('sillón', () => {
     const chairBase = {
       tenantId: 't1',
+      patientCode: '2010',
       locationId: 'loc-1',
       active: true,
       createdAt: '2026-01-01T00:00:00.000Z',

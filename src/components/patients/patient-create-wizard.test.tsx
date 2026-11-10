@@ -31,6 +31,7 @@ const mockedGetPolicies = getPrivacyPolicies as jest.MockedFunction<typeof getPr
 const CREATED: Patient = {
   id: 'p1',
   tenantId: 't1',
+  patientCode: '1034',
   firstName: 'Ana',
   lastName: 'García',
   docType: 'NATIONAL_ID',

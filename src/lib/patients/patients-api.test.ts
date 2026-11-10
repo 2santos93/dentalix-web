@@ -1,8 +1,37 @@
-import { listPatients, replacePatientKeepingDerived, updatePatient, type Patient } from './patients-api';
-import { apiFetch } from '../api/client';
+import {
+  canExportImaging,
+  fetchPatientImagingExport,
+  imagingExportFileName,
+  listPatients,
+  replacePatientKeepingDerived,
+  updatePatient,
+  type Patient,
+} from './patients-api';
+import { apiFetch, apiFetchText } from '../api/client';
 
-jest.mock('../api/client', () => ({ apiFetch: jest.fn(), apiFetchOrNull: jest.fn() }));
+jest.mock('../api/client', () => ({ apiFetch: jest.fn(), apiFetchOrNull: jest.fn(), apiFetchText: jest.fn() }));
 const mockedFetch = apiFetch as jest.MockedFunction<typeof apiFetch>;
+const mockedFetchText = apiFetchText as jest.MockedFunction<typeof apiFetchText>;
+
+describe('datos para el software de imagen (DX-484)', () => {
+  it('pide el .txt con el token por el cliente de texto', async () => {
+    mockedFetchText.mockResolvedValue('Código del paciente: 1042\r\n');
+    await expect(fetchPatientImagingExport('tok', 'p1')).resolves.toBe('Código del paciente: 1042\r\n');
+    expect(mockedFetchText).toHaveBeenCalledWith('/patients/p1/imaging-export.txt', { token: 'tok' });
+  });
+
+  it('el nombre del fichero lleva el código', () => {
+    expect(imagingExportFileName('1042')).toBe('paciente-1042.txt');
+  });
+
+  it('solo DENTIST, ASSISTANT y ADMIN', () => {
+    expect(canExportImaging('DENTIST')).toBe(true);
+    expect(canExportImaging('ASSISTANT')).toBe(true);
+    expect(canExportImaging('ADMIN')).toBe(true);
+    expect(canExportImaging('RECEPTION')).toBe(false);
+    expect(canExportImaging(null)).toBe(false);
+  });
+});
 
 describe('updatePatient', () => {
   it('hace PATCH al paciente con el cuerpo recibido', async () => {

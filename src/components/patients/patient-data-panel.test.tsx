@@ -8,6 +8,7 @@ function patient(overrides: Partial<Patient> = {}): Patient {
   return {
     id: 'p1',
     tenantId: 't1',
+    patientCode: '1011',
     firstName: 'Carlos',
     lastName: 'Mejía',
     docType: 'NATIONAL_ID',

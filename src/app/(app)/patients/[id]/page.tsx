@@ -20,6 +20,7 @@ import { PatientDataPanel } from '@/components/patients/patient-data-panel';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 import { PatientEditModal } from '@/components/patients/patient-edit-modal';
 import { PatientRecordHeader } from '@/components/patients/patient-record-header';
+import { ImagingExportDialog, imagingExportMenuAction } from '@/components/patients/imaging-export-dialog';
 import {
   PatientRetentionDialogs,
   PatientRetentionSection,
@@ -122,6 +123,8 @@ function PatientDetailView() {
   // Menú «⋯» de la cabecera: modales de retención (ADMIN) y «Enviar anamnesis».
   const [retentionDialog, setRetentionDialog] = useState<RetentionDialog | null>(null);
   const [sendingAnamnesis, setSendingAnamnesis] = useState(false);
+  // DX-484: «Datos para el software de imagen» (menú «⋯», roles clínicos).
+  const [imagingExportOpen, setImagingExportOpen] = useState(false);
   // Sube al generar un enlace: el bloque de anamnesis de la pestaña se relee.
   const [anamnesisVersion, setAnamnesisVersion] = useState(0);
   // «Registrar en Historia clínica» desde «Datos»: al abrir la pestaña, el foco
@@ -303,6 +306,9 @@ function PatientDetailView() {
       onSelect: () => setSendingAnamnesis(true),
     },
   ];
+  // DX-484: DENTIST, ASSISTANT y ADMIN (la API lo vuelve a exigir).
+  const imagingAction = imagingExportMenuAction(role, () => setImagingExportOpen(true));
+  if (imagingAction && patient) menuActions.push(imagingAction);
   if (isAdmin && patient) {
     menuActions.push({
       label: retentionActionLabels.retention,
@@ -448,6 +454,15 @@ function PatientDetailView() {
             patientId={patientId}
             onCreated={() => setAnamnesisVersion((v) => v + 1)}
           />
+          {patient && imagingAction ? (
+            <ImagingExportDialog
+              open={imagingExportOpen}
+              onOpenChange={setImagingExportOpen}
+              token={accessToken}
+              patientId={patientId}
+              patientCode={patient.patientCode}
+            />
+          ) : null}
           {isAdmin ? (
             <PatientRetentionDialogs
               patient={patient}

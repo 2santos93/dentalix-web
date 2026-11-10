@@ -14,6 +14,7 @@ const mockedUpdate = updatePatient as jest.MockedFunction<typeof updatePatient>;
 const patient = {
   id: 'p1',
   tenantId: 't1',
+  patientCode: '1017',
   firstName: 'Carlos',
   lastName: 'Mejía',
   docType: 'NATIONAL_ID',

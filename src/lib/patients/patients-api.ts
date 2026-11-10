@@ -1,7 +1,8 @@
-import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
+import { apiFetch, apiFetchOrNull, apiFetchText } from '@/lib/api/client';
 import type { components, paths } from '@/lib/api/schema';
 import type { ClinicalHistoryValue } from '@/lib/clinical/clinical-types';
 import type { OverdueBalance } from '@/lib/collections/collections-api';
+import type { ClinicRole } from '@/lib/me/me-api';
 
 /**
  * The generated `CreatePatientDto.medicalHistory` collapses its nested
@@ -55,6 +56,11 @@ export interface Patient {
   balance?: OverdueBalance;
   id: string;
   tenantId: string;
+  /**
+   * DX-484: código estable del paciente en la clínica (solo dígitos, p. ej.
+   * «1042»). Es el ID del paciente que se da de alta en el software de imagen.
+   */
+  patientCode: string;
   firstName: string;
   lastName: string;
   docType: DocType;
@@ -220,6 +226,29 @@ export async function updatePatient(
  */
 export async function archivePatient(token: string, id: string): Promise<void> {
   await apiFetchOrNull<null>(`/patients/${id}`, { method: 'DELETE', token });
+}
+
+/**
+ * `GET /patients/:id/imaging-export.txt` (DX-484): los datos del paciente para
+ * darlo de alta en el software de imagen (código, apellidos, nombre, también
+ * sin tildes, fecha de nacimiento y sexo), en texto plano UTF-8. Solo DENTIST,
+ * ASSISTANT y ADMIN (recepción recibe 403 con el mensaje en español). Cada
+ * llamada queda auditada como EXPORT en la API: pedirla UNA vez por apertura.
+ */
+export async function fetchPatientImagingExport(token: string, patientId: string): Promise<string> {
+  return apiFetchText(`/patients/${patientId}/imaging-export.txt`, { token });
+}
+
+const IMAGING_EXPORT_ROLES: readonly ClinicRole[] = ['DENTIST', 'ASSISTANT', 'ADMIN'];
+
+/** Los mismos roles que el `@Roles(...)` de la API para el .txt (no recepción). */
+export function canExportImaging(role: ClinicRole | null): boolean {
+  return role !== null && IMAGING_EXPORT_ROLES.includes(role);
+}
+
+/** Nombre del fichero del .txt, el mismo que propone la API. */
+export function imagingExportFileName(patientCode: string): string {
+  return `paciente-${patientCode}.txt`;
 }
 
 /** DX-461: enlaces públicos vivos del paciente, por tipo y en total. */
