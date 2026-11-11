@@ -4548,6 +4548,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/chair-occupancy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ocupación por sillón: minutos abiertos, reservados y atendidos por sede y sillón
+         * @description Ocupación = reservados ÷ abiertos, por sede y sillón (DX-211), en días civiles de la zona de cada sede (DX-097). Abiertos (de cada sillón): el horario semanal de la sede (DX-122) en el período, menos los cierres de toda la sede (bloqueos sin profesional que no admiten citas) y los festivos de la sede (DX-316; los recurrentes, el mismo día y mes de cada año). Una sede sin tramos en su horario («sin restricción» en la agenda) sale como «Sin horario»: sin abiertos ni porcentajes. Reservados: minutos de las citas no canceladas (las inasistencias incluidas), recortados al período y al horario abierto; en un sillón las citas que se pisan cuentan una vez. Atendidos: lo mismo con las citas atendidas (COMPLETED). Las inasistencias (NO_SHOW) cuentan como reservadas y no atendidas, y van aparte. Porcentajes de 0 a 1 con tope en 1. Las citas sin sillón van en «Sin sillón» (sumadas cita a cita, sin porcentaje) y no entran en el total de la sede, que suma sus sillones sobre abiertos × sillones. Un sillón desactivado solo sale si tuvo citas. Solo ADMIN; un miembro restringido (DX-089) solo ve sus sedes. Sin datos de pacientes.
+         */
+        get: operations["ChairOccupancyController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/chair-occupancy.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ocupación por sillón en CSV (mismos filtros, auditado)
+         * @description Ocupación = reservados ÷ abiertos, por sede y sillón (DX-211), en días civiles de la zona de cada sede (DX-097). Abiertos (de cada sillón): el horario semanal de la sede (DX-122) en el período, menos los cierres de toda la sede (bloqueos sin profesional que no admiten citas) y los festivos de la sede (DX-316; los recurrentes, el mismo día y mes de cada año). Una sede sin tramos en su horario («sin restricción» en la agenda) sale como «Sin horario»: sin abiertos ni porcentajes. Reservados: minutos de las citas no canceladas (las inasistencias incluidas), recortados al período y al horario abierto; en un sillón las citas que se pisan cuentan una vez. Atendidos: lo mismo con las citas atendidas (COMPLETED). Las inasistencias (NO_SHOW) cuentan como reservadas y no atendidas, y van aparte. Porcentajes de 0 a 1 con tope en 1. Las citas sin sillón van en «Sin sillón» (sumadas cita a cita, sin porcentaje) y no entran en el total de la sede, que suma sus sillones sobre abiertos × sillones. Un sillón desactivado solo sale si tuvo citas. Solo ADMIN; un miembro restringido (DX-089) solo ve sus sedes. Sin datos de pacientes. Una fila por sillón, la de «Sin sillón» y el total de cada sede, con la fórmula en la cabecera. UTF-8 con BOM; celdas protegidas contra fórmulas. Cada descarga queda en auditoría (EXPORT).
+         */
+        get: operations["ChairOccupancyController_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/closing-queue": {
         parameters: {
             query?: never;
@@ -17455,6 +17495,120 @@ export interface components {
             byProvider: components["schemas"]["ProviderRecoveredSlotsDto"][];
             /** @description Todas las semanas ISO que toca el período, en orden (con ceros) */
             byWeek: components["schemas"]["WeekRecoveredSlotsDto"][];
+        };
+        ChairOccupancyRowDto: {
+            /**
+             * @description Minutos abiertos: horario semanal de la sede en el período − cierres de toda la sede − festivos. En el total de la sede, abiertos por sillón × sillones. null = la sede no tiene horario («Sin horario») o es la fila «Sin sillón».
+             * @example 1320
+             */
+            openMinutes: number | null;
+            /**
+             * @description Minutos de citas no canceladas (inasistencias incluidas), recortados al período y, con horario, a sus tramos abiertos. En un sillón, las citas que se pisan cuentan una vez; en «Sin sillón», cada una suma.
+             * @example 990
+             */
+            reservedMinutes: number;
+            /**
+             * @description Lo mismo, solo de las citas atendidas (COMPLETED)
+             * @example 840
+             */
+            attendedMinutes: number;
+            /**
+             * @description Lo mismo, solo de las inasistencias (NO_SHOW): reservadas y no atendidas
+             * @example 60
+             */
+            noShowMinutes: number;
+            /** @description Citas no canceladas que tocan el período */
+            reservedAppointments: number;
+            /** @description De ellas, atendidas (COMPLETED) */
+            attendedAppointments: number;
+            /** @description De ellas, inasistencias (NO_SHOW) */
+            noShowAppointments: number;
+            /**
+             * @description Ocupación = reservados ÷ abiertos, de 0 a 1 (tope 1); null sin abiertos
+             * @example 0.75
+             */
+            reservedRate: number | null;
+            /**
+             * @description Atendidos ÷ abiertos, de 0 a 1 (tope 1); null sin abiertos
+             * @example 0.6364
+             */
+            attendedRate: number | null;
+            /** Format: uuid */
+            chairId: string;
+            /** @example Sillón 1 */
+            chairName: string;
+            /** @description false = sillón desactivado: solo sale si tuvo citas no canceladas en el período */
+            active: boolean;
+        };
+        ChairOccupancyMetricsDto: {
+            /**
+             * @description Minutos abiertos: horario semanal de la sede en el período − cierres de toda la sede − festivos. En el total de la sede, abiertos por sillón × sillones. null = la sede no tiene horario («Sin horario») o es la fila «Sin sillón».
+             * @example 1320
+             */
+            openMinutes: number | null;
+            /**
+             * @description Minutos de citas no canceladas (inasistencias incluidas), recortados al período y, con horario, a sus tramos abiertos. En un sillón, las citas que se pisan cuentan una vez; en «Sin sillón», cada una suma.
+             * @example 990
+             */
+            reservedMinutes: number;
+            /**
+             * @description Lo mismo, solo de las citas atendidas (COMPLETED)
+             * @example 840
+             */
+            attendedMinutes: number;
+            /**
+             * @description Lo mismo, solo de las inasistencias (NO_SHOW): reservadas y no atendidas
+             * @example 60
+             */
+            noShowMinutes: number;
+            /** @description Citas no canceladas que tocan el período */
+            reservedAppointments: number;
+            /** @description De ellas, atendidas (COMPLETED) */
+            attendedAppointments: number;
+            /** @description De ellas, inasistencias (NO_SHOW) */
+            noShowAppointments: number;
+            /**
+             * @description Ocupación = reservados ÷ abiertos, de 0 a 1 (tope 1); null sin abiertos
+             * @example 0.75
+             */
+            reservedRate: number | null;
+            /**
+             * @description Atendidos ÷ abiertos, de 0 a 1 (tope 1); null sin abiertos
+             * @example 0.6364
+             */
+            attendedRate: number | null;
+        };
+        LocationChairOccupancyDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sede Chacao */
+            locationName: string;
+            /** @example America/Caracas */
+            timeZone: string;
+            /** @description La sede tiene horario semanal con tramos. Sin él (en la agenda, «sin restricción») no hay abiertos ni porcentajes. */
+            hasSchedule: boolean;
+            /** @description Minutos abiertos de UN sillón (los de la sede); null sin horario */
+            openMinutesPerChair: number | null;
+            /** @description Días del período cerrados por festivo */
+            holidayDays: number;
+            /** @description Sillones activos y los desactivados con citas, por orden de la agenda y nombre */
+            chairs: components["schemas"]["ChairOccupancyRowDto"][];
+            /** @description «Sin sillón»: citas de la sede sin sillón asignado (sin %). null si no hay. */
+            noChair: components["schemas"]["ChairOccupancyMetricsDto"] | null;
+            /** @description Total de la sede: suma de sus sillones (sin «Sin sillón»), sobre abiertos × sillones */
+            totals: components["schemas"]["ChairOccupancyMetricsDto"];
+        };
+        ChairOccupancyReportDto: {
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+            /** Format: uuid */
+            locationId: string | null;
+            /** @description El usuario solo ve algunas sedes (DX-089) */
+            restrictedToLocations: boolean;
+            /** @description Una entrada por sede visible (con zona horaria), por fecha de alta */
+            locations: components["schemas"]["LocationChairOccupancyDto"][];
         };
         /**
          * @description Las secciones que ve el rol: ADMIN las tres, DENTIST EVOLUTION y TREATMENT, RECEPTION OUTCOME
@@ -33993,6 +34147,101 @@ export interface operations {
             };
             /** @description Solo la administración ve los reportes de la clínica. / sede fuera de las del usuario */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChairOccupancyController_get: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChairOccupancyReportDto"];
+                };
+            };
+            /** @description Período inválido o de más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve los reportes de la clínica. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con citas no tiene zona horaria válida */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChairOccupancyController_csv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Período inválido o de más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve los reportes de la clínica. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con citas no tiene zona horaria válida */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
