@@ -2,13 +2,8 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { KIND_LABELS, RECALL_INTERVALS, RECALL_REASON_MAX, intervalLabel } from '@/lib/recall/presentation';
-import {
-  setPatientRecall,
-  type PatientRecall,
-  type PatientRecalls,
-  type RecallKind,
-} from '@/lib/recall/recall-api';
+import { RECALL_INTERVALS, RECALL_REASON_MAX, intervalLabel } from '@/lib/recall/presentation';
+import { setPatientRecall, type PatientRecall, type PatientRecalls } from '@/lib/recall/recall-api';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -39,7 +34,9 @@ export function RecallIntervalDialog({
   onOpenChange,
   token,
   patientId,
-  kind,
+  typeRef,
+  typeName,
+  defaultIntervalMonths = null,
   recall,
   onSaved,
 }: {
@@ -47,11 +44,16 @@ export function RecallIntervalDialog({
   onOpenChange: (open: boolean) => void;
   token: string;
   patientId: string;
-  kind: RecallKind;
+  /** Id del tipo (DX-015-bis) o, en el respaldo sin tipos, su clave. */
+  typeRef: string;
+  typeName: string;
+  /** Intervalo con que nace un recall nuevo de este tipo (el del tipo; sin él, 6 meses). */
+  defaultIntervalMonths?: number | null;
   recall: PatientRecall | null;
   onSaved: (recalls: PatientRecalls) => void;
 }) {
-  const [months, setMonths] = useState(recall?.intervalMonths ?? 6);
+  const [months, setMonths] = useState(recall?.intervalMonths ?? defaultIntervalMonths ?? 6);
+  // La base vigente (DX-015-bis): guardar sin tocarla no mueve el vencimiento.
   const [lastDone, setLastDone] = useState<string | null>(recall?.lastDoneAt ?? null);
   const [pauseUntil, setPauseUntil] = useState<string | null>(recall?.disabledUntil ?? null);
   const [reason, setReason] = useState(recall?.disabledReason ?? '');
@@ -68,7 +70,7 @@ export function RecallIntervalDialog({
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const saved = await setPatientRecall(token, patientId, kind, {
+      const saved = await setPatientRecall(token, patientId, typeRef, {
         intervalMonths: months,
         // Sin fecha manda hoy la API: al editar se conserva la que había.
         ...(lastDone ? { lastDoneAt: lastDone } : {}),
@@ -89,7 +91,7 @@ export function RecallIntervalDialog({
     <FormModal
       open={open}
       onOpenChange={onOpenChange}
-      title={copy.title(KIND_LABELS[kind])}
+      title={copy.title(typeName)}
       description={copy.description}
       onSubmit={(e) => void submit(e)}
       submitLabel={copy.submit}

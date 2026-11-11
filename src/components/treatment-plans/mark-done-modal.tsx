@@ -1,14 +1,19 @@
 'use client';
 import * as React from 'react';
 import { useCallback, useEffect, useId, useState } from 'react';
+import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import { getTokenUserId } from '@/lib/auth/token-role';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
-import { locationTimeZone } from '@/lib/locations/location-settings';
+import { locationRegionalFormat, locationTimeZone } from '@/lib/locations/location-settings';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
-import { updateItem, type TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
+import {
+  updateItem,
+  type ItemRecallUpdate,
+  type TreatmentPlanItem,
+} from '@/lib/treatment-plans/treatment-plans-api';
 import { attendsAt, attributionInstant, isAttendingRole } from '@/lib/treatment-plans/item-attribution';
 import { FormModal } from '@/components/shared/form-modal';
 import { FieldError } from '@/components/errors/field-error';
@@ -45,7 +50,25 @@ const copy = {
   dateLabel: 'Fecha en que se realizó',
   dateRequired: 'Indica la fecha en que se realizó (no puede ser futura).',
   attributeError: 'No pudimos atribuir el procedimiento. Intenta de nuevo.',
+  // DX-015-bis: el procedimiento movió el reloj de un recall (p. ej. una profilaxis → Higiene).
+  recallDue: (type: string, day: string) => `Recall de ${type}: vence el ${day}`,
+  recallMoved: (type: string) => `Recall de ${type} actualizado`,
 };
+
+/**
+ * DX-015-bis: el aviso de los recalls que movió el cambio, con la fecha en el
+ * formato de la sede donde quedó realizado (`formatDay`); sin formato de sede,
+ * sin fecha (nunca otro formato en su lugar). `null` si no movió ninguno.
+ */
+export function recallUpdatesNotice(
+  updates: readonly ItemRecallUpdate[] | undefined,
+  formatDay: ((day: string) => string) | null,
+): string | null {
+  if (!updates || updates.length === 0) return null;
+  return updates
+    .map((u) => (formatDay ? copy.recallDue(u.recallTypeName, formatDay(u.dueAt)) : copy.recallMoved(u.recallTypeName)))
+    .join(' · ');
+}
 
 export interface MarkDoneModalProps {
   open: boolean;
@@ -198,6 +221,10 @@ export function MarkDoneModal({
               }
             : { performedById: performerId };
       const saved = await updateItem(token, planId, item.id, patch);
+      const sede = locations.find((l) => l.id === (saved.performedLocationId ?? activeLocationId)) ?? null;
+      const fmt = locationRegionalFormat(sede);
+      const recallNotice = recallUpdatesNotice(saved.recallUpdates, fmt ? (day) => fmt.civilDate(day) : null);
+      if (recallNotice) toast.success(recallNotice);
       onSaved(saved);
     } catch (err) {
       setError(

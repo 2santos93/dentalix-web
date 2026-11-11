@@ -11,8 +11,13 @@ export const RECALL_INTERVALS: readonly number[] = [1, 2, 3, 4, 6, 9, 12, 18, 24
 /** La ventana de «vence pronto» de la lista. */
 export const RECALL_SOON_DAYS = 30;
 
+/**
+ * Respaldo de los nombres por clave (DX-015-bis): los tipos salen de
+ * `GET /recall-types`; esto solo se usa si esa lectura falla. Mismo orden que
+ * los tipos por defecto de la API.
+ */
 export const KIND_LABELS: Record<RecallKind, string> = { HYGIENE: 'Higiene', CHECKUP: 'Control' };
-export const KIND_ORDER: readonly RecallKind[] = ['CHECKUP', 'HYGIENE'];
+export const KIND_ORDER: readonly RecallKind[] = ['HYGIENE', 'CHECKUP'];
 
 export const CHANNEL_LABELS: Record<RecallContactChannel, string> = {
   CALL: 'Llamada',

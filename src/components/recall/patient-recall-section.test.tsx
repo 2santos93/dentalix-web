@@ -4,9 +4,11 @@ import { ApiError } from '@/lib/api/client';
 import {
   createRecallContact,
   getPatientRecalls,
+  listRecallTypes,
   setPatientRecall,
   type PatientRecall,
   type PatientRecalls,
+  type RecallType,
 } from '@/lib/recall/recall-api';
 import { PatientRecallSection } from './patient-recall-section';
 import { listLocations } from '@/lib/locations/locations-api';
@@ -16,19 +18,43 @@ import { STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../../lib/recall/recall-api', () => ({
   getPatientRecalls: jest.fn(),
+  listRecallTypes: jest.fn(),
   setPatientRecall: jest.fn(),
   createRecallContact: jest.fn(),
 }));
 const mockedGet = getPatientRecalls as jest.MockedFunction<typeof getPatientRecalls>;
 const mockedSet = setPatientRecall as jest.MockedFunction<typeof setPatientRecall>;
 const mockedContact = createRecallContact as jest.MockedFunction<typeof createRecallContact>;
+const mockedTypes = jest.mocked(listRecallTypes);
+
+const type = (over: Partial<RecallType> & Pick<RecallType, 'id' | 'name'>): RecallType => ({
+  defaultIntervalMonths: 6,
+  active: true,
+  sortOrder: 10,
+  systemKey: null,
+  exclusionGroup: null,
+  triggerCatalogItemIds: [],
+  ...over,
+});
+// Los tipos por defecto de la API (DX-015-bis), en su orden.
+const TYPES: RecallType[] = [
+  type({ id: 't-hyg', name: 'Higiene', systemKey: 'HYGIENE', sortOrder: 10, exclusionGroup: 'HYGIENE_PERIO' }),
+  type({ id: 't-ctl', name: 'Control', systemKey: 'CHECKUP', sortOrder: 20, defaultIntervalMonths: 12 }),
+  type({ id: 't-perio', name: 'Mantenimiento periodontal', sortOrder: 30, defaultIntervalMonths: 3 }),
+];
 
 const patient = { id: 'pat-1', fullName: 'Ana Pérez' };
 const recall: PatientRecall = {
   id: 'r1',
   kind: 'CHECKUP',
+  recallTypeId: 't-ctl',
+  recallTypeName: 'Control',
   intervalMonths: 6,
   lastDoneAt: '2026-04-10',
+  manualDoneAt: '2026-04-10',
+  lastDoneItemId: null,
+  source: 'MANUAL',
+  preBackfillDoneAt: null,
   active: true,
   disabledUntil: null,
   disabledReason: null,
@@ -47,6 +73,8 @@ const data: PatientRecalls = {
       id: 'c1',
       recallId: 'r1',
       kind: 'CHECKUP',
+      recallTypeId: 't-ctl',
+      recallTypeName: 'Control',
       patientId: 'pat-1',
       locationId: null,
       channel: 'CALL',
@@ -64,6 +92,8 @@ describe('PatientRecallSection (DX-015)', () => {
     mockedGet.mockReset();
     mockedSet.mockReset();
     mockedContact.mockReset();
+    mockedTypes.mockReset();
+    mockedTypes.mockResolvedValue(TYPES);
     (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([clinicLocation({ id: 'l1' })]);
   });
 
@@ -113,7 +143,7 @@ describe('PatientRecallSection (DX-015)', () => {
     await userEvent.selectOptions(await screen.findByLabelText('Intervalo'), '3');
     await userEvent.click(screen.getByRole('button', { name: 'Guardar recall' }));
     await waitFor(() =>
-      expect(mockedSet).toHaveBeenCalledWith('tok', 'pat-1', 'CHECKUP', {
+      expect(mockedSet).toHaveBeenCalledWith('tok', 'pat-1', 't-ctl', {
         intervalMonths: 3,
         lastDoneAt: '2026-04-10',
         active: true,
@@ -136,5 +166,78 @@ describe('PatientRecallSection (DX-015)', () => {
     await userEvent.selectOptions(screen.getByLabelText('Resultado'), 'NO_ANSWER');
     await userEvent.click(screen.getByRole('button', { name: 'Guardar contacto' }));
     await waitFor(() => expect(mockedContact).toHaveBeenCalledWith('tok', 'r1', { channel: 'CALL', outcome: 'NO_ANSWER' }));
+  });
+
+  describe('DX-015-bis: tipos de la clínica', () => {
+    it('un renglón por tipo de GET /recall-types, en su orden; uno nuevo nace con el intervalo de su tipo', async () => {
+      mockedGet.mockResolvedValue(data);
+      mockedSet.mockResolvedValue(data);
+      render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
+      await screen.findByTestId('recall-row-CHECKUP');
+      const rows = screen.getAllByTestId(/^recall-row-/).map((r) => r.getAttribute('data-testid'));
+      expect(rows).toEqual(['recall-row-HYGIENE', 'recall-row-CHECKUP', 'recall-row-t-perio']);
+      const perio = screen.getByTestId('recall-row-t-perio');
+      expect(within(perio).getByText('Mantenimiento periodontal')).toBeInTheDocument();
+      expect(within(perio).getByText('Sin recall')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Fijar recall de mantenimiento periodontal' }));
+      expect(await screen.findByRole('dialog', { name: 'Recall de mantenimiento periodontal' })).toBeInTheDocument();
+      expect(screen.getByLabelText('Intervalo')).toHaveValue('3');
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar recall' }));
+      await waitFor(() =>
+        expect(mockedSet).toHaveBeenCalledWith('tok', 'pat-1', 't-perio', expect.objectContaining({ intervalMonths: 3 })),
+      );
+    });
+
+    it('si GET /recall-types falla, Higiene y Control por su clave (respaldo)', async () => {
+      mockedTypes.mockRejectedValue(new ApiError(500, 'boom'));
+      mockedGet.mockResolvedValue(data);
+      mockedSet.mockResolvedValue(data);
+      render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
+      const row = await screen.findByTestId('recall-row-CHECKUP');
+      expect(within(row).getByText('Control')).toBeInTheDocument();
+      expect(within(screen.getByTestId('recall-row-HYGIENE')).getByText('Higiene')).toBeInTheDocument();
+      expect(screen.queryByTestId('recall-row-t-perio')).not.toBeInTheDocument();
+      // Ningún error a la vista: la sección se lee igual.
+      expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Cambiar recall de control' }));
+      await userEvent.click(await screen.findByRole('button', { name: 'Guardar recall' }));
+      await waitFor(() => expect(mockedSet).toHaveBeenCalledWith('tok', 'pat-1', 'CHECKUP', expect.anything()));
+    });
+
+    it('un recall de un tipo desactivado sigue a la vista con su nombre', async () => {
+      mockedTypes.mockResolvedValue([TYPES[0], TYPES[1], { ...TYPES[2], active: false }]);
+      mockedGet.mockResolvedValue({
+        recalls: [{ ...recall, id: 'r9', kind: null, recallTypeId: 't-perio', recallTypeName: 'Mantenimiento periodontal' }],
+        contacts: [],
+      });
+      render(<PatientRecallSection token="tok" patient={patient} canSet={false} canContact={false} />);
+      const row = await screen.findByTestId('recall-row-t-perio');
+      expect(within(row).getByText('Mantenimiento periodontal')).toBeInTheDocument();
+      expect(within(row).getByText('Por llamar')).toBeInTheDocument();
+    });
+
+    it.each([
+      [
+        'el procedimiento realizado',
+        { lastDoneItemId: 'item-1', source: 'PROCEDURE', manualDoneAt: null } as const,
+        'Cuenta desde el procedimiento realizado el',
+      ],
+      [
+        'la última visita congelada en el despliegue (no «fijado a mano»)',
+        { preBackfillDoneAt: '2025-12-01', source: 'MANUAL' } as const,
+        'Cuenta desde la última visita atendida, el',
+      ],
+      ['lo fijado a mano', {}, 'Cuenta desde el'],
+    ])('dice de dónde cuenta el plazo: %s', async (_name, over, text) => {
+      (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([{ ...STAMP_SEDES.caracas, id: 'l1' }]);
+      mockedGet.mockResolvedValue({ recalls: [{ ...recall, ...over }], contacts: [] });
+      render(<PatientRecallSection token="tok" patient={patient} canSet={false} canContact={false} />);
+      const row = await screen.findByTestId('recall-row-CHECKUP');
+      const day = STAMP_FORMATS.caracas.civilDate('2026-04-10');
+      await waitFor(() => expect(within(row).getByTestId('recall-basis')).toHaveTextContent(`${text}`));
+      expect(within(row).getByTestId('recall-basis')).toHaveTextContent(day);
+      const manual = over === undefined || Object.keys(over).length === 0;
+      expect(within(row).getByTestId('recall-basis').textContent?.includes('fijado a mano')).toBe(manual);
+    });
   });
 });
