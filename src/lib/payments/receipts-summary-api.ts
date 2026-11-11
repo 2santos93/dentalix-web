@@ -1,87 +1,40 @@
 import { apiFetch } from '@/lib/api/client';
+import type { components } from '@/lib/api/schema';
 
 /*
  * Recibo resumen de un periodo por paciente (DX-401): los recibos de caja del
  * paciente entre dos días civiles, con los totales por moneda (nunca sumados
- * entre monedas) y el aviso de que no es factura.
- *
- * TODO(DX-401): derive from schema.d.ts after codegen. La API de DX-401 va en
- * paralelo y `schema.d.ts` todavía no trae estas rutas; los tipos son el
- * contrato acordado, escritos a mano. Tras el merge de la API y `npm run codegen`
- * se cambian por `components['schemas'][…]`.
+ * entre monedas) y el aviso de que no es factura. Los tipos salen del OpenAPI.
  */
+
+type Schemas = components['schemas'];
 
 /**
  * Una fila del periodo: una forma de pago de un recibo. Un cobro dividido trae
- * una fila por forma de pago, seguidas y con el mismo `paymentId` y número.
- * Los anulados vienen marcados y no cuentan en los totales.
+ * una fila por forma de pago, seguidas y con el mismo `paymentId` y número
+ * (`PRI-000123`, o la referencia antigua `REC-xxxxxxxx`). `issuedOn` es el día
+ * civil de emisión en su sede. Los anulados vienen marcados y no cuentan en
+ * los totales.
  */
-export interface ReceiptsSummaryReceipt {
-  paymentId: string;
-  /** Número de la serie de la sede (`PRI-000123`) o la referencia antigua (`REC-xxxxxxxx`). */
-  receiptNumber: string;
-  /** Día civil de emisión del recibo en su sede, `YYYY-MM-DD` (por él se filtra el periodo). */
-  issuedOn: string;
-  locationName: string;
-  methodLabel: string;
-  amount: number;
-  currency: string;
-  voided: boolean;
-  voidReason: string | null;
-}
+export type ReceiptsSummaryReceipt = Schemas['ReceiptSummaryLineDto'];
 
 /** La fila `i` es otra forma de pago del mismo recibo que la anterior (cobro dividido). */
 export function isContinuation(rows: readonly ReceiptsSummaryReceipt[], i: number): boolean {
   return i > 0 && rows[i - 1].paymentId === rows[i].paymentId;
 }
 
-/** Total de una moneda: solo las filas no anuladas de esa moneda. */
-export interface ReceiptsSummaryTotal {
-  currency: string;
-  amount: number;
-  /** Filas (formas de pago) no anuladas en esa moneda. */
-  count: number;
-}
+/** Total de una moneda: solo las filas no anuladas; `count` cuenta filas (formas de pago). */
+export type ReceiptsSummaryTotal = Schemas['ReceiptSummaryTotalDto'];
 
-export interface ReceiptsSummary {
-  patient: {
-    id: string;
-    fullName: string;
-    /** Nombre del tipo de documento, el que le da la clínica («Documento de identidad»). */
-    documentTypeName: string;
-    /** Solo el número enmascarado («****5678»), o `null` sin documento. */
-    documentMasked: string | null;
-    patientCode: string;
-  };
-  clinic: {
-    name: string;
-    legalName: string | null;
-    taxId: string | null;
-    taxIdLabel?: string;
-    address: string | null;
-  };
-  /** Primer día del periodo, `YYYY-MM-DD`, inclusive. */
-  from: string;
-  /** Último día del periodo, `YYYY-MM-DD`, inclusive. */
-  to: string;
-  /** Instante ISO en que la API armó el resumen. */
-  generatedAt: string;
-  /** `true` si quien lo pide solo ve sus sedes: el resumen no trae los abonos de las demás. */
-  restrictedToLocations: boolean;
-  receipts: ReceiptsSummaryReceipt[];
-  totals: ReceiptsSummaryTotal[];
-  /** Recibos anulados (no filas). */
-  voidedCount: number;
-  /** Aviso del pie (no es factura), redactado por la API. */
-  notice: string;
-}
+/**
+ * El resumen: `from`/`to` inclusive (`YYYY-MM-DD`); `restrictedToLocations`
+ * si quien lo pide solo ve sus sedes; `voidedCount` cuenta recibos, no filas;
+ * `notice` es el pie (no es factura) que redacta la API.
+ */
+export type ReceiptsSummary = Schemas['PaymentReceiptSummaryDto'];
 
-export interface SendReceiptsSummaryResult {
-  /** Destino enmascarado («an***@example.com»). */
-  sentTo: string;
-  /** Salió al email del responsable del paciente (menor o paciente sin email). */
-  sentToResponsible: boolean;
-}
+/** Destino enmascarado («an***@example.com») y si salió al responsable. */
+export type SendReceiptsSummaryResult = Schemas['SendPaymentReceiptResponseDto'];
 
 export interface ReceiptsSummaryRange {
   from: string;

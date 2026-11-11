@@ -5,6 +5,7 @@ import {
   exchangeRateDetail,
   paymentAllocationDetail,
   receiptDetail,
+  receiptsSummaryPeriodDetail,
   cancellationDetail,
   importBatchDetail,
   AUDIT_ACTION_LABELS,
@@ -991,5 +992,20 @@ describe('treatmentPlanAcceptanceDetail (DX-379 C)', () => {
       'Presupuesto pendiente creado por una aceptación parcial',
     );
     expect(treatmentPlanAcceptanceDetail({})).toBeNull();
+  });
+});
+
+describe('receiptsSummaryPeriodDetail (DX-401)', () => {
+  const H23 = regionalFormat({ locale: 'es-VE', hourCycle: 'h23' });
+  const period = { from: '2026-11-01', to: '2026-11-30' };
+
+  it('el periodo del resumen con el formato de la sede', () => {
+    expect(receiptsSummaryPeriodDetail({ period }, H23)).toBe('Periodo 01/11/2026 – 30/11/2026');
+    expect(AUDIT_RESOURCE_LABELS.PAYMENT_RECEIPT_SUMMARY).toBe('Resumen de recibos');
+  });
+
+  it('sin el formato de la sede, «—»; sin periodo, null', () => {
+    expect(receiptsSummaryPeriodDetail({ period }, null)).toBe('Periodo — – —');
+    expect(receiptsSummaryPeriodDetail({}, H23)).toBeNull();
   });
 });

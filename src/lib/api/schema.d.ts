@@ -3911,6 +3911,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/payment-receipts/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ver el resumen de los recibos de caja de un paciente en un período
+         * @description Los recibos emitidos del día `from` al `to` (ambos inclusive, en la zona de la sede de cada recibo), con su número, sede, forma de pago e importe; los anulados, marcados y fuera de los totales. Totales por moneda: nunca se suman monedas distintas. Período sin recibos: 200 con la lista vacía.
+         */
+        get: operations["PaymentReceiptSummaryController_view"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/payment-receipts/summary/print": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Imprimir el resumen (lo deja en la auditoría y lo devuelve)
+         * @description Devuelve el MISMO resumen que GET; la vista imprimible lo pide por aquí para que cada impresión quede registrada.
+         */
+        post: operations["PaymentReceiptSummaryController_print"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/payment-receipts/summary/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enviar el resumen por email al paciente
+         * @description Encola (outbox, DX-088) el MISMO resumen al email de la ficha del paciente, con el documento enmascarado. DX-203: el de un menor o de un paciente sin email va al responsable que recibe avisos (`sentToResponsible`).
+         */
+        post: operations["PaymentReceiptSummaryController_email"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payments/{id}/allocations": {
         parameters: {
             query?: never;
@@ -6949,7 +7009,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -7194,6 +7254,18 @@ export interface components {
             /** @description Una bajada que corrige una subida de hace menos de 24 horas. */
             withinCorrectionWindow: boolean;
         };
+        AuditPeriodDto: {
+            /**
+             * @description Primer día (AAAA-MM-DD), inclusive.
+             * @example 2026-10-01
+             */
+            from: string;
+            /**
+             * @description Último día (AAAA-MM-DD), inclusive.
+             * @example 2026-10-31
+             */
+            to: string;
+        };
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
             changedFields?: string[];
@@ -7235,6 +7307,8 @@ export interface components {
             configChange?: components["schemas"]["AuditConfigChangeDto"];
             /** @description DX-330: cambio del plazo de conservación de la historia clínica (`reason` CLINICAL_RECORD_RETENTION_SETTINGS): dirección, pacientes protegidos, plazos vigentes y si corrigió una subida reciente. Solo códigos y enteros. */
             retentionTermChange?: components["schemas"]["AuditRetentionTermChangeDto"];
+            /** @description DX-401: el período (días civiles, ambos inclusive) del resumen de recibos del paciente que se vio, imprimió o envió. Solo las dos fechas. */
+            period?: components["schemas"]["AuditPeriodDto"];
         };
         AuditEventDto: {
             /** Format: uuid */
@@ -15343,6 +15417,93 @@ export interface components {
             sentTo: string;
             /** @description DX-203: salió al email del responsable (un menor o un paciente sin email). */
             sentToResponsible: boolean;
+        };
+        ReceiptSummaryPatientDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example María Fernanda Rondón */
+            fullName: string;
+            /**
+             * @description Número del documento enmascarado como en el recibo (nunca en claro); null sin documento.
+             * @example ****5678
+             */
+            documentMasked: string | null;
+            /**
+             * @description Nombre visible del tipo de documento (DX-327), con los nombres de la clínica.
+             * @example Documento nacional
+             */
+            documentTypeName: string;
+            /**
+             * @description Código del paciente (DX-484).
+             * @example 1042
+             */
+            patientCode: string;
+        };
+        ReceiptSummaryLineDto: {
+            /**
+             * Format: uuid
+             * @description El abono del recibo (en un cobro dividido, el de su línea 1): `GET /payments/:id/receipt`.
+             */
+            paymentId: string;
+            /**
+             * @description Número del recibo (serie y consecutivo), o `REC-xxxxxxxx` en un abono anterior a la numeración. Se repite en cada forma de pago de un cobro dividido.
+             * @example CCS-000123
+             */
+            receiptNumber: string;
+            /**
+             * @description Día civil de emisión en la zona de la sede del recibo.
+             * @example 2026-10-15
+             */
+            issuedOn: string;
+            /**
+             * @description Sede del recibo (la de su foto).
+             * @example Sede Altamira
+             */
+            locationName: string;
+            /**
+             * @description Medio de pago de la clínica o, sin él, el método (Efectivo, Tarjeta…).
+             * @example Pago móvil
+             */
+            methodLabel: string;
+            /**
+             * @description Importe en su moneda.
+             * @example 150
+             */
+            amount: number;
+            /** @description Código ISO 4217 de la moneda del importe. */
+            currency: string;
+            /** @description Recibo anulado: no suma en los totales. */
+            voided: boolean;
+            voidReason: string | null;
+        };
+        ReceiptSummaryTotalDto: {
+            /** @description Código ISO 4217. */
+            currency: string;
+            /** @example 150 */
+            amount: number;
+            /** @description Formas de pago no anuladas en esa moneda. */
+            count: number;
+        };
+        PaymentReceiptSummaryDto: {
+            patient: components["schemas"]["ReceiptSummaryPatientDto"];
+            /** @description Datos de HOY de la clínica (el resumen se emite hoy). */
+            clinic: components["schemas"]["ReceiptClinicDto"];
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+            /** Format: date-time */
+            generatedAt: string;
+            /** @description DX-525: quien consulta solo ve sus sedes; los recibos de las demás no salen. */
+            restrictedToLocations: boolean;
+            /** @description Una fila por forma de pago, en orden de emisión; vacía si no hay recibos. */
+            receipts: components["schemas"]["ReceiptSummaryLineDto"][];
+            /** @description Total por moneda de lo NO anulado (las monedas nunca se suman entre sí). */
+            totals: components["schemas"]["ReceiptSummaryTotalDto"][];
+            /** @description Recibos anulados. */
+            voidedCount: number;
+            /** @example Resumen de abonos: no es un documento fiscal. Cada abono tiene su recibo de caja con el número indicado. */
+            notice: string;
         };
         /**
          * @description Estado del plan: rechazado o cancelado no admite reasignar (409 en el PUT) y sus `items` vienen vacíos
@@ -31880,6 +32041,161 @@ export interface operations {
                 content?: never;
             };
             /** @description Ni el paciente ni un responsable que recibe avisos tienen email */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Topes de envío de la clínica */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentReceiptSummaryController_view: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD), inclusive, en la zona horaria de la sede de cada recibo. */
+                from: string;
+                /** @description Último día del período (AAAA-MM-DD), inclusive. Debe ser >= from; el período no puede superar 366 días. Las dos fechas, entre 2000-01-01 y 2100-12-31 (400 si no). */
+                to: string;
+            };
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentReceiptSummaryDto"];
+                };
+            };
+            /** @description Fechas ausentes o inválidas, from > to o más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pagos (403 en español) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El paciente no existe o es de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentReceiptSummaryController_print: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD), inclusive, en la zona horaria de la sede de cada recibo. */
+                from: string;
+                /** @description Último día del período (AAAA-MM-DD), inclusive. Debe ser >= from; el período no puede superar 366 días. Las dos fechas, entre 2000-01-01 y 2100-12-31 (400 si no). */
+                to: string;
+            };
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentReceiptSummaryDto"];
+                };
+            };
+            /** @description Fechas ausentes o inválidas, from > to o más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pagos (403 en español) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El paciente no existe o es de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentReceiptSummaryController_email: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD), inclusive, en la zona horaria de la sede de cada recibo. */
+                from: string;
+                /** @description Último día del período (AAAA-MM-DD), inclusive. Debe ser >= from; el período no puede superar 366 días. Las dos fechas, entre 2000-01-01 y 2100-12-31 (400 si no). */
+                to: string;
+            };
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendPaymentReceiptResponseDto"];
+                };
+            };
+            /** @description Fechas ausentes o inválidas, from > to o más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pagos (403 en español) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El paciente no existe o es de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No hay abonos en el período, o ni el paciente ni un responsable que recibe avisos tienen email */
             422: {
                 headers: {
                     [name: string]: unknown;

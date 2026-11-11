@@ -39,6 +39,7 @@ import {
   healthRegistrationDetail,
   clinicSettingsDetail,
   receiptDetail,
+  receiptsSummaryPeriodDetail,
   exchangeRateBackupDetail,
   exchangeRateDetail,
   paymentAllocationDetail,
@@ -580,6 +581,7 @@ function eventDetail(
     receiptDetail(event.metadata) ??
     exchangeRateBackupDetail(event.metadata) ??
     exchangeRateDetail(event.metadata, clock?.fmt ?? null) ??
+    receiptsSummaryPeriodDetail(event.metadata, clock?.fmt ?? null) ??
     paymentAllocationDetail(event.metadata, clock?.fmt ?? null) ??
     anamnesisDetail(event.metadata) ??
     signatureRequestDetail(event.metadata) ??

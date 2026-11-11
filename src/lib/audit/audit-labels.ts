@@ -75,6 +75,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   STAFF_MEMBER: 'Miembro del personal',
   // DX-136: recibo de caja de un abono (ver, reimprimir, enviar).
   PAYMENT_RECEIPT: 'Recibo de caja',
+  // DX-401: resumen de los recibos de un paciente en un periodo.
+  PAYMENT_RECEIPT_SUMMARY: 'Resumen de recibos',
   // DX-170: plantillas de evolución (crear, editar, desactivar, ejemplos).
   CLINICAL_NOTE_TEMPLATE: 'Plantilla de evolución',
   // SEC-009: un ADMIN verifica o elimina un dominio personalizado.
@@ -918,6 +920,16 @@ export function exchangeRateDetail(metadata: AuditMetadata, fmt: RegionalFormat 
   const value = Number(rate.rate);
   const shown = fmt && Number.isFinite(value) ? fmt.number(value, { min: 0, max: 8 }) : NO_SEDE_FORMAT;
   return `${rate.currency} · ${sedeCivilDate(rate.day, fmt)} · ${shown}`;
+}
+
+/**
+ * DX-401: el periodo del resumen de recibos, «Periodo 01/11/2026 – 30/11/2026»
+ * con el formato de la sede («—» sin él). null si el evento no trae `period`.
+ */
+export function receiptsSummaryPeriodDetail(metadata: AuditMetadata, fmt: RegionalFormat | null): string | null {
+  const period = metadata.period;
+  if (!period) return null;
+  return `Periodo ${sedeCivilDate(period.from, fmt)} – ${sedeCivilDate(period.to, fmt)}`;
 }
 
 /** «2 ítems · 100,00 EUR» o «sin imputar»: un lado de la reimputación de un abono. */
