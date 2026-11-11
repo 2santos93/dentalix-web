@@ -102,6 +102,7 @@ describe('ComingOfAgeView (DX-342)', () => {
     mockedGet.mockResolvedValue({
       status: 'PENDING',
       majorityDate: '2026-11-20',
+      majorityAge: 18,
       decision: null,
       reviewedAt: null,
       reviewedByName: null,

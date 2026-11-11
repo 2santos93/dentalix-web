@@ -20,11 +20,12 @@ const mockedGet = getMajorityReview as jest.MockedFunction<typeof getMajorityRev
 const mockedPost = submitMajorityReview as jest.MockedFunction<typeof submitMajorityReview>;
 
 const stamp = testStamp([STAMP_SEDES.caracas]);
-const patient = { id: 'p1', fullName: 'Lucía Mora', birthDate: '2008-11-03' };
+const patient = { id: 'p1', fullName: 'Lucía Mora' };
 
 const view = (over: Partial<MajorityReviewView> = {}): MajorityReviewView => ({
   status: 'PENDING',
   majorityDate: '2026-11-03',
+  majorityAge: 18,
   decision: null,
   reviewedAt: null,
   reviewedByName: null,
@@ -50,7 +51,7 @@ describe('MajorityReviewBanner (DX-342)', () => {
     expect(screen.getByRole('button', { name: copy.action })).toBeInTheDocument();
   });
 
-  it('usa la mayoría de edad de la vista cuando la API la manda', async () => {
+  it('los años salen de la mayoría de edad de la vista', async () => {
     mockedGet.mockResolvedValue(view({ majorityAge: 16, majorityDate: '2024-11-03' }));
     render(<MajorityReviewBanner token="tok" patient={patient} canReview stamp={stamp} />);
     expect(await screen.findByTestId('majority-review-banner')).toHaveTextContent('Cumplió 16 años');

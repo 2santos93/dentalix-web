@@ -1,4 +1,4 @@
-import { canReviewMajority, civilMonthRange, reachedAge, sortComingOfAge, type ComingOfAgeItem } from './majority-review-api';
+import { canReviewMajority, civilMonthRange, sortComingOfAge, type ComingOfAgeItem } from './majority-review-api';
 
 const item = (over: Partial<ComingOfAgeItem>): ComingOfAgeItem => ({
   patientId: 'p',
@@ -27,12 +27,6 @@ describe('majority-review-api (DX-342)', () => {
       item({ patientId: 'c', majorityDate: '2026-08-01', overdue: true, status: 'REVIEWED' }),
     ]);
     expect(sorted.map((i) => i.patientId)).toEqual(['b', 'c', 'a']);
-  });
-
-  it('reachedAge: la de la vista o la diferencia de años', () => {
-    expect(reachedAge({ majorityAge: 16, majorityDate: '2026-11-01' }, '2008-11-01')).toBe(16);
-    expect(reachedAge({ majorityDate: '2026-11-01' }, '2008-11-01')).toBe(18);
-    expect(reachedAge({ majorityDate: null }, '2008-11-01')).toBeNull();
   });
 
   it('canReviewMajority: ADMIN y RECEPTION', () => {

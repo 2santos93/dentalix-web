@@ -25,6 +25,7 @@ const stamp = testStamp([STAMP_SEDES.caracas]);
 const view = (over: Partial<MajorityReviewView> = {}): MajorityReviewView => ({
   status: 'PENDING',
   majorityDate: '2026-11-03',
+  majorityAge: 18,
   decision: null,
   reviewedAt: null,
   reviewedByName: null,

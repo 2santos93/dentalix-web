@@ -26,8 +26,8 @@ export interface MajorityReviewView {
   reviewedAt: string | null;
   reviewedByName: string | null;
   responsibles: MajorityReviewResponsible[];
-  /** La mayoría de edad de la clínica con la que se calculó (si la API la manda). */
-  majorityAge?: number;
+  /** La mayoría de edad de la clínica con la que se calculó («Cumplió 18 años…»). */
+  majorityAge: number;
 }
 
 export interface ComingOfAgeItem {
@@ -95,17 +95,6 @@ export function submitMajorityReview(
     body: input,
     token,
   });
-}
-
-/**
- * Los años que cumplió: los de la vista si los trae; si no, la diferencia de
- * años entre la fecha de mayoría de edad y la de nacimiento (días civiles).
- */
-export function reachedAge(view: Pick<MajorityReviewView, 'majorityAge' | 'majorityDate'>, birthDate: string | null | undefined): number | null {
-  if (typeof view.majorityAge === 'number') return view.majorityAge;
-  if (!view.majorityDate || !birthDate) return null;
-  const age = Number(view.majorityDate.slice(0, 4)) - Number(birthDate.slice(0, 4));
-  return Number.isFinite(age) && age > 0 ? age : null;
 }
 
 /** Primer y último día civil del mes de `day` (`YYYY-MM-DD`), desplazado `offset` meses. */

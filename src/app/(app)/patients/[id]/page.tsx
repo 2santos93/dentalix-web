@@ -474,7 +474,7 @@ function PatientDetailView() {
             <MajorityReviewBanner
               key={`majority-${patientId}`}
               token={accessToken}
-              patient={{ id: patient.id, fullName: fullName(patient), birthDate: patient.birthDate }}
+              patient={{ id: patient.id, fullName: fullName(patient) }}
               canReview={canReviewMajority(role)}
               stamp={stamp}
             />

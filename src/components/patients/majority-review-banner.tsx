@@ -4,15 +4,15 @@ import { UserCheck } from 'lucide-react';
 import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { SedePainters } from '@/lib/locations/sede-stamp';
-import { getMajorityReview, reachedAge, type MajorityReviewView } from '@/lib/patients/majority-review-api';
+import { getMajorityReview, type MajorityReviewView } from '@/lib/patients/majority-review-api';
 import { SectionError } from '@/components/errors/section-error';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { MajorityReviewDialog } from './majority-review-dialog';
 
 export const majorityBannerCopy = {
-  title: (age: number | null, date: string | null) =>
-    `Cumplió ${age ?? 'la mayoría de'} ${age ? 'años' : 'edad'}${date ? ` el ${date}` : ''}: revisa a quién van sus avisos y recibos`,
+  title: (age: number, date: string | null) =>
+    `Cumplió ${age} años${date ? ` el ${date}` : ''}: revisa a quién van sus avisos y recibos`,
   body: 'Mientras no se revise, sus avisos y recibos no van a su responsable.',
   bodyNoAction: 'Mientras no se revise, sus avisos y recibos no van a su responsable. Lo revisan recepción y administración.',
   action: 'Revisar responsables',
@@ -28,7 +28,7 @@ type State =
 
 interface MajorityReviewBannerProps {
   token: string;
-  patient: { id: string; fullName: string; birthDate: string | null };
+  patient: { id: string; fullName: string };
   /** ADMIN y RECEPTION: ven «Revisar responsables». Los demás, solo el aviso. */
   canReview: boolean;
   stamp: SedePainters;
@@ -86,7 +86,7 @@ export function MajorityReviewBanner({ token, patient, canReview, stamp }: Major
         tone="warning"
         icon={UserCheck}
         titleAs="h2"
-        title={copy.title(reachedAge(view, patient.birthDate), date)}
+        title={copy.title(view.majorityAge, date)}
         data-testid="majority-review-banner"
         action={
           canReview ? (
