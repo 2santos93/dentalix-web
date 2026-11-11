@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/shared/page-header';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { LocationsComparisonView } from '@/components/reports/locations-comparison-view';
 import { ProductionByProcedureView } from '@/components/reports/production-by-procedure-view';
+import { RecoveredSlotsView } from '@/components/reports/recovered-slots-view';
 import { UnallocatedPaymentsView } from '@/components/reports/unallocated-payments-view';
 import {
   ReportsTabs,
@@ -42,7 +43,8 @@ function ReportesRoute() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const accessToken = useAuthStore((s) => s.accessToken);
-  const tabs = reportTabsFor(getTokenRole(accessToken));
+  const role = getTokenRole(accessToken);
+  const tabs = reportTabsFor(role);
   const tab = resolveReportTab(searchParams.get('tab'), tabs);
 
   if (!accessToken) {
@@ -51,6 +53,7 @@ function ReportesRoute() {
 
   // Reescribe la pestaña SIN navegar (una sola entrada de historial).
   function changeTab(next: ReportTabKey) {
+    // Los filtros de una pestaña (`?mes=`…) no viajan a otra.
     router.replace(next === tabs[0].key ? pathname : `${pathname}?tab=${next}`, { scroll: false });
   }
 
@@ -59,6 +62,8 @@ function ReportesRoute() {
   const view =
     tab === 'produccion' ? (
       <ProductionByProcedureView token={accessToken} />
+    ) : tab === 'huecos-recuperados' ? (
+      <RecoveredSlotsView token={accessToken} isAdmin={role === 'ADMIN'} />
     ) : tab === 'sin-imputar' ? (
       <UnallocatedPaymentsView token={accessToken} />
     ) : (
