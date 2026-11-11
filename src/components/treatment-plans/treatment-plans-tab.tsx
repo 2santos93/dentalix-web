@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { isPendingRest, QUOTE_EXPIRED, type PlanQuote } from '@/lib/treatment-plans/plan-quote-api';
+import { QUOTE_EXPIRED, type PlanQuote } from '@/lib/treatment-plans/plan-quote-api';
 import {
   createPlan,
   getPlan,
@@ -38,61 +38,41 @@ import { optionGroupOf, patchableStatuses } from '@/lib/treatment-plans/plan-opt
 import { useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
-import { SedeStampNote } from '@/components/locations/sede-stamp-note';
-import { QuoteValidity } from './quote-validity';
 import { getDiscountPolicy } from '@/lib/discounts/discounts-api';
 import type { DiscountRules } from '@/lib/discounts/discount-rules';
 import { Button } from '@/components/ui/button';
-import { NativeSelect } from '@/components/ui/native-select';
-import { SectionHeader } from '@/components/ui/section-header';
 import { Skeleton } from '@/components/ui/skeleton';
-import { StatusBadge } from '@/components/ui/status-badge';
-import { FormField } from '@/components/shared/form-field';
-import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { EmptyState } from '@/components/shared/empty-state';
-import { CurrencySelect } from '@/components/shared/currency-select';
-import { Disclosure } from '@/components/shared/disclosure';
-import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
 import { usePaymentProofViewer } from '@/components/payments/payment-proof-viewer';
-import { ExternalInvoiceModal, type ExternalInvoiceTarget } from '@/components/payments/external-invoice-modal';
-import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
+import type { ExternalInvoiceTarget } from '@/components/payments/external-invoice-modal';
 import { voidPaymentErrorMessage } from '@/components/payments/use-void-payment';
-import { ReallocatePaymentModal } from '@/components/payments/reallocate-payment-modal';
-import { PaymentAllocationDetailDialog } from '@/components/payments/payment-allocation-detail-dialog';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
-import { BulkDiscountModal, bulkDiscountCopy } from '@/components/discounts/bulk-discount-modal';
-import { contractRoundingDigits } from '@/lib/money/line-rounding';
-import { VoidCancellationFeeModal } from '@/components/appointments/fee-reason-modal';
-import { PaymentPlanSection } from './payment-plan-section';
-import { PlanVisitsBoard } from './plan-visits-board';
+import { bulkDiscountCopy } from '@/components/discounts/bulk-discount-modal';
 import { PlanQuoteActions } from './plan-quote-actions';
 import { planPrimaryAction } from '@/lib/treatment-plans/plan-primary-action';
 import { canRepricePlan, isPlanRepriceable } from '@/lib/treatment-plans/plan-repricing-api';
 import { PlanOptionsPanel } from './plan-options-panel';
-import { MarkDoneModal } from './mark-done-modal';
-import { NewEvolutionModal } from '@/components/clinical-notes/new-evolution-modal';
 import { canWriteClinicalHistory } from '@/lib/clinical/clinical-roles';
-import { ItemsTable } from './plan-items-table';
 import { PlanItemForm } from './plan-item-form';
 import { PlanMoneySummary } from './plan-money-summary';
-import { PlanPaymentFormModal } from './plan-payment-form-modal';
-import { PlanPaymentsList, paymentRowActionsButton, paymentRowLabel } from './plan-payments-list';
-import {
-  PAYMENTS_TRIGGER_ID,
-  copy,
-  feeReferences,
-  procedureName,
-  splitLinesOf,
-} from './treatment-plans-tab-copy';
+import { paymentRowActionsButton, paymentRowLabel } from './plan-payments-list';
+import { PlanDetailHeader, PlanSelectorSection } from './treatment-plan-plan';
+import { PlanItemsSection } from './treatment-plan-items';
+import { PlanBillingSection } from './treatment-plan-payments';
+import { TreatmentPlanModals } from './treatment-plan-modals';
+import { PAYMENTS_TRIGGER_ID, copy, procedureName } from './treatment-plans-tab-copy';
 
 /*
- * La pestaña «Plan de tratamiento» de la ficha. Las piezas viven en ficheros
- * propios: la tabla de ítems (`plan-items-table`), el formulario «Agregar
- * ítem» (`plan-item-form`), el modal «Registrar abono»
- * (`plan-payment-form-modal`), la lista de abonos (`plan-payments-list`) y
- * las cifras (`plan-money-summary`); el copy, en `treatment-plans-tab-copy`.
+ * La pestaña «Plan de tratamiento» de la ficha. Aquí viven el estado, las
+ * cargas y las acciones; lo que se pinta, en ficheros propios (DX-117): el
+ * bloque «Planes» y la cabecera del plan (`treatment-plan-plan`), los ítems
+ * (`treatment-plan-items`, con `plan-items-table`), los abonos
+ * (`treatment-plan-payments`, con `plan-payment-form-modal` y
+ * `plan-payments-list`) y los modales (`treatment-plan-modals`). También
+ * el formulario «Agregar ítem» (`plan-item-form`) y las cifras
+ * (`plan-money-summary`); el copy, en `treatment-plans-tab-copy`.
  */
 
 interface TreatmentPlansTabProps {
@@ -988,136 +968,38 @@ export function TreatmentPlansTab({
       {/* Bloques planos con cabecera de sección (UX v2): antes cada bloque era
           una `Card` y los vacíos, tarjetas discontinuas dentro de ella
           (tarjetas anidadas). */}
-      <section className="flex flex-col gap-4" aria-labelledby="tp-plans-heading">
-        <SectionHeader
-          titleId="tp-plans-heading"
-          title={copy.plansHeading}
-          actions={
-            // A 390px la moneda y «Nuevo plan» no caben junto al título: bajan
-            // a su propia fila.
-            <div className="flex w-full items-center gap-2 sm:w-auto">
-              <CurrencySelect
-                id="tp-new-plan-currency"
-                token={token}
-                value={newPlanCurrency}
-                onChange={(code) => {
-                  setNewPlanCurrency(code);
-                  setCreatePlanError(null);
-                }}
-                placeholder={newPlanCurrency ? undefined : copy.newPlanCurrencyPlaceholder}
-                className="min-w-0 flex-1 sm:w-44 sm:flex-none"
-                ariaLabel={copy.newPlanCurrencyLabel}
-              />
-              <Button type="button" variant={newPlanVariant} onClick={handleCreatePlan} disabled={creatingPlan}>
-                {creatingPlan ? copy.creatingPlan : copy.newPlan}
-              </Button>
-            </div>
-          }
-        />
-        {createPlanError && <InlineError>{createPlanError}</InlineError>}
-        <SedeStampNote stamp={stamp} />
-        {planCreated && !createPlanError && (
-          <p role="status" className="text-sm font-medium text-success-text">
-            {copy.planCreated}
-          </p>
-        )}
-        {planReused && !createPlanError && (
-          <p role="status" className="text-sm font-medium text-ink">
-            {copy.planReused}
-          </p>
-        )}
-        {plans.length === 0 ? (
-          <EmptyState role="status" title={copy.emptyPlansTitle} description={copy.emptyPlansDescription} />
-        ) : (
-          <FormField htmlFor="tp-plan-select" label={copy.selectPlanLabel} className="sm:max-w-md">
-            <NativeSelect id="tp-plan-select" value={selectedPlanId ?? ''} onChange={(e) => setSelectedPlanId(e.target.value)}>
-              {plans.map((plan, index) => (
-                <option key={plan.id} value={plan.id}>
-                  {copy.planOptionLabel(
-                    plan.createdAt,
-                    plan.status,
-                    index + 1,
-                    plan.optionLabel,
-                    stamp,
-                    isPendingRest(plan),
-                  )}
-                </option>
-              ))}
-            </NativeSelect>
-          </FormField>
-        )}
-      </section>
+      <PlanSelectorSection
+        token={token}
+        newPlanCurrency={newPlanCurrency}
+        onNewPlanCurrencyChange={(code) => {
+          setNewPlanCurrency(code);
+          setCreatePlanError(null);
+        }}
+        newPlanVariant={newPlanVariant}
+        creatingPlan={creatingPlan}
+        onCreatePlan={handleCreatePlan}
+        createPlanError={createPlanError}
+        stamp={stamp}
+        planCreated={planCreated}
+        planReused={planReused}
+        plans={plans}
+        selectedPlanId={selectedPlanId}
+        onSelectPlan={setSelectedPlanId}
+      />
 
       {selectedPlanId && (
         <section className="flex flex-col gap-4 border-t border-border-subtle pt-6" aria-labelledby="tp-detail-heading">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div className="flex min-w-0 flex-col gap-1">
-              <h2 id="tp-detail-heading" className="t-title text-ink">
-                {copy.detailHeading}
-              </h2>
-              {selectedPlan ? (
-                <p data-testid="tp-plan-status-line" className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <StatusBadge kind="treatmentPlan" status={selectedPlan.status} />
-                  {/* DX-379: hasta qué día valen los precios (o desde cuándo no). */}
-                  <QuoteValidity
-                    status={selectedPlan.status}
-                    validUntil={selectedPlan.quoteValidUntil}
-                    expired={selectedPlan.quoteExpired}
-                    locationId={selectedPlan.presentedLocationId}
-                    stamp={stamp}
-                  />
-                  {selectedPlan.optionLabel ? (
-                    <span className="text-sm font-medium text-muted">{selectedPlan.optionLabel}</span>
-                  ) : null}
-                  {/* DX-417: aceptado en parte, o el presupuesto pendiente que dejó. */}
-                  {selectedPlan.partialPendingPlanId ? (
-                    <StatusBadge kind="planSplit" status="PARTIAL" />
-                  ) : isPendingRest(selectedPlan) ? (
-                    <StatusBadge kind="planSplit" status="PENDING_REST" />
-                  ) : null}
-                </p>
-              ) : null}
-              {splitLinks.map((link) => (
-                <p key={link.planId} className="text-sm">
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="sm"
-                    className="h-auto p-0 text-left whitespace-normal tabular-nums"
-                    onClick={() => setSelectedPlanId(link.planId)}
-                  >
-                    {link.label}
-                  </Button>
-                </p>
-              ))}
-            </div>
-            {planDetail && (
-              <FormField
-                htmlFor="tp-plan-status"
-                label={copy.planStatusLabel}
-                className="sm:w-56"
-                hint={acceptHiddenByExpiry ? copy.planStatusExpiredHint : undefined}
-                hintId="tp-plan-status-hint"
-              >
-                {/* Solo el estado actual y sus transiciones (máquina de
-                    estados, DX-040): presentar y rechazar tienen botón
-                    propio, y aceptar es de odontólogo y ADMIN. */}
-                <NativeSelect
-                  id="tp-plan-status"
-                  value={planDetail.status}
-                  disabled={updatingPlanStatus || statusChoices.length === 1}
-                  aria-describedby={acceptHiddenByExpiry ? 'tp-plan-status-hint' : undefined}
-                  onChange={(e) => handlePlanStatusChange(e.target.value as TreatmentPlanStatus)}
-                >
-                  {statusChoices.map((status) => (
-                    <option key={status} value={status}>
-                      {PLAN_STATUS_LABELS[status]}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </FormField>
-            )}
-          </div>
+          <PlanDetailHeader
+            selectedPlan={selectedPlan}
+            stamp={stamp}
+            splitLinks={splitLinks}
+            onSelectPlan={setSelectedPlanId}
+            planDetail={planDetail}
+            acceptHiddenByExpiry={acceptHiddenByExpiry}
+            updatingPlanStatus={updatingPlanStatus}
+            statusChoices={statusChoices}
+            onPlanStatusChange={handlePlanStatusChange}
+          />
 
           {planDetailLoading && (
             <div className="flex flex-col gap-3" role="status">
@@ -1194,250 +1076,88 @@ export function TreatmentPlansTab({
                   pegada debajo y no repetida en cada número. */}
               <p className="t-label text-muted">{copy.paymentsScopeNote}</p>
 
-              <div className="flex flex-col gap-4 border-t border-border-subtle pt-6">
-                {/* El diente que trajo al usuario desde el odontograma, dicho
-                    antes de la tabla para que se entienda por qué hay filas
-                    resaltadas. */}
-                {focusedToothOnPlan && (
-                  <p role="status" className="text-sm font-medium text-ink">
-                    {copy.focusedToothNotice(focusedToothOnPlan)}
-                  </p>
-                )}
-
-                {/* DX-343: destino del foco cuando la fila del cargo desaparece. */}
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <h3 ref={itemsHeadingRef} tabIndex={-1} className="t-title text-ink">
-                    {copy.itemsTableCaption}
-                  </h3>
-                  {discountable && (planDetail.items ?? []).length > 0 ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm text-muted tabular-nums">{copy.selectedCount(selectedItemIds.size)}</span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setSelectedItemIds(
-                              selectedItemIds.size === (planDetail.items ?? []).length
-                                ? new Set()
-                                : new Set((planDetail.items ?? []).map((i) => i.id)),
-                            )
-                          }
-                        >
-                          {selectedItemIds.size === (planDetail.items ?? []).length
-                            ? copy.clearSelection
-                            : copy.selectAll}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          disabled={selectedItemIds.size === 0 || discountRules === null}
-                          onClick={() => {
-                            setBulkNotice(null);
-                            setBulkKey((k) => k + 1);
-                            setBulkOpen(true);
-                          }}
-                        >
-                          {copy.bulkDiscount}
-                        </Button>
-                    </div>
-                  ) : null}
-                </div>
-                {planDetail.status === 'ACCEPTED' && !signed ? (
-                  <p role="status" className="text-sm text-muted">
-                    {copy.acceptedDiscountNotice}
-                  </p>
-                ) : null}
-                <p role="status" className={bulkNotice ? 'text-sm text-success-text' : 'sr-only'}>
-                  {bulkNotice}
-                </p>
-
-                {/* DX-343: tras un 409 la lista de ítems ya no es fiable. Si
-                    releerla falla, cede su sitio al error de sección (escalón
-                    1): no queda una tabla vieja con un aviso de «actualizando»
-                    que ya no es verdad. */}
-                {feeStale && feeReloadFailed ? (
-                  <SectionError
-                    description={copy.genericPlanDetailRefreshError}
-                    onRetry={() => {
-                      setFeeReloadFailed(false);
-                      setPlanDetailReloadKey((k) => k + 1);
-                    }}
-                  />
-                ) : (
-                  <>
-                    {feeStale ? (
-                      <p role="status" className="text-sm text-muted">
-                        {copy.feeRefreshing}
-                      </p>
-                    ) : null}
-                    <PlanVisitsBoard
-                      key={planDetail.id}
-                      token={token}
-                      plan={planDetail}
-                      role={role}
-                      onChanged={refreshPlanDetail}
-                      primaryScheduling={primary === 'scheduleVisit'}
-                      onSchedulableChange={setHasSchedulableVisit}
-                      renderItems={(visitItems, { visit, ordered }) => (
-                        <ItemsTable
-                          items={visitItems}
-                          visit={visit}
-                          catalogById={catalogById}
-                          currency={planDetail.currency}
-                          feeStale={feeStale}
-                          feeRefs={feeReferences(ordered)}
-                          updatingItemId={updatingItemId}
-                          focusedTooth={focusedToothOnPlan}
-                          odontogramHref={odontogramHref}
-                          implantHref={implantHref}
-                          onStatusChange={handleItemStatusChange}
-                          onRemove={openRemoveConfirm}
-                          canLeaveDone={(item) => role === 'ADMIN' || item.performedById === sessionUserId}
-                          onCorrectAttribution={
-                            role === 'ADMIN' ? (itemId) => setMarkDone({ itemId, mode: 'correct' }) : undefined
-                          }
-                          onVoidFee={role === 'ADMIN' ? setFeeToVoid : undefined}
-                          itemBalances={itemBalances}
-                          fmt={sedeFmt}
-                          stamp={stamp}
-                          locked={signed}
-                          closed={closed}
-                          markDoneOnly={planDetail?.status === 'COMPLETED'}
-                          selection={
-                            discountable
-                              ? {
-                                  selectedIds: selectedItemIds,
-                                  onToggle: (itemId, checked) =>
-                                    setSelectedItemIds((prev) => {
-                                      const next = new Set(prev);
-                                      if (checked) next.add(itemId);
-                                      else next.delete(itemId);
-                                      return next;
-                                    }),
-                                }
-                              : undefined
-                          }
-                        />
-                      )}
-                    />
-                  </>
-                )}
-              </div>
+              <PlanItemsSection
+                token={token}
+                role={role}
+                planDetail={planDetail}
+                focusedToothOnPlan={focusedToothOnPlan}
+                headingRef={itemsHeadingRef}
+                discountable={discountable}
+                selectedItemIds={selectedItemIds}
+                setSelectedItemIds={setSelectedItemIds}
+                discountRules={discountRules}
+                onOpenBulkDiscount={() => {
+                  setBulkNotice(null);
+                  setBulkKey((k) => k + 1);
+                  setBulkOpen(true);
+                }}
+                signed={signed}
+                closed={closed}
+                bulkNotice={bulkNotice}
+                feeStale={feeStale}
+                feeReloadFailed={feeReloadFailed}
+                onRetryFeeReload={() => {
+                  setFeeReloadFailed(false);
+                  setPlanDetailReloadKey((k) => k + 1);
+                }}
+                onPlanChanged={refreshPlanDetail}
+                primary={primary}
+                onSchedulableChange={setHasSchedulableVisit}
+                catalogById={catalogById}
+                updatingItemId={updatingItemId}
+                odontogramHref={odontogramHref}
+                implantHref={implantHref}
+                onItemStatusChange={handleItemStatusChange}
+                onRemoveItem={openRemoveConfirm}
+                sessionUserId={sessionUserId}
+                onCorrectAttribution={
+                  role === 'ADMIN' ? (itemId) => setMarkDone({ itemId, mode: 'correct' }) : undefined
+                }
+                onVoidFee={role === 'ADMIN' ? setFeeToVoid : undefined}
+                itemBalances={itemBalances}
+                sedeFmt={sedeFmt}
+                stamp={stamp}
+              />
 
               {canSeeBilling ? (
-                <div className="flex flex-col gap-4 border-t border-border-subtle pt-6">
-                  {/* La nota de alcance NO se repite aquí: vive una sola vez
-                      pegada a `PlanMoneySummary`. */}
-                  <SectionHeader
-                    as="h3"
-                    title={copy.paymentsHeading}
-                    actions={
-                      <Button
-                        type="button"
-                        variant={primary === 'registerPayment' ? 'default' : 'secondary'}
-                        size="sm"
-                        onClick={openPaymentForm}
-                        disabled={!billable}
-                        aria-describedby={billable ? undefined : 'plan-not-billable-hint'}
-                      >
-                        {copy.registerPayment}
-                      </Button>
-                    }
-                  />
-                  {!billable && planDetail && (
-                    <p id="plan-not-billable-hint" className="text-sm text-muted">
-                      {copy.notBillableHint(PLAN_STATUS_LABELS[planDetail.status])}
-                    </p>
-                  )}
-
-                  {paymentsLoading && (
-                    <p role="status" className="text-sm text-muted">
-                      {copy.loadingBalance}
-                    </p>
-                  )}
-                  {paymentsError && (
-                    // Misma razón que en `planDetailError` arriba: la reload
-                    // key mantiene el fallo en el escalón 1 en vez de apilarle
-                    // un toast de escalón 3.
-                    <SectionError description={paymentsError} onRetry={() => setPaymentsReloadKey((k) => k + 1)} />
-                  )}
-
-                  {!paymentsLoading && !paymentsError && planBalance && (
-                    <>
-                      {paymentsRefreshing && (
-                        <p role="status" aria-live="polite" className="t-caption text-muted">
-                          {copy.refreshing}
-                        </p>
-                      )}
-
-                      {paymentForm ? (
-                        <PlanPaymentFormModal
-                          key={`${planDetail.id}-${paymentForm.seq}`}
-                          token={token}
-                          open={paymentForm.open}
-                          onOpenChange={(open) =>
-                            setPaymentForm((prev) => (prev && !open ? { ...prev, open: false } : prev))
-                          }
-                          plan={planDetail}
-                          planBalance={planBalance}
-                          onRetryBalance={() => void refreshBalanceAndPayments()}
-                          sedeZone={sedeZone}
-                          sedeFmt={sedeFmt}
-                          locationHint={locationHint}
-                          onRecorded={refreshBalanceAndPayments}
-                        />
-                      ) : null}
-
-                      {/* El detalle abono a abono se pliega; lo que decide si
-                          hace falta abrirlo —cuántos abonos hay— se queda en la
-                          propia fila, y el Saldo sigue arriba. Se esconde la
-                          TABLA, nunca el número. Abierta por defecto cuando aún
-                          no hay ningún abono, para que el vacío enseñe el
-                          siguiente paso. */}
-                      <Disclosure
-                        triggerId={PAYMENTS_TRIGGER_ID}
-                        summary={copy.paymentsDisclosure}
-                        meta={copy.paymentsDisclosureMeta(payments.length)}
-                        defaultOpen={payments.length === 0}
-                      >
-                        <PlanPaymentsList
-                          payments={payments}
-                          voidingPaymentId={voidingPaymentId}
-                          onVoid={openVoidConfirm}
-                          onReceipt={setReceiptPaymentId}
-                          billable={billable}
-                          manualPaymentIds={manualPaymentIds}
-                          onAllocate={role === 'ADMIN' && billable ? openAllocation : undefined}
-                          onViewAllocation={role === 'ADMIN' ? setViewAllocationPaymentId : undefined}
-                          onViewProof={canSeeBilling ? (p) => proofViewer.open(p.id) : undefined}
-                          fmt={sedeFmt}
-                          onExternalInvoice={(p) =>
-                            setInvoiceTarget({
-                              paymentId: p.id,
-                              subject: paymentRowLabel(p, sedeFmt),
-                              externalInvoiceNumber: p.externalInvoiceNumber,
-                            })
-                          }
-                        />
-                      </Disclosure>
-
-                      <div className="border-t border-border-subtle pt-6">
-                        <PaymentPlanSection
-                          token={token}
-                          planId={selectedPlanId!}
-                          planCurrency={planBalance.planCurrency}
-                          billable={planBalance.billable}
-                          canCreate={billable}
-                          refreshSignal={paymentPlanRefreshSignal}
-                          fmt={sedeFmt}
-                          onRetryBalance={() => void refreshBalanceAndPayments()}
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
+                <PlanBillingSection
+                  token={token}
+                  planDetail={planDetail}
+                  selectedPlanId={selectedPlanId!}
+                  primary={primary}
+                  billable={billable}
+                  onOpenPaymentForm={openPaymentForm}
+                  paymentsLoading={paymentsLoading}
+                  paymentsError={paymentsError}
+                  onRetryPayments={() => setPaymentsReloadKey((k) => k + 1)}
+                  planBalance={planBalance}
+                  paymentsRefreshing={paymentsRefreshing}
+                  paymentForm={paymentForm}
+                  onPaymentFormOpenChange={(open) =>
+                    setPaymentForm((prev) => (prev && !open ? { ...prev, open: false } : prev))
+                  }
+                  onRetryBalance={() => void refreshBalanceAndPayments()}
+                  sedeZone={sedeZone}
+                  sedeFmt={sedeFmt}
+                  locationHint={locationHint}
+                  onRecorded={refreshBalanceAndPayments}
+                  payments={payments}
+                  voidingPaymentId={voidingPaymentId}
+                  onVoid={openVoidConfirm}
+                  onReceipt={setReceiptPaymentId}
+                  manualPaymentIds={manualPaymentIds}
+                  onAllocate={role === 'ADMIN' && billable ? openAllocation : undefined}
+                  onViewAllocation={role === 'ADMIN' ? setViewAllocationPaymentId : undefined}
+                  onViewProof={canSeeBilling ? (p) => proofViewer.open(p.id) : undefined}
+                  onExternalInvoice={(p) =>
+                    setInvoiceTarget({
+                      paymentId: p.id,
+                      subject: paymentRowLabel(p, sedeFmt),
+                      externalInvoiceNumber: p.externalInvoiceNumber,
+                    })
+                  }
+                  paymentPlanRefreshSignal={paymentPlanRefreshSignal}
+                />
               ) : null}
 
               {/* Firmado (DX-012): no se agregan ítems; `PlanQuoteActions` ya
@@ -1486,182 +1206,96 @@ export function TreatmentPlansTab({
         </section>
       )}
 
-      {planDetail && discountRules ? (
-        <BulkDiscountModal
-          key={bulkKey}
-          open={bulkOpen}
-          onOpenChange={setBulkOpen}
-          token={token}
-          planId={planDetail.id}
-          currency={planDetail.currency}
-          roundingDigits={contractRoundingDigits(planDetail.currencyDigits)}
-          items={(planDetail.items ?? []).filter((i) => selectedItemIds.has(i.id))}
-          procedureOf={(item) => procedureName(item, catalogById)}
-          rules={discountRules}
-          role={role}
-          fmt={sedeFmt}
-          onApplied={(updated, skippedNoDiscount) => {
-            setSelectedItemIds(new Set());
-            // DX-105: lo que no admite descuento se salta; se dice cuántos.
-            setBulkNotice(
-              [
-                updated.length > 0 || skippedNoDiscount === 0 ? copy.bulkDiscountApplied(updated.length) : null,
-                skippedNoDiscount > 0 ? bulkDiscountCopy.skipped(skippedNoDiscount) : null,
-              ]
-                .filter(Boolean)
-                .join(' '),
-            );
-            // DX-051: el descuento baja lo facturable y libera lo imputado de más.
-            void Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()]);
-          }}
-        />
-      ) : null}
-
-      {proofViewer.dialog}
-
-      <PaymentReceiptDialog
+      <TreatmentPlanModals
         token={token}
-        paymentId={receiptPaymentId}
-        hasProof={payments.find((p) => p.id === receiptPaymentId)?.hasProof ?? false}
-        onOpenChange={(open) => {
-          if (!open) setReceiptPaymentId(null);
+        patientId={patientId}
+        role={role}
+        planDetail={planDetail}
+        catalogById={catalogById}
+        sedeFmt={sedeFmt}
+        discountRules={discountRules}
+        bulkKey={bulkKey}
+        bulkOpen={bulkOpen}
+        onBulkOpenChange={setBulkOpen}
+        selectedItemIds={selectedItemIds}
+        onBulkApplied={(updated, skippedNoDiscount) => {
+          setSelectedItemIds(new Set());
+          // DX-105: lo que no admite descuento se salta; se dice cuántos.
+          setBulkNotice(
+            [
+              updated.length > 0 || skippedNoDiscount === 0 ? copy.bulkDiscountApplied(updated.length) : null,
+              skippedNoDiscount > 0 ? bulkDiscountCopy.skipped(skippedNoDiscount) : null,
+            ]
+              .filter(Boolean)
+              .join(' '),
+          );
+          // DX-051: el descuento baja lo facturable y libera lo imputado de más.
+          void Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()]);
         }}
-      />
-
-      {/* DX-515: `key` por abono, para empezar con su nº actual. */}
-      <ExternalInvoiceModal
-        key={invoiceTarget?.paymentId ?? 'no-invoice-target'}
-        token={token}
-        target={invoiceTarget}
-        onOpenChange={(open) => {
-          if (!open) setInvoiceTarget(null);
-        }}
-        onSaved={(result) => {
+        proofDialog={proofViewer.dialog}
+        receiptPaymentId={receiptPaymentId}
+        onReceiptClose={() => setReceiptPaymentId(null)}
+        payments={payments}
+        invoiceTarget={invoiceTarget}
+        onInvoiceClose={() => setInvoiceTarget(null)}
+        onInvoiceSaved={(result) => {
           const ids = new Set(result.paymentIds);
           setPayments((list) =>
             list.map((p) => (ids.has(p.id) ? { ...p, externalInvoiceNumber: result.externalInvoiceNumber } : p)),
           );
         }}
-      />
-
-      {markDone && markDoneItem && planDetail ? (
-        <MarkDoneModal
-          key={`${markDone.itemId}-${markDone.mode}`}
-          open
-          onOpenChange={(open) => {
-            if (!open) setMarkDone(null);
-          }}
-          token={token}
-          planId={planDetail.id}
-          item={markDoneItem}
-          subject={copy.markDoneSubject(procedureName(markDoneItem, catalogById), markDoneItem.toothNumber)}
-          mode={markDone.mode}
-          // Se lee al abrir (tras un clic, sin riesgo de hidratación): es la
-          // sede que el cliente HTTP manda en `X-Location-Id`.
-          activeLocationId={getActiveLocationId()}
-          locationName={locations.find((l) => l.id === getActiveLocationId())?.name ?? null}
-          locations={locations}
-          onRetryLocations={() => {
-            // Releer de verdad: la lista cacheada de la sesión no sirve.
-            invalidateLocations();
-            setLocationsReloadKey((k) => k + 1);
-          }}
-          onSaved={handleMarkDoneSaved}
-        />
-      ) : null}
-
-      {suggestedEvolution ? (
-        <NewEvolutionModal
-          key={suggestedEvolution.key}
-          open
-          onOpenChange={(open) => {
-            if (!open) setSuggestedEvolution(null);
-          }}
-          token={token}
-          patientId={patientId}
-          suggestedTemplateId={suggestedEvolution.templateId}
-          suggestedBy={suggestedEvolution.procedure}
-          onCreated={() => toast.success(copy.evolutionSaved)}
-        />
-      ) : null}
-
-      {feeToVoid?.cancellationFeeAppointmentId ? (
-        <VoidCancellationFeeModal
-          key={feeToVoid.id}
-          token={token}
-          appointmentId={feeToVoid.cancellationFeeAppointmentId}
-          onCloseAutoFocus={(event) => {
-            if (!focusItemsHeadingOnClose.current) return;
-            focusItemsHeadingOnClose.current = false;
-            event.preventDefault();
-            itemsHeadingRef.current?.focus();
-          }}
-          onClose={() => setFeeToVoid(null)}
-          onDone={() => {
-            focusItemsHeadingOnClose.current = true;
-            setFeeToVoid(null);
-            // El ítem sale del plan y deja de ser facturable.
-            void Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()]);
-          }}
-          onStale={() => {
-            focusItemsHeadingOnClose.current = true;
-            feeStalePlanRef.current = selectedPlanId;
-            setFeeStalePlanId(selectedPlanId);
-            setFeeReloadFailed(false);
-            setPlanDetailReloadKey((k) => k + 1);
-          }}
-        />
-      ) : null}
-
-      <ConfirmDialog
-        open={itemToRemove !== null}
-        onOpenChange={(open) => {
-          if (!open) setItemToRemove(null);
+        markDone={markDone}
+        markDoneItem={markDoneItem}
+        onMarkDoneClose={() => setMarkDone(null)}
+        locations={locations}
+        onRetryLocations={() => {
+          // Releer de verdad: la lista cacheada de la sesión no sirve.
+          invalidateLocations();
+          setLocationsReloadKey((k) => k + 1);
         }}
-        title={copy.removeConfirmTitle}
-        description={copy.removeConfirmDescription}
-        confirmLabel={copy.removeConfirm}
-        onConfirm={handleRemoveItem}
-        confirming={updatingItemId !== null && updatingItemId === itemToRemove}
-        error={removeItemError}
-      />
-
-      <PaymentAllocationDetailDialog
-        token={token}
-        paymentId={viewAllocationPaymentId}
-        onOpenChange={(open) => {
-          if (!open) setViewAllocationPaymentId(null);
+        onMarkDoneSaved={handleMarkDoneSaved}
+        suggestedEvolution={suggestedEvolution}
+        onSuggestedEvolutionClose={() => setSuggestedEvolution(null)}
+        feeToVoid={feeToVoid}
+        onFeeCloseAutoFocus={(event) => {
+          if (!focusItemsHeadingOnClose.current) return;
+          focusItemsHeadingOnClose.current = false;
+          event.preventDefault();
+          itemsHeadingRef.current?.focus();
         }}
-        onChange={role === 'ADMIN' && billable ? openAllocation : undefined}
-      />
-
-      {allocation ? (
-        <ReallocatePaymentModal
-          key={allocation.seq}
-          open={allocation.open}
-          onOpenChange={(open) => {
-            if (!open) setAllocation((prev) => (prev ? { ...prev, open: false } : prev));
-          }}
-          paymentId={allocation.paymentId}
-          token={token}
-          onSaved={() => void refreshBalanceAndPayments()}
-          onCloseAutoFocus={focusAfterAllocation}
-        />
-      ) : null}
-
-      {/* `key` por abono: cada anulación empieza con el motivo en blanco. */}
-      <VoidPaymentModal
-        key={paymentToVoid ?? 'none'}
-        open={paymentToVoid !== null}
-        onOpenChange={(open) => {
-          if (!open) setPaymentToVoid(null);
+        onFeeClose={() => setFeeToVoid(null)}
+        onFeeDone={() => {
+          focusItemsHeadingOnClose.current = true;
+          setFeeToVoid(null);
+          // El ítem sale del plan y deja de ser facturable.
+          void Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()]);
         }}
-        onConfirm={handleVoidPayment}
-        submitting={voidingPaymentId !== null && voidingPaymentId === paymentToVoid}
-        error={paymentActionError}
-        // Pinta el aviso de la ventana de recepción; la regla la aplica la API.
-        restrictedToOwnToday={role !== 'ADMIN'}
-        splitLines={splitLinesOf(payments, paymentToVoid)}
+        onFeeStale={() => {
+          focusItemsHeadingOnClose.current = true;
+          feeStalePlanRef.current = selectedPlanId;
+          setFeeStalePlanId(selectedPlanId);
+          setFeeReloadFailed(false);
+          setPlanDetailReloadKey((k) => k + 1);
+        }}
+        itemToRemove={itemToRemove}
+        onRemoveClose={() => setItemToRemove(null)}
+        onRemoveConfirm={handleRemoveItem}
+        removing={updatingItemId !== null && updatingItemId === itemToRemove}
+        removeItemError={removeItemError}
+        viewAllocationPaymentId={viewAllocationPaymentId}
+        onViewAllocationClose={() => setViewAllocationPaymentId(null)}
+        onAllocationChange={role === 'ADMIN' && billable ? openAllocation : undefined}
+        allocation={allocation}
+        onAllocationOpenChange={(open) => {
+          if (!open) setAllocation((prev) => (prev ? { ...prev, open: false } : prev));
+        }}
+        onAllocationSaved={() => void refreshBalanceAndPayments()}
+        onAllocationCloseAutoFocus={focusAfterAllocation}
+        paymentToVoid={paymentToVoid}
+        onVoidClose={() => setPaymentToVoid(null)}
+        onVoidConfirm={handleVoidPayment}
+        voiding={voidingPaymentId !== null && voidingPaymentId === paymentToVoid}
+        paymentActionError={paymentActionError}
       />
     </div>
   );
