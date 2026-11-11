@@ -564,8 +564,9 @@ export function appointmentMoveDetail(
   staff: StaffNames | null,
 ): string | null {
   if (metadata.reason !== 'APPOINTMENT_MOVED') return null;
-  const what = 'Cita movida';
   const move = metadata.move;
+  // DX-436-bis: «Asignar» desde «Ocupar este hueco».
+  const what = move?.via === 'OPENING' ? 'Cita movida a un hueco liberado' : 'Cita movida';
   if (!move) return what;
   const when = (iso: string) => (clock ? clock.fmt.dateTime(new Date(iso), clock.timeZone) : NO_SEDE_FORMAT);
   const who = (id: string) => staff?.get(id.toLowerCase()) ?? FORMER_PROVIDER;

@@ -7127,6 +7127,11 @@ export interface components {
         AuditAppointmentMoveDto: {
             from: components["schemas"]["AuditAppointmentSlotDto"];
             to: components["schemas"]["AuditAppointmentSlotDto"];
+            /**
+             * @description DX-436-bis: `OPENING` = «Asignar» desde «Ocupar este hueco»; sin él, un reagendado.
+             * @enum {string}
+             */
+            via?: "OPENING";
         };
         AuditStatusChangeDto: {
             /** @example CONFIRMED */
