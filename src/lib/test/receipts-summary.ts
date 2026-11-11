@@ -9,7 +9,7 @@ export function receiptsSummaryFixture(overrides: Partial<ReceiptsSummary> = {})
     patient: {
       id: 'pat-1',
       fullName: 'Carolina Pérez',
-      documentTypeName: 'Cédula',
+      documentTypeName: 'Documento de identidad',
       documentMasked: '****5678',
       patientCode: 'P-000042',
     },

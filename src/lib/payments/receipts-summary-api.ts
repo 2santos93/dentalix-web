@@ -47,7 +47,7 @@ export interface ReceiptsSummary {
   patient: {
     id: string;
     fullName: string;
-    /** Nombre del tipo de documento («Cédula»). */
+    /** Nombre del tipo de documento, el que le da la clínica («Documento de identidad»). */
     documentTypeName: string;
     /** Solo el número enmascarado («****5678»), o `null` sin documento. */
     documentMasked: string | null;

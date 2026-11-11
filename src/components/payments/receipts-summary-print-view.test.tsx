@@ -47,7 +47,7 @@ it('pide la impresión (auditada) del periodo, pinta el documento y abre el diá
   expect(doc).toHaveTextContent('Clínica Demo');
   expect(doc).toHaveTextContent('RIF J-12345678-9');
   expect(doc).toHaveTextContent('Carolina Pérez');
-  expect(doc).toHaveTextContent('Cédula ****5678');
+  expect(doc).toHaveTextContent('Documento de identidad ****5678');
   expect(doc).toHaveTextContent('Del 01/11/2026 al 11/11/2026');
   expect(within(doc).getByTestId('receipts-summary-notice')).toHaveTextContent(
     'Este resumen no es factura ni documento fiscal.',
@@ -111,7 +111,7 @@ it('sin documento no pinta el tipo', async () => {
   mockedPrint.mockResolvedValue(receiptsSummaryFixture({ patient: { ...base.patient, documentMasked: null } }));
   render(<ReceiptsSummaryPrintView token="tok" patientId="pat-1" {...RANGE} />);
   const doc = await screen.findByTestId('receipts-summary-document');
-  expect(doc).not.toHaveTextContent('Cédula');
+  expect(doc).not.toHaveTextContent('Documento de identidad');
 });
 
 it('un 404 es un aviso sin reintento', async () => {
