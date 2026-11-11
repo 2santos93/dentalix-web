@@ -11,9 +11,11 @@ import { isoToCalendarDate, type IsoRange } from '@/lib/dates/iso';
 export const MAX_SUMMARY_DAYS = 366;
 
 export const summaryRangeCopy = {
-  missing: 'Elige el primer y el último día del periodo.',
-  fromAfterTo: 'La fecha «Desde» no puede ser posterior a «Hasta».',
-  tooLong: `El periodo no puede superar ${MAX_SUMMARY_DAYS} días.`,
+  missing: 'Elige el primer y el último día del período.',
+  // Los 400 de la API (`receipt-summary.ts`). El de orden, sin su «usa fechas AAAA-MM-DD»:
+  // aquí la fecha se elige en el calendario con el formato de la sede, nunca se teclea en ISO.
+  fromAfterTo: 'El período no es válido: «Desde» tiene que ser anterior o igual a «Hasta».',
+  tooLong: `El período del resumen admite como mucho ${MAX_SUMMARY_DAYS} días.`,
 };
 
 export type SummaryRangeError = { field: 'from' | 'to'; message: string };

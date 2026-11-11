@@ -94,8 +94,8 @@ export function ReceiptsSummaryDocument({ summary, format }: ReceiptsSummaryDocu
                   </tr>
                 </thead>
                 <tbody>
-                  {summary.receipts.map((r) => (
-                    <tr key={r.paymentId} className={r.voided ? 'text-[#6b7280]' : undefined}>
+                  {summary.receipts.map((r, i) => (
+                    <tr key={`${r.paymentId}-${i}`} className={r.voided ? 'text-[#6b7280]' : undefined}>
                       <Td>
                         {r.receiptNumber}
                         {r.voided && r.voidReason ? (
@@ -115,8 +115,8 @@ export function ReceiptsSummaryDocument({ summary, format }: ReceiptsSummaryDocu
             </div>
             {/* Teléfono: cada recibo, una ficha apilada (sin tabla que desborde). */}
             <ul aria-label={receiptsSummaryCopy.listLabel} className="divide-y divide-[#e5e7eb] text-sm sm:hidden print:hidden">
-              {summary.receipts.map((r) => (
-                <li key={r.paymentId} className={`py-2 ${r.voided ? 'text-[#6b7280]' : ''}`}>
+              {summary.receipts.map((r, i) => (
+                <li key={`${r.paymentId}-${i}`} className={`py-2 ${r.voided ? 'text-[#6b7280]' : ''}`}>
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="font-medium tabular-nums">{r.receiptNumber}</span>
                     <Amount voided={r.voided} text={doc.amount(r.amount, r.currency)} />

@@ -304,9 +304,9 @@ export function SummaryPreview({ summary, fmt }: { summary: ReceiptsSummary; fmt
     <div className="flex flex-col gap-4" data-testid="receipts-summary-preview">
       {summary.restrictedToLocations ? <p className="text-sm text-muted">{copy.restricted}</p> : null}
       <ul aria-label={copy.listLabel} className="divide-y divide-border rounded-lg border border-border">
-        {summary.receipts.map((r) => (
+        {summary.receipts.map((r, i) => (
           <li
-            key={r.paymentId}
+            key={`${r.paymentId}-${i}`}
             data-testid="receipts-summary-row"
             data-voided={r.voided || undefined}
             className="flex flex-col gap-1 px-3 py-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
