@@ -46,7 +46,7 @@ async function setRecallInRecord(page: Page, patientId: string): Promise<void> {
   await page.getByRole('button', { name: 'Fijar recall de control' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Intervalo').selectOption('6');
-  await fillDate(dialog, 'Último control', lastControl);
+  await fillDate(dialog, 'Fecha fijada a mano', lastControl);
   await dialog.getByRole('button', { name: 'Guardar recall' }).click();
   await expect(page.getByTestId('recall-row-CHECKUP')).toContainText('Por llamar');
 }

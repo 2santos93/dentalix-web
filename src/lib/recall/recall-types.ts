@@ -1,5 +1,5 @@
-import { KIND_LABELS, KIND_ORDER } from "./presentation";
-import type { PatientRecall, RecallKind, RecallType } from "./recall-api";
+import { KIND_LABELS, KIND_ORDER } from './presentation';
+import type { PatientRecall, RecallKind, RecallType } from './recall-api';
 
 /**
  * DX-015-bis: un tipo de recall tal como lo usa la pantalla. Viene de
@@ -19,9 +19,7 @@ export interface RecallTypeOption {
 }
 
 /** Los tipos de la API por su orden, o el respaldo si no se pudieron leer (`null`). */
-export function recallTypeOptions(
-  types: readonly RecallType[] | null,
-): RecallTypeOption[] {
+export function recallTypeOptions(types: readonly RecallType[] | null): RecallTypeOption[] {
   if (types === null) {
     return KIND_ORDER.map((kind) => ({
       ref: kind,
@@ -33,9 +31,7 @@ export function recallTypeOptions(
     }));
   }
   return [...types]
-    .sort(
-      (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "es"),
-    )
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'es'))
     .map((t) => ({
       ref: t.id,
       id: t.id,
@@ -47,9 +43,7 @@ export function recallTypeOptions(
 }
 
 /** Identificador estable de la fila (los `data-testid`): la clave si la tiene, si no el id. */
-export function recallTypeKey(
-  option: Pick<RecallTypeOption, "systemKey" | "ref">,
-): string {
+export function recallTypeKey(option: Pick<RecallTypeOption, 'systemKey' | 'ref'>): string {
   return option.systemKey ?? option.ref;
 }
 
@@ -57,57 +51,57 @@ export function recallTypeKey(
  * El filtro de `GET /recall/due` para un `ref`: el id del tipo va como
  * `recallTypeId`; la clave del respaldo (`HYGIENE`, `CHECKUP`), como `kind`.
  */
-export function recallTypeFilter(
-  ref: string,
-): { recallTypeId: string } | { kind: RecallKind } {
-  return (KIND_ORDER as readonly string[]).includes(ref)
-    ? { kind: ref as RecallKind }
-    : { recallTypeId: ref };
+export function recallTypeFilter(ref: string): { recallTypeId: string } | { kind: RecallKind } {
+  return (KIND_ORDER as readonly string[]).includes(ref) ? { kind: ref as RecallKind } : { recallTypeId: ref };
 }
 
 /** El nombre del tipo de un recall o un contacto; sin él (API anterior), el de su clave. */
-export function recallTypeLabel(r: {
-  recallTypeName?: string | null;
-  kind: RecallKind | null;
-}): string {
+export function recallTypeLabel(r: { recallTypeName?: string | null; kind: RecallKind | null }): string {
   if (r.recallTypeName) return r.recallTypeName;
-  return r.kind ? KIND_LABELS[r.kind] : "Recall";
+  return r.kind ? KIND_LABELS[r.kind] : 'Recall';
 }
 
-function belongsTo(
-  option: RecallTypeOption,
-  recall: Pick<PatientRecall, "recallTypeId" | "kind">,
-): boolean {
-  return option.id !== null
-    ? recall.recallTypeId === option.id
-    : recall.kind === option.systemKey;
+function belongsTo(option: RecallTypeOption, recall: Pick<PatientRecall, 'recallTypeId' | 'kind'>): boolean {
+  return option.id !== null ? recall.recallTypeId === option.id : recall.kind === option.systemKey;
 }
 
 export interface RecallRow {
   type: RecallTypeOption;
   recall: PatientRecall | null;
+  /**
+   * Se puede fijar o cambiar. No, si el tipo del recall ya no está entre los de
+   * la clínica (borrado): el PUT daría 404. En el respaldo no se sabe, y se
+   * deja (la API devolvería su error en el diálogo).
+   */
+  editable: boolean;
 }
 
 /**
  * Los renglones del bloque de la ficha: un tipo activo por renglón (con su
  * recall o «Sin recall») y, además, cada recall de un tipo que ya no se ofrece
- * (desactivado, o de otro tipo en el respaldo), para que no desaparezca.
+ * (desactivado, borrado o de otro tipo en el respaldo), para que no desaparezca.
  */
-export function recallRows(
-  options: readonly RecallTypeOption[],
-  recalls: readonly PatientRecall[],
-): RecallRow[] {
+export function recallRows(options: readonly RecallTypeOption[], recalls: readonly PatientRecall[]): RecallRow[] {
+  const fromApi = options.some((o) => o.id !== null);
   const rows: RecallRow[] = options
     .filter((o) => o.active)
     .map((type) => ({
       type,
       recall: recalls.find((r) => belongsTo(type, r)) ?? null,
+      editable: true,
     }));
   for (const recall of recalls) {
     if (rows.some((row) => row.recall?.id === recall.id)) continue;
+    // Un tipo desactivado sigue en la lista de la API: se edita por su id.
+    const inactive = options.find((o) => belongsTo(o, recall));
+    if (inactive) {
+      rows.push({ type: inactive, recall, editable: true });
+      continue;
+    }
     rows.push({
+      editable: !fromApi,
       type: {
-        ref: recall.recallTypeId ?? recall.kind ?? "",
+        ref: recall.recallTypeId ?? recall.kind ?? '',
         id: recall.recallTypeId ?? null,
         systemKey: recall.kind,
         name: recallTypeLabel(recall),
@@ -128,19 +122,14 @@ export function recallRows(
  * - `manual`: la fecha que fijó el clínico.
  */
 export type RecallBasis = {
-  kind: "procedure" | "frozen" | "manual";
+  kind: 'procedure' | 'frozen' | 'manual';
   day: string;
 };
 
 export function recallBasis(
-  recall: Pick<
-    PatientRecall,
-    "lastDoneAt" | "lastDoneItemId" | "preBackfillDoneAt"
-  >,
+  recall: Pick<PatientRecall, 'lastDoneAt' | 'lastDoneItemId' | 'preBackfillDoneAt'>,
 ): RecallBasis {
-  if (recall.lastDoneItemId)
-    return { kind: "procedure", day: recall.lastDoneAt };
-  if (recall.preBackfillDoneAt)
-    return { kind: "frozen", day: recall.lastDoneAt };
-  return { kind: "manual", day: recall.lastDoneAt };
+  if (recall.lastDoneItemId) return { kind: 'procedure', day: recall.lastDoneAt };
+  if (recall.preBackfillDoneAt) return { kind: 'frozen', day: recall.lastDoneAt };
+  return { kind: 'manual', day: recall.lastDoneAt };
 }

@@ -32,7 +32,7 @@ import { RecallIntervalDialog } from './recall-interval-dialog';
 export const patientRecallCopy = {
   heading: 'Recall',
   description:
-    'Cada cuánto debe volver y a quién se ha llamado. El plazo cuenta desde el último procedimiento del tipo realizado o desde la fecha fijada a mano.',
+    'Cada cuánto debe volver y a quién se ha llamado. El plazo cuenta desde lo más reciente: el último procedimiento que lo reinicia o la fecha fijada a mano.',
   notSet: 'Sin recall',
   set: 'Fijar',
   change: 'Cambiar',
@@ -48,6 +48,7 @@ export const patientRecallCopy = {
     manual: (day: string) => `Cuenta desde el ${day}, fijado a mano`,
   } satisfies Record<RecallBasis['kind'], (day: string) => string>,
   pausedUntil: (day: string, reason: string | null) => `En pausa hasta el ${day}${reason ? ` · ${reason}` : ''}`,
+  typeGone: 'Este tipo ya no existe en la clínica: el recall se conserva, pero no se puede cambiar.',
   contactsHeading: 'Historial de contactos',
   noContacts: 'Sin contactos.',
   by: (name: string | null) => (name ? `por ${name}` : 'por un miembro que ya no está en la clínica'),
@@ -135,7 +136,7 @@ export function PatientRecallSection({
         skeleton={<Skeleton className="h-24 w-full" />}
       >
         <ul className="flex flex-col divide-y divide-border-subtle rounded-xl border border-border bg-surface">
-          {rows.map(({ type, recall }) => {
+          {rows.map(({ type, recall, editable }) => {
             const label = type.name;
             const basis = recall ? recallBasis(recall) : null;
             return (
@@ -159,6 +160,7 @@ export function PatientRecallSection({
                       {copy.basis[basis.kind](stamp.civilDate(basis.day, recall.locationId))}
                     </span>
                   ) : null}
+                  {!editable ? <span className="text-xs text-muted">{copy.typeGone}</span> : null}
                   {recall?.status === 'PAUSED' && recall.disabledUntil ? (
                     <span className="text-xs text-muted tabular-nums">
                       {copy.pausedUntil(stamp.civilDate(recall.disabledUntil, recall.locationId), recall.disabledReason)}
@@ -177,7 +179,7 @@ export function PatientRecallSection({
                       {copy.register}
                     </Button>
                   ) : null}
-                  {canSet ? (
+                  {canSet && editable ? (
                     <Button
                       type="button"
                       variant="secondary"

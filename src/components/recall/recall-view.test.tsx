@@ -168,6 +168,20 @@ describe('RecallView (DX-015)', () => {
     );
   });
 
+  it('mientras llegan los tipos el filtro solo ofrece «Todos» y está deshabilitado (revisión 1, MINOR-2)', async () => {
+    let resolveTypes: (t: RecallType[]) => void = () => undefined;
+    mockedTypes.mockReturnValue(new Promise<RecallType[]>((r) => (resolveTypes = r)));
+    mockedList.mockResolvedValue(page([item()]));
+    render(<RecallView token="tok" />);
+    await screen.findByText('Ana Pérez');
+    const filter = screen.getByLabelText(recallCopy.kindLabel);
+    expect(filter).toBeDisabled();
+    expect(within(filter).getAllByRole('option').map((o) => o.textContent)).toEqual([recallCopy.kindAll]);
+    resolveTypes(TYPES);
+    await waitFor(() => expect(filter).not.toBeDisabled());
+    expect(within(filter).getByRole('option', { name: 'Higiene' })).toHaveValue('t-hyg');
+  });
+
   it('DX-015-bis: la columna «Tipo» dice el nombre del tipo, también sin clave', async () => {
     mockedList.mockResolvedValue(
       page([item({ kind: null, recallTypeId: 't-perio', recallTypeName: 'Mantenimiento periodontal', intervalMonths: 3 })]),

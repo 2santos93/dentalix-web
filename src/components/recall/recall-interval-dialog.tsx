@@ -16,8 +16,12 @@ export const intervalDialogCopy = {
   title: (kind: string) => `Recall de ${kind.toLowerCase()}`,
   description: 'Cada cuánto debe volver el paciente. Cuando venza y no tenga cita, recepción lo verá en la lista.',
   interval: 'Intervalo',
-  lastDone: 'Último control',
-  lastDoneHint: 'Vacío: hoy.',
+  // DX-015-bis: el campo es lo fijado a mano; el plazo cuenta desde lo más
+  // reciente entre esto y el último procedimiento que reinicia el recall.
+  lastDone: 'Fecha fijada a mano',
+  lastDoneHint: 'Cuenta la más reciente entre esta fecha y el último procedimiento que reinicia el recall. Vacío: hoy.',
+  lastDoneFromProcedureHint:
+    'Sin fecha fijada a mano: viene la del procedimiento realizado. Si guardas, queda fijada a mano.',
   pauseUntil: 'Pausar hasta (opcional)',
   pauseReason: 'Motivo de la pausa (opcional)',
   active: 'Recall activo',
@@ -53,8 +57,14 @@ export function RecallIntervalDialog({
   onSaved: (recalls: PatientRecalls) => void;
 }) {
   const [months, setMonths] = useState(recall?.intervalMonths ?? defaultIntervalMonths ?? 6);
-  // La base vigente (DX-015-bis): guardar sin tocarla no mueve el vencimiento.
-  const [lastDone, setLastDone] = useState<string | null>(recall?.lastDoneAt ?? null);
+  // DX-015-bis: lo fijado a mano, tal cual. Guardar solo el intervalo lo
+  // reenvía sin cambios: no convierte el día de un procedimiento en «fijado a
+  // mano» ni pierde la fecha del clínico (la base es el máximo de los dos).
+  // Un recall nacido de un procedimiento no tiene fecha fijada y la API, sin
+  // `lastDoneAt`, pondría HOY: se ofrece la del procedimiento (la base vigente)
+  // y se avisa de que quedará fijada (hasta que la API conserve lo fijado).
+  const fromProcedureOnly = recall !== null && recall.manualDoneAt === null;
+  const [lastDone, setLastDone] = useState<string | null>(recall?.manualDoneAt ?? recall?.lastDoneAt ?? null);
   const [pauseUntil, setPauseUntil] = useState<string | null>(recall?.disabledUntil ?? null);
   const [reason, setReason] = useState(recall?.disabledReason ?? '');
   const [active, setActive] = useState(recall?.active ?? true);
@@ -110,7 +120,11 @@ export function RecallIntervalDialog({
               ))}
           </NativeSelect>
         </FormField>
-        <FormField htmlFor="ri-last-done" label={copy.lastDone} hint={copy.lastDoneHint}>
+        <FormField
+          htmlFor="ri-last-done"
+          label={copy.lastDone}
+          hint={fromProcedureOnly ? copy.lastDoneFromProcedureHint : copy.lastDoneHint}
+        >
           <DateField id="ri-last-done" value={lastDone} onChange={setLastDone} />
         </FormField>
         <FormField htmlFor="ri-pause" label={copy.pauseUntil}>

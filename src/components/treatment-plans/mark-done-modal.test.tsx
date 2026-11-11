@@ -1,7 +1,8 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
-import { MarkDoneModal, recallUpdatesNotice } from './mark-done-modal';
+import { MarkDoneModal } from './mark-done-modal';
+import { recallUpdatesNotice } from '@/lib/recall/recall-notice';
 import { STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { updateItem, type TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
@@ -342,6 +343,23 @@ describe('MarkDoneModal · recalls que mueve el procedimiento (DX-015-bis)', () 
     await user.click(screen.getByRole('button', { name: 'Marcar realizado' }));
     await waitFor(() => expect(props.onSaved).toHaveBeenCalled());
     expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('sin las sedes cargadas el aviso sale sin fecha, nunca en otro formato (revisión 1, MINOR-5)', async () => {
+    const user = userEvent.setup();
+    mockedUpdate.mockResolvedValue({
+      ...item,
+      status: 'DONE',
+      performedById: 'laura',
+      performedLocationId: 'loc-main',
+      recallUpdates: [higiene],
+    } as TreatmentPlanItem);
+    const props = renderModal({ locations: [] });
+    const select = await screen.findByRole('combobox', { name: 'Profesional que lo realizó' });
+    await waitFor(() => expect(select).toHaveValue('laura'));
+    await user.click(screen.getByRole('button', { name: 'Marcar realizado' }));
+    await waitFor(() => expect(props.onSaved).toHaveBeenCalled());
+    expect(toast.success).toHaveBeenCalledWith('Recall de Higiene actualizado');
   });
 
   it('el texto: uno o varios recalls; sin formato de sede, sin fecha', () => {

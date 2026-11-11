@@ -77,13 +77,15 @@ test('una profilaxis realizada deja el vencimiento de Higiene en la ficha', asyn
   const dialog = page.getByRole('dialog', { name: 'Marcar como realizado' });
   // El ADMIN atiende: viene elegido él.
   await expect(dialog.getByLabel('Profesional que lo realizó')).not.toHaveValue('');
+  // El día en la sede, antes y después del clic: si cambia de día en medio, vale cualquiera de los dos.
+  const dayBefore = sedeDayFromToday(0, E2E_REGION.timeZone);
   await dialog.getByRole('button', { name: 'Marcar realizado' }).click();
+  // El aviso se cierra solo a los pocos segundos: se lee en una sola operación
+  // (`textContent` espera a que aparezca y lo lee a la vez) y se compara
+  // después con la API.
+  const noticeText = (await page.getByText(/^Recall de Higiene: vence el /).textContent({ timeout: 15_000 }))?.trim();
   await expect(dialog).toBeHidden();
-  // El aviso dura unos segundos: se lee ya y se compara después con la API.
-  const notice = page.getByText(/^Recall de Higiene: vence el /);
-  await expect(notice).toBeVisible();
-  const noticeText = (await notice.textContent())?.trim();
-  await shot(page, 'recall-procedure-toast', 1440);
+  const dayAfter = sedeDayFromToday(0, E2E_REGION.timeZone);
 
   // El vencimiento lo calcula la API (hoy en la sede + 6 meses de Higiene).
   const recallsRes = await request.get(`${API_URL}/patients/${patientId}/recalls`, { headers: session.headers });
@@ -92,10 +94,8 @@ test('una profilaxis realizada deja el vencimiento de Higiene en la ficha', asyn
     recalls: { recallTypeName: string; dueAt: string; lastDoneAt: string; source: string }[];
   };
   const hygiene = recalls.find((r) => r.recallTypeName === 'Higiene');
-  expect(hygiene, 'la profilaxis creó el recall de Higiene').toMatchObject({
-    source: 'PROCEDURE',
-    lastDoneAt: sedeDayFromToday(0, E2E_REGION.timeZone),
-  });
+  expect(hygiene, 'la profilaxis creó el recall de Higiene').toMatchObject({ source: 'PROCEDURE' });
+  expect([dayBefore, dayAfter]).toContain(hygiene!.lastDoneAt);
   expect(hygiene!.dueAt > hygiene!.lastDoneAt).toBe(true);
   const due = fmt.civilDate(hygiene!.dueAt);
 

@@ -125,8 +125,10 @@ export function RecallView({ token }: { token: string }) {
   const isPhone = useMediaQuery(DATA_LIST_PHONE_QUERY);
   // DX-015-bis: el filtro es un tipo de la clínica (`ref`: su id o, en el respaldo, su clave).
   const [typeRef, setTypeRef] = useState<string>('ALL');
-  const [types, setTypes] = useState<RecallType[] | null>(null);
-  const typeOptions = recallTypeOptions(types);
+  // Hasta que llegan los tipos el filtro solo ofrece «Todos» (deshabilitado):
+  // así no se elige una clave del respaldo que luego no esté entre las opciones.
+  const [types, setTypes] = useState<RecallType[] | 'loading' | 'failed'>('loading');
+  const typeOptions = types === 'loading' ? [] : recallTypeOptions(types === 'failed' ? null : types);
   const [soon, setSoon] = useState(false);
   const [sort, setSort] = useState<RecallDueSort>('MOST_OVERDUE');
   const [page, setPage] = useState(1);
@@ -185,7 +187,8 @@ export function RecallView({ token }: { token: string }) {
         if (!cancelled) setTypes(list);
       })
       .catch(() => {
-        /* respaldo: las claves de siempre */
+        // Respaldo: las claves de siempre.
+        if (!cancelled) setTypes('failed');
       });
     return () => {
       cancelled = true;
@@ -321,6 +324,7 @@ export function RecallView({ token }: { token: string }) {
             <NativeSelect
               aria-label={copy.kindLabel}
               value={typeRef}
+              disabled={types === 'loading'}
               onChange={(e) => {
                 setTypeRef(e.target.value);
                 setPage(1);
