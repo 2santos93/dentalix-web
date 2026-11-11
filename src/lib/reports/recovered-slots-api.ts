@@ -1,47 +1,19 @@
 import { apiFetch, apiFetchText } from '@/lib/api/client';
 import { addMonths, monthLabel } from '@/lib/appointments/calendar-grid';
+import type { components } from '@/lib/api/schema';
 
 // «Huecos recuperados» (DX-436).
-// TODO(DX-436): derive from schema.d.ts after codegen (RecoveredSlotsReportDto).
-export interface RecoveredSlotsOffers {
-  sent: number;
-  accepted: number;
-  declined: number;
-  unanswered: number;
-}
+type Schemas = components['schemas'];
 
-export interface RecoveredSlotsMetrics {
-  freedSlots: number;
-  freedMinutes: number;
-  filledSlots: number;
-  partiallyFilledSlots: number;
-  recoveredMinutes: number;
-  filledByListSlots: number;
-  /** Fracciones 0–1; `null` sin base (sin huecos liberados). */
-  fillRate: number | null;
-  filledWithin30MinRate: number | null;
-  filledWithin24hRate: number | null;
-  meanMinutesToFill: number | null;
-  cancellationRate: number | null;
-  offers: RecoveredSlotsOffers;
-  /** Una línea por moneda: nunca se suman entre monedas. */
-  recoveredValue: Array<{ currency: string; amount: number }>;
-  unvaluedRecoveredSlots: number;
-}
-
-export type RecoveredSlotsProviderRow = { providerId: string; providerName: string } & RecoveredSlotsMetrics;
-export type RecoveredSlotsWeekRow = { weekStart: string } & RecoveredSlotsMetrics;
-
-export interface RecoveredSlotsReport {
-  from: string;
-  to: string;
-  locationId: string | null;
-  providerId: string | null;
-  restrictedToLocations: boolean;
-  totals: RecoveredSlotsMetrics;
-  byProvider: RecoveredSlotsProviderRow[];
-  byWeek: RecoveredSlotsWeekRow[];
-}
+export type RecoveredSlotsOffers = Schemas['RecoveredSlotsOffersDto'];
+/**
+ * Fracciones 0–1 (`null` sin base); `recoveredValue`, una línea por moneda:
+ * nunca se suman entre monedas.
+ */
+export type RecoveredSlotsMetrics = Schemas['RecoveredSlotsMetricsDto'];
+export type RecoveredSlotsProviderRow = Schemas['ProviderRecoveredSlotsDto'];
+export type RecoveredSlotsWeekRow = Schemas['WeekRecoveredSlotsDto'];
+export type RecoveredSlotsReport = Schemas['RecoveredSlotsReportDto'];
 
 export interface RecoveredSlotsFilters {
   /** Días civiles de la sede, AAAA-MM-DD. */
