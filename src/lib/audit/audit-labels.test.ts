@@ -940,6 +940,15 @@ describe('appointmentMoveDetail (DX-133-bis)', () => {
     expect(detail).toMatch(/2:00/);
   });
 
+  it('DX-436-bis: «Asignar» desde «Ocupar este hueco» se nombra como tal', () => {
+    const detail = appointmentMoveDetail(
+      { reason: 'APPOINTMENT_MOVED', move: { ...move, via: 'OPENING' as const } },
+      VE,
+      staff,
+    );
+    expect(detail).toMatch(/^Cita movida a un hueco liberado · Antes: /);
+  });
+
   it('un profesional que ya no está se nombra como retirado, nunca por su id', () => {
     const detail = appointmentMoveDetail(
       { reason: 'APPOINTMENT_MOVED', move: { ...move, to: { ...move.to, providerId: '99999999-9999-4999-8999-999999999999' } } },
