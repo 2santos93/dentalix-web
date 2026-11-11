@@ -40,6 +40,9 @@ export interface ComingOfAgeItem {
   status: MajorityReviewStatus;
   overdue: boolean;
   responsiblesCount: number;
+  /** Sede del paciente: la de su última cita atendida; `null` sin citas atendidas. */
+  locationId: string | null;
+  locationName: string | null;
 }
 
 export interface ComingOfAgeList {

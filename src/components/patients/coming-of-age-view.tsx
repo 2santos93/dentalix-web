@@ -6,6 +6,7 @@ import { Cake, Lock, UserCheck } from 'lucide-react';
 import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { useLocationsState } from '@/lib/locations/use-locations-state';
 import { wallDay } from '@/lib/time/wall-clock';
 import {
   civilMonthRange,
@@ -41,6 +42,7 @@ export const comingOfAgeCopy = {
   colMajority: 'Mayoría de edad',
   colResponsibles: 'Responsables',
   colStatus: 'Estado',
+  colLocation: 'Sede',
   responsibles: (n: number) => (n === 1 ? '1 responsable' : `${n} responsables`),
   notApplicable: '—',
   notApplicableLabel: 'Sin revisión',
@@ -87,6 +89,9 @@ function StatusCell({ item }: { item: ComingOfAgeItem }) {
 export function ComingOfAgeView({ token }: { token: string }) {
   const router = useRouter();
   const stamp = useSedeStamp(token);
+  // La sede del paciente solo dice algo cuando la clínica tiene más de una.
+  const locationsState = useLocationsState(token);
+  const multiSede = locationsState.status === 'ready' && locationsState.locations.length > 1;
   const timeZone = stamp.clock?.timeZone ?? null;
   const [range, setRange] = useState<Range>('THIS_MONTH');
   const [data, setData] = useState<ComingOfAgeList | null>(null);
@@ -176,6 +181,16 @@ export function ComingOfAgeView({ token }: { token: string }) {
         return d ? `${copy.colBirth}: ${d}` : null;
       },
     },
+    ...(multiSede
+      ? [
+          {
+            id: 'location',
+            header: copy.colLocation,
+            cell: (r) => (r.locationName ? <span className="[overflow-wrap:anywhere]">{r.locationName}</span> : null),
+            mobileCell: (r) => r.locationName,
+          } satisfies DataListColumn<ComingOfAgeItem>,
+        ]
+      : []),
     {
       id: 'responsibles',
       header: copy.colResponsibles,

@@ -34,6 +34,8 @@ const item = (over: Partial<ComingOfAgeItem> = {}): ComingOfAgeItem => ({
   status: 'PENDING',
   overdue: false,
   responsiblesCount: 1,
+  locationId: null,
+  locationName: null,
   ...over,
 });
 const list = (items: ComingOfAgeItem[], over: Partial<ComingOfAgeList> = {}): ComingOfAgeList => ({
@@ -142,5 +144,27 @@ describe('ComingOfAgeView (DX-342)', () => {
     mockedList.mockResolvedValue(list([item()], { restrictedToLocations: true }));
     render(<ComingOfAgeView token="tok" />);
     expect(await screen.findByText(copy.restricted)).toBeInTheDocument();
+  });
+
+  it('la sede del paciente sale solo si la clínica tiene más de una y el paciente la tiene', async () => {
+    const rows = [
+      item({ patientId: 'a', fullName: 'Ana Ruiz', locationId: STAMP_SEDES.berlin.id, locationName: 'Sede Este' }),
+      item({ patientId: 'b', fullName: 'Beto Gil' }),
+    ];
+    mockedList.mockResolvedValue(list(rows));
+    const { unmount } = render(<ComingOfAgeView token="tok" />);
+    const single = await screen.findByRole('table', { name: copy.listLabel });
+    expect(await within(single).findByText('Ana Ruiz')).toBeInTheDocument();
+    expect(within(single).queryByRole('columnheader', { name: copy.colLocation })).not.toBeInTheDocument();
+    expect(within(single).queryByText('Sede Este')).not.toBeInTheDocument();
+    unmount();
+
+    (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin]);
+    render(<ComingOfAgeView token="tok2" />);
+    const multi = await screen.findByRole('table', { name: copy.listLabel });
+    expect(await within(multi).findByRole('columnheader', { name: copy.colLocation })).toBeInTheDocument();
+    const [ana, beto] = within(multi).getAllByRole('row').slice(1);
+    expect(ana).toHaveTextContent('Sede Este');
+    expect(beto).not.toHaveTextContent('Sede Este');
   });
 });

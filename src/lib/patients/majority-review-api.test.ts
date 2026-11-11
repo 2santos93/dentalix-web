@@ -10,6 +10,8 @@ const item = (over: Partial<ComingOfAgeItem>): ComingOfAgeItem => ({
   status: 'PENDING',
   overdue: false,
   responsiblesCount: 1,
+  locationId: null,
+  locationName: null,
   ...over,
 });
 
