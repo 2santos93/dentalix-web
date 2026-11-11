@@ -7,7 +7,7 @@ import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
-import { listLocations } from '@/lib/locations/locations-api';
+import { useSessionLocations } from '@/lib/session/session-store';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { moneyWithCode } from '@/lib/format/sede-number';
@@ -352,6 +352,7 @@ export function RecoveredSlotsView({ token, isAdmin }: { token: string; isAdmin:
   const fmt = readyFormat(sedeFormat);
   const today = timeZone ? sedeToday(timeZone) : null;
   const baseId = React.useId();
+  const requestLocations = useSessionLocations(token);
 
   const monthParam = searchParams.get('mes');
   const month = isMonth(monthParam) ? monthParam : today ? monthOf(today) : null;
@@ -381,7 +382,7 @@ export function RecoveredSlotsView({ token, isAdmin }: { token: string; isAdmin:
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    listLocations(token)
+    requestLocations()
       .then((list) => {
         if (!cancelled) setLocations(list.map((l) => ({ id: l.id, name: l.name, isActive: l.isActive })));
       })
@@ -398,7 +399,7 @@ export function RecoveredSlotsView({ token, isAdmin }: { token: string; isAdmin:
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, requestLocations]);
 
   useEffect(() => {
     if (!token || !filterKey) return;
