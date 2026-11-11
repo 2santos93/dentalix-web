@@ -1,62 +1,22 @@
 import { apiFetch } from '@/lib/api/client';
+import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
-import type { ResponsibleRelationship } from './responsible-parties-api';
 
 // DX-342: paso a la mayoría de edad. Un paciente que llegó a la mayoría de edad
 // de la clínica con un responsable añadido cuando era menor deja de mandar sus
 // avisos y recibos al responsable hasta que recepción o ADMIN lo revisa.
-//
-// TODO(DX-342): derive from schema.d.ts after codegen — la API se hace en
-// paralelo y el contrato aún no está en el esquema generado.
-export type MajorityReviewStatus = 'NOT_APPLICABLE' | 'PENDING' | 'REVIEWED';
-export type MajorityReviewDecision = 'PATIENT_SELF' | 'KEEP_RESPONSIBLE';
 
-export interface MajorityReviewResponsible {
-  id: string;
-  name: string;
-  relationship: ResponsibleRelationship;
-  receivesNotices: boolean;
-  isPayer: boolean;
-}
+type Schemas = components['schemas'];
 
-export interface MajorityReviewView {
-  status: MajorityReviewStatus;
-  majorityDate: string | null;
-  decision: MajorityReviewDecision | null;
-  reviewedAt: string | null;
-  reviewedByName: string | null;
-  responsibles: MajorityReviewResponsible[];
-  /** La mayoría de edad de la clínica con la que se calculó («Cumplió 18 años…»). */
-  majorityAge: number;
-}
-
-export interface ComingOfAgeItem {
-  patientId: string;
-  fullName: string;
-  patientCode: string;
-  birthDate: string;
-  majorityDate: string;
-  majorityAge: number;
-  status: MajorityReviewStatus;
-  overdue: boolean;
-  responsiblesCount: number;
-  /** Sede del paciente: la de su última cita atendida; `null` sin citas atendidas. */
-  locationId: string | null;
-  locationName: string | null;
-}
-
-export interface ComingOfAgeList {
-  from: string;
-  to: string;
-  majorityAge: number;
-  restrictedToLocations: boolean;
-  items: ComingOfAgeItem[];
-}
-
-export interface MajorityReviewInput {
-  decision: MajorityReviewDecision;
-  note?: string;
-}
+export type MajorityReviewStatus = Schemas['MajorityReviewStatus'];
+export type MajorityReviewDecision = Schemas['MajorityReviewDecision'];
+export type MajorityReviewResponsible = Schemas['MajorityReviewResponsibleDto'];
+/** `majorityAge`: la mayoría de edad de la clínica con la que se calculó («Cumplió 18 años…»). */
+export type MajorityReviewView = Schemas['MajorityReviewViewDto'];
+/** `locationName`: la sede de su última cita atendida; `null` sin citas atendidas. */
+export type ComingOfAgeItem = Schemas['ComingOfAgeItemDto'];
+export type ComingOfAgeList = Schemas['ComingOfAgeListDto'];
+export type MajorityReviewInput = Schemas['ReviewMajorityDto'];
 
 /** La lista «Cumplen la mayoría de edad»: bajo Pacientes, sin entrada propia en el menú. */
 export const COMING_OF_AGE_HREF = '/patients/mayoria-de-edad';

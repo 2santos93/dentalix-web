@@ -326,7 +326,6 @@ const equipment = {
 /**
  * DX-342: revisión del paso a la mayoría de edad. Pendiente pide revisar a
  * quién van los avisos; vencida lleva tiempo sin revisar; revisada está hecha.
- * TODO(DX-342): tipar con el enum del esquema tras el codegen.
  */
 const majorityReview = {
   PENDING: s('warning', 'Pendiente'),
