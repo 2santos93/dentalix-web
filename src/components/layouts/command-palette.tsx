@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { hasUnsavedChanges, requestNavigation } from '@/components/settings/unsaved-changes';
-import { CalendarPlus, CornerDownLeft, ListTodo, Phone, PhoneCall, Search, UserPlus, UserRound } from 'lucide-react';
+import { Cake, CalendarPlus, CornerDownLeft, ListTodo, Phone, PhoneCall, Search, UserPlus, UserRound } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
@@ -14,6 +14,7 @@ import { InlineError } from '@/components/errors/inline-error';
 import { cn } from '@/lib/utils';
 import { NEW_APPOINTMENT_EVENT, NEW_APPOINTMENT_PARAM } from '@/lib/ui/new-appointment';
 import { canManageRecall } from '@/lib/recall/presentation';
+import { canReviewMajority, COMING_OF_AGE_HREF } from '@/lib/patients/majority-review-api';
 import { canSee, ALL_NAV_ITEMS } from './nav-config';
 import { useCloseOnBack } from './use-shell-media';
 
@@ -26,6 +27,8 @@ const copy = {
   goTo: 'Ir a',
   recall: 'Recall',
   recallHint: 'Pacientes por llamar: control vencido y sin cita',
+  comingOfAge: 'Cumplen la mayoría de edad',
+  comingOfAgeHint: 'Revisar a quién van los avisos de quien deja de ser menor',
   actions: 'Acciones',
   searching: 'Buscando pacientes…',
   searchFailed: 'No se pudo buscar pacientes. Revisa la conexión e inténtalo de nuevo.',
@@ -190,6 +193,17 @@ export function CommandPalette({
         hint: copy.recallHint,
         icon: PhoneCall,
         run: () => go('/recall'),
+      });
+    }
+    // DX-342: tampoco gasta entrada en la barra; se llega desde Pacientes y desde aquí.
+    if (q && canReviewMajority(role) && matches(copy.comingOfAge, copy.comingOfAgeHint)) {
+      result.push({
+        id: 'nav-coming-of-age',
+        group: 'goto',
+        label: copy.comingOfAge,
+        hint: copy.comingOfAgeHint,
+        icon: Cake,
+        run: () => go(COMING_OF_AGE_HREF),
       });
     }
     // Las pantallas de Ajustes solo al escribir: sin texto, la lista es corta.

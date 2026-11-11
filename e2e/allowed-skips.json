@@ -280,6 +280,27 @@
       "annotation": "E2E_DATABASE_URL no definido: no se puede vencer el presupuesto",
       "requiresUnset": "E2E_DATABASE_URL",
       "reason": "Sin E2E_DATABASE_URL no se puede vencer el presupuesto (la API fecha la emisión con el día de la sede)."
+    },
+    {
+      "file": "e2e/coming-of-age.spec.ts",
+      "title": "DENTIST ve el aviso de la ficha sin «Revisar responsables»",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede fechar el alta del responsable",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede fechar el alta del responsable antes de la mayoría de edad (la API la pone al crearlo)."
+    },
+    {
+      "file": "e2e/coming-of-age.spec.ts",
+      "title": "RECEPTION revisa desde la lista con «El paciente gestiona sus avisos» y el aviso desaparece",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede fechar el alta del responsable",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede fechar el alta del responsable antes de la mayoría de edad (la API la pone al crearlo)."
+    },
+    {
+      "file": "e2e/coming-of-age.spec.ts",
+      "title": "390 px: la lista y el modal no desbordan y la acción mide 44 px",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede fechar el alta del responsable",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede fechar el alta del responsable antes de la mayoría de edad (la API la pone al crearlo)."
     }
   ]
 }

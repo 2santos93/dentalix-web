@@ -661,6 +661,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/coming-of-age": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pacientes que pasan a la mayoría de edad en un período (DX-342)
+         * @description Pacientes con responsable cuya fecha de mayoría de edad (nacimiento + mayoría de edad de la clínica) cae en [from, to], más los ya adultos PENDING con la mayoría antes de `from` (`overdue`). Un miembro restringido a unas sedes solo ve a los pacientes de esas sedes (la de su última cita atendida); un paciente sin citas atendidas solo lo ve quien no está restringido. ADMIN y RECEPTION; el resto, 403 en español.
+         */
+        get: operations["PatientMajorityReviewController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/majority-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estado del paso a la mayoría de edad del paciente (DX-342)
+         * @description Para el aviso y el modal de la ficha. La edad cuenta en el día civil de la sede activa o principal. Lo ven los 4 roles, como los responsables.
+         */
+        get: operations["PatientMajorityReviewController_get"];
+        put?: never;
+        /**
+         * Revisar el paso a la mayoría de edad (DX-342)
+         * @description PATIENT_SELF: los envíos van al propio paciente (sin email: a nadie). KEEP_RESPONSIBLE: siguen yendo a su responsable con su consentimiento. Vale para su fecha de mayoría de edad vigente; rige la última. Queda en la auditoría (motivo MAJORITY_REVIEWED) con la decisión y el largo de la nota, nunca su texto.
+         */
+        post: operations["PatientMajorityReviewController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients": {
         parameters: {
             query?: never;
@@ -7744,6 +7788,109 @@ export interface components {
             /** @description 10 códigos de un solo uso. Solo se muestran en esta respuesta. */
             recoveryCodes: string[];
         };
+        /**
+         * @description NOT_APPLICABLE: menor, sin fecha de nacimiento o sin responsable dado de alta antes de su mayoría de edad. PENDING: cumplió la mayoría de edad con responsable y no está revisado para su fecha de mayoría de edad vigente (mientras tanto avisos, recibos y estados de cuenta van a su propio email o a nadie). REVIEWED: revisado; rige `decision`.
+         * @enum {string}
+         */
+        MajorityReviewStatus: "NOT_APPLICABLE" | "PENDING" | "REVIEWED";
+        ComingOfAgeItemDto: {
+            /** Format: uuid */
+            patientId: string;
+            /** @example Sofía Rondón */
+            fullName: string;
+            /** @example 1042 */
+            patientCode: string;
+            /**
+             * Format: date
+             * @example 2008-11-20
+             */
+            birthDate: string;
+            /**
+             * Format: date
+             * @example 2026-11-20
+             */
+            majorityDate: string;
+            /**
+             * @description Mayoría de edad de la clínica.
+             * @example 18
+             */
+            majorityAge: number;
+            /** @description NOT_APPLICABLE: menor, sin fecha de nacimiento o sin responsable dado de alta antes de su mayoría de edad. PENDING: cumplió la mayoría de edad con responsable y no está revisado para su fecha de mayoría de edad vigente (mientras tanto avisos, recibos y estados de cuenta van a su propio email o a nadie). REVIEWED: revisado; rige `decision`. */
+            status: components["schemas"]["MajorityReviewStatus"];
+            /** @description Ya adulto y PENDING con la mayoría de edad antes de `from` (atrasado). */
+            overdue: boolean;
+            /** @description Responsables vivos. */
+            responsiblesCount: number;
+            /**
+             * Format: uuid
+             * @description Sede del paciente: la de su última cita atendida; null sin ninguna.
+             */
+            locationId: string | null;
+            locationName: string | null;
+        };
+        ComingOfAgeListDto: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            /** @example 18 */
+            majorityAge: number;
+            /** @description El miembro está restringido a unas sedes (DX-525): solo ve a los pacientes de esas sedes. */
+            restrictedToLocations: boolean;
+            /** @description Primero los atrasados (`overdue`), luego por fecha de mayoría de edad y nombre. */
+            items: components["schemas"]["ComingOfAgeItemDto"][];
+        };
+        /**
+         * @description Solo con REVIEWED. PATIENT_SELF: los envíos van al propio paciente (sin email: a nadie). KEEP_RESPONSIBLE: el paciente consiente que sigan yendo a su responsable (regla general DX-203).
+         * @enum {string}
+         */
+        MajorityReviewDecision: "PATIENT_SELF" | "KEEP_RESPONSIBLE";
+        /** @enum {string} */
+        ResponsibleRelationship: "MOTHER" | "FATHER" | "LEGAL_GUARDIAN" | "GRANDPARENT" | "SIBLING" | "SPOUSE" | "CHILD" | "OTHER";
+        MajorityReviewResponsibleDto: {
+            /**
+             * Format: uuid
+             * @description Id del vínculo
+             */
+            id: string;
+            /** @example Carmen Rondón */
+            name: string;
+            relationship: components["schemas"]["ResponsibleRelationship"];
+            receivesNotices: boolean;
+            isPayer: boolean;
+        };
+        MajorityReviewViewDto: {
+            /** @description NOT_APPLICABLE: menor, sin fecha de nacimiento o sin responsable dado de alta antes de su mayoría de edad. PENDING: cumplió la mayoría de edad con responsable y no está revisado para su fecha de mayoría de edad vigente (mientras tanto avisos, recibos y estados de cuenta van a su propio email o a nadie). REVIEWED: revisado; rige `decision`. */
+            status: components["schemas"]["MajorityReviewStatus"];
+            /**
+             * Format: date
+             * @description Día en que cumple la mayoría de edad de la clínica (el 29/2 cae el 1/3 de un año no bisiesto); null sin fecha de nacimiento.
+             * @example 2026-11-20
+             */
+            majorityDate: string | null;
+            /**
+             * @description Mayoría de edad de la clínica con la que se cuenta.
+             * @example 18
+             */
+            majorityAge: number;
+            /** @description Solo con REVIEWED. PATIENT_SELF: los envíos van al propio paciente (sin email: a nadie). KEEP_RESPONSIBLE: el paciente consiente que sigan yendo a su responsable (regla general DX-203). */
+            decision: components["schemas"]["MajorityReviewDecision"] | null;
+            /**
+             * Format: date-time
+             * @description Solo con REVIEWED.
+             */
+            reviewedAt: string | null;
+            /** @description Quién lo revisó (solo con REVIEWED); null si ya no es de la clínica. */
+            reviewedByName: string | null;
+            /** @description Responsables vivos, en orden de alta. */
+            responsibles: components["schemas"]["MajorityReviewResponsibleDto"][];
+        };
+        ReviewMajorityDto: {
+            /** @description PATIENT_SELF: los envíos van al propio paciente (sin email: a nadie). KEEP_RESPONSIBLE: el paciente consiente que sigan yendo a su responsable (regla general DX-203). */
+            decision: components["schemas"]["MajorityReviewDecision"];
+            /** @description Nota libre (p. ej. con quién se habló). Se guarda con la revisión; nunca va a la auditoría. */
+            note?: string | null;
+        };
         /** @enum {string} */
         DocType: "NATIONAL_ID" | "PASSPORT" | "RESIDENCE_PERMIT" | "TAX_ID" | "OTHER";
         /** @enum {string} */
@@ -8657,8 +8804,6 @@ export interface components {
             /** @description DX-387: el teléfono en formato internacional de la librería, con su extensión, leído con la región por defecto de la sede (la activa o la principal; en una sede, la suya). null si no hay teléfono o no se puede leer de una sola forma: la web muestra entonces `phone` tal cual. */
             phoneInternational: string | null;
         };
-        /** @enum {string} */
-        ResponsibleRelationship: "MOTHER" | "FATHER" | "LEGAL_GUARDIAN" | "GRANDPARENT" | "SIBLING" | "SPOUSE" | "CHILD" | "OTHER";
         ResponsiblePartyDto: {
             /** Format: uuid */
             id: string;
@@ -22996,6 +23141,134 @@ export interface operations {
         responses: {
             /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientMajorityReviewController_list: {
+        parameters: {
+            query: {
+                /** @description Primer día (AAAA-MM-DD), inclusive. */
+                from: string;
+                /** @description Último día (AAAA-MM-DD), inclusive; >= from y como mucho 366 días (400 si no). */
+                to: string;
+                /** @description Solo los pacientes de esta sede (la de su última cita atendida). 404 si no es una sede de la clínica; 403 LOCATION_NOT_ALLOWED si no está entre las permitidas al miembro. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComingOfAgeListDto"];
+                };
+            };
+            /** @description Período no válido o de más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso o sede no permitida (LOCATION_NOT_ALLOWED) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `locationId` no es una sede de la clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientMajorityReviewController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MajorityReviewViewDto"];
+                };
+            };
+            /** @description Paciente no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientMajorityReviewController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewMajorityDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MajorityReviewViewDto"];
+                };
+            };
+            /** @description Validación (mensaje en español) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El paciente todavía es menor de edad */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sin fecha de nacimiento, sin responsables o con responsables dados de alta ya adulto */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

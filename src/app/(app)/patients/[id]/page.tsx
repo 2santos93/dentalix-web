@@ -29,6 +29,8 @@ import { PatientCommunicationSection } from '@/components/patients/patient-commu
 import { PatientRecallSection } from '@/components/recall/patient-recall-section';
 import { canManageRecall, canSetRecall } from '@/lib/recall/presentation';
 import { PatientResponsiblePartiesSection } from '@/components/patients/patient-responsible-parties-section';
+import { MajorityReviewBanner } from '@/components/patients/majority-review-banner';
+import { canReviewMajority } from '@/lib/patients/majority-review-api';
 import { PatientAgreementSection } from '@/components/patients/patient-agreement-section';
 import { PatientCoverageSection } from '@/components/patients/patient-coverage-section';
 import { canEditCommunication, withCommunication } from '@/lib/patients/communication-api';
@@ -467,6 +469,15 @@ function PatientDetailView() {
           >
             {/* DX-099/DX-247: «Sin anamnesis» como UN aviso con sus dos
                 salidas, y el estado de los enlaces enviados. */}
+            {/* DX-342: cumplió la mayoría de edad con un responsable de cuando
+                era menor: sus avisos esperan la revisión de recepción o ADMIN. */}
+            <MajorityReviewBanner
+              key={`majority-${patientId}`}
+              token={accessToken}
+              patient={{ id: patient.id, fullName: fullName(patient) }}
+              canReview={canReviewMajority(role)}
+              stamp={stamp}
+            />
             {anamnesisBlock('data')}
             <PatientDataPanel patient={patient} docTypeNames={docTypeNames} stamp={stamp} />
             {/* DX-128: canal de los recordatorios, móvil, opt-in y baja. Lo ven
