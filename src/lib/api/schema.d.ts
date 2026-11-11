@@ -7455,18 +7455,46 @@ export interface components {
             token: string;
         };
         /**
-         * @description VALID: se puede usar. EXPIRED: caducó (30 min). USED: ya se usó. INVALID: no existe, fue reemplazado por uno más reciente o no vale en esta clínica.
+         * @description VALID: se puede usar. EXPIRED: caducó (30 min). USED: ya se usó. INVALID: no existe, fue reemplazado por uno más reciente, quedó invalidado por un cambio de contraseña o no vale en esta clínica.
          * @enum {string}
          */
         PasswordResetTokenStatus: "VALID" | "EXPIRED" | "USED" | "INVALID";
         PasswordResetTokenStatusDto: {
-            /** @description VALID: se puede usar. EXPIRED: caducó (30 min). USED: ya se usó. INVALID: no existe, fue reemplazado por uno más reciente o no vale en esta clínica. */
+            /** @description VALID: se puede usar. EXPIRED: caducó (30 min). USED: ya se usó. INVALID: no existe, fue reemplazado por uno más reciente, quedó invalidado por un cambio de contraseña o no vale en esta clínica. */
             status: components["schemas"]["PasswordResetTokenStatus"];
         };
         ResetPasswordDto: {
             /** @description Token del enlace recibido por email. */
             token: string;
             password: string;
+        };
+        ResetTokenNotFoundErrorDto: {
+            /** @example 404 */
+            statusCode: number;
+            /** @example Not Found */
+            error: string;
+            /**
+             * @example RESET_TOKEN_INVALID
+             * @enum {string}
+             */
+            code: "RESET_TOKEN_INVALID";
+            /** @example El enlace para restablecer la contraseña no es válido o ya fue reemplazado por uno más reciente. Pide un enlace nuevo. */
+            message: string;
+        };
+        /**
+         * @description RESET_TOKEN_EXPIRED: caducó (30 min). RESET_TOKEN_USED: ya se usó.
+         * @enum {string}
+         */
+        ResetTokenGoneCode: "RESET_TOKEN_EXPIRED" | "RESET_TOKEN_USED";
+        ResetTokenGoneErrorDto: {
+            /** @example 410 */
+            statusCode: number;
+            /** @example Gone */
+            error: string;
+            /** @description RESET_TOKEN_EXPIRED: caducó (30 min). RESET_TOKEN_USED: ya se usó. */
+            code: components["schemas"]["ResetTokenGoneCode"];
+            /** @example El enlace para restablecer la contraseña caducó (vale 30 minutos). Pide un enlace nuevo. */
+            message: string;
         };
         /**
          * @description available = se puede registrar; taken = ya es de una clínica (también dada de baja); invalid = no cumple el formato (minúsculas, números y guiones, 1–63, sin guion al principio ni al final); reserved = dirección de la plataforma (www, api…).
@@ -21787,19 +21815,23 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Enlace inexistente o reemplazado. */
+            /** @description Enlace inexistente, reemplazado por uno más reciente, invalidado por un cambio de contraseña o de otra clínica (`code` RESET_TOKEN_INVALID; mismo cuerpo en todos los casos). */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ResetTokenNotFoundErrorDto"];
+                };
             };
-            /** @description Enlace caducado o ya usado. */
+            /** @description Enlace caducado (`code` RESET_TOKEN_EXPIRED) o ya usado (`code` RESET_TOKEN_USED). */
             410: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ResetTokenGoneErrorDto"];
+                };
             };
             /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
             429: {
