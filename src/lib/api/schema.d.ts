@@ -4508,6 +4508,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/recovered-slots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Huecos recuperados: liberados, rellenados, por la lista, tiempo hasta rellenar y valor
+         * @description Hueco liberado: cita cancelada o en inasistencia cuya cancelación o marca fue al menos 1 h antes de su inicio (DX-279), con el inicio en el período (días civiles de la zona de cada sede, DX-097). Recuperado: una cita viva no cancelada del MISMO profesional y la MISMA sede que se solapa con el hueco y llegó a él (creada, o movida según el rastro de auditoría) después de liberarse y antes de que terminara; si solo ocupa parte, cuenta como relleno parcial con sus minutos. Un sobrecupo creado antes de la cancelación no cuenta. Cada minuto de una cita cuenta en un solo hueco. «Por la lista»: la cita nació de un pendiente de «Pendientes por agendar» o de una oferta ACEPTADA de ese hueco (DX-210/DX-435). Valor recuperado: precio − descuento de los ítems del plan ligados a las citas recuperadas, por moneda y sin convertir; sin ítems, «sin valorar». Ofertas: las de huecos que empiezan en el período. Tasa de cancelación: canceladas ÷ agendadas del período. Solo ADMIN; un miembro restringido (DX-089) solo ve sus sedes. Sin datos de pacientes.
+         */
+        get: operations["RecoveredSlotsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/recovered-slots.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Huecos recuperados en CSV (mismos filtros, auditado)
+         * @description Hueco liberado: cita cancelada o en inasistencia cuya cancelación o marca fue al menos 1 h antes de su inicio (DX-279), con el inicio en el período (días civiles de la zona de cada sede, DX-097). Recuperado: una cita viva no cancelada del MISMO profesional y la MISMA sede que se solapa con el hueco y llegó a él (creada, o movida según el rastro de auditoría) después de liberarse y antes de que terminara; si solo ocupa parte, cuenta como relleno parcial con sus minutos. Un sobrecupo creado antes de la cancelación no cuenta. Cada minuto de una cita cuenta en un solo hueco. «Por la lista»: la cita nació de un pendiente de «Pendientes por agendar» o de una oferta ACEPTADA de ese hueco (DX-210/DX-435). Valor recuperado: precio − descuento de los ítems del plan ligados a las citas recuperadas, por moneda y sin convertir; sin ítems, «sin valorar». Ofertas: las de huecos que empiezan en el período. Tasa de cancelación: canceladas ÷ agendadas del período. Solo ADMIN; un miembro restringido (DX-089) solo ve sus sedes. Sin datos de pacientes. Solo agregados: el total, una fila por profesional y una por semana, con una columna de valor por moneda. UTF-8 con BOM; celdas protegidas contra fórmulas. Cada descarga queda en auditoría (EXPORT).
+         */
+        get: operations["RecoveredSlotsController_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/closing-queue": {
         parameters: {
             query?: never;
@@ -17422,6 +17462,133 @@ export interface components {
             totals: components["schemas"]["UnallocatedTotalDto"][];
             /** @description Abonos del período en otra moneda que la del plan a los que todavía les falta la tasa de su día: no se pueden imputar y no están en las cifras (uno en la moneda del plan sin base espera al barrido y no se cuenta) */
             paymentsWithoutRateCount: number;
+        };
+        RecoveredSlotsOffersDto: {
+            /** @description Ofertas de huecos del período (por el inicio del hueco ofrecido): aceptadas + rechazadas + sin respuesta */
+            sent: number;
+            accepted: number;
+            declined: number;
+            /** @description Pendientes, anotadas sin respuesta, caducadas o que otro paciente se quedó antes */
+            unanswered: number;
+        };
+        RecoveredValueDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /**
+             * @description Suma (precio − descuento) de los ítems del plan ligados a las citas recuperadas, en esa moneda. Nunca se suman monedas distintas ni se convierten.
+             * @example 120
+             */
+            amount: number;
+        };
+        RecoveredSlotsMetricsDto: {
+            /** @description Huecos liberados: citas canceladas o en inasistencia con la liberación ≥ 1 h antes del inicio */
+            freedSlots: number;
+            /** @description Minutos de esos huecos */
+            freedMinutes: number;
+            /** @description Huecos ocupados del todo por citas del mismo profesional y sede que llegaron después de liberarse */
+            filledSlots: number;
+            /** @description Huecos ocupados solo en parte */
+            partiallyFilledSlots: number;
+            /** @description Minutos recuperados (completos + parciales) */
+            recoveredMinutes: number;
+            /** @description De los recuperados (completos o parciales), los ocupados por una cita nacida de un pendiente de la lista o de una oferta aceptada */
+            filledByListSlots: number;
+            /** @description (completos + parciales) ÷ liberados, de 0 a 1; null sin huecos liberados */
+            fillRate: number | null;
+            /** @description Recuperados en ≤ 30 min desde la liberación ÷ liberados, de 0 a 1 */
+            filledWithin30MinRate: number | null;
+            /** @description Recuperados en ≤ 24 h desde la liberación ÷ liberados, de 0 a 1 */
+            filledWithin24hRate: number | null;
+            /** @description Minutos medios desde la liberación hasta la primera cita que ocupó el hueco (null sin recuperados) */
+            meanMinutesToFill: number | null;
+            /** @description Citas canceladas ÷ citas agendadas del período (todas, con cualquier aviso), de 0 a 1; null sin citas */
+            cancellationRate: number | null;
+            offers: components["schemas"]["RecoveredSlotsOffersDto"];
+            recoveredValue: components["schemas"]["RecoveredValueDto"][];
+            /** @description Huecos recuperados cuyas citas no tienen ítems del plan ligados («sin valorar») */
+            unvaluedRecoveredSlots: number;
+        };
+        ProviderRecoveredSlotsDto: {
+            /** @description Huecos liberados: citas canceladas o en inasistencia con la liberación ≥ 1 h antes del inicio */
+            freedSlots: number;
+            /** @description Minutos de esos huecos */
+            freedMinutes: number;
+            /** @description Huecos ocupados del todo por citas del mismo profesional y sede que llegaron después de liberarse */
+            filledSlots: number;
+            /** @description Huecos ocupados solo en parte */
+            partiallyFilledSlots: number;
+            /** @description Minutos recuperados (completos + parciales) */
+            recoveredMinutes: number;
+            /** @description De los recuperados (completos o parciales), los ocupados por una cita nacida de un pendiente de la lista o de una oferta aceptada */
+            filledByListSlots: number;
+            /** @description (completos + parciales) ÷ liberados, de 0 a 1; null sin huecos liberados */
+            fillRate: number | null;
+            /** @description Recuperados en ≤ 30 min desde la liberación ÷ liberados, de 0 a 1 */
+            filledWithin30MinRate: number | null;
+            /** @description Recuperados en ≤ 24 h desde la liberación ÷ liberados, de 0 a 1 */
+            filledWithin24hRate: number | null;
+            /** @description Minutos medios desde la liberación hasta la primera cita que ocupó el hueco (null sin recuperados) */
+            meanMinutesToFill: number | null;
+            /** @description Citas canceladas ÷ citas agendadas del período (todas, con cualquier aviso), de 0 a 1; null sin citas */
+            cancellationRate: number | null;
+            offers: components["schemas"]["RecoveredSlotsOffersDto"];
+            recoveredValue: components["schemas"]["RecoveredValueDto"][];
+            /** @description Huecos recuperados cuyas citas no tienen ítems del plan ligados («sin valorar») */
+            unvaluedRecoveredSlots: number;
+            /** Format: uuid */
+            providerId: string;
+            /** @example Dra. María Pérez */
+            providerName: string;
+        };
+        WeekRecoveredSlotsDto: {
+            /** @description Huecos liberados: citas canceladas o en inasistencia con la liberación ≥ 1 h antes del inicio */
+            freedSlots: number;
+            /** @description Minutos de esos huecos */
+            freedMinutes: number;
+            /** @description Huecos ocupados del todo por citas del mismo profesional y sede que llegaron después de liberarse */
+            filledSlots: number;
+            /** @description Huecos ocupados solo en parte */
+            partiallyFilledSlots: number;
+            /** @description Minutos recuperados (completos + parciales) */
+            recoveredMinutes: number;
+            /** @description De los recuperados (completos o parciales), los ocupados por una cita nacida de un pendiente de la lista o de una oferta aceptada */
+            filledByListSlots: number;
+            /** @description (completos + parciales) ÷ liberados, de 0 a 1; null sin huecos liberados */
+            fillRate: number | null;
+            /** @description Recuperados en ≤ 30 min desde la liberación ÷ liberados, de 0 a 1 */
+            filledWithin30MinRate: number | null;
+            /** @description Recuperados en ≤ 24 h desde la liberación ÷ liberados, de 0 a 1 */
+            filledWithin24hRate: number | null;
+            /** @description Minutos medios desde la liberación hasta la primera cita que ocupó el hueco (null sin recuperados) */
+            meanMinutesToFill: number | null;
+            /** @description Citas canceladas ÷ citas agendadas del período (todas, con cualquier aviso), de 0 a 1; null sin citas */
+            cancellationRate: number | null;
+            offers: components["schemas"]["RecoveredSlotsOffersDto"];
+            recoveredValue: components["schemas"]["RecoveredValueDto"][];
+            /** @description Huecos recuperados cuyas citas no tienen ítems del plan ligados («sin valorar») */
+            unvaluedRecoveredSlots: number;
+            /**
+             * @description Lunes de la semana ISO (AAAA-MM-DD). La primera puede empezar antes de `from`; cada hueco cuenta en la semana del día civil de su inicio en la zona de su sede.
+             * @example 2026-10-05
+             */
+            weekStart: string;
+        };
+        RecoveredSlotsReportDto: {
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+            /** Format: uuid */
+            locationId: string | null;
+            /** Format: uuid */
+            providerId: string | null;
+            /** @description El usuario solo ve algunas sedes (DX-089): los totales son solo de ellas */
+            restrictedToLocations: boolean;
+            totals: components["schemas"]["RecoveredSlotsMetricsDto"];
+            /** @description Un profesional por fila (con actividad en el período), por nombre */
+            byProvider: components["schemas"]["ProviderRecoveredSlotsDto"][];
+            /** @description Todas las semanas ISO que toca el período, en orden (con ceros) */
+            byWeek: components["schemas"]["WeekRecoveredSlotsDto"][];
         };
         /**
          * @description Las secciones que ve el rol: ADMIN las tres, DENTIST EVOLUTION y TREATMENT, RECEPTION OUTCOME
@@ -33932,6 +34099,91 @@ export interface operations {
                 content?: never;
             };
             /** @description Tu rol no tiene acceso a lo cobrado sin imputar: es para administración y recepción. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecoveredSlotsController_get: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede; cuenta el día del INICIO del hueco). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo los huecos, citas y ofertas de este profesional (usuario). Uno de otra clínica da un informe vacío. */
+                providerId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecoveredSlotsReportDto"];
+                };
+            };
+            /** @description Período inválido o de más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve los reportes de la clínica. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecoveredSlotsController_csv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede; cuenta el día del INICIO del hueco). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo los huecos, citas y ofertas de este profesional (usuario). Uno de otra clínica da un informe vacío. */
+                providerId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Período inválido o de más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve los reportes de la clínica. / sede fuera de las del usuario */
             403: {
                 headers: {
                     [name: string]: unknown;
