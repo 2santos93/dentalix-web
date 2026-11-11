@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { notifySuccess } from '@/components/errors/notify';
-import { CalendarClock, ChevronDown, FileText, HandCoins, Lock, Printer, Wallet } from 'lucide-react';
+import { CalendarClock, ChevronDown, FileText, HandCoins, Lock, Printer, ReceiptText, Wallet } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import {
   accountStatementPrintHref,
@@ -60,6 +60,8 @@ import {
 } from '@/components/payments/use-void-payment';
 import { SplitPaymentBadge, splitPaymentLabel } from '@/components/payments/split-payment-badge';
 import { RecordPaymentModal } from '@/components/payments/record-payment-modal';
+import { ReceiptsSummaryDialog } from '@/components/payments/receipts-summary-dialog';
+import { receiptsSummaryCopy } from '@/components/payments/receipts-summary-copy';
 import { StatementPaymentPlanModal } from './statement-payment-plan-modal';
 import { PlanItemsBalance } from './plan-items-balance';
 import { canRecordPayments } from '@/lib/payments/billable-plans-api';
@@ -188,6 +190,8 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
   // entrar al plan de tratamiento (clínico). Tras cada uno se recarga todo.
   const canCharge = canRecordPayments(getTokenRole(token));
   const [chargeModal, setChargeModal] = useState<'payment' | 'payment-plan' | null>(null);
+  // DX-401: recibo resumen de un periodo (mismos roles que cobrar).
+  const [summaryOpen, setSummaryOpen] = useState(false);
   // Recibo de caja (DX-136) de cualquier movimiento, también de los anulados
   // (sale marcado «ANULADO»).
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
@@ -315,6 +319,15 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
                   <CalendarClock aria-hidden />
                   {copy.paymentPlan}
                 </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full max-sm:min-h-11 sm:w-auto"
+                  onClick={() => setSummaryOpen(true)}
+                >
+                  <ReceiptText aria-hidden />
+                  {receiptsSummaryCopy.trigger}
+                </Button>
               </>
             ) : null}
             {showPrint ? (
@@ -394,6 +407,12 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
             token={token}
             patientId={patientId}
             onCreated={charged}
+          />
+          <ReceiptsSummaryDialog
+            open={summaryOpen}
+            onOpenChange={setSummaryOpen}
+            token={token}
+            patientId={patientId}
           />
         </>
       ) : null}
