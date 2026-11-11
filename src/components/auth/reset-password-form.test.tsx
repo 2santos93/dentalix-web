@@ -140,6 +140,41 @@ describe('ResetPasswordForm', () => {
     expect(document.activeElement).not.toBe(heading);
   });
 
+  // DX-114 (R5): región aria-live siempre montada con el título del estado.
+  it('la región viva está vacía mientras carga y con el enlace válido', async () => {
+    (apiFetch as jest.Mock).mockResolvedValueOnce({ status: 'VALID' });
+    render(<ResetPasswordForm resetToken={TOKEN} />);
+    const live = screen.getByTestId('reset-password-live');
+    expect(live).toHaveAttribute('aria-live', 'polite');
+    expect(live).not.toHaveAttribute('role');
+    expect(live).toBeEmptyDOMElement();
+    await screen.findByLabelText('Contraseña nueva');
+    expect(screen.getByTestId('reset-password-live')).toBeEmptyDOMElement();
+  });
+
+  it('al abrir un enlace caducado, la región viva lo anuncia (la misma, sin remontarse)', async () => {
+    (apiFetch as jest.Mock).mockResolvedValueOnce({ status: 'EXPIRED' });
+    render(<ResetPasswordForm resetToken={TOKEN} />);
+    const live = screen.getByTestId('reset-password-live');
+    await screen.findByRole('heading', { name: 'El enlace caducó' });
+    expect(screen.getByTestId('reset-password-live')).toBe(live);
+    expect(live).toHaveTextContent('El enlace caducó');
+  });
+
+  it('si el enlace deja de servir al guardar, la región viva lo anuncia', async () => {
+    (apiFetch as jest.Mock).mockResolvedValueOnce({ status: 'VALID' });
+    (apiFetchOrNull as jest.Mock).mockRejectedValueOnce(
+      new ApiError(410, 'x', { code: 'RESET_TOKEN_USED' }),
+    );
+    render(<ResetPasswordForm resetToken={TOKEN} />);
+    await screen.findByLabelText('Contraseña nueva');
+    const live = screen.getByTestId('reset-password-live');
+    expect(live).toBeEmptyDOMElement();
+    fill('Clave-Nueva-2026');
+    await waitFor(() => expect(live).toHaveTextContent('Este enlace ya se usó'));
+    expect(screen.getByTestId('reset-password-live')).toBe(live);
+  });
+
   it('otro error al guardar (500) se queda en el formulario con el aviso', async () => {
     await saveRejectedWith(new ApiError(500, 'boom'));
     expect(await screen.findByRole('alert')).toBeInTheDocument();

@@ -180,99 +180,116 @@ export function ResetPasswordForm({ resetToken }: { resetToken: string }) {
     }
   }
 
-  if (loadError) {
-    return <SectionError description={loadError} onRetry={() => setReloadKey((k) => k + 1)} />;
-  }
+  // DX-114 (R5): región viva siempre montada (sin role, para no sumar otro
+  // `status` al de «Verificando…»). Recibe el título del estado cuando el
+  // enlace no sirve, tanto al abrir como al guardar; vacía mientras carga o
+  // vale. Al guardar, además, el foco va al título (ver arriba).
+  const announcement = status && status !== 'VALID' ? INVALID_COPY[status].title : '';
 
-  if (!status) {
-    return (
-      <p role="status" className="flex items-center gap-2 text-sm text-muted">
-        <Loader2 className="size-4 animate-spin" aria-hidden /> {copy.loading}
-      </p>
-    );
-  }
+  function body(): React.ReactNode {
+    if (loadError) {
+      return <SectionError description={loadError} onRetry={() => setReloadKey((k) => k + 1)} />;
+    }
 
-  if (status !== 'VALID') {
-    const { title, message } = INVALID_COPY[status];
+    if (!status) {
+      return (
+        <p role="status" className="flex items-center gap-2 text-sm text-muted">
+          <Loader2 className="size-4 animate-spin" aria-hidden /> {copy.loading}
+        </p>
+      );
+    }
+
+    if (status !== 'VALID') {
+      const { title, message } = INVALID_COPY[status];
+      return (
+        <div className="flex flex-col gap-3">
+          <h2
+            ref={invalidHeadingRef}
+            tabIndex={-1}
+            className={FOCUSABLE_TITLE_CLASS}
+          >
+            {title}
+          </h2>
+          <p className="text-sm text-muted">{message}</p>
+          <Button asChild size="lg" className={AUTH_SUBMIT_CLASS}>
+            <Link href={FORGOT_PASSWORD_PATH}>{copy.requestNew}</Link>
+          </Button>
+          <Link href="/login" className={`self-center ${AUTH_LINK_CLASS}`}>
+            {copy.backToLogin}
+          </Link>
+        </div>
+      );
+    }
+
     return (
-      <div className="flex flex-col gap-3">
-        <h2
-          ref={invalidHeadingRef}
-          tabIndex={-1}
-          className={FOCUSABLE_TITLE_CLASS}
+      <form onSubmit={handleSubmit} noValidate className={AUTH_FORM_CLASS}>
+        <p className="text-sm text-muted">{copy.intro}</p>
+        <FormField
+          htmlFor="reset-password-new"
+          label={copy.passwordLabel}
+          hint={copy.passwordHint}
+          hintId={HINT_ID}
         >
-          {title}
-        </h2>
-        <p className="text-sm text-muted">{message}</p>
-        <Button asChild size="lg" className={AUTH_SUBMIT_CLASS}>
-          <Link href={FORGOT_PASSWORD_PATH}>{copy.requestNew}</Link>
+          <PasswordInput
+            id="reset-password-new"
+            name="password"
+            autoComplete="new-password"
+            required
+            minLength={MIN}
+            maxLength={MAX}
+            disabled={submitting}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? ERROR_ID : HINT_ID}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            visible={showPassword}
+            onVisibleChange={setShowPassword}
+            showLabel={copy.showPassword}
+            hideLabel={copy.hidePassword}
+          />
+        </FormField>
+
+        <FormField htmlFor="reset-password-confirm" label={copy.confirmLabel}>
+          <Input
+            id="reset-password-confirm"
+            name="confirm"
+            type={showPassword ? 'text' : 'password'}
+            autoComplete="new-password"
+            required
+            maxLength={MAX}
+            disabled={submitting}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? ERROR_ID : undefined}
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+          />
+        </FormField>
+
+        {error ? (
+          <InlineError id={ERROR_ID} variant="summary">
+            {error}
+          </InlineError>
+        ) : null}
+
+        <Button type="submit" size="lg" disabled={submitting} className={AUTH_SUBMIT_CLASS}>
+          {submitting ? (
+            <>
+              <Loader2 className="animate-spin" /> {copy.submitting}
+            </>
+          ) : (
+            copy.submit
+          )}
         </Button>
-        <Link href="/login" className={`self-center ${AUTH_LINK_CLASS}`}>
-          {copy.backToLogin}
-        </Link>
-      </div>
+      </form>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className={AUTH_FORM_CLASS}>
-      <p className="text-sm text-muted">{copy.intro}</p>
-      <FormField
-        htmlFor="reset-password-new"
-        label={copy.passwordLabel}
-        hint={copy.passwordHint}
-        hintId={HINT_ID}
-      >
-        <PasswordInput
-          id="reset-password-new"
-          name="password"
-          autoComplete="new-password"
-          required
-          minLength={MIN}
-          maxLength={MAX}
-          disabled={submitting}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? ERROR_ID : HINT_ID}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          visible={showPassword}
-          onVisibleChange={setShowPassword}
-          showLabel={copy.showPassword}
-          hideLabel={copy.hidePassword}
-        />
-      </FormField>
-
-      <FormField htmlFor="reset-password-confirm" label={copy.confirmLabel}>
-        <Input
-          id="reset-password-confirm"
-          name="confirm"
-          type={showPassword ? 'text' : 'password'}
-          autoComplete="new-password"
-          required
-          maxLength={MAX}
-          disabled={submitting}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? ERROR_ID : undefined}
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-        />
-      </FormField>
-
-      {error ? (
-        <InlineError id={ERROR_ID} variant="summary">
-          {error}
-        </InlineError>
-      ) : null}
-
-      <Button type="submit" size="lg" disabled={submitting} className={AUTH_SUBMIT_CLASS}>
-        {submitting ? (
-          <>
-            <Loader2 className="animate-spin" /> {copy.submitting}
-          </>
-        ) : (
-          copy.submit
-        )}
-      </Button>
-    </form>
+    <>
+      <div aria-live="polite" aria-atomic="true" className="sr-only" data-testid="reset-password-live">
+        {announcement}
+      </div>
+      {body()}
+    </>
   );
 }
