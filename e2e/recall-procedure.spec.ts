@@ -61,6 +61,8 @@ test('una profilaxis realizada deja el vencimiento de Higiene en la ficha', asyn
   await apiPost(request, session, `/treatment-plans/${plan.id}/items`, {
     toothNumber: '11',
     catalogItemId: prophylaxis!.id,
+    // El catálogo semilla de una clínica nueva no trae precios: se indica aquí.
+    price: 40,
   });
   const accept = await request.patch(`${API_URL}/treatment-plans/${plan.id}`, {
     headers: session.headers,
