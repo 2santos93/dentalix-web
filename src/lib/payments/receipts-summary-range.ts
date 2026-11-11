@@ -16,7 +16,12 @@ export const summaryRangeCopy = {
   // aquí la fecha se elige en el calendario con el formato de la sede, nunca se teclea en ISO.
   fromAfterTo: 'El período no es válido: «Desde» tiene que ser anterior o igual a «Hasta».',
   tooLong: `El período del resumen admite como mucho ${MAX_SUMMARY_DAYS} días.`,
+  outOfBounds: 'Las fechas del período tienen que estar entre el 01/01/2000 y el 31/12/2100.',
 };
+
+/** Los días que acepta la API (ambos incluidos). */
+const FIRST_DAY = '2000-01-01';
+const LAST_DAY = '2100-12-31';
 
 export type SummaryRangeError = { field: 'from' | 'to'; message: string };
 
@@ -29,6 +34,8 @@ export function summaryRangeError(from: string | null, to: string | null): Summa
   const end = isoToCalendarDate(to);
   if (!start) return { field: 'from', message: summaryRangeCopy.missing };
   if (!end) return { field: 'to', message: summaryRangeCopy.missing };
+  if (from! < FIRST_DAY || from! > LAST_DAY) return { field: 'from', message: summaryRangeCopy.outOfBounds };
+  if (to! < FIRST_DAY || to! > LAST_DAY) return { field: 'to', message: summaryRangeCopy.outOfBounds };
   if (start.compare(end) > 0) return { field: 'to', message: summaryRangeCopy.fromAfterTo };
   if (end.compare(start) + 1 > MAX_SUMMARY_DAYS) return { field: 'to', message: summaryRangeCopy.tooLong };
   return null;
