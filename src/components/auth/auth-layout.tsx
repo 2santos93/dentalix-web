@@ -87,6 +87,13 @@ export const AUTH_LINK_CLASS =
   'inline-flex min-h-10 items-center text-sm font-medium text-primary-text underline-offset-4 hover:underline pointer-coarse:min-h-11';
 
 /**
+ * Título de un estado al que se lleva el foco por código (DX-114): enfocable
+ * con `tabIndex={-1}` y con el anillo de foco del producto (DESIGN.md → Focus).
+ */
+export const FOCUSABLE_TITLE_CLASS =
+  't-title text-ink rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text';
+
+/**
  * Plantilla única de las páginas de acceso (login, registro, verificación,
  * contraseña olvidada y nueva, invitación). Cabecera de alto fijo (64 px) y
  * 48 px hasta el H1 (96 px desde lg) sea cual sea la longitud del formulario:

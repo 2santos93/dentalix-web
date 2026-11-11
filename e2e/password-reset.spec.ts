@@ -151,6 +151,57 @@ test.describe('Recuperar la contraseña', () => {
     }
   });
 
+  // DX-114: cambiar la contraseña desde el perfil invalida los enlaces de
+  // restablecimiento pedidos antes (si no, un enlace viejo en el correo seguiría
+  // sirviendo para quitarle la cuenta a quien acaba de cambiarla).
+  test('un enlace pedido antes de cambiar la contraseña desde el perfil ya no es válido', async ({
+    page,
+    playwright,
+  }) => {
+    const suffix = randomUUID().slice(0, 8);
+    const clinic = {
+      subdomain: `restablece-perfil-${suffix}`,
+      clinicName: `Clínica Restablece Perfil ${suffix}`,
+      fullName: 'Dueña Restablece Perfil',
+      email: `restablece.perfil.${suffix}@example.com`,
+      password: PASSWORD,
+    };
+    const api = await playwright.request.newContext();
+    const { origin } = await registerClinicViaApi(api, clinic);
+    await api.dispose();
+
+    // --- 1. Pedir el enlace (y que el foco vaya al título, FE-040) ---
+    await page.goto(`${origin}/olvide-contrasena`);
+    await page.getByLabel('Correo electrónico').fill(clinic.email);
+    await page.getByRole('button', { name: 'Enviar enlace' }).click();
+    await expect(page.getByRole('heading', { name: 'Revisa tu correo' })).toBeFocused({
+      timeout: 10_000,
+    });
+    const link = await resetLinkFor(clinic.email, origin);
+
+    // --- 2. Cambiar la contraseña desde el perfil ---
+    await loginAs(page, origin, clinic.email, PASSWORD);
+    await page.goto(`${origin}/settings/profile`);
+    await page.getByRole('button', { name: 'Cambiar contraseña' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Cambiar contraseña' });
+    await dialog.getByLabel('Contraseña actual').fill(PASSWORD);
+    await dialog.getByLabel('Nueva contraseña').fill(NEW_PASSWORD);
+    await dialog.getByLabel('Confirmar contraseña').fill(NEW_PASSWORD);
+    await dialog.getByRole('button', { name: 'Cambiar contraseña' }).click();
+    await expect(dialog).toBeHidden({ timeout: 10_000 });
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Tu contraseña fue actualizada.' }),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // --- 3. El enlace viejo ya no sirve ---
+    await page.goto(link);
+    await expect(page.getByRole('heading', { name: 'Enlace no válido' })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByLabel('Contraseña nueva')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Pedir un enlace nuevo' })).toBeVisible();
+  });
+
   for (const viewport of [
     { width: 390, height: 844 },
     { width: 1440, height: 900 },

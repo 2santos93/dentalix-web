@@ -83,29 +83,67 @@ describe('ResetPasswordForm', () => {
     });
   });
 
-  it('si al guardar el enlace ya caducó (410), lo dice y ofrece pedir otro', async () => {
+  async function saveRejectedWith(err: ApiError) {
     (apiFetch as jest.Mock).mockResolvedValueOnce({ status: 'VALID' });
-    (apiFetchOrNull as jest.Mock).mockRejectedValueOnce(
+    (apiFetchOrNull as jest.Mock).mockRejectedValueOnce(err);
+    render(<ResetPasswordForm resetToken={TOKEN} />);
+    await screen.findByLabelText('Contraseña nueva');
+    fill('Clave-Nueva-2026');
+  }
+
+  // DX-114 (R4): manda el código del cuerpo, no el texto del mensaje.
+  it.each([
+    [404, 'RESET_TOKEN_INVALID', 'Enlace no válido'],
+    [410, 'RESET_TOKEN_EXPIRED', 'El enlace caducó'],
+    [410, 'RESET_TOKEN_USED', 'Este enlace ya se usó'],
+  ])('si al guardar la API responde %i %s, lo dice y ofrece pedir otro', async (status, code, title) => {
+    // El texto apunta a otro estado a propósito: si se leyera, fallaría.
+    await saveRejectedWith(new ApiError(status, 'caducó / usado / no válido', { code }));
+    expect(await screen.findByRole('heading', { name: title })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Pedir un enlace nuevo' })).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('sin código: 404 → no válido', async () => {
+    await saveRejectedWith(new ApiError(404, 'No es válido'));
+    expect(await screen.findByRole('heading', { name: 'Enlace no válido' })).toBeInTheDocument();
+  });
+
+  it('sin código: 410 → ya se usó, aunque el texto diga «caducó» (el texto no es contrato)', async () => {
+    await saveRejectedWith(
       new ApiError(
         410,
         'El enlace para restablecer la contraseña caducó (vale 30 minutos). Pide un enlace nuevo.',
       ),
     );
-    render(<ResetPasswordForm resetToken={TOKEN} />);
-    await screen.findByLabelText('Contraseña nueva');
-    fill('Clave-Nueva-2026');
-    expect(await screen.findByRole('heading', { name: 'El enlace caducó' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Pedir un enlace nuevo' })).toBeInTheDocument();
-    expect(push).not.toHaveBeenCalled();
+    expect(await screen.findByRole('heading', { name: 'Este enlace ya se usó' })).toBeInTheDocument();
   });
 
-  it('si al guardar el enlace ya no existe (404), lo dice', async () => {
-    (apiFetch as jest.Mock).mockResolvedValueOnce({ status: 'VALID' });
-    (apiFetchOrNull as jest.Mock).mockRejectedValueOnce(new ApiError(404, 'No es válido'));
-    render(<ResetPasswordForm resetToken={TOKEN} />);
-    await screen.findByLabelText('Contraseña nueva');
-    fill('Clave-Nueva-2026');
+  it('un código desconocido en un 404 cae al status', async () => {
+    await saveRejectedWith(new ApiError(404, 'x', { code: 'OTRA_COSA' }));
     expect(await screen.findByRole('heading', { name: 'Enlace no válido' })).toBeInTheDocument();
+  });
+
+  // DX-114 (R5): el formulario desaparece con el foco dentro; el título del
+  // estado lo recibe para que el lector de pantalla lo anuncie.
+  it('al pasar del formulario al estado de enlace inválido, el foco va al título', async () => {
+    await saveRejectedWith(new ApiError(410, 'x', { code: 'RESET_TOKEN_EXPIRED' }));
+    const heading = await screen.findByRole('heading', { name: 'El enlace caducó' });
+    await waitFor(() => expect(document.activeElement).toBe(heading));
+    expect(heading).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('al abrir un enlace que ya no sirve no se roba el foco', async () => {
+    (apiFetch as jest.Mock).mockResolvedValueOnce({ status: 'USED' });
+    render(<ResetPasswordForm resetToken={TOKEN} />);
+    const heading = await screen.findByRole('heading', { name: 'Este enlace ya se usó' });
+    expect(document.activeElement).not.toBe(heading);
+  });
+
+  it('otro error al guardar (500) se queda en el formulario con el aviso', async () => {
+    await saveRejectedWith(new ApiError(500, 'boom'));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.getByLabelText('Contraseña nueva')).toBeInTheDocument();
   });
 
   it('un fallo al comprobar el enlace ofrece reintentar', async () => {
