@@ -448,6 +448,8 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
     await screen.findByRole('region', { name: /resumen en VES/i });
     expect(screen.getByRole('button', { name: 'Registrar abono' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Plan de cuotas' })).toBeInTheDocument();
+    // DX-401: el recibo resumen de un periodo, con los mismos roles que cobrar.
+    expect(screen.getByRole('button', { name: 'Resumen de recibos' })).toBeInTheDocument();
   });
 
   it.each(['DENTIST', 'ASSISTANT'])('%s (sin permiso de pagos) no ve los botones de cobro', async (role) => {
@@ -456,6 +458,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
     await screen.findByRole('region', { name: /resumen en VES/i });
     expect(screen.queryByRole('button', { name: 'Registrar abono' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Plan de cuotas' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Resumen de recibos' })).not.toBeInTheDocument();
   });
 
   it('sin rol legible tampoco, ni con un 403 del estado de cuenta', async () => {
