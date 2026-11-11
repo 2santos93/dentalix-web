@@ -22,7 +22,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { ResponsiblePartyDialog } from './responsible-party-dialog';
 import { SectionHeader } from '@/components/ui/section-header';
-import { DATA_SECTION_CLASS, DATA_SECTION_HEADER_CLASS } from './data-section';
+import { DATA_SECTION_CLASS, DATA_SECTION_HEADER_CLASS, RESPONSIBLES_ANCHOR } from './data-section';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the app.
 export const responsiblesCopy = {
@@ -275,6 +275,8 @@ export function PatientResponsiblePartiesSection({
 
   return (
     <section
+      // DX-342: «Editar responsables en la ficha» desde la revisión de mayoría de edad.
+      id={RESPONSIBLES_ANCHOR}
       aria-labelledby={`${ids}-heading`}
       data-testid="patient-responsibles"
       className={DATA_SECTION_CLASS}

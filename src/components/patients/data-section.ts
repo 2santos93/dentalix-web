@@ -14,3 +14,6 @@ export const DATA_SECTION_CLASS =
  * cada título convertía la pestaña en una escalera de botones.
  */
 export const DATA_SECTION_HEADER_CLASS = 'flex-row flex-wrap items-center justify-between gap-2';
+
+/** Ancla de «Responsable y familia» en la ficha: la revisión de mayoría de edad (DX-342) enlaza aquí. */
+export const RESPONSIBLES_ANCHOR = 'responsable-y-familia';

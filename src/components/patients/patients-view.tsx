@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Plus } from 'lucide-react';
+import { Cake, Plus } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
 import { listPayers, type Payer } from '@/lib/payers/payers-api';
@@ -15,6 +15,8 @@ import { SectionError } from '@/components/errors/section-error';
 import { FieldError } from '@/components/errors/field-error';
 import { useSedeClock } from '@/lib/locations/sede-clock';
 import { ClinicWideNote } from '@/components/locations/clinic-wide-note';
+import { getTokenRole } from '@/lib/auth/token-role';
+import { canReviewMajority, COMING_OF_AGE_HREF } from '@/lib/patients/majority-review-api';
 
 // Corto para no notarse al teclear, largo para no lanzar una petición por
 // tecla. Mismo valor que el resto de las listas.
@@ -28,6 +30,9 @@ const copy = {
   clinicWideNote:
     'La ficha de paciente es compartida: ves todos los pacientes de la clínica, no solo los de la sede activa.',
   newPatient: 'Nuevo paciente',
+  // DX-342: la lista de quienes cumplen la mayoría de edad vive aquí, no en el menú.
+  comingOfAge: 'Mayoría de edad',
+  comingOfAgeLabel: 'Cumplen la mayoría de edad',
   searchLabel: 'Buscar por nombre, apellido o documento',
   // La búsqueda de la API mira nombre, apellido y documento —no el teléfono—:
   // el placeholder no promete lo que no hace (informe K2). Corto para caber
@@ -166,11 +171,20 @@ export function PatientsView({ token }: PatientsViewProps) {
           value={searchInput}
           onChange={setSearchInput}
           action={
-            <Button asChild>
-              <Link href="/patients/new">
-                <Plus /> {copy.newPatient}
-              </Link>
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              {canReviewMajority(getTokenRole(token)) ? (
+                <Button asChild variant="secondary">
+                  <Link href={COMING_OF_AGE_HREF} aria-label={copy.comingOfAgeLabel} title={copy.comingOfAgeLabel}>
+                    <Cake aria-hidden /> {copy.comingOfAge}
+                  </Link>
+                </Button>
+              ) : null}
+              <Button asChild>
+                <Link href="/patients/new">
+                  <Plus /> {copy.newPatient}
+                </Link>
+              </Button>
+            </div>
           }
         >
           {payersFailed ? (

@@ -98,3 +98,20 @@ export function expirePlanQuote(planId: string): void {
     input: `UPDATE treatment_plans SET "quoteIssuedOn" = (timezone('UTC', now()))::date - 3, "quoteValidUntil" = (timezone('UTC', now()))::date - 2 WHERE id = :'id';`,
   });
 }
+
+/**
+ * DX-342: el responsable se dio de alta hace `days` días (cuando el paciente
+ * aún era menor). La API pone `createdAt` al dar de alta y no deja fecharlo:
+ * sin esto, un paciente que ya cumplió la mayoría de edad no puede tener un
+ * responsable «de cuando era menor».
+ */
+export function backdateResponsibleParty(partyId: string, days: number): void {
+  if (!E2E_DATABASE_URL) throw new Error('E2E_DATABASE_URL no definido');
+  execFileSync(
+    'psql',
+    [E2E_DATABASE_URL, '-v', 'ON_ERROR_STOP=1', '-v', `id=${partyId}`, '-v', `days=${Math.trunc(days)}`],
+    {
+      input: `UPDATE patient_responsible_parties SET "createdAt" = "createdAt" - make_interval(days => :days) WHERE id = :'id';`,
+    },
+  );
+}
