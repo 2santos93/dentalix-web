@@ -1,9 +1,18 @@
 import type { ReceiptsSummary } from '@/lib/payments/receipts-summary-api';
 
-/** Resumen de recibos de prueba (DX-401): dos abonos en USD, uno en VES y uno anulado. */
+/**
+ * Resumen de recibos de prueba (DX-401): un abono en USD, un cobro dividido
+ * (USD + VES, dos filas del mismo recibo) y uno anulado.
+ */
 export function receiptsSummaryFixture(overrides: Partial<ReceiptsSummary> = {}): ReceiptsSummary {
   return {
-    patient: { id: 'pat-1', fullName: 'Carolina Pérez', documentMasked: 'V-******5678', patientCode: 'P-000042' },
+    patient: {
+      id: 'pat-1',
+      fullName: 'Carolina Pérez',
+      documentTypeName: 'Cédula',
+      documentMasked: '****5678',
+      patientCode: 'P-000042',
+    },
     clinic: {
       name: 'Clínica Demo',
       legalName: 'Clínica Demo C.A.',
@@ -39,9 +48,9 @@ export function receiptsSummaryFixture(overrides: Partial<ReceiptsSummary> = {})
         voidReason: null,
       },
       {
-        paymentId: 'pay-3',
-        receiptNumber: 'PRI-000103',
-        issuedOn: '2026-11-06',
+        paymentId: 'pay-2',
+        receiptNumber: 'PRI-000102',
+        issuedOn: '2026-11-05',
         locationName: 'Sede principal',
         methodLabel: 'Pago móvil',
         amount: 1500,

@@ -75,6 +75,29 @@ it('el anulado sale marcado con su motivo y fuera del total; los totales van por
   expect(text(within(dialog).getByTestId('receipts-summary-total-USD'))).toBe('USD 205,00');
   expect(text(within(dialog).getByTestId('receipts-summary-total-VES'))).toBe('VES 1.500,00');
   expect(within(dialog).getByText('1 recibo anulado: no cuenta en el total.')).toBeInTheDocument();
+  expect(within(dialog).getByText('(2 abonos)')).toBeInTheDocument();
+});
+
+it('un cobro dividido: sus formas de pago van juntas bajo el mismo recibo', async () => {
+  mockedGet.mockResolvedValue(receiptsSummaryFixture());
+  const { dialog } = await openDialog();
+  await within(dialog).findByTestId('receipts-summary-preview');
+  const rows = within(dialog).getAllByTestId('receipts-summary-row');
+  expect(rows[1]).toHaveTextContent('PRI-000102');
+  expect(rows[1]).not.toHaveAttribute('data-continuation');
+  expect(rows[2]).toHaveAttribute('data-continuation', 'true');
+  expect(rows[2]).toHaveTextContent('Mismo recibo · Pago móvil');
+  expect(rows[2]).not.toHaveTextContent('PRI-000102');
+  expect(text(rows[2])).toContain('VES 1.500,00');
+});
+
+it('un recibo antiguo (sin serie) sale con su referencia', async () => {
+  const base = receiptsSummaryFixture();
+  mockedGet.mockResolvedValue(
+    receiptsSummaryFixture({ receipts: [{ ...base.receipts[0], receiptNumber: 'REC-1a2b3c4d' }] }),
+  );
+  const { dialog } = await openDialog();
+  expect(await within(dialog).findByText('REC-1a2b3c4d')).toBeInTheDocument();
 });
 
 it('los atajos cambian el periodo y el enlace de imprimir lo lleva', async () => {
@@ -165,7 +188,7 @@ it('si va al responsable, lo dice', async () => {
 });
 
 it.each([
-  [422, 'El paciente no tiene un email registrado.'],
+  [422, 'No hay abonos en ese periodo'],
   [429, 'Ya se enviaron demasiados resúmenes a este paciente hoy.'],
 ])('un %i al enviar muestra el mensaje de la API junto a la acción', async (status, message) => {
   mockedGet.mockResolvedValue(receiptsSummaryFixture());

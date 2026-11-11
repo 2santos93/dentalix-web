@@ -16,7 +16,9 @@ export const receiptsSummaryCopy = {
   listLabel: 'Recibos del periodo',
   totalsLabel: 'Totales por moneda',
   total: (currency: string) => `Total ${currency}`,
-  receiptCount: (n: number) => (n === 1 ? '1 recibo' : `${n} recibos`),
+  // `count` de la API: formas de pago no anuladas (un cobro dividido suma una por moneda).
+  lineCount: (n: number) => (n === 1 ? '1 abono' : `${n} abonos`),
+  sameReceipt: 'Mismo recibo',
   voided: 'Anulado',
   voidReason: (reason: string) => `Motivo: ${reason}`,
   voidedExcluded: (n: number) =>

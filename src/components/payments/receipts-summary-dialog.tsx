@@ -8,6 +8,7 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { todayDate, type IsoRange } from '@/lib/dates/iso';
 import {
   getReceiptsSummary,
+  isContinuation,
   receiptsSummaryPrintHref,
   sendReceiptsSummary,
   type ReceiptsSummary,
@@ -303,43 +304,58 @@ export function SummaryPreview({ summary, fmt }: { summary: ReceiptsSummary; fmt
   return (
     <div className="flex flex-col gap-4" data-testid="receipts-summary-preview">
       {summary.restrictedToLocations ? <p className="text-sm text-muted">{copy.restricted}</p> : null}
-      <ul aria-label={copy.listLabel} className="divide-y divide-border rounded-lg border border-border">
-        {summary.receipts.map((r, i) => (
-          <li
-            key={`${r.paymentId}-${i}`}
-            data-testid="receipts-summary-row"
-            data-voided={r.voided || undefined}
-            className="flex flex-col gap-1 px-3 py-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
-          >
-            <div className="min-w-0">
-              <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-ink">
-                <span className="tabular-nums">{r.receiptNumber}</span>
-                {r.voided ? <Badge variant="neutral">{copy.voided}</Badge> : null}
-              </p>
-              <p className="text-sm text-muted [overflow-wrap:anywhere]">
-                <span className="tabular-nums">{sedeCivilDate(r.issuedOn, fmt)}</span>
-                {` · ${r.locationName} · ${r.methodLabel}`}
-              </p>
-              {r.voided && r.voidReason ? (
-                <p className="text-xs text-muted [overflow-wrap:anywhere]">{copy.voidReason(r.voidReason)}</p>
-              ) : null}
-            </div>
-            <p
+      <ul aria-label={copy.listLabel} className="rounded-lg border border-border">
+        {summary.receipts.map((r, i) => {
+          // Un cobro dividido: sus formas de pago van seguidas; la segunda y siguientes, bajo el mismo recibo.
+          const continuation = isContinuation(summary.receipts, i);
+          return (
+            <li
+              key={`${r.paymentId}-${i}`}
+              data-testid="receipts-summary-row"
+              data-voided={r.voided || undefined}
+              data-continuation={continuation || undefined}
               className={cn(
-                'shrink-0 text-sm font-medium tabular-nums sm:text-right',
-                r.voided ? 'text-muted line-through' : 'text-ink',
+                'flex flex-col gap-1 px-3 py-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4',
+                i > 0 && !continuation && 'border-t border-border',
+                continuation && 'pt-0 pl-6',
               )}
             >
-              {sedeMoney(r.amount, r.currency, fmt)}
-            </p>
-          </li>
-        ))}
+              <div className="min-w-0">
+                {continuation ? (
+                  <p className="text-sm text-muted [overflow-wrap:anywhere]">{`${copy.sameReceipt} · ${r.methodLabel}`}</p>
+                ) : (
+                  <>
+                    <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-ink">
+                      <span className="tabular-nums">{r.receiptNumber}</span>
+                      {r.voided ? <Badge variant="neutral">{copy.voided}</Badge> : null}
+                    </p>
+                    <p className="text-sm text-muted [overflow-wrap:anywhere]">
+                      <span className="tabular-nums">{sedeCivilDate(r.issuedOn, fmt)}</span>
+                      {` · ${r.locationName} · ${r.methodLabel}`}
+                    </p>
+                    {r.voided && r.voidReason ? (
+                      <p className="text-xs text-muted [overflow-wrap:anywhere]">{copy.voidReason(r.voidReason)}</p>
+                    ) : null}
+                  </>
+                )}
+              </div>
+              <p
+                className={cn(
+                  'shrink-0 text-sm font-medium tabular-nums sm:text-right',
+                  r.voided ? 'text-muted line-through' : 'text-ink',
+                )}
+              >
+                {sedeMoney(r.amount, r.currency, fmt)}
+              </p>
+            </li>
+          );
+        })}
       </ul>
       <dl aria-label={copy.totalsLabel} className="flex flex-col gap-1.5" data-testid="receipts-summary-totals">
         {summary.totals.map((t) => (
           <div key={t.currency} className="flex flex-wrap items-baseline justify-between gap-x-4">
             <dt className="text-sm text-muted">
-              {copy.total(t.currency)} <span className="text-xs">({copy.receiptCount(t.count)})</span>
+              {copy.total(t.currency)} <span className="text-xs">({copy.lineCount(t.count)})</span>
             </dt>
             <dd className="text-base font-semibold tabular-nums text-ink" data-testid={`receipts-summary-total-${t.currency}`}>
               {sedeMoney(t.amount, t.currency, fmt)}

@@ -11,12 +11,16 @@ import { apiFetch } from '@/lib/api/client';
  * se cambian por `components['schemas'][…]`.
  */
 
-/** Un recibo del periodo. Los anulados vienen marcados y no cuentan en los totales. */
+/**
+ * Una fila del periodo: una forma de pago de un recibo. Un cobro dividido trae
+ * una fila por forma de pago, seguidas y con el mismo `paymentId` y número.
+ * Los anulados vienen marcados y no cuentan en los totales.
+ */
 export interface ReceiptsSummaryReceipt {
   paymentId: string;
-  /** Número de la serie de la sede (`PRI-000123`) o la referencia antigua. */
+  /** Número de la serie de la sede (`PRI-000123`) o la referencia antigua (`REC-xxxxxxxx`). */
   receiptNumber: string;
-  /** Día civil del abono en su sede, `YYYY-MM-DD`. */
+  /** Día civil de emisión del recibo en su sede, `YYYY-MM-DD` (por él se filtra el periodo). */
   issuedOn: string;
   locationName: string;
   methodLabel: string;
@@ -26,15 +30,29 @@ export interface ReceiptsSummaryReceipt {
   voidReason: string | null;
 }
 
-/** Total de una moneda: solo los recibos no anulados de esa moneda. */
+/** La fila `i` es otra forma de pago del mismo recibo que la anterior (cobro dividido). */
+export function isContinuation(rows: readonly ReceiptsSummaryReceipt[], i: number): boolean {
+  return i > 0 && rows[i - 1].paymentId === rows[i].paymentId;
+}
+
+/** Total de una moneda: solo las filas no anuladas de esa moneda. */
 export interface ReceiptsSummaryTotal {
   currency: string;
   amount: number;
+  /** Filas (formas de pago) no anuladas en esa moneda. */
   count: number;
 }
 
 export interface ReceiptsSummary {
-  patient: { id: string; fullName: string; documentMasked: string | null; patientCode: string };
+  patient: {
+    id: string;
+    fullName: string;
+    /** Nombre del tipo de documento («Cédula»). */
+    documentTypeName: string;
+    /** Solo el número enmascarado («****5678»), o `null` sin documento. */
+    documentMasked: string | null;
+    patientCode: string;
+  };
   clinic: {
     name: string;
     legalName: string | null;
@@ -52,6 +70,7 @@ export interface ReceiptsSummary {
   restrictedToLocations: boolean;
   receipts: ReceiptsSummaryReceipt[];
   totals: ReceiptsSummaryTotal[];
+  /** Recibos anulados (no filas). */
   voidedCount: number;
   /** Aviso del pie (no es factura), redactado por la API. */
   notice: string;
@@ -102,8 +121,8 @@ export function printReceiptsSummary(
 
 /**
  * `POST /patients/:id/payment-receipts/summary/email?from&to` — encola el
- * resumen al email del paciente (o de su responsable). 422 sin email o sin
- * recibos en el periodo; 429 con los topes de envío. Los dos en español.
+ * resumen al email del paciente (o de su responsable). Periodo en la query,
+ * sin cuerpo. 422 sin email o sin recibos en el periodo; 429 con los topes de envío. Los dos en español.
  */
 export function sendReceiptsSummary(
   token: string,

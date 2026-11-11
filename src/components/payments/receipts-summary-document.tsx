@@ -2,7 +2,7 @@ import { ClinicFiscalLines } from '@/components/brand/clinic-fiscal-lines';
 import { DocSection, DocTable, Td, Th } from '@/components/account-statement/account-statement-document';
 import { EMPTY_CLINIC_FISCAL } from '@/lib/clinic/clinic-settings-api';
 import { documentTexts, type DocumentFormat } from '@/lib/format/document-format';
-import type { ReceiptsSummary } from '@/lib/payments/receipts-summary-api';
+import { isContinuation, type ReceiptsSummary } from '@/lib/payments/receipts-summary-api';
 import { receiptsSummaryCopy } from './receipts-summary-copy';
 
 const copy = {
@@ -22,7 +22,7 @@ const copy = {
   colMethod: 'Método',
   colAmount: 'Monto',
   colCurrency: 'Moneda',
-  colCount: 'Recibos',
+  colCount: 'Abonos',
   colTotal: 'Total',
 };
 
@@ -70,7 +70,10 @@ export function ReceiptsSummaryDocument({ summary, format }: ReceiptsSummaryDocu
 
       <dl className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
         <Fact label={copy.patient} value={patient.fullName} strong />
-        <Fact label={copy.document} value={patient.documentMasked ?? copy.none} />
+        <Fact
+          label={copy.document}
+          value={patient.documentMasked ? `${patient.documentTypeName} ${patient.documentMasked}` : copy.none}
+        />
         <Fact label={copy.patientCode} value={patient.patientCode} />
         <Fact label={copy.period} value={copy.periodValue(doc.civilDate(summary.from), doc.civilDate(summary.to))} />
       </dl>
@@ -94,41 +97,59 @@ export function ReceiptsSummaryDocument({ summary, format }: ReceiptsSummaryDocu
                   </tr>
                 </thead>
                 <tbody>
-                  {summary.receipts.map((r, i) => (
-                    <tr key={`${r.paymentId}-${i}`} className={r.voided ? 'text-[#6b7280]' : undefined}>
-                      <Td>
-                        {r.receiptNumber}
-                        {r.voided && r.voidReason ? (
-                          <span className="block text-xs">{receiptsSummaryCopy.voidReason(r.voidReason)}</span>
-                        ) : null}
-                      </Td>
-                      <Td>{doc.civilDate(r.issuedOn)}</Td>
-                      <Td>{r.locationName}</Td>
-                      <Td>{r.methodLabel}</Td>
-                      <Td right>
-                        <Amount voided={r.voided} text={doc.amount(r.amount, r.currency)} />
-                      </Td>
-                    </tr>
-                  ))}
+                  {summary.receipts.map((r, i) => {
+                    // Cobro dividido: la segunda forma de pago y siguientes, bajo el mismo recibo.
+                    const continuation = isContinuation(summary.receipts, i);
+                    return (
+                      <tr key={`${r.paymentId}-${i}`} className={r.voided ? 'text-[#6b7280]' : undefined}>
+                        <Td>
+                          {continuation ? (
+                            <span className="pl-3 text-xs">{receiptsSummaryCopy.sameReceipt}</span>
+                          ) : (
+                            <>
+                              {r.receiptNumber}
+                              {r.voided && r.voidReason ? (
+                                <span className="block text-xs">{receiptsSummaryCopy.voidReason(r.voidReason)}</span>
+                              ) : null}
+                            </>
+                          )}
+                        </Td>
+                        <Td>{continuation ? '' : doc.civilDate(r.issuedOn)}</Td>
+                        <Td>{continuation ? '' : r.locationName}</Td>
+                        <Td>{r.methodLabel}</Td>
+                        <Td right>
+                          <Amount voided={r.voided} text={doc.amount(r.amount, r.currency)} />
+                        </Td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </DocTable>
             </div>
             {/* Teléfono: cada recibo, una ficha apilada (sin tabla que desborde). */}
-            <ul aria-label={receiptsSummaryCopy.listLabel} className="divide-y divide-[#e5e7eb] text-sm sm:hidden print:hidden">
-              {summary.receipts.map((r, i) => (
-                <li key={`${r.paymentId}-${i}`} className={`py-2 ${r.voided ? 'text-[#6b7280]' : ''}`}>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="font-medium tabular-nums">{r.receiptNumber}</span>
-                    <Amount voided={r.voided} text={doc.amount(r.amount, r.currency)} />
-                  </div>
-                  <p className="text-xs [overflow-wrap:anywhere]">
-                    {`${doc.civilDate(r.issuedOn)} · ${r.locationName} · ${r.methodLabel}`}
-                  </p>
-                  {r.voided && r.voidReason ? (
-                    <p className="text-xs [overflow-wrap:anywhere]">{receiptsSummaryCopy.voidReason(r.voidReason)}</p>
-                  ) : null}
-                </li>
-              ))}
+            <ul aria-label={receiptsSummaryCopy.listLabel} className="text-sm sm:hidden print:hidden">
+              {summary.receipts.map((r, i) => {
+                const continuation = isContinuation(summary.receipts, i);
+                return (
+                  <li
+                    key={`${r.paymentId}-${i}`}
+                    className={`${continuation ? 'pb-2 pl-3' : `py-2 ${i > 0 ? 'border-t border-[#e5e7eb]' : ''}`} ${r.voided ? 'text-[#6b7280]' : ''}`}
+                  >
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className={continuation ? 'text-xs' : 'font-medium tabular-nums'}>
+                        {continuation ? receiptsSummaryCopy.sameReceipt : r.receiptNumber}
+                      </span>
+                      <Amount voided={r.voided} text={doc.amount(r.amount, r.currency)} />
+                    </div>
+                    <p className="text-xs [overflow-wrap:anywhere]">
+                      {continuation ? r.methodLabel : `${doc.civilDate(r.issuedOn)} · ${r.locationName} · ${r.methodLabel}`}
+                    </p>
+                    {!continuation && r.voided && r.voidReason ? (
+                      <p className="text-xs [overflow-wrap:anywhere]">{receiptsSummaryCopy.voidReason(r.voidReason)}</p>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           </DocSection>
 

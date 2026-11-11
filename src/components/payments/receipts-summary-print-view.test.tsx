@@ -47,7 +47,7 @@ it('pide la impresión (auditada) del periodo, pinta el documento y abre el diá
   expect(doc).toHaveTextContent('Clínica Demo');
   expect(doc).toHaveTextContent('RIF J-12345678-9');
   expect(doc).toHaveTextContent('Carolina Pérez');
-  expect(doc).toHaveTextContent('V-******5678');
+  expect(doc).toHaveTextContent('Cédula ****5678');
   expect(doc).toHaveTextContent('Del 01/11/2026 al 11/11/2026');
   expect(within(doc).getByTestId('receipts-summary-notice')).toHaveTextContent(
     'Este resumen no es factura ni documento fiscal.',
@@ -70,6 +70,12 @@ it('pide la impresión (auditada) del periodo, pinta el documento y abre el diá
   expect(stacked.className).toMatch(/sm:hidden/);
   expect(stacked.className).toMatch(/print:hidden/);
   expect(within(stacked).getAllByRole('listitem')).toHaveLength(4);
+
+  // Cobro dividido: la segunda forma de pago, bajo el mismo recibo (sin repetir número).
+  const split = within(table).getAllByRole('row').filter((row) => /PRI-000102|Mismo recibo/.test(row.textContent ?? ''));
+  expect(split).toHaveLength(2);
+  expect(split[1]).toHaveTextContent('Mismo recibo');
+  expect(split[1]).not.toHaveTextContent('PRI-000102');
 
   const toolbar = screen.getByRole('toolbar');
   expect(toolbar.className).toMatch(/print:hidden/);
@@ -98,6 +104,14 @@ it('un rol sin permiso no pide nada y ve el aviso', () => {
   render(<ReceiptsSummaryPrintView token="tok" patientId="pat-1" {...RANGE} allowed={false} />);
   expect(screen.getByText('Tu rol no tiene acceso a los recibos de caja.')).toBeInTheDocument();
   expect(mockedPrint).not.toHaveBeenCalled();
+});
+
+it('sin documento no pinta el tipo', async () => {
+  const base = receiptsSummaryFixture();
+  mockedPrint.mockResolvedValue(receiptsSummaryFixture({ patient: { ...base.patient, documentMasked: null } }));
+  render(<ReceiptsSummaryPrintView token="tok" patientId="pat-1" {...RANGE} />);
+  const doc = await screen.findByTestId('receipts-summary-document');
+  expect(doc).not.toHaveTextContent('Cédula');
 });
 
 it('un 404 es un aviso sin reintento', async () => {
