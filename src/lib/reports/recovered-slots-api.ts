@@ -81,7 +81,10 @@ export function isMonth(value: string | null | undefined): value is string {
   return typeof value === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
 }
 
-/** El mes `AAAA-MM` como período civil: del día 1 al último día del mes. */
+/**
+ * El mes `AAAA-MM` como período civil: del día 1 al último del mes, también en
+ * el mes en curso (un hueco liberado puede ser de una cita de la semana que viene).
+ */
 export function monthPeriod(month: string): { from: string; to: string } {
   const [y, m] = month.split('-').map(Number);
   const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
