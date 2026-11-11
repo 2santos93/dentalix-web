@@ -21566,7 +21566,7 @@ export interface components {
             intervalMonths: number;
             /**
              * Format: date
-             * @description Día del último control o limpieza (AAAA-MM-DD, no futuro). Por defecto, hoy en la sede.
+             * @description Día del último control o limpieza (AAAA-MM-DD, no futuro), fijado a mano. Por defecto: hoy en la sede al crear el recall; al editarlo, se conserva lo fijado (y la base que da un procedimiento).
              * @example 2026-04-10
              */
             lastDoneAt?: string;

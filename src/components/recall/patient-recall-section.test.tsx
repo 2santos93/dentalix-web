@@ -135,7 +135,7 @@ describe('PatientRecallSection (DX-015)', () => {
     expect(await screen.findByTestId('recall-contact-row')).toBeInTheDocument();
   });
 
-  it('el clínico fija «cada 3 meses»; al cambiarlo conserva la fecha del último control', async () => {
+  it('el clínico fija «cada 3 meses»; al cambiar solo el intervalo no manda fecha (la API conserva lo fijado)', async () => {
     mockedGet.mockResolvedValue(data);
     mockedSet.mockResolvedValue(data);
     render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
@@ -145,7 +145,6 @@ describe('PatientRecallSection (DX-015)', () => {
     await waitFor(() =>
       expect(mockedSet).toHaveBeenCalledWith('tok', 'pat-1', 't-ctl', {
         intervalMonths: 3,
-        lastDoneAt: '2026-04-10',
         active: true,
         disabledUntil: null,
         disabledReason: null,
@@ -204,32 +203,72 @@ describe('PatientRecallSection (DX-015)', () => {
       await waitFor(() => expect(mockedSet).toHaveBeenCalledWith('tok', 'pat-1', 'CHECKUP', expect.anything()));
     });
 
-    it('cambiar solo el intervalo reenvía lo fijado a mano, no el día del procedimiento (revisión 1, MAJOR-1)', async () => {
+    it('cambiar solo el intervalo no manda fecha: ni el día del procedimiento ni lo fijado (revisión 1, MAJOR-1)', async () => {
       // Fijado en enero; una profilaxis de junio da la base.
       const both = { ...recall, manualDoneAt: '2026-01-10', lastDoneAt: '2026-06-10', lastDoneItemId: 'item-1' };
       mockedGet.mockResolvedValue({ recalls: [both], contacts: [] });
       mockedSet.mockResolvedValue(data);
       render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
       await userEvent.click(await screen.findByRole('button', { name: 'Cambiar recall de control' }));
-      await userEvent.selectOptions(await screen.findByLabelText('Intervalo'), '3');
+      // El campo muestra lo fijado a mano (enero), no la base (junio).
+      const field = await screen.findByRole('group', { name: 'Fecha fijada a mano' });
+      expect(within(field).getAllByRole('spinbutton').map((x) => x.textContent)).toEqual(['10', '01', '2026']);
+      expect(screen.getByText(/Si no la cambias, se conserva/)).toBeInTheDocument();
+      await userEvent.selectOptions(screen.getByLabelText('Intervalo'), '3');
       await userEvent.click(screen.getByRole('button', { name: 'Guardar recall' }));
-      await waitFor(() =>
-        expect(mockedSet).toHaveBeenCalledWith('tok', 'pat-1', 't-ctl', expect.objectContaining({ intervalMonths: 3, lastDoneAt: '2026-01-10' })),
-      );
+      await waitFor(() => expect(mockedSet).toHaveBeenCalled());
+      const [, , , body] = mockedSet.mock.calls[0];
+      expect(body).toMatchObject({ intervalMonths: 3 });
+      expect(body).not.toHaveProperty('lastDoneAt');
     });
 
-    it('un recall nacido de un procedimiento (sin fecha fijada) avisa de que la fecha quedará fijada a mano', async () => {
+    it('un recall nacido de un procedimiento abre con la fecha vacía y, sin tocarla, no la manda', async () => {
       const born = { ...recall, manualDoneAt: null, lastDoneAt: '2026-06-10', lastDoneItemId: 'item-1', source: 'PROCEDURE' as const };
       mockedGet.mockResolvedValue({ recalls: [born], contacts: [] });
       mockedSet.mockResolvedValue(data);
       render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
       await userEvent.click(await screen.findByRole('button', { name: 'Cambiar recall de control' }));
-      expect(await screen.findByText(/Sin fecha fijada a mano: viene la del procedimiento realizado/)).toBeInTheDocument();
+      const field = await screen.findByRole('group', { name: 'Fecha fijada a mano' });
+      expect(within(field).getAllByRole('spinbutton').map((x) => x.textContent)).not.toContain('2026');
+      expect(screen.queryByText(/queda fijada a mano/)).not.toBeInTheDocument();
       await userEvent.click(screen.getByRole('button', { name: 'Guardar recall' }));
-      // Sin `lastDoneAt` la API pondría hoy: se manda la base vigente (no mueve el vencimiento).
+      await waitFor(() => expect(mockedSet).toHaveBeenCalled());
+      expect(mockedSet.mock.calls[0][3]).not.toHaveProperty('lastDoneAt');
+    });
+
+    it('si el clínico cambia la fecha, se manda', async () => {
+      const born = { ...recall, manualDoneAt: null, lastDoneAt: '2026-06-10', lastDoneItemId: 'item-1', source: 'PROCEDURE' as const };
+      mockedGet.mockResolvedValue({ recalls: [born], contacts: [] });
+      mockedSet.mockResolvedValue(data);
+      const user = userEvent.setup();
+      render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
+      await user.click(await screen.findByRole('button', { name: 'Cambiar recall de control' }));
+      const field = await screen.findByRole('group', { name: 'Fecha fijada a mano' });
+      await user.click(within(field).getAllByRole('spinbutton')[0]);
+      await user.keyboard('05032026');
+      await user.click(screen.getByRole('button', { name: 'Guardar recall' }));
       await waitFor(() =>
-        expect(mockedSet).toHaveBeenCalledWith('tok', 'pat-1', 't-ctl', expect.objectContaining({ lastDoneAt: '2026-06-10' })),
+        expect(mockedSet).toHaveBeenCalledWith('tok', 'pat-1', 't-ctl', expect.objectContaining({ lastDoneAt: '2026-03-05' })),
       );
+    });
+
+    it('un recall nuevo sin fecha no la manda (la API pone hoy); con fecha, sí', async () => {
+      mockedGet.mockResolvedValue({ recalls: [], contacts: [] });
+      mockedSet.mockResolvedValue({ recalls: [], contacts: [] });
+      const user = userEvent.setup();
+      render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
+      await user.click(await screen.findByRole('button', { name: 'Fijar recall de higiene' }));
+      expect(await screen.findByText(/Vacío: hoy/)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Guardar recall' }));
+      await waitFor(() => expect(mockedSet).toHaveBeenCalledTimes(1));
+      expect(mockedSet.mock.calls[0][3]).not.toHaveProperty('lastDoneAt');
+      await user.click(await screen.findByRole('button', { name: 'Fijar recall de control' }));
+      const field = await screen.findByRole('group', { name: 'Fecha fijada a mano' });
+      await user.click(within(field).getAllByRole('spinbutton')[0]);
+      await user.keyboard('05032026');
+      await user.click(screen.getByRole('button', { name: 'Guardar recall' }));
+      await waitFor(() => expect(mockedSet).toHaveBeenCalledTimes(2));
+      expect(mockedSet.mock.calls[1][3]).toMatchObject({ lastDoneAt: '2026-03-05' });
     });
 
     it('un recall de un tipo que ya no existe se ve, pero sin «Cambiar» (revisión 1, MINOR-3)', async () => {
