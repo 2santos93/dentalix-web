@@ -17,6 +17,10 @@ jest.mock('../../lib/payers/payers-api', () => ({
   listPayers: jest.fn(),
 }));
 
+// DX-342: el enlace a «Cumplen la mayoría de edad» depende del rol del token.
+let mockRole: string | null = null;
+jest.mock('../../lib/auth/token-role', () => ({ getTokenRole: () => mockRole }));
+
 const mockedList = listPatients as jest.MockedFunction<typeof listPatients>;
 const mockedPayers = listPayers as jest.MockedFunction<typeof listPayers>;
 
@@ -207,5 +211,21 @@ describe('PatientsView', () => {
         await screen.findByRole('combobox', { name: 'Cobertura' }),
       ).toBeInTheDocument();
     });
+  });
+
+  it.each([
+    ['ADMIN', true],
+    ['RECEPTION', true],
+    ['DENTIST', false],
+    ['ASSISTANT', false],
+  ])('DX-342: %s ve el enlace a «Cumplen la mayoría de edad»: %s', async (role, visible) => {
+    mockRole = role;
+    mockedList.mockResolvedValue(page([maria]));
+    render(<PatientsView token="tok" />);
+    await screen.findByText('María López');
+    const link = screen.queryByRole('link', { name: 'Cumplen la mayoría de edad' });
+    if (visible) expect(link).toHaveAttribute('href', '/patients/mayoria-de-edad');
+    else expect(link).not.toBeInTheDocument();
+    mockRole = null;
   });
 });

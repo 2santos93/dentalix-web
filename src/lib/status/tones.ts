@@ -323,7 +323,19 @@ const equipment = {
   RETIRED: s('neutral', 'Dado de baja'),
 } satisfies Presentations<Schemas['EquipmentStatus']>;
 
+/**
+ * DX-342: revisión del paso a la mayoría de edad. Pendiente pide revisar a
+ * quién van los avisos; vencida lleva tiempo sin revisar; revisada está hecha.
+ * TODO(DX-342): tipar con el enum del esquema tras el codegen.
+ */
+const majorityReview = {
+  PENDING: s('warning', 'Pendiente'),
+  OVERDUE: s('danger', 'Vencida'),
+  REVIEWED: s('success', 'Revisado'),
+} satisfies Presentations<'PENDING' | 'OVERDUE' | 'REVIEWED'>;
+
 export const STATUS_PRESENTATION = {
+  majorityReview,
   equipmentMaintenance,
   equipmentMaintenanceRecord,
   equipment,
