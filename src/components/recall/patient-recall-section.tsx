@@ -234,7 +234,7 @@ export function PatientRecallSection({
             setData({ recalls: saved.recalls, contacts: saved.contacts });
             // D9: «Recall de Higiene desactivado: lo sustituye Mantenimiento periodontal».
             const excluded = recallUpdatesNotice(saved.recallUpdates, null);
-            setNotice(excluded ? `${copy.saved} ${excluded}` : copy.saved);
+            setNotice(excluded ? `${copy.saved} ${excluded}.` : copy.saved);
           }}
         />
       ) : null}

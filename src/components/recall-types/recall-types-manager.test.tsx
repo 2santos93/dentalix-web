@@ -211,6 +211,9 @@ describe('RecallTypesManager (DX-015-bis)', () => {
     );
     await waitFor(() => expect(mockedTriggers).toHaveBeenCalledWith('tok', 't-orto', ['c-orto']));
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledWith('tok', 't-ctl', { exclusionGroup: 'G_TEST0001' }));
+    // El otro tipo va primero: si fallara, no se habría creado nada.
+    expect(mockedUpdate.mock.invocationCallOrder[0]).toBeLessThan(mockedCreate.mock.invocationCallOrder[0]);
+    expect(mockedCreate.mock.invocationCallOrder[0]).toBeLessThan(mockedTriggers.mock.invocationCallOrder[0]);
     const t = await table();
     await waitFor(() => expect(rowOf(t, 'Retención de ortodoncia')).toHaveTextContent('Excluyente con Control'));
     expect(rowOf(t, 'Retención de ortodoncia')).toHaveTextContent('Control de ortodoncia');
@@ -257,6 +260,70 @@ describe('RecallTypesManager (DX-015-bis)', () => {
       expect(mockedUpdate).toHaveBeenCalledWith('tok', 't-ctl', expect.objectContaining({ exclusionGroup: 'HYGIENE_PERIO' })),
     );
     expect(mockedUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('si falla el PATCH del otro tipo no se guarda nada: Higiene conserva su exclusión con Perio', async () => {
+    const user = setupUser();
+    mockedUpdate.mockRejectedValue(new ApiError(500, 'Caído'));
+    render(<RecallTypesManager token="tok" allowed />);
+    const t = await table();
+    await user.click(primaryOf(t, 'Higiene'));
+    const dialog = await screen.findByRole('dialog');
+    await user.selectOptions(within(dialog).getByLabelText('Excluyente con'), 't-ctl');
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+    expect(await within(dialog).findByText(/No pudimos marcar «Control» como excluyente: no se guardó nada/)).toBeInTheDocument();
+    expect(mockedUpdate).toHaveBeenCalledTimes(1);
+    expect(mockedUpdate).toHaveBeenCalledWith('tok', 't-ctl', { exclusionGroup: 'G_TEST0001' });
+    expect(mockedTriggers).not.toHaveBeenCalled();
+    // La tabla está tras el modal (aria-hidden): se lee su texto.
+    expect(t).toHaveTextContent('HigieneExcluyente con Mantenimiento periodontal');
+  });
+
+  it('si el otro tipo se guardó y este falla, el reintento reutiliza su grupo sin otro PATCH', async () => {
+    const user = setupUser();
+    mockedUpdate.mockImplementation(async (_tok, id, input) => {
+      if (id === 't-ctl') return { ...ctl, exclusionGroup: input.exclusionGroup ?? null };
+      throw new ApiError(500, 'Caído');
+    });
+    render(<RecallTypesManager token="tok" allowed />);
+    const t = await table();
+    await user.click(primaryOf(t, 'Higiene'));
+    const dialog = await screen.findByRole('dialog');
+    await user.selectOptions(within(dialog).getByLabelText('Excluyente con'), 't-ctl');
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+    expect(await within(dialog).findByText(/No pudimos guardar el tipo de recall/)).toBeInTheDocument();
+
+    mockedUpdate.mockClear();
+    mockedUpdate.mockResolvedValueOnce({ ...hyg, exclusionGroup: 'G_TEST0001' });
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith('tok', 't-hyg', expect.objectContaining({ exclusionGroup: 'G_TEST0001' })),
+    );
+    expect(mockedUpdate).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(rowOf(t, 'Higiene')).toHaveTextContent('Excluyente con Control'));
+  });
+
+  it('si fallan los disparadores, la exclusión pendiente ya quedó guardada y el aviso solo nombra los disparadores', async () => {
+    const user = setupUser();
+    mockedUpdate.mockImplementation(async (_tok, id, input) =>
+      id === 't-ctl' ? { ...ctl, exclusionGroup: input.exclusionGroup ?? null } : { ...perio, exclusionGroup: 'G_TEST0001' },
+    );
+    mockedTriggers.mockRejectedValue(new ApiError(500, 'Caído'));
+    render(<RecallTypesManager token="tok" allowed />);
+    const t = await table();
+    await user.click(primaryOf(t, 'Mantenimiento periodontal'));
+    const dialog = await screen.findByRole('dialog');
+    await user.selectOptions(within(dialog).getByLabelText('Excluyente con'), 't-ctl');
+    await user.click(await within(dialog).findByRole('checkbox', { name: /Profilaxis/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+    await waitFor(() => expect(mockedNotify).toHaveBeenCalled());
+    expect(mockedUpdate).toHaveBeenCalledWith('tok', 't-ctl', { exclusionGroup: 'G_TEST0001' });
+    expect(mockedUpdate).toHaveBeenCalledWith('tok', 't-perio', expect.objectContaining({ exclusionGroup: 'G_TEST0001' }));
+    const [message, opts] = mockedNotify.mock.calls[0];
+    expect(message).toMatch(/^Se guardó «Mantenimiento periodontal», pero no sus disparadores\./);
+    expect(message).toMatch(/desde «Editar»/);
+    expect(opts?.onRetry).toEqual(expect.any(Function));
+    await waitFor(() => expect(rowOf(t, 'Control')).toHaveTextContent('Excluyente con Mantenimiento periodontal'));
   });
 
   it('un 409 de nombre repetido se queda en el modal (escalón 4)', async () => {

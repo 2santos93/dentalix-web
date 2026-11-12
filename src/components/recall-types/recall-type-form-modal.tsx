@@ -45,51 +45,32 @@ export const recallTypeFormCopy = {
   invalidName: `Escribe un nombre (hasta ${RECALL_TYPE_NAME_MAX} caracteres).`,
   invalidMonths: `El intervalo debe ser un número entero de meses entre ${RECALL_TYPE_MONTHS_MIN} y ${RECALL_TYPE_MONTHS_MAX}.`,
   saveError: 'No pudimos guardar el tipo de recall. Intenta de nuevo.',
-  triggersFailed: (name: string, reason: string) => `Se guardó «${name}», pero no sus disparadores. ${reason}`,
-  partnerFailed: (name: string, partner: string, reason: string) =>
-    `Se guardó «${name}», pero no la exclusión con «${partner}». ${reason}`,
+  // El aviso lleva «Reintentar»; si otro diálogo lo tapa (notifyError lo quita), queda «Editar».
+  triggersFailed: (name: string, reason: string) =>
+    `Se guardó «${name}», pero no sus disparadores. ${reason} También puedes volver a elegirlos desde «Editar».`,
+  partnerFailed: (partner: string, reason: string) =>
+    `No pudimos marcar «${partner}» como excluyente: no se guardó nada. ${reason}`,
   partialReason: 'Intenta de nuevo.',
 };
 const copy = recallTypeFormCopy;
 
-/** Lo que falta tras guardar el tipo: sus disparadores y el grupo del otro tipo. */
-interface PendingSteps {
-  triggers: string[] | null;
-  partner: { id: string; name: string; exclusionGroup: string } | null;
-}
-
 /**
- * Los pasos que siguen al alta o la edición. Si uno falla, el tipo ya está
- * guardado: el modal ya se cerró, la lista muestra lo guardado y un aviso
- * (escalón 3) reintenta solo lo que falta.
+ * El último paso, con el tipo ya guardado: sus disparadores. Si falla, el modal
+ * ya se cerró, la lista muestra lo guardado y un aviso (escalón 3) reintenta
+ * solo esto.
  */
-async function runPendingSteps(
+async function saveTriggers(
   token: string,
   saved: RecallType,
-  pending: PendingSteps,
+  triggers: string[],
   onSaved: (types: RecallType[]) => void,
 ): Promise<void> {
-  let current = saved;
-  if (pending.triggers) {
-    try {
-      current = await setRecallTypeTriggers(token, saved.id, pending.triggers);
-      onSaved([current]);
-    } catch (err) {
-      notifyError(copy.triggersFailed(saved.name, apiErrorMessage(err, copy.partialReason)), {
-        onRetry: () => void runPendingSteps(token, saved, pending, onSaved),
-      });
-      return;
-    }
-  }
-  if (pending.partner) {
-    const partner = pending.partner;
-    try {
-      onSaved([await updateRecallType(token, partner.id, { exclusionGroup: partner.exclusionGroup })]);
-    } catch (err) {
-      notifyError(copy.partnerFailed(current.name, partner.name, apiErrorMessage(err, copy.partialReason)), {
-        onRetry: () => void runPendingSteps(token, current, { triggers: null, partner }, onSaved),
-      });
-    }
+  try {
+    onSaved([await setRecallTypeTriggers(token, saved.id, triggers)]);
+  } catch (err) {
+    notifyError(copy.triggersFailed(saved.name, apiErrorMessage(err, copy.partialReason)), {
+      onRetry: () => void saveTriggers(token, saved, triggers, onSaved),
+    });
   }
 }
 
@@ -112,8 +93,13 @@ interface RecallTypeFormModalProps {
 /**
  * Alta y edición de un tipo de recall (DX-015-bis, solo ADMIN): nombre,
  * intervalo por defecto, activo, «Excluyente con…» (D13) y los procedimientos
- * que lo reinician (D12). Guarda en este orden: el tipo (con su grupo), sus
- * disparadores (`PUT …/triggers`) y, si hace falta, el grupo del otro tipo.
+ * que lo reinician (D12). Guarda en este orden:
+ * 1. si hace falta un grupo nuevo, el del OTRO tipo primero: si falla no se
+ *    guardó nada y este conserva su exclusión de antes; si lo que falla
+ *    después es este tipo, el otro queda solo en su grupo, que no tiene efecto
+ *    (y el reintento reutiliza ese grupo: la lista ya lo trae);
+ * 2. el tipo, con su grupo;
+ * 3. sus disparadores (`PUT …/triggers`), con aviso y reintento si fallan.
  * El padre lo monta con una `key` por apertura.
  */
 export function RecallTypeFormModal({ open, onOpenChange, token, type, types, onSaved }: RecallTypeFormModalProps) {
@@ -156,6 +142,16 @@ export function RecallTypeFormModal({ open, onOpenChange, token, type, types, on
       ...(plan.selfGroup !== undefined ? { exclusionGroup: plan.selfGroup } : {}),
     };
     setSubmitting(true);
+    if (plan.partnerPatch) {
+      const partner = others.find((t) => t.id === plan.partnerPatch!.id);
+      try {
+        onSaved([await updateRecallType(token, plan.partnerPatch.id, { exclusionGroup: plan.partnerPatch.exclusionGroup })]);
+      } catch (err) {
+        setError(copy.partnerFailed(partner?.name ?? '', apiErrorMessage(err, copy.partialReason)));
+        setSubmitting(false);
+        return;
+      }
+    }
     let saved: RecallType;
     try {
       saved = editing
@@ -166,15 +162,10 @@ export function RecallTypeFormModal({ open, onOpenChange, token, type, types, on
       setSubmitting(false);
       return;
     }
-    const partner = plan.partnerPatch ? others.find((t) => t.id === plan.partnerPatch!.id) : undefined;
-    const pending: PendingSteps = {
-      triggers: sameSet(triggerIds, initialTriggers) ? null : triggerIds,
-      partner: plan.partnerPatch && partner ? { ...plan.partnerPatch, name: partner.name } : null,
-    };
     onSaved([saved]);
     onOpenChange(false);
     setSubmitting(false);
-    await runPendingSteps(token, saved, pending, onSaved);
+    if (!sameSet(triggerIds, initialTriggers)) await saveTriggers(token, saved, triggerIds, onSaved);
   }
 
   return (

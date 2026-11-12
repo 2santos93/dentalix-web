@@ -173,7 +173,7 @@ describe('PatientRecallSection (DX-015)', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Fijar recall de mantenimiento periodontal' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Guardar recall' }));
     expect(
-      await screen.findByText('Recall guardado. Recall de Higiene desactivado: lo sustituye Mantenimiento periodontal'),
+      await screen.findByText('Recall guardado. Recall de Higiene desactivado: lo sustituye Mantenimiento periodontal.'),
     ).toBeInTheDocument();
   });
 
