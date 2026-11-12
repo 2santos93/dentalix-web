@@ -1,6 +1,9 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { toast } from 'sonner';
 import { MarkDoneModal } from './mark-done-modal';
+import { recallUpdatesNotice } from '@/lib/recall/recall-notice';
+import { STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { updateItem, type TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
 import { ApiError } from '@/lib/api/client';
@@ -13,6 +16,7 @@ jest.mock('../../lib/treatment-plans/treatment-plans-api', () => ({
   updateItem: jest.fn(),
 }));
 jest.mock('../../lib/auth/token-role', () => ({ getTokenUserId: jest.fn() }));
+jest.mock('sonner', () => ({ toast: { success: jest.fn() } }));
 
 const mockedStaff = jest.mocked(listStaff);
 const mockedUpdate = jest.mocked(updateItem);
@@ -300,3 +304,76 @@ describe('MarkDoneModal (DX-050)', () => {
     });
   });
 });
+
+describe('MarkDoneModal · recalls que mueve el procedimiento (DX-015-bis)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedStaff.mockResolvedValue(STAFF);
+    mockedMe.mockReturnValue('laura');
+  });
+
+  const higiene = { recallId: 'r1', recallTypeId: 't-hyg', recallTypeName: 'Higiene', dueAt: '2027-10-10' };
+
+  it('una profilaxis realizada avisa «Recall de Higiene: vence el …» con el formato de la sede donde quedó', async () => {
+    const user = userEvent.setup();
+    const caracas = { ...STAMP_SEDES.caracas, id: 'loc-main', name: 'Sede Principal' };
+    mockedUpdate.mockResolvedValue({
+      ...item,
+      status: 'DONE',
+      performedById: 'laura',
+      performedLocationId: 'loc-main',
+      recallUpdates: [higiene],
+    } as TreatmentPlanItem);
+    const props = renderModal({ locations: [caracas] });
+    const select = await screen.findByRole('combobox', { name: 'Profesional que lo realizó' });
+    await waitFor(() => expect(select).toHaveValue('laura'));
+    await user.click(screen.getByRole('button', { name: 'Marcar realizado' }));
+    await waitFor(() => expect(props.onSaved).toHaveBeenCalled());
+    expect(toast.success).toHaveBeenCalledWith(
+      `Recall de Higiene: vence el ${STAMP_FORMATS.caracas.civilDate('2027-10-10')}`,
+    );
+  });
+
+  it('sin recalls movidos (o con una API anterior) no avisa nada', async () => {
+    const user = userEvent.setup();
+    mockedUpdate.mockResolvedValue({ ...item, status: 'DONE', performedById: 'laura' } as TreatmentPlanItem);
+    const props = renderModal();
+    const select = await screen.findByRole('combobox', { name: 'Profesional que lo realizó' });
+    await waitFor(() => expect(select).toHaveValue('laura'));
+    await user.click(screen.getByRole('button', { name: 'Marcar realizado' }));
+    await waitFor(() => expect(props.onSaved).toHaveBeenCalled());
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('sin las sedes cargadas el aviso sale sin fecha, nunca en otro formato (revisión 1, MINOR-5)', async () => {
+    const user = userEvent.setup();
+    mockedUpdate.mockResolvedValue({
+      ...item,
+      status: 'DONE',
+      performedById: 'laura',
+      performedLocationId: 'loc-main',
+      recallUpdates: [higiene],
+    } as TreatmentPlanItem);
+    const props = renderModal({ locations: [] });
+    const select = await screen.findByRole('combobox', { name: 'Profesional que lo realizó' });
+    await waitFor(() => expect(select).toHaveValue('laura'));
+    await user.click(screen.getByRole('button', { name: 'Marcar realizado' }));
+    await waitFor(() => expect(props.onSaved).toHaveBeenCalled());
+    expect(toast.success).toHaveBeenCalledWith('Recall de Higiene actualizado');
+  });
+
+  it('el texto: uno o varios recalls; sin formato de sede, sin fecha', () => {
+    const day = (d: string) => `[${d}]`;
+    expect(recallUpdatesNotice(undefined, day)).toBeNull();
+    expect(recallUpdatesNotice([], day)).toBeNull();
+    expect(recallUpdatesNotice([higiene], day)).toBe('Recall de Higiene: vence el [2027-10-10]');
+    expect(
+      recallUpdatesNotice(
+        [higiene, { ...higiene, recallTypeName: 'Mantenimiento periodontal', dueAt: '2027-07-10' }],
+        day,
+      ),
+    ).toBe('Recall de Higiene: vence el [2027-10-10] · Recall de Mantenimiento periodontal: vence el [2027-07-10]');
+    expect(recallUpdatesNotice([higiene], null)).toBe('Recall de Higiene actualizado');
+  });
+});
+

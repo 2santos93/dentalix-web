@@ -1,7 +1,13 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '@/lib/api/client';
-import { listRecallDue, type RecallDueItem, type RecallDuePage } from '@/lib/recall/recall-api';
+import {
+  listRecallDue,
+  listRecallTypes,
+  type RecallDueItem,
+  type RecallDuePage,
+  type RecallType,
+} from '@/lib/recall/recall-api';
 import { overdueLabel, recallMessage } from '@/lib/recall/presentation';
 import { RecallView, recallCopy } from './recall-view';
 import { listLocations } from '@/lib/locations/locations-api';
@@ -11,8 +17,28 @@ import { STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('../../lib/clinic-branding', () => ({ fetchClinicName: jest.fn().mockResolvedValue('Clínica Sol') }));
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
-jest.mock('../../lib/recall/recall-api', () => ({ listRecallDue: jest.fn(), createRecallContact: jest.fn() }));
+jest.mock('../../lib/recall/recall-api', () => ({
+  listRecallDue: jest.fn(),
+  listRecallTypes: jest.fn(),
+  createRecallContact: jest.fn(),
+}));
 const mockedList = listRecallDue as jest.MockedFunction<typeof listRecallDue>;
+const mockedTypes = jest.mocked(listRecallTypes);
+const TYPES: RecallType[] = [
+  ['t-hyg', 'Higiene', 'HYGIENE', 10, 6],
+  ['t-ctl', 'Control', 'CHECKUP', 20, 12],
+  ['t-perio', 'Mantenimiento periodontal', null, 30, 3],
+  ['t-old', 'Ortodoncia retenida', null, 40, 12],
+].map(([id, name, systemKey, sortOrder, months]) => ({
+  id: id as string,
+  name: name as string,
+  systemKey: systemKey as RecallType['systemKey'],
+  sortOrder: sortOrder as number,
+  defaultIntervalMonths: months as number,
+  active: id !== 't-old',
+  exclusionGroup: null,
+  triggerCatalogItemIds: [],
+}));
 
 const item = (over: Partial<RecallDueItem> = {}): RecallDueItem => ({
   recallId: 'r1',
@@ -22,6 +48,8 @@ const item = (over: Partial<RecallDueItem> = {}): RecallDueItem => ({
   patientWhatsApp: '584125550101',
   reminderOptedOut: false,
   kind: 'CHECKUP',
+  recallTypeId: 't-ctl',
+  recallTypeName: 'Control',
   intervalMonths: 6,
   baseDate: '2026-04-10',
   dueAt: '2026-10-10',
@@ -35,6 +63,8 @@ const page = (items: RecallDueItem[]): RecallDuePage => ({ items, total: items.l
 describe('RecallView (DX-015)', () => {
   beforeEach(() => {
     mockedList.mockReset();
+    mockedTypes.mockReset();
+    mockedTypes.mockResolvedValue(TYPES);
     (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([clinicLocation({ id: 'l1' })]);
   });
 
@@ -111,11 +141,69 @@ describe('RecallView (DX-015)', () => {
     expect(await screen.findByRole('menuitem', { name: recallCopy.schedule })).toBeInTheDocument();
   });
 
-  it('filtra por tipo, ventana y orden, volviendo a la página 1', async () => {
+  it('filtra por tipo (los de la clínica), ventana y orden, volviendo a la página 1', async () => {
     mockedList.mockResolvedValue(page([item()]));
     render(<RecallView token="tok" />);
     await screen.findByText('Ana Pérez');
-    await userEvent.selectOptions(screen.getByLabelText(recallCopy.kindLabel), 'HYGIENE');
+    const filter = screen.getByLabelText(recallCopy.kindLabel);
+    await waitFor(() => expect(within(filter).getByRole('option', { name: 'Mantenimiento periodontal' })).toBeInTheDocument());
+    // Un tipo desactivado no se ofrece.
+    expect(within(filter).queryByRole('option', { name: 'Ortodoncia retenida' })).not.toBeInTheDocument();
+    expect(within(filter).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      recallCopy.kindAll,
+      'Higiene',
+      'Control',
+      'Mantenimiento periodontal',
+    ]);
+    await userEvent.selectOptions(filter, 't-perio');
+    await userEvent.selectOptions(screen.getByLabelText(recallCopy.windowLabel), 'soon');
+    await userEvent.selectOptions(screen.getByLabelText(recallCopy.sortLabel), 'LEAST_OVERDUE');
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenLastCalledWith('tok', {
+        recallTypeId: 't-perio',
+        withinDays: 30,
+        sort: 'LEAST_OVERDUE',
+        page: 1,
+      }),
+    );
+  });
+
+  it('mientras llegan los tipos el filtro solo ofrece «Todos» y está deshabilitado (revisión 1, MINOR-2)', async () => {
+    let resolveTypes: (t: RecallType[]) => void = () => undefined;
+    mockedTypes.mockReturnValue(new Promise<RecallType[]>((r) => (resolveTypes = r)));
+    mockedList.mockResolvedValue(page([item()]));
+    render(<RecallView token="tok" />);
+    await screen.findByText('Ana Pérez');
+    const filter = screen.getByLabelText(recallCopy.kindLabel);
+    expect(filter).toBeDisabled();
+    expect(within(filter).getAllByRole('option').map((o) => o.textContent)).toEqual([recallCopy.kindAll]);
+    resolveTypes(TYPES);
+    await waitFor(() => expect(filter).not.toBeDisabled());
+    expect(within(filter).getByRole('option', { name: 'Higiene' })).toHaveValue('t-hyg');
+  });
+
+  it('DX-015-bis: la columna «Tipo» dice el nombre del tipo, también sin clave', async () => {
+    mockedList.mockResolvedValue(
+      page([item({ kind: null, recallTypeId: 't-perio', recallTypeName: 'Mantenimiento periodontal', intervalMonths: 3 })]),
+    );
+    render(<RecallView token="tok" />);
+    const row = (await screen.findByText('Ana Pérez')).closest('tr')!;
+    expect(within(row).getByText('Mantenimiento periodontal')).toBeInTheDocument();
+    expect(within(row).getByText('Cada 3 meses')).toBeInTheDocument();
+  });
+
+  it('si GET /recall-types falla, filtra por la clave (respaldo Higiene y Control)', async () => {
+    mockedTypes.mockRejectedValue(new ApiError(500, 'boom'));
+    mockedList.mockResolvedValue(page([item()]));
+    render(<RecallView token="tok" />);
+    await screen.findByText('Ana Pérez');
+    const filter = screen.getByLabelText(recallCopy.kindLabel);
+    expect(within(filter).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      recallCopy.kindAll,
+      'Higiene',
+      'Control',
+    ]);
+    await userEvent.selectOptions(filter, 'HYGIENE');
     await userEvent.selectOptions(screen.getByLabelText(recallCopy.windowLabel), 'soon');
     await userEvent.selectOptions(screen.getByLabelText(recallCopy.sortLabel), 'LEAST_OVERDUE');
     await waitFor(() =>

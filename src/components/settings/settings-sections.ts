@@ -4,6 +4,7 @@ import {
   ArrowLeftRight,
   BadgePercent,
   BellRing,
+  Hourglass,
   Building2,
   Store,
   CalendarClock,
@@ -36,6 +37,7 @@ import type { ClinicRole } from '@/lib/me/me-api';
 import { canManageConsentTemplates } from '@/lib/consents/consents-api';
 import { canManagePrescriptionSettings } from '@/lib/prescriptions/prescriptions-api';
 import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
+import { canManageSlotOfferSettings } from '@/lib/appointments/slot-offer-settings-api';
 import { canManageChairs } from '@/lib/chairs/chairs-api';
 import { canManageEquipment } from '@/lib/equipment/equipment-api';
 import { canManagePayers } from '@/lib/payers/payers-api';
@@ -189,6 +191,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Inventario de equipos de cada sede, su hoja de vida y sus mantenimientos.',
         icon: Stethoscope,
         visible: canManageEquipment,
+      },
+      // DX-448: caducidad y antelación de la oferta de hueco por enlace.
+      {
+        href: '/settings/ofertas-de-hueco',
+        label: 'Ofertas de hueco',
+        description: 'Cuánto antes del hueco caduca el enlace de la oferta y con cuánta antelación se puede enviar.',
+        icon: Hourglass,
+        visible: canManageSlotOfferSettings,
       },
       // DX-026.
       {

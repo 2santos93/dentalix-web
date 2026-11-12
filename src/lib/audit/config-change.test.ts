@@ -372,3 +372,21 @@ describe("DX-384: plazo de la última tasa manual", () => {
     );
   });
 });
+
+describe("DX-448: ajustes de la oferta de hueco", () => {
+  it("lo dice en español; sin elegir antes, «Por defecto»", () => {
+    const list = configChangeItems(
+      {
+        reason: "SLOT_OFFER_SETTINGS",
+        changedFields: ["expiryLeadMinutes", "minLeadMinutes"],
+        configChange: {
+          before: { expiryLeadMinutes: null, minLeadMinutes: 20 },
+          after: { expiryLeadMinutes: 60, minLeadMinutes: 30 },
+        },
+      },
+    );
+    expect(configChangeText(list!)).toBe(
+      "Caducidad del enlace de la oferta de hueco: Por defecto → 60 min antes del hueco · Antelación mínima para ofrecer un hueco: 20 → 30 min",
+    );
+  });
+});

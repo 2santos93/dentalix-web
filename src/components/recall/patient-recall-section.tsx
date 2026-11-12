@@ -4,14 +4,23 @@ import { useEffect, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
+import { CHANNEL_LABELS, OUTCOME_LABELS, intervalLabel } from '@/lib/recall/presentation';
 import {
-  CHANNEL_LABELS,
-  KIND_LABELS,
-  KIND_ORDER,
-  OUTCOME_LABELS,
-  intervalLabel,
-} from '@/lib/recall/presentation';
-import { getPatientRecalls, type PatientRecall, type PatientRecalls, type RecallKind } from '@/lib/recall/recall-api';
+  getPatientRecalls,
+  listRecallTypes,
+  type PatientRecall,
+  type PatientRecalls,
+  type RecallType,
+} from '@/lib/recall/recall-api';
+import {
+  recallBasis,
+  recallRows,
+  recallTypeKey,
+  recallTypeLabel,
+  recallTypeOptions,
+  type RecallBasis,
+  type RecallTypeOption,
+} from '@/lib/recall/recall-types';
 import { AsyncSection } from '@/components/shared/async-section';
 import { Button } from '@/components/ui/button';
 import { SectionHeader } from '@/components/ui/section-header';
@@ -22,7 +31,8 @@ import { RecallIntervalDialog } from './recall-interval-dialog';
 
 export const patientRecallCopy = {
   heading: 'Recall',
-  description: 'Cada cuánto debe volver y a quién se ha llamado. Una cita atendida reinicia el plazo.',
+  description:
+    'Cada cuánto debe volver y a quién se ha llamado. El plazo cuenta desde lo más reciente: el último procedimiento que lo reinicia o la fecha fijada a mano.',
   notSet: 'Sin recall',
   set: 'Fijar',
   change: 'Cambiar',
@@ -31,7 +41,14 @@ export const patientRecallCopy = {
   changeLabel: (kind: string) => `Cambiar recall de ${kind.toLowerCase()}`,
   registerLabel: (kind: string) => `Registrar contacto de ${kind.toLowerCase()}`,
   due: (day: string) => `Vence el ${day}`,
+  // DX-015-bis: de dónde cuenta el plazo. Lo congelado en el despliegue no lo fijó nadie a mano.
+  basis: {
+    procedure: (day: string) => `Cuenta desde el procedimiento realizado el ${day}`,
+    frozen: (day: string) => `Cuenta desde la última visita atendida, el ${day}`,
+    manual: (day: string) => `Cuenta desde el ${day}, fijado a mano`,
+  } satisfies Record<RecallBasis['kind'], (day: string) => string>,
   pausedUntil: (day: string, reason: string | null) => `En pausa hasta el ${day}${reason ? ` · ${reason}` : ''}`,
+  typeGone: 'Este tipo ya no existe en la clínica: el recall se conserva, pero no se puede cambiar.',
   contactsHeading: 'Historial de contactos',
   noContacts: 'Sin contactos.',
   by: (name: string | null) => (name ? `por ${name}` : 'por un miembro que ya no está en la clínica'),
@@ -41,7 +58,10 @@ export const patientRecallCopy = {
 };
 const copy = patientRecallCopy;
 
-type Dialog = { type: 'interval'; kind: RecallKind } | { type: 'contact'; recall: PatientRecall } | null;
+type Dialog =
+  | { type: 'interval'; recallType: RecallTypeOption; recall: PatientRecall | null }
+  | { type: 'contact'; recall: PatientRecall }
+  | null;
 
 /**
  * Bloque «Recall» de la ficha (DX-015): un renglón por tipo con su vencimiento
@@ -61,6 +81,8 @@ export function PatientRecallSection({
   canContact: boolean;
 }) {
   const [data, setData] = useState<PatientRecalls | null>(null);
+  // DX-015-bis: los tipos de la clínica; `null` si no se pudieron leer (respaldo: Higiene y Control).
+  const [types, setTypes] = useState<RecallType[] | null>(null);
   // DX-354b: cada recall y cada contacto con el formato y el reloj de SU sede; un solo aviso por sección.
   const stamp = useSedeStamp(token, [
     ...(data?.recalls.map((r) => r.locationId) ?? []),
@@ -77,9 +99,13 @@ export function PatientRecallSection({
     async function load() {
       setLoading(true);
       try {
-        const res = await getPatientRecalls(token, patient.id);
+        const [res, typesRes] = await Promise.all([
+          getPatientRecalls(token, patient.id),
+          listRecallTypes(token).catch(() => null),
+        ]);
         if (cancelled) return;
         setData(res);
+        setTypes(typesRes);
         setError(null);
       } catch (err) {
         if (!cancelled) setError(apiErrorMessage(err, { fallback: copy.loadError }));
@@ -93,7 +119,7 @@ export function PatientRecallSection({
   }, [token, patient.id, reloadKey]);
 
   const contacts = data?.contacts ?? [];
-  const recallOf = (kind: RecallKind) => data?.recalls.find((r) => r.kind === kind) ?? null;
+  const rows = recallRows(recallTypeOptions(types), data?.recalls ?? []);
 
   return (
     <section aria-labelledby="recall-heading" className="flex flex-col gap-3" data-testid="patient-recall">
@@ -110,14 +136,14 @@ export function PatientRecallSection({
         skeleton={<Skeleton className="h-24 w-full" />}
       >
         <ul className="flex flex-col divide-y divide-border-subtle rounded-xl border border-border bg-surface">
-          {KIND_ORDER.map((kind) => {
-            const recall = recallOf(kind);
-            const label = KIND_LABELS[kind];
+          {rows.map(({ type, recall, editable }) => {
+            const label = type.name;
+            const basis = recall ? recallBasis(recall) : null;
             return (
               <li
-                key={kind}
+                key={recall?.id ?? type.ref}
                 className="flex min-w-0 flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm"
-                data-testid={`recall-row-${kind}`}
+                data-testid={`recall-row-${recallTypeKey(type)}`}
               >
                 <span className="flex min-w-0 flex-col gap-1">
                   <span className="flex flex-wrap items-center gap-2">
@@ -129,6 +155,12 @@ export function PatientRecallSection({
                       ? `${intervalLabel(recall.intervalMonths)} · ${copy.due(stamp.civilDate(recall.dueAt, recall.locationId))}`
                       : copy.notSet}
                   </span>
+                  {recall && basis ? (
+                    <span className="text-xs text-muted tabular-nums" data-testid="recall-basis">
+                      {copy.basis[basis.kind](stamp.civilDate(basis.day, recall.locationId))}
+                    </span>
+                  ) : null}
+                  {!editable ? <span className="text-xs text-muted">{copy.typeGone}</span> : null}
                   {recall?.status === 'PAUSED' && recall.disabledUntil ? (
                     <span className="text-xs text-muted tabular-nums">
                       {copy.pausedUntil(stamp.civilDate(recall.disabledUntil, recall.locationId), recall.disabledReason)}
@@ -147,13 +179,13 @@ export function PatientRecallSection({
                       {copy.register}
                     </Button>
                   ) : null}
-                  {canSet ? (
+                  {canSet && editable ? (
                     <Button
                       type="button"
                       variant="secondary"
                       size="sm"
                       aria-label={recall ? copy.changeLabel(label) : copy.setLabel(label)}
-                      onClick={() => setDialog({ type: 'interval', kind })}
+                      onClick={() => setDialog({ type: 'interval', recallType: type, recall })}
                     >
                       {recall ? copy.change : copy.set}
                     </Button>
@@ -172,7 +204,7 @@ export function PatientRecallSection({
               {contacts.map((c) => (
                 <li key={c.id} className="flex min-w-0 flex-col gap-1 px-4 py-3 text-sm" data-testid="recall-contact-row">
                   <span className="font-medium text-ink">
-                    {KIND_LABELS[c.kind]} · {CHANNEL_LABELS[c.channel]} · {OUTCOME_LABELS[c.outcome]}
+                    {recallTypeLabel(c)} · {CHANNEL_LABELS[c.channel]} · {OUTCOME_LABELS[c.outcome]}
                   </span>
                   {c.note ? <p className="whitespace-pre-line break-words text-ink">{c.note}</p> : null}
                   <span className="text-xs text-muted tabular-nums">
@@ -193,8 +225,10 @@ export function PatientRecallSection({
           }}
           token={token}
           patientId={patient.id}
-          kind={dialog.kind}
-          recall={recallOf(dialog.kind)}
+          typeRef={dialog.recallType.ref}
+          typeName={dialog.recallType.name}
+          defaultIntervalMonths={dialog.recallType.defaultIntervalMonths}
+          recall={dialog.recall}
           onSaved={(saved) => {
             setData(saved);
             setNotice(copy.saved);

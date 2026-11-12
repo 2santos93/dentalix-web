@@ -96,6 +96,7 @@ export const fillOpeningCopy = {
   select: (name: string) => `Elegir a ${name} para la oferta con enlace`,
   selectedCount: (n: number) => (n === 1 ? '1 elegido' : `${n} elegidos`),
   sendLinkOffer: 'Enviar oferta con enlace',
+  // DX-448: la API manda el texto con los minutos de la clínica; este, si no llega.
   linkTooLate: 'Faltan menos de 20 minutos: ya no da tiempo a ofrecerlo por enlace.',
   linkNoChannel: 'Sin correo ni WhatsApp: llámalo',
   slotOffersSent: (n: number) => `Oferta enviada (${n})`,
@@ -430,7 +431,7 @@ export function FillOpeningPanel({
                       </Button>
                     </>
                   ) : (
-                    <p className="text-xs text-muted">{fillOpeningCopy.linkTooLate}</p>
+                    <p className="text-xs text-muted">{data?.linkOfferClosedMessage ?? fillOpeningCopy.linkTooLate}</p>
                   )}
                 </div>
               ) : null}
