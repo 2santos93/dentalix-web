@@ -64,6 +64,8 @@ export const patientLinksCopy = {
     '«—»: la confirmación de cita no registra si el paciente abrió el enlace (solo su respuesta); las indicaciones postoperatorias no tienen paso de completar (abrirlas es leerlas); y sin enlaces enviados no hay porcentaje.',
   howTitle: 'Cómo se calcula',
   howFormula: 'Cada porcentaje es sobre los enlaces enviados en el período.',
+  // Corto: en la fila del desplegable no se parte (a 390 px desbordaba).
+  howMeta: '% sobre enviados',
   howItems: [
     'Cuentan los enlaces ENVIADOS en las fechas elegidas (el día de la sede del enlace). Abiertos, completados y caducados son de esos mismos enlaces, tal como están hoy.',
     'Abierto: el paciente abrió la página del enlace. Completar cuenta como abrir. En la anamnesis, la apertura se registra al ver el cuestionario; en la firma, al pedir el código.',
@@ -179,7 +181,7 @@ function HowItIsCalculated() {
   const c = patientLinksCopy;
   return (
     <div className="-mx-2 max-w-[80ch] self-start" data-testid="patient-links-how">
-      <Disclosure summary={c.howTitle} meta={c.howFormula}>
+      <Disclosure summary={c.howTitle} meta={c.howMeta}>
         <div className="flex flex-col gap-2 text-sm text-muted">
           <p className="font-medium text-ink">{c.howFormula}</p>
           <ul className="flex list-disc flex-col gap-1 pl-5">

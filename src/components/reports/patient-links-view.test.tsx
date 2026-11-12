@@ -178,8 +178,9 @@ describe('PatientLinksView (DX-424)', () => {
     render(<PatientLinksView token="t" />);
     await screen.findAllByRole('table');
     const how = screen.getByTestId('patient-links-how');
-    expect(how).toHaveTextContent('Cada porcentaje es sobre los enlaces enviados en el período.');
+    expect(how).toHaveTextContent('% sobre enviados');
     await userEvent.click(within(how).getByRole('button', { name: /Cómo se calcula/ }));
+    expect(how).toHaveTextContent('Cada porcentaje es sobre los enlaces enviados en el período.');
     expect(how).toHaveTextContent('Un enlace anulado o reemplazado por otro no cuenta');
     expect(how).toHaveTextContent('Sin nombres, teléfonos ni emails de pacientes.');
   });
