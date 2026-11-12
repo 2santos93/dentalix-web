@@ -90,6 +90,7 @@ function view(items: OpeningCandidate[]): OpeningCandidates {
     offerCap: 2,
     linkOffers: { pending: 0, total: 0, acceptedBy: null, expired: false },
     linkOfferOpen: true,
+    linkOfferClosedMessage: null,
     items,
     truncated: false,
   };
@@ -478,6 +479,20 @@ describe('«Ocupar este hueco» (DX-210)', () => {
       expect(await screen.findByTestId('slot-link-offers')).toHaveTextContent('Caducado');
       expect(screen.getByText(/Faltan menos de 20 minutos/)).toBeInTheDocument();
       expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+
+    it('DX-448: con los minutos de la clínica, dice el texto de la API', async () => {
+      const message =
+        'El enlace caduca 60 minutos antes del hueco y le quedarían menos de 30 minutos de vida: ya no da tiempo a ofrecerlo por enlace. Llama al paciente.';
+      mockedList.mockResolvedValueOnce({
+        ...view([ana]),
+        linkOfferOpen: false,
+        linkOfferClosedMessage: message,
+      });
+      renderPanel();
+      expect(await screen.findByText(message)).toBeInTheDocument();
+      expect(screen.queryByText(/Faltan menos de 20 minutos/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Enviar oferta con enlace' })).not.toBeInTheDocument();
     });
 
     it('«Aceptado por …» sigue a la vista aunque ya no quede ningún candidato', async () => {

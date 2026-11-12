@@ -2970,6 +2970,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/slot-offer-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Caducidad anticipada y antelación mínima de la oferta de hueco por enlace (DX-448) */
+        get: operations["SlotOfferSettingsController_settings"];
+        /**
+         * Cambia la caducidad anticipada y la antelación mínima de la oferta de hueco; queda en la auditoría (DX-448)
+         * @description Aplica a las ofertas que se envíen después; las ya enviadas conservan su caducidad. Si nada cambia, responde 200 sin evento de auditoría.
+         */
+        put: operations["SlotOfferSettingsController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/appointments/{id}/confirmation-link": {
         parameters: {
             query?: never;
@@ -13309,8 +13330,13 @@ export interface components {
             /** @description Tope de ofertas por paciente y día. */
             offerCap: number;
             linkOffers: components["schemas"]["SlotLinkOffersDto"];
-            /** @description DX-435: quedan al menos 20 minutos para el hueco (se puede enviar oferta con enlace). */
+            /** @description DX-435: al enlace le quedaría al menos la antelación mínima de la clínica (DX-448; 20 minutos de plataforma), contando su caducidad anticipada: se puede enviar oferta con enlace. */
             linkOfferOpen: boolean;
+            /**
+             * @description DX-448: por qué ya no se ofrece por enlace, con los minutos de la clínica (el mismo texto que el 409); `null` si se puede.
+             * @example null
+             */
+            linkOfferClosedMessage: string | null;
             items: components["schemas"]["OpeningCandidateDto"][];
             /** @description Había más de 50 candidatos. */
             truncated: boolean;
@@ -13475,6 +13501,40 @@ export interface components {
             clinic: components["schemas"]["PublicSlotOfferClinicDto"] | null;
             /** @description Solo con `OPEN` o `ACCEPTED`. */
             offer: components["schemas"]["PublicSlotOfferDetailsDto"] | null;
+        };
+        SlotOfferSettingsDto: {
+            /**
+             * @description Minutos antes del hueco en que caduca el enlace, ya resueltos: si la clínica no eligió, los de la instalación.
+             * @example 60
+             */
+            expiryLeadMinutes: number;
+            /**
+             * @description Vida mínima del enlace para ofrecer el hueco por enlace (minutos).
+             * @example 20
+             */
+            minLeadMinutes: number;
+            /**
+             * @description La caducidad anticipada de la instalación (`WAITLIST_LINK_OFFER_EXPIRY_LEAD_MINUTES`, 0 = al empezar): la que rige hasta que la clínica elige la suya.
+             * @example 0
+             */
+            defaultExpiryLeadMinutes: number;
+            /**
+             * @description La antelación mínima de plataforma.
+             * @example 20
+             */
+            defaultMinLeadMinutes: number;
+        };
+        UpdateSlotOfferSettingsDto: {
+            /**
+             * @description Minutos antes del inicio del hueco en que caduca el enlace de la oferta (0 = al empezar el hueco). Cambiarlo no toca las ofertas ya enviadas.
+             * @example 60
+             */
+            expiryLeadMinutes: number;
+            /**
+             * @description Vida mínima del enlace (minutos hasta que caduca) para poder ofrecer el hueco por enlace. 20 de plataforma.
+             * @example 20
+             */
+            minLeadMinutes: number;
         };
         /**
          * @description DX-354: reloj de la sede de la cita, en crudo. null si la sede no lo tiene: la página pinta «—» y pide llamar a la clínica.
@@ -30039,7 +30099,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Tope de ofertas del día («Ya se le ofrecieron 2 huecos hoy»), por WhatsApp a un paciente con baja, canal «Ninguno» o sin el permiso de WhatsApp (DX-128), o pendiente/cita que ya no está vigente. DX-435: por enlace con menos de 20 minutos para el hueco o sobre un hueco ya ocupado, o por email sin email o con baja. */
+            /** @description Tope de ofertas del día («Ya se le ofrecieron 2 huecos hoy»), por WhatsApp a un paciente con baja, canal «Ninguno» o sin el permiso de WhatsApp (DX-128), o pendiente/cita que ya no está vigente. DX-435: por enlace con menos vida para el enlace que la antelación mínima de la clínica (DX-448; 20 minutos de plataforma) o sobre un hueco ya ocupado, o por email sin email o con baja. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -30200,6 +30260,62 @@ export interface operations {
             };
             /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SlotOfferSettingsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlotOfferSettingsDto"];
+                };
+            };
+        };
+    };
+    SlotOfferSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSlotOfferSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlotOfferSettingsDto"];
+                };
+            };
+            /** @description Falta un valor, o la caducidad no es un entero de 0 a 240 o la antelación mínima de 5 a 240 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar los ajustes de las ofertas de hueco. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -76,6 +76,9 @@ const FIELD_LABELS: Record<string, string> = {
   fixedCurrency: "Moneda del importe fijo",
   // DX-330: plazo de conservación de la historia clínica.
   clinicalRecordRetentionYears: "Plazo de conservación de la historia clínica",
+  // DX-448: oferta de hueco por enlace.
+  expiryLeadMinutes: "Caducidad del enlace de la oferta de hueco",
+  minLeadMinutes: "Antelación mínima para ofrecer un hueco",
   // DX-384: hasta cuántos días vale la última tasa manual registrada.
   manualRateMaxAgeDays: "Días de validez de la última tasa manual",
   // DX-517: «VES=Bs.», una moneda por elemento.
@@ -100,6 +103,13 @@ const FIELD_UNITS: Record<string, string> = {
   leadHours: "h",
   clinicalRecordRetentionYears: "años",
   manualRateMaxAgeDays: "días",
+  expiryLeadMinutes: "min antes del hueco",
+  minLeadMinutes: "min",
+};
+
+/** Lo que dice un `null` que no es «sin valor» (DX-448: el de la instalación). */
+const NULL_LABELS: Record<string, string> = {
+  expiryLeadMinutes: "Por defecto",
 };
 
 const DOMAIN_STATUS_LABELS: Record<string, string> = {
@@ -161,6 +171,7 @@ function bare(
   value: ConfigValue | undefined,
   fmt: RegionalFormat | null,
 ): string | null {
+  if (value === null && NULL_LABELS[field]) return NULL_LABELS[field];
   if (value === null || value === undefined) return null;
   if (typeof value === "boolean") return value ? "Sí" : "No";
   if (Array.isArray(value))
@@ -172,6 +183,7 @@ function bare(
 
 function withUnit(field: string, text: string | null): string {
   if (text === null) return NONE;
+  if (text === NULL_LABELS[field]) return text;
   const unit = FIELD_UNITS[field];
   return unit ? `${text} ${unit}` : text;
 }
