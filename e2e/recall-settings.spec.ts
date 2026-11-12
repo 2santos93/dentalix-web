@@ -14,10 +14,10 @@ import { API_URL, tenantOrigin } from './support/urls';
  * grupo: la pantalla crea uno para los dos. La API lo confirma.
  */
 const suffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase();
-const subdomain = `recallset-${suffix}`.slice(0, 40);
-const origin = tenantOrigin(subdomain);
 const password = 'Password123!';
-const admin = { fullName: 'Ana Titular', email: `ana.rset.${suffix}@example.com` };
+// Una clínica por intento: el reintento de CI no encuentra el tipo ya creado ni el subdominio ocupado.
+let origin: string;
+let admin: { fullName: string; email: string };
 const NEW_TYPE = 'Retención de ortodoncia';
 
 let session: ApiSession;
@@ -32,7 +32,11 @@ interface ApiRecallType {
 
 test.describe.configure({ mode: 'serial' });
 
-test.beforeAll(async ({ request }) => {
+test.beforeAll(async ({ request }, testInfo) => {
+  const run = `r${testInfo.retry}${suffix}`;
+  const subdomain = `recallset-${run}`.slice(0, 40);
+  origin = tenantOrigin(subdomain);
+  admin = { fullName: 'Ana Titular', email: `ana.rset.${run}@example.com` };
   session = await registerClinicViaApi(request, {
     subdomain,
     clinicName: `Clínica Ajustes Recall ${suffix}`,
@@ -61,7 +65,11 @@ test('crear un tipo con disparador y excluyente con Control', async ({ page, req
 
   const list = dataList(page, 'Tipos de recall');
   const rows = dataListRows(list);
-  const hygiene = rows.filter({ hasText: /^Higiene/ });
+  // La fila de UN tipo: la que EMPIEZA por su nombre (la celda principal va
+  // primero en la tabla y en la tarjeta). Sin el ancla, «Control» también casa
+  // con la fila del tipo nuevo («Excluyente con Control») y viceversa.
+  const typeRow = (name: string) => rows.filter({ hasText: new RegExp(`^${name}`) });
+  const hygiene = typeRow('Higiene');
   await expect(hygiene).toContainText('Excluyente con Mantenimiento periodontal');
   await expect(hygiene).toContainText('6 meses');
   // Higiene es del sistema: se desactiva, no se retira.
@@ -85,11 +93,11 @@ test('crear un tipo con disparador y excluyente con Control', async ({ page, req
   await dialog.getByRole('button', { name: 'Crear tipo' }).click();
   await expect(dialog).toBeHidden();
 
-  const created = rows.filter({ hasText: new RegExp(`^${NEW_TYPE}`) });
+  const created = typeRow(NEW_TYPE);
   await expect(created).toContainText('Excluyente con Control');
   await expect(created).toContainText('4 meses');
   await expect(created).toContainText(trigger!.labelEs);
-  await expect(rows.filter({ hasText: /^Control/ })).toContainText(`Excluyente con ${NEW_TYPE}`);
+  await expect(typeRow('Control')).toContainText(`Excluyente con ${NEW_TYPE}`);
   await expectNoHorizontalScroll(page);
   await shot(page, 'recall-settings-list', 1440);
 
@@ -114,7 +122,7 @@ test('crear un tipo con disparador y excluyente con Control', async ({ page, req
 
   // A 390 px la lista no desborda.
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(rows.filter({ hasText: NEW_TYPE })).toBeVisible();
+  await expect(typeRow(NEW_TYPE)).toBeVisible();
   await expectNoHorizontalScroll(page);
   await shot(page, 'recall-settings-list', 390);
 });
