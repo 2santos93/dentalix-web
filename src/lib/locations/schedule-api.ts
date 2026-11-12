@@ -1,29 +1,23 @@
 import { apiFetch } from '@/lib/api/client';
+import type { components } from '@/lib/api/schema';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeMinuteRanges } from '@/lib/locations/sede-clock';
 import { civilWeekday } from '@/lib/time/civil-day';
 
-/** Un tramo de atención, en minutos de pared desde 00:00. */
-export interface ScheduleRange {
-  /** 0=domingo .. 6=sábado (convención de `Date.getDay()`). */
-  weekday: number;
-  startMinute: number;
-  endMinute: number;
-}
+// DX-352: los tipos salen tal cual del contrato generado (`LocationScheduleDto`).
 
-export interface BusinessHours {
-  /**
-   * Zona IANA de la sede, de solo lectura: es `Location.timeZone` (G1, R4) y
-   * se cambia en Ajustes → Sedes. `null` si la sede aún no la tiene.
-   */
-  timezone: string | null;
-  ranges: ScheduleRange[];
-}
+/** Un tramo de atención, en minutos de pared desde 00:00; `weekday` 0=domingo .. 6=sábado (`Date.getDay()`). */
+export type ScheduleRange = components['schemas']['ScheduleRangeDto'];
+
+/**
+ * Horario de la sede. `timezone` es la zona IANA de la sede, de solo lectura:
+ * es `Location.timeZone` (G1, R4) y se cambia en Ajustes → Sedes. Siempre
+ * viene: una sede sin zona válida responde 409 `LOCATION_TIMEZONE_REQUIRED`.
+ */
+export type BusinessHours = components['schemas']['LocationScheduleDto'];
 
 /** Cuerpo de `PUT /locations/schedule`: solo los tramos; la zona nunca se envía (R15). */
-export interface BusinessHoursInput {
-  ranges: ScheduleRange[];
-}
+export type BusinessHoursInput = Omit<components['schemas']['ReplaceLocationScheduleDto'], 'timezone'>;
 
 /**
  * `GET /locations/schedule` — horario de la sede ACTIVA (el cliente ya envía
