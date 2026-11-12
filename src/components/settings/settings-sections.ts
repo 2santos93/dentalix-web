@@ -11,6 +11,7 @@ import {
   CalendarDays,
   ClipboardClock,
   ClipboardList,
+  Repeat,
   Stethoscope,
   Coins,
   FileClock,
@@ -37,6 +38,7 @@ import type { ClinicRole } from '@/lib/me/me-api';
 import { canManageConsentTemplates } from '@/lib/consents/consents-api';
 import { canManagePrescriptionSettings } from '@/lib/prescriptions/prescriptions-api';
 import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
+import { canManageRecallTypes } from '@/lib/recall/recall-api';
 import { canManageSlotOfferSettings } from '@/lib/appointments/slot-offer-settings-api';
 import { canManageChairs } from '@/lib/chairs/chairs-api';
 import { canManageEquipment } from '@/lib/equipment/equipment-api';
@@ -207,6 +209,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Recordatorios por correo antes de cada cita, por sede.',
         icon: BellRing,
         visible: canManageReminders,
+      },
+      // DX-015-bis: tipos de recall, sus disparadores y la exclusión.
+      {
+        href: '/settings/recall',
+        label: 'Recall',
+        description: 'Cada cuánto vuelve el paciente, qué procedimientos reinician el plazo y qué controles se excluyen.',
+        icon: Repeat,
+        visible: canManageRecallTypes,
       },
     ],
   },

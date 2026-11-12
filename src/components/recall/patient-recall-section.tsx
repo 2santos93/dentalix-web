@@ -5,6 +5,7 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { CHANNEL_LABELS, OUTCOME_LABELS, intervalLabel } from '@/lib/recall/presentation';
+import { recallUpdatesNotice } from '@/lib/recall/recall-notice';
 import {
   getPatientRecalls,
   listRecallTypes,
@@ -230,8 +231,10 @@ export function PatientRecallSection({
           defaultIntervalMonths={dialog.recallType.defaultIntervalMonths}
           recall={dialog.recall}
           onSaved={(saved) => {
-            setData(saved);
-            setNotice(copy.saved);
+            setData({ recalls: saved.recalls, contacts: saved.contacts });
+            // D9: «Recall de Higiene desactivado: lo sustituye Mantenimiento periodontal».
+            const excluded = recallUpdatesNotice(saved.recallUpdates, null);
+            setNotice(excluded ? `${copy.saved} ${excluded}.` : copy.saved);
           }}
         />
       ) : null}

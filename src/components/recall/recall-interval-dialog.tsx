@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { RECALL_INTERVALS, RECALL_REASON_MAX, intervalLabel } from '@/lib/recall/presentation';
-import { setPatientRecall, type PatientRecall, type PatientRecalls } from '@/lib/recall/recall-api';
+import { setPatientRecall, type PatientRecall, type SetPatientRecallResult } from '@/lib/recall/recall-api';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -55,7 +55,8 @@ export function RecallIntervalDialog({
   /** Intervalo con que nace un recall nuevo de este tipo (el del tipo; sin él, 6 meses). */
   defaultIntervalMonths?: number | null;
   recall: PatientRecall | null;
-  onSaved: (recalls: PatientRecalls) => void;
+  /** Los recalls y contactos del paciente y, D9, los recalls que la exclusión desactivó (`recallUpdates`). */
+  onSaved: (result: SetPatientRecallResult) => void;
 }) {
   const [months, setMonths] = useState(recall?.intervalMonths ?? defaultIntervalMonths ?? 6);
   // DX-015-bis: el campo es lo fijado a mano (vacío si el recall nació de un
