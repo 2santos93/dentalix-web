@@ -37,6 +37,19 @@ leen. Si siguen en tu `.env.local`, renómbralas a `API_URL` y `FILES_ORIGIN`;
 la web avisa al arrancar mientras no lo hagas. En producción (`next start` o
 la imagen) la web no arranca sin una `API_URL` http(s) válida.
 
+**El origen de la API es público (SEC-065).** La CSP lleva el origen de
+`API_URL` en `img-src` (`src/lib/security/csp.ts`), así que cualquier visitante
+lo ve en la cabecera `Content-Security-Policy`. Es a propósito: ese origen ya es
+público por diseño. Los logos y avatares que devuelve la API son URL absolutas
+sobre `FILES_PUBLIC_BASE_URL` de la API (en producción, obligatoria, https y no
+local; ejemplo `https://api.dentalix.app/api/v1/files`). Esas mismas URL van
+dentro de los emails a los pacientes, y su cliente de correo solo puede cargar
+la imagen desde un origen público. Lo que oculta SEC-064 (sin
+`x-middleware-rewrite`) es el destino del proxy cuando NO coincide con ese
+origen público. Si algún día la API pasa a ser privada (solo detrás del
+`/api/v1` de la web), habrá que servir los ficheros por el mismo origen de la
+web, también en emails y PDF, y quitar `apiOrigin` de `img-src`.
+
 Imagen de producción: `Dockerfile` (`output: 'standalone'`); runbook en
 `dentalix-docs/docs/operacion/despliegue.md`.
 
