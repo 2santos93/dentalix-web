@@ -7117,7 +7117,7 @@ export interface paths {
         get?: never;
         /**
          * Fijar (o cambiar, pausar, retirar) el recall de un tipo
-         * @description «Control cada 6 meses»: intervalo (1–36 meses), día del último control (por defecto hoy en la sede), pausa hasta un día con motivo, o `active: false` para retirarlo. Un recall por paciente y tipo. DX-015-bis: lo fijado queda como `manualDoneAt`; la base es el máximo con el último procedimiento disparador realizado.
+         * @description «Control cada 6 meses»: intervalo (1–36 meses), día del último control (por defecto hoy en la sede), pausa hasta un día con motivo, o `active: false` para retirarlo. Un recall por paciente y tipo. DX-015-bis: lo fijado queda como `manualDoneAt`; la base es el máximo con el último procedimiento disparador realizado. D9: dar de alta o reactivar el recall de un tipo con grupo de exclusión desactiva los demás recalls activos del paciente de ese grupo (`recallUpdates`).
          */
         put: operations["PatientRecallsController_set"];
         post?: never;
@@ -7136,10 +7136,58 @@ export interface paths {
         };
         /**
          * Tipos de recall de la clínica
-         * @description Vivos (activos o no), por su orden: nombre, intervalo por defecto, clave de compatibilidad (HYGIENE/CHECKUP) y los procedimientos del catálogo cuyo DONE mueve su reloj.
+         * @description Vivos (activos o no), por su orden: nombre, intervalo por defecto, activo, orden, clave de compatibilidad (HYGIENE/CHECKUP), grupo de exclusión y los procedimientos del catálogo cuyo DONE mueve su reloj (con su código y su nombre).
          */
         get: operations["RecallTypesController_list"];
         put?: never;
+        /**
+         * Crear un tipo de recall
+         * @description Nombre 1–60 (único entre los vivos sin distinguir mayúsculas), intervalo por defecto 1–36 meses, activo, orden (por defecto, el último) y grupo de exclusión opcional. Sin disparadores: se fijan con PUT /recall-types/:id/triggers.
+         */
+        post: operations["RecallTypesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recall-types/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Retirar un tipo de recall (borrado lógico)
+         * @description Sus recalls se conservan pero dejan de salir en la lista y en la ficha. Higiene y Control (con clave del enum) no se retiran: se desactivan (409).
+         */
+        delete: operations["RecallTypesController_remove"];
+        options?: never;
+        head?: never;
+        /**
+         * Editar un tipo de recall
+         * @description Cualquier campo. Cambiar el intervalo por defecto NO cambia los recalls que ya existen: solo los que se creen después. Desactivarlo deja de crear recalls por procedimiento; los que hay siguen. Cambiar el grupo de exclusión no desactiva nada por sí solo: se aplica en el siguiente DONE o PUT del paciente.
+         */
+        patch: operations["RecallTypesController_update"];
+        trace?: never;
+    };
+    "/api/v1/recall-types/{id}/triggers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Fijar los procedimientos que disparan un tipo
+         * @description Reemplaza el conjunto. Solo procedimientos vivos del catálogo de la clínica (o los que el tipo ya tenía); uno puede disparar varios tipos.
+         */
+        put: operations["RecallTypesController_triggers"];
         post?: never;
         delete?: never;
         options?: never;
@@ -7174,7 +7222,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -14154,6 +14202,12 @@ export interface components {
             surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             notes?: string;
         };
+        RecallReplacementDto: {
+            /** Format: uuid */
+            recallTypeId: string;
+            /** @example Mantenimiento periodontal */
+            recallTypeName: string;
+        };
         ItemRecallUpdateDto: {
             /** Format: uuid */
             recallId: string;
@@ -14167,6 +14221,10 @@ export interface components {
              * @example 2027-10-10
              */
             dueAt: string;
+            /** @description D9: la exclusión lo acaba de desactivar porque otro recall de un tipo del mismo grupo pasó a activo («Recall de Higiene desactivado: lo sustituye Mantenimiento periodontal»). Sigue ahí (inactivo): reactivarlo es un PUT o un DONE posterior de su procedimiento. */
+            deactivated: boolean;
+            /** @description El tipo que lo sustituye; null si no se desactivó */
+            replacedBy: components["schemas"]["RecallReplacementDto"] | null;
         };
         UpdatedTreatmentPlanItemDto: {
             /** @default 1 */
@@ -14270,7 +14328,7 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
-            /** @description Recalls que creó o recalculó el cambio (DONE, salida de DONE o corrección de fecha o sede de un procedimiento disparador); vacío si ninguno */
+            /** @description Recalls que creó, recalculó o reactivó el cambio (DONE, salida de DONE o corrección de fecha o sede de un procedimiento disparador) y, tras ellos, los que la exclusión desactivó (`deactivated: true`); vacío si ninguno */
             recallUpdates: components["schemas"]["ItemRecallUpdateDto"][];
         };
         PlanQuoteVisitDto: {
@@ -22123,6 +22181,46 @@ export interface components {
             /** @description Motivo corto de la pausa (sin datos clínicos) */
             disabledReason?: string | null;
         };
+        RecallReplacementTypeDto: {
+            /** Format: uuid */
+            recallTypeId: string;
+            /** @example Mantenimiento periodontal */
+            recallTypeName: string;
+        };
+        RecallExclusionUpdateDto: {
+            /** Format: uuid */
+            recallId: string;
+            /** Format: uuid */
+            recallTypeId: string;
+            /** @example Higiene */
+            recallTypeName: string;
+            /**
+             * Format: date
+             * @description Vencimiento (no cambia)
+             */
+            dueAt: string;
+            /** @description Siempre true (como en el PATCH del ítem) */
+            deactivated: boolean;
+            replacedBy: components["schemas"]["RecallReplacementTypeDto"];
+        };
+        SetPatientRecallResultDto: {
+            recalls: components["schemas"]["PatientRecallDto"][];
+            /** @description Historial de contactos, más recientes primero (hasta 50) */
+            contacts: components["schemas"]["RecallContactDto"][];
+            /** @description D9: recalls de tipos del mismo grupo de exclusión que este alta o reactivación desactivó («Recall de Higiene desactivado: lo sustituye Mantenimiento periodontal»); vacío si ninguno */
+            recallUpdates: components["schemas"]["RecallExclusionUpdateDto"][];
+        };
+        RecallTypeTriggerDto: {
+            /** Format: uuid */
+            catalogItemId: string;
+            /** @example PREV-PROFILAXIS */
+            code: string;
+            /**
+             * @description Nombre del procedimiento en el catálogo de la clínica
+             * @example Profilaxis
+             */
+            name: string;
+        };
         RecallTypeDto: {
             /** Format: uuid */
             id: string;
@@ -22138,6 +22236,40 @@ export interface components {
             exclusionGroup: string | null;
             /** @description Procedimientos del catálogo cuyo DONE mueve el reloj de este tipo */
             triggerCatalogItemIds: string[];
+            /** @description Los mismos procedimientos, con su código y su nombre (en el orden de triggerCatalogItemIds) */
+            triggers: components["schemas"]["RecallTypeTriggerDto"][];
+        };
+        CreateRecallTypeDto: {
+            name: string;
+            /** @description Intervalo de los recalls que cree un procedimiento a partir de ahora (cambiarlo no mueve los que ya existen) */
+            defaultIntervalMonths: number;
+            /** @description Por defecto, true. false: deja de crear recalls por procedimiento; los que hay siguen en la lista */
+            active?: boolean;
+            /** @description Orden en las listas; por defecto, el último */
+            sortOrder?: number;
+            /**
+             * @description Grupo de exclusión (D9/D13): dos recalls de un paciente de tipos del mismo grupo no están activos a la vez. null = sin exclusión
+             * @example HYGIENE_PERIO
+             */
+            exclusionGroup?: string | null;
+        };
+        UpdateRecallTypeDto: {
+            name?: string;
+            /** @description Intervalo de los recalls que cree un procedimiento a partir de ahora (cambiarlo no mueve los que ya existen) */
+            defaultIntervalMonths?: number;
+            /** @description Por defecto, true. false: deja de crear recalls por procedimiento; los que hay siguen en la lista */
+            active?: boolean;
+            /** @description Orden en las listas; por defecto, el último */
+            sortOrder?: number;
+            /**
+             * @description Grupo de exclusión (D9/D13): dos recalls de un paciente de tipos del mismo grupo no están activos a la vez. null = sin exclusión
+             * @example HYGIENE_PERIO
+             */
+            exclusionGroup?: string | null;
+        };
+        SetRecallTypeTriggersDto: {
+            /** @description Reemplaza los disparadores: procedimientos vivos del catálogo de la clínica (o los que el tipo ya tenía). [] los quita todos */
+            catalogItemIds: string[];
         };
         /** @enum {string} */
         WorkQueueKey: "CLOSING_QUEUE" | "ANAMNESIS_REVIEW" | "QUOTE_FOLLOW_UP" | "ACCEPTED_UNSCHEDULED" | "WAITLIST" | "RECALL" | "RECEIVABLES" | "LOW_STOCK";
@@ -41397,7 +41529,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PatientRecallsDto"];
+                    "application/json": components["schemas"]["SetPatientRecallResultDto"];
                 };
             };
             /** @description Intervalo, fechas o motivo inválidos */
@@ -41439,6 +41571,197 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RecallTypeDto"][];
                 };
+            };
+        };
+    };
+    RecallTypesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRecallTypeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallTypeDto"];
+                };
+            };
+            /** @description Nombre vacío o largo, intervalo, orden o grupo inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los tipos de recall de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe un tipo con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecallTypesController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retirado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los tipos de recall de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tipo no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Es un tipo del sistema (Higiene, Control): solo se desactiva */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecallTypesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRecallTypeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallTypeDto"];
+                };
+            };
+            /** @description Campo inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los tipos de recall de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tipo no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe un tipo con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecallTypesController_triggers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetRecallTypeTriggersDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallTypeDto"];
+                };
+            };
+            /** @description Lista inválida o de más de 50 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los tipos de recall de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tipo no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Algún id no es un procedimiento vivo del catálogo de esta clínica */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

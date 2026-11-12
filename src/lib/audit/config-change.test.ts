@@ -11,6 +11,29 @@ const configChangeItems = (metadata: Parameters<typeof items_>[0]) =>
   items_(metadata, fmt);
 
 describe("configChangeItems (DX-360)", () => {
+  it("DX-015-bis: la edición de un tipo de recall dice el intervalo en meses y el grupo de exclusión", () => {
+    const items = configChangeItems({
+      reason: "RECALL_TYPE_UPDATED",
+      changedFields: ["defaultIntervalMonths", "exclusionGroup"],
+      configChange: {
+        before: { defaultIntervalMonths: 6, exclusionGroup: null },
+        after: { defaultIntervalMonths: 4, exclusionGroup: "G_AB12CD34" },
+      },
+    });
+    expect(configChangeText(items!)).toBe(
+      "Intervalo por defecto: 6 → 4 meses · Grupo de exclusión: — → G_AB12CD34",
+    );
+  });
+
+  it("DX-015-bis: el cambio de disparadores es un evento de configuración", () => {
+    const items = configChangeItems({
+      reason: "RECALL_TYPE_TRIGGERS_UPDATED",
+      changedFields: ["catalogItemIds"],
+      configChange: { before: { catalogItemIds: [] }, after: { catalogItemIds: ["c-1"] } },
+    });
+    expect(items?.[0]).toMatchObject({ label: "Procedimientos que lo reinician", before: "—", after: "c-1" });
+  });
+
   it("edición: solo lo que cambió, con su antes y su después, en un orden fijo (nombre y duración primero)", () => {
     const items = configChangeItems({
       reason: "APPOINTMENT_TYPE_UPDATED",
