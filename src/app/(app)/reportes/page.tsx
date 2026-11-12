@@ -7,6 +7,7 @@ import { getTokenRole } from '@/lib/auth/token-role';
 import { LocationsComparisonView } from '@/components/reports/locations-comparison-view';
 import { ProductionByProcedureView } from '@/components/reports/production-by-procedure-view';
 import { RecoveredSlotsView } from '@/components/reports/recovered-slots-view';
+import { ChairOccupancyView } from '@/components/reports/chair-occupancy-view';
 import { UnallocatedPaymentsView } from '@/components/reports/unallocated-payments-view';
 import {
   ReportsTabs,
@@ -64,6 +65,8 @@ function ReportesRoute() {
       <ProductionByProcedureView token={accessToken} />
     ) : tab === 'huecos-recuperados' ? (
       <RecoveredSlotsView token={accessToken} isAdmin={role === 'ADMIN'} />
+    ) : tab === 'ocupacion-sillones' ? (
+      <ChairOccupancyView token={accessToken} isAdmin={role === 'ADMIN'} />
     ) : tab === 'sin-imputar' ? (
       <UnallocatedPaymentsView token={accessToken} />
     ) : (
