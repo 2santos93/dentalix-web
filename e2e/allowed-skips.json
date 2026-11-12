@@ -301,6 +301,20 @@
       "annotation": "E2E_DATABASE_URL no definido: no se puede fechar el alta del responsable",
       "requiresUnset": "E2E_DATABASE_URL",
       "reason": "Sin E2E_DATABASE_URL no se puede fechar el alta del responsable antes de la mayoría de edad (la API la pone al crearlo)."
+    },
+    {
+      "file": "e2e/slot-offer-email.spec.ts",
+      "title": "Oferta de hueco por email con la caducidad de la clínica (DX-448) › ADMIN: carga, error y cambio de la caducidad en Ajustes › Ofertas de hueco (390 y 1440)",
+      "annotation": "E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)",
+      "requiresUnset": "E2E_MAIL_DIR",
+      "reason": "Sin E2E_MAIL_DIR no se pueden registrar la clínica ni leer el enlace de la oferta por email."
+    },
+    {
+      "file": "e2e/slot-offer-email.spec.ts",
+      "title": "Oferta de hueco por email con la caducidad de la clínica (DX-448) › recepción ofrece por email → la paciente abre el enlace del email y acepta → agenda al día",
+      "annotation": "E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)",
+      "requiresUnset": "E2E_MAIL_DIR",
+      "reason": "Sin E2E_MAIL_DIR no se pueden registrar la clínica ni leer el enlace de la oferta por email."
     }
   ]
 }
