@@ -8,9 +8,9 @@ import { disableBusinessHours } from './support/business-hours';
 import { axeInBothThemes } from './support/axe';
 import { expectNoHorizontalScroll } from './support/layout';
 import { MAIL_DIR } from './support/mail';
-import { atSede, sedeDate, sedeDayFromToday } from './support/clock';
+import { SEDE_TODAY_TZ, sedeDate } from './support/clock';
 import { API_URL } from './support/urls';
-import { E2E_BROWSER_LOCALE } from './support/regional';
+import { E2E_BROWSER_LOCALE, E2E_TODAY_REGION } from './support/regional';
 
 /**
  * e2e (DX-222): indicaciones postoperatorias de punta a punta, en escritorio
@@ -52,9 +52,19 @@ const TYPE_NAME = 'Cirugía oral';
 
 const HALF_HOUR = 30 * 60_000;
 
+/**
+ * DX-250-bis: la sede y los navegadores van en `SEDE_TODAY_TZ` (DX-449), la
+ * zona de la suite mientras queden al menos 3 h hasta su medianoche y, si no,
+ * una en la que ahora es cerca del mediodía. Con America/Caracas fija, a las
+ * 23:59 de la sede no quedaba cita de HOY por agendar y la API respondía 400
+ * «End must be after start» (E2E del PR web #175, 03:59 UTC).
+ */
+const ZONE = SEDE_TODAY_TZ;
+test.use({ timezoneId: ZONE });
+
 const hhmm = (d: Date) =>
   new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'America/Caracas',
+    timeZone: ZONE,
     hour: '2-digit',
     minute: '2-digit',
     hourCycle: 'h23',
@@ -63,18 +73,15 @@ const hhmm = (d: Date) =>
 /**
  * Cita HOY en la sede, de 30 min en la primera media hora en punto que empiece
  * dentro de al menos 15 min. DX-250: las indicaciones no se ofrecen en una cita
- * de un día aún por llegar, así que cerca de medianoche no vale mañana: la cita
- * empieza dentro de 2 min y se acorta para acabar antes de la medianoche de la
- * sede (solo falla en los últimos minutos del día).
+ * de un día aún por llegar, así que tiene que ser de hoy; con `ZONE` siempre
+ * quedan al menos 3 h hasta la medianoche de la sede, y las zonas candidatas
+ * tienen desfase entero, así que la media hora UTC es también la de la sede.
  */
 function appointmentSlot(): { start: Date; end: Date; day: string; label: string } {
-  const day = sedeDate(new Date());
-  let start = new Date(Math.ceil((Date.now() + 15 * 60_000) / HALF_HOUR) * HALF_HOUR);
-  let end = new Date(start.getTime() + HALF_HOUR);
-  if (sedeDate(new Date(end.getTime() - 1)) !== day) {
-    start = new Date(Math.ceil((Date.now() + 2 * 60_000) / 60_000) * 60_000);
-    end = new Date(Math.min(start.getTime() + HALF_HOUR, atSede(sedeDayFromToday(1), '00:00').getTime() - 60_000));
-  }
+  const day = sedeDate(new Date(), ZONE);
+  const start = new Date(Math.ceil((Date.now() + 15 * 60_000) / HALF_HOUR) * HALF_HOUR);
+  const end = new Date(start.getTime() + HALF_HOUR);
+  expect(sedeDate(new Date(end.getTime() - 1), ZONE), 'la cita de las indicaciones es de hoy en la sede').toBe(day);
   return { start, end, day, label: `${hhmm(start)}–${hhmm(end)}` };
 }
 
@@ -172,6 +179,7 @@ for (const viewport of VIEWPORTS) {
       fullName: ownerName,
       email: `test.user.postop.${tag}@example.com`,
       password,
+      location: E2E_TODAY_REGION,
     });
     await disableBusinessHours(page, origin);
     const call = await api(page, origin);
@@ -439,7 +447,7 @@ for (const viewport of VIEWPORTS) {
     // --- 4. Página pública: sin sesión, a 390 px ------------------------------
     const patientContext = await browser.newContext({
       viewport: { width: 390, height: 844 },
-      timezoneId: 'America/Caracas',
+      timezoneId: ZONE,
       locale: E2E_BROWSER_LOCALE,
     });
     const publicPage = await patientContext.newPage();
