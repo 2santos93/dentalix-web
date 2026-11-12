@@ -8,6 +8,8 @@ import {
   sedeDate,
   sedeTodayZone,
 } from '../../e2e/support/clock';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { regionalFormat } from '@/lib/format/regional-format';
 import { utcOffsetLabel } from '@/lib/format/zone';
 import { addCivilDays, wallDay, wallMinuteOfDay } from '@/lib/time/wall-clock';
@@ -117,6 +119,30 @@ describe('«hoy» de la sede con el reloj fijo (DX-449)', () => {
       expect(wallDay(slot.end, zone)).toBe(slot.day);
     },
   );
+});
+
+describe('post-op-instructions.spec.ts agenda su cita de HOY en la zona de hoy (DX-250-bis)', () => {
+  // Con America/Caracas fija, a las 23:59 de la sede no quedaba cita de hoy y
+  // la API daba 400 «End must be after start». La premisa (al menos 3 h hasta
+  // la medianoche de `SEDE_TODAY_TZ`, de sobra para «dentro de 15 min + 30»)
+  // la fija el bloque DX-449 de arriba; aquí, que el spec la siga usando.
+  const source = readFileSync(join(process.cwd(), 'e2e/post-op-instructions.spec.ts'), 'utf8');
+  // Sin las líneas de comentario (el comentario del spec cita la zona antigua).
+  const code = source
+    .split('\n')
+    .filter((line) => !/^\s*(\*|\/\/|\/\*)/.test(line))
+    .join('\n');
+
+  it('sede y navegadores en SEDE_TODAY_TZ, sin zona fija', () => {
+    expect(code).toMatch(/const ZONE = SEDE_TODAY_TZ;/);
+    expect(code).toMatch(/test\.use\(\{ timezoneId: ZONE \}\)/);
+    expect(code).toMatch(/location: E2E_TODAY_REGION/);
+    expect(code).not.toMatch(/['"]America\/Caracas['"]/);
+  });
+
+  it('el margen de la zona de hoy cubre la cita (15 min + 30 min)', () => {
+    expect(SEDE_TODAY_MARGIN_MINUTES).toBeGreaterThan(15 + 30 + 30);
+  });
 });
 
 describe('birthDateTurnedLastMonth: la edad exacta a cualquier fecha', () => {
