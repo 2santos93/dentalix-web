@@ -4609,6 +4609,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/patient-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Enlaces del paciente: enviados, abiertos, completados y caducados sin abrir por tipo y sede
+         * @description Por tipo de enlace y sede: los ENVIADOS en el período (fecha de envío en la zona de la sede del enlace, DX-097) y, de esos mismos, los abiertos, los completados y los caducados sin abrir, mirados ahora (`asOf`). Tasas = parte ÷ enviados, en % con 1 decimal; sin envíos, null. Mediana de horas del envío al completado. Anamnesis: abierta = la página avisó de la apertura o se envió; completada = enviada. Firma (consentimiento o presupuesto): abierta = pidió el código, lo verificó o firmó; completada = firmada. Confirmación de cita: completada = respondida (confirmar, cancelar o «llámenme»); no guarda la apertura, así que abiertos y caducados sin abrir van en null. Indicaciones postoperatorias (solo email y WhatsApp): abierta = primera apertura; no tienen paso de completar (null). Caducado sin abrir: pasó su caducidad sin abrirse ni completarse; un enlace anulado o reemplazado no cuenta. Sede: la del enlace; en la confirmación, la de la cita. Solo ADMIN; un miembro restringido (DX-089) solo ve sus sedes. Sin datos de pacientes.
+         */
+        get: operations["PatientLinksController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/closing-queue": {
         parameters: {
             query?: never;
@@ -6125,6 +6145,26 @@ export interface paths {
         put?: never;
         /** Enviar las respuestas (una sola vez; la HC no cambia hasta que se revisa) */
         post: operations["PublicMedicalHistoryController_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/medical-history/{token}/opened": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Marcar la primera apertura del enlace (para «Enlaces del paciente»)
+         * @description La llama la página al mostrar el cuestionario: el GET es de solo lectura porque los previsualizadores de enlaces lo abren solos. Solo cuenta la primera vez (las siguientes no cambian nada). Sin auditoría: la apertura queda en el envío.
+         */
+        post: operations["PublicMedicalHistoryController_opened"];
         delete?: never;
         options?: never;
         head?: never;
@@ -17875,6 +17915,88 @@ export interface components {
             restrictedToLocations: boolean;
             /** @description Una entrada por sede visible (con zona horaria), por fecha de alta */
             locations: components["schemas"]["LocationChairOccupancyDto"][];
+        };
+        /**
+         * @description ANAMNESIS = cuestionario de salud por enlace; CONSENT_SIGNATURE = firma a distancia de un consentimiento; BUDGET_SIGNATURE = aceptación a distancia de un presupuesto; APPOINTMENT_CONFIRMATION = confirmar, cancelar o «llámenme» de una cita; POST_OP_INSTRUCTIONS = indicaciones postoperatorias por email o WhatsApp (las impresas no cuentan).
+         * @enum {string}
+         */
+        PatientLinkType: "ANAMNESIS" | "CONSENT_SIGNATURE" | "BUDGET_SIGNATURE" | "APPOINTMENT_CONFIRMATION" | "POST_OP_INSTRUCTIONS";
+        PatientLinkMetricsDto: {
+            /** @description ANAMNESIS = cuestionario de salud por enlace; CONSENT_SIGNATURE = firma a distancia de un consentimiento; BUDGET_SIGNATURE = aceptación a distancia de un presupuesto; APPOINTMENT_CONFIRMATION = confirmar, cancelar o «llámenme» de una cita; POST_OP_INSTRUCTIONS = indicaciones postoperatorias por email o WhatsApp (las impresas no cuentan). */
+            linkType: components["schemas"]["PatientLinkType"];
+            /** @description El tipo registra la apertura. false (confirmación de cita): opened, expiredUnopened y sus tasas van en null. */
+            tracksOpened: boolean;
+            /** @description El tipo tiene un paso de completar. false (indicaciones postoperatorias: abrirlas es todo el uso): completed, su tasa y la mediana van en null. */
+            tracksCompleted: boolean;
+            /**
+             * @description Enlaces enviados en el período (por fecha de envío)
+             * @example 40
+             */
+            sent: number;
+            /**
+             * @description De los enviados, los abiertos alguna vez (completar cuenta como abrir). null si el tipo no registra la apertura.
+             * @example 28
+             */
+            opened: number | null;
+            /**
+             * @description De los enviados, los completados (anamnesis enviada, documento firmado, cita respondida). null si el tipo no tiene ese paso.
+             * @example 22
+             */
+            completed: number | null;
+            /**
+             * @description De los enviados, los que caducaron sin abrirse ni completarse. Un enlace anulado o reemplazado NO cuenta. null si el tipo no registra la apertura.
+             * @example 6
+             */
+            expiredUnopened: number | null;
+            /**
+             * @description Abiertos ÷ enviados en %, con 1 decimal (70 = 70 %). null sin envíos o sin señal.
+             * @example 70
+             */
+            openedRate: number | null;
+            /**
+             * @description Completados ÷ enviados en %, con 1 decimal. null sin envíos o sin señal.
+             * @example 55
+             */
+            completedRate: number | null;
+            /**
+             * @description Caducados sin abrir ÷ enviados en %, con 1 decimal. null sin envíos o sin señal.
+             * @example 15
+             */
+            expiredUnopenedRate: number | null;
+            /**
+             * @description Mediana de horas del envío al completado, con 1 decimal. null sin completados o sin ese paso.
+             * @example 5.5
+             */
+            medianHoursToComplete: number | null;
+        };
+        LocationPatientLinksDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sede Chacao */
+            locationName: string;
+            /** @example America/Caracas */
+            timeZone: string;
+            /** @description Un tipo por fila, siempre los cinco y en el mismo orden */
+            rows: components["schemas"]["PatientLinkMetricsDto"][];
+        };
+        PatientLinksReportDto: {
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+            /** Format: uuid */
+            locationId: string | null;
+            /** @description El usuario solo ve algunas sedes (DX-089): los totales son de ellas */
+            restrictedToLocations: boolean;
+            /**
+             * Format: date-time
+             * @description Instante con el que se decidió qué enlaces ya caducaron
+             */
+            asOf: string;
+            /** @description Todas las sedes visibles juntas (la mediana, de todos los enlaces), un tipo por fila */
+            totals: components["schemas"]["PatientLinkMetricsDto"][];
+            /** @description Una entrada por sede visible (con zona horaria), por fecha de alta */
+            locations: components["schemas"]["LocationPatientLinksDto"][];
         };
         /**
          * @description Las secciones que ve el rol: ADMIN las tres, DENTIST EVOLUTION y TREATMENT, RECEPTION OUTCOME
@@ -34728,6 +34850,53 @@ export interface operations {
             };
         };
     };
+    PatientLinksController_get: {
+        parameters: {
+            query: {
+                /** @description Primer día del período de ENVÍO (AAAA-MM-DD, en la zona de la sede de cada enlace). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientLinksReportDto"];
+                };
+            };
+            /** @description Período inválido o de más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve los reportes de la clínica. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con enlaces no tiene zona horaria válida */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     ClosingQueueController_list: {
         parameters: {
             query?: {
@@ -38764,6 +38933,47 @@ export interface operations {
             };
             /** @description Falta la autorización de datos de salud */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicMedicalHistoryController_opened: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Primera apertura registrada (las siguientes no cambian nada). */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token malformado, desconocido o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Este enlace ya no es válido, contacte con su clínica. (caducado, anulado o ya enviado) */
+            410: {
                 headers: {
                     [name: string]: unknown;
                 };
