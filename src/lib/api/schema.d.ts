@@ -12248,11 +12248,20 @@ export interface components {
             startMinute: number;
             endMinute: number;
         };
+        LocationScheduleDto: {
+            /**
+             * @description Zona IANA de la sede (`Location.timeZone`, de solo lectura aquí: se cambia en PATCH /locations/:id). Siempre presente: una sede sin zona válida responde 409 `LOCATION_TIMEZONE_REQUIRED`.
+             * @example America/Caracas
+             */
+            timezone: string;
+            /** @description Tramos vigentes de la semana. Un día sin tramos = cerrado; lista vacía = sede sin restricción. */
+            ranges: components["schemas"]["ScheduleRangeDto"][];
+        };
         ReplaceLocationScheduleDto: {
             /**
              * @deprecated
              * @description Obsoleto (G1): la zona es un dato de la sede (PATCH /locations/:id) y nunca se guarda desde aquí. Solo se acepta, para una web antigua, si es igual a la zona de la sede; distinta (o sede sin zona) es 400.
-             * @example Europe/Madrid
+             * @example America/Caracas
              */
             timezone?: string;
             /** @description La semana COMPLETA. Un día sin tramos = cerrado. Lista vacía = sede sin restricción. */
@@ -28469,6 +28478,15 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
+                content: {
+                    "application/json": components["schemas"]["LocationScheduleDto"] | null;
+                };
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: la sede en contexto no tiene zona horaria válida (se configura en Ajustes → Sedes) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
                 content?: never;
             };
         };
@@ -28488,6 +28506,22 @@ export interface operations {
         responses: {
             /** @description Horario reemplazado; `timezone` en la respuesta es la zona de la sede */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationScheduleDto"];
+                };
+            };
+            /** @description Tramo fuera de rango, fin no posterior al inicio, tramos solapados en el mismo día, o `timezone` (obsoleto) distinta de la zona de la sede */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: la sede en contexto no tiene zona horaria válida (se configura en Ajustes → Sedes) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
