@@ -5,6 +5,7 @@ import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   getPublicAnamnesis,
+  markPublicAnamnesisOpened,
   submitPublicAnamnesis,
   type AnamnesisQuestionnaire,
   type PublicAnamnesis,
@@ -103,6 +104,7 @@ export function PublicAnamnesisView({ linkToken }: { linkToken: string }) {
   const [done, setDone] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const doneRef = useRef<HTMLHeadingElement>(null);
+  const markedOpened = useRef(false);
 
   // Focus only after a user-driven step change, after React commits its heading.
   useEffect(() => {
@@ -127,6 +129,14 @@ export function PublicAnamnesisView({ linkToken }: { linkToken: string }) {
       cancelled = true;
     };
   }, [linkToken, reloadKey]);
+
+  // DX-424: la página (no un previsualizador) avisa de que el paciente la
+  // abrió. Solo estadística para la clínica: un fallo no se le muestra.
+  useEffect(() => {
+    if (state.kind !== 'ready' || markedOpened.current) return;
+    markedOpened.current = true;
+    markPublicAnamnesisOpened(linkToken).catch(() => undefined);
+  }, [state.kind, linkToken]);
 
   const clinic = state.kind === 'ready' ? state.data.clinic : null;
   const clinicName = clinic?.name ?? copy.fallbackClinic;
