@@ -11,8 +11,6 @@ import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { useMediaQuery } from '@/lib/hooks/use-media-query';
 import {
   CHANNEL_LABELS,
-  KIND_LABELS,
-  KIND_ORDER,
   OUTCOME_LABELS,
   RECALL_SOON_DAYS,
   intervalLabel,
@@ -21,11 +19,13 @@ import {
 } from '@/lib/recall/presentation';
 import {
   listRecallDue,
+  listRecallTypes,
   type RecallDueItem,
   type RecallDuePage,
   type RecallDueSort,
-  type RecallKind,
+  type RecallType,
 } from '@/lib/recall/recall-api';
+import { recallTypeFilter, recallTypeLabel, recallTypeOptions } from '@/lib/recall/recall-types';
 import { telHref } from '@/lib/receivables/presentation';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -123,7 +123,12 @@ function ContactButtons({ item, clinicName }: { item: RecallDueItem; clinicName:
 export function RecallView({ token }: { token: string }) {
   const router = useRouter();
   const isPhone = useMediaQuery(DATA_LIST_PHONE_QUERY);
-  const [kind, setKind] = useState<RecallKind | 'ALL'>('ALL');
+  // DX-015-bis: el filtro es un tipo de la clínica (`ref`: su id o, en el respaldo, su clave).
+  const [typeRef, setTypeRef] = useState<string>('ALL');
+  // Hasta que llegan los tipos el filtro solo ofrece «Todos» (deshabilitado):
+  // así no se elige una clave del respaldo que luego no esté entre las opciones.
+  const [types, setTypes] = useState<RecallType[] | 'loading' | 'failed'>('loading');
+  const typeOptions = types === 'loading' ? [] : recallTypeOptions(types === 'failed' ? null : types);
   const [soon, setSoon] = useState(false);
   const [sort, setSort] = useState<RecallDueSort>('MOST_OVERDUE');
   const [page, setPage] = useState(1);
@@ -147,7 +152,7 @@ export function RecallView({ token }: { token: string }) {
       setLoading(true);
       try {
         const res = await listRecallDue(token, {
-          ...(kind !== 'ALL' ? { kind } : {}),
+          ...(typeRef === 'ALL' ? {} : recallTypeFilter(typeRef)),
           ...(soon ? { withinDays: RECALL_SOON_DAYS } : {}),
           sort,
           page,
@@ -172,7 +177,23 @@ export function RecallView({ token }: { token: string }) {
     return () => {
       cancelled = true;
     };
-  }, [token, kind, soon, sort, page, reloadKey]);
+  }, [token, typeRef, soon, sort, page, reloadKey]);
+
+  // Los tipos del filtro: si la lectura falla, Higiene y Control (respaldo).
+  useEffect(() => {
+    let cancelled = false;
+    listRecallTypes(token)
+      .then((list) => {
+        if (!cancelled) setTypes(list);
+      })
+      .catch(() => {
+        // Respaldo: las claves de siempre.
+        if (!cancelled) setTypes('failed');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   // Nombre de la clínica para el mensaje de WhatsApp: si falla, «la clínica».
   useEffect(() => {
@@ -246,11 +267,11 @@ export function RecallView({ token }: { token: string }) {
       header: copy.colKind,
       cell: (r) => (
         <span className="block whitespace-nowrap">
-          <span className="block">{KIND_LABELS[r.kind]}</span>
+          <span className="block">{recallTypeLabel(r)}</span>
           <span className="block text-xs text-muted">{intervalLabel(r.intervalMonths)}</span>
         </span>
       ),
-      mobileCell: (r) => (r.reminderOptedOut ? `${KIND_LABELS[r.kind]} · ${copy.optedOut}` : KIND_LABELS[r.kind]),
+      mobileCell: (r) => (r.reminderOptedOut ? `${recallTypeLabel(r)} · ${copy.optedOut}` : recallTypeLabel(r)),
     },
     {
       id: 'due',
@@ -302,19 +323,22 @@ export function RecallView({ token }: { token: string }) {
           <div className="grid min-w-0 gap-3 sm:flex sm:flex-wrap sm:items-center">
             <NativeSelect
               aria-label={copy.kindLabel}
-              value={kind}
+              value={typeRef}
+              disabled={types === 'loading'}
               onChange={(e) => {
-                setKind(e.target.value as RecallKind | 'ALL');
+                setTypeRef(e.target.value);
                 setPage(1);
               }}
               className="sm:w-48"
             >
               <option value="ALL">{copy.kindAll}</option>
-              {KIND_ORDER.map((k) => (
-                <option key={k} value={k}>
-                  {KIND_LABELS[k]}
-                </option>
-              ))}
+              {typeOptions
+                .filter((o) => o.active || o.ref === typeRef)
+                .map((o) => (
+                  <option key={o.ref} value={o.ref}>
+                    {o.name}
+                  </option>
+                ))}
             </NativeSelect>
             <NativeSelect
               aria-label={copy.windowLabel}

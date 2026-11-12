@@ -7039,7 +7039,7 @@ export interface paths {
         };
         /**
          * Lista de llamada: pacientes con el control vencido y sin cita
-         * @description Recalls activos vencidos (o que vencen en ≤ withinDays) cuyo paciente no tiene cita futura agendada o confirmada ni una en curso, en cualquier sede; sin pausa vigente ni paciente archivado. Vencimiento = MAX(último control fijado, última cita atendida) + intervalo. Ordenada por días de vencido.
+         * @description Recalls activos vencidos (o que vencen en ≤ withinDays) cuyo paciente no tiene cita futura agendada o confirmada ni una en curso, en cualquier sede; sin pausa vigente ni paciente archivado. Vencimiento (guardado) = MAX(último control fijado a mano, último procedimiento disparador del tipo realizado) + intervalo; una cita atendida sin ese procedimiento ya no lo mueve (DX-015-bis). Ordenada por días de vencido.
          */
         get: operations["RecallController_list"];
         put?: never;
@@ -7117,9 +7117,29 @@ export interface paths {
         get?: never;
         /**
          * Fijar (o cambiar, pausar, retirar) el recall de un tipo
-         * @description «Control cada 6 meses»: intervalo (1–36 meses), día del último control (por defecto hoy en la sede), pausa hasta un día con motivo, o `active: false` para retirarlo. Un recall por paciente y tipo.
+         * @description «Control cada 6 meses»: intervalo (1–36 meses), día del último control (por defecto hoy en la sede), pausa hasta un día con motivo, o `active: false` para retirarlo. Un recall por paciente y tipo. DX-015-bis: lo fijado queda como `manualDoneAt`; la base es el máximo con el último procedimiento disparador realizado.
          */
         put: operations["PatientRecallsController_set"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recall-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tipos de recall de la clínica
+         * @description Vivos (activos o no), por su orden: nombre, intervalo por defecto, clave de compatibilidad (HYGIENE/CHECKUP) y los procedimientos del catálogo cuyo DONE mueve su reloj.
+         */
+        get: operations["RecallTypesController_list"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -14124,6 +14144,125 @@ export interface components {
             appointmentId?: string;
             surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             notes?: string;
+        };
+        ItemRecallUpdateDto: {
+            /** Format: uuid */
+            recallId: string;
+            /** Format: uuid */
+            recallTypeId: string;
+            /** @example Higiene */
+            recallTypeName: string;
+            /**
+             * Format: date
+             * @description Vencimiento del recall tras el cambio (día civil)
+             * @example 2027-10-10
+             */
+            dueAt: string;
+        };
+        UpdatedTreatmentPlanItemDto: {
+            /** @default 1 */
+            visit: number;
+            visitLabel?: string | null;
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            planId: string;
+            toothNumber: string;
+            surfaces: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
+            /** Format: uuid */
+            catalogItemId: string;
+            /** @description Precio de REFERENCIA al dar de alta el ítem (null = ítem libre). DX-105: el resuelto (convenio → lista de precios de la sede → catálogo). Un precio por debajo cuenta como descuento (SEC-041): tope del rol, motivo e informe de descuentos. */
+            catalogPrice: number | null;
+            /** @description DX-105: precio de catálogo (`defaultPrice`) en el alta. Null en ítems anteriores a DX-105 o sin precio de catálogo. */
+            basePrice: number | null;
+            /** @description DX-502: moneda de `basePrice`, la del catálogo (común a las sedes activas) al dar de alta el ítem, congelada. Null si no había una común o no hay precio de catálogo. Puede no ser la del plan: no se convierte. */
+            catalogCurrency: string | null;
+            /**
+             * @description DX-105: de dónde salió `catalogPrice` (convenio por %, lista del convenio, lista de la sede o catálogo). Null en ítems anteriores a DX-105.
+             * @enum {string|null}
+             */
+            priceSource: "CATALOG" | "PRICE_LIST" | "AGREEMENT_PERCENT" | "AGREEMENT_PRICE_LIST" | null;
+            /** @description DX-513-bis: moneda de `catalogPrice` al escribir el ítem (la del plan para las listas, la del catálogo para el resto). Null si no se supo, en los libres y en los anteriores sin foto. */
+            referenceCurrency: string | null;
+            /** @description DX-513-bis: `catalogPrice` en la moneda del plan, congelado al escribir el ítem (convertido con `referenceRate` si su moneda era otra). Es la referencia del descuento: un precio por debajo cuenta (tope por rol y motivo). Null en los libres y en los anteriores sin foto (se miden como en DX-513). */
+            referencePriceInPlan: number | null;
+            /** @description DX-513-bis: `basePrice` en la moneda del plan, congelado con la referencia. DX-513-ter: en una lista de convenio con el catálogo en otra moneda, convertido con `baseRate`. Null si no hay o no había tasa para expresarlo. */
+            basePriceInPlan: number | null;
+            /** @description DX-513-bis: la tasa (de la moneda del catálogo a la del plan) con que se convirtió la referencia (`catalogPrice` en `referenceCurrency`); null si no hizo falta. DX-513-ter: siempre null en las listas (`PRICE_LIST`, `AGREEMENT_PRICE_LIST`), cuya referencia ya está en la moneda del plan: su tasa va en `baseRate`. */
+            referenceRate: components["schemas"]["ReferenceRateDto"] | null;
+            /** @description DX-513-ter: en un ítem de lista de convenio con el catálogo en otra moneda, la tasa del día (de `catalogCurrency` a la del plan) con que se convirtió `basePrice` a `basePriceInPlan`, congelada al darlo de alta. Null si no hizo falta, si no había tasa ese día o si el ítem no es de lista. */
+            baseRate: components["schemas"]["ReferenceRateDto"] | null;
+            /**
+             * Format: uuid
+             * @description DX-105: convenio con el que se resolvió el precio
+             */
+            agreementId: string | null;
+            /** @description DX-105: nombre del convenio en el alta (foto: no cambia si se renombra) */
+            agreementName: string | null;
+            /**
+             * Format: uuid
+             * @description DX-105: sede con la que se resolvió el precio
+             */
+            pricingLocationId: string | null;
+            price: number;
+            /** @description Descuento en la moneda del plan (0 si no hay) */
+            discount: number;
+            /**
+             * @description DX-204: motivo del descuento vigente
+             * @enum {string|null}
+             */
+            discountReason: "LOYALTY" | "FAMILY_OR_STAFF" | "PROMOTION" | "FINANCIAL_HARDSHIP" | "SERVICE_RECOVERY" | "OTHER" | null;
+            discountReasonNote: string | null;
+            /**
+             * Format: uuid
+             * @description DX-204: quién dio el descuento vigente, incluida la rebaja de precio frente al catálogo (SEC-041); null sin descuento o anterior a DX-204
+             */
+            discountById: string | null;
+            /**
+             * Format: date-time
+             * @description DX-204: cuándo (hora del servidor)
+             */
+            discountAt: string | null;
+            /**
+             * Format: uuid
+             * @description DX-204: sede donde se dio (la activa o la principal)
+             */
+            discountLocationId: string | null;
+            /** @enum {string} */
+            status: "PROPOSED" | "ACCEPTED" | "DONE";
+            /**
+             * Format: uuid
+             * @description DX-050: usuario que realizó el procedimiento. Null fuera de DONE y en los DONE anteriores a DX-050 («Sin atribuir»)
+             */
+            performedById: string | null;
+            /** @description DX-050: su nombre (también si ya no es miembro activo de la clínica) */
+            performedByName: string | null;
+            /**
+             * Format: uuid
+             * @description DX-050: sede donde se realizó (la del request al marcarlo)
+             */
+            performedLocationId: string | null;
+            /** @description DX-050: su nombre */
+            performedLocationName: string | null;
+            /**
+             * Format: date-time
+             * @description DX-050: cuándo se realizó (hora del servidor al marcarlo)
+             */
+            completedAt: string | null;
+            /**
+             * Format: uuid
+             * @description SEC-050: el ítem es el cargo vigente por inasistencia o cancelación tardía de esta cita (DX-291). Su precio, descuento y estado no cambian ni se quita del plan (409 a todo rol): se anula con `POST /appointments/{id}/cancellation-fee/void`, con motivo. null en cualquier otro ítem.
+             */
+            cancellationFeeAppointmentId: string | null;
+            notes: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description Recalls que creó o recalculó el cambio (DONE, salida de DONE o corrección de fecha o sede de un procedimiento disparador); vacío si ninguno */
+            recallUpdates: components["schemas"]["ItemRecallUpdateDto"][];
         };
         PlanQuoteVisitDto: {
             /** Format: uuid */
@@ -21809,11 +21948,16 @@ export interface components {
             patientWhatsApp: string | null;
             /** @description DX-128: el paciente pidió no recibir avisos. Sigue en la lista, sin contacto. */
             reminderOptedOut: boolean;
-            kind: components["schemas"]["RecallKind"];
+            /** @description DEPRECADO (DX-015-bis): la clave del tipo; null en los tipos sin clave. Usar `recallTypeId`. */
+            kind: components["schemas"]["RecallKind"] | null;
+            /** Format: uuid */
+            recallTypeId: string;
+            /** @description Nombre del tipo (p. ej. «Higiene») */
+            recallTypeName: string;
             intervalMonths: number;
             /**
              * Format: date
-             * @description Base del vencimiento: lo fijado o la última visita atendida
+             * @description Base del vencimiento: lo fijado a mano o el último procedimiento disparador realizado
              */
             baseDate: string;
             /** Format: date */
@@ -21860,7 +22004,11 @@ export interface components {
             id: string;
             /** Format: uuid */
             recallId: string;
-            kind: components["schemas"]["RecallKind"];
+            /** @description DEPRECADO (DX-015-bis): usar `recallTypeId`. */
+            kind: components["schemas"]["RecallKind"] | null;
+            /** Format: uuid */
+            recallTypeId: string;
+            recallTypeName: string;
             /** Format: uuid */
             patientId: string;
             /** Format: uuid */
@@ -21875,6 +22023,11 @@ export interface components {
             createdAt: string;
         };
         /**
+         * @description MANUAL: fijado a mano · PROCEDURE: lo creó un procedimiento realizado · BACKFILL: lo creó el relleno del historial
+         * @enum {string}
+         */
+        RecallSource: "MANUAL" | "PROCEDURE" | "BACKFILL";
+        /**
          * @description DUE: por llamar · UPCOMING: aún no vence · SCHEDULED: ya tiene cita · PAUSED: pausado hasta una fecha · INACTIVE: retirado
          * @enum {string}
          */
@@ -21882,10 +22035,35 @@ export interface components {
         PatientRecallDto: {
             /** Format: uuid */
             id: string;
-            kind: components["schemas"]["RecallKind"];
+            /** @description DEPRECADO (DX-015-bis): la clave del tipo; null en los tipos sin clave. Usar `recallTypeId`. */
+            kind: components["schemas"]["RecallKind"] | null;
+            /** Format: uuid */
+            recallTypeId: string;
+            /** @description Nombre del tipo (p. ej. «Higiene») */
+            recallTypeName: string;
             intervalMonths: number;
-            /** Format: date */
+            /**
+             * Format: date
+             * @description Base del vencimiento: el máximo entre lo fijado a mano y el último procedimiento disparador realizado
+             */
             lastDoneAt: string;
+            /**
+             * Format: date
+             * @description Lo fijado a mano; null si el recall nació de un procedimiento
+             */
+            manualDoneAt: string | null;
+            /**
+             * Format: uuid
+             * @description Ítem del plan realizado que da la base (si la da un procedimiento y no lo fijado)
+             */
+            lastDoneItemId: string | null;
+            /** @description MANUAL: fijado a mano · PROCEDURE: lo creó un procedimiento realizado · BACKFILL: lo creó el relleno del historial */
+            source: components["schemas"]["RecallSource"];
+            /**
+             * Format: date
+             * @description Relleno del despliegue de DX-015-bis: si no es null, `manualDoneAt` NO lo tecleó nadie (es la última visita atendida, que entonces movía el reloj) y esto es lo que había fijado el clínico. Se vuelve null al fijarlo de nuevo.
+             */
+            preBackfillDoneAt: string | null;
             active: boolean;
             /** Format: date */
             disabledUntil: string | null;
@@ -21894,7 +22072,10 @@ export interface components {
             locationId: string;
             /** Format: date */
             baseDate: string;
-            /** Format: date */
+            /**
+             * Format: date
+             * @description Vencimiento guardado: base + intervalo
+             */
             dueAt: string;
             daysOverdue: number;
             /** @description DUE: por llamar · UPCOMING: aún no vence · SCHEDULED: ya tiene cita · PAUSED: pausado hasta una fecha · INACTIVE: retirado */
@@ -21916,7 +22097,7 @@ export interface components {
             intervalMonths: number;
             /**
              * Format: date
-             * @description Día del último control o limpieza (AAAA-MM-DD, no futuro). Por defecto, hoy en la sede.
+             * @description Día del último control o limpieza (AAAA-MM-DD, no futuro), fijado a mano. Por defecto: hoy en la sede al crear el recall; al editarlo, se conserva lo fijado (y la base que da un procedimiento).
              * @example 2026-04-10
              */
             lastDoneAt?: string;
@@ -21932,6 +22113,22 @@ export interface components {
             disabledUntil?: string | null;
             /** @description Motivo corto de la pausa (sin datos clínicos) */
             disabledReason?: string | null;
+        };
+        RecallTypeDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Higiene */
+            name: string;
+            /** @description Intervalo de los recalls que crea un procedimiento realizado */
+            defaultIntervalMonths: number;
+            active: boolean;
+            sortOrder: number;
+            /** @description Clave de compatibilidad (rutas `:kind`); null si no tiene */
+            systemKey: components["schemas"]["RecallKind"] | null;
+            /** @description Tipos excluyentes entre sí (p. ej. HYGIENE_PERIO) */
+            exclusionGroup: string | null;
+            /** @description Procedimientos del catálogo cuyo DONE mueve el reloj de este tipo */
+            triggerCatalogItemIds: string[];
         };
         /** @enum {string} */
         WorkQueueKey: "CLOSING_QUEUE" | "ANAMNESIS_REVIEW" | "QUOTE_FOLLOW_UP" | "ACCEPTED_UNSCHEDULED" | "WAITLIST" | "RECALL" | "RECEIVABLES" | "LOW_STOCK";
@@ -31109,7 +31306,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TreatmentPlanItemDto"];
+                    "application/json": components["schemas"]["UpdatedTreatmentPlanItemDto"];
                 };
             };
             /** @description DX-050: pasar a DONE sin `performedById` quien no atiende (ASSISTANT); el profesional no atiende (ASSISTANT/RECEPTION) o no atiende en la sede; `completedAt` al pasar a DONE o futuro; `performedById`/`completedAt` en un ítem que no queda DONE. Mensaje en español */
@@ -40991,8 +41188,10 @@ export interface operations {
     RecallController_list: {
         parameters: {
             query?: {
-                /** @description Solo un tipo de recall (higiene o control) */
+                /** @description Compatibilidad: solo el tipo con esa clave (higiene o control). Mejor `recallTypeId`. */
                 kind?: components["schemas"]["RecallKind"];
+                /** @description DX-015-bis: solo un tipo de recall de la clínica (GET /recall-types) */
+                recallTypeId?: string;
                 /** @description Incluir también los que vencen en los próximos N días (0 = solo los ya vencidos) */
                 withinDays?: number;
                 /** @description Por días de vencido: los más vencidos primero o al revés */
@@ -41029,8 +41228,10 @@ export interface operations {
     RecallController_count: {
         parameters: {
             query?: {
-                /** @description Solo un tipo de recall (higiene o control) */
+                /** @description Compatibilidad: solo el tipo con esa clave (higiene o control). Mejor `recallTypeId`. */
                 kind?: components["schemas"]["RecallKind"];
+                /** @description DX-015-bis: solo un tipo de recall de la clínica (GET /recall-types) */
+                recallTypeId?: string;
                 /** @description Incluir también los que vencen en los próximos N días (0 = solo los ya vencidos) */
                 withinDays?: number;
             };
@@ -41146,7 +41347,8 @@ export interface operations {
             };
             path: {
                 id: string;
-                kind: components["schemas"]["RecallKind"];
+                /** @description HYGIENE o CHECKUP (compatibilidad) o el id de un tipo de la clínica (GET /recall-types) */
+                kind: string;
             };
             cookie?: never;
         };
@@ -41178,12 +41380,31 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Paciente de otra clínica o inexistente */
+            /** @description Paciente de otra clínica o inexistente; tipo de recall que no existe en esta clínica */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    RecallTypesController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallTypeDto"][];
+                };
             };
         };
     };

@@ -1,12 +1,14 @@
 'use client';
 import * as React from 'react';
 import { useCallback, useEffect, useId, useState } from 'react';
+import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import { getTokenUserId } from '@/lib/auth/token-role';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { locationTimeZone } from '@/lib/locations/location-settings';
+import { recallNoticeFor } from '@/lib/recall/recall-notice';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { updateItem, type TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
 import { attendsAt, attributionInstant, isAttendingRole } from '@/lib/treatment-plans/item-attribution';
@@ -198,6 +200,9 @@ export function MarkDoneModal({
               }
             : { performedById: performerId };
       const saved = await updateItem(token, planId, item.id, patch);
+      // DX-015-bis: «Recall de Higiene: vence el …» si el procedimiento movió un recall.
+      const recallNotice = recallNoticeFor(saved, locations, activeLocationId);
+      if (recallNotice) toast.success(recallNotice);
       onSaved(saved);
     } catch (err) {
       setError(

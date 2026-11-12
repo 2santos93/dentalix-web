@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { getPatient, type Patient } from '@/lib/patients/patients-api';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { KIND_LABELS } from '@/lib/recall/presentation';
+import { recallTypeLabel } from '@/lib/recall/recall-types';
 import type { RecallDueItem } from '@/lib/recall/recall-api';
 import { AppointmentForm } from '@/components/appointments/appointment-form';
 import { AsyncSection } from '@/components/shared/async-section';
@@ -70,7 +70,7 @@ export function RecallScheduleDialog({
             <AppointmentForm
               token={token}
               defaultPatient={patient}
-              defaultReason={scheduleDialogCopy.reason(KIND_LABELS[item.kind])}
+              defaultReason={scheduleDialogCopy.reason(recallTypeLabel(item))}
               locationId={item.locationId}
               onCreated={onCreated}
             />

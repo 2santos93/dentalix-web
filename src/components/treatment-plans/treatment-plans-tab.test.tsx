@@ -779,6 +779,37 @@ describe('TreatmentPlansTab', () => {
     expect(screen.getByRole('table', { name: /ítems de la visita/i })).toBe(table);
   });
 
+  it('DX-015-bis: sacar de realizado una profilaxis avisa del recall que recalcula, con el formato de la sede activa', async () => {
+    // Sacar de realizado: el ADMIN (o quien lo realizó).
+    const adminTok = `h.${btoa(JSON.stringify({ sub: 'u-admin', tenantId: 't1', role: 'ADMIN' }))}.s`;
+    window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+    const done = { ...item2, status: 'DONE' as const, performedById: 'u-laura', performedLocationId: 'loc-1' };
+    mockedListPlans.mockResolvedValue([plan1]);
+    mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [item1, done] });
+    mockedUpdateItem.mockResolvedValue({
+      ...item2,
+      status: 'ACCEPTED',
+      performedLocationId: null,
+      recallUpdates: [{ recallId: 'r1', recallTypeId: 't-hyg', recallTypeName: 'Higiene', dueAt: '2027-10-10' }],
+    });
+    const user = userEvent.setup();
+    render(
+      <>
+        <TreatmentPlansTab patientId="pat-1" token={adminTok} />
+        <Toaster />
+      </>,
+    );
+    const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+    const select = within(table).getByRole<HTMLSelectElement>('combobox', { name: /estado del ítem del diente 26/i });
+    await waitFor(() => expect(select.value).toBe('DONE'));
+    await user.selectOptions(select, 'ACCEPTED');
+    await waitFor(() =>
+      expect(mockedUpdateItem).toHaveBeenCalledWith(adminTok, 'plan-1', 'item-2', { status: 'ACCEPTED' }),
+    );
+    expect(await screen.findByText('Recall de Higiene: vence el 10/10/2027')).toBeInTheDocument();
+    window.localStorage.removeItem('dentalix.activeLocationId');
+  });
+
   it('removing an item calls removeItem then refreshes the plan in place — the removed item disappears and the total drops, table stays mounted', async () => {
     mockedListPlans.mockResolvedValue([plan1]);
     mockedRemoveItem.mockResolvedValue(undefined);

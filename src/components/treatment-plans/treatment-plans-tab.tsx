@@ -30,6 +30,7 @@ import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catal
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { invalidateLocations, loadLocations } from '@/lib/session/session-store';
 import { getActiveLocationId } from '@/lib/locations/location-store';
+import { recallNoticeFor } from '@/lib/recall/recall-notice';
 import { activeSedeCurrency } from '@/lib/locations/location-settings';
 import { paymentLocationHint } from '@/lib/payments/payment-location';
 import { getTokenAllowedLocationIds, getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
@@ -778,7 +779,10 @@ export function TreatmentPlansTab({
     setUpdatingItemId(itemId);
     setItemActionError(null);
     try {
-      await updateItem(token, selectedPlanId, itemId, { status });
+      const saved = await updateItem(token, selectedPlanId, itemId, { status });
+      // DX-015-bis: sacar de realizado un procedimiento que reinicia un recall lo recalcula.
+      const recallNotice = recallNoticeFor(saved, locations, getActiveLocationId());
+      if (recallNotice) toast.success(recallNotice);
       // Propuesto ↔ aceptado cambia lo facturable: el saldo va con el ítem.
       await Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()]);
     } catch (err) {

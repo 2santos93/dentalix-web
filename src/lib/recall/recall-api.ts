@@ -15,9 +15,16 @@ export type PatientRecall = Schemas['PatientRecallDto'];
 export type PatientRecalls = Schemas['PatientRecallsDto'];
 export type SetPatientRecallInput = Schemas['SetPatientRecallDto'];
 export type CreateRecallContactInput = Schemas['CreateRecallContactDto'];
+/** DX-015-bis: un tipo de recall de la clínica (Higiene, Control, Mantenimiento periodontal…). */
+export type RecallType = Schemas['RecallTypeDto'];
+/** DX-015-bis: un recall que movió el cambio de un ítem del plan (respuesta del PATCH). */
+export type ItemRecallUpdate = Schemas['ItemRecallUpdateDto'];
 
 export interface RecallDueFilters {
+  /** Compatibilidad: el filtro por clave cuando no se pudieron leer los tipos. */
   kind?: RecallKind;
+  /** DX-015-bis: un tipo de la clínica (`GET /recall-types`). */
+  recallTypeId?: string;
   withinDays?: number;
   sort?: RecallDueSort;
   page?: number;
@@ -52,14 +59,23 @@ export function getPatientRecalls(token: string, patientId: string): Promise<Pat
   return apiFetch<PatientRecalls>(`/patients/${patientId}/recalls`, { token });
 }
 
-/** `PUT /patients/:id/recalls/:kind`: fijar, cambiar, pausar o retirar. */
+/** `GET /recall-types`: los tipos de la clínica, por su orden (activos o no). */
+export function listRecallTypes(token: string): Promise<RecallType[]> {
+  return apiFetch<RecallType[]>('/recall-types', { token });
+}
+
+/**
+ * `PUT /patients/:id/recalls/:type`: fijar, cambiar, pausar o retirar. `type`
+ * es el id del tipo (DX-015-bis) o, si no se pudieron leer los tipos, su clave
+ * (`HYGIENE`, `CHECKUP`), que la API sigue aceptando.
+ */
 export function setPatientRecall(
   token: string,
   patientId: string,
-  kind: RecallKind,
+  type: string,
   input: SetPatientRecallInput,
 ): Promise<PatientRecalls> {
-  return apiFetch<PatientRecalls>(`/patients/${patientId}/recalls/${kind}`, {
+  return apiFetch<PatientRecalls>(`/patients/${patientId}/recalls/${encodeURIComponent(type)}`, {
     token,
     method: 'PUT',
     body: input,
