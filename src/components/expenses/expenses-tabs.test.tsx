@@ -5,6 +5,7 @@ import { setupUser } from '@/lib/test/user';
 describe('ExpensesTabs (DX-274)', () => {
   it('cualquier valor desconocido de ?tab= cae en «Gastos»', () => {
     expect(resolveExpensesTab('resumen')).toBe('resumen');
+    expect(resolveExpensesTab('proveedores')).toBe('proveedores');
     expect(resolveExpensesTab('otra')).toBe('gastos');
     expect(resolveExpensesTab(null)).toBe('gastos');
   });
@@ -15,11 +16,14 @@ describe('ExpensesTabs (DX-274)', () => {
     render(<ExpensesTabs active="gastos" onChange={onChange} />);
 
     const gastos = screen.getByRole('tab', { name: 'Gastos' });
+    const proveedores = screen.getByRole('tab', { name: 'Por proveedor' });
     const resumen = screen.getByRole('tab', { name: 'Resumen' });
     expect(gastos).toHaveAttribute('aria-selected', 'true');
     expect(resumen).toHaveAttribute('aria-selected', 'false');
 
     gastos.focus();
+    await user.keyboard('{ArrowRight}');
+    expect(proveedores).toHaveFocus();
     await user.keyboard('{ArrowRight}');
     expect(resumen).toHaveFocus();
     expect(onChange).not.toHaveBeenCalled();

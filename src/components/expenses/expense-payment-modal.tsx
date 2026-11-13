@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { addExpensePayment, type ExpenseDetail } from '@/lib/expenses/expenses-api';
+import { addExpensePayment, type Expense, type ExpenseDetail } from '@/lib/expenses/expenses-api';
 import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
 import { useExpenseToday } from './use-expense-today';
@@ -35,7 +35,8 @@ interface ExpensePaymentModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   token: string;
-  expense: ExpenseDetail;
+  /** El gasto (con o sin sus pagos): del detalle o de la lista de un proveedor (DX-411). */
+  expense: Expense;
   /** Hoy en la sede del gasto. */
   today?: string;
   onSaved: (expense: ExpenseDetail, notice: string) => void;

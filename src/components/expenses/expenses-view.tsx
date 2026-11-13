@@ -1,14 +1,16 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { Building2, Download, Lock, Plus } from 'lucide-react';
+import { Building2, CalendarClock, Download, Lock, Plus } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getTokenRole } from '@/lib/auth/token-role';
 import {
   canManageExpenses,
   downloadExpensesCsv,
+  getExpensePayables,
   listExpenses,
+  type ExpensePayables,
   type Expense,
   type ExpenseFilters,
   type ExpensePage,
@@ -29,6 +31,7 @@ import { ListToolbar, ResultCount } from '@/components/shared/list-toolbar';
 import { PageHeader } from '@/components/shared/page-header';
 import { Pagination } from '@/components/shared/pagination';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { DateRangePicker } from '@/components/ui/date-picker';
 import { NativeSelect } from '@/components/ui/native-select';
@@ -81,6 +84,12 @@ export const expensesCopy = {
   badRequest: 'Algún filtro no es válido: «Desde» no puede ser posterior a «Hasta».',
   forbiddenTitle: 'Tu rol no tiene acceso a los gastos.',
   forbiddenHint: 'Los gastos de la sede son para la administración de la clínica.',
+  // DX-411: el aviso de lo que vence esta semana (los 7 días que empiezan hoy en la sede del gasto).
+  dueSoonTitle: (n: number) =>
+    n === 1 ? '1 gasto vence en los próximos 7 días' : `${n} gastos vencen en los próximos 7 días`,
+  overdueTitle: (n: number) => (n === 1 ? '1 gasto vencido sin pagar' : `${n} gastos vencidos sin pagar`),
+  overdueAlso: (n: number) => (n === 1 ? 'Y 1 ya está vencido.' : `Y ${n} ya están vencidos.`),
+  showPayables: 'Ver por proveedor',
   empty: 'No hay gastos en este periodo',
   emptyHint: 'Registra el primero con «Nuevo gasto», o prueba con otras fechas y filtros.',
 };
@@ -107,7 +116,16 @@ const STATUS_CHOICES: readonly { value: StatusChoice; label: string }[] = [
  * Sin selector de sede propio: el global ya acota la petición (`X-Location-Id`)
  * y dos selectores de sede en la misma pantalla no decían cuál mandaba.
  */
-export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesViewTabs }) {
+export function ExpensesView({
+  token,
+  tabs,
+  onShowPayables,
+}: {
+  token: string;
+  tabs?: ExpensesViewTabs;
+  /** Abre «Por proveedor» desde el aviso de vencimientos (DX-411). */
+  onShowPayables?: () => void;
+}) {
   const isAdmin = canManageExpenses(getTokenRole(token));
   const [activeLocationId] = useState<string | null>(() => getActiveLocationId());
   const sedes = useExpenseLocations(token);
@@ -129,6 +147,7 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
   const [reloadKey, setReloadKey] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [payables, setPayables] = useState<ExpensePayables | null>(null);
   const [formKey, setFormKey] = useState(0);
   const [formOpen, setFormOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -197,6 +216,21 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
       cancelled = true;
     };
   }, [token, filterKey, page, reloadKey]);
+
+  // DX-411: cuántos gastos por pagar vencen esta semana, en todas las fechas de
+  // factura (no solo las del filtro). Es un aviso: si falla, no se muestra y la
+  // lista sigue (su propio error ya tiene la escalera).
+  useEffect(() => {
+    if (!token || !isAdmin) return;
+    let cancelled = false;
+    getExpensePayables(token).then(
+      (res) => !cancelled && setPayables(res),
+      () => !cancelled && setPayables(null),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [token, isAdmin, reloadKey]);
 
   async function exportCsv() {
     if (!filterKey) return;
@@ -438,6 +472,7 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
               </div>
             ) : null}
 
+            <DueSoonNotice payables={payables} onShowPayables={onShowPayables} />
             <SedeStampNote stamp={stamp} />
             <AsyncSection
               loading={showLoading}
@@ -511,6 +546,40 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
         categories={categories}
       />
     </>
+  );
+}
+
+/**
+ * DX-411: el aviso de vencimientos de la lista. Cuenta los gastos por pagar de
+ * todas las monedas que vencen en los próximos 7 días (hoy incluido, en la sede
+ * de cada gasto) y, aparte, los ya vencidos. Sin ninguno, no se pinta.
+ */
+function DueSoonNotice({
+  payables,
+  onShowPayables,
+}: {
+  payables: ExpensePayables | null;
+  onShowPayables?: () => void;
+}) {
+  const soon = payables?.totals.reduce((n, t) => n + t.dueIn7DaysCount, 0) ?? 0;
+  const overdue = payables?.totals.reduce((n, t) => n + t.overdueCount, 0) ?? 0;
+  if (soon === 0 && overdue === 0) return null;
+  return (
+    <Callout
+      tone="warning"
+      icon={CalendarClock}
+      title={soon > 0 ? expensesCopy.dueSoonTitle(soon) : expensesCopy.overdueTitle(overdue)}
+      action={
+        onShowPayables ? (
+          <Button type="button" variant="secondary" size="sm" onClick={onShowPayables} className="max-sm:min-h-11">
+            {expensesCopy.showPayables}
+          </Button>
+        ) : null
+      }
+      data-testid="expenses-due-soon"
+    >
+      {soon > 0 && overdue > 0 ? expensesCopy.overdueAlso(overdue) : null}
+    </Callout>
   );
 }
 
