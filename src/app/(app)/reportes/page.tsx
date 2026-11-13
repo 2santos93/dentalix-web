@@ -8,6 +8,7 @@ import { LocationsComparisonView } from '@/components/reports/locations-comparis
 import { ProductionByProcedureView } from '@/components/reports/production-by-procedure-view';
 import { RecoveredSlotsView } from '@/components/reports/recovered-slots-view';
 import { ChairOccupancyView } from '@/components/reports/chair-occupancy-view';
+import { PatientLinksView } from '@/components/reports/patient-links-view';
 import { UnallocatedPaymentsView } from '@/components/reports/unallocated-payments-view';
 import {
   ReportsTabs,
@@ -67,6 +68,8 @@ function ReportesRoute() {
       <RecoveredSlotsView token={accessToken} isAdmin={role === 'ADMIN'} />
     ) : tab === 'ocupacion-sillones' ? (
       <ChairOccupancyView token={accessToken} isAdmin={role === 'ADMIN'} />
+    ) : tab === 'enlaces-paciente' ? (
+      <PatientLinksView token={accessToken} />
     ) : tab === 'sin-imputar' ? (
       <UnallocatedPaymentsView token={accessToken} />
     ) : (

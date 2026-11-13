@@ -6,7 +6,8 @@ import { TabBar } from '@/components/ui/tabs';
  * Pestañas de «Reportes» (DX-014): «Comparar sedes» (solo ADMIN),
  * «Producción por procedimiento» (DX-423: ADMIN y DENTIST, que ve solo la
  * suya), «Cobrado sin imputar» (DX-399: ADMIN y recepción) y «Huecos
- * recuperados» (DX-436: ADMIN) y «Ocupación por sillón» (DX-481: ADMIN). Las siguientes son una línea más en `REPORT_TABS` y su vista en la
+ * recuperados» (DX-436: ADMIN), «Ocupación por sillón» (DX-481: ADMIN) y
+ * «Enlaces del paciente» (DX-424: ADMIN). Las siguientes son una línea más en `REPORT_TABS` y su vista en la
  * página. Patrón ARIA de pestañas con activación manual, como la Caja: las
  * flechas mueven el foco y Enter/Espacio (o el clic) eligen.
  */
@@ -19,6 +20,8 @@ export const REPORT_TABS = [
   { key: 'huecos-recuperados', label: 'Huecos recuperados', roles: ['ADMIN'] },
   // DX-481: minutos abiertos, reservados y atendidos de cada sillón; administración (REPORT_ROLES).
   { key: 'ocupacion-sillones', label: 'Ocupación por sillón', roles: ['ADMIN'] },
+  // DX-424: enviados, abiertos y completados de los enlaces al paciente; administración (REPORT_ROLES).
+  { key: 'enlaces-paciente', label: 'Enlaces del paciente', roles: ['ADMIN'] },
 ] as const satisfies readonly { key: string; label: string; roles: readonly ClinicRole[] }[];
 
 export type ReportTabKey = (typeof REPORT_TABS)[number]['key'];
