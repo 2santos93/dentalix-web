@@ -229,7 +229,7 @@ test('capturas a 390 y 1440 px en claro y oscuro: ajustes, diálogo, ficha y pá
       await page.getByRole('button', { name: 'Añadir idioma' }).click();
       const dialog = page.getByRole('dialog', { name: 'Añadir un idioma' });
       await expectDialogInsideViewport(page, dialog);
-      await dialog.getByLabel('Código del idioma').fill('pt-BR');
+      await dialog.getByLabel('Código del idioma').fill('pt');
       if (width < 640) {
         for (const target of [dialog.getByRole('button', { name: 'Añadir' }), dialog.getByLabel('Código del idioma')]) {
           await expectTouchTarget(target, { scope: dialog });

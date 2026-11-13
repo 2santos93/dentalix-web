@@ -38,11 +38,11 @@ const copy = {
   remove: 'Quitar',
   removeLabel: (name: string) => `Quitar ${name}`,
   addTitle: 'Añadir un idioma',
-  addDescription: 'Escribe su código BCP 47: «en» inglés, «ca» catalán, «pt-BR» portugués de Brasil. El cambio queda en la auditoría.',
+  addDescription: 'Escribe su código BCP 47: «en» inglés, «ca» catalán, «es-419» español de Latinoamérica. El cambio queda en la auditoría.',
   codeLabel: 'Código del idioma',
   preview: (name: string) => `Se verá como: ${name}`,
   codeRequired: 'Escribe el código del idioma (p. ej. en).',
-  codeInvalid: 'Ese código no es un idioma válido. Usa uno como «en», «ca» o «pt-BR».',
+  codeInvalid: 'Ese código no es un idioma válido. Usa uno como «en», «ca» o «es-419».',
   codeDuplicate: 'Ese idioma ya está en la lista.',
   removeTitle: (name: string) => `¿Quitar ${name}?`,
   removeDescription:
@@ -62,7 +62,7 @@ const copy = {
 const TRANSLATED = new Set(['es', 'en']);
 
 /** Sugerencias del campo (no limitan: vale cualquier etiqueta BCP 47). */
-const SUGGESTIONS = ['en', 'ca', 'pt', 'pt-BR', 'fr', 'it', 'de', 'ar', 'zh', 'gl', 'eu'];
+const SUGGESTIONS = ['en', 'ca', 'pt', 'fr', 'it', 'de', 'ar', 'zh', 'gl', 'eu'];
 
 const loadErrorOptions = { fallback: copy.loadError, byStatus: { 404: copy.loadError } };
 
