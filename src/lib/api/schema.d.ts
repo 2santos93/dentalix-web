@@ -19057,7 +19057,7 @@ export interface components {
             maxBytes: number;
         };
         ExpenseSummaryCategoryDto: {
-            /** @example Arriendo */
+            /** @example Alquiler */
             category: string;
             /** @example 2500000 */
             amount: number;
@@ -19177,7 +19177,7 @@ export interface components {
              */
             locationId?: string;
             /**
-             * @description Una predefinida o una propia activa de la clínica.
+             * @description Una predefinida o una propia activa de la clínica, sin distinguir mayúsculas ni tildes. El nombre anterior de una predefinida cuenta como el actual.
              * @example Servicios públicos
              */
             category: string;
@@ -19355,7 +19355,7 @@ export interface components {
         };
         CreateCashOutflowDto: {
             /**
-             * @description Una predefinida o una propia activa de la clínica.
+             * @description Una predefinida o una propia activa de la clínica, sin distinguir mayúsculas ni tildes. El nombre anterior de una predefinida cuenta como el actual.
              * @example Servicios públicos
              */
             category: string;
@@ -19888,7 +19888,7 @@ export interface components {
             /** @example 1 */
             running: number;
             /**
-             * @description RUNNING con el arriendo vencido (worker caído o sin latido)
+             * @description RUNNING con la reserva vencida (worker caído o sin latido)
              * @example 0
              */
             runningExpired: number;
@@ -36283,6 +36283,7 @@ export interface operations {
                 /** @description Fecha de factura, hasta. */
                 to?: string;
                 locationId?: string;
+                /** @description Sin distinguir mayúsculas ni tildes. El nombre anterior de una predefinida filtra por el actual. */
                 category?: string;
                 /** @description `OPEN` = pendiente + parcial. */
                 status?: "PENDING" | "PARTIAL" | "PAID" | "VOIDED" | "OPEN";
@@ -36498,6 +36499,7 @@ export interface operations {
                 /** @description Fecha de factura, hasta. */
                 to?: string;
                 locationId?: string;
+                /** @description Sin distinguir mayúsculas ni tildes. El nombre anterior de una predefinida filtra por el actual. */
                 category?: string;
                 /** @description `OPEN` = pendiente + parcial. */
                 status?: "PENDING" | "PARTIAL" | "PAID" | "VOIDED" | "OPEN";
