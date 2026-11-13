@@ -16,7 +16,7 @@ import { moneyWithCode } from '../src/lib/format/sede-number';
  * reloj de la CI): un abono de USD 130, un gasto de Laboratorio de USD 45
  * pagado ese día y uno de Mantenimiento de USD 200 sin pagar.
  *  - Caja: cobrado 130 − gastos pagados 45 = 85.
- *  - Devengo: producción 0 − gastos facturados 245 = −115.
+ *  - Devengo: producción 0 − gastos facturados 245 = −245 (el abono de 130 es caja, no producción).
  *  1. 1440 px: la base en la cabecera, la sede y el total, y el detalle de
  *     un importe (el proveedor del gasto, sin datos del paciente).
  *  2. Devengo, con el gasto sin pagar.
@@ -151,7 +151,7 @@ test('Devengo: gastos por fecha de factura, pagados o no', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Rentabilidad en base Devengo' })).toBeVisible({ timeout: 30_000 });
   const sede = page.getByRole('table', { name: SUMMARY }).getByRole('row').filter({ hasText: locationName });
   await expect(sede).toContainText(money(245));
-  await expect(sede).toContainText(money(-115));
+  await expect(sede).toContainText(money(-245));
   await expect(page.getByRole('table', { name: 'Gastos por categoría en USD' })).toContainText('Mantenimiento');
   await shot(page, 'devengo-1440');
 });
