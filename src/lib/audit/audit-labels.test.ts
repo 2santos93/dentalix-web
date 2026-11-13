@@ -86,6 +86,11 @@ describe('etiquetas de auditoría', () => {
     }
   });
 
+  it('DX-015-bis: los tipos de recall tienen su etiqueta y salen en el filtro', () => {
+    expect(AUDIT_RESOURCE_LABELS.RECALL_TYPE).toBe('Tipo de recall');
+    expect(AUDIT_RESOURCE_OPTIONS).toContain('RECALL_TYPE');
+  });
+
   it('las opciones no repiten valores', () => {
     expect(new Set(AUDIT_ACTION_OPTIONS).size).toBe(AUDIT_ACTION_OPTIONS.length);
     expect(new Set(AUDIT_RESOURCE_OPTIONS).size).toBe(AUDIT_RESOURCE_OPTIONS.length);

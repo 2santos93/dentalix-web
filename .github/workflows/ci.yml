@@ -122,8 +122,13 @@ jobs:
       # Presupuesto de la ficha: lo medido tras partirla (propio 68,8 KB y
       # total 442,1 KB en la CI de la porción 4) + ~5 %. El total lo domina el
       # shell de `(app)` (373 KB, común a todas sus rutas).
+      # 2026-11-12, propio 72 → 73: main ya medía 71,9 KB (la ficha creció
+      # 3,1 KB desde DX-117 en dos días de funcionalidades) y DX-015-bis
+      # porción 2 suma 0,2 KB (el aviso de exclusión de recall en la ficha).
+      # Subirlo no es la solución de fondo: el siguiente paso es volver a
+      # partir la ficha (carga diferida de pestañas), no otro aumento.
       - name: Informe de JS por ruta
-        run: node scripts/bundle-report.mjs --budget '/patients/[id]:total=465,own=72'
+        run: node scripts/bundle-report.mjs --budget '/patients/[id]:total=465,own=73'
       - name: Subir el informe de JS por ruta
         if: always() && hashFiles('.next/bundle-report.json') != ''
         uses: actions/upload-artifact@v4

@@ -790,7 +790,9 @@ describe('TreatmentPlansTab', () => {
       ...item2,
       status: 'ACCEPTED',
       performedLocationId: null,
-      recallUpdates: [{ recallId: 'r1', recallTypeId: 't-hyg', recallTypeName: 'Higiene', dueAt: '2027-10-10' }],
+      recallUpdates: [
+        { recallId: 'r1', recallTypeId: 't-hyg', recallTypeName: 'Higiene', dueAt: '2027-10-10', deactivated: false, replacedBy: null },
+      ],
     });
     const user = userEvent.setup();
     render(
