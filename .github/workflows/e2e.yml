@@ -145,7 +145,7 @@ jobs:
       # specs, package-lock) son los de `web_sha`. Por eso un sha anterior a las
       # fases que el YAML de main llama (`skips`, `schema`) falla con «Fase
       # desconocida».
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.web_sha || github.sha }}
           path: dentalix-web
@@ -155,7 +155,7 @@ jobs:
       # paso «API» falla, el resumen dice contra qué commit (DX-494).
       - name: Checkout de dentalix-api
         id: api-checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: 2santos93/dentalix-api
           ref: ${{ inputs.api_ref || 'main' }}
@@ -166,7 +166,7 @@ jobs:
         run: scripts/e2e-ci.sh sync
         timeout-minutes: 1
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -194,7 +194,7 @@ jobs:
       - name: Navegadores de Playwright (restaurar la caché)
         id: playwright-cache
         timeout-minutes: 2
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ steps.playwright-version.outputs.os }}-${{ steps.playwright-version.outputs.version }}
@@ -299,7 +299,7 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         timeout-minutes: 2
         continue-on-error: true
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.cache/ms-playwright
           key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
@@ -366,7 +366,7 @@ jobs:
       - name: Subir la lista de specs del shard
         if: steps.shard-specs.outcome == 'success'
         timeout-minutes: 2
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-shard-${{ matrix.shard }}
           path: dentalix-web/.e2e/e2e-shard-${{ matrix.shard }}.txt
@@ -451,7 +451,7 @@ jobs:
       - name: Subir el informe del shard (blob)
         if: always()
         timeout-minutes: 5
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: blob-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}
           path: dentalix-web/blob-report/
@@ -465,7 +465,7 @@ jobs:
       - name: Subir trazas y logs del shard
         if: always()
         timeout-minutes: 5
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-${{ github.run_id }}-${{ github.run_attempt }}-shard-${{ matrix.shard }}
           path: |
@@ -536,7 +536,7 @@ jobs:
           echo "::error title=Shards de Playwright::los shards se cancelaron: no hay nada que fusionar"
           exit 1
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.web_sha || github.sha }}
           path: dentalix-web
@@ -547,14 +547,14 @@ jobs:
       # en los shards; sin E2E_DATABASE_URL ni E2E_MAIL_DIR, los saltos
       # permitidos por su ausencia pasarían en silencio.
       - name: Checkout de dentalix-api
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: 2santos93/dentalix-api
           ref: ${{ inputs.api_ref || 'main' }}
           path: dentalix-api
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -611,7 +611,7 @@ jobs:
       - name: Descargar las listas de los shards
         timeout-minutes: 2
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: e2e-shard-*
           path: dentalix-web/.e2e/shards
@@ -705,7 +705,7 @@ jobs:
         if: ${{ !cancelled() && needs.playwright.result != 'cancelled' }}
         timeout-minutes: 2
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: blob-${{ github.run_id }}-*
           path: dentalix-web/.e2e/blobs-raw
@@ -861,7 +861,7 @@ jobs:
       - name: Subir los flaky de la run (tendencia)
         if: ${{ !cancelled() && needs.playwright.result != 'cancelled' && github.event_name == 'push' && github.ref == 'refs/heads/main' && hashFiles('dentalix-web/e2e-flaky.json') != '' }}
         timeout-minutes: 2
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-flaky
           path: dentalix-web/e2e-flaky.json
@@ -874,7 +874,7 @@ jobs:
       - name: Subir el informe fusionado
         if: ${{ !cancelled() && needs.playwright.result != 'cancelled' }}
         timeout-minutes: 5
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
