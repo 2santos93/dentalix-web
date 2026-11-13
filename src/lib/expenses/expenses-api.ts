@@ -22,6 +22,10 @@ export type ExpenseReceiptDisposition = ExpenseReceiptUrl['disposition'];
 export type ExpenseSummary = Schemas['ExpenseSummaryDto'];
 export type ExpenseSummaryRow = Schemas['ExpenseSummaryRowDto'];
 export type CreateCashOutflowInput = Schemas['CreateCashOutflowDto'];
+export type ExpensePayables = Schemas['ExpensePayablesDto'];
+export type PayableSupplierRow = Schemas['PayableSupplierRowDto'];
+export type PayableCurrencyTotal = Schemas['PayableCurrencyTotalDto'];
+export type PayableExpenses = Schemas['PayableExpensesDto'];
 
 /** La pantalla Gastos y el resumen: solo ADMIN (EXPENSE_ROLES en la API). */
 export function canManageExpenses(role: ClinicRole | null): boolean {
@@ -188,6 +192,34 @@ export function getExpenseSummary(token: string, query: ExpenseSummaryQuery): Pr
 /** `GET /expenses/summary.csv` (auditado). */
 export function downloadExpenseSummaryCsv(token: string, query: ExpenseSummaryQuery): Promise<string> {
   return apiFetchText(`/expenses/summary.csv${searchOf(query)}`, { token });
+}
+
+/**
+ * Cuentas por pagar por proveedor (DX-411). La sede activa viaja en
+ * `X-Location-Id`; `currency` acota a una moneda.
+ */
+export interface ExpensePayablesQuery {
+  currency?: string;
+}
+
+/** `GET /expenses/payables` — una fila por proveedor × moneda y totales por moneda. */
+export function getExpensePayables(token: string, query: ExpensePayablesQuery = {}): Promise<ExpensePayables> {
+  return apiFetch<ExpensePayables>(`/expenses/payables${searchOf(query)}`, { token });
+}
+
+/** `GET /expenses/payables.csv` — las mismas filas (auditado). */
+export function downloadExpensePayablesCsv(token: string, query: ExpensePayablesQuery = {}): Promise<string> {
+  return apiFetchText(`/expenses/payables.csv${searchOf(query)}`, { token });
+}
+
+/**
+ * `GET /expenses/payables/expenses` — los gastos abiertos de un proveedor en
+ * una moneda, por vencimiento. `supplierKey` vacía = «Sin proveedor» (va
+ * siempre en la URL, aunque esté vacía).
+ */
+export function getPayableExpenses(token: string, supplierKey: string, currency: string): Promise<PayableExpenses> {
+  const search = new URLSearchParams({ supplierKey, currency });
+  return apiFetch<PayableExpenses>(`/expenses/payables/expenses?${search.toString()}`, { token });
 }
 
 /**

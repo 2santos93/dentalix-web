@@ -5,6 +5,7 @@ import { getTokenRole } from '@/lib/auth/token-role';
 import {
   downloadExpensesCsv,
   getExpense,
+  getExpensePayables,
   listExpenses,
   voidExpense,
   type ExpensePage,
@@ -22,6 +23,7 @@ jest.mock('../../lib/format/date', () => ({ ...jest.requireActual('../../lib/for
 jest.mock('../../lib/expenses/expenses-api', () => ({
   ...jest.requireActual('../../lib/expenses/expenses-api'),
   listExpenses: jest.fn(),
+  getExpensePayables: jest.fn(),
   downloadExpensesCsv: jest.fn(),
   getExpense: jest.fn(),
   voidExpense: jest.fn(),
@@ -74,6 +76,7 @@ function lastQuery() {
 describe('ExpensesView (DX-274)', () => {
   beforeEach(() => {
     mockedList.mockReset().mockResolvedValue(page());
+    jest.mocked(getExpensePayables).mockReset().mockResolvedValue({ rows: [], totals: [] });
     mockedCsv.mockReset().mockResolvedValue('csv');
     mockedCategories.mockReset().mockResolvedValue([
       { id: null, name: 'Laboratorio', predefined: true },
@@ -85,6 +88,46 @@ describe('ExpensesView (DX-274)', () => {
     jest.mocked(getLocationSchedule).mockReset().mockResolvedValue({ timezone: 'Pacific/Auckland', ranges: [] });
     jest.mocked(saveCsv).mockReset();
     jest.mocked(notifyError).mockReset();
+  });
+
+  it('DX-411: avisa de los gastos que vencen en 7 días (todas las monedas) y de los vencidos, y lleva a «Por proveedor»', async () => {
+    const total = (currency: string, dueIn7DaysCount: number, overdueCount: number) => ({
+      currency,
+      openCount: 5,
+      pending: 100,
+      overdueCount,
+      overdue: overdueCount * 10,
+      dueIn7DaysCount,
+      dueIn7Days: dueIn7DaysCount * 10,
+      dueIn30DaysCount: dueIn7DaysCount,
+      dueIn30Days: dueIn7DaysCount * 10,
+      noDueDateCount: 0,
+      noDueDate: 0,
+    });
+    jest.mocked(getExpensePayables).mockResolvedValue({ rows: [], totals: [total('USD', 2, 1), total('VES', 1, 0)] });
+    const onShowPayables = jest.fn();
+    const user = setupUser();
+    render(<ExpensesView token="t" onShowPayables={onShowPayables} />);
+    const notice = await screen.findByTestId('expenses-due-soon');
+    expect(notice).toHaveTextContent('3 gastos vencen en los próximos 7 días');
+    expect(notice).toHaveTextContent('Y 1 ya está vencido.');
+    await user.click(within(notice).getByRole('button', { name: 'Ver por proveedor' }));
+    expect(onShowPayables).toHaveBeenCalled();
+  });
+
+  it('DX-411: solo vencidos → el aviso lo dice; sin nada que venza, no hay aviso', async () => {
+    const base = {
+      openCount: 1, pending: 10, overdue: 10, dueIn7Days: 0, dueIn7DaysCount: 0,
+      dueIn30Days: 0, dueIn30DaysCount: 0, noDueDate: 0, noDueDateCount: 0,
+    };
+    jest.mocked(getExpensePayables).mockResolvedValue({ rows: [], totals: [{ ...base, currency: 'USD', overdueCount: 1 }] });
+    const view = render(<ExpensesView token="t" />);
+    expect(await screen.findByTestId('expenses-due-soon')).toHaveTextContent('1 gasto vencido sin pagar');
+    view.unmount();
+    jest.mocked(getExpensePayables).mockResolvedValue({ rows: [], totals: [] });
+    render(<ExpensesView token="t" />);
+    await findRow();
+    expect(screen.queryByTestId('expenses-due-soon')).not.toBeInTheDocument();
   });
 
   it('sin horario explícito ofrece recuperar configuración y no consulta fechas inferidas del país', async () => {

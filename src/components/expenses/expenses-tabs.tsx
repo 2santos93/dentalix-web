@@ -2,10 +2,11 @@
 import * as React from 'react';
 import { TabBar } from '@/components/ui/tabs';
 
-export type ExpensesTabKey = 'gastos' | 'resumen';
+export type ExpensesTabKey = 'gastos' | 'proveedores' | 'resumen';
 
 const TABS: { key: ExpensesTabKey; label: string }[] = [
   { key: 'gastos', label: 'Gastos' },
+  { key: 'proveedores', label: 'Por proveedor' },
   { key: 'resumen', label: 'Resumen' },
 ];
 
@@ -15,7 +16,7 @@ const copy = {
 
 /** `?tab=` de la URL → pestaña (cualquier otro valor cae en «Gastos»). */
 export function resolveExpensesTab(value: string | null | undefined): ExpensesTabKey {
-  return value === 'resumen' ? 'resumen' : 'gastos';
+  return value === 'resumen' || value === 'proveedores' ? value : 'gastos';
 }
 
 export const expensesTabId = (key: ExpensesTabKey) => `expenses-tab-${key}`;
@@ -45,8 +46,8 @@ interface ExpensesTabsProps {
 }
 
 /**
- * Pestañas de los gastos (DX-274): «Gastos» (la lista) y «Resumen» (ingresos
- * contra gastos por mes). Mismo patrón ARIA que las de la Caja: activación
+ * Pestañas de los gastos (DX-274): «Gastos» (la lista), «Por proveedor» (las
+ * cuentas por pagar, DX-411) y «Resumen» (ingresos contra gastos por mes). Mismo patrón ARIA que las de la Caja: activación
  * manual, las flechas mueven el foco y Enter/Espacio (o el clic) eligen.
  */
 export function ExpensesTabs({ active, onChange }: ExpensesTabsProps) {
