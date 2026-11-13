@@ -14,7 +14,7 @@ import { moneyWithCode } from '../src/lib/format/sede-number';
  * e2e DX-410 — «Reportes» → «Rentabilidad», sin mocks, en una clínica nueva
  * (una sede en USD). Hace 3 días (dentro de «Últimos 30 días» sea cual sea el
  * reloj de la CI): un abono de USD 130, un gasto de Laboratorio de USD 45
- * pagado ese día y uno de Alquiler de USD 200 sin pagar.
+ * pagado ese día y uno de Mantenimiento de USD 200 sin pagar.
  *  - Caja: cobrado 130 − gastos pagados 45 = 85.
  *  - Devengo: producción 0 − gastos facturados 245 = −115.
  *  1. 1440 px: la base en la cabecera, la sede y el total, y el detalle de
@@ -102,7 +102,7 @@ test.beforeAll(async ({ request }) => {
     amount: 45,
     payment: { amount: 45, method: 'TRANSFER', paidOn: DAY },
   });
-  await expense({ category: 'Alquiler', supplier: `Inmobiliaria ${suffix}`, amount: 200 });
+  await expense({ category: 'Mantenimiento', supplier: `Servicio técnico ${suffix}`, amount: 200 });
 });
 
 async function openTab(page: Page, query = '&periodo=last_30_days'): Promise<void> {
@@ -129,7 +129,7 @@ test('1440 px: Caja por sede y total, con el detalle de cada importe', async ({ 
   // Por categoría: solo lo pagado en el período.
   const categories = page.getByRole('table', { name: 'Gastos por categoría en USD' });
   await expect(categories).toContainText('Laboratorio');
-  await expect(categories).not.toContainText('Alquiler');
+  await expect(categories).not.toContainText('Mantenimiento');
   await expect(page.getByRole('main')).not.toContainText(PATIENT_LAST_NAME);
   await expectNoHorizontalScroll(page);
   await shot(page, 'caja-1440');
@@ -152,7 +152,7 @@ test('Devengo: gastos por fecha de factura, pagados o no', async ({ page }) => {
   const sede = page.getByRole('table', { name: SUMMARY }).getByRole('row').filter({ hasText: locationName });
   await expect(sede).toContainText(money(245));
   await expect(sede).toContainText(money(-115));
-  await expect(page.getByRole('table', { name: 'Gastos por categoría en USD' })).toContainText('Alquiler');
+  await expect(page.getByRole('table', { name: 'Gastos por categoría en USD' })).toContainText('Mantenimiento');
   await shot(page, 'devengo-1440');
 });
 
