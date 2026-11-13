@@ -51,6 +51,7 @@ export function makePrescription(overrides: Partial<Prescription> = {}): Prescri
     safetyAlerts: [],
     safetyOverrideReason: null,
     contentHash: 'a'.repeat(64),
+    verificationCode: 'K7M3QH9XRT2W',
     voidedAt: null,
     voidedById: null,
     voidedByName: null,

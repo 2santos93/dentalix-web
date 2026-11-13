@@ -131,6 +131,8 @@ export interface Patient {
   whatsappOptInById?: string | null;
   reminderOptOutAt?: string | null;
   reminderOptOutSource?: components['schemas']['ReminderOptOutSource'] | null;
+  /** DX-497: idioma preferido (BCP 47); null = «Idioma de la clínica». */
+  preferredLanguage?: string | null;
   createdAt: string;
   updatedAt: string;
 }

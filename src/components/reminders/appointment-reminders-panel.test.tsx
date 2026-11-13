@@ -29,6 +29,8 @@ const item = (over: Partial<AppointmentReminderItem>): AppointmentReminderItem =
   failureReason: null,
   emailDelivery: null,
   sentToResponsible: false,
+  language: null,
+  languageFallbackFrom: null,
   current: true,
   ...over,
 });
@@ -220,5 +222,20 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
     });
     render(<AppointmentRemindersPanel clock={CLOCK} token="tok" appointmentId="appt-1" />);
     expect(await screen.findByText('Recordatorio enviado al responsable')).toBeInTheDocument();
+  });
+
+  it('DX-497: el registro dice el idioma del email y si no había traducción (ca → es)', async () => {
+    mockedGet.mockResolvedValue({
+      enabled: true,
+      leadHours: [48, 2],
+      patientBlocker: null,
+      items: [
+        item({ state: 'SENT', sentAt: '2026-10-14T14:00:00.000Z', language: 'es', languageFallbackFrom: 'ca' }),
+        item({ leadHours: 2, state: 'SENT', sentAt: '2026-10-16T12:00:00.000Z', language: 'en' }),
+      ],
+    });
+    render(<AppointmentRemindersPanel token="tok" appointmentId="a1" clock={CLOCK} />);
+    const notes = await screen.findAllByTestId('reminder-language');
+    expect(notes.map((n) => n.textContent)).toEqual(['sin traducción: ca → es', 'Enviado en English (en)']);
   });
 });

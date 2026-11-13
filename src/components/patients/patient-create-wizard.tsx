@@ -25,6 +25,8 @@ import { DOC_TYPES, docTypeOptionLabel, normalizeDocTypeLabel } from '@/lib/pati
 import { isEmailAddress } from '@/lib/format/email';
 import { DocTypeLabelField, docTypeLabelFieldError } from './doc-type-label-field';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
+import { usePatientLanguages } from '@/lib/patients/use-patient-languages';
+import { languageOptions } from '@/lib/patients/patient-languages';
 import { clearPrefillPhone, peekPrefillPhone } from '@/lib/patients/prefill-phone';
 import type { ClinicalHistoryValue } from '@/lib/clinical/clinical-types';
 import { ConditionSummaryText } from '@/components/clinical/condition-summary';
@@ -53,6 +55,9 @@ const copy = {
   emailLabel: 'Correo electrónico (opcional)',
   addressLabel: 'Dirección (opcional)',
   notesLabel: 'Notas (opcional)',
+  // DX-497.
+  languageLabel: 'Idioma de los mensajes',
+  languageHint: 'El recordatorio y la página para confirmar la cita le llegan en este idioma, si hay traducción.',
   requiredError: 'Nombre, apellido y tipo de documento son obligatorios para continuar.',
   summaryTitle: 'Resumen de la historia clínica',
   summaryAllergies: (n: number) => `Alergias registradas: ${n}`,
@@ -173,6 +178,9 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
+  // DX-497: '' = «Idioma de la clínica».
+  const patientLanguages = usePatientLanguages(token);
+  const [preferredLanguage, setPreferredLanguage] = useState('');
 
   const [history, setHistory] = useState<ClinicalHistoryValue>({});
 
@@ -257,6 +265,7 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
         ...(email.trim() ? { email: email.trim().toLowerCase() } : {}),
         ...(address.trim() ? { address: address.trim() } : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
+        ...(preferredLanguage ? { preferredLanguage } : {}),
         // `CreatePatientInput.medicalHistory` is typed as
         // `ClinicalHistoryValue` (patients-api.ts overrides the generated
         // field, whose nested shape Swagger can't introspect), so `history`
@@ -431,6 +440,24 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
                 onChange={(e) => setAddress(e.target.value)}
               />
             </FormField>
+
+            {/* DX-497: solo si la clínica ofrece más idiomas que el suyo. */}
+            {patientLanguages && patientLanguages.languages.length > 1 ? (
+              <FormField htmlFor="pcw-language" label={copy.languageLabel} hint={copy.languageHint}>
+                <NativeSelect
+                  id="pcw-language"
+                  name="preferredLanguage"
+                  value={preferredLanguage}
+                  onChange={(e) => setPreferredLanguage(e.target.value)}
+                >
+                  {languageOptions(patientLanguages.languages, patientLanguages.clinicLanguage).map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </FormField>
+            ) : null}
 
             <FormField htmlFor="pcw-notes" label={copy.notesLabel}>
               <Textarea

@@ -39,9 +39,9 @@ describe('documentos emitidos (DX-019)', () => {
   });
 
   it('la receta imprime su foto; sin foto, ningún dato fiscal', () => {
-    const { rerender } = render(<PrescriptionDocument format={null} prescription={makePrescriptionDocument({ clinicFiscal: FROZEN })} />);
+    const { rerender } = render(<PrescriptionDocument format={null} origin="https://demo.dentalix.app" prescription={makePrescriptionDocument({ clinicFiscal: FROZEN })} />);
     expect(screen.getByTestId('clinic-fiscal')).toHaveTextContent('Sonrisas S.A. · ID fiscal J-1');
-    rerender(<PrescriptionDocument format={null} prescription={makePrescriptionDocument({ clinicFiscal: null })} />);
+    rerender(<PrescriptionDocument format={null} origin="https://demo.dentalix.app" prescription={makePrescriptionDocument({ clinicFiscal: null })} />);
     expect(screen.queryByTestId('clinic-fiscal')).not.toBeInTheDocument();
   });
 });

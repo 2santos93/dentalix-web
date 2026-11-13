@@ -14,6 +14,10 @@ import {
 import { SectionError } from '@/components/errors/section-error';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { languageName } from '@/lib/patients/patient-languages';
+
+/** El idioma de la clínica (DX-497): un email en él no lleva nota de idioma. */
+const CLINIC_LANGUAGE = 'es';
 
 const copy = {
   heading: 'Recordatorios por email',
@@ -34,6 +38,9 @@ const copy = {
   previous: 'Para la hora anterior de la cita',
   // DX-203: un menor o un paciente sin email lo recibe su responsable.
   toResponsible: 'Recordatorio enviado al responsable',
+  // DX-497: idioma del email según el registro de envíos.
+  language: (name: string) => `Enviado en ${name}`,
+  noTranslation: (from: string, to: string) => `sin traducción: ${from} → ${to}`,
   delivery: {
     PENDING: 'Entregándose al correo del paciente',
     SENT: 'Entregado al proveedor de correo',
@@ -160,6 +167,15 @@ export function AppointmentRemindersPanel({ token, appointmentId, clock }: Appoi
                 {item.state === 'SENT' && item.sentToResponsible && (
                   <p className="text-xs text-ink">{copy.toResponsible}</p>
                 )}
+                {item.languageFallbackFrom && item.language ? (
+                  <p className="text-xs text-ink" data-testid="reminder-language">
+                    {copy.noTranslation(item.languageFallbackFrom, item.language)}
+                  </p>
+                ) : item.language && item.language !== CLINIC_LANGUAGE ? (
+                  <p className="text-xs text-muted" data-testid="reminder-language">
+                    {copy.language(languageName(item.language))}
+                  </p>
+                ) : null}
                 {extra && <p className="text-xs tabular-nums text-muted">{extra}</p>}
                 {!item.current && <p className="text-xs text-muted">{copy.previous}</p>}
               </li>
