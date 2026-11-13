@@ -13,6 +13,8 @@ import { TabBar } from '@/components/ui/tabs';
  */
 export const REPORT_TABS = [
   { key: 'comparar-sedes', label: 'Comparar sedes', roles: ['ADMIN'] },
+  // DX-410: ingresos − gastos por sede en base Caja o Devengo; administración (PROFITABILITY_REPORT_ROLES).
+  { key: 'rentabilidad', label: 'Rentabilidad', roles: ['ADMIN'] },
   { key: 'produccion', label: 'Producción por procedimiento', roles: ['ADMIN', 'DENTIST'] },
   // DX-399: lo cobrado que aún no cubre ningún ítem; los roles de cobro (UNALLOCATED_PAYMENTS_ROLES).
   { key: 'sin-imputar', label: 'Cobrado sin imputar', roles: ['ADMIN', 'RECEPTION'] },

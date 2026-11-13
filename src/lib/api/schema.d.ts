@@ -4650,6 +4650,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/profitability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rentabilidad por sede: ingresos − gastos en base Caja o Devengo
+         * @description Ingresos − gastos de cada sede que ve quien consulta (DX-089: un miembro restringido solo ve las suyas) y el «Total del grupo», que suma solo esas sedes. `basis=CASH` («Caja»): abonos no anulados − pagos de gastos no anulados, por fecha de pago. `basis=ACCRUAL` («Devengo»): producción realizada (precio − descuento de los ítems DONE, en la sede donde se realizaron) − gastos no anulados por fecha de factura, pagados o no. Días civiles en la zona de cada sede (DX-097). Gastos por categoría. Importes por moneda, sin convertir ni restar monedas distintas. `definition` trae la definición de la base (cabecera y «Cómo se calcula»). Sin datos de pacientes. La cabecera X-Location-Id no acota.
+         */
+        get: operations["ProfitabilityController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/profitability.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rentabilidad por sede en CSV (mismos filtros y definición)
+         * @description Ingresos − gastos de cada sede que ve quien consulta (DX-089: un miembro restringido solo ve las suyas) y el «Total del grupo», que suma solo esas sedes. `basis=CASH` («Caja»): abonos no anulados − pagos de gastos no anulados, por fecha de pago. `basis=ACCRUAL` («Devengo»): producción realizada (precio − descuento de los ítems DONE, en la sede donde se realizaron) − gastos no anulados por fecha de factura, pagados o no. Días civiles en la zona de cada sede (DX-097). Gastos por categoría. Importes por moneda, sin convertir ni restar monedas distintas. `definition` trae la definición de la base (cabecera y «Cómo se calcula»). Sin datos de pacientes. La cabecera X-Location-Id no acota. Por sede (y el total) y moneda: ingresos, una línea por categoría de gasto, total de gastos, resultado y margen, con la base en cada línea; UTF-8 con BOM; celdas protegidas contra fórmulas.
+         */
+        get: operations["ProfitabilityController_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/profitability/lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Detalle de una cifra: los movimientos que la forman
+         * @description Mismos filtros y alcance que el informe, más el lado (`INCOME`/`EXPENSE`), la moneda y, en los gastos, la categoría: los abonos, procedimientos realizados, pagos de gastos o gastos que suman la cifra, del más reciente al más antiguo, con el `total` de todas las filas. Sin `locationId`, las de todas las sedes visibles (la cifra del total del grupo). Sin datos de pacientes.
+         */
+        get: operations["ProfitabilityController_lines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/closing-queue": {
         parameters: {
             query?: never;
@@ -18189,6 +18249,159 @@ export interface components {
             totals: components["schemas"]["PatientLinkMetricsDto"][];
             /** @description Una entrada por sede visible (con zona horaria), por fecha de alta */
             locations: components["schemas"]["LocationPatientLinksDto"][];
+        };
+        ProfitabilityDefinitionDto: {
+            /** @enum {string} */
+            basis: "CASH" | "ACCRUAL";
+            /**
+             * @description Nombre de la base
+             * @example Caja
+             */
+            label: string;
+            /** @example Cobrado */
+            incomeLabel: string;
+            /** @example Gastos pagados */
+            expensesLabel: string;
+            /** @example Resultado = cobrado − gastos pagados, por fecha de pago. */
+            formula: string;
+            /** @description Las reglas de la base, una por línea («Cómo se calcula») */
+            howItIsCalculated: string[];
+        };
+        ProfitabilityCategoryDto: {
+            /**
+             * @description La categoría del gasto (foto del nombre al registrarlo)
+             * @example Laboratorio
+             */
+            category: string;
+            /** @example 120.5 */
+            amount: number;
+            /** @description Pagos de gastos (Caja) o gastos (Devengo) que la forman */
+            count: number;
+        };
+        ProfitabilityCurrencyDto: {
+            /** @description Código ISO 4217 de 3 letras */
+            currency: string;
+            /**
+             * @description Ingresos en esta moneda
+             * @example 1500
+             */
+            income: number;
+            /** @description Abonos (Caja) o procedimientos realizados (Devengo) que forman los ingresos */
+            incomeCount: number;
+            /**
+             * @description Gastos en esta moneda
+             * @example 600
+             */
+            expenses: number;
+            /** @description Pagos de gastos (Caja) o gastos (Devengo) */
+            expenseCount: number;
+            /**
+             * @description Ingresos − gastos; puede ser negativo
+             * @example 900
+             */
+            net: number;
+            /**
+             * @description Resultado ÷ ingresos en %, con 1 decimal; null sin ingresos (puede ser negativo)
+             * @example 60
+             */
+            margin: number | null;
+            /** @description Gastos por categoría, mayor primero */
+            categories: components["schemas"]["ProfitabilityCategoryDto"][];
+        };
+        ProfitabilityRowDto: {
+            /**
+             * Format: uuid
+             * @description null = el total del grupo
+             */
+            locationId: string | null;
+            /** @example Sede Chacao */
+            name: string;
+            /** @description false = sede desactivada */
+            isActive: boolean;
+            /**
+             * @description Zona de la sede; null en el total
+             * @example America/Caracas
+             */
+            timeZone: string | null;
+            /** @description Una entrada por moneda con movimientos (orden alfabético), nunca sumadas ni convertidas entre sí; vacía = sin movimientos en el período */
+            currencies: components["schemas"]["ProfitabilityCurrencyDto"][];
+        };
+        ProfitabilityReportDto: {
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+            /** @enum {string} */
+            basis: "CASH" | "ACCRUAL";
+            definition: components["schemas"]["ProfitabilityDefinitionDto"];
+            /** Format: uuid */
+            locationId: string | null;
+            /** @description El usuario solo ve algunas sedes (DX-089) */
+            restrictedToLocations: boolean;
+            /** @description Una fila por sede visible (o solo la pedida), en orden de creación, también sin movimientos */
+            locations: components["schemas"]["ProfitabilityRowDto"][];
+            /** @description «Total del grupo»: las sedes de `locations`, moneda a moneda */
+            total: components["schemas"]["ProfitabilityRowDto"];
+            /** @description ¿Algún ingreso o gasto en el período? */
+            hasActivity: boolean;
+        };
+        ProfitabilityLineDto: {
+            /**
+             * Format: uuid
+             * @description Id del abono, del ítem realizado, del pago del gasto (Caja) o del gasto (Devengo)
+             */
+            id: string;
+            /**
+             * @description Día civil: de pago (abono, en la zona de su sede; pago del gasto), de realización (procedimiento) o de factura (gasto)
+             * @example 2026-10-05
+             */
+            date: string;
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sede Chacao */
+            locationName: string;
+            /** @example 80 */
+            amount: number;
+            /**
+             * @description Abono: nº de recibo (o la referencia antigua REC-…). Procedimiento: código · nombre del catálogo. Gasto: proveedor o, sin él, descripción. Nunca el paciente.
+             * @example CCS-000123
+             */
+            concept: string | null;
+            /** @description Solo gastos: su categoría */
+            category: string | null;
+            /**
+             * @description Caja: el medio de pago
+             * @example Efectivo
+             */
+            method: string | null;
+            /**
+             * @description Solo gastos en Devengo: pagado, en parte o sin pagar (pagos vivos)
+             * @enum {string|null}
+             */
+            paymentStatus: "PAID" | "PARTIAL" | "UNPAID" | null;
+        };
+        ProfitabilityLinesDto: {
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+            /** @enum {string} */
+            basis: "CASH" | "ACCRUAL";
+            /** @enum {string} */
+            side: "INCOME" | "EXPENSE";
+            /** @description Código ISO 4217 de 3 letras */
+            currency: string;
+            /** Format: uuid */
+            locationId: string | null;
+            category: string | null;
+            /** @description Suma de TODAS las filas (no solo de la página): la cifra del informe */
+            total: number;
+            /** @description Filas en total */
+            count: number;
+            page: number;
+            pageSize: number;
+            /** @description De la más reciente a la más antigua */
+            lines: components["schemas"]["ProfitabilityLineDto"][];
         };
         /**
          * @description Las secciones que ve el rol: ADMIN las tres, DENTIST EVOLUTION y TREATMENT, RECEPTION OUTCOME
@@ -35272,6 +35485,141 @@ export interface operations {
             };
             /** @description LOCATION_TIMEZONE_REQUIRED: una sede con enlaces no tiene zona horaria válida */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProfitabilityController_get: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description `CASH` («Caja»): abonos vivos − pagos de gastos vivos, por fecha de pago. `ACCRUAL` («Devengo»): producción realizada − gastos no anulados por fecha de factura, pagados o no. */
+                basis: "CASH" | "ACCRUAL";
+                /** @description Solo esta sede (403 si no es de las del usuario, no es de la clínica o está retirada: la misma respuesta). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfitabilityReportDto"];
+                };
+            };
+            /** @description Período inválido o de más de 366 días; `basis`, `locationId`, `side`, `currency`, `category` o la página inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve la rentabilidad de las sedes. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProfitabilityController_csv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description `CASH` («Caja»): abonos vivos − pagos de gastos vivos, por fecha de pago. `ACCRUAL` («Devengo»): producción realizada − gastos no anulados por fecha de factura, pagados o no. */
+                basis: "CASH" | "ACCRUAL";
+                /** @description Solo esta sede (403 si no es de las del usuario, no es de la clínica o está retirada: la misma respuesta). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Período inválido o de más de 366 días; `basis`, `locationId`, `side`, `currency`, `category` o la página inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve la rentabilidad de las sedes. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProfitabilityController_lines: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description `CASH` («Caja»): abonos vivos − pagos de gastos vivos, por fecha de pago. `ACCRUAL` («Devengo»): producción realizada − gastos no anulados por fecha de factura, pagados o no. */
+                basis: "CASH" | "ACCRUAL";
+                /** @description Solo esta sede (403 si no es de las del usuario, no es de la clínica o está retirada: la misma respuesta). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description `INCOME`: lo que forma los ingresos; `EXPENSE`: los gastos */
+                side: "INCOME" | "EXPENSE";
+                /** @description La moneda de la cifra (ISO 4217) */
+                currency: string;
+                /** @description Solo con `side=EXPENSE`: la categoría de la cifra (el nombre tal como sale en el informe). Sin ella, todos los gastos. */
+                category?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfitabilityLinesDto"];
+                };
+            };
+            /** @description Período inválido o de más de 366 días; `basis`, `locationId`, `side`, `currency`, `category` o la página inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve la rentabilidad de las sedes. / sede fuera de las del usuario */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
