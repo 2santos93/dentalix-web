@@ -4,6 +4,7 @@
 # leen en RUNTIME: la misma imagen sirve en staging y en producción.
 #   docker build -t dentalix-web .
 #   docker run -p 3001:3001 -e API_URL=https://api.dentalix.app/api/v1 dentalix-web
+# Salud: GET /api/health. Keep-alive y apagado: ver `server-entry.cjs` (DX-458).
 
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
@@ -38,6 +39,17 @@ COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
 # SEC-062: quita `x-middleware-rewrite` (la URL interna de la API) de las respuestas.
 COPY scripts/docker/strip-middleware-rewrite.cjs ./strip-middleware-rewrite.cjs
+# DX-458 (OPS-054): arranque que envuelve `server.js`: keep-alive y cabeceras
+# por encima del balanceador y apagado ordenado con SIGTERM (detalle en el
+# fichero). Todo por entorno, en ms; por defecto:
+#   HTTP_KEEP_ALIVE_TIMEOUT_MS=65000  (> 60 s de inactividad del balanceador)
+#   HTTP_HEADERS_TIMEOUT_MS=66000     (keep-alive + 1 s)
+#   SHUTDOWN_DRAIN_MS=15000           (salud en 503 atendiendo, antes de cerrar)
+#   SHUTDOWN_TIMEOUT_MS=25000         (tope para las peticiones en vuelo)
+# Sonda: GET /api/health. El periodo de gracia del orquestador tiene que ser
+# mayor que drenaje + tope (40 s): `docker stop -t 45`, o
+# `terminationGracePeriodSeconds: 45` en Kubernetes.
+COPY scripts/docker/server-entry.cjs ./server-entry.cjs
 USER node
 EXPOSE 3001
-CMD ["node", "server.js"]
+CMD ["node", "server-entry.cjs"]
