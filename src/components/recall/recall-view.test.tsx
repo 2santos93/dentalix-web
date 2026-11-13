@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { ApiError } from '@/lib/api/client';
 import {
   createDefaultPatientRecall,
+  createRecallContact,
   listRecallDue,
   listRecallTypes,
   listRecallUnconfigured,
@@ -22,6 +23,27 @@ import { STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('../../lib/clinic-branding', () => ({ fetchClinicName: jest.fn().mockResolvedValue('Clínica Sol') }));
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+// «Agendar» tiene sus tests (recall-schedule-dialog.test.tsx): aquí, qué le llega.
+jest.mock('./recall-schedule-dialog', () => ({
+  RecallScheduleDialog: (props: {
+    appointmentTypeId?: string | null;
+    defaultChannel?: string;
+    note?: string;
+    onCreated: (a: { id: string }) => void;
+  }) => (
+    <div
+      role="dialog"
+      aria-label="Agendar cita"
+      data-type={props.appointmentTypeId ?? ''}
+      data-channel={props.defaultChannel ?? ''}
+      data-note={props.note ?? ''}
+    >
+      <button type="button" onClick={() => props.onCreated({ id: 'ap-1' })}>
+        Crear cita
+      </button>
+    </div>
+  ),
+}));
 jest.mock('../../lib/recall/recall-api', () => ({
   listRecallDue: jest.fn(),
   listRecallTypes: jest.fn(),
@@ -46,7 +68,7 @@ const TYPES: RecallType[] = [
   defaultIntervalMonths: months as number,
   active: id !== 't-old',
   exclusionGroup: null,
-  appointmentTypeId: null,
+  appointmentTypeId: id === 't-ctl' ? 'a-val' : null,
   triggerCatalogItemIds: [],
   triggers: [],
 }));
@@ -150,6 +172,51 @@ describe('RecallView (DX-015)', () => {
     expect(within(row).queryByRole('link', { name: /Llamar|WhatsApp/ })).not.toBeInTheDocument();
     await userEvent.click(within(row).getByRole('button', { name: 'Acciones de Ana Pérez' }));
     expect(await screen.findByRole('menuitem', { name: recallCopy.schedule })).toBeInTheDocument();
+  });
+
+  describe('«Agendó» (DX-015-bis-4, D21–D23)', () => {
+    async function openMenu(name: string) {
+      const row = (await screen.findByText('Ana Pérez')).closest('tr')!;
+      await userEvent.click(within(row).getByRole('button', { name: 'Acciones de Ana Pérez' }));
+      await userEvent.click(await screen.findByRole('menuitem', { name }));
+    }
+
+    it('«Agendar» pasa el tipo de cita del tipo de recall de la fila (una sola lectura de tipos)', async () => {
+      mockedList.mockResolvedValue(page([item(), item({ recallId: 'r2', patientName: 'Luis Gómez', recallTypeId: 't-hyg' })]));
+      render(<RecallView token="tok" />);
+      await waitFor(() => expect(mockedTypes).toHaveBeenCalledTimes(1));
+      await openMenu(recallCopy.schedule);
+      const dialog = await screen.findByRole('dialog', { name: 'Agendar cita' });
+      expect(dialog).toHaveAttribute('data-type', 'a-val');
+      expect(dialog).toHaveAttribute('data-channel', '');
+      expect(mockedTypes).toHaveBeenCalledTimes(1);
+    });
+
+    it('«Registrar contacto» con «Agendó» no guarda: abre «Agendar» con el canal y la nota', async () => {
+      const user = userEvent.setup();
+      mockedList.mockResolvedValue(page([item()]));
+      render(<RecallView token="tok" />);
+      await openMenu(recallCopy.register);
+      const contact = await screen.findByRole('dialog', { name: 'Registrar contacto' });
+      await user.selectOptions(within(contact).getByLabelText('Canal'), 'WHATSAPP_LINK');
+      await user.selectOptions(within(contact).getByLabelText('Resultado'), 'BOOKED');
+      expect(within(contact).queryByRole('button', { name: 'Guardar contacto' })).not.toBeInTheDocument();
+      await user.type(within(contact).getByLabelText('Nota (opcional)'), 'Prefiere la tarde');
+      await user.click(within(contact).getByRole('button', { name: 'Agendar cita…' }));
+
+      const schedule = await screen.findByRole('dialog', { name: 'Agendar cita' });
+      expect(schedule).toHaveAttribute('data-channel', 'WHATSAPP_LINK');
+      expect(schedule).toHaveAttribute('data-note', 'Prefiere la tarde');
+      expect(schedule).toHaveAttribute('data-type', 'a-val');
+      expect(createRecallContact).not.toHaveBeenCalled();
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Registrar contacto' })).not.toBeInTheDocument());
+
+      const calls = mockedList.mock.calls.length;
+      await user.click(within(schedule).getByRole('button', { name: 'Crear cita' }));
+      expect(await screen.findByText(recallCopy.scheduled('Ana Pérez'))).toBeInTheDocument();
+      expect(screen.queryByRole('dialog', { name: 'Agendar cita' })).not.toBeInTheDocument();
+      await waitFor(() => expect(mockedList.mock.calls.length).toBeGreaterThan(calls));
+    });
   });
 
   it('filtra por tipo (los de la clínica), ventana y orden, volviendo a la página 1', async () => {

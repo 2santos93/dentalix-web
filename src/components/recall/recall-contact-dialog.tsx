@@ -33,6 +33,9 @@ export const contactDialogCopy = {
   counter: (n: number) => `${n}/${RECALL_NOTE_MAX}`,
   clinicalWarning: 'No escribas datos clínicos (diagnósticos, tratamientos, medicación): solo lo hablado sobre la cita.',
   submit: 'Guardar contacto',
+  // D23: «Agendó» no se guarda sin cita: sigue en «Agendar».
+  submitBooked: 'Agendar cita…',
+  bookedHint: 'El contacto se guarda al agendar la cita, con este canal y esta nota.',
   channelRequired: 'Elige el canal del contacto.',
   outcomeRequired: 'Elige el resultado del contacto.',
   noteTooLong: `La nota admite hasta ${RECALL_NOTE_MAX} caracteres.`,
@@ -40,7 +43,11 @@ export const contactDialogCopy = {
 };
 const copy = contactDialogCopy;
 
-/** «Registrar contacto» (DX-015): canal, resultado y nota corta. Append-only. */
+/**
+ * «Registrar contacto» (DX-015): canal, resultado y nota corta. Append-only.
+ * Con «Agendó» (D23) no guarda nada: pasa el canal y la nota a `onBook`, que
+ * abre «Agendar»; el contacto se registra con la cita creada.
+ */
 export function RecallContactDialog({
   open,
   onOpenChange,
@@ -48,6 +55,7 @@ export function RecallContactDialog({
   recallId,
   patientName,
   onSaved,
+  onBook,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -55,6 +63,8 @@ export function RecallContactDialog({
   recallId: string;
   patientName: string;
   onSaved: (contact: RecallContact) => void;
+  /** Sin él (la ficha) no se ofrece «Agendó»: no hay desde dónde agendar. */
+  onBook?: (draft: { channel: RecallContactChannel; note: string }) => void;
 }) {
   const [channel, setChannel] = useState<RecallContactChannel | ''>('');
   const [outcome, setOutcome] = useState<RecallContactOutcome | ''>('');
@@ -84,6 +94,10 @@ export function RecallContactDialog({
     if (note.trim().length > RECALL_NOTE_MAX) next.note = copy.noteTooLong;
     setErrors(next);
     if (Object.keys(next).length > 0 || !channel || !outcome) return;
+    if (outcome === 'BOOKED' && onBook) {
+      onBook({ channel, note: note.trim() });
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -109,7 +123,7 @@ export function RecallContactDialog({
       title={copy.title}
       description={copy.description(patientName)}
       onSubmit={(e) => void submit(e)}
-      submitLabel={copy.submit}
+      submitLabel={outcome === 'BOOKED' ? copy.submitBooked : copy.submit}
       submitting={submitting}
       error={submitError}
     >
@@ -136,10 +150,12 @@ export function RecallContactDialog({
             value={outcome}
             onChange={(e) => setOutcome(e.target.value as RecallContactOutcome | '')}
             aria-invalid={errors.outcome ? true : undefined}
-            aria-describedby={errors.outcome ? fieldErrorId('rc-outcome') : undefined}
+            aria-describedby={
+              cn(outcome === 'BOOKED' && 'rc-outcome-booked', errors.outcome && fieldErrorId('rc-outcome')) || undefined
+            }
           >
             <option value="">{copy.choose}</option>
-            {OUTCOME_ORDER.map((o) => (
+            {OUTCOME_ORDER.filter((o) => o !== 'BOOKED' || onBook).map((o) => (
               <option key={o} value={o}>
                 {OUTCOME_LABELS[o]}
               </option>
@@ -147,6 +163,11 @@ export function RecallContactDialog({
           </NativeSelect>
         </FormField>
       </div>
+      {outcome === 'BOOKED' ? (
+        <p id="rc-outcome-booked" className="text-sm text-muted">
+          {copy.bookedHint}
+        </p>
+      ) : null}
       <FormField htmlFor="rc-note" label={copy.note} error={errors.note}>
         <Callout id="rc-note-warning" tone="warning" role="note" icon={ShieldAlert}>
           {copy.clinicalWarning}

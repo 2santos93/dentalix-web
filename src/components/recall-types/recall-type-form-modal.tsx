@@ -10,6 +10,9 @@ import {
   type UpdateRecallTypeInput,
 } from '@/lib/recall/recall-api';
 import { currentPartnerId, planExclusion } from '@/lib/recall/recall-exclusion';
+import { linkedAppointmentType } from '@/lib/recall/recall-appointment-type';
+import type { AppointmentType } from '@/lib/appointments/appointment-types-api';
+import { FieldError } from '@/components/errors/field-error';
 import { notifyError } from '@/components/errors/notify';
 import { FormField } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
@@ -40,6 +43,12 @@ export const recallTypeFormCopy = {
   // D10: el grupo se aplica en el próximo DONE o PUT, nunca en el acto.
   exclusiveHint:
     'Un paciente no tiene los dos activos: manda el último procedimiento. Se aplica al próximo procedimiento de cada paciente; no cambia los recalls de hoy.',
+  // D20: el tipo de cita con el que «Agendar» de la lista de recall prellena la cita.
+  appointmentType: 'Tipo de cita al agendar',
+  appointmentTypeHint: 'Al agendar desde la lista de recall, la cita sale con este tipo y su duración.',
+  appointmentTypesLoading: 'Cargando tipos de cita…',
+  appointmentTypesError: 'No se pudieron cargar',
+  retiredAppointmentType: 'Un tipo de cita retirado',
   create: 'Crear tipo',
   save: 'Guardar cambios',
   invalidName: `Escribe un nombre (hasta ${RECALL_TYPE_NAME_MAX} caracteres).`,
@@ -74,6 +83,35 @@ async function saveTriggers(
   }
 }
 
+/**
+ * D20: «Ninguno» y los tipos de cita activos. El que ya tenía el tipo de
+ * recall se ofrece aunque ya no esté activo, para no perderlo al guardar otra
+ * cosa (la API acepta volver a mandarlo).
+ */
+function appointmentTypeOptions(
+  appointmentTypes: readonly AppointmentType[] | 'loading',
+  currentId: string,
+): React.ReactNode {
+  if (appointmentTypes === 'loading') {
+    return <option value={currentId}>{copy.appointmentTypesLoading}</option>;
+  }
+  const linked = linkedAppointmentType(currentId || null, appointmentTypes);
+  return (
+    <>
+      <option value="">{copy.none}</option>
+      {appointmentTypes
+        .filter((t) => t.active)
+        .map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+          </option>
+        ))}
+      {linked.kind === 'inactive' ? <option value={currentId}>{copy.inactiveOption(linked.name)}</option> : null}
+      {linked.kind === 'missing' ? <option value={currentId}>{copy.retiredAppointmentType}</option> : null}
+    </>
+  );
+}
+
 function sameSet(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((id) => b.includes(id));
 }
@@ -88,6 +126,9 @@ interface RecallTypeFormModalProps {
   types: readonly RecallType[];
   /** Los tipos que cambiaron (el propio y, si se tocó, el otro de la exclusión). */
   onSaved: (types: RecallType[]) => void;
+  /** D20: los tipos de cita de la clínica (activos e inactivos). */
+  appointmentTypes: readonly AppointmentType[] | 'loading' | 'failed';
+  onRetryAppointmentTypes: () => void;
 }
 
 /**
@@ -102,7 +143,16 @@ interface RecallTypeFormModalProps {
  * 3. sus disparadores (`PUT …/triggers`), con aviso y reintento si fallan.
  * El padre lo monta con una `key` por apertura.
  */
-export function RecallTypeFormModal({ open, onOpenChange, token, type, types, onSaved }: RecallTypeFormModalProps) {
+export function RecallTypeFormModal({
+  open,
+  onOpenChange,
+  token,
+  type,
+  types,
+  onSaved,
+  appointmentTypes,
+  onRetryAppointmentTypes,
+}: RecallTypeFormModalProps) {
   const editing = type !== null;
   const initialPartner = currentPartnerId(type, types) ?? '';
   const initialTriggers = type?.triggerCatalogItemIds ?? [];
@@ -111,6 +161,8 @@ export function RecallTypeFormModal({ open, onOpenChange, token, type, types, on
   const [active, setActive] = useState(type?.active ?? true);
   const [partnerId, setPartnerId] = useState(initialPartner);
   const [triggerIds, setTriggerIds] = useState<string[]>(initialTriggers);
+  const initialAppointmentTypeId = type?.appointmentTypeId ?? '';
+  const [appointmentTypeId, setAppointmentTypeId] = useState(initialAppointmentTypeId);
   const [nameError, setNameError] = useState<string | null>(null);
   const [monthsError, setMonthsError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -140,6 +192,8 @@ export function RecallTypeFormModal({ open, onOpenChange, token, type, types, on
       defaultIntervalMonths: n,
       active,
       ...(plan.selfGroup !== undefined ? { exclusionGroup: plan.selfGroup } : {}),
+      // Solo si cambió: un enlace que se desactivó después se conserva sin tocarlo.
+      ...(appointmentTypeId !== initialAppointmentTypeId ? { appointmentTypeId: appointmentTypeId || null } : {}),
     };
     setSubmitting(true);
     if (plan.partnerPatch) {
@@ -226,6 +280,24 @@ export function RecallTypeFormModal({ open, onOpenChange, token, type, types, on
             </option>
           ))}
         </NativeSelect>
+      </FormField>
+      <FormField htmlFor="rt-appointment-type" label={copy.appointmentType} hint={copy.appointmentTypeHint}>
+        {appointmentTypes === 'failed' ? (
+          <FieldError
+            label={copy.appointmentTypesError}
+            onRetry={onRetryAppointmentTypes}
+            className="h-10 w-full"
+          />
+        ) : (
+          <NativeSelect
+            id="rt-appointment-type"
+            value={appointmentTypeId}
+            disabled={appointmentTypes === 'loading'}
+            onChange={(e) => setAppointmentTypeId(e.target.value)}
+          >
+            {appointmentTypeOptions(appointmentTypes, initialAppointmentTypeId)}
+          </NativeSelect>
+        )}
       </FormField>
       <RecallTriggersField token={token} current={type?.triggers ?? []} value={triggerIds} onChange={setTriggerIds} />
     </FormModal>

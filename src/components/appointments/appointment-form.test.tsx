@@ -318,6 +318,28 @@ describe('AppointmentForm', () => {
       expect(mockedListTypes).toHaveBeenCalledWith('tok');
     });
 
+    // DX-015-bis (D21): el tipo del tipo de recall, como si se eligiera a mano.
+    it('prellena el tipo por defecto si está activo, con su hora de fin', async () => {
+      render(
+        <AppointmentForm
+          token="tok"
+          onCreated={jest.fn()}
+          defaultDate={FUTURE_DATE}
+          defaultStartTime="09:00"
+          defaultAppointmentTypeId="type-endo"
+        />,
+      );
+      await screen.findByRole('option', { name: 'Endodoncia · 90 min' });
+      await waitFor(() => expect(screen.getByLabelText(/tipo de cita/i)).toHaveValue('type-endo'));
+      expect(readTime(/hora de fin/i)).toBe('10:30');
+    });
+
+    it('ignora el tipo por defecto si ya no está entre los activos', async () => {
+      render(<AppointmentForm token="tok" onCreated={jest.fn()} defaultAppointmentTypeId="type-retirado" />);
+      await screen.findByRole('option', { name: 'Endodoncia · 90 min' });
+      expect(screen.getByLabelText(/tipo de cita/i)).toHaveValue('');
+    });
+
     it('prefija el profesional desde la columna', async () => {
       render(<AppointmentForm token="tok" onCreated={jest.fn()} defaultProviderId="staff-2" />);
       await screen.findByRole('option', { name: /dr\. luis gómez/i });

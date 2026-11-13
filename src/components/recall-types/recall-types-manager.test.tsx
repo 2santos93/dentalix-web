@@ -9,6 +9,7 @@ import {
   type RecallType,
 } from '@/lib/recall/recall-api';
 import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catalog-api';
+import { listAppointmentTypes, type AppointmentType } from '@/lib/appointments/appointment-types-api';
 import { ApiError } from '@/lib/api/client';
 import { notifyError } from '@/components/errors/notify';
 import { setupUser } from '@/lib/test/user';
@@ -22,6 +23,7 @@ jest.mock('../../lib/recall/recall-api', () => ({
   setRecallTypeTriggers: jest.fn(),
 }));
 jest.mock('../../lib/odontogram/catalog-api', () => ({ listCatalogItems: jest.fn() }));
+jest.mock('../../lib/appointments/appointment-types-api', () => ({ listAppointmentTypes: jest.fn() }));
 jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 
 const mockedList = jest.mocked(listRecallTypes);
@@ -31,6 +33,20 @@ const mockedRetire = jest.mocked(retireRecallType);
 const mockedTriggers = jest.mocked(setRecallTypeTriggers);
 const mockedCatalog = jest.mocked(listCatalogItems);
 const mockedNotify = jest.mocked(notifyError);
+const mockedApptTypes = jest.mocked(listAppointmentTypes);
+
+const apptType = (id: string, name: string, active = true): AppointmentType => ({
+  id,
+  tenantId: 't1',
+  name,
+  durationMinutes: 45,
+  color: '#0E7490',
+  active,
+  isUrgent: false,
+  createdAt: '2026-10-01T00:00:00.000Z',
+  updatedAt: '2026-10-01T00:00:00.000Z',
+});
+const APPT_TYPES = [apptType('a-val', 'Valoración'), apptType('a-lim', 'Limpieza'), apptType('a-old', 'Blanqueamiento', false)];
 
 const type = (over: Partial<RecallType> & Pick<RecallType, 'id' | 'name'>): RecallType => ({
   defaultIntervalMonths: 6,
@@ -103,6 +119,7 @@ describe('RecallTypesManager (DX-015-bis)', () => {
     jest.spyOn(crypto, 'randomUUID').mockReturnValue('test0001-0000-4000-8000-000000000000');
     mockedList.mockResolvedValue(TYPES);
     mockedCatalog.mockResolvedValue(CATALOG);
+    mockedApptTypes.mockResolvedValue(APPT_TYPES);
   });
 
   it('solo ADMIN: otro rol ve el aviso y no se pide nada', () => {
@@ -384,5 +401,86 @@ describe('RecallTypesManager (DX-015-bis)', () => {
   it('mergeRecallTypes sustituye en su sitio y añade al final', () => {
     const merged = mergeRecallTypes(TYPES, [{ ...ctl, name: 'Control anual' }, type({ id: 't-new', name: 'Nuevo' })]);
     expect(merged.map((t) => t.name)).toEqual(['Higiene', 'Control anual', 'Mantenimiento periodontal', 'Nuevo']);
+  });
+
+  describe('tipo de cita al agendar (D20)', () => {
+    it('la lista enseña el enlazado: activo, «(inactivo)», «—» si se retiró y «Ninguno» sin enlace', async () => {
+      mockedList.mockResolvedValue([
+        { ...hyg, appointmentTypeId: 'a-lim' },
+        { ...ctl, appointmentTypeId: 'a-old' },
+        { ...perio, appointmentTypeId: 'a-gone' },
+        type({ id: 't-x', name: 'Ortodoncia', sortOrder: 40 }),
+      ]);
+      render(<RecallTypesManager token="tok" allowed />);
+      const t = await table();
+      expect(mockedApptTypes).toHaveBeenCalledWith('tok', { includeInactive: true });
+      await waitFor(() => expect(rowOf(t, 'Higiene')).toHaveTextContent('Limpieza'));
+      expect(rowOf(t, 'Control')).toHaveTextContent('Blanqueamiento (inactivo)');
+      expect(within(rowOf(t, 'Mantenimiento periodontal')).getAllByRole('cell')[3]).toHaveTextContent('—');
+      expect(within(rowOf(t, 'Ortodoncia')).getAllByRole('cell')[3]).toHaveTextContent('Ninguno');
+    });
+
+    it('el modal ofrece «Ninguno» y los activos, y lo guarda en el mismo PATCH', async () => {
+      const user = setupUser();
+      mockedUpdate.mockResolvedValue({ ...ctl, appointmentTypeId: 'a-val' });
+      render(<RecallTypesManager token="tok" allowed />);
+      const t = await table();
+      await user.click(primaryOf(t, 'Control'));
+      const dialog = await screen.findByRole('dialog');
+      const select = within(dialog).getByLabelText('Tipo de cita al agendar');
+      await waitFor(() => expect(select).toBeEnabled());
+      expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(['Ninguno', 'Valoración', 'Limpieza']);
+      expect(select).toHaveValue('');
+      await user.selectOptions(select, 'a-val');
+      await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+      await waitFor(() =>
+        expect(mockedUpdate).toHaveBeenCalledWith('tok', 't-ctl', {
+          name: 'Control',
+          defaultIntervalMonths: 12,
+          active: true,
+          appointmentTypeId: 'a-val',
+        }),
+      );
+      await waitFor(() => expect(rowOf(t, 'Control')).toHaveTextContent('Valoración'));
+    });
+
+    it('un enlace ya inactivo se ofrece como «(inactivo)» y no viaja si no se toca; «Ninguno» lo quita', async () => {
+      const user = setupUser();
+      const linked = { ...ctl, appointmentTypeId: 'a-old' };
+      mockedList.mockResolvedValue([hyg, linked, perio]);
+      mockedUpdate.mockResolvedValue(linked);
+      render(<RecallTypesManager token="tok" allowed />);
+      const t = await table();
+      await user.click(primaryOf(t, 'Control'));
+      let dialog = await screen.findByRole('dialog');
+      let select = within(dialog).getByLabelText('Tipo de cita al agendar');
+      await waitFor(() => expect(select).toHaveValue('a-old'));
+      expect(within(select).getByRole('option', { name: 'Blanqueamiento (inactivo)' })).toBeInTheDocument();
+      await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+      await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+      expect(mockedUpdate.mock.calls[0][2]).not.toHaveProperty('appointmentTypeId');
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await user.click(primaryOf(t, 'Control'));
+      dialog = await screen.findByRole('dialog');
+      select = within(dialog).getByLabelText('Tipo de cita al agendar');
+      await user.selectOptions(select, '');
+      await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+      await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(2));
+      expect(mockedUpdate.mock.calls[1][2]).toMatchObject({ appointmentTypeId: null });
+    });
+
+    it('si no cargan los tipos de cita, el campo da «Reintentar» y el resto del modal sigue', async () => {
+      const user = setupUser();
+      mockedApptTypes.mockRejectedValueOnce(new ApiError(500, 'Caído'));
+      render(<RecallTypesManager token="tok" allowed />);
+      const t = await table();
+      await user.click(primaryOf(t, 'Control'));
+      const dialog = await screen.findByRole('dialog');
+      const retry = await within(dialog).findByRole('button', { name: /reintentar/i });
+      await user.click(retry);
+      await waitFor(() => expect(within(dialog).getByLabelText('Tipo de cita al agendar')).toBeEnabled());
+      expect(mockedApptTypes).toHaveBeenCalledTimes(2);
+    });
   });
 });
