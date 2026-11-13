@@ -142,6 +142,9 @@ jobs:
   # arranca contra dos APIs (falsas) distintas cambiando solo API_URL y
   # FILES_ORIGIN: el proxy /api/v1 llega a cada una, el origen de la URL
   # `inline` de un documento está en la CSP servida, y sin API_URL no arranca.
+  # DX-458: además, /api/health, el keep-alive de 65 s y el apagado ordenado
+  # con SIGTERM (drenaje, conexiones nuevas rechazadas, petición en vuelo
+  # terminada, y corte con código 1 si vence el tope).
   docker-image:
     name: Imagen Docker (build y humo con dos APIs)
     runs-on: ubuntu-24.04
@@ -157,6 +160,6 @@ jobs:
       - name: Sin .env y sin root en la imagen
         run: |
           docker run --rm dentalix-web:ci sh -c '
-            test "$(id -u)" != 0 && ! ls -a /app | grep -q "^\.env" && test -f server.js'
+            test "$(id -u)" != 0 && ! ls -a /app | grep -q "^\.env" && test -f server.js && test -f server-entry.cjs'
       - name: Prueba de humo con dos URLs de API
         run: scripts/docker-smoke/web.sh dentalix-web:ci

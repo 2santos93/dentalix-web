@@ -51,7 +51,21 @@ origen público. Si algún día la API pasa a ser privada (solo detrás del
 web, también en emails y PDF, y quitar `apiOrigin` de `img-src`.
 
 Imagen de producción: `Dockerfile` (`output: 'standalone'`); runbook en
-`dentalix-docs/docs/operacion/despliegue.md`.
+`dentalix-docs/docs/operacion/despliegue.md`. La imagen arranca con
+`scripts/docker/server-entry.cjs` (DX-458), que envuelve el `server.js` de Next:
+
+| Variable (ms) | Para qué | Por defecto |
+|---|---|---|
+| `HTTP_KEEP_ALIVE_TIMEOUT_MS` | Inactividad tras la que la web cierra una conexión keep-alive; MAYOR que la del balanceador (60 s típicos), o hay 502 esporádicos | `65000` |
+| `HTTP_HEADERS_TIMEOUT_MS` | Plazo para recibir las cabeceras; mayor que el keep-alive | keep-alive + `1000` |
+| `SHUTDOWN_DRAIN_MS` | Con SIGTERM, `/api/health` da 503 y la web sigue atendiendo este tiempo antes de cerrar | `15000` |
+| `SHUTDOWN_TIMEOUT_MS` | Tope para terminar las peticiones en vuelo tras cerrar; vencido, las corta y sale con 1 | `25000` |
+
+Con valores inválidos la imagen no arranca y dice por qué. Sonda:
+`GET /api/health` → `200 {"status":"ok"}` (503 `{"status":"draining"}` al
+apagar); no llama a la API ni pasa por `src/proxy.ts`. El periodo de gracia
+del orquestador tiene que ser mayor que drenaje + tope (45 s con los valores
+por defecto).
 
 ## Marca de la clínica en el servidor (DX-517-ter)
 
