@@ -56,7 +56,9 @@ function proxyToApi(req: NextRequest): NextResponse {
  * DX-243: lo mismo para la firma a distancia (`/firmar/<token>`), que tras el
  * código muestra el consentimiento. DX-435: y para la oferta de hueco
  * (`/hueco/<token>`), cuyo token de un solo uso reserva una cita. DX-443: y
- * para la copia del PDF firmado (`/copia/<token>`), de un solo uso.
+ * para la copia del PDF firmado (`/copia/<token>`), de un solo uso. DX-467: y
+ * para la verificación de una receta (`/receta/<código>`): sin caché, anularla
+ * se ve en la carga siguiente, y sin indexar.
  */
 export const HEALTH_FORM_HEADERS: Record<string, string> = {
   'Referrer-Policy': 'no-referrer',
@@ -64,7 +66,7 @@ export const HEALTH_FORM_HEADERS: Record<string, string> = {
   'X-Robots-Tag': 'noindex, nofollow',
 };
 
-const HEALTH_FORM_PREFIXES = ['/anamnesis', '/firmar', '/hueco', '/copia'];
+const HEALTH_FORM_PREFIXES = ['/anamnesis', '/firmar', '/hueco', '/copia', '/receta'];
 
 function isHealthFormPath(pathname: string): boolean {
   return HEALTH_FORM_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));

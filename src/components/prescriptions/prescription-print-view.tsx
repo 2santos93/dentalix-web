@@ -129,7 +129,8 @@ export function PrescriptionPrintView({
               </div>
             ) : null}
             <div className="mx-auto max-w-[210mm] shadow-sm print:shadow-none">
-              <PrescriptionDocument prescription={data} format={format} />
+              {/* Solo en el cliente: `data` llega tras el fetch, nunca en el render del servidor. */}
+              <PrescriptionDocument prescription={data} format={format} origin={window.location.origin} />
             </div>
           </>
         ) : forbidden ? (

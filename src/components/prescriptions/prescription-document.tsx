@@ -1,9 +1,14 @@
 import { ClinicFiscalLines } from '@/components/brand/clinic-fiscal-lines';
 import * as React from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import type { PrescriptionDocument as PrescriptionDoc } from '@/lib/prescriptions/prescriptions-api';
 import type { PrescriptionFormat } from '@/lib/prescriptions/prescription-format';
 import { legacyPrescriptionLayout } from '@/lib/prescriptions/legacy-prescription-layout';
 import { neutralPrescriptionLayout } from '@/lib/prescriptions/prescription-layout';
+import {
+  formatVerificationCode,
+  prescriptionVerificationUrl,
+} from '@/lib/prescriptions/prescription-verification';
 
 /** Lo que depende del formato de la sede y no lo tiene (R11): nunca otro formato. */
 const MISSING = '—';
@@ -38,6 +43,10 @@ const copy = {
     `Anulada el ${when} por ${who}. Motivo: ${reason}. No es válida para dispensar.`,
   unknownUser: 'un usuario',
   footerHash: 'Huella SHA-256 del contenido emitido',
+  verifyHeading: 'Verificar esta receta',
+  verifyCode: 'Código',
+  verifyHint: (url: string) => `Escanee el código QR o abra ${url}`,
+  verifyQr: 'Código QR para verificar la receta',
   tampered:
     'La huella no coincide con el contenido guardado: esta receta pudo alterarse fuera de Dentalix.',
 };
@@ -55,6 +64,49 @@ interface PrescriptionDocumentProps {
   prescription: PrescriptionDoc;
   /** El formato de la sede de la receta (`prescriptionFormat`); `null` → «—» en fechas. */
   format: PrescriptionFormat | null;
+  /**
+   * DX-467: origen de la web de la clínica (el host desde el que se imprime),
+   * para el QR que lleva a `/receta/<código>`. La API resuelve la clínica por
+   * el host, así que el QR apunta al mismo.
+   */
+  origin: string;
+}
+
+/**
+ * DX-467: el código de verificación y su QR. Quien recibe la receta (una
+ * farmacia) lo escanea o abre la dirección y ve si es válida o está anulada.
+ */
+function VerificationStamp({ code, origin }: { code: string; origin: string }) {
+  const url = prescriptionVerificationUrl(origin, code);
+  const shownUrl = url.replace(/^https?:\/\//, '');
+  return (
+    <section
+      aria-label={copy.verifyHeading}
+      data-testid="prescription-verification"
+      className="prescription-verification flex items-center gap-3"
+    >
+      <QRCodeSVG
+        value={url}
+        size={76}
+        level="M"
+        marginSize={0}
+        title={copy.verifyQr}
+        className="shrink-0"
+        data-testid="prescription-verification-qr"
+        data-value={url}
+      />
+      <div className="min-w-0 text-xs text-[#4b5563]">
+        <p className="font-semibold text-[#111827]">{copy.verifyHeading}</p>
+        <p>
+          {copy.verifyCode}:{' '}
+          <span className="font-mono text-sm font-semibold tracking-wider text-[#111827]">
+            {formatVerificationCode(code)}
+          </span>
+        </p>
+        <p className="break-all">{copy.verifyHint(shownUrl)}</p>
+      </div>
+    </section>
+  );
 }
 
 /**
@@ -65,7 +117,7 @@ interface PrescriptionDocumentProps {
  * congelada, con sus textos, filas y orden de entonces. Las fechas siguen el formato de la sede de la receta (R11). Papel blanco y tinta oscura
  * explícitos, también en modo oscuro.
  */
-export function PrescriptionDocument({ prescription: rx, format }: PrescriptionDocumentProps) {
+export function PrescriptionDocument({ prescription: rx, format, origin }: PrescriptionDocumentProps) {
   const layout = legacyPrescriptionLayout(rx) ?? neutralPrescriptionLayout(rx);
   const neutral = layout.patientRows === 'neutral';
   const dateTime = (iso: string | null) =>
@@ -239,12 +291,15 @@ export function PrescriptionDocument({ prescription: rx, format }: PrescriptionD
         </div>
       </section>
 
-      <footer className="mt-6 flex flex-col gap-1 border-t border-[#d1d5db] pt-3 text-xs text-[#4b5563]">
-        {!rx.integrityOk ? <p className="font-medium text-[#be123c]">{copy.tampered}</p> : null}
-        <p>
-          {copy.footerHash}:{' '}
-          <span className="break-all font-mono text-[#111827]">{rx.contentHash}</span>
-        </p>
+      <footer className="mt-6 flex flex-col gap-3 border-t border-[#d1d5db] pt-3 text-xs text-[#4b5563] sm:flex-row sm:items-center sm:justify-between print:flex-row print:items-center print:justify-between">
+        <div className="flex min-w-0 flex-col gap-1">
+          {!rx.integrityOk ? <p className="font-medium text-[#be123c]">{copy.tampered}</p> : null}
+          <p>
+            {copy.footerHash}:{' '}
+            <span className="break-all font-mono text-[#111827]">{rx.contentHash}</span>
+          </p>
+        </div>
+        <VerificationStamp code={rx.verificationCode} origin={origin} />
       </footer>
     </article>
   );

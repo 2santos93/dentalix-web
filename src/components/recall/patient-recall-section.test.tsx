@@ -33,6 +33,7 @@ const type = (over: Partial<RecallType> & Pick<RecallType, 'id' | 'name'>): Reca
   sortOrder: 10,
   systemKey: null,
   exclusionGroup: null,
+  appointmentTypeId: null,
   triggerCatalogItemIds: [],
   triggers: [],
   ...over,

@@ -148,11 +148,15 @@ const LEGACY_CO_MARKUP = [
   '</p>',
   '</div>',
   '</section>',
-  '<footer class="mt-6 flex flex-col gap-1 border-t border-[#d1d5db] pt-3 text-xs text-[#4b5563]">',
+  '<footer class="mt-6 flex flex-col gap-3 border-t border-[#d1d5db] pt-3 text-xs text-[#4b5563] sm:flex-row sm:items-center sm:justify-between print:flex-row print:items-center print:justify-between">',
+  '<div class="flex min-w-0 flex-col gap-1">',
   '<p>Huella SHA-256 del contenido emitido: ',
   '<span class="break-all font-mono text-[#111827]">aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   '</span>',
   '</p>',
+  '</div>',
+  // DX-467: el código y el QR de verificación (los comprueba su propio test).
+  '<verificación/>',
   '</footer>',
   '</article>',
 ];
@@ -290,25 +294,38 @@ const LEGACY_ES_MARKUP = [
   '</p>',
   '</div>',
   '</section>',
-  '<footer class="mt-6 flex flex-col gap-1 border-t border-[#d1d5db] pt-3 text-xs text-[#4b5563]">',
+  '<footer class="mt-6 flex flex-col gap-3 border-t border-[#d1d5db] pt-3 text-xs text-[#4b5563] sm:flex-row sm:items-center sm:justify-between print:flex-row print:items-center print:justify-between">',
+  '<div class="flex min-w-0 flex-col gap-1">',
   '<p>Huella SHA-256 del contenido emitido: ',
   '<span class="break-all font-mono text-[#111827]">aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   '</span>',
   '</p>',
+  '</div>',
+  // DX-467: el código y el QR de verificación (los comprueba su propio test).
+  '<verificación/>',
   '</footer>',
   '</article>',
 ];
 
-/** Enmascara las fechas y corta por etiquetas para que un fallo señale la pieza que cambió. */
+/**
+ * Enmascara las fechas y el sello de verificación (DX-467, con su QR) y corta
+ * por etiquetas para que un fallo señale la pieza que cambió.
+ */
 function legacyMarkup(html: string): string[] {
   return html
+    .replace(/<section aria-label="Verificar esta receta"[\s\S]*?<\/section>/, '<verificación/>')
     .replace(/\d{2}[/.]\d{2}[/.]\d{4}(?: \d{1,2}:\d{2}(?: [ap]\. m\.)?)?/g, '[fecha]')
     .split(/(?=<)/);
 }
 
 function renderDocument(prescription: PrescriptionDoc, format: PrescriptionFormat | null = NEW_YORK) {
-  return render(<PrescriptionDocument prescription={prescription} format={format} />);
+  return render(<PrescriptionDocument prescription={prescription} format={format} origin="https://demo.dentalix.app" />);
 }
+
+/** DX-467: el texto del sello de verificación del pie (título del QR incluido). */
+const STAMP_TEXT =
+  'Código QR para verificar la recetaVerificar esta recetaCódigo: K7M3-QH9X-RT2W' +
+  'Escanee el código QR o abra demo.dentalix.app/receta/K7M3QH9XRT2W';
 
 function item(rx: PrescriptionDoc, overrides: Partial<PrescriptionDoc['items'][number]>) {
   return [{ ...rx.items[0], ...overrides }];
@@ -332,7 +349,8 @@ describe('PrescriptionDocument (A4)', () => {
         'Cantidad total: 21 (veintiuno) cápsulas' +
         'Profesional que prescribeDra. Laura RuizRegistro profesionalRM-12345Contactolaura@example.com' +
         'Firma del profesionalHuella SHA-256 del contenido emitido: ' +
-        'a'.repeat(64),
+        'a'.repeat(64) +
+        STAMP_TEXT,
     );
     expect(screen.getByRole('heading', { name: 'Fórmula médica' })).toBeInTheDocument();
     expect(screen.getByText('Nº de historia clínica').nextSibling).toHaveTextContent('1020');
@@ -351,7 +369,8 @@ describe('PrescriptionDocument (A4)', () => {
         'Cantidad total: 21 (veintiuno) cápsulas · Envases: 2' +
         'Profesional que prescribeDra. Laura RuizNº de colegiado28/012345Contactolaura@example.com' +
         'Firma del profesionalHuella SHA-256 del contenido emitido: ' +
-        'a'.repeat(64),
+        'a'.repeat(64) +
+        STAMP_TEXT,
     );
     expect(screen.getByText('DNI/NIE').nextSibling).toHaveTextContent('12345678Z');
     expect(screen.getByText('Año de nacimiento').nextSibling).toHaveTextContent('1980');
@@ -568,6 +587,26 @@ describe('PrescriptionDocument (A4)', () => {
   it('DX-300: sin avisos bloqueantes no hay bloque de avisos', () => {
     renderDocument(makePrescriptionDocument());
     expect(screen.queryByRole('region', { name: 'Avisos de seguridad confirmados' })).not.toBeInTheDocument();
+  });
+
+  it('DX-467: el pie lleva el código agrupado y un QR hacia /receta/<código> en el host de la clínica', () => {
+    renderDocument(makePrescriptionDocument({ verificationCode: 'K7M3QH9XRT2W' }));
+    const stamp = screen.getByRole('region', { name: 'Verificar esta receta' });
+    expect(stamp).toHaveTextContent('Código: K7M3-QH9X-RT2W');
+    expect(stamp).toHaveTextContent('demo.dentalix.app/receta/K7M3QH9XRT2W');
+    const qr = screen.getByTestId('prescription-verification-qr');
+    expect(qr).toHaveAttribute('data-value', 'https://demo.dentalix.app/receta/K7M3QH9XRT2W');
+    expect(qr.querySelector('title')).toHaveTextContent('Código QR para verificar la receta');
+  });
+
+  it('DX-467: también una receta anulada o legada lleva su sello de verificación', () => {
+    const { unmount } = renderDocument(
+      makePrescriptionDocument({ status: 'VOIDED', voidedAt: '2026-10-20T12:00:00.000Z', voidReason: 'Error' }),
+    );
+    expect(screen.getByTestId('prescription-verification')).toBeInTheDocument();
+    unmount();
+    renderDocument(makePrescriptionDocument(makeLegacyPrescription('ES', { safetyRulesVersion: null })));
+    expect(screen.getByTestId('prescription-verification')).toBeInTheDocument();
   });
 
   it('la huella sale entera en el pie', () => {

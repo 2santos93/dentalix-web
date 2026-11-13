@@ -46,6 +46,7 @@ const TYPES: RecallType[] = [
   defaultIntervalMonths: months as number,
   active: id !== 't-old',
   exclusionGroup: null,
+  appointmentTypeId: null,
   triggerCatalogItemIds: [],
   triggers: [],
 }));
