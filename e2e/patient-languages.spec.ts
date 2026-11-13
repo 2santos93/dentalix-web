@@ -123,7 +123,8 @@ test('la auditoría dice el idioma antes y después y quién lo cambió', async 
   await page.goto(`${origin}/settings/auditoria`);
   const table = page.getByRole('table', { name: 'Registro de auditoría' });
   await expect(table).toBeVisible({ timeout: 15_000 });
-  const row = table.getByRole('row').filter({ hasText: 'Idioma de la clínica → Català (ca)' });
+  // La flecha va con « a » solo para lectores de pantalla.
+  const row = table.getByRole('row').filter({ hasText: /Idioma de los mensajes:\s*Idioma de la clínica.*Català \(ca\)/ });
   await expect(row).toHaveCount(1);
   await expect(row).toContainText(reception.fullName);
 });
