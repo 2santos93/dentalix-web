@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { RegionalFormat } from '@/lib/format/regional-format';
+import { moneyWithCode } from '@/lib/format/sede-number';
 import {
   getProfitabilityLines,
   type ProfitabilityFigure,
@@ -132,7 +133,7 @@ export function ProfitabilityLinesDialog({
         {
           header: c.amount,
           numeric: true,
-          cell: (l) => <span className="whitespace-nowrap tabular-nums">{fmt.money(l.amount, currency)}</span>,
+          cell: (l) => <span className="whitespace-nowrap tabular-nums">{moneyWithCode(l.amount, currency, fmt)}</span>,
         },
       ]
     : [];
@@ -154,7 +155,7 @@ export function ProfitabilityLinesDialog({
             <DialogHeader>
               <DialogTitle>{opened.title}</DialogTitle>
               <DialogDescription>
-                {data ? c.description(data.count, fmt.money(data.total, currency)) : c.loading}
+                {data ? c.description(data.count, moneyWithCode(data.total, currency, fmt)) : c.loading}
               </DialogDescription>
             </DialogHeader>
             <AsyncSection

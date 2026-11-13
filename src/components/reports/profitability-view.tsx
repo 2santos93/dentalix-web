@@ -9,6 +9,7 @@ import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-s
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { useSessionLocations } from '@/lib/session/session-store';
 import type { RegionalFormat } from '@/lib/format/regional-format';
+import { moneyWithCode } from '@/lib/format/sede-number';
 import { saveCsv } from '@/lib/files/save-csv';
 import { isValidPeriod, PERIOD_PRESETS, periodFor, type PeriodPresetKey } from '@/lib/reports/period-presets';
 import { isCivilDate } from '@/lib/reports/chair-occupancy-api';
@@ -108,7 +109,7 @@ function Figure({
   onOpen: () => void;
   strong?: boolean;
 }) {
-  const text = fmt.money(amount, currency);
+  const text = moneyWithCode(amount, currency, fmt);
   if (count === 0) return <span className="whitespace-nowrap tabular-nums text-muted">{text}</span>;
   return (
     <button
@@ -194,7 +195,7 @@ function CurrencySection({
     if (!m) return <span className="text-muted">{c.noActivity}</span>;
     return (
       <span className={cn('whitespace-nowrap tabular-nums', netClass(m.net), r.total ? 'font-semibold' : 'font-medium')}>
-        {fmt.money(m.net, currency)}
+        {moneyWithCode(m.net, currency, fmt)}
       </span>
     );
   };
@@ -247,7 +248,7 @@ function CurrencySection({
     if (r.category === null) {
       return m ? (
         <span className={cn('whitespace-nowrap tabular-nums text-ink', strong && 'font-semibold')}>
-          {fmt.money(m.expenses, currency)}
+          {moneyWithCode(m.expenses, currency, fmt)}
         </span>
       ) : (
         <span className="text-muted">{c.noValue}</span>
