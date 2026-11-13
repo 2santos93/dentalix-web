@@ -7222,7 +7222,7 @@ export interface paths {
         put?: never;
         /**
          * Crear un tipo de recall
-         * @description Nombre 1–60 (único entre los vivos sin distinguir mayúsculas), intervalo por defecto 1–36 meses, activo, orden (por defecto, el último) y grupo de exclusión opcional. Sin disparadores: se fijan con PUT /recall-types/:id/triggers.
+         * @description Nombre 1–60 (único entre los vivos sin distinguir mayúsculas), intervalo por defecto 1–36 meses, activo, orden (por defecto, el último), grupo de exclusión y tipo de cita al agendar opcionales. Sin disparadores: se fijan con PUT /recall-types/:id/triggers.
          */
         post: operations["RecallTypesController_create"];
         delete?: never;
@@ -7250,7 +7250,7 @@ export interface paths {
         head?: never;
         /**
          * Editar un tipo de recall
-         * @description Cualquier campo. Cambiar el intervalo por defecto NO cambia los recalls que ya existen: solo los que se creen después. Desactivarlo deja de crear recalls por procedimiento; los que hay siguen. Cambiar el grupo de exclusión no desactiva nada por sí solo: se aplica en el siguiente DONE o PUT del paciente.
+         * @description Cualquier campo. Cambiar el intervalo por defecto NO cambia los recalls que ya existen: solo los que se creen después. Desactivarlo deja de crear recalls por procedimiento; los que hay siguen. Cambiar el grupo de exclusión no desactiva nada por sí solo: se aplica en el siguiente DONE o PUT del paciente. El tipo de cita al agendar tiene que ser uno vivo y activo de la clínica (null lo quita).
          */
         patch: operations["RecallTypesController_update"];
         trace?: never;
@@ -22473,6 +22473,11 @@ export interface components {
             systemKey: components["schemas"]["RecallKind"] | null;
             /** @description Tipos excluyentes entre sí (p. ej. HYGIENE_PERIO) */
             exclusionGroup: string | null;
+            /**
+             * Format: uuid
+             * @description Tipo de cita con el que se agenda un recall de este tipo (la web lo prellena en «Agendar»); null = ninguno. Es el guardado aunque ese tipo de cita se haya retirado o desactivado después: la web lo ignora si ya no está activo
+             */
+            appointmentTypeId: string | null;
             /** @description Procedimientos del catálogo cuyo DONE mueve el reloj de este tipo */
             triggerCatalogItemIds: string[];
             /** @description Los mismos procedimientos, con su código y su nombre (en el orden de triggerCatalogItemIds) */
@@ -22491,6 +22496,11 @@ export interface components {
              * @example HYGIENE_PERIO
              */
             exclusionGroup?: string | null;
+            /**
+             * Format: uuid
+             * @description Tipo de cita al agendar (D20): uno vivo y activo de esta clínica (si no, 422). null = ninguno (lo quita); ausente, no cambia. Volver a mandar el que ya tenía vale aunque se haya retirado o desactivado después
+             */
+            appointmentTypeId?: string | null;
         };
         UpdateRecallTypeDto: {
             name?: string;
@@ -22505,6 +22515,11 @@ export interface components {
              * @example HYGIENE_PERIO
              */
             exclusionGroup?: string | null;
+            /**
+             * Format: uuid
+             * @description Tipo de cita al agendar (D20): uno vivo y activo de esta clínica (si no, 422). null = ninguno (lo quita); ausente, no cambia. Volver a mandar el que ya tenía vale aunque se haya retirado o desactivado después
+             */
+            appointmentTypeId?: string | null;
         };
         SetRecallTypeTriggersDto: {
             /** @description Reemplaza los disparadores: procedimientos vivos del catálogo de la clínica (o los que el tipo ya tenía). [] los quita todos */
@@ -42061,6 +42076,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Ese tipo de cita no existe en esta clínica, está retirado o desactivado: elige uno activo o «Ninguno». */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     RecallTypesController_remove: {
@@ -42150,6 +42172,13 @@ export interface operations {
             };
             /** @description Ya existe un tipo con ese nombre */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ese tipo de cita no existe en esta clínica, está retirado o desactivado: elige uno activo o «Ninguno». */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
