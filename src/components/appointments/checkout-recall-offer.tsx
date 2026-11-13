@@ -48,12 +48,15 @@ export interface ScheduledRecall {
 export function CheckoutRecallOffer({
   token,
   patientId,
+  appointmentId,
   types,
   onScheduled,
   onStale,
 }: {
   token: string;
   patientId: string;
+  /** La cita que se despide: la base del recall es ella (D15), no la visita anterior. */
+  appointmentId: string;
   types: readonly OfferedRecallType[];
   onScheduled: (scheduled: ScheduledRecall) => void;
   /** Releer la lista de salida (409: ya lo tenía). */
@@ -70,7 +73,7 @@ export function CheckoutRecallOffer({
     setError(null);
     setInfo(null);
     try {
-      const result = await createDefaultPatientRecall(token, patientId, type.id);
+      const result = await createDefaultPatientRecall(token, patientId, type.id, appointmentId);
       announceRecallChanged(patientId);
       onScheduled({
         typeName: type.name,

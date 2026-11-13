@@ -181,7 +181,7 @@ describe('DX-015-bis (D16): «Programar recall de <tipo>» en la salida', () => 
     create.mockResolvedValue(recallFor('t-hyg', 'Higiene'));
     const { onComplete } = mount();
     await userEvent.click(await screen.findByRole('button', { name: checkoutRecallCopy.schedule('Higiene', 6) }));
-    expect(create).toHaveBeenCalledWith('tok', 'p1', 't-hyg');
+    expect(create).toHaveBeenCalledWith('tok', 'p1', 't-hyg', 'a1');
     await waitFor(() => expect(screen.getByTestId('checkout-NEXT_VISIT')).toHaveAttribute('data-done', 'true'));
     expect(await screen.findByText(/Recall de Higiene: vence el 15\/05\/2027/)).toBeInTheDocument();
     expect(screen.queryByTestId('checkout-recall-offer')).toBeNull();

@@ -117,16 +117,21 @@ export function setPatientRecall(
 /**
  * `POST /patients/:id/recalls/default` (D15): crea el recall de un tipo con su
  * intervalo por defecto (también recepción). 409 si ya tiene uno de ese tipo.
+ * Desde la salida va `appointmentId` (la cita que se despide): la base es esa
+ * cita; sin él, la última atendida («Sin recall configurado»). 422 si la cita
+ * no es del paciente o no está en curso ni atendida.
  */
 export function createDefaultPatientRecall(
   token: string,
   patientId: string,
   recallTypeId: string,
+  appointmentId?: string,
 ): Promise<SetPatientRecallResult> {
+  const body: Schemas['CreateDefaultRecallDto'] = { recallTypeId, ...(appointmentId ? { appointmentId } : {}) };
   return apiFetch<SetPatientRecallResult>(`/patients/${encodeURIComponent(patientId)}/recalls/default`, {
     token,
     method: 'POST',
-    body: { recallTypeId },
+    body,
   });
 }
 

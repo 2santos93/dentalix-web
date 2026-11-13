@@ -190,7 +190,6 @@ export function RecallUnconfiguredList({
           onOpenChange={(open) => {
             if (!open) setTarget(null);
           }}
-          onStale={() => setReloadKey((k) => k + 1)}
           onSaved={(result, typeName) => {
             // D9: si la exclusión desactivó otro, se dice también.
             const excluded = recallUpdatesNotice(result.recallUpdates, null);

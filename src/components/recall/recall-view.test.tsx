@@ -317,6 +317,8 @@ describe('RecallView · «Sin recall configurado» (DX-015-bis D17)', () => {
     await userEvent.selectOptions(select, 't-perio');
     await userEvent.click(within(dialog).getByRole('button', { name: recallDefaultCopy.submit }));
     expect(mockedCreate).toHaveBeenCalledWith('tok', 'p9', 't-perio');
+    // Desde esta lista no va la cita: la base es la última visita atendida.
+    expect(mockedCreate.mock.calls[0]).toHaveLength(3);
     expect(
       await screen.findByText(recallUnconfiguredCopy.scheduled('Mantenimiento periodontal', 'María Rondón')),
     ).toBeInTheDocument();
@@ -333,6 +335,7 @@ describe('RecallView · «Sin recall configurado» (DX-015-bis D17)', () => {
     const dialog = await screen.findByRole('dialog');
     await within(dialog).findByLabelText(recallDefaultCopy.type);
     await userEvent.click(within(dialog).getByRole('button', { name: recallDefaultCopy.submit }));
-    expect(await within(dialog).findByText(recallDefaultCopy.alreadySet)).toBeInTheDocument();
+    expect(await within(dialog).findByText(recallDefaultCopy.alreadySet('Higiene'))).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: recallDefaultCopy.openRecord })).toHaveAttribute('href', '/patients/p9');
   });
 });

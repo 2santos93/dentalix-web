@@ -1,6 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   announceRecallChanged,
@@ -13,6 +14,7 @@ import {
 import { monthsLabel } from '@/lib/recall/recall-offer';
 import { recallTypeOptions } from '@/lib/recall/recall-types';
 import { FieldError } from '@/components/errors/field-error';
+import { InlineError } from '@/components/errors/inline-error';
 import { FormField } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
 import { NativeSelect } from '@/components/ui/native-select';
@@ -28,34 +30,35 @@ export const recallDefaultCopy = {
   noTypes: 'La clínica no tiene tipos de recall activos. Actívalos en Ajustes › Recall.',
   submit: 'Programar recall',
   saveError: 'No pudimos programar el recall. Intenta de nuevo.',
-  alreadySet: 'Ya tiene un recall de ese tipo, quizá inactivo. Elige otro tipo o cámbialo desde la ficha.',
+  // En esta lista no hay recalls activos: el 409 es uno desactivado, y reactivarlo es del clínico.
+  alreadySet: (type: string) => `Ya tiene un recall de ${type} desactivado. Reactívalo desde la ficha.`,
+  openRecord: 'Abrir ficha',
 };
 const copy = recallDefaultCopy;
 
 /**
  * DX-015-bis (D17 → D15): «Programar recall» desde «Sin recall configurado».
  * Elige un tipo activo y crea su recall con el intervalo por defecto del tipo
- * (también recepción). Un 409 deja el diálogo abierto para elegir otro tipo.
+ * (también recepción). Un 409 (ya tiene uno de ese tipo, desactivado) deja el
+ * diálogo abierto con el motivo y «Abrir ficha», donde el clínico lo reactiva.
  */
 export function RecallDefaultDialog({
   token,
   patient,
   onOpenChange,
   onSaved,
-  onStale,
 }: {
   token: string;
   patient: { id: string; name: string };
   onOpenChange: (open: boolean) => void;
   onSaved: (result: SetPatientRecallResult, typeName: string) => void;
-  /** Ya tenía un recall de ese tipo: la lista de fondo puede estar desfasada. */
-  onStale?: () => void;
 }) {
   const [types, setTypes] = useState<RecallType[] | null>(null);
   const [typesFailed, setTypesFailed] = useState(false);
   const [typesKey, setTypesKey] = useState(0);
   const [typeId, setTypeId] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [conflict, setConflict] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -84,6 +87,7 @@ export function RecallDefaultDialog({
     if (!type) return;
     setSubmitting(true);
     setError(null);
+    setConflict(null);
     try {
       const result = await createDefaultPatientRecall(token, patient.id, type.ref);
       announceRecallChanged(patient.id);
@@ -91,8 +95,7 @@ export function RecallDefaultDialog({
       onOpenChange(false);
     } catch (err) {
       if (isRecallAlreadySet(err)) {
-        setError(copy.alreadySet);
-        onStale?.();
+        setConflict(copy.alreadySet(type.name));
       } else {
         setError(apiErrorMessage(err, { fallback: copy.saveError }));
       }
@@ -129,7 +132,14 @@ export function RecallDefaultDialog({
         ) : options.length === 0 ? (
           <p className="text-sm text-muted">{copy.noTypes}</p>
         ) : (
-          <NativeSelect id="rd-type" value={typeId} onChange={(e) => setTypeId(e.target.value)}>
+          <NativeSelect
+            id="rd-type"
+            value={typeId}
+            onChange={(e) => {
+              setTypeId(e.target.value);
+              setConflict(null);
+            }}
+          >
             {options.map((o) => (
               <option key={o.ref} value={o.ref}>
                 {o.defaultIntervalMonths ? copy.typeOption(o.name, o.defaultIntervalMonths) : o.name}
@@ -138,6 +148,17 @@ export function RecallDefaultDialog({
           </NativeSelect>
         )}
       </FormField>
+      {conflict ? (
+        <div className="flex flex-col items-start gap-1">
+          <InlineError>{conflict}</InlineError>
+          <Link
+            href={`/patients/${patient.id}`}
+            className="inline-flex min-h-11 items-center text-sm font-medium text-primary-text underline-offset-4 hover:underline sm:min-h-6"
+          >
+            {copy.openRecord}
+          </Link>
+        </div>
+      ) : null}
     </FormModal>
   );
 }

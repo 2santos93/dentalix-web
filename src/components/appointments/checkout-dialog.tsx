@@ -170,6 +170,7 @@ export function CheckoutDialog({
                   <CheckoutRecallOffer
                     token={token}
                     patientId={list.patientId}
+                    appointmentId={appointmentId}
                     types={list.recallTypes}
                     onScheduled={(next) => {
                       setScheduled(next);
