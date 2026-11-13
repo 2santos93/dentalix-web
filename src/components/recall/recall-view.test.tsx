@@ -38,6 +38,7 @@ const TYPES: RecallType[] = [
   active: id !== 't-old',
   exclusionGroup: null,
   triggerCatalogItemIds: [],
+  triggers: [],
 }));
 
 const item = (over: Partial<RecallDueItem> = {}): RecallDueItem => ({

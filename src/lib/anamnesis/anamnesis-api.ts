@@ -1,5 +1,5 @@
 import { statusLabels } from '@/lib/status/tones';
-import { apiFetch } from '@/lib/api/client';
+import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { ClinicalHistoryValue } from '@/lib/clinical/clinical-types';
@@ -101,6 +101,15 @@ const publicPath = (linkToken: string) => `/public/medical-history/${encodeURICo
 /** Página pública (sin sesión): la clínica sale del host. */
 export function getPublicAnamnesis(linkToken: string): Promise<PublicAnamnesis> {
   return apiFetch<PublicAnamnesis>(publicPath(linkToken));
+}
+
+/**
+ * `POST /public/medical-history/:token/opened` (DX-424) — la primera apertura,
+ * para «Enlaces del paciente». 204 sin cuerpo e idempotente. El GET no la
+ * marca: los previsualizadores de enlaces lo abren solos.
+ */
+export async function markPublicAnamnesisOpened(linkToken: string): Promise<void> {
+  await apiFetchOrNull<void>(`${publicPath(linkToken)}/opened`, { method: 'POST' });
 }
 
 export function submitPublicAnamnesis(

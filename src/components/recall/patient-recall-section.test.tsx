@@ -34,6 +34,7 @@ const type = (over: Partial<RecallType> & Pick<RecallType, 'id' | 'name'>): Reca
   systemKey: null,
   exclusionGroup: null,
   triggerCatalogItemIds: [],
+  triggers: [],
   ...over,
 });
 // Los tipos por defecto de la API (DX-015-bis), en su orden.
@@ -137,7 +138,7 @@ describe('PatientRecallSection (DX-015)', () => {
 
   it('el clínico fija «cada 3 meses»; al cambiar solo el intervalo no manda fecha (la API conserva lo fijado)', async () => {
     mockedGet.mockResolvedValue(data);
-    mockedSet.mockResolvedValue(data);
+    mockedSet.mockResolvedValue({ ...data, recallUpdates: [] });
     render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
     await userEvent.click(await screen.findByRole('button', { name: 'Cambiar recall de control' }));
     await userEvent.selectOptions(await screen.findByLabelText('Intervalo'), '3');
@@ -151,6 +152,29 @@ describe('PatientRecallSection (DX-015)', () => {
       }),
     );
     expect(await screen.findByText('Recall guardado.')).toBeInTheDocument();
+  });
+
+  it('D9: dar de alta el mantenimiento periodontal avisa del recall de Higiene que desactivó', async () => {
+    mockedGet.mockResolvedValue(data);
+    mockedSet.mockResolvedValue({
+      ...data,
+      recallUpdates: [
+        {
+          recallId: 'r-hyg',
+          recallTypeId: 't-hyg',
+          recallTypeName: 'Higiene',
+          dueAt: '2026-12-01',
+          deactivated: true,
+          replacedBy: { recallTypeId: 't-perio', recallTypeName: 'Mantenimiento periodontal' },
+        },
+      ],
+    });
+    render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Fijar recall de mantenimiento periodontal' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Guardar recall' }));
+    expect(
+      await screen.findByText('Recall guardado. Recall de Higiene desactivado: lo sustituye Mantenimiento periodontal.'),
+    ).toBeInTheDocument();
   });
 
   it('el mostrador registra un contacto y exige canal y resultado', async () => {
@@ -170,7 +194,7 @@ describe('PatientRecallSection (DX-015)', () => {
   describe('DX-015-bis: tipos de la clínica', () => {
     it('un renglón por tipo de GET /recall-types, en su orden; uno nuevo nace con el intervalo de su tipo', async () => {
       mockedGet.mockResolvedValue(data);
-      mockedSet.mockResolvedValue(data);
+      mockedSet.mockResolvedValue({ ...data, recallUpdates: [] });
       render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
       await screen.findByTestId('recall-row-CHECKUP');
       const rows = screen.getAllByTestId(/^recall-row-/).map((r) => r.getAttribute('data-testid'));
@@ -190,7 +214,7 @@ describe('PatientRecallSection (DX-015)', () => {
     it('si GET /recall-types falla, Higiene y Control por su clave (respaldo)', async () => {
       mockedTypes.mockRejectedValue(new ApiError(500, 'boom'));
       mockedGet.mockResolvedValue(data);
-      mockedSet.mockResolvedValue(data);
+      mockedSet.mockResolvedValue({ ...data, recallUpdates: [] });
       render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
       const row = await screen.findByTestId('recall-row-CHECKUP');
       expect(within(row).getByText('Control')).toBeInTheDocument();
@@ -207,7 +231,7 @@ describe('PatientRecallSection (DX-015)', () => {
       // Fijado en enero; una profilaxis de junio da la base.
       const both = { ...recall, manualDoneAt: '2026-01-10', lastDoneAt: '2026-06-10', lastDoneItemId: 'item-1' };
       mockedGet.mockResolvedValue({ recalls: [both], contacts: [] });
-      mockedSet.mockResolvedValue(data);
+      mockedSet.mockResolvedValue({ ...data, recallUpdates: [] });
       render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
       await userEvent.click(await screen.findByRole('button', { name: 'Cambiar recall de control' }));
       // El campo muestra lo fijado a mano (enero), no la base (junio).
@@ -225,7 +249,7 @@ describe('PatientRecallSection (DX-015)', () => {
     it('un recall nacido de un procedimiento abre con la fecha vacía y, sin tocarla, no la manda', async () => {
       const born = { ...recall, manualDoneAt: null, lastDoneAt: '2026-06-10', lastDoneItemId: 'item-1', source: 'PROCEDURE' as const };
       mockedGet.mockResolvedValue({ recalls: [born], contacts: [] });
-      mockedSet.mockResolvedValue(data);
+      mockedSet.mockResolvedValue({ ...data, recallUpdates: [] });
       render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
       await userEvent.click(await screen.findByRole('button', { name: 'Cambiar recall de control' }));
       const field = await screen.findByRole('group', { name: 'Fecha fijada a mano' });
@@ -239,7 +263,7 @@ describe('PatientRecallSection (DX-015)', () => {
     it('si el clínico cambia la fecha, se manda', async () => {
       const born = { ...recall, manualDoneAt: null, lastDoneAt: '2026-06-10', lastDoneItemId: 'item-1', source: 'PROCEDURE' as const };
       mockedGet.mockResolvedValue({ recalls: [born], contacts: [] });
-      mockedSet.mockResolvedValue(data);
+      mockedSet.mockResolvedValue({ ...data, recallUpdates: [] });
       const user = userEvent.setup();
       render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
       await user.click(await screen.findByRole('button', { name: 'Cambiar recall de control' }));
@@ -254,7 +278,7 @@ describe('PatientRecallSection (DX-015)', () => {
 
     it('un recall nuevo sin fecha no la manda (la API pone hoy); con fecha, sí', async () => {
       mockedGet.mockResolvedValue({ recalls: [], contacts: [] });
-      mockedSet.mockResolvedValue({ recalls: [], contacts: [] });
+      mockedSet.mockResolvedValue({ recalls: [], contacts: [], recallUpdates: [] });
       const user = userEvent.setup();
       render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
       await user.click(await screen.findByRole('button', { name: 'Fijar recall de higiene' }));

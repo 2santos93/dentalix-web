@@ -5,6 +5,7 @@ import { PublicAnamnesisView } from './public-anamnesis-view';
 import { ApiError, NetworkError } from '@/lib/api/api-error';
 import {
   getPublicAnamnesis,
+  markPublicAnamnesisOpened,
   submitPublicAnamnesis,
   type PublicAnamnesis,
 } from '@/lib/anamnesis/anamnesis-api';
@@ -13,11 +14,13 @@ import { REGIONAL_DE, REGIONAL_VE } from '@/lib/test/document-regional';
 jest.mock('../../lib/anamnesis/anamnesis-api', () => ({
   ...jest.requireActual('../../lib/anamnesis/anamnesis-api'),
   getPublicAnamnesis: jest.fn(),
+  markPublicAnamnesisOpened: jest.fn(),
   submitPublicAnamnesis: jest.fn(),
 }));
 
 const mockedGet = getPublicAnamnesis as jest.MockedFunction<typeof getPublicAnamnesis>;
 const mockedSubmit = submitPublicAnamnesis as jest.MockedFunction<typeof submitPublicAnamnesis>;
+const mockedOpened = markPublicAnamnesisOpened as jest.MockedFunction<typeof markPublicAnamnesisOpened>;
 
 function fixture(overrides: Partial<PublicAnamnesis> = {}): PublicAnamnesis {
   return {
@@ -66,6 +69,27 @@ describe('PublicAnamnesisView (DX-099)', () => {
   beforeEach(() => {
     mockedGet.mockReset();
     mockedSubmit.mockReset();
+    mockedOpened.mockReset();
+    mockedOpened.mockResolvedValue(undefined);
+  });
+
+  it('DX-424: con el cuestionario a la vista avisa una vez de la apertura; si el aviso falla, el paciente no lo nota', async () => {
+    mockedGet.mockResolvedValue(fixture());
+    mockedOpened.mockRejectedValue(new NetworkError(new TypeError('Failed to fetch')));
+    const { rerender } = render(<PublicAnamnesisView linkToken="tok" />);
+    expect(mockedOpened).not.toHaveBeenCalled();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Cuestionario de salud' })).toBeInTheDocument();
+    await waitFor(() => expect(mockedOpened).toHaveBeenCalledWith('tok'));
+    rerender(<PublicAnamnesisView linkToken="tok" />);
+    expect(mockedOpened).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('DX-424: un enlace que ya no vale no avisa de apertura', async () => {
+    mockedGet.mockRejectedValue(new ApiError(410, 'gone'));
+    render(<PublicAnamnesisView linkToken="tok" />);
+    expect(await screen.findByRole('heading', { name: 'Este enlace ya no es válido' })).toBeInTheDocument();
+    expect(mockedOpened).not.toHaveBeenCalled();
   });
 
   it('carga con esqueleto y saluda solo con el nombre de pila y la clínica', async () => {

@@ -1,5 +1,6 @@
-import { apiFetch } from '@/lib/api/client';
+import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
+import type { ClinicRole } from '@/lib/me/me-api';
 
 type Schemas = components['schemas'];
 
@@ -19,6 +20,17 @@ export type CreateRecallContactInput = Schemas['CreateRecallContactDto'];
 export type RecallType = Schemas['RecallTypeDto'];
 /** DX-015-bis: un recall que movió el cambio de un ítem del plan (respuesta del PATCH). */
 export type ItemRecallUpdate = Schemas['ItemRecallUpdateDto'];
+/** DX-015-bis (D9): la respuesta del PUT del recall del paciente, con los que la exclusión desactivó. */
+export type SetPatientRecallResult = Schemas['SetPatientRecallResultDto'];
+export type RecallExclusionUpdate = Schemas['RecallExclusionUpdateDto'];
+export type CreateRecallTypeInput = Schemas['CreateRecallTypeDto'];
+export type UpdateRecallTypeInput = Schemas['UpdateRecallTypeDto'];
+export type RecallTypeTrigger = Schemas['RecallTypeTriggerDto'];
+
+/** Crear, editar, retirar y fijar disparadores de los tipos: solo ADMIN (`RECALL_TYPE_WRITE_ROLES`). */
+export function canManageRecallTypes(role: ClinicRole | null): boolean {
+  return role === 'ADMIN';
+}
 
 export interface RecallDueFilters {
   /** Compatibilidad: el filtro por clave cuando no se pudieron leer los tipos. */
@@ -74,10 +86,37 @@ export function setPatientRecall(
   patientId: string,
   type: string,
   input: SetPatientRecallInput,
-): Promise<PatientRecalls> {
-  return apiFetch<PatientRecalls>(`/patients/${patientId}/recalls/${encodeURIComponent(type)}`, {
+): Promise<SetPatientRecallResult> {
+  return apiFetch<SetPatientRecallResult>(`/patients/${patientId}/recalls/${encodeURIComponent(type)}`, {
     token,
     method: 'PUT',
     body: input,
+  });
+}
+
+/** `POST /recall-types` (ADMIN): nace sin disparadores; se fijan con `setRecallTypeTriggers`. */
+export function createRecallType(token: string, input: CreateRecallTypeInput): Promise<RecallType> {
+  return apiFetch<RecallType>('/recall-types', { token, method: 'POST', body: input });
+}
+
+/**
+ * `PATCH /recall-types/:id` (ADMIN). Cambiar el intervalo por defecto o el grupo
+ * de exclusión no toca los recalls que ya existen (D10, D11).
+ */
+export function updateRecallType(token: string, id: string, input: UpdateRecallTypeInput): Promise<RecallType> {
+  return apiFetch<RecallType>(`/recall-types/${id}`, { token, method: 'PATCH', body: input });
+}
+
+/** `DELETE /recall-types/:id` (ADMIN): borrado lógico; 409 en Higiene y Control (`systemKey`). */
+export async function retireRecallType(token: string, id: string): Promise<void> {
+  await apiFetchOrNull<null>(`/recall-types/${id}`, { token, method: 'DELETE' });
+}
+
+/** `PUT /recall-types/:id/triggers` (ADMIN): reemplaza el conjunto; 422 si alguno no es un procedimiento vivo. */
+export function setRecallTypeTriggers(token: string, id: string, catalogItemIds: string[]): Promise<RecallType> {
+  return apiFetch<RecallType>(`/recall-types/${id}/triggers`, {
+    token,
+    method: 'PUT',
+    body: { catalogItemIds },
   });
 }

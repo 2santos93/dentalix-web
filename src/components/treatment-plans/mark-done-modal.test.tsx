@@ -312,7 +312,21 @@ describe('MarkDoneModal · recalls que mueve el procedimiento (DX-015-bis)', () 
     mockedMe.mockReturnValue('laura');
   });
 
-  const higiene = { recallId: 'r1', recallTypeId: 't-hyg', recallTypeName: 'Higiene', dueAt: '2027-10-10' };
+  const higiene = {
+    recallId: 'r1',
+    recallTypeId: 't-hyg',
+    recallTypeName: 'Higiene',
+    dueAt: '2027-10-10',
+    deactivated: false,
+    replacedBy: null,
+  };
+  // D9: el mantenimiento periodontal pasó a activo y desactivó la higiene del mismo grupo.
+  const perio = { ...higiene, recallId: 'r2', recallTypeId: 't-perio', recallTypeName: 'Mantenimiento periodontal', dueAt: '2027-01-10' };
+  const higieneExcluida = {
+    ...higiene,
+    deactivated: true,
+    replacedBy: { recallTypeId: 't-perio', recallTypeName: 'Mantenimiento periodontal' },
+  };
 
   it('una profilaxis realizada avisa «Recall de Higiene: vence el …» con el formato de la sede donde quedó', async () => {
     const user = userEvent.setup();
@@ -374,6 +388,36 @@ describe('MarkDoneModal · recalls que mueve el procedimiento (DX-015-bis)', () 
       ),
     ).toBe('Recall de Higiene: vence el [2027-10-10] · Recall de Mantenimiento periodontal: vence el [2027-07-10]');
     expect(recallUpdatesNotice([higiene], null)).toBe('Recall de Higiene actualizado');
+  });
+
+  it('D9: el recall que la exclusión desactivó dice quién lo sustituye, con fecha o sin ella', () => {
+    const day = (d: string) => `[${d}]`;
+    expect(recallUpdatesNotice([perio, higieneExcluida], day)).toBe(
+      'Recall de Mantenimiento periodontal: vence el [2027-01-10] · Recall de Higiene desactivado: lo sustituye Mantenimiento periodontal',
+    );
+    expect(recallUpdatesNotice([perio, higieneExcluida], null)).toBe(
+      'Recall de Mantenimiento periodontal actualizado · Recall de Higiene desactivado: lo sustituye Mantenimiento periodontal',
+    );
+  });
+
+  it('D9: al marcar realizado un raspado, el aviso suma el recall de Higiene desactivado', async () => {
+    const user = userEvent.setup();
+    const caracas = { ...STAMP_SEDES.caracas, id: 'loc-main', name: 'Sede Principal' };
+    mockedUpdate.mockResolvedValue({
+      ...item,
+      status: 'DONE',
+      performedById: 'laura',
+      performedLocationId: 'loc-main',
+      recallUpdates: [perio, higieneExcluida],
+    } as TreatmentPlanItem);
+    const props = renderModal({ locations: [caracas] });
+    const select = await screen.findByRole('combobox', { name: 'Profesional que lo realizó' });
+    await waitFor(() => expect(select).toHaveValue('laura'));
+    await user.click(screen.getByRole('button', { name: 'Marcar realizado' }));
+    await waitFor(() => expect(props.onSaved).toHaveBeenCalled());
+    expect(toast.success).toHaveBeenCalledWith(
+      `Recall de Mantenimiento periodontal: vence el ${STAMP_FORMATS.caracas.civilDate('2027-01-10')} · Recall de Higiene desactivado: lo sustituye Mantenimiento periodontal`,
+    );
   });
 });
 

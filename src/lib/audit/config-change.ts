@@ -94,6 +94,11 @@ const FIELD_LABELS: Record<string, string> = {
   contactPhone: "Teléfono de contacto",
   primaryColor: "Color de la marca",
   logo: "Logo",
+  // DX-015-bis: tipos de recall (los disparadores van en su propio evento).
+  defaultIntervalMonths: "Intervalo por defecto",
+  sortOrder: "Orden",
+  exclusionGroup: "Grupo de exclusión",
+  catalogItemIds: "Procedimientos que lo reinician",
 };
 const FIELD_ORDER = Object.keys(FIELD_LABELS);
 
@@ -105,6 +110,7 @@ const FIELD_UNITS: Record<string, string> = {
   manualRateMaxAgeDays: "días",
   expiryLeadMinutes: "min antes del hueco",
   minLeadMinutes: "min",
+  defaultIntervalMonths: "meses",
 };
 
 /** Lo que dice un `null` que no es «sin valor» (DX-448: el de la instalación). */
@@ -125,7 +131,7 @@ const HOUR_CYCLE_LABELS: Record<string, string> = {
 
 /** Eventos de configuración de DX-360 (también los que solo traen `changedFields`). */
 const CONFIG_REASON =
-  /^(LOCATION_CREATED|DOMAIN_REGISTERED|PRIVACY_POLICY_PUBLISHED|REMINDER_SETTINGS_UPDATED|INVENTORY_MOVEMENT_RECORDED|(APPOINTMENT_TYPE|PAYER|CONSENT_TEMPLATE|PRESCRIPTION_TEMPLATE|INVENTORY_ITEM)_(CREATED|UPDATED|DELETED))$/;
+  /^(LOCATION_CREATED|DOMAIN_REGISTERED|PRIVACY_POLICY_PUBLISHED|REMINDER_SETTINGS_UPDATED|INVENTORY_MOVEMENT_RECORDED|RECALL_TYPE_TRIGGERS_UPDATED|(APPOINTMENT_TYPE|RECALL_TYPE|PAYER|CONSENT_TEMPLATE|PRESCRIPTION_TEMPLATE|INVENTORY_ITEM)_(CREATED|UPDATED|DELETED))$/;
 
 const NONE = "—";
 
