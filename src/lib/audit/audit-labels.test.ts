@@ -21,6 +21,7 @@ import {
   cashSessionDetail,
   sedationDetail,
   chairDetail,
+  recallViaDetail,
   scheduleChangeDetail,
   patientFlowDetail,
   planItemAttributionDetail,
@@ -1021,5 +1022,16 @@ describe('receiptsSummaryPeriodDetail (DX-401)', () => {
   it('sin el formato de la sede, «—»; sin periodo, null', () => {
     expect(receiptsSummaryPeriodDetail({ period }, null)).toBe('Periodo — – —');
     expect(receiptsSummaryPeriodDetail({}, H23)).toBeNull();
+  });
+});
+
+describe('recallViaDetail (DX-015-bis)', () => {
+  it('rotula por dónde se programó el recall', () => {
+    expect(recallViaDetail({ via: 'DEFAULT' })).toBe('Recall por defecto');
+    expect(recallViaDetail({ via: 'CLINICAL_ENTRY' })).toBe('Desde la evolución');
+  });
+  it('sin `via` o con uno desconocido, nada', () => {
+    expect(recallViaDetail({})).toBeNull();
+    expect(recallViaDetail({ via: 'OTRO' as never })).toBeNull();
   });
 });

@@ -545,6 +545,7 @@ describe('InClinicPanel (DX-200)', () => {
       hasPhone: true,
       hasEmail: true,
       remindersOptedOut: false,
+      recallTypes: [],
       balance: { hasOverdue: false, overdueDays: null },
     });
     render(<Harness role="RECEPTION"/>);

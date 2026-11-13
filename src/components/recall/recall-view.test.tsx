@@ -2,14 +2,19 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '@/lib/api/client';
 import {
+  createDefaultPatientRecall,
   listRecallDue,
   listRecallTypes,
+  listRecallUnconfigured,
+  type RecallUnconfiguredItem,
   type RecallDueItem,
   type RecallDuePage,
   type RecallType,
 } from '@/lib/recall/recall-api';
 import { overdueLabel, recallMessage } from '@/lib/recall/presentation';
 import { RecallView, recallCopy } from './recall-view';
+import { recallUnconfiguredCopy } from './recall-unconfigured-list';
+import { recallDefaultCopy } from './recall-default-dialog';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
 import { STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
@@ -21,6 +26,10 @@ jest.mock('../../lib/recall/recall-api', () => ({
   listRecallDue: jest.fn(),
   listRecallTypes: jest.fn(),
   createRecallContact: jest.fn(),
+  listRecallUnconfigured: jest.fn(),
+  createDefaultPatientRecall: jest.fn(),
+  announceRecallChanged: jest.fn(),
+  isRecallAlreadySet: jest.requireActual('../../lib/recall/recall-api').isRecallAlreadySet,
 }));
 const mockedList = listRecallDue as jest.MockedFunction<typeof listRecallDue>;
 const mockedTypes = jest.mocked(listRecallTypes);
@@ -228,5 +237,105 @@ describe('presentación del recall', () => {
     expect(recallMessage('Ana Pérez', null)).toBe(
       'Hola Ana, te escribimos de la clínica. Ya te toca tu control. ¿Te ayudamos a agendar tu cita?',
     );
+  });
+});
+
+describe('RecallView · «Sin recall configurado» (DX-015-bis D17)', () => {
+  const mockedUnconfigured = jest.mocked(listRecallUnconfigured);
+  const mockedCreate = jest.mocked(createDefaultPatientRecall);
+  const row = (over: Partial<RecallUnconfiguredItem> = {}): RecallUnconfiguredItem => ({
+    patientId: 'p9',
+    patientName: 'María Rondón',
+    patientPhone: '+58 414 555 0199',
+    patientWhatsApp: '584145550199',
+    reminderOptedOut: false,
+    lastVisitAt: '2026-09-15',
+    lastVisitLocationId: 'l1',
+    ...over,
+  });
+
+  beforeEach(() => {
+    mockedList.mockReset();
+    mockedList.mockResolvedValue(page([]));
+    mockedTypes.mockReset();
+    mockedTypes.mockResolvedValue(TYPES);
+    mockedUnconfigured.mockReset();
+    mockedCreate.mockReset();
+    (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([
+      { ...STAMP_SEDES.caracas, id: 'l1', name: 'Sede Chacao' },
+    ]);
+  });
+
+  async function openUnconfigured() {
+    render(<RecallView token="tok" />);
+    await userEvent.click(await screen.findByRole('radio', { name: recallCopy.viewUnconfigured }));
+  }
+
+  it('lista paciente, teléfono, última visita con su sede y la baja de avisos', async () => {
+    mockedUnconfigured.mockResolvedValue({
+      items: [row(), row({ patientId: 'p8', patientName: 'Pedro Silva', patientPhone: null, reminderOptedOut: true })],
+      total: 2,
+      page: 1,
+      pageSize: 20,
+    });
+    await openUnconfigured();
+    const first = (await screen.findByText('María Rondón')).closest('tr')!;
+    expect(within(first).getByText('+58 414 555 0199')).toBeInTheDocument();
+    expect(within(first).getByText(STAMP_FORMATS.caracas.civilDate('2026-09-15'))).toBeInTheDocument();
+    expect(within(first).getByText('Sede Chacao')).toBeInTheDocument();
+    const second = screen.getByText('Pedro Silva').closest('tr')!;
+    expect(within(second).getByText(recallUnconfiguredCopy.optedOut)).toBeInTheDocument();
+    expect(within(second).getByText(recallUnconfiguredCopy.noPhone)).toBeInTheDocument();
+    expect(mockedUnconfigured).toHaveBeenCalledWith('tok', { page: 1 });
+    // Los filtros de «Vencidos» no aplican aquí.
+    expect(screen.queryByLabelText(recallCopy.kindLabel)).toBeNull();
+  });
+
+  it('vacío propio', async () => {
+    mockedUnconfigured.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 });
+    await openUnconfigured();
+    expect(await screen.findByText(recallUnconfiguredCopy.emptyTitle)).toBeInTheDocument();
+  });
+
+  it('«Programar recall» elige un tipo activo (con su intervalo), llama a D15 y relee la lista', async () => {
+    mockedUnconfigured
+      .mockResolvedValueOnce({ items: [row()], total: 1, page: 1, pageSize: 20 })
+      .mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 });
+    mockedCreate.mockResolvedValue({ recalls: [], contacts: [], recallUpdates: [] });
+    await openUnconfigured();
+    const tr = (await screen.findByText('María Rondón')).closest('tr')!;
+    await userEvent.click(within(tr).getByRole('button', { name: 'Acciones de María Rondón' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: recallUnconfiguredCopy.schedule }));
+    const dialog = await screen.findByRole('dialog');
+    const select = await within(dialog).findByLabelText(recallDefaultCopy.type);
+    // Solo los activos, con su intervalo.
+    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Higiene · cada 6 meses',
+      'Control · cada 12 meses',
+      'Mantenimiento periodontal · cada 3 meses',
+    ]);
+    await userEvent.selectOptions(select, 't-perio');
+    await userEvent.click(within(dialog).getByRole('button', { name: recallDefaultCopy.submit }));
+    expect(mockedCreate).toHaveBeenCalledWith('tok', 'p9', 't-perio');
+    // Desde esta lista no va la cita: la base es la última visita atendida.
+    expect(mockedCreate.mock.calls[0]).toHaveLength(3);
+    expect(
+      await screen.findByText(recallUnconfiguredCopy.scheduled('Mantenimiento periodontal', 'María Rondón')),
+    ).toBeInTheDocument();
+    expect(await screen.findByText(recallUnconfiguredCopy.emptyTitle)).toBeInTheDocument();
+  });
+
+  it('un 409 deja el diálogo abierto con el motivo', async () => {
+    mockedUnconfigured.mockResolvedValue({ items: [row()], total: 1, page: 1, pageSize: 20 });
+    mockedCreate.mockRejectedValue(new ApiError(409, 'Ya tiene un recall de ese tipo.'));
+    await openUnconfigured();
+    const tr = (await screen.findByText('María Rondón')).closest('tr')!;
+    await userEvent.click(within(tr).getByRole('button', { name: 'Acciones de María Rondón' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: recallUnconfiguredCopy.schedule }));
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByLabelText(recallDefaultCopy.type);
+    await userEvent.click(within(dialog).getByRole('button', { name: recallDefaultCopy.submit }));
+    expect(await within(dialog).findByText(recallDefaultCopy.alreadySet('Higiene'))).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: recallDefaultCopy.openRecord })).toHaveAttribute('href', '/patients/p9');
   });
 });

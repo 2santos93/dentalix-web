@@ -458,6 +458,20 @@ export function chairDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && CHAIR_REASONS[metadata.reason]) ?? null;
 }
 
+/**
+ * DX-015-bis: por dónde se creó o cambió un recall del paciente fuera del PUT
+ * de la ficha (`via`). Tipado con el enum de la API: uno nuevo no compila sin su etiqueta.
+ */
+const RECALL_VIA_LABELS: Record<NonNullable<AuditMetadata['via']>, string> = {
+  DEFAULT: 'Recall por defecto',
+  CLINICAL_ENTRY: 'Desde la evolución',
+};
+
+/** DX-015-bis: «Recall por defecto» o «Desde la evolución»; null sin `via` o con uno desconocido. */
+export function recallViaDetail(metadata: AuditMetadata): string | null {
+  return (metadata.via && Object.hasOwn(RECALL_VIA_LABELS, metadata.via) && RECALL_VIA_LABELS[metadata.via]) || null;
+}
+
 /** DX-407: qué parte de la hoja de sedación se registró, o null si no es de ella. */
 export function sedationDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && SEDATION_REASONS[metadata.reason]) ?? null;

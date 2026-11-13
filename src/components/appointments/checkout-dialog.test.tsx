@@ -2,6 +2,18 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { getCheckoutChecklist, type CheckoutChecklist } from '@/lib/appointments/checkout-checklist';
 import { CheckoutDialog, checkoutCopy } from './checkout-dialog';
+import { checkoutRecallCopy } from './checkout-recall-offer';
+import { ApiError } from '@/lib/api/client';
+import { createDefaultPatientRecall, type PatientRecall } from '@/lib/recall/recall-api';
+import { listLocations } from '@/lib/locations/locations-api';
+import { caracasSede } from '@/lib/test/sede-clock';
+
+jest.mock('../../lib/recall/recall-api', () => ({
+  ...jest.requireActual('../../lib/recall/recall-api'),
+  createDefaultPatientRecall: jest.fn(),
+}));
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+const create = jest.mocked(createDefaultPatientRecall);
 
 jest.mock('../../lib/appointments/checkout-checklist', () => ({
   ...jest.requireActual('../../lib/appointments/checkout-checklist'),
@@ -17,6 +29,7 @@ const list = (over: Partial<CheckoutChecklist> = {}): CheckoutChecklist => ({
   hasPhone: true,
   hasEmail: false,
   remindersOptedOut: false,
+  recallTypes: [],
   balance: { hasOverdue: true, overdueDays: 30 },
   ...over,
 });
@@ -123,5 +136,107 @@ describe('CheckoutDialog (DX-202)', () => {
       expect(screen.queryByRole('button', { name: /Completar/ })).not.toBeInTheDocument();
       expect(onComplete).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('DX-015-bis (D16): «Programar recall de <tipo>» en la salida', () => {
+  const TYPES = [
+    { id: 't-hyg', name: 'Higiene', defaultIntervalMonths: 6 },
+    { id: 't-ctl', name: 'Control', defaultIntervalMonths: 12 },
+    { id: 't-perio', name: 'Mantenimiento periodontal', defaultIntervalMonths: 3 },
+  ];
+  const recallFor = (typeId: string, name: string) => ({
+    recalls: [
+      {
+        id: `r-${typeId}`,
+        kind: null,
+        recallTypeId: typeId,
+        recallTypeName: name,
+        intervalMonths: 6,
+        dueAt: '2027-05-15',
+        locationId: 'l1',
+      } as unknown as PatientRecall,
+    ],
+    contacts: [],
+    recallUpdates: [],
+  });
+
+  beforeEach(() => {
+    create.mockReset();
+    jest.mocked(listLocations).mockResolvedValue([caracasSede({ id: 'l1' })]);
+  });
+
+  it('ofrece los dos primeros tipos y «Otros…»; no se ofrece si el punto está hecho', async () => {
+    get.mockResolvedValue(list({ recallTypes: TYPES }));
+    mount();
+    expect(await screen.findByRole('button', { name: checkoutRecallCopy.schedule('Higiene', 6) })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: checkoutRecallCopy.schedule('Control', 12) })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: checkoutRecallCopy.schedule('Mantenimiento periodontal', 3) })).toBeNull();
+    expect(screen.getByRole('button', { name: checkoutRecallCopy.moreLabel })).toBeInTheDocument();
+  });
+
+  it('programa con D15, marca el punto hecho con el vencimiento y se puede completar sin pendiente', async () => {
+    get.mockResolvedValueOnce(list({ recallTypes: TYPES.slice(0, 1), hasEmail: true, balance: null }));
+    get.mockResolvedValue(list({ recallTypes: [], recallDueOn: '2027-05-15', hasEmail: true, balance: null }));
+    create.mockResolvedValue(recallFor('t-hyg', 'Higiene'));
+    const { onComplete } = mount();
+    await userEvent.click(await screen.findByRole('button', { name: checkoutRecallCopy.schedule('Higiene', 6) }));
+    expect(create).toHaveBeenCalledWith('tok', 'p1', 't-hyg', 'a1');
+    await waitFor(() => expect(screen.getByTestId('checkout-NEXT_VISIT')).toHaveAttribute('data-done', 'true'));
+    expect(await screen.findByText(/Recall de Higiene: vence el 15\/05\/2027/)).toBeInTheDocument();
+    expect(screen.queryByTestId('checkout-recall-offer')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: checkoutCopy.submit }));
+    expect(onComplete).toHaveBeenCalledWith([]);
+  });
+
+  it('dice qué recall desactivó la exclusión (D9)', async () => {
+    get.mockResolvedValue(list({ recallTypes: TYPES }));
+    create.mockResolvedValue({
+      ...recallFor('t-hyg', 'Higiene'),
+      recallUpdates: [
+        {
+          recallId: 'r-old',
+          recallTypeId: 't-perio',
+          recallTypeName: 'Mantenimiento periodontal',
+          dueAt: '2027-01-01',
+          deactivated: true,
+          replacedBy: { recallTypeId: 't-hyg', recallTypeName: 'Higiene' },
+        },
+      ],
+    });
+    mount();
+    await userEvent.click(await screen.findByRole('button', { name: checkoutRecallCopy.schedule('Higiene', 6) }));
+    expect(
+      await screen.findByText('Recall de Mantenimiento periodontal desactivado: lo sustituye Higiene.'),
+    ).toBeInTheDocument();
+  });
+
+  it('un 409 (ya lo tenía) relee la lista de salida', async () => {
+    get.mockResolvedValueOnce(list({ recallTypes: TYPES }));
+    get.mockResolvedValue(list({ recallTypes: [], recallDueOn: '2027-01-01' }));
+    create.mockRejectedValue(new ApiError(409, 'Ya tiene un recall de ese tipo.'));
+    mount();
+    await userEvent.click(await screen.findByRole('button', { name: checkoutRecallCopy.schedule('Higiene', 6) }));
+    await waitFor(() => expect(screen.getByTestId('checkout-NEXT_VISIT')).toHaveAttribute('data-done', 'true'));
+    expect(get).toHaveBeenCalledTimes(2);
+  });
+
+  it('un 422 (la cita no vale) sale junto a los botones, con el mensaje de la API (escalón 4)', async () => {
+    get.mockResolvedValue(list({ recallTypes: TYPES }));
+    create.mockRejectedValue(new ApiError(422, 'La cita no es de este paciente o no está en curso.'));
+    mount();
+    await userEvent.click(await screen.findByRole('button', { name: checkoutRecallCopy.schedule('Higiene', 6) }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('La cita no es de este paciente o no está en curso.');
+    expect(create).toHaveBeenCalledWith('tok', 'p1', 't-hyg', 'a1');
+    expect(screen.getByTestId('checkout-NEXT_VISIT')).toHaveAttribute('data-done', 'false');
+  });
+
+  it('otro error se dice junto a los botones y deja seguir', async () => {
+    get.mockResolvedValue(list({ recallTypes: TYPES }));
+    create.mockRejectedValue(new Error('red'));
+    mount();
+    await userEvent.click(await screen.findByRole('button', { name: checkoutRecallCopy.schedule('Control', 12) }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(checkoutRecallCopy.saveError);
+    expect(screen.getByRole('button', { name: checkoutCopy.submitWithPending(3) })).toBeEnabled();
   });
 });

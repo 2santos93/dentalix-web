@@ -41,10 +41,16 @@ import { Tooltip } from '@/components/ui/tooltip';
 import { RecallContactDialog } from './recall-contact-dialog';
 import { RecallScheduleDialog } from './recall-schedule-dialog';
 import { ExternalLink } from '@/components/shared/external-link';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { RecallUnconfiguredList } from './recall-unconfigured-list';
 
 export const recallCopy = {
   title: 'Recall',
   description: 'Pacientes con el control vencido y sin cita: llámalos para que vuelvan.',
+  // DX-015-bis (D17): la otra vista, los atendidos que nunca tuvieron recall.
+  viewLabel: 'Vista de la lista de recall',
+  viewDue: 'Vencidos',
+  viewUnconfigured: 'Sin recall configurado',
   kindLabel: 'Tipo',
   kindAll: 'Todos los tipos',
   windowLabel: 'Vencimiento',
@@ -83,10 +89,17 @@ export const recallCopy = {
 const copy = recallCopy;
 
 type Dialog = { kind: 'contact' | 'schedule'; item: RecallDueItem } | null;
+type RecallListView = 'due' | 'unconfigured';
 
 const recordHref = (item: RecallDueItem) => `/patients/${item.patientId}`;
 
-function ContactButtons({ item, clinicName }: { item: RecallDueItem; clinicName: string | null }) {
+function ContactButtons({
+  item,
+  clinicName,
+}: {
+  item: Pick<RecallDueItem, 'patientName' | 'patientPhone' | 'patientWhatsApp' | 'reminderOptedOut'>;
+  clinicName: string | null;
+}) {
   if (item.reminderOptedOut) return <Badge variant="warning">{copy.optedOut}</Badge>;
   const phone = item.patientPhone;
   if (!phone) return <span className="whitespace-nowrap text-xs text-muted">{copy.noPhone}</span>;
@@ -123,6 +136,7 @@ function ContactButtons({ item, clinicName }: { item: RecallDueItem; clinicName:
 export function RecallView({ token }: { token: string }) {
   const router = useRouter();
   const isPhone = useMediaQuery(DATA_LIST_PHONE_QUERY);
+  const [view, setView] = useState<RecallListView>('due');
   // DX-015-bis: el filtro es un tipo de la clínica (`ref`: su id o, en el respaldo, su clave).
   const [typeRef, setTypeRef] = useState<string>('ALL');
   // Hasta que llegan los tipos el filtro solo ofrece «Todos» (deshabilitado):
@@ -147,6 +161,7 @@ export function RecallView({ token }: { token: string }) {
   const [dialog, setDialog] = useState<Dialog>(null);
 
   useEffect(() => {
+    if (view !== 'due') return;
     let cancelled = false;
     async function load() {
       setLoading(true);
@@ -177,7 +192,7 @@ export function RecallView({ token }: { token: string }) {
     return () => {
       cancelled = true;
     };
-  }, [token, typeRef, soon, sort, page, reloadKey]);
+  }, [token, view, typeRef, soon, sort, page, reloadKey]);
 
   // Los tipos del filtro: si la lectura falla, Higiene y Control (respaldo).
   useEffect(() => {
@@ -320,6 +335,22 @@ export function RecallView({ token }: { token: string }) {
       <PageHeader title={copy.title} description={copy.description} />
       <div className="flex flex-col gap-3">
         {!forbidden ? (
+          <SegmentedControl<RecallListView>
+            aria-label={copy.viewLabel}
+            value={view}
+            onValueChange={(next) => {
+              setView(next);
+              setNotice(null);
+            }}
+            options={[
+              { value: 'due', label: copy.viewDue },
+              { value: 'unconfigured', label: copy.viewUnconfigured },
+            ]}
+            fullWidthOnMobile
+            className="self-start"
+          />
+        ) : null}
+        {!forbidden && view === 'due' ? (
           <div className="grid min-w-0 gap-3 sm:flex sm:flex-wrap sm:items-center">
             <NativeSelect
               aria-label={copy.kindLabel}
@@ -370,10 +401,12 @@ export function RecallView({ token }: { token: string }) {
         <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
         </p>
-        <SedeStampNote stamp={stamp} />
+        {view === 'due' ? <SedeStampNote stamp={stamp} /> : null}
 
         {forbidden ? (
           <EmptyState role="status" icon={<Lock aria-hidden />} title={copy.forbiddenTitle} description={copy.forbiddenHint} />
+        ) : view === 'unconfigured' ? (
+          <RecallUnconfiguredList token={token} onNotice={setNotice} />
         ) : (
           <>
             <AsyncSection

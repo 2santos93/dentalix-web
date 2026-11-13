@@ -12,6 +12,7 @@ import { SectionError } from '@/components/errors/section-error';
 import { FormModal } from '@/components/shared/form-modal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ExternalLink } from '@/components/shared/external-link';
+import { CheckoutRecallOffer, ScheduledRecallText, type ScheduledRecall } from './checkout-recall-offer';
 
 export const checkoutCopy = {
   title: (name: string) => `Salida de ${name}`,
@@ -58,6 +59,8 @@ export function CheckoutDialog({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // DX-015-bis (D16): el recall programado desde aquí, para decir cuándo vence.
+  const [scheduled, setScheduled] = useState<ScheduledRecall | null>(null);
 
   const load = useCallback(() => {
     getCheckoutChecklist(token, appointmentId).then(
@@ -82,7 +85,10 @@ export function CheckoutDialog({
     load();
   }, [load]);
 
-  const items = list ? checkoutItems(list) : [];
+  // Programado aquí, el punto queda hecho sin esperar a la relectura.
+  const items = list
+    ? checkoutItems(list).map((i) => (i.item === 'NEXT_VISIT' && scheduled ? { ...i, done: true } : i))
+    : [];
   const pending = items.filter((i) => !i.done).map((i) => i.item);
   const loadError = list ? null : error;
   const failed = loadError !== null;
@@ -131,26 +137,51 @@ export function CheckoutDialog({
           {items.map(({ item, done }) => {
             const text = checkoutCopy.items[item];
             const Icon = done ? CircleCheck : CircleAlert;
+            const offerRecall = item === 'NEXT_VISIT' && !done && list.recallTypes.length > 0;
             return (
               <li
                 key={item}
                 data-testid={`checkout-${item}`}
                 data-done={done}
-                className="flex min-h-11 items-center justify-between gap-3 px-3 py-2 text-sm text-ink"
+                className="flex flex-col gap-2 px-3 py-2 text-sm text-ink"
               >
-                <span className="flex min-w-0 items-center gap-2">
-                  <Icon aria-hidden className={done ? 'size-4 shrink-0 text-success-text' : 'size-4 shrink-0 text-warning-text'} />
-                  {done ? text.done : text.pending}
+                <span className="flex min-h-11 items-center justify-between gap-3 sm:min-h-7">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Icon aria-hidden className={done ? 'size-4 shrink-0 text-success-text' : 'size-4 shrink-0 text-warning-text'} />
+                    {item === 'NEXT_VISIT' && done && scheduled ? (
+                      <ScheduledRecallText token={token} scheduled={scheduled} />
+                    ) : done ? (
+                      text.done
+                    ) : (
+                      text.pending
+                    )}
+                  </span>
+                  {done ? null : (
+                    <ExternalLink
+                      href={`/patients/${list.patientId}${text.tab}`}
+                      className="inline-flex min-h-11 shrink-0 items-center font-medium text-primary-text underline-offset-4 hover:underline sm:min-h-6"
+                    >
+                      {checkoutCopy.open}
+                      <span className="sr-only">: {text.pending}</span>
+                    </ExternalLink>
+                  )}
                 </span>
-                {done ? null : (
-                  <ExternalLink
-                    href={`/patients/${list.patientId}${text.tab}`}
-                    className="inline-flex min-h-11 shrink-0 items-center font-medium text-primary-text underline-offset-4 hover:underline sm:min-h-6"
-                  >
-                    {checkoutCopy.open}
-                    <span className="sr-only">: {text.pending}</span>
-                  </ExternalLink>
-                )}
+                {offerRecall ? (
+                  <CheckoutRecallOffer
+                    token={token}
+                    patientId={list.patientId}
+                    appointmentId={appointmentId}
+                    types={list.recallTypes}
+                    onScheduled={(next) => {
+                      setScheduled(next);
+                      load();
+                    }}
+                    onStale={load}
+                  />
+                ) : null}
+                {item === 'NEXT_VISIT' && scheduled?.excluded ? (
+                  <p className="text-xs text-muted">{scheduled.excluded}.</p>
+                ) : null}
               </li>
             );
           })}

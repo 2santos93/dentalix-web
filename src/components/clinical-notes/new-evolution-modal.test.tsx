@@ -6,6 +6,15 @@ import { createClinicalEntry, getClinicalEntrySigning } from '@/lib/patients/cli
 import { toast } from 'sonner';
 import { controlTemplate, prophylaxisTemplate, resinTemplate } from './fixtures';
 import { searchIcd10 } from '@/lib/reference/icd10-api';
+import { announceRecallChanged, getPatientRecalls, listRecallTypes, type RecallType } from '@/lib/recall/recall-api';
+import { evolutionRecallCopy } from './evolution-recall-fields';
+
+jest.mock('../../lib/recall/recall-api', () => ({
+  ...jest.requireActual('../../lib/recall/recall-api'),
+  getPatientRecalls: jest.fn(),
+  listRecallTypes: jest.fn(),
+  announceRecallChanged: jest.fn(),
+}));
 
 // DX-378: el día de la cita sale con la zona y el formato de la sede (Caracas, es-VE).
 jest.mock('../../lib/locations/locations-api', () => ({
@@ -606,5 +615,98 @@ describe('NewEvolutionModal · atajos de plantilla (DX-455)', () => {
       expect(await screen.findByRole('radio', { name: /sin plantilla/i })).toBeChecked();
       expect(screen.queryByText(/sugerida por el procedimiento/i)).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('NewEvolutionModal · recall (DX-015-bis D18)', () => {
+  const TYPES = [
+    { id: 't-hyg', name: 'Higiene', systemKey: 'HYGIENE', sortOrder: 10, defaultIntervalMonths: 6, active: true },
+    { id: 't-ctl', name: 'Control', systemKey: 'CHECKUP', sortOrder: 20, defaultIntervalMonths: 12, active: true },
+    { id: 't-off', name: 'Ortodoncia', systemKey: null, sortOrder: 30, defaultIntervalMonths: 12, active: false },
+  ].map((t) => ({ ...t, exclusionGroup: null, triggerCatalogItemIds: [], triggers: [] })) as unknown as RecallType[];
+
+  beforeEach(() => {
+    mockedList.mockReset();
+    mockedList.mockResolvedValue([resinTemplate, prophylaxisTemplate]);
+    mockedCreate.mockReset();
+    mockedCreate.mockResolvedValue({ ...created, recallUpdates: [] });
+    mockedSigning.mockResolvedValue(SIGNED_OK);
+    jest.mocked(listRecallTypes).mockReset().mockResolvedValue(TYPES);
+    jest.mocked(getPatientRecalls)
+      .mockReset()
+      .mockResolvedValue({
+        recalls: [{ recallTypeId: 't-ctl', intervalMonths: 4, active: true } as never],
+        contacts: [],
+      });
+    jest.mocked(announceRecallChanged).mockReset();
+    (toast.success as jest.Mock).mockReset();
+  });
+
+  async function writeNote(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(await screen.findByLabelText(/texto de la evolución/i), 'Profilaxis sin novedad');
+  }
+
+  it('cerrada y «Sin cambios» por defecto: no manda `recall` ni pide los tipos', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await writeNote(user);
+    const toggle = screen.getByRole('button', { name: /Recall\s*Sin cambios/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await user.click(screen.getByRole('button', { name: 'Guardar evolución' }));
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalled());
+    expect(mockedCreate.mock.calls[0][2]).not.toHaveProperty('recall');
+    expect(listRecallTypes).not.toHaveBeenCalled();
+    expect(announceRecallChanged).not.toHaveBeenCalled();
+  });
+
+  it('prellena con el intervalo del recall que ya tiene; sin él, con el del tipo; manda tipo y meses', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await writeNote(user);
+    await user.click(screen.getByRole('button', { name: /Recall/ }));
+    const type = await screen.findByLabelText(evolutionRecallCopy.type);
+    // Solo los activos.
+    expect(within(type).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      evolutionRecallCopy.unchanged,
+      'Higiene',
+      'Control',
+    ]);
+    await user.selectOptions(type, 't-ctl');
+    expect(screen.getByLabelText(evolutionRecallCopy.months)).toHaveValue('4');
+    await user.selectOptions(type, 't-hyg');
+    expect(screen.getByLabelText(evolutionRecallCopy.months)).toHaveValue('6');
+    await user.selectOptions(screen.getByLabelText(evolutionRecallCopy.months), '3');
+    await user.click(screen.getByRole('button', { name: 'Guardar evolución' }));
+    await waitFor(() =>
+      expect(mockedCreate.mock.calls[0][2]).toMatchObject({ recall: { recallTypeId: 't-hyg', intervalMonths: 3 } }),
+    );
+    expect(announceRecallChanged).toHaveBeenCalledWith('p1');
+  });
+
+  it('tras guardar avisa de los recalls que movió (y de la exclusión)', async () => {
+    mockedCreate.mockResolvedValue({
+      ...created,
+      recallUpdates: [
+        { recallId: 'r1', recallTypeId: 't-hyg', recallTypeName: 'Higiene', dueAt: '2027-01-17', deactivated: false, replacedBy: null },
+        {
+          recallId: 'r2',
+          recallTypeId: 't-ctl',
+          recallTypeName: 'Control',
+          dueAt: '2027-03-01',
+          deactivated: true,
+          replacedBy: { recallTypeId: 't-hyg', recallTypeName: 'Higiene' },
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderModal();
+    await writeNote(user);
+    await user.click(screen.getByRole('button', { name: /Recall/ }));
+    await user.selectOptions(await screen.findByLabelText(evolutionRecallCopy.type), 't-hyg');
+    await user.click(screen.getByRole('button', { name: 'Guardar evolución' }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    const notice = (toast.success as jest.Mock).mock.calls[0][0] as string;
+    expect(notice).toMatch(/^Recall de Higiene: vence el 17\/01\/2027 · /);
+    expect(notice).toContain('Recall de Control desactivado: lo sustituye Higiene');
   });
 });

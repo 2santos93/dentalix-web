@@ -90,6 +90,8 @@ export type ClinicalEntrySettings = components['schemas']['ClinicalEntrySettings
 /** La evolución recién firmada con los avisos de la firma (solo en el alta). */
 export interface CreatedClinicalEntry extends ClinicalEntry {
   warnings?: ClinicalEntryWarning[];
+  /** DX-015-bis (D18): el recall que fijó la evolución y los que la exclusión desactivó; vacío sin `recall`. */
+  recallUpdates?: components['schemas']['ItemRecallUpdateDto'][];
 }
 
 /** Topes por evolución que repite la API: 1 principal y hasta 3 relacionados. */

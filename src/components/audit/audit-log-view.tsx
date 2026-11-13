@@ -34,6 +34,7 @@ import {
   cashSessionDetail,
   sedationDetail,
   chairDetail,
+  recallViaDetail,
   scheduleChangeDetail,
   cancellationDetail,
   healthRegistrationDetail,
@@ -573,6 +574,7 @@ function eventDetail(
     scheduleChangeDetail(event.metadata, clock?.fmt ?? null) ??
     cancellationDetail(event.metadata) ??
     patientFlowDetail(event.metadata) ??
+    recallViaDetail(event.metadata) ??
     planItemAttributionDetail(event.metadata, clock) ??
     importBatchDetail(event.metadata) ??
     healthRegistrationDetail(event.metadata) ??
