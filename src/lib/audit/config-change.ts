@@ -1,5 +1,6 @@
 import type { AuditEvent } from "@/lib/audit/audit-api";
 import { payerTypeLabel } from "@/components/payers/payer-labels";
+import { CLINIC_LANGUAGE_LABEL, languageName } from "@/lib/patients/patient-languages";
 import { MOVEMENT_TYPE_LABELS } from "@/components/inventory/movement-format";
 import type { RegionalFormat } from "@/lib/format/regional-format";
 import { sedeNumber } from "@/lib/format/sede-number";
@@ -99,6 +100,9 @@ const FIELD_LABELS: Record<string, string> = {
   sortOrder: "Orden",
   exclusionGroup: "Grupo de exclusión",
   catalogItemIds: "Procedimientos que lo reinician",
+  // DX-497: idiomas de los pacientes (Ajustes) e idioma de un paciente (ficha).
+  patientLanguages: "Idiomas de los pacientes",
+  preferredLanguage: "Idioma de los mensajes",
 };
 const FIELD_ORDER = Object.keys(FIELD_LABELS);
 
@@ -116,7 +120,12 @@ const FIELD_UNITS: Record<string, string> = {
 /** Lo que dice un `null` que no es «sin valor» (DX-448: el de la instalación). */
 const NULL_LABELS: Record<string, string> = {
   expiryLeadMinutes: "Por defecto",
+  // DX-497: sin preferencia, el paciente recibe el idioma de la clínica.
+  preferredLanguage: CLINIC_LANGUAGE_LABEL,
 };
+
+/** DX-497: campos cuyo valor es una etiqueta de idioma (BCP 47). */
+const LANGUAGE_FIELDS = new Set(["patientLanguages", "preferredLanguage"]);
 
 const DOMAIN_STATUS_LABELS: Record<string, string> = {
   PENDING: "Pendiente",
@@ -160,6 +169,7 @@ function scalar(
       payerTypeLabel(value)
     );
   if (field === "status") return DOMAIN_STATUS_LABELS[value] ?? value;
+  if (LANGUAGE_FIELDS.has(field)) return languageName(value);
   if (field === "hourCycle") return HOUR_CYCLE_LABELS[value] ?? value;
   if (field === "adjustmentType")
     return ADJUSTMENT_TYPE_LABELS[value as keyof typeof ADJUSTMENT_TYPE_LABELS] ?? value;

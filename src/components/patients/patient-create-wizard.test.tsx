@@ -5,6 +5,7 @@ import { createPatient, type Patient } from '@/lib/patients/patients-api';
 import { getPrivacyPolicies } from '@/lib/data-consents/data-consents-api';
 import { getDocumentTypeNames } from '@/lib/patients/document-type-names-api';
 import { policiesFixture, policyFixture } from '@/lib/test/data-consents';
+import { getPatientLanguages } from '@/lib/patients/patient-languages';
 import { clearPrefillPhone, peekPrefillPhone, setPrefillPhone } from '@/lib/patients/prefill-phone';
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
@@ -13,6 +14,11 @@ jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }))
 // path here, matching @/lib/patients/patients-api's actual location.
 jest.mock('../../lib/patients/patients-api', () => ({
   createPatient: jest.fn(),
+}));
+
+jest.mock('../../lib/patients/patient-languages', () => ({
+  ...jest.requireActual('../../lib/patients/patient-languages'),
+  getPatientLanguages: jest.fn(),
 }));
 
 jest.mock('../../lib/patients/document-type-names-api', () => ({
@@ -26,6 +32,7 @@ jest.mock('../../lib/data-consents/data-consents-api', () => ({
 
 const mockedCreatePatient = createPatient as jest.MockedFunction<typeof createPatient>;
 const mockedGetNames = getDocumentTypeNames as jest.MockedFunction<typeof getDocumentTypeNames>;
+const mockedGetLanguages = getPatientLanguages as jest.MockedFunction<typeof getPatientLanguages>;
 const mockedGetPolicies = getPrivacyPolicies as jest.MockedFunction<typeof getPrivacyPolicies>;
 
 const CREATED: Patient = {
@@ -65,6 +72,8 @@ describe('PatientCreateWizard', () => {
     mockedCreatePatient.mockReset();
     mockedGetPolicies.mockReset();
     mockedGetPolicies.mockResolvedValue(policiesFixture());
+    mockedGetLanguages.mockReset();
+    mockedGetLanguages.mockResolvedValue({ languages: ['es'], clinicLanguage: 'es' });
     mockedGetNames.mockReset();
     mockedGetNames.mockResolvedValue({
       NATIONAL_ID: null,
@@ -94,6 +103,32 @@ describe('PatientCreateWizard', () => {
     expect(input).toMatchObject({ firstName: 'Ana', lastName: 'García', docType: 'NATIONAL_ID' });
     expect(input).not.toHaveProperty('medicalHistory');
     expect(input).not.toHaveProperty('dataConsents');
+  });
+
+  it('DX-497: sin más idiomas que el de la clínica, el alta no ofrece el campo', async () => {
+    render(<PatientCreateWizard token="tok" canWriteClinicalHistory />);
+    await screen.findByLabelText(/^nombre$/i);
+    expect(mockedGetLanguages).toHaveBeenCalled();
+    expect(screen.queryByLabelText('Idioma de los mensajes')).not.toBeInTheDocument();
+  });
+
+  it('DX-497: con English y Català en la lista, recepción elige el idioma y se envía', async () => {
+    const user = userEvent.setup();
+    mockedGetLanguages.mockResolvedValue({ languages: ['es', 'en', 'ca'], clinicLanguage: 'es' });
+    mockedCreatePatient.mockResolvedValue(CREATED);
+    render(<PatientCreateWizard token="tok" canWriteClinicalHistory={false} />);
+    const select = await screen.findByLabelText('Idioma de los mensajes');
+    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Idioma de la clínica · Español (es)',
+      'English (en)',
+      'Català (ca)',
+    ]);
+    await user.type(screen.getByLabelText(/^nombre$/i), 'Ana');
+    await user.type(screen.getByLabelText(/apellido/i), 'García');
+    await user.selectOptions(screen.getByLabelText(/tipo de documento/i), 'NATIONAL_ID');
+    await user.selectOptions(select, 'en');
+    await user.click(screen.getByRole('button', { name: /crear paciente/i }));
+    expect(mockedCreatePatient.mock.calls[0][1]).toMatchObject({ preferredLanguage: 'en' });
   });
 
   it('DX-224: «Crear paciente» de «¿Quién llama?» trae el teléfono escrito, y se olvida al salir', async () => {

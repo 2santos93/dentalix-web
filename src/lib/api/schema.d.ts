@@ -790,6 +790,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/languages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Idiomas de los pacientes de la clínica (DX-497) */
+        get: operations["PatientsController_languages"];
+        /**
+         * Cambia los idiomas que la ficha ofrece al paciente; queda en la auditoría
+         * @description DX-497. Solo ADMIN. Etiquetas BCP 47 normalizadas, sin repetidos, con el idioma de la clínica siempre incluido. Quitar un idioma no borra el de ningún paciente (la ficha lo enseña «(no disponible)»). Si la lista no cambia, 200 sin evento de auditoría.
+         */
+        put: operations["PatientsController_updateLanguages"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/document-type-names": {
         parameters: {
             query?: never;
@@ -8354,6 +8375,11 @@ export interface components {
             dataConsentPolicyVersion?: string;
             maritalStatus?: string;
             occupation?: string;
+            /**
+             * @description DX-497: idioma preferido (BCP 47) de lo que se le envía (recordatorio, página de confirmar). null o ausente = «Idioma de la clínica». Tiene que estar en la lista de la clínica (GET /patients/languages); si no, 400.
+             * @example en
+             */
+            preferredLanguage?: string | null;
             physicianName?: string;
             physicianPhone?: string;
             emergencyContactName?: string;
@@ -8475,6 +8501,11 @@ export interface components {
             importBatchId: string | null;
             /** @description DX-128: canal de los avisos automáticos (EMAIL, WHATSAPP o NONE). Detalle en GET /patients/:id/communication. */
             contactChannel: components["schemas"]["ContactChannel"];
+            /**
+             * @description DX-497: idioma preferido (BCP 47); null = «Idioma de la clínica». Puede no estar ya en la lista de la clínica (se quitó): la ficha lo enseña «(no disponible)» y los envíos salen en el idioma de la clínica.
+             * @example en
+             */
+            preferredLanguage: string | null;
             /** Format: date-time */
             whatsappOptInAt: string | null;
             whatsappOptInSource: components["schemas"]["WhatsappOptInSource"] | null;
@@ -8606,6 +8637,11 @@ export interface components {
             importBatchId: string | null;
             /** @description DX-128: canal de los avisos automáticos (EMAIL, WHATSAPP o NONE). Detalle en GET /patients/:id/communication. */
             contactChannel: components["schemas"]["ContactChannel"];
+            /**
+             * @description DX-497: idioma preferido (BCP 47); null = «Idioma de la clínica». Puede no estar ya en la lista de la clínica (se quitó): la ficha lo enseña «(no disponible)» y los envíos salen en el idioma de la clínica.
+             * @example en
+             */
+            preferredLanguage: string | null;
             /** Format: date-time */
             whatsappOptInAt: string | null;
             whatsappOptInSource: components["schemas"]["WhatsappOptInSource"] | null;
@@ -8720,6 +8756,32 @@ export interface components {
              * @example 18
              */
             majorityAge: number;
+        };
+        PatientLanguagesDto: {
+            /**
+             * @example [
+             *       "es",
+             *       "en",
+             *       "ca"
+             *     ]
+             */
+            languages: string[];
+            /**
+             * @description Idioma de la clínica: el de los pacientes con «Idioma de la clínica» (null) y el de los envíos sin traducción.
+             * @example es
+             */
+            clinicLanguage: string;
+        };
+        UpdatePatientLanguagesDto: {
+            /**
+             * @description Etiquetas BCP 47 que la ficha ofrece como idioma preferido. Se normalizan («EN» → «en»), sin repetidos, y siempre incluyen el idioma de la clínica («es»). Quitar uno no toca a los pacientes que lo tenían.
+             * @example [
+             *       "es",
+             *       "en",
+             *       "ca"
+             *     ]
+             */
+            languages: string[];
         };
         DocumentTypeNamesValuesDto: {
             /** @description Documento nacional */
@@ -8871,6 +8933,11 @@ export interface components {
             importBatchId: string | null;
             /** @description DX-128: canal de los avisos automáticos (EMAIL, WHATSAPP o NONE). Detalle en GET /patients/:id/communication. */
             contactChannel: components["schemas"]["ContactChannel"];
+            /**
+             * @description DX-497: idioma preferido (BCP 47); null = «Idioma de la clínica». Puede no estar ya en la lista de la clínica (se quitó): la ficha lo enseña «(no disponible)» y los envíos salen en el idioma de la clínica.
+             * @example en
+             */
+            preferredLanguage: string | null;
             /** Format: date-time */
             whatsappOptInAt: string | null;
             whatsappOptInSource: components["schemas"]["WhatsappOptInSource"] | null;
@@ -9025,6 +9092,25 @@ export interface components {
             reminderOptOut: components["schemas"]["ReminderOptOutDto"] | null;
             /** @description A quién se dirigen los avisos (como Dentrix Ascend: un menor, a su tutor o contacto principal). Usan el correo y el móvil de la ficha. */
             recipient: components["schemas"]["CommunicationRecipientDto"];
+            /**
+             * @description DX-497: idioma preferido (BCP 47) del recordatorio y de la página de confirmar. null = «Idioma de la clínica». Si ya no está en `patientLanguages`, la ficha lo enseña «(no disponible)».
+             * @example en
+             */
+            preferredLanguage: string | null;
+            /**
+             * @description DX-497: idiomas que ofrece la clínica (opciones del desplegable).
+             * @example [
+             *       "es",
+             *       "en",
+             *       "ca"
+             *     ]
+             */
+            patientLanguages: string[];
+            /**
+             * @description DX-497: idioma de la clínica.
+             * @example es
+             */
+            clinicLanguage: string;
         };
         PatientOptOutMatchWarningDto: {
             /** Format: uuid */
@@ -9043,6 +9129,11 @@ export interface components {
             whatsappOptInSource?: components["schemas"]["WhatsappOptInSource"];
             /** @description true anota la baja de los recordatorios a petición del paciente (origen STAFF); false la quita y los reactiva. */
             reminderOptOut?: boolean;
+            /**
+             * @description DX-497: idioma preferido (BCP 47). null o vacío = «Idioma de la clínica». Tiene que estar en la lista de la clínica (400 si no). Queda en la auditoría con el antes y el después.
+             * @example en
+             */
+            preferredLanguage?: string | null;
         };
         /**
          * @description PATIENT: otro paciente de la clínica (sus datos salen de su ficha). CONTACT: contacto sin ficha.
@@ -13842,6 +13933,11 @@ export interface components {
             currency: string | null;
         };
         PublicAppointmentConfirmationDto: {
+            /**
+             * @description DX-497: idioma (BCP 47) en que abre la página: el preferido del paciente de la cita o, sin preferencia, el de la clínica. Sin traducción para él, la página sale en el de la clínica; el paciente puede cambiarlo en la página sin tocar su ficha.
+             * @example en
+             */
+            language: string;
             /** @description DX-469: se puede añadir la cita al calendario (enlace válido, cita no cancelada y aún no terminada): `GET …/:token/calendar.ics` y `googleCalendarUrl`. */
             calendarAvailable: boolean;
             /** @description DX-469: «Añadir a Google Calendar» (plantilla de evento, sin datos clínicos). null si `calendarAvailable` es false. */
@@ -21870,6 +21966,7 @@ export interface components {
             emergencyContactName?: string;
             emergencyContactPhone?: string;
             notes?: string;
+            preferredLanguage?: string;
         };
         ImportFieldDescriptorDto: {
             /** @example firstName */
@@ -22027,6 +22124,7 @@ export interface components {
             emergencyContactName?: string;
             emergencyContactPhone?: string;
             notes?: string;
+            preferredLanguage?: string;
         };
         ImportPreviewRowDto: {
             rowNumber: number;
@@ -22220,6 +22318,16 @@ export interface components {
             emailDelivery: components["schemas"]["ReminderEmailDelivery"] | null;
             /** @description DX-203: salió al email del responsable del paciente (un menor o un paciente sin email): «Recordatorio enviado al responsable». */
             sentToResponsible: boolean;
+            /**
+             * @description DX-497: idioma (BCP 47) en que salió el email, del registro de envíos. null si no salió o es anterior a DX-497.
+             * @example en
+             */
+            language: string | null;
+            /**
+             * @description DX-497: el idioma del paciente no tenía traducción y el email salió en `language` (el de la clínica): «sin traducción: ca → es». null si no hubo caída.
+             * @example ca
+             */
+            languageFallbackFrom: string | null;
             /** @description false = de una hora de inicio anterior (la cita se reprogramó) */
             current: boolean;
         };
@@ -24326,6 +24434,62 @@ export interface operations {
                 };
             };
             /** @description Fuera de 14–21 o no entero */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar la mayoría de edad. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientsController_languages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientLanguagesDto"];
+                };
+            };
+        };
+    };
+    PatientsController_updateLanguages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePatientLanguagesDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientLanguagesDto"];
+                };
+            };
+            /** @description Etiqueta no válida o más de 20 */
             400: {
                 headers: {
                     [name: string]: unknown;

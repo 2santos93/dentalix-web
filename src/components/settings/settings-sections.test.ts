@@ -30,10 +30,10 @@ describe('Índice de Ajustes (DX-282)', () => {
     ]);
   });
 
-  it('ADMIN ve las 33 pantallas de ajustes (Mi perfil incluido), cada una una sola vez', () => {
+  it('ADMIN ve las 34 pantallas de ajustes (Mi perfil incluido), cada una una sola vez', () => {
     const hrefs = hrefsFor('ADMIN');
-    expect(hrefs).toHaveLength(33);
-    expect(new Set(hrefs).size).toBe(33);
+    expect(hrefs).toHaveLength(34);
+    expect(new Set(hrefs).size).toBe(34);
   });
 
   it('la entrada de Historia clínica dice también el plazo de conservación (DX-330)', () => {
@@ -91,6 +91,13 @@ describe('Índice de Ajustes (DX-282)', () => {
     expect(hrefsFor('ADMIN')).toContain('/settings/mayoria-de-edad');
     for (const role of ['DENTIST', 'ASSISTANT', 'RECEPTION', null] as const) {
       expect(hrefsFor(role)).not.toContain('/settings/mayoria-de-edad');
+    }
+  });
+
+  it('DX-497: Idiomas de los pacientes solo para ADMIN', () => {
+    expect(hrefsFor('ADMIN')).toContain('/settings/idiomas-de-pacientes');
+    for (const role of ['DENTIST', 'ASSISTANT', 'RECEPTION', null] as const) {
+      expect(hrefsFor(role)).not.toContain('/settings/idiomas-de-pacientes');
     }
   });
 

@@ -57,6 +57,9 @@ function comms(over: Partial<PatientCommunication> = {}): PatientCommunication {
       minor: false,
       responsiblePartyId: null,
     },
+    preferredLanguage: null,
+    patientLanguages: ['es'],
+    clinicLanguage: 'es',
     ...over,
   };
 }
@@ -412,5 +415,56 @@ describe('PatientCommunicationSection con cada sede (DX-354b)', () => {
     await waitFor(() =>
       expect(screen.getByText(new RegExp(dateIn(key, optOut.at).replace(/\./g, '\\.')))).toBeInTheDocument(),
     );
+  });
+
+  describe('DX-497: idioma de los mensajes', () => {
+    it('recepción ve «Idioma de la clínica» y los idiomas de la lista, y guarda solo el idioma', async () => {
+      mockedGet.mockResolvedValue(comms({ patientLanguages: ['es', 'en', 'ca'] }));
+      mockedUpdate.mockResolvedValue(comms({ preferredLanguage: 'en', patientLanguages: ['es', 'en', 'ca'] }));
+      const user = setupUser();
+      renderSection();
+      expect(await screen.findByTestId('patient-preferred-language')).toHaveTextContent('Idioma de la clínica');
+      await user.click(screen.getByRole('button', { name: 'Editar comunicaciones' }));
+      const dialog = await screen.findByRole('dialog');
+      const select = within(dialog).getByLabelText('Idioma de los mensajes');
+      expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual([
+        'Idioma de la clínica · Español (es)',
+        'English (en)',
+        'Català (ca)',
+      ]);
+      await user.selectOptions(select, 'en');
+      await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
+      await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+      expect(mockedUpdate).toHaveBeenCalledWith('tok', 'p1', { preferredLanguage: 'en' });
+      expect(await screen.findByTestId('patient-preferred-language')).toHaveTextContent('English (en)');
+    });
+
+    it('volver a «Idioma de la clínica» envía null', async () => {
+      mockedGet.mockResolvedValue(comms({ preferredLanguage: 'en', patientLanguages: ['es', 'en'] }));
+      mockedUpdate.mockResolvedValue(comms({ patientLanguages: ['es', 'en'] }));
+      const user = setupUser();
+      renderSection();
+      await user.click(await screen.findByRole('button', { name: 'Editar comunicaciones' }));
+      const dialog = await screen.findByRole('dialog');
+      await user.selectOptions(within(dialog).getByLabelText('Idioma de los mensajes'), '');
+      await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
+      await waitFor(() => expect(mockedUpdate).toHaveBeenCalledWith('tok', 'p1', { preferredLanguage: null }));
+    });
+
+    it('un idioma que la clínica quitó se ve «(no disponible) ca» y no se pierde al guardar otra cosa', async () => {
+      mockedGet.mockResolvedValue(comms({ preferredLanguage: 'ca', patientLanguages: ['es', 'en'] }));
+      mockedUpdate.mockResolvedValue(comms({ preferredLanguage: 'ca', reminderOptOut: null }));
+      const user = setupUser();
+      renderSection();
+      expect(await screen.findByTestId('patient-preferred-language')).toHaveTextContent('(no disponible) ca');
+      await user.click(screen.getByRole('button', { name: 'Editar comunicaciones' }));
+      const dialog = await screen.findByRole('dialog');
+      const select = within(dialog).getByLabelText('Idioma de los mensajes');
+      expect(select).toHaveValue('ca');
+      expect(within(select).getByRole('option', { name: '(no disponible) ca' })).toBeInTheDocument();
+      await user.click(within(dialog).getByLabelText('Dado de baja de los recordatorios automáticos'));
+      await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
+      await waitFor(() => expect(mockedUpdate).toHaveBeenCalledWith('tok', 'p1', { reminderOptOut: true }));
+    });
   });
 });

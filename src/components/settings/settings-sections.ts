@@ -31,10 +31,12 @@ import {
   ScanBarcode,
   ShieldCheck,
   UserCheck,
+  Languages,
   UserRound,
   Wallet,
 } from 'lucide-react';
 import type { ClinicRole } from '@/lib/me/me-api';
+import { canManagePatientLanguages } from '@/lib/patients/patient-languages';
 import { canManageConsentTemplates } from '@/lib/consents/consents-api';
 import { canManagePrescriptionSettings } from '@/lib/prescriptions/prescriptions-api';
 import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
@@ -156,6 +158,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Cómo se llama cada tipo de documento en tu clínica. Se usa en fichas, recibos, recetas y consentimientos, y al importar pacientes.',
         icon: IdCard,
         visible: canManageDocumentTypeNames,
+      },
+      // DX-497.
+      {
+        href: '/settings/idiomas-de-pacientes',
+        label: 'Idiomas de los pacientes',
+        description: 'Los idiomas en que se puede escribir a cada paciente: recordatorio y página para confirmar la cita.',
+        icon: Languages,
+        visible: canManagePatientLanguages,
       },
     ],
   },

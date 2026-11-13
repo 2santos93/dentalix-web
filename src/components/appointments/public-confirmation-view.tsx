@@ -37,73 +37,13 @@ import { InlineError } from '@/components/errors/inline-error';
 import { ClinicBrand } from '@/components/brand/clinic-brand';
 import { ExternalLink } from '@/components/shared/external-link';
 import { API_PROXY_PATH } from '@/lib/api/api-base';
-
-// Copy as constants (i18n-ready) — es first, matches the rest of the copy
-// until next-intl wiring lands.
-const copy = {
-  loading: 'Cargando tu cita…',
-  // Sin "Intenta de nuevo." — `SectionError` trae su propio botón.
-  loadError: 'No pudimos cargar tu cita. Revisa tu conexión.',
-  greeting: (name: string | null) => (name ? `Hola ${name},` : 'Hola,'),
-  pendingLead: 'tienes esta cita. ¿Nos confirmas si vienes?',
-  dayLabel: 'Fecha',
-  timeLabel: 'Hora',
-  providerLabel: 'Profesional',
-  locationLabel: 'Sede',
-  confirm: 'Confirmar asistencia',
-  callMe: 'Quiero que me llamen',
-  cancel: 'Cancelar cita',
-  respondError: 'No pudimos enviar tu respuesta. Revisa tu conexión e intenta de nuevo.',
-  respondedTitle: 'Ya respondiste',
-  responded: {
-    confirm: 'Confirmaste tu asistencia. ¡Te esperamos!',
-    cancel: 'Cancelaste la cita. Si quieres otra fecha, comunícate con la clínica.',
-    call_me: 'Te llamaremos pronto para coordinar tu cita.',
-  } satisfies Record<ConfirmationAction, string>,
-  expiredTitle: 'Este enlace ya no es válido',
-  expiredMessage:
-    'Caducó o la cita cambió después de enviarlo. Si necesitas confirmar o cambiar tu cita, comunícate con la clínica.',
-  invalidTitle: 'Enlace no válido',
-  invalidMessage:
-    'No encontramos este enlace. Revisa que esté completo o pide a la clínica que te lo envíe de nuevo.',
-  fallbackClinic: 'Tu clínica',
-  // DX-291: la política de cancelación de la sede.
-  policyTitle: 'Política de cancelación',
-  policyNotice: (hours: number) => `Si no puedes asistir, avísanos con al menos ${hours} h de antelación.`,
-  policyFee: (amount: string) => `Cargo por inasistencia o cancelación tardía: ${amount}.`,
-  lateTitle: (hours: number) => `Cancelación con menos de ${hours} h de aviso`,
-  lateMessage:
-    'Si cancelas ahora, cuenta como cancelación tardía según la política de la clínica. Si prefieres, pide que te llamemos para buscar otra hora.',
-  acknowledge: 'He leído y acepto la política de cancelación de la clínica',
-  // DX-354: la sede de la cita no tiene zona, formato o reloj: no hay quien lo configure, así que se manda a la clínica.
-  noFormat: 'Llama a la clínica para confirmar la hora de tu cita.',
-  // DX-354: con la sede sin formato no se puede escribir el cargo: nunca «—» en su lugar; se cancela por teléfono.
-  feeNeedsClinicTitle: 'Para cancelar ahora, llama a la clínica',
-  feeNeedsClinicMessage:
-    'Cancelar con tan poco aviso tiene un cargo según la política de la clínica y aquí no podemos mostrártelo. Llama a la clínica para cancelar o para que te llamemos a ti.',
-  acknowledgeRequired: (hours: number) =>
-    `Para cancelar con menos de ${hours} h de aviso, marca que aceptas la política de cancelación.`,
-  // DX-437: «Avisarme si se libera un hueco antes».
-  earlierTitle: '¿Quieres venir antes?',
-  earlierLabel: 'Si se libera un hueco antes, avísame',
-  earlierHint: 'Tu cita de ahora se mantiene. Te avisaremos solo si queda un hueco que te sirva.',
-  earlierWindowLabel: 'Franja',
-  earlierWindows: {
-    ANY: 'Cualquier hora',
-    MORNING: 'Mañanas',
-    AFTERNOON: 'Tardes',
-  } satisfies Record<EarlierWindow, string>,
-  earlierSaved: (window: EarlierWindow) =>
-    window === 'ANY'
-      ? 'Listo. Te avisaremos si se libera un hueco antes.'
-      : `Listo. Te avisaremos si se libera un hueco antes (${copy.earlierWindows[window].toLowerCase()}).`,
-  earlierCleared: 'Listo. No te avisaremos de huecos anteriores.',
-  earlierError: 'No pudimos guardar tu preferencia. Revisa tu conexión e intenta de nuevo.',
-  // DX-469: «Añadir a mi calendario».
-  calendarTitle: 'Añadir a mi calendario',
-  calendarIcs: 'Apple, Outlook u otro (.ics)',
-  calendarGoogle: 'Google Calendar',
-};
+import {
+  PAGE_LANGUAGES,
+  PUBLIC_CONFIRMATION_COPY,
+  resolvePageLanguage,
+  type PageLanguage,
+  type PublicConfirmationCopy,
+} from './public-confirmation-copy';
 
 type LoadState =
   | { kind: 'loading' }
@@ -140,9 +80,11 @@ function cancelNeedsClinic(data: PublicConfirmation): boolean {
 function AppointmentSummary({
   appointment,
   format,
+  t,
 }: {
   appointment: ConfirmationAppointment;
   format: DocumentFormat | null;
+  t: PublicConfirmationCopy;
 }) {
   const doc = documentTexts(format);
   // En 12 h el rango lleva espacios alrededor del guion («9:00 a. m. – 9:30 a. m.»).
@@ -150,7 +92,7 @@ function AppointmentSummary({
   const rows = [
     {
       icon: CalendarCheck,
-      label: copy.dayLabel,
+      label: t.dayLabel,
       value: format
         ? format.fmt.longDate(new Date(appointment.start), format.timeZone)
         : <MissingValue />,
@@ -158,18 +100,18 @@ function AppointmentSummary({
     },
     {
       icon: Clock,
-      label: copy.timeLabel,
+      label: t.timeLabel,
       value: format
         ? `${doc.time(appointment.start)}${separator}${doc.time(appointment.end)}`
         : <MissingValue />,
-      sub: format ? null : copy.noFormat,
+      sub: format ? null : t.noFormat,
     },
     ...(appointment.providerName
-      ? [{ icon: UserRound, label: copy.providerLabel, value: appointment.providerName, sub: null }]
+      ? [{ icon: UserRound, label: t.providerLabel, value: appointment.providerName, sub: null }]
       : []),
     {
       icon: MapPin,
-      label: copy.locationLabel,
+      label: t.locationLabel,
       value: appointment.locationName,
       sub: appointment.locationAddress,
     },
@@ -203,7 +145,9 @@ function CancellationPolicyNotice({
   isLate,
   format,
   feeBlocked,
+  t,
 }: {
+  t: PublicConfirmationCopy;
   policy: PublicCancellationPolicy;
   isLate: boolean;
   format: DocumentFormat | null;
@@ -222,30 +166,30 @@ function CancellationPolicyNotice({
     >
       <h2 id="cancellation-policy-title" className="t-title flex items-center gap-2 text-ink">
         <FileText aria-hidden className="size-4 shrink-0 text-muted" />
-        {copy.policyTitle}
+        {t.policyTitle}
       </h2>
       <div className="flex flex-col gap-2 text-sm text-ink">
-        <p>{copy.policyNotice(policy.noticeHours)}</p>
+        <p>{t.policyNotice(policy.noticeHours)}</p>
         {policy.text ? <p className="whitespace-pre-line break-words">{policy.text}</p> : null}
-        {fee ? <p className="tabular-nums">{copy.policyFee(fee)}</p> : null}
+        {fee ? <p className="tabular-nums">{t.policyFee(fee)}</p> : null}
       </div>
       {feeBlocked ? (
         <Callout
           tone="warning"
           role="note"
           data-testid="public-fee-needs-clinic"
-          title={copy.feeNeedsClinicTitle}
+          title={t.feeNeedsClinicTitle}
         >
-          {copy.feeNeedsClinicMessage}
+          {t.feeNeedsClinicMessage}
         </Callout>
       ) : isLate ? (
         <Callout
           tone="warning"
           role="note"
           data-testid="public-late-cancellation"
-          title={copy.lateTitle(policy.noticeHours)}
+          title={t.lateTitle(policy.noticeHours)}
         >
-          {copy.lateMessage}
+          {t.lateMessage}
         </Callout>
       ) : null}
     </section>
@@ -257,7 +201,15 @@ function CancellationPolicyNotice({
  * calendario del móvil) y Google Calendar en una pestaña nueva. Solo con
  * `calendarAvailable` (enlace válido, cita no cancelada y aún no terminada).
  */
-function CalendarLinks({ token, googleUrl }: { token: string; googleUrl: string | null }) {
+function CalendarLinks({
+  token,
+  googleUrl,
+  t,
+}: {
+  token: string;
+  googleUrl: string | null;
+  t: PublicConfirmationCopy;
+}) {
   const ics = `${API_PROXY_PATH}/public/appointment-confirmations/${encodeURIComponent(token)}/calendar.ics`;
   const linkClass =
     'inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-surface px-4 text-sm font-medium text-ink hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text';
@@ -269,15 +221,15 @@ function CalendarLinks({ token, googleUrl }: { token: string; googleUrl: string 
     >
       <h2 id="calendar-links-title" className="t-title flex items-center gap-2 text-ink">
         <CalendarPlus aria-hidden className="size-4 shrink-0 text-muted" />
-        {copy.calendarTitle}
+        {t.calendarTitle}
       </h2>
       <div className="flex flex-col gap-2 sm:flex-row">
         <a href={ics} download="cita.ics" className={linkClass}>
-          {copy.calendarIcs}
+          {t.calendarIcs}
         </a>
         {googleUrl ? (
           <ExternalLink href={googleUrl} className={linkClass}>
-            {copy.calendarGoogle}
+            {t.calendarGoogle}
           </ExternalLink>
         ) : null}
       </div>
@@ -300,7 +252,9 @@ function EarlierRequestSection({
   notice,
   error,
   onChange,
+  t,
 }: {
+  t: PublicConfirmationCopy;
   appointment: ConfirmationAppointment;
   pending: boolean;
   notice: string | null;
@@ -318,7 +272,7 @@ function EarlierRequestSection({
     >
       <h2 id="earlier-request-title" className="t-title flex items-center gap-2 text-ink">
         <BellRing aria-hidden className="size-4 shrink-0 text-muted" />
-        {copy.earlierTitle}
+        {t.earlierTitle}
       </h2>
       {/* 44 px: la casilla y el selector se tocan con el dedo. */}
       <Checkbox
@@ -326,14 +280,14 @@ function EarlierRequestSection({
         checked={appointment.wantsEarlier}
         disabled={pending}
         onChange={(e) => onChange(e.target.checked, window)}
-        label={copy.earlierLabel}
-        description={copy.earlierHint}
+        label={t.earlierLabel}
+        description={t.earlierHint}
         className="min-h-11"
       />
       {appointment.wantsEarlier ? (
         <div className="flex flex-col gap-1">
           <label htmlFor={selectId} className="t-caption text-muted">
-            {copy.earlierWindowLabel}
+            {t.earlierWindowLabel}
           </label>
           <NativeSelect
             id={selectId}
@@ -344,7 +298,7 @@ function EarlierRequestSection({
           >
             {EARLIER_WINDOWS.map((w) => (
               <option key={w} value={w}>
-                {copy.earlierWindows[w]}
+                {t.earlierWindows[w]}
               </option>
             ))}
           </NativeSelect>
@@ -366,6 +320,21 @@ function EarlierRequestSection({
  */
 export function PublicConfirmationView({ confirmationToken }: { confirmationToken: string }) {
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
+  // DX-497: el idioma que eligió el paciente en la página (null = el suyo de
+  // la ficha, que manda la API). Cambiarlo no toca la ficha: solo esta vista.
+  const [chosenLanguage, setChosenLanguage] = useState<PageLanguage | null>(null);
+  const language: PageLanguage =
+    chosenLanguage ?? resolvePageLanguage(state.kind === 'ready' ? state.data.language : null);
+  const t = PUBLIC_CONFIRMATION_COPY[language];
+  const languageSelectId = useId();
+  useEffect(() => {
+    const previous = document.documentElement.lang;
+    document.documentElement.lang = language;
+    document.title = t.documentTitle;
+    return () => {
+      document.documentElement.lang = previous;
+    };
+  }, [language, t]);
   const [reloadKey, setReloadKey] = useState(0);
   const [pending, setPending] = useState<ConfirmationAction | null>(null);
   const [respondError, setRespondError] = useState<string | null>(null);
@@ -424,10 +393,10 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
         setState({ kind: 'invalid' });
       } else if (err instanceof ApiError && err.status === 400) {
         // La política exige aceptarla (la hora cambió mientras leía): se relee.
-        setRespondError(apiErrorMessage(err, copy.respondError));
+        setRespondError(apiErrorMessage(err, t.respondError));
         setReloadKey((k) => k + 1);
       } else {
-        setRespondError(copy.respondError);
+        setRespondError(t.respondError);
       }
     } finally {
       setPending(null);
@@ -446,7 +415,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
         ...(wantsEarlier ? { preferredWindow: window } : {}),
       });
       setState({ kind: 'ready', data });
-      setEarlierNotice(wantsEarlier ? copy.earlierSaved(window) : copy.earlierCleared);
+      setEarlierNotice(wantsEarlier ? t.earlierSaved(window) : t.earlierCleared);
     } catch (err) {
       if (err instanceof ApiError && err.status === 410) {
         setState({ kind: 'ready', data: { ...state.data, status: 'EXPIRED', appointment: null } });
@@ -454,10 +423,10 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
         setState({ kind: 'invalid' });
       } else if (err instanceof ApiError && err.status === 400) {
         // Ya no se puede (la cita cambió o es hoy): el motivo de la API y se relee.
-        setEarlierError(apiErrorMessage(err, copy.earlierError));
+        setEarlierError(apiErrorMessage(err, t.earlierError));
         setReloadKey((k) => k + 1);
       } else {
-        setEarlierError(copy.earlierError);
+        setEarlierError(t.earlierError);
       }
     } finally {
       setEarlierPending(false);
@@ -468,7 +437,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
   /** DX-437: con la cita a la vista, no cancelada, y si la API lo permite. */
   const calendarSection =
     state.kind === 'ready' && state.data.calendarAvailable ? (
-      <CalendarLinks token={confirmationToken} googleUrl={state.data.googleCalendarUrl} />
+      <CalendarLinks token={confirmationToken} googleUrl={state.data.googleCalendarUrl} t={t} />
     ) : null;
   const earlierSection =
     state.kind === 'ready' &&
@@ -481,15 +450,35 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
         notice={earlierNotice}
         error={earlierError}
         onChange={(wantsEarlier, window) => void handleEarlierChange(wantsEarlier, window)}
+        t={t}
       />
     ) : null;
 
   return (
-    <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-canvas">
+    <div style={publicBrandStyle(clinic)} lang={language} className="flex min-h-dvh flex-col bg-canvas">
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
+        {/* DX-497: el paciente cambia el idioma de la página (no el de su ficha). */}
+        <div className="flex items-center justify-end gap-2">
+          <label htmlFor={languageSelectId} className="t-caption text-muted">
+            {t.languageLabel}
+          </label>
+          <NativeSelect
+            id={languageSelectId}
+            data-testid="public-language"
+            value={language}
+            onChange={(e) => setChosenLanguage(e.target.value as PageLanguage)}
+            selectClassName="h-11"
+          >
+            {PAGE_LANGUAGES.map((l) => (
+              <option key={l} value={l} lang={l}>
+                {PUBLIC_CONFIRMATION_COPY[l].languageName}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
         {state.kind === 'loading' && (
           <div role="status" className="flex flex-col gap-4">
-            <span className="sr-only">{copy.loading}</span>
+            <span className="sr-only">{t.loading}</span>
             <Skeleton className="h-7 w-48" />
             <Skeleton className="h-48 w-full rounded-xl" />
             <Skeleton className="h-12 w-full" />
@@ -499,7 +488,9 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
 
         {state.kind === 'error' && (
           <SectionError
-            description={copy.loadError}
+            title={t.loadErrorTitle}
+            retryLabel={t.retry}
+            description={t.loadError}
             onRetry={() => {
               setState({ kind: 'loading' });
               setReloadKey((k) => k + 1);
@@ -508,31 +499,32 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
         )}
 
         {state.kind === 'invalid' && (
-          <Notice headingLevel={1} icon={LinkIcon} title={copy.invalidTitle} message={copy.invalidMessage} />
+          <Notice headingLevel={1} icon={LinkIcon} title={t.invalidTitle} message={t.invalidMessage} />
         )}
 
         {state.kind === 'ready' && (
           <>
-            <ClinicBrand variant="public" name={clinic?.name ?? copy.fallbackClinic} logoUrl={clinic?.logoUrl} />
+            <ClinicBrand variant="public" name={clinic?.name ?? t.fallbackClinic} logoUrl={clinic?.logoUrl} />
 
             {state.data.status === 'EXPIRED' && (
-              <Notice icon={CalendarX} title={copy.expiredTitle} message={copy.expiredMessage} />
+              <Notice icon={CalendarX} title={t.expiredTitle} message={t.expiredMessage} />
             )}
 
             {state.data.status === 'RESPONDED' && (
               <section aria-labelledby="confirmation-done" className="flex flex-col gap-4">
                 <div role="status" className="rounded-xl border border-border bg-surface px-4 py-4">
                   <h2 id="confirmation-done" className="t-title text-ink">
-                    {copy.respondedTitle}
+                    {t.respondedTitle}
                   </h2>
                   {state.data.response && (
-                    <p className="mt-1 text-sm text-ink">{copy.responded[state.data.response]}</p>
+                    <p className="mt-1 text-sm text-ink">{t.responded[state.data.response]}</p>
                   )}
                 </div>
                 {state.data.appointment && (
                   <AppointmentSummary
                     appointment={state.data.appointment}
                     format={appointmentFormat(state.data.appointment)}
+                    t={t}
                   />
                 )}
                 {calendarSection}
@@ -544,13 +536,14 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
               <section aria-labelledby="confirmation-lead" className="flex flex-col gap-5">
                 <p id="confirmation-lead" className="text-base text-ink">
                   <span className="font-semibold">
-                    {copy.greeting(state.data.appointment.patientFirstName)}
+                    {t.greeting(state.data.appointment.patientFirstName)}
                   </span>{' '}
-                  {copy.pendingLead}
+                  {t.pendingLead}
                 </p>
                 <AppointmentSummary
                   appointment={state.data.appointment}
                   format={appointmentFormat(state.data.appointment)}
+                  t={t}
                 />
                 {calendarSection}
                 {earlierSection}
@@ -560,6 +553,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                     isLate={state.data.isLate}
                     format={appointmentFormat(state.data.appointment)}
                     feeBlocked={cancelNeedsClinic(state.data)}
+                    t={t}
                   />
                 ) : null}
                 <div className="flex flex-col gap-3">
@@ -571,7 +565,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                     disabled={pending !== null}
                     onClick={() => void handleRespond('confirm')}
                   >
-                    <CalendarCheck aria-hidden /> {copy.confirm}
+                    <CalendarCheck aria-hidden /> {t.confirm}
                   </Button>
                   <Button
                     type="button"
@@ -582,7 +576,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                     disabled={pending !== null}
                     onClick={() => void handleRespond('call_me')}
                   >
-                    <Phone aria-hidden /> {copy.callMe}
+                    <Phone aria-hidden /> {t.callMe}
                   </Button>
                   {state.data.isLate && state.data.cancellationPolicy && !cancelNeedsClinic(state.data) ? (
                     <div className="rounded-lg border border-border bg-surface px-3 py-2">
@@ -595,8 +589,8 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                           setAcknowledged(e.target.checked);
                           if (e.target.checked) setAckError(false);
                         }}
-                        label={copy.acknowledge}
-                        error={ackError ? copy.acknowledgeRequired(state.data.cancellationPolicy.noticeHours) : null}
+                        label={t.acknowledge}
+                        error={ackError ? t.acknowledgeRequired(state.data.cancellationPolicy.noticeHours) : null}
                       />
                     </div>
                   ) : null}
@@ -610,7 +604,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                       disabled={pending !== null}
                       onClick={() => void handleRespond('cancel')}
                     >
-                      <CalendarX aria-hidden /> {copy.cancel}
+                      <CalendarX aria-hidden /> {t.cancel}
                     </Button>
                   )}
                   {respondError && <InlineError>{respondError}</InlineError>}

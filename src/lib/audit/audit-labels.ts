@@ -872,6 +872,8 @@ export function clinicSettingsDetail(metadata: AuditMetadata): string | null {
   if (metadata.reason === 'DOCUMENT_TYPE_NAMES_SETTINGS') {
     return documentTypeNamesDetail(metadata.changedFields);
   }
+  // DX-497: la lista antes y después la pinta `configChangeItems`.
+  if (metadata.reason === 'PATIENT_LANGUAGES_SETTINGS') return 'Idiomas de los pacientes';
   if (!metadata.statusChange) return null;
   const { from, to } = metadata.statusChange;
   if (metadata.reason === 'PRESCRIPTION_SETTINGS') return prescriptionSettingsDetail(from, to);
