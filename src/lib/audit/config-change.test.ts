@@ -11,6 +11,34 @@ const configChangeItems = (metadata: Parameters<typeof items_>[0]) =>
   items_(metadata, fmt);
 
 describe("configChangeItems (DX-360)", () => {
+  it("DX-497: la lista de idiomas de los pacientes, con el nombre de cada idioma", () => {
+    const items = configChangeItems({
+      reason: "PATIENT_LANGUAGES_SETTINGS",
+      changedFields: ["patientLanguages"],
+      configChange: {
+        before: { patientLanguages: ["es"] },
+        after: { patientLanguages: ["es", "en", "ca"] },
+      },
+    });
+    expect(configChangeText(items!)).toBe(
+      "Idiomas de los pacientes: Español (es) → Español (es), English (en), Català (ca)",
+    );
+  });
+
+  it("DX-497: el idioma del paciente; null es «Idioma de la clínica»", () => {
+    const items = configChangeItems({
+      reason: "COMMUNICATION_PREFERENCES_CHANGED",
+      changedFields: ["preferredLanguage"],
+      configChange: {
+        before: { preferredLanguage: null },
+        after: { preferredLanguage: "en" },
+      },
+    });
+    expect(configChangeText(items!)).toBe(
+      "Idioma de los mensajes: Idioma de la clínica → English (en)",
+    );
+  });
+
   it("DX-015-bis: la edición de un tipo de recall dice el intervalo en meses y el grupo de exclusión", () => {
     const items = configChangeItems({
       reason: "RECALL_TYPE_UPDATED",

@@ -65,6 +65,9 @@ describe('communication-api (DX-128)', () => {
         minor: false,
         responsiblePartyId: null,
       },
+      preferredLanguage: 'en',
+      patientLanguages: ['es', 'en'],
+      clinicLanguage: 'es',
     };
     expect(withCommunication(patient, saved)).toEqual({
       ...patient,
@@ -77,6 +80,7 @@ describe('communication-api (DX-128)', () => {
       whatsappOptInById: 'u1',
       reminderOptOutAt: '2026-10-17T11:00:00.000Z',
       reminderOptOutSource: 'STAFF',
+      preferredLanguage: 'en',
     });
   });
 });

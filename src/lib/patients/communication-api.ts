@@ -89,6 +89,8 @@ export function withCommunication(patient: Patient, c: PatientCommunication): Pa
     whatsappOptInById: c.whatsappOptIn?.recordedBy?.id ?? null,
     reminderOptOutAt: c.reminderOptOut?.at ?? null,
     reminderOptOutSource: c.reminderOptOut?.source ?? null,
+    // DX-497: el idioma también se cambia desde el bloque.
+    preferredLanguage: c.preferredLanguage,
   };
 }
 

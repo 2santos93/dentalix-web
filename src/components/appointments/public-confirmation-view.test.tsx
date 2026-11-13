@@ -41,6 +41,8 @@ const CLINIC = { name: 'Clínica Sonrisa', primaryColor: '#7C3AED', logoUrl: nul
 
 function view(overrides: Partial<PublicConfirmation> = {}): PublicConfirmation {
   return {
+    // DX-497: sin preferencia, el idioma de la clínica.
+    language: 'es',
     status: 'PENDING',
     clinic: CLINIC,
     appointment: APPOINTMENT,
@@ -465,5 +467,45 @@ describe('PublicConfirmationView · «Añadir a mi calendario» (DX-469)', () =>
     );
     render(<PublicConfirmationView confirmationToken="tok" />);
     expect(await screen.findByTestId('public-calendar-links')).toBeInTheDocument();
+  });
+});
+
+describe('PublicConfirmationView · idioma del paciente (DX-497)', () => {
+  beforeEach(() => {
+    get.mockReset();
+    respond.mockReset();
+    setEarlier.mockReset();
+  });
+
+  it('abre en inglés si el paciente tiene «en»; la fecha y la hora siguen la sede', async () => {
+    get.mockResolvedValueOnce(view({ language: 'en' }));
+    render(<PublicConfirmationView confirmationToken="tok-1" />);
+    expect(await screen.findByText(/hello ana/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /confirm attendance/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /cancel appointment/i })).toBeInTheDocument();
+    // DX-315: el formato es el de la sede (es-VE), no el del idioma.
+    expect(screen.getByText(/martes 20 de octubre de 2026/i)).toBeInTheDocument();
+    expect(screen.getByText('10:00 a. m. – 10:30 a. m.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Language')).toHaveValue('en');
+    expect(document.documentElement.lang).toBe('en');
+  });
+
+  it('un idioma sin traducción (ca) abre en el de la clínica', async () => {
+    get.mockResolvedValueOnce(view({ language: 'ca' }));
+    render(<PublicConfirmationView confirmationToken="tok-1" />);
+    expect(await screen.findByText(/hola ana/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Idioma')).toHaveValue('es');
+  });
+
+  it('el selector cambia el idioma de la página sin llamar a la API (la ficha no cambia)', async () => {
+    get.mockResolvedValueOnce(view({ language: 'es' }));
+    render(<PublicConfirmationView confirmationToken="tok-1" />);
+    await screen.findByText(/hola ana/i);
+    fireEvent.change(screen.getByLabelText('Idioma'), { target: { value: 'en' } });
+    expect(screen.getByText(/hello ana/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /please call me/i })).toBeInTheDocument();
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(respond).not.toHaveBeenCalled();
+    expect(setEarlier).not.toHaveBeenCalled();
   });
 });
