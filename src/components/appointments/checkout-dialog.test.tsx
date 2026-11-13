@@ -221,6 +221,16 @@ describe('DX-015-bis (D16): «Programar recall de <tipo>» en la salida', () => 
     expect(get).toHaveBeenCalledTimes(2);
   });
 
+  it('un 422 (la cita no vale) sale junto a los botones, con el mensaje de la API (escalón 4)', async () => {
+    get.mockResolvedValue(list({ recallTypes: TYPES }));
+    create.mockRejectedValue(new ApiError(422, 'La cita no es de este paciente o no está en curso.'));
+    mount();
+    await userEvent.click(await screen.findByRole('button', { name: checkoutRecallCopy.schedule('Higiene', 6) }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('La cita no es de este paciente o no está en curso.');
+    expect(create).toHaveBeenCalledWith('tok', 'p1', 't-hyg', 'a1');
+    expect(screen.getByTestId('checkout-NEXT_VISIT')).toHaveAttribute('data-done', 'false');
+  });
+
   it('otro error se dice junto a los botones y deja seguir', async () => {
     get.mockResolvedValue(list({ recallTypes: TYPES }));
     create.mockRejectedValue(new Error('red'));
