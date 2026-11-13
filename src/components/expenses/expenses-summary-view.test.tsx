@@ -39,7 +39,7 @@ const vesRow: ExpenseSummary['rows'][number] = {
   currency: 'VES',
   income: 5_000_000,
   categories: [
-    { category: 'Arriendo', amount: 2_500_000 },
+    { category: 'Alquiler', amount: 2_500_000 },
     { category: 'Laboratorio', amount: 1_000_000 },
   ],
   expensesTotal: 3_500_000,
@@ -131,7 +131,7 @@ describe('ExpensesSummaryView (DX-274)', () => {
     await user.click(toggle);
 
     const list = screen.getByRole('list', { name: 'Gastos por categoría' });
-    expect(within(list).getByText('Arriendo')).toBeInTheDocument();
+    expect(within(list).getByText('Alquiler')).toBeInTheDocument();
     expect(within(list).getByText(/2\.500\.000,00/)).toBeInTheDocument();
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
   });

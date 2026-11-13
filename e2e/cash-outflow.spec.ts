@@ -239,7 +239,7 @@ for (const viewport of [
       await expect(page.getByText(figure(FLOAT - 8_000)).first()).toBeVisible();
 
       // Dos más por la API; la administradora anula una con la caja abierta.
-      await outflowViaApi(page.request, reception, 'Aseo y cafetería', 22_000);
+      await outflowViaApi(page.request, reception, 'Limpieza y cafetería', 22_000);
       await outflowViaApi(page.request, reception, 'Papelería', 25_000);
       const taxi = await outflowViaApi(page.request, reception, 'Otros', 12_000);
       await apiPost(page.request, admin, `/expenses/${taxi.id}/void`, { reason: 'Registrada dos veces' });
