@@ -1,4 +1,5 @@
 import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
+import { ApiError } from '@/lib/api/api-error';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 
@@ -26,6 +27,9 @@ export type RecallExclusionUpdate = Schemas['RecallExclusionUpdateDto'];
 export type CreateRecallTypeInput = Schemas['CreateRecallTypeDto'];
 export type UpdateRecallTypeInput = Schemas['UpdateRecallTypeDto'];
 export type RecallTypeTrigger = Schemas['RecallTypeTriggerDto'];
+/** DX-015-bis (D17): un paciente atendido sin recall ni cita («Sin recall configurado»). */
+export type RecallUnconfiguredItem = Schemas['RecallUnconfiguredItemDto'];
+export type RecallUnconfiguredPage = Schemas['RecallUnconfiguredPageDto'];
 
 /** Crear, editar, retirar y fijar disparadores de los tipos: solo ADMIN (`RECALL_TYPE_WRITE_ROLES`). */
 export function canManageRecallTypes(role: ClinicRole | null): boolean {
@@ -51,6 +55,22 @@ export function listRecallDue(token: string, filters: RecallDueFilters = {}): Pr
   }
   const query = search.toString();
   return apiFetch<RecallDuePage>(`/recall/due${query ? `?${query}` : ''}`, { token });
+}
+
+/**
+ * `GET /recall/unconfigured` (D17): atendidos en los últimos 24 meses sin
+ * recall activo ni cita, de la sede activa (cabecera de `apiFetch`).
+ */
+export function listRecallUnconfigured(
+  token: string,
+  filters: { page?: number; pageSize?: number; locationId?: string } = {},
+): Promise<RecallUnconfiguredPage> {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined) search.set(key, String(value));
+  }
+  const query = search.toString();
+  return apiFetch<RecallUnconfiguredPage>(`/recall/unconfigured${query ? `?${query}` : ''}`, { token });
 }
 
 /** `POST /recall/:id/contacts`: append-only; una corrección es otro contacto. */
@@ -92,6 +112,38 @@ export function setPatientRecall(
     method: 'PUT',
     body: input,
   });
+}
+
+/**
+ * `POST /patients/:id/recalls/default` (D15): crea el recall de un tipo con su
+ * intervalo por defecto (también recepción). 409 si ya tiene uno de ese tipo.
+ */
+export function createDefaultPatientRecall(
+  token: string,
+  patientId: string,
+  recallTypeId: string,
+): Promise<SetPatientRecallResult> {
+  return apiFetch<SetPatientRecallResult>(`/patients/${encodeURIComponent(patientId)}/recalls/default`, {
+    token,
+    method: 'POST',
+    body: { recallTypeId },
+  });
+}
+
+/**
+ * El 409 de D15 porque el paciente ya tiene un recall de ese tipo (alguien lo
+ * creó entretanto): se relee la lista. Otro 409 (la sede sin zona horaria) es
+ * un error que se enseña.
+ */
+export function isRecallAlreadySet(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 409 && err.code !== 'LOCATION_TIMEZONE_REQUIRED';
+}
+
+/** Avisa a quien pinta el recall del paciente (la ficha) de que cambió fuera de su bloque. */
+export const RECALL_CHANGED_EVENT = 'dentalix:recall-changed';
+export function announceRecallChanged(patientId: string): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(RECALL_CHANGED_EVENT, { detail: { patientId } }));
 }
 
 /** `POST /recall-types` (ADMIN): nace sin disparadores; se fijan con `setRecallTypeTriggers`. */

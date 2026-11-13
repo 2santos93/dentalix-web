@@ -2,6 +2,7 @@
 import * as React from 'react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { CalendarCheck } from 'lucide-react';
+import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   createClinicalEntry,
@@ -46,6 +47,15 @@ import {
   emptyDiagnosesDraft,
   type DiagnosesDraft,
 } from '@/lib/clinical-notes/diagnoses-draft';
+import { recallUpdatesNotice } from '@/lib/recall/recall-notice';
+import { announceRecallChanged } from '@/lib/recall/recall-api';
+import {
+  emptyEvolutionRecallDraft,
+  evolutionRecallPayload,
+  type EvolutionRecallDraft,
+} from '@/lib/recall/recall-offer';
+import { stampPainters } from '@/lib/locations/sede-stamp';
+import { EvolutionRecallFields } from './evolution-recall-fields';
 
 export const newEvolutionCopy = {
   title: 'Nueva evolución',
@@ -148,6 +158,9 @@ export function NewEvolutionModal({
   // DX-212: diagnósticos CIE-10 (opcionales), guardados con la evolución.
   const [diagnoses, setDiagnoses] = useState<DiagnosesDraft>(emptyDiagnosesDraft);
   const [diagnosesError, setDiagnosesError] = useState<string | null>(null);
+  // DX-015-bis (D18): el recall que fija la evolución; «Sin cambios» por defecto.
+  const [recallDraft, setRecallDraft] = useState<EvolutionRecallDraft>(emptyEvolutionRecallDraft);
+  const [recallError, setRecallError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   // DX-540: ¿la firma saldría sin registro profesional (y la clínica avisa)?
@@ -312,6 +325,7 @@ export function NewEvolutionModal({
     setNotesError(null);
     setDateError(null);
     setDiagnosesError(null);
+    setRecallError(null);
     if (!appointment && entryDate && today !== null && entryDate > today) {
       setDateError(copy.futureDate);
       return;
@@ -326,6 +340,11 @@ export function NewEvolutionModal({
       setDiagnosesError(dx.error);
       return;
     }
+    const recall = evolutionRecallPayload(recallDraft);
+    if ('error' in recall) {
+      setRecallError(recall.error);
+      return;
+    }
     // Con cita no se manda fecha: la API usa el DÍA de la cita en la zona de
     // su sede (fecha civil, como la que se elige a mano), no el del navegador.
     const civilDay = appointment ? '' : entryDate;
@@ -336,14 +355,23 @@ export function NewEvolutionModal({
       ...(template ? { templateId: template.id } : {}),
       ...(appointment ? { appointmentId: appointment.id } : {}),
       ...(dx.diagnoses.length > 0 ? { diagnoses: dx.diagnoses } : {}),
+      ...recall,
     };
     setSubmitting(true);
     try {
-      const { warnings, ...created } = await createClinicalEntry(token, patientId, input);
+      const { warnings, recallUpdates, ...created } = await createClinicalEntry(token, patientId, input);
       onCreated({ ...created, addenda: created.addenda ?? [] });
       onOpenChange(false);
       // DX-540: ya guardada; el aviso del servidor se lee en un toast.
       announceClinicalEntryWarnings(warnings);
+      if (recall.recall) {
+        // D18: el recall cambió: la ficha lo relee y se dice cuándo vence (y, D9, a cuál sustituyó).
+        // La fecha con el formato de la sede de la pantalla solo sin cita: con cita, el recall es de la sede de la cita.
+        announceRecallChanged(patientId);
+        const painters = !appointment && clock ? stampPainters(clock) : null;
+        const notice = recallUpdatesNotice(recallUpdates, painters ? (day) => painters.civilDate(day) : null);
+        if (notice) toast.success(notice);
+      }
     } catch (err) {
       setError(apiErrorMessage(err, copy.genericError));
     } finally {
@@ -485,6 +513,16 @@ export function NewEvolutionModal({
           setDiagnosesError(null);
         }}
         error={diagnosesError}
+      />
+      <EvolutionRecallFields
+        token={token}
+        patientId={patientId}
+        value={recallDraft}
+        onChange={(next) => {
+          setRecallDraft(next);
+          setRecallError(null);
+        }}
+        error={recallError}
       />
 
       {template && manualNotes !== null ? (

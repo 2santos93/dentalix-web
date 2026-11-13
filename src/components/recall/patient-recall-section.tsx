@@ -7,6 +7,7 @@ import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { CHANNEL_LABELS, OUTCOME_LABELS, intervalLabel } from '@/lib/recall/presentation';
 import { recallUpdatesNotice } from '@/lib/recall/recall-notice';
 import {
+  RECALL_CHANGED_EVENT,
   getPatientRecalls,
   listRecallTypes,
   type PatientRecall,
@@ -118,6 +119,15 @@ export function PatientRecallSection({
       cancelled = true;
     };
   }, [token, patient.id, reloadKey]);
+
+  // DX-015-bis: el recall cambió fuera de este bloque (la evolución, la salida): se relee.
+  useEffect(() => {
+    function onChanged(e: Event) {
+      if ((e as CustomEvent<{ patientId: string }>).detail?.patientId === patient.id) setReloadKey((k) => k + 1);
+    }
+    window.addEventListener(RECALL_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(RECALL_CHANGED_EVENT, onChanged);
+  }, [patient.id]);
 
   const contacts = data?.contacts ?? [];
   const rows = recallRows(recallTypeOptions(types), data?.recalls ?? []);

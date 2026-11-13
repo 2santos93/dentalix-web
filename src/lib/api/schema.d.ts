@@ -1568,7 +1568,7 @@ export interface paths {
         put?: never;
         /**
          * Registra una evolución (inalterable, DX-038)
-         * @description DX-170: con `templateId`, el texto compuesto se guarda en `notes` (enviado ya revisado, o compuesto por el servidor con `answers`). Con `appointmentId`, la evolución queda ligada a la cita. DX-540: congela el registro profesional del autor (`authorProfessionalLicense`) y, si la clínica tiene el aviso activo y el autor no lo tiene, responde `warnings: [{ code: PROFESSIONAL_LICENSE_MISSING }]` sin bloquear la firma.
+         * @description DX-170: con `templateId`, el texto compuesto se guarda en `notes` (enviado ya revisado, o compuesto por el servidor con `answers`). Con `appointmentId`, la evolución queda ligada a la cita. DX-540: congela el registro profesional del autor (`authorProfessionalLicense`) y, si la clínica tiene el aviso activo y el autor no lo tiene, responde `warnings: [{ code: PROFESSIONAL_LICENSE_MISSING }]` sin bloquear la firma. DX-015-bis (D18): con `recall`, fija el intervalo del recall de ese tipo en la misma transacción (`recallUpdates`).
          */
         post: operations["ClinicalEntriesController_create"];
         delete?: never;
@@ -7070,6 +7070,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/recall/unconfigured": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sin recall configurado: atendidos sin recall ni cita
+         * @description DX-015-bis (D17): pacientes vivos con al menos una cita atendida en los últimos 24 meses (antes de «hoy» en su sede), sin ningún recall activo de un tipo vivo y sin cita futura agendada o confirmada ni una en curso. La sede del paciente es la de su última cita atendida. Orden: la última visita más reciente primero, después el apellido.
+         */
+        get: operations["RecallController_unconfigured"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/recall/due": {
         parameters: {
             query?: never;
@@ -7121,6 +7141,26 @@ export interface paths {
          * @description Canal, desenlace y una nota corta (≤ 280, sin datos clínicos). «Agendó» (BOOKED) exige la cita creada, del mismo paciente. No se edita ni se borra: una corrección es otro contacto.
          */
         post: operations["RecallController_contact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/recalls/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Programar el recall de un tipo con su intervalo por defecto
+         * @description DX-015-bis (D15): solo crea. Intervalo = el por defecto del tipo (Ajustes › Recall). Base: con `appointmentId` (la cita que se despide en la salida), el día civil de esa cita en la zona de su sede (y esa sede); sin él, el de la última cita atendida del paciente; sin ninguna, hoy en la sede activa. `source` MANUAL. D9: si el tipo tiene grupo de exclusión, desactiva los demás recalls activos del paciente de ese grupo (`recallUpdates`). También recepción; elegir otro intervalo, editarlo o reactivarlo es el PUT clínico.
+         */
+        post: operations["PatientRecallsController_createDefaultRecall"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7524,6 +7564,11 @@ export interface components {
              */
             to: string;
         };
+        /**
+         * @description DX-015-bis: por dónde se creó o cambió un recall (`PATIENT_RECALL`) fuera del PUT de la ficha: DEFAULT = «Programar recall» con el intervalo por defecto del tipo; CLINICAL_ENTRY = el intervalo fijado al registrar la evolución.
+         * @enum {string}
+         */
+        AuditRecallVia: "DEFAULT" | "CLINICAL_ENTRY";
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
             changedFields?: string[];
@@ -7567,6 +7612,8 @@ export interface components {
             retentionTermChange?: components["schemas"]["AuditRetentionTermChangeDto"];
             /** @description DX-401: el período (días civiles, ambos inclusive) del resumen de recibos del paciente que se vio, imprimió o envió. Solo las dos fechas. */
             period?: components["schemas"]["AuditPeriodDto"];
+            /** @description DX-015-bis: por dónde se creó o cambió un recall (`PATIENT_RECALL`) fuera del PUT de la ficha: DEFAULT = «Programar recall» con el intervalo por defecto del tipo; CLINICAL_ENTRY = el intervalo fijado al registrar la evolución. */
+            via?: components["schemas"]["AuditRecallVia"];
         };
         AuditEventDto: {
             /** Format: uuid */
@@ -10116,6 +10163,18 @@ export interface components {
              */
             toothFdi?: string | null;
         };
+        ClinicalEntryRecallInputDto: {
+            /**
+             * Format: uuid
+             * @description Tipo de recall de la clínica (GET /recall-types). Inexistente o retirado: 422 y no se guarda la evolución.
+             */
+            recallTypeId: string;
+            /**
+             * @description Cada cuántos meses vuelve (p. ej. 3 = «control en 3 meses»)
+             * @example 3
+             */
+            intervalMonths: number;
+        };
         CreateClinicalEntryDto: {
             /**
              * Format: date-time
@@ -10139,6 +10198,8 @@ export interface components {
             answers?: components["schemas"]["ClinicalEntryAnswerDto"][];
             /** @description DX-212: diagnósticos CIE-10, guardados en la misma transacción e inalterables. Como máximo 1 PRINCIPAL y 3 RELACIONADO (400 en español si no); los relacionados exigen el principal. Opcional: sin diagnóstico la evolución se guarda igual. */
             diagnoses?: components["schemas"]["ClinicalEntryDiagnosisInputDto"][];
+            /** @description DX-015-bis (D18): el intervalo del recall de un tipo, en la misma transacción que la evolución. Si el paciente no tiene recall de ese tipo, se crea (MANUAL) con la base en el día de la evolución y su sede (la de la cita o la activa); si lo tiene, solo cambia el intervalo (la base no) y, si estaba inactivo, se reactiva. Un alta o una reactivación de un tipo con grupo de exclusión desactiva los demás recalls activos del grupo. La respuesta lo devuelve en `recallUpdates`. */
+            recall?: components["schemas"]["ClinicalEntryRecallInputDto"];
         };
         ClinicalEntryAppointmentDto: {
             /** Format: uuid */
@@ -10198,6 +10259,30 @@ export interface components {
             /** @description Texto en español para mostrarlo tal cual */
             message: string;
         };
+        RecallReplacementDto: {
+            /** Format: uuid */
+            recallTypeId: string;
+            /** @example Mantenimiento periodontal */
+            recallTypeName: string;
+        };
+        ItemRecallUpdateDto: {
+            /** Format: uuid */
+            recallId: string;
+            /** Format: uuid */
+            recallTypeId: string;
+            /** @example Higiene */
+            recallTypeName: string;
+            /**
+             * Format: date
+             * @description Vencimiento del recall tras el cambio (día civil)
+             * @example 2027-10-10
+             */
+            dueAt: string;
+            /** @description D9: la exclusión lo acaba de desactivar porque otro recall de un tipo del mismo grupo pasó a activo («Recall de Higiene desactivado: lo sustituye Mantenimiento periodontal»). Sigue ahí (inactivo): reactivarlo es un PUT o un DONE posterior de su procedimiento. */
+            deactivated: boolean;
+            /** @description El tipo que lo sustituye; null si no se desactivó */
+            replacedBy: components["schemas"]["RecallReplacementDto"] | null;
+        };
         CreatedClinicalEntryDto: {
             /** Format: uuid */
             id: string;
@@ -10238,6 +10323,8 @@ export interface components {
             diagnoses: components["schemas"]["ClinicalEntryDiagnosisDto"][];
             /** @description DX-540: avisos de la firma; vacío si no hay nada que avisar. No se guardan con la evolución. */
             warnings: components["schemas"]["ClinicalEntryWarningDto"][];
+            /** @description DX-015-bis (D18): con `recall`, el recall que fijó la evolución (creado, con otro intervalo o reactivado) y, tras él, los que la exclusión desactivó (`deactivated: true`); vacío sin `recall`. */
+            recallUpdates: components["schemas"]["ItemRecallUpdateDto"][];
         };
         ClinicalEntryDto: {
             /** Format: uuid */
@@ -12104,6 +12191,17 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        CheckoutRecallTypeDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Higiene */
+            name: string;
+            /**
+             * @description Intervalo por defecto del tipo, en meses (el que usará D15)
+             * @example 6
+             */
+            defaultIntervalMonths: number;
+        };
         CheckoutChecklistDto: {
             /** Format: uuid */
             appointmentId: string;
@@ -12117,6 +12215,8 @@ export interface components {
             hasEmail: boolean;
             /** @description Dio de baja los recordatorios: tener el dato no basta. */
             remindersOptedOut: boolean;
+            /** @description DX-015-bis (D16): sin próxima cita ni recall activo, los tipos de recall activos de la clínica en su orden, para «Programar recall de <tipo> (N meses)» (POST /patients/:id/recalls/default); vacío en cualquier otro caso. */
+            recallTypes: components["schemas"]["CheckoutRecallTypeDto"][];
             /** @description Saldo vencido (`hasOverdue`, `overdueDays`, `amounts`); null si el rol no cobra. */
             balance: components["schemas"]["OverdueBalanceDto"] | null;
         };
@@ -14241,30 +14341,6 @@ export interface components {
             appointmentId?: string;
             surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             notes?: string;
-        };
-        RecallReplacementDto: {
-            /** Format: uuid */
-            recallTypeId: string;
-            /** @example Mantenimiento periodontal */
-            recallTypeName: string;
-        };
-        ItemRecallUpdateDto: {
-            /** Format: uuid */
-            recallId: string;
-            /** Format: uuid */
-            recallTypeId: string;
-            /** @example Higiene */
-            recallTypeName: string;
-            /**
-             * Format: date
-             * @description Vencimiento del recall tras el cambio (día civil)
-             * @example 2027-10-10
-             */
-            dueAt: string;
-            /** @description D9: la exclusión lo acaba de desactivar porque otro recall de un tipo del mismo grupo pasó a activo («Recall de Higiene desactivado: lo sustituye Mantenimiento periodontal»). Sigue ahí (inactivo): reactivarlo es un PUT o un DONE posterior de su procedimiento. */
-            deactivated: boolean;
-            /** @description El tipo que lo sustituye; null si no se desactivó */
-            replacedBy: components["schemas"]["RecallReplacementDto"] | null;
         };
         UpdatedTreatmentPlanItemDto: {
             /** @default 1 */
@@ -22111,6 +22187,35 @@ export interface components {
             /** @description DX-354: zona, locale y reloj de la sede principal de la clínica (la activa más antigua), para pintar `optedOutAt`. null si le falta algo: la página pinta «—» y pide llamar a la clínica. */
             regional: components["schemas"]["DocumentRegionalDto"] | null;
         };
+        RecallUnconfiguredItemDto: {
+            /** Format: uuid */
+            patientId: string;
+            /** @example María Rondón */
+            patientName: string;
+            /** @description `null` sin teléfono o con baja de avisos (DX-128) */
+            patientPhone: string | null;
+            /** @description E.164 sin `+` para `https://wa.me/…` (región de la sede de la última visita); `null` si no sirve o hay baja de avisos */
+            patientWhatsApp: string | null;
+            /** @description DX-128: el paciente pidió no recibir avisos. Sigue en la lista, sin contacto. */
+            reminderOptedOut: boolean;
+            /**
+             * Format: date
+             * @description Día civil de la última cita atendida, en la zona de su sede (en los últimos 24 meses)
+             * @example 2027-03-15
+             */
+            lastVisitAt: string;
+            /**
+             * Format: uuid
+             * @description Sede de la última cita atendida: la del paciente
+             */
+            lastVisitLocationId: string;
+        };
+        RecallUnconfiguredPageDto: {
+            items: components["schemas"]["RecallUnconfiguredItemDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
         /** @enum {string} */
         RecallKind: "HYGIENE" | "CHECKUP";
         /** @enum {string} */
@@ -22211,6 +22316,18 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        CreateDefaultRecallDto: {
+            /**
+             * Format: uuid
+             * @description Tipo de recall de la clínica (GET /recall-types), vivo y activo. Se usa su intervalo por defecto.
+             */
+            recallTypeId: string;
+            /**
+             * Format: uuid
+             * @description La cita que se despide (salida del paciente). Tiene que ser de este paciente, viva y en llegada, en sillón, lista para la salida o atendida (si no, 422). Con ella, la base es el día civil de esa cita en la zona de su sede, y la sede es la suya. Sin ella, la última cita atendida del paciente (o hoy): el caso de «Sin recall configurado».
+             */
+            appointmentId?: string;
+        };
         /**
          * @description MANUAL: fijado a mano · PROCEDURE: lo creó un procedimiento realizado · BACKFILL: lo creó el relleno del historial
          * @enum {string}
@@ -22273,6 +22390,35 @@ export interface components {
             updatedAt: string;
             updatedBy: components["schemas"]["RecallStaffRefDto"];
         };
+        RecallReplacementTypeDto: {
+            /** Format: uuid */
+            recallTypeId: string;
+            /** @example Mantenimiento periodontal */
+            recallTypeName: string;
+        };
+        RecallExclusionUpdateDto: {
+            /** Format: uuid */
+            recallId: string;
+            /** Format: uuid */
+            recallTypeId: string;
+            /** @example Higiene */
+            recallTypeName: string;
+            /**
+             * Format: date
+             * @description Vencimiento (no cambia)
+             */
+            dueAt: string;
+            /** @description Siempre true (como en el PATCH del ítem) */
+            deactivated: boolean;
+            replacedBy: components["schemas"]["RecallReplacementTypeDto"];
+        };
+        SetPatientRecallResultDto: {
+            recalls: components["schemas"]["PatientRecallDto"][];
+            /** @description Historial de contactos, más recientes primero (hasta 50) */
+            contacts: components["schemas"]["RecallContactDto"][];
+            /** @description D9: recalls de tipos del mismo grupo de exclusión que este alta o reactivación desactivó («Recall de Higiene desactivado: lo sustituye Mantenimiento periodontal»); vacío si ninguno */
+            recallUpdates: components["schemas"]["RecallExclusionUpdateDto"][];
+        };
         PatientRecallsDto: {
             recalls: components["schemas"]["PatientRecallDto"][];
             /** @description Historial de contactos, más recientes primero (hasta 50) */
@@ -22302,35 +22448,6 @@ export interface components {
             disabledUntil?: string | null;
             /** @description Motivo corto de la pausa (sin datos clínicos) */
             disabledReason?: string | null;
-        };
-        RecallReplacementTypeDto: {
-            /** Format: uuid */
-            recallTypeId: string;
-            /** @example Mantenimiento periodontal */
-            recallTypeName: string;
-        };
-        RecallExclusionUpdateDto: {
-            /** Format: uuid */
-            recallId: string;
-            /** Format: uuid */
-            recallTypeId: string;
-            /** @example Higiene */
-            recallTypeName: string;
-            /**
-             * Format: date
-             * @description Vencimiento (no cambia)
-             */
-            dueAt: string;
-            /** @description Siempre true (como en el PATCH del ítem) */
-            deactivated: boolean;
-            replacedBy: components["schemas"]["RecallReplacementTypeDto"];
-        };
-        SetPatientRecallResultDto: {
-            recalls: components["schemas"]["PatientRecallDto"][];
-            /** @description Historial de contactos, más recientes primero (hasta 50) */
-            contacts: components["schemas"]["RecallContactDto"][];
-            /** @description D9: recalls de tipos del mismo grupo de exclusión que este alta o reactivación desactivó («Recall de Higiene desactivado: lo sustituye Mantenimiento periodontal»); vacío si ninguno */
-            recallUpdates: components["schemas"]["RecallExclusionUpdateDto"][];
         };
         RecallTypeTriggerDto: {
             /** Format: uuid */
@@ -26522,6 +26639,13 @@ export interface operations {
             };
             /** @description Paciente, cita o plantilla no encontrados en esta clínica (inexistentes o de otra clínica). */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description DX-015-bis (D18): el tipo de `recall` no existe en esta clínica o se retiró; no se guarda la evolución. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -41561,6 +41685,47 @@ export interface operations {
             };
         };
     };
+    RecallController_unconfigured: {
+        parameters: {
+            query?: {
+                /** @description Solo los pacientes cuya última cita atendida es de esta sede (tiene que estar entre las permitidas: 403 si no). Sin ella, la sede activa (X-Location-Id) o las permitidas. */
+                locationId?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: {
+                /** @description Sede activa: los pacientes cuya sede (la de su última cita atendida o, sin ella, la del recall) es esta; sin ella, las sedes permitidas (vista consolidada) */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallUnconfiguredPageDto"];
+                };
+            };
+            /** @description page, pageSize o locationId inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no gestiona la lista de recall: es para administración y recepción. O 403 LOCATION_NOT_ALLOWED: locationId de una sede no permitida. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     RecallController_list: {
         parameters: {
             query?: {
@@ -41679,6 +41844,69 @@ export interface operations {
             };
             /** @description Recall de otra clínica o inexistente */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientRecallsController_createDefaultRecall: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede activa: solo cuenta si el paciente no tiene ninguna cita atendida (sede y «hoy» del recall). */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDefaultRecallDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetPatientRecallResultDto"];
+                };
+            };
+            /** @description recallTypeId inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no programa recalls de pacientes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El paciente ya tiene un recall de ese tipo (también uno inactivo); o la sede de su última cita no tiene zona horaria (LOCATION_TIMEZONE_REQUIRED) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tipo de recall inexistente en esta clínica, retirado o desactivado; o `appointmentId` que no es una cita viva de este paciente en llegada, en sillón, lista para la salida o atendida */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -193,6 +193,10 @@ test('1440 px: llegó → en sillón → listo para cobrar → completada', asyn
   const checkout = page.getByRole('dialog', { name: `Salida de Ana ${last}` });
   await expect(checkout.getByTestId('checkout-NEXT_VISIT')).toHaveAttribute('data-done', 'false', { timeout: 10_000 });
   await expectNoHorizontalScroll(page);
+  // DX-015-bis (D16): sin próxima cita ni recall, la salida propone el recall del tipo con su intervalo.
+  await checkout.getByRole('button', { name: /^Programar recall de higiene \(\d+ meses?\)$/ }).click();
+  await expect(checkout.getByTestId('checkout-NEXT_VISIT')).toHaveAttribute('data-done', 'true');
+  await expect(checkout.getByTestId('checkout-NEXT_VISIT')).toContainText(/Recall de Higiene: vence el/);
   await checkout.getByRole('button', { name: /^Completar con \d+ pendientes?$/ }).click();
   await expect(checkout).toBeHidden();
   await expect(page.getByText(`Cita de Ana ${last} completada.`)).toBeVisible();
