@@ -144,9 +144,11 @@ for (const viewport of [
       // La fila del proveedor: una sola para las dos grafías, en su moneda.
       await page.getByRole('combobox', { name: /^Moneda/ }).selectOption(DEMO_CURRENCY);
       const listing = page.getByRole(narrow ? 'list' : 'table', { name: /^Cuentas por pagar por proveedor/ });
-      const row = listing.getByRole('button', { name: new RegExp(supplier, 'i') });
+      const rowButton = page.getByRole('button', { name: new RegExp(supplier, 'i') });
+      const row = listing.locator(rowButton);
       await expect(row).toHaveCount(1, { timeout: 15_000 });
-      const rowBox = narrow ? listing.getByRole('listitem').filter({ has: row }) : listing.getByRole('row').filter({ has: row });
+      // `has` se evalúa dentro de cada fila: el localizador del botón no puede colgar de `listing`.
+      const rowBox = listing.getByRole(narrow ? 'listitem' : 'row').filter({ has: rowButton });
       await expect(rowBox).toContainText(amount('180,00'));
       await expect(rowBox).toContainText(amount('100,00'));
       if (narrow) await expectNoHorizontalScroll(page);
