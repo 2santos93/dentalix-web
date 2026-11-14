@@ -5,6 +5,8 @@ import { BellRing, Eye, EyeOff, Lock, Pencil, Plus, Trash2 } from 'lucide-react'
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { listRecallTypes, retireRecallType, updateRecallType, type RecallType } from '@/lib/recall/recall-api';
 import { exclusivePartners } from '@/lib/recall/recall-exclusion';
+import { linkedAppointmentType } from '@/lib/recall/recall-appointment-type';
+import { listAppointmentTypes, type AppointmentType } from '@/lib/appointments/appointment-types-api';
 import { AsyncSection } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -28,6 +30,11 @@ export const recallTypesCopy = {
   colInterval: 'Intervalo',
   colTriggers: 'Disparadores',
   colStatus: 'Estado',
+  colAppointmentType: 'Al agendar',
+  noAppointmentType: 'Ninguno',
+  missingAppointmentType: '—',
+  inactiveAppointmentType: (name: string) => `${name} (inactivo)`,
+  appointmentTypeMeta: (label: string) => `Agenda: ${label}`,
   months: (n: number) => (n === 1 ? '1 mes' : `${n} meses`),
   noTriggers: 'Ninguno',
   exclusiveWith: (names: string) => `Excluyente con ${names}`,
@@ -77,6 +84,25 @@ export function RecallTypesManager({ token, allowed }: RecallTypesManagerProps) 
   const [removing, setRemoving] = useState<RecallType | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
+  // D20: los tipos de cita (también los inactivos, para nombrar un enlace que se desactivó).
+  const [appointmentTypes, setAppointmentTypes] = useState<AppointmentType[] | 'loading' | 'failed'>('loading');
+  const [appointmentTypesKey, setAppointmentTypesKey] = useState(0);
+
+  useEffect(() => {
+    if (!allowed) return;
+    let cancelled = false;
+    listAppointmentTypes(token, { includeInactive: true })
+      .then((list) => {
+        if (!cancelled) setAppointmentTypes(list);
+      })
+      .catch(() => {
+        // Rung 2 en el modal (con «Reintentar»); en la lista, «—».
+        if (!cancelled) setAppointmentTypes('failed');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, allowed, appointmentTypesKey]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -191,6 +217,17 @@ export function RecallTypesManager({ token, allowed }: RecallTypesManagerProps) 
     return type.triggers.length > 0 ? type.triggers.map((t) => t.name).join(', ') : null;
   }
 
+  /** D20: el tipo de cita enlazado; `null` sin enlace. */
+  function appointmentTypeText(type: RecallType): string | null {
+    const linked = linkedAppointmentType(
+      type.appointmentTypeId,
+      Array.isArray(appointmentTypes) ? appointmentTypes : null,
+    );
+    if (linked.kind === 'none') return null;
+    if (linked.kind === 'missing') return copy.missingAppointmentType;
+    return linked.kind === 'active' ? linked.name : copy.inactiveAppointmentType(linked.name);
+  }
+
   /** «Activo» es lo normal: texto discreto. Solo «Inactivo» lleva chip. */
   function status(type: RecallType) {
     return type.active ? (
@@ -215,6 +252,16 @@ export function RecallTypesManager({ token, allowed }: RecallTypesManagerProps) 
       mobile: 'meta',
       cell: (t) => triggersText(t) ?? <span className="text-muted">{copy.noTriggers}</span>,
       mobileCell: (t) => triggersText(t),
+    },
+    {
+      id: 'appointment-type',
+      header: copy.colAppointmentType,
+      mobile: 'meta',
+      cell: (t) => appointmentTypeText(t) ?? <span className="text-muted">{copy.noAppointmentType}</span>,
+      mobileCell: (t) => {
+        const text = appointmentTypeText(t);
+        return text && text !== copy.missingAppointmentType ? copy.appointmentTypeMeta(text) : null;
+      },
     },
     { id: 'status', header: copy.colStatus, mobile: 'trailing', cell: status },
   ];
@@ -259,6 +306,11 @@ export function RecallTypesManager({ token, allowed }: RecallTypesManagerProps) 
         type={editing}
         types={types}
         onSaved={upsert}
+        appointmentTypes={appointmentTypes}
+        onRetryAppointmentTypes={() => {
+          setAppointmentTypes('loading');
+          setAppointmentTypesKey((k) => k + 1);
+        }}
       />
 
       <ConfirmDialog

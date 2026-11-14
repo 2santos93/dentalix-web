@@ -15,6 +15,11 @@ import { API_URL, tenantOrigin } from './support/urls';
  * paciente vencido en «Mi día» y en /recall, registra «No contesta» (que queda
  * en el historial de la ficha) y le agenda una cita desde la lista: sale solo.
  * Una clínica por corrida y un paciente por ancho (1440 y 390).
+ *
+ * DX-015-bis-4: Control está enlazado al tipo de cita «Control periódico»
+ * (45 min), que «Agendar» prellena. A 1440 se agenda desde «Agendar»; a 390,
+ * desde «Registrar contacto» › «Agendó», con el canal y la nota, y el contacto
+ * «Agendó» queda en el historial de la ficha.
  */
 const suffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase();
 const subdomain = `recall-${suffix}`.slice(0, 40);
@@ -27,6 +32,8 @@ const lastControl = addDays(sedeDayFromToday(0), -240);
 
 let session: ApiSession;
 const patientIds: Record<string, string> = {};
+const APPOINTMENT_TYPE = 'Control periódico';
+let appointmentTypeId: string;
 
 async function seedPatient(request: APIRequestContext, firstName: string, doc: string): Promise<string> {
   const { id } = await apiPost<{ id: string }>(request, session, '/patients', {
@@ -51,7 +58,13 @@ async function setRecallInRecord(page: Page, patientId: string): Promise<void> {
   await expect(page.getByTestId('recall-row-CHECKUP')).toContainText('Por llamar');
 }
 
-async function receptionFlow(page: Page, firstName: string, width: number, day: string): Promise<void> {
+async function receptionFlow(
+  page: Page,
+  firstName: string,
+  width: number,
+  day: string,
+  via: 'schedule' | 'booked',
+): Promise<void> {
   const fullName = `${firstName} Recall${suffix}`.slice(0, firstName.length + 1 + 30);
   await page.goto(`${origin}/dashboard`);
   await expect(page.getByTestId('pending-recall')).toBeVisible();
@@ -77,15 +90,31 @@ async function receptionFlow(page: Page, firstName: string, width: number, day: 
   await expect(page.getByText(`Contacto registrado para ${fullName}.`)).toBeVisible();
   await expect(row).toContainText('No contesta');
 
-  // Agendar: el formulario llega con el paciente y, al crear la cita, sale.
-  await rowAction(page, row, 'Agendar');
+  if (via === 'booked') {
+    // D23: «Agendó» no se guarda sin cita: abre «Agendar» con el canal y la nota.
+    await rowAction(page, row, 'Registrar contacto');
+    const booked = page.getByRole('dialog', { name: 'Registrar contacto' });
+    await booked.getByLabel('Canal').selectOption('WHATSAPP_LINK');
+    await booked.getByLabel('Resultado').selectOption('BOOKED');
+    await booked.getByLabel('Nota (opcional)').fill('Prefiere la mañana');
+    await booked.getByRole('button', { name: 'Agendar cita…' }).click();
+    await expect(booked).toBeHidden();
+    await expect(page.getByLabel('Contacto por')).toHaveValue('WHATSAPP_LINK');
+    await expect(page.getByText('Nota del contacto: Prefiere la mañana')).toBeVisible();
+  } else {
+    await rowAction(page, row, 'Agendar');
+    await expect(page.getByLabel('Contacto por')).toHaveValue('CALL');
+  }
+
+  // Agendar: el formulario llega con el paciente y el tipo de cita de Control
+  // (D21); la hora de fin sale de su duración. Al crear la cita, sale.
   const form = page.getByRole('form', { name: 'Agendar cita' });
   await expect(form).toContainText(fullName);
   await expect(form.getByLabel('Motivo (opcional)')).toHaveValue('Recall: control');
+  await expect(form.getByLabel('Tipo de cita (opcional)')).toHaveValue(appointmentTypeId);
   await form.getByLabel('Profesional', { exact: true }).selectOption({ label: dentist.fullName });
   await fillDate(form, 'Fecha', day);
   await fillTime(form, 'Hora de inicio', '10:00');
-  await fillTime(form, 'Hora de fin', '10:30');
   await shot(page, 'schedule', width);
   await form.getByRole('button', { name: 'Agendar cita' }).click();
   await expect(page.getByText(`Cita agendada para ${fullName}: ya salió de la lista.`)).toBeVisible();
@@ -109,6 +138,22 @@ test.beforeAll(async ({ request }) => {
     data: { ranges: [] },
   });
   expect(schedule.ok()).toBeTruthy();
+  // D20: Control agenda con «Control periódico» (una clínica nueva no trae tipos de cita).
+  ({ id: appointmentTypeId } = await apiPost<{ id: string }>(request, session, '/appointment-types', {
+    name: APPOINTMENT_TYPE,
+    durationMinutes: 45,
+    color: '#0E7490',
+  }));
+  const typesRes = await request.get(`${API_URL}/recall-types`, { headers: session.headers });
+  expect(typesRes.ok(), await typesRes.text()).toBeTruthy();
+  const control = ((await typesRes.json()) as { id: string; systemKey: string | null }[]).find(
+    (t) => t.systemKey === 'CHECKUP',
+  );
+  const link = await request.patch(`${API_URL}/recall-types/${control!.id}`, {
+    headers: session.headers,
+    data: { appointmentTypeId },
+  });
+  expect(link.ok(), await link.text()).toBeTruthy();
   patientIds.Clara = await seedPatient(request, 'Clara', 'RA');
   patientIds.Marta = await seedPatient(request, 'Marta', 'RB');
 });
@@ -123,23 +168,29 @@ test('el clínico fija el control en la ficha', async ({ page }) => {
 test('recepción, 1440: vencido → contacto → agendar → sale de la lista', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await loginAs(page, origin, reception.email, password);
-  await receptionFlow(page, 'Clara', 1440, sedeDayFromToday(3));
+  await receptionFlow(page, 'Clara', 1440, sedeDayFromToday(3), 'schedule');
   await page.goto(`${origin}/patients/${patientIds.Clara}?tab=data`);
-  await expect(page.getByTestId('recall-contact-row')).toContainText('Control · Llamada · No contesta');
-  await expect(page.getByTestId('recall-contact-row')).toContainText('Volver a llamar por la tarde');
+  const contacts = page.getByTestId('recall-contact-row');
+  await expect(contacts.filter({ hasText: 'No contesta' })).toContainText('Control · Llamada · No contesta');
+  await expect(contacts.filter({ hasText: 'No contesta' })).toContainText('Volver a llamar por la tarde');
+  // D22: «Agendar» registró el contacto «Agendó» por Llamada (el canal por defecto).
+  await expect(contacts.filter({ hasText: 'Agendó' })).toContainText('Control · Llamada · Agendó');
   await expect(page.getByTestId('recall-row-CHECKUP')).toContainText('Con cita');
 });
 
-test('recepción, 390: el mismo flujo en tarjetas', async ({ page }) => {
+test('recepción, 390: el mismo flujo en tarjetas, agendando desde «Agendó»', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await loginAs(page, origin, reception.email, password);
-  await receptionFlow(page, 'Marta', 390, sedeDayFromToday(4));
+  await receptionFlow(page, 'Marta', 390, sedeDayFromToday(4), 'booked');
   await expect(page.getByText('Nadie pendiente de control')).toBeVisible();
   await expectNoHorizontalScroll(page);
   await shot(page, 'empty', 390);
   await page.goto(`${origin}/patients/${patientIds.Marta}?tab=data`);
   await page.getByTestId('patient-recall').scrollIntoViewIfNeeded();
   await expect(page.getByTestId('recall-row-CHECKUP')).toContainText('Con cita');
+  const booked = page.getByTestId('recall-contact-row').filter({ hasText: 'Agendó' });
+  await expect(booked).toContainText('Control · WhatsApp · Agendó');
+  await expect(booked).toContainText('Prefiere la mañana');
   await expectNoHorizontalScroll(page);
   await shot(page, 'record', 390);
 });

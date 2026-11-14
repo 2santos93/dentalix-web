@@ -22,10 +22,12 @@ import {
   listRecallTypes,
   type RecallDueItem,
   type RecallDuePage,
+  type RecallContactChannel,
   type RecallDueSort,
   type RecallType,
 } from '@/lib/recall/recall-api';
 import { recallTypeFilter, recallTypeLabel, recallTypeOptions } from '@/lib/recall/recall-types';
+import { recallAppointmentTypeId } from '@/lib/recall/recall-appointment-type';
 import { telHref } from '@/lib/receivables/presentation';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -88,7 +90,14 @@ export const recallCopy = {
 };
 const copy = recallCopy;
 
-type Dialog = { kind: 'contact' | 'schedule'; item: RecallDueItem } | null;
+/**
+ * El diálogo abierto. «Agendar» puede venir de «Registrar contacto» con
+ * «Agendó» (D23): trae el canal y la nota elegidos allí.
+ */
+type Dialog =
+  | { kind: 'contact'; item: RecallDueItem }
+  | { kind: 'schedule'; item: RecallDueItem; channel?: RecallContactChannel; note?: string }
+  | null;
 type RecallListView = 'due' | 'unconfigured';
 
 const recordHref = (item: RecallDueItem) => `/patients/${item.patientId}`;
@@ -456,12 +465,17 @@ export function RecallView({ token }: { token: string }) {
             setNotice(copy.contactSaved(dialog.item.patientName));
             setReloadKey((k) => k + 1);
           }}
+          onBook={({ channel, note }) => setDialog({ kind: 'schedule', item: dialog.item, channel, note })}
         />
       ) : null}
       {dialog?.kind === 'schedule' ? (
         <RecallScheduleDialog
           token={token}
           item={dialog.item}
+          // D21: el tipo de cita del tipo de recall, de los tipos que ya cargó el filtro.
+          appointmentTypeId={recallAppointmentTypeId(dialog.item.recallTypeId, Array.isArray(types) ? types : null)}
+          defaultChannel={dialog.channel}
+          note={dialog.note}
           onClose={() => setDialog(null)}
           onCreated={() => {
             setNotice(copy.scheduled(dialog.item.patientName));
