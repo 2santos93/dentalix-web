@@ -135,7 +135,7 @@ describe('e2e.yml: topes y duración de los pasos con apt (OPS-057)', () => {
     (jobName) => {
       const jj = job('e2e.yml', jobName);
       const untimed = jj.steps.filter((s) => s['timeout-minutes'] === undefined);
-      expect(untimed.map((s) => s.uses)).toEqual(['actions/checkout@v4', 'actions/checkout@v4', 'actions/setup-node@v4']);
+      expect(untimed.map((s) => s.uses)).toEqual(['actions/checkout@v5', 'actions/checkout@v5', 'actions/setup-node@v5']);
       const jobLimit = timeouts(jj['timeout-minutes'], jj)!;
       VARIANTS.forEach((variant, i) => {
         const sum = 3 + jj.steps.reduce((acc, s) => acc + (timeouts(s['timeout-minutes'], jj)?.[i] ?? 0), 0);

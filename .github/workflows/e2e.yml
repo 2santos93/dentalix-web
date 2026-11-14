@@ -145,7 +145,7 @@ jobs:
       # specs, package-lock) son los de `web_sha`. Por eso un sha anterior a las
       # fases que el YAML de main llama (`skips`, `schema`) falla con «Fase
       # desconocida».
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ inputs.web_sha || github.sha }}
           path: dentalix-web
@@ -155,7 +155,7 @@ jobs:
       # paso «API» falla, el resumen dice contra qué commit (DX-494).
       - name: Checkout de dentalix-api
         id: api-checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: 2santos93/dentalix-api
           ref: ${{ inputs.api_ref || 'main' }}
@@ -166,7 +166,7 @@ jobs:
         run: scripts/e2e-ci.sh sync
         timeout-minutes: 1
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -536,7 +536,7 @@ jobs:
           echo "::error title=Shards de Playwright::los shards se cancelaron: no hay nada que fusionar"
           exit 1
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ inputs.web_sha || github.sha }}
           path: dentalix-web
@@ -547,14 +547,14 @@ jobs:
       # en los shards; sin E2E_DATABASE_URL ni E2E_MAIL_DIR, los saltos
       # permitidos por su ausencia pasarían en silencio.
       - name: Checkout de dentalix-api
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: 2santos93/dentalix-api
           ref: ${{ inputs.api_ref || 'main' }}
           path: dentalix-api
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
