@@ -40,7 +40,7 @@ export function AsyncSection({
   children,
 }: AsyncSectionProps) {
   if (loading) {
-    return <>{skeleton ?? <DefaultSkeleton />}</>;
+    return <>{skeleton ?? <SectionSkeleton />}</>;
   }
   if (error) {
     return <SectionError description={error} onRetry={onRetry} retryLabel={retryLabel} />;
@@ -59,8 +59,12 @@ export function AsyncSection({
   return <>{children}</>;
 }
 
-/** A neutral three-row shimmer for content whose shape isn't known here. */
-function DefaultSkeleton() {
+/**
+ * A neutral three-row shimmer for content whose shape isn't known here. También
+ * lo pintan las pestañas de la ficha que llegan en su propio trozo de JS
+ * (`next/dynamic`, DX-117) mientras ese trozo se descarga.
+ */
+export function SectionSkeleton() {
   return (
     <div className="flex flex-col gap-3" role="status" aria-label="Cargando">
       <Skeleton className="h-5 w-1/3" />

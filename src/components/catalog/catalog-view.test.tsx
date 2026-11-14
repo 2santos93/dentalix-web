@@ -1,4 +1,6 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
+import { tokenForRole } from '@/lib/test/data-consents';
 import type userEvent from '@testing-library/user-event';
 import { setupUser } from '@/lib/test/user';
 import { CatalogView } from './catalog-view';
@@ -15,6 +17,8 @@ import { listLocations, type ClinicLocation } from '@/lib/locations/locations-ap
 import { ApiError } from '@/lib/api/client';
 import { tokenFor } from '@/lib/test/prescriptions';
 import { clinicLocation } from '@/lib/test/locations';
+import { listNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
+import { prophylaxisTemplate, resinTemplate } from '@/components/clinical-notes/fixtures';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC transform
 // (only real import/require specifiers are) — use a relative path here, same
@@ -27,8 +31,15 @@ jest.mock('../../lib/odontogram/catalog-api', () => ({
   updateCatalogItem: jest.fn(),
 }));
 
-// Las sedes deciden la moneda base de la clínica (DX-063): una clínica en
-// Colombia por defecto.
+// DX-455: el formulario pide las plantillas de evolución al abrirse.
+jest.mock('../../lib/clinical-notes/note-templates-api', () => ({
+  ...jest.requireActual('../../lib/clinical-notes/note-templates-api'),
+  listNoteTemplates: jest.fn(() => Promise.resolve([])),
+}));
+const mockedTemplates = listNoteTemplates as jest.MockedFunction<typeof listNoteTemplates>;
+
+// Las sedes deciden la moneda base de la clínica (DX-063): una clínica con
+// la moneda del fixture por defecto.
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 
@@ -40,9 +51,9 @@ function clinicIn(country: ClinicLocation['country']): ClinicLocation[] {
       address: null,
       country,
       isActive: true,
-      currency: country === 'ES' ? 'EUR' : 'COP',
-      timeZone: country === 'ES' ? 'Europe/Madrid' : 'America/Bogota',
-      locale: country === 'ES' ? 'es-ES' : 'es-CO',
+      currency: country === 'ES' ? 'EUR' : 'VES',
+      timeZone: country === 'ES' ? 'Europe/Madrid' : 'America/Caracas',
+      locale: country === 'ES' ? 'es-ES' : 'es-VE',
       createdAt: '2026-01-01T00:00:00Z',
     }),
   ];
@@ -93,21 +104,45 @@ async function openRowMenu(
   return screen.findByRole('menu');
 }
 
+const ADMIN_TOKEN = tokenForRole('ADMIN');
+
 describe('CatalogView', () => {
   beforeEach(() => {
     mockedList.mockReset();
     mockedCreate.mockReset();
     mockedUpdate.mockReset();
-    mockedLocations.mockReset().mockResolvedValue(clinicIn('CO'));
+    mockedLocations.mockReset().mockResolvedValue(clinicIn('VE'));
+    mockedTemplates.mockReset().mockResolvedValue([]);
     // La sede activa vive en localStorage y persiste entre tests del mismo
     // fichero: sin limpiarla, el aviso de alcance se filtra a los demás casos.
     window.localStorage.clear();
   });
 
+  it.each(['DENTIST', 'ASSISTANT'] as const)('DX-064: %s lee el catálogo sin acciones de escritura', async (role) => {
+    mockedList.mockResolvedValue(page([item1]));
+    render(<CatalogView token={tokenForRole(role)} initialItemId={item1.id} />);
+
+    const table = await screen.findByRole('table', { name: /catálogo/i });
+    expect(within(table).getByText(item1.labelEs)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Agregar ítem' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /acciones de/i })).not.toBeInTheDocument();
+    // Ni la fila ni `?item=` abren el formulario de edición.
+    fireEvent.click(within(table).getByText(item1.labelEs));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('DX-064: ADMIN ve «Agregar ítem» y las acciones de la fila', async () => {
+    mockedList.mockResolvedValue(page([item1]));
+    render(<CatalogView token={ADMIN_TOKEN} />);
+    await screen.findByRole('table', { name: /catálogo/i });
+    expect(screen.getByRole('button', { name: 'Agregar ítem' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /acciones de/i })).toBeInTheDocument();
+  });
+
   it('pinta las filas de la página que devuelve el directorio', async () => {
     mockedList.mockResolvedValue(page([item1]));
 
-    render(<CatalogView token="tok" />);
+    render(<CatalogView token={ADMIN_TOKEN} />);
 
     const table = await screen.findByRole('table', { name: /catálogo/i });
     expect(within(table).getByText('Profilaxis')).toBeInTheDocument();
@@ -120,7 +155,7 @@ describe('CatalogView', () => {
   it('el tipo va solo en su columna; bajo el nombre, la categoría; el código en `t-id`', async () => {
     const caries: DentalCatalogItem = { ...item1, id: 'c2', code: 'DX-CARIES', kind: 'DIAGNOSIS', labelEs: 'Caries', category: 'Diagnóstico', defaultPrice: null };
     mockedList.mockResolvedValue(page([item1, caries]));
-    render(<CatalogView token="tok" />);
+    render(<CatalogView token={ADMIN_TOKEN} />);
     const table = await screen.findByRole('table', { name: /catálogo/i });
     const row = within(table).getByRole('row', { name: /profilaxis/i });
     expect(within(row).getAllByText('Procedimiento')).toHaveLength(1);
@@ -131,7 +166,7 @@ describe('CatalogView', () => {
     const sinPrecio: DentalCatalogItem = { ...item1, id: 'c2', code: 'RES', labelEs: 'Resina', defaultPrice: null };
     const caries: DentalCatalogItem = { ...item1, id: 'c3', code: 'DX', kind: 'DIAGNOSIS', labelEs: 'Caries', defaultPrice: null };
     mockedList.mockResolvedValue(page([sinPrecio, caries]));
-    render(<CatalogView token="tok" />);
+    render(<CatalogView token={ADMIN_TOKEN} />);
     const table = await screen.findByRole('table', { name: /catálogo/i });
     expect(within(within(table).getByRole('row', { name: /resina/i })).getByText('Sin precio')).toBeInTheDocument();
     const dx = within(table).getByRole('row', { name: /caries/i });
@@ -142,7 +177,7 @@ describe('CatalogView', () => {
   it('solo los inactivos llevan chip de estado; los activos van limpios', async () => {
     const inactivo: DentalCatalogItem = { ...item1, id: 'c2', code: 'OLD', labelEs: 'Amalgama', active: false };
     mockedList.mockResolvedValue(page([item1, inactivo]));
-    render(<CatalogView token="tok" />);
+    render(<CatalogView token={ADMIN_TOKEN} />);
     const table = await screen.findByRole('table', { name: /catálogo/i });
     expect(within(table).queryByText(/^activo$/i)).not.toBeInTheDocument();
     expect(within(within(table).getByRole('row', { name: /amalgama/i })).getByText('Inactivo')).toBeInTheDocument();
@@ -152,7 +187,7 @@ describe('CatalogView', () => {
   it('tocar la fila abre el ítem en edición', async () => {
     const user = setupUser();
     mockedList.mockResolvedValue(page([item1]));
-    render(<CatalogView token="tok" />);
+    render(<CatalogView token={ADMIN_TOKEN} />);
     const table = await screen.findByRole('table', { name: /catálogo/i });
     await user.click(within(table).getByRole('button', { name: /^profilaxis/i }));
     expect(await screen.findByRole('dialog', { name: 'Editar ítem' })).toBeInTheDocument();
@@ -167,7 +202,7 @@ describe('CatalogView', () => {
     })) as unknown as typeof window.matchMedia;
     try {
       mockedList.mockResolvedValue(page([item1]));
-      render(<CatalogView token="tok" />);
+      render(<CatalogView token={ADMIN_TOKEN} />);
       const list = await screen.findByRole('list', { name: /catálogo/i });
       const card = within(list).getByRole('button', { name: /^profilaxis/i });
       expect(card).toHaveTextContent('Preventiva · Procedimiento');
@@ -182,7 +217,7 @@ describe('CatalogView', () => {
   it('pide la primera página al montar, sin filtros', async () => {
     mockedList.mockResolvedValue(page([item1]));
 
-    render(<CatalogView token="tok" />);
+    render(<CatalogView token={ADMIN_TOKEN} />);
     await screen.findByRole('table', { name: /catálogo/i });
 
     expect(lastParams()).toEqual({ page: 1, pageSize: 20 });
@@ -194,7 +229,7 @@ describe('CatalogView', () => {
     mockedList.mockResolvedValueOnce(page([item1]));
 
     const user = setupUser();
-    render(<CatalogView token="tok" />);
+    render(<CatalogView token={ADMIN_TOKEN} />);
 
     await screen.findByText(/el catálogo todavía está vacío/i);
 
@@ -206,7 +241,7 @@ describe('CatalogView', () => {
     await user.click(screen.getByRole('button', { name: /^crear$/i }));
 
     await waitFor(() =>
-      expect(mockedCreate).toHaveBeenCalledWith('tok', {
+      expect(mockedCreate).toHaveBeenCalledWith(ADMIN_TOKEN, {
         code: 'PROF',
         kind: 'PROCEDURE',
         labelEs: 'Profilaxis',
@@ -225,7 +260,7 @@ describe('CatalogView', () => {
   it('el campo Tipo explica cuál elegir, y el desplegable da ejemplos', async () => {
     mockedList.mockResolvedValue(page([], 0));
     const user = setupUser();
-    render(<CatalogView token="tok" />);
+    render(<CatalogView token={ADMIN_TOKEN} />);
     await screen.findByText(/el catálogo todavía está vacío/i);
 
     await user.click(screen.getByRole('button', { name: /agregar ítem/i }));
@@ -248,23 +283,25 @@ describe('CatalogView', () => {
     mockedList.mockResolvedValueOnce(page([{ ...item1, kind: 'DIAGNOSIS' }]));
 
     const user = setupUser();
-    render(<CatalogView token="tok" />);
+    render(<CatalogView token={ADMIN_TOKEN} />);
     await screen.findByText(/el catálogo todavía está vacío/i);
 
     await user.click(screen.getByRole('button', { name: /agregar ítem/i }));
     await user.type(screen.getByLabelText(/^nombre$/i), 'Caries dental');
+    // DX-105-bis: «Admite descuentos» solo existe para los procedimientos.
+    expect(screen.getByLabelText('Admite descuentos')).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText(/^tipo$/i), 'DIAGNOSIS');
+    expect(screen.queryByLabelText('Admite descuentos')).not.toBeInTheDocument();
     await user.type(screen.getByLabelText(/^código$/i), 'DX-CARIES');
 
     await user.click(screen.getByRole('button', { name: /^crear$/i }));
 
     await waitFor(() =>
-      expect(mockedCreate).toHaveBeenCalledWith('tok', {
+      expect(mockedCreate).toHaveBeenCalledWith(ADMIN_TOKEN, {
         code: 'DX-CARIES',
         kind: 'DIAGNOSIS',
         labelEs: 'Caries dental',
         color: '#0E7490',
-        allowDiscount: true,
       }),
     );
   });
@@ -277,7 +314,7 @@ describe('CatalogView', () => {
     );
 
     const user = setupUser();
-    render(<CatalogView token="tok" />);
+    render(<CatalogView token={ADMIN_TOKEN} />);
     await screen.findByRole('table', { name: /catálogo/i });
 
     const menu = await openRowMenu(user, /acciones de profilaxis/i);
@@ -290,7 +327,7 @@ describe('CatalogView', () => {
     await user.click(screen.getByRole('button', { name: /^guardar$/i }));
 
     await waitFor(() =>
-      expect(mockedUpdate).toHaveBeenCalledWith('tok', 'c1', {
+      expect(mockedUpdate).toHaveBeenCalledWith(ADMIN_TOKEN, 'c1', {
         code: 'PROF',
         kind: 'PROCEDURE',
         labelEs: 'Profilaxis dental',
@@ -303,18 +340,18 @@ describe('CatalogView', () => {
     expect(await screen.findByText('Profilaxis dental')).toBeInTheDocument();
   });
 
-  // Revisión DX-241: un precio de catálogo en COP con céntimos (la API lo
+  // Revisión DX-241: un precio de catálogo en VES con céntimos (la API lo
   // guarda en Decimal(12,2)) se edita sin tocar el precio y se guarda tal cual.
-  it('DX-241: editar un ítem con precio en COP con céntimos guarda sin tocar el precio', async () => {
+  it('DX-241: editar un ítem con precio en VES con céntimos guarda sin tocar el precio', async () => {
     const withCents = { ...item1, defaultPrice: 150000.5 };
     mockedList.mockResolvedValueOnce(page([withCents]));
     mockedUpdate.mockResolvedValue({ ...withCents, labelEs: 'Profilaxis dental' });
     mockedList.mockResolvedValueOnce(page([{ ...withCents, labelEs: 'Profilaxis dental' }]));
 
     const user = setupUser();
-    render(<CatalogView token="tok" />);
+    render(<CatalogView token={ADMIN_TOKEN} />);
     await screen.findByRole('table', { name: /catálogo/i });
-    await waitFor(() => expect(screen.getByText('150.000,50 COP')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('VES 150.000,50')).toBeInTheDocument());
 
     const menu = await openRowMenu(user, /acciones de profilaxis/i);
     await user.click(within(menu).getByRole('menuitem', { name: /editar/i }));
@@ -324,7 +361,7 @@ describe('CatalogView', () => {
     await user.click(screen.getByRole('button', { name: /^guardar$/i }));
 
     await waitFor(() =>
-      expect(mockedUpdate).toHaveBeenCalledWith('tok', 'c1', expect.objectContaining({ defaultPrice: 150000.5 })),
+      expect(mockedUpdate).toHaveBeenCalledWith(ADMIN_TOKEN, 'c1', expect.objectContaining({ defaultPrice: 150000.5 })),
     );
   });
 
@@ -334,7 +371,7 @@ describe('CatalogView', () => {
     mockedList.mockResolvedValueOnce(page([{ ...item1, active: false }]));
 
     const user = setupUser();
-    render(<CatalogView token="tok" />);
+    render(<CatalogView token={ADMIN_TOKEN} />);
     await screen.findByRole('table', { name: /catálogo/i });
 
     const menu = await openRowMenu(user, /acciones de profilaxis/i);
@@ -343,7 +380,7 @@ describe('CatalogView', () => {
     );
 
     await waitFor(() =>
-      expect(mockedUpdate).toHaveBeenCalledWith('tok', 'c1', { active: false }),
+      expect(mockedUpdate).toHaveBeenCalledWith(ADMIN_TOKEN, 'c1', { active: false }),
     );
     expect(await screen.findByText('Inactivo')).toBeInTheDocument();
 
@@ -363,7 +400,7 @@ describe('CatalogView', () => {
     render(
       <>
         <Toaster />
-        <CatalogView token="tok" />
+        <CatalogView token={ADMIN_TOKEN} />
       </>,
     );
     await screen.findByRole('table', { name: /catálogo/i });
@@ -388,7 +425,7 @@ describe('CatalogView', () => {
     mockedUpdate.mockRejectedValue(new ApiError(409, 'El código ya existe'));
 
     const user = setupUser();
-    render(<CatalogView token="tok" />);
+    render(<CatalogView token={ADMIN_TOKEN} />);
     await screen.findByRole('table', { name: /catálogo/i });
 
     const menu = await openRowMenu(user, /acciones de profilaxis/i);
@@ -404,7 +441,7 @@ describe('CatalogView', () => {
     it('teclear manda la búsqueda al servidor, recortada y una sola vez', async () => {
       mockedList.mockResolvedValue(page([item1]));
       const user = setupUser();
-      render(<CatalogView token="tok" />);
+      render(<CatalogView token={ADMIN_TOKEN} />);
       await screen.findByRole('table', { name: /catálogo/i });
 
       const callsBefore = mockedList.mock.calls.length;
@@ -423,7 +460,7 @@ describe('CatalogView', () => {
     it('el filtro de tipo viaja como `kind`', async () => {
       mockedList.mockResolvedValue(page([item1]));
       const user = setupUser();
-      render(<CatalogView token="tok" />);
+      render(<CatalogView token={ADMIN_TOKEN} />);
       await screen.findByRole('table', { name: /catálogo/i });
 
       await user.selectOptions(
@@ -439,7 +476,7 @@ describe('CatalogView', () => {
     it('«Solo activos» viaja como activeOnly=true y «Solo inactivos» como false', async () => {
       mockedList.mockResolvedValue(page([item1]));
       const user = setupUser();
-      render(<CatalogView token="tok" />);
+      render(<CatalogView token={ADMIN_TOKEN} />);
       await screen.findByRole('table', { name: /catálogo/i });
 
       const select = screen.getByLabelText(/filtrar por estado/i);
@@ -457,7 +494,7 @@ describe('CatalogView', () => {
     it('cambiar de filtro devuelve a la página 1', async () => {
       mockedList.mockResolvedValue(page([item1], 60, 1));
       const user = setupUser();
-      render(<CatalogView token="tok" />);
+      render(<CatalogView token={ADMIN_TOKEN} />);
       await screen.findByRole('table', { name: /catálogo/i });
 
       await user.click(screen.getByRole('button', { name: /siguiente/i }));
@@ -476,7 +513,7 @@ describe('CatalogView', () => {
     it('sin resultados ofrece limpiar los filtros; el catálogo vacío no', async () => {
       mockedList.mockResolvedValueOnce(page([item1]));
       const user = setupUser();
-      render(<CatalogView token="tok" />);
+      render(<CatalogView token={ADMIN_TOKEN} />);
       await screen.findByRole('table', { name: /catálogo/i });
 
       mockedList.mockResolvedValue(page([], 0));
@@ -492,7 +529,7 @@ describe('CatalogView', () => {
 
     it('el catálogo vacío de verdad enseña el mensaje de bienvenida, no el de "sin coincidencias"', async () => {
       mockedList.mockResolvedValue(page([], 0));
-      render(<CatalogView token="tok" />);
+      render(<CatalogView token={ADMIN_TOKEN} />);
 
       expect(
         await screen.findByText(/el catálogo todavía está vacío/i),
@@ -507,7 +544,7 @@ describe('CatalogView', () => {
 
     it('el conteo dice cuántos hay, y se anuncia', async () => {
       mockedList.mockResolvedValue(page([item1], 137));
-      render(<CatalogView token="tok" />);
+      render(<CatalogView token={ADMIN_TOKEN} />);
 
       // Por texto y no por `role="status"`: el esqueleto de carga también lo
       // lleva, así que buscar por rol encontraría ese primero.
@@ -519,7 +556,7 @@ describe('CatalogView', () => {
   describe('paginación', () => {
     it('no pinta controles cuando todo cabe en una página', async () => {
       mockedList.mockResolvedValue(page([item1], 1));
-      render(<CatalogView token="tok" />);
+      render(<CatalogView token={ADMIN_TOKEN} />);
       await screen.findByRole('table', { name: /catálogo/i });
 
       expect(
@@ -530,7 +567,7 @@ describe('CatalogView', () => {
     it('«Siguiente» pide la página 2 al servidor', async () => {
       mockedList.mockResolvedValue(page([item1], 45, 1));
       const user = setupUser();
-      render(<CatalogView token="tok" />);
+      render(<CatalogView token={ADMIN_TOKEN} />);
       await screen.findByRole('table', { name: /catálogo/i });
 
       expect(screen.getByText('1–20 de 45')).toBeInTheDocument();
@@ -542,7 +579,7 @@ describe('CatalogView', () => {
     it('el debounce del buscador no devuelve a la página 1 si no se tecleó nada', async () => {
       mockedList.mockResolvedValue(page([item1], 45, 1));
       const user = setupUser();
-      render(<CatalogView token="tok" />);
+      render(<CatalogView token={ADMIN_TOKEN} />);
       await screen.findByRole('table', { name: /catálogo/i });
 
       await user.click(screen.getByRole('button', { name: /siguiente/i }));
@@ -560,7 +597,7 @@ describe('CatalogView', () => {
       setActiveLocationId('sede-norte');
       mockedList.mockResolvedValue(page([item1]));
 
-      render(<CatalogView token="tok" />);
+      render(<CatalogView token={ADMIN_TOKEN} />);
       await screen.findByRole('table', { name: /catálogo/i });
 
       expect(await screen.findByText(/de toda la clínica/i)).toBeInTheDocument();
@@ -570,7 +607,7 @@ describe('CatalogView', () => {
       setActiveLocationId(null);
       mockedList.mockResolvedValue(page([item1]));
 
-      render(<CatalogView token="tok" />);
+      render(<CatalogView token={ADMIN_TOKEN} />);
       await screen.findByRole('table', { name: /catálogo/i });
 
       expect(screen.queryByText(/de toda la clínica/i)).not.toBeInTheDocument();
@@ -578,26 +615,26 @@ describe('CatalogView', () => {
   });
 
   // DX-063 / FE-014: los precios iban siempre en USD («US$») aunque la clínica
-  // cobre en pesos.
-  it('formatea los precios en la moneda base de la clínica (COP en Colombia), no en USD', async () => {
+  // cobre en otra moneda.
+  it('formatea los precios en la moneda base de la clínica (USD en Venezuela), no en USD', async () => {
     mockedList.mockResolvedValue(page([item1]));
-    render(<CatalogView token="tok" />);
+    render(<CatalogView token={ADMIN_TOKEN} />);
     const table = await screen.findByRole('table', { name: /catálogo/i });
-    await waitFor(() => expect(within(table).getByText('80.000,00 COP')).toBeInTheDocument());
+    await waitFor(() => expect(within(table).getByText('VES 80.000,00')).toBeInTheDocument());
     expect(within(table).queryByText(/US\$|USD/)).not.toBeInTheDocument();
   });
 
   it('una clínica en España ve los precios en euros', async () => {
     mockedLocations.mockResolvedValue(clinicIn('ES'));
     mockedList.mockResolvedValue(page([item1]));
-    render(<CatalogView token="tok" />);
+    render(<CatalogView token={ADMIN_TOKEN} />);
     const table = await screen.findByRole('table', { name: /catálogo/i });
     await waitFor(() => expect(within(table).getByText('80.000,00 EUR')).toBeInTheDocument());
   });
 
-  it('una clínica con sedes en Colombia y España pinta el importe sin moneda, elija la sede que elija', async () => {
+  it('una clínica con sedes en Venezuela y España pinta el importe sin moneda, elija la sede que elija', async () => {
     mockedLocations.mockResolvedValue([
-      ...clinicIn('CO'),
+      ...clinicIn('VE'),
       clinicLocation({
         id: 'l2',
         name: 'Madrid',
@@ -612,37 +649,98 @@ describe('CatalogView', () => {
     ]);
     setActiveLocationId('l2');
     mockedList.mockResolvedValue(page([item1]));
-    render(<CatalogView token="tok" />);
+    render(<CatalogView token={ADMIN_TOKEN} />);
     const table = await screen.findByRole('table', { name: /catálogo/i });
     await waitFor(() => expect(mockedLocations).toHaveBeenCalled());
     await waitFor(() => expect(within(table).getByText('80.000,00')).toBeInTheDocument());
-    expect(within(table).queryByText(/€|EUR|COP|US\$|USD/)).not.toBeInTheDocument();
+    expect(within(table).queryByText(/€|EUR|VES|US\$|USD/)).not.toBeInTheDocument();
   });
 
-  it('sin sedes cargadas pinta el importe sin moneda, nunca en USD', async () => {
+  describe('DX-502-ter: la moneda del catálogo viene de la API', () => {
+    const mixedSedes = () => [
+      ...clinicIn('VE'),
+      clinicLocation({
+        id: 'l2',
+        name: 'Madrid',
+        address: null,
+        country: 'ES',
+        isActive: true,
+        currency: 'EUR',
+        timeZone: 'Europe/Madrid',
+        locale: 'es-ES',
+        createdAt: '2026-01-01T00:00:00Z',
+      }),
+    ];
+
+    it.each(['ADMIN', 'DENTIST', 'ASSISTANT'] as const)(
+      '%s ve los precios en la moneda fijada aunque las sedes usen monedas distintas',
+      async (role) => {
+        mockedLocations.mockResolvedValue(mixedSedes());
+        mockedList.mockResolvedValue({ ...page([item1]), catalogCurrency: 'USD' });
+        render(<CatalogView token={tokenForRole(role)} />);
+        const table = await screen.findByRole('table', { name: /catálogo/i });
+        await waitFor(() => expect(within(table).getByText(/80[.,]000[.,]00/)).toBeInTheDocument());
+        expect(within(table).getByText(/US\$|USD/)).toBeInTheDocument();
+        expect(within(table).queryByText(/€|EUR|VES/)).not.toBeInTheDocument();
+      },
+    );
+
+    it('la moneda de la API manda sobre la de las sedes', async () => {
+      mockedList.mockResolvedValue({ ...page([item1]), catalogCurrency: 'USD' });
+      render(<CatalogView token={ADMIN_TOKEN} />);
+      const table = await screen.findByRole('table', { name: /catálogo/i });
+      await waitFor(() => expect(within(table).getByText(/US\$|USD/)).toBeInTheDocument());
+      expect(within(table).queryByText(/VES/)).not.toBeInTheDocument();
+    });
+
+    it('con la página vacía también la conoce (el alta de un ítem nuevo)', async () => {
+      mockedLocations.mockResolvedValue(mixedSedes());
+      mockedList.mockResolvedValue({ ...page([], 0), catalogCurrency: 'USD' });
+      render(<CatalogView token={ADMIN_TOKEN} />);
+      await screen.findByRole('button', { name: 'Agregar ítem' });
+      await waitFor(() => expect(mockedList).toHaveBeenCalled());
+      const user = setupUser();
+      await user.click(screen.getByRole('button', { name: 'Agregar ítem' }));
+      await user.type(await screen.findByLabelText(/^Precio/), '100');
+      // La vista previa del importe lleva la moneda del catálogo, no «sin moneda».
+      expect(await screen.findByText(/US\$|USD/)).toBeInTheDocument();
+    });
+
+    it('si la API no la sabe (null), el importe va sin moneda', async () => {
+      mockedLocations.mockResolvedValue(mixedSedes());
+      mockedList.mockResolvedValue({ ...page([item1]), catalogCurrency: null });
+      render(<CatalogView token={ADMIN_TOKEN} />);
+      const table = await screen.findByRole('table', { name: /catálogo/i });
+      await waitFor(() => expect(within(table).getByText('80.000,00')).toBeInTheDocument());
+      expect(within(table).queryByText(/€|EUR|VES|US\$|USD/)).not.toBeInTheDocument();
+    });
+  });
+
+  it('sin sedes cargadas el importe sale «—» y un aviso, nunca en USD ni con otro formato', async () => {
     mockedLocations.mockRejectedValue(new TypeError('Failed to fetch'));
     mockedList.mockResolvedValue(page([item1]));
-    render(<CatalogView token="tok" />);
+    render(<CatalogView token={ADMIN_TOKEN} />);
     const table = await screen.findByRole('table', { name: /catálogo/i });
-    await waitFor(() => expect(within(table).getByText('80.000,00')).toBeInTheDocument());
+    await waitFor(() => expect(within(table).getAllByText('—').length).toBeGreaterThan(0));
+    expect(within(table).queryByText(/80[.,]000/)).not.toBeInTheDocument();
     expect(within(table).queryByText(/US\$|USD/)).not.toBeInTheDocument();
   });
 
   it('JPY location shows JPY without decimals', async () => {
-    // País CO a propósito: la moneda sale de la sede, nunca del país.
-    mockedLocations.mockResolvedValue([clinicLocation({ id: 'l1', country: 'CO', currency: 'JPY' })]);
+    // País VE a propósito: la moneda sale de la sede, nunca del país.
+    mockedLocations.mockResolvedValue([clinicLocation({ id: 'l1', country: 'VE', currency: 'JPY' })]);
     mockedList.mockResolvedValue(page([{ ...item1, defaultPrice: 8000 }]));
-    render(<CatalogView token="tok" />);
+    render(<CatalogView token={ADMIN_TOKEN} />);
     const table = await screen.findByRole('table', { name: /catálogo/i });
-    await waitFor(() => expect(within(table).getByText(/^8000\sJPY$/)).toBeInTheDocument());
-    expect(within(table).queryByText(/COP|,00/)).not.toBeInTheDocument();
+    await waitFor(() => expect(within(table).getByText(/^JPY\s8\.000$/)).toBeInTheDocument());
+    expect(within(table).queryByText(/VES|,00/)).not.toBeInTheDocument();
   });
 
-  it('location without currency shows SedeConfigError and never COP', async () => {
+  it('location without currency shows SedeConfigError and never VES', async () => {
     const user = setupUser();
-    mockedLocations.mockResolvedValue([clinicLocation({ id: 'l1', country: 'CO', currency: null })]);
+    mockedLocations.mockResolvedValue([clinicLocation({ id: 'l1', country: 'VE', currency: null })]);
     mockedList.mockResolvedValue(page([item1]));
-    render(<CatalogView token="tok" />);
+    render(<CatalogView token={ADMIN_TOKEN} />);
     const table = await screen.findByRole('table', { name: /catálogo/i });
     expect(
       await screen.findByText(
@@ -650,11 +748,23 @@ describe('CatalogView', () => {
       ),
     ).toBeInTheDocument();
     expect(within(table).getByText('80.000,00')).toBeInTheDocument();
-    expect(within(table).queryByText(/COP|US\$|USD/)).not.toBeInTheDocument();
+    expect(within(table).queryByText(/VES|US\$|USD/)).not.toBeInTheDocument();
 
     mockedLocations.mockResolvedValue([clinicLocation({ id: 'l1', currency: 'EUR' })]);
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
-    await waitFor(() => expect(within(table).getByText('80.000,00 EUR')).toBeInTheDocument());
+    await waitFor(() => expect(within(table).getByText('EUR 80.000,00')).toBeInTheDocument());
+  });
+
+  it('el precio sale con el formato de la sede: Berlín (de-DE) «80.000,00 EUR», Miami (en-US) «USD 80,000.00» (DX-354b)', async () => {
+    mockedLocations.mockResolvedValue([clinicLocation({ id: 'l1', currency: 'EUR', locale: 'de-DE', hourCycle: 'h23', timeZone: 'Europe/Berlin' })]);
+    mockedList.mockResolvedValue(page([item1]));
+    const first = render(<CatalogView token={ADMIN_TOKEN} />);
+    await waitFor(() => expect(within(first.container).getAllByText('80.000,00 EUR').length).toBeGreaterThan(0));
+    first.unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
+    mockedLocations.mockResolvedValue([clinicLocation({ id: 'l1', currency: 'USD', locale: 'en-US', hourCycle: 'h12', timeZone: 'America/New_York' })]);
+    const second = render(<CatalogView token={ADMIN_TOKEN} />);
+    await waitFor(() => expect(within(second.container).getAllByText('USD 80,000.00').length).toBeGreaterThan(0));
   });
 
   // DX-063: un 500 de la API no llega a la pantalla como «Internal server error».
@@ -663,7 +773,7 @@ describe('CatalogView', () => {
     mockedList
       .mockRejectedValueOnce(new ApiError(500, 'Internal server error'))
       .mockResolvedValueOnce(page([item1]));
-    render(<CatalogView token="tok" />);
+    render(<CatalogView token={ADMIN_TOKEN} />);
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('No pudimos cargar el catálogo.');
     expect(alert).not.toHaveTextContent(/internal server error/i);
@@ -673,44 +783,44 @@ describe('CatalogView', () => {
 });
 
 // DX-320 (decisión D4): el catálogo se identifica por su código interno; no
-// hay código CUPS ni ningún «código externo» del procedimiento.
-describe('CatalogView · sin código CUPS (DX-320)', () => {
+// hay código de procedimiento ni ningún «código externo» del procedimiento.
+describe('CatalogView · sin código externo (DX-320)', () => {
   const admin = tokenFor('ADMIN', 'u-admin');
 
   beforeEach(() => {
     mockedList.mockReset().mockResolvedValue(page([item1]));
     mockedUpdate.mockReset().mockResolvedValue(item1);
     mockedCreate.mockReset().mockResolvedValue(item1);
-    mockedLocations.mockReset().mockResolvedValue(clinicIn('CO'));
+    mockedLocations.mockReset().mockResolvedValue(clinicIn('VE'));
     (listCatalogItems as jest.Mock).mockReset().mockResolvedValue([item1]);
     window.localStorage.clear();
   });
 
-  it('la tabla no tiene columna CUPS', async () => {
+  it('la tabla no tiene columna de código externo', async () => {
     render(<CatalogView token={admin} />);
     const table = await screen.findByRole('table', { name: /catálogo/i });
-    expect(within(table).queryByRole('columnheader', { name: /CUPS/i })).not.toBeInTheDocument();
-    expect(screen.queryByText(/CUPS/i)).not.toBeInTheDocument();
+    expect(within(table).queryByRole('columnheader', { name: /CU[P]S/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/CU[P]S/i)).not.toBeInTheDocument();
   });
 
-  it('el formulario de edición no pide CUPS ni otro código externo, y no lo envía', async () => {
+  it('el formulario de edición no pide ningún código externo, y no lo envía', async () => {
     const user = setupUser();
     render(<CatalogView token={admin} initialItemId="c1" />);
     const dialog = await screen.findByRole('dialog', { name: 'Editar ítem' });
-    expect(within(dialog).queryByLabelText(/CUPS/i)).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText(/CU[P]S/i)).not.toBeInTheDocument();
     expect(within(dialog).queryByLabelText(/código externo/i)).not.toBeInTheDocument();
-    expect(within(dialog).queryByText(/CUPS/i)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/CU[P]S/i)).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
     expect(mockedUpdate.mock.calls[0][2]).not.toHaveProperty('cupsCode');
   });
 
-  it('el alta no pide CUPS', async () => {
+  it('el alta no pide código externo', async () => {
     const user = setupUser();
     render(<CatalogView token={admin} />);
     await screen.findByRole('table', { name: /catálogo/i });
     await user.click(screen.getByRole('button', { name: /agregar ítem/i }));
-    expect(screen.queryByLabelText(/CUPS/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/CU[P]S/i)).not.toBeInTheDocument();
   });
 });
 
@@ -721,7 +831,7 @@ describe('CatalogView · admite descuentos (DX-105)', () => {
     mockedList.mockReset().mockResolvedValue(page([item1]));
     mockedUpdate.mockReset().mockResolvedValue(item1);
     mockedCreate.mockReset().mockResolvedValue(item1);
-    mockedLocations.mockReset().mockResolvedValue(clinicIn('CO'));
+    mockedLocations.mockReset().mockResolvedValue(clinicIn('VE'));
     (listCatalogItems as jest.Mock).mockReset().mockResolvedValue([item1]);
     window.localStorage.clear();
   });
@@ -757,5 +867,103 @@ describe('CatalogView · admite descuentos (DX-105)', () => {
   it('un ítem sin el campo (respuesta antigua) se trata como que admite descuentos', async () => {
     render(<CatalogView token={admin} initialItemId="c1" />);
     expect(await screen.findByRole('checkbox', { name: 'Admite descuentos' })).toBeChecked();
+  });
+});
+
+describe('CatalogView · plantilla de evolución del procedimiento (DX-455)', () => {
+  const inactiveResin = { ...resinTemplate, active: false };
+
+  beforeEach(() => {
+    mockedList.mockReset();
+    mockedUpdate.mockReset().mockResolvedValue(item1);
+    mockedCreate.mockReset();
+    mockedLocations.mockReset().mockResolvedValue(clinicIn('VE'));
+    mockedTemplates.mockReset();
+    window.localStorage.clear();
+  });
+
+  async function openEditOf(item: DentalCatalogItem) {
+    mockedList.mockResolvedValue(page([item]));
+    const user = setupUser();
+    render(<CatalogView token={ADMIN_TOKEN} />);
+    await screen.findByRole('table', { name: /catálogo/i });
+    const menu = await openRowMenu(user, /acciones de profilaxis/i);
+    await user.click(within(menu).getByRole('menuitem', { name: /editar/i }));
+    return user;
+  }
+
+  it('ofrece las activas y «Sin plantilla», y guarda el vínculo elegido', async () => {
+    mockedTemplates.mockResolvedValue([resinTemplate, prophylaxisTemplate, { ...resinTemplate, id: 'x', name: 'Vieja', active: false }]);
+    const user = await openEditOf(item1);
+    const select = await screen.findByRole('combobox', { name: 'Plantilla de evolución' });
+    expect(mockedTemplates).toHaveBeenCalledWith(ADMIN_TOKEN, { includeInactive: true });
+    const options = within(select).getAllByRole('option').map((o) => o.textContent);
+    expect(options).toEqual(['Sin plantilla', 'Profilaxis', 'Resina']);
+    await user.selectOptions(select, 'tpl-resina');
+    await user.click(screen.getByRole('button', { name: /^guardar$/i }));
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith(
+        ADMIN_TOKEN,
+        'c1',
+        expect.objectContaining({ clinicalNoteTemplateId: 'tpl-resina' }),
+      ),
+    );
+  });
+
+  it('sin tocar la plantilla no la manda; «Sin plantilla» la desliga con null', async () => {
+    mockedTemplates.mockResolvedValue([resinTemplate]);
+    const linked = { ...item1, clinicalNoteTemplateId: 'tpl-resina', suggestedClinicalNoteTemplateId: 'tpl-resina' };
+    const user = await openEditOf(linked);
+    const select = await screen.findByRole('combobox', { name: 'Plantilla de evolución' });
+    expect(select).toHaveValue('tpl-resina');
+    await user.click(screen.getByRole('button', { name: /^guardar$/i }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).not.toHaveProperty('clinicalNoteTemplateId');
+  });
+
+  it('una ligada que se desactivó se ve como «(desactivada)», no elegible, y explica por qué no se sugiere', async () => {
+    mockedTemplates.mockResolvedValue([inactiveResin, prophylaxisTemplate]);
+    const linked = { ...item1, clinicalNoteTemplateId: 'tpl-resina', suggestedClinicalNoteTemplateId: null };
+    const user = await openEditOf(linked);
+    const select = await screen.findByRole('combobox', { name: 'Plantilla de evolución' });
+    expect(select).toHaveValue('tpl-resina');
+    const inactive = within(select).getByRole('option', { name: 'Resina (desactivada)' });
+    expect(inactive).toBeDisabled();
+    expect(screen.getByText(/«Resina» está desactivada: no se sugiere al marcar hecho/)).toBeInTheDocument();
+    await user.selectOptions(select, '');
+    await user.click(screen.getByRole('button', { name: /^guardar$/i }));
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith(ADMIN_TOKEN, 'c1', expect.objectContaining({ clinicalNoteTemplateId: null })),
+    );
+  });
+
+  it('el error de la API sobre la plantilla sale junto al campo, con el foco', async () => {
+    mockedTemplates.mockResolvedValue([resinTemplate]);
+    mockedUpdate.mockReset().mockRejectedValue(
+      new ApiError(400, 'La plantilla «Resina» está desactivada: actívala en Ajustes → Plantillas de evolución o elige otra.'),
+    );
+    const user = await openEditOf(item1);
+    const select = await screen.findByRole('combobox', { name: 'Plantilla de evolución' });
+    await user.selectOptions(select, 'tpl-resina');
+    await user.click(screen.getByRole('button', { name: /^guardar$/i }));
+    expect(await screen.findByText(/La plantilla «Resina» está desactivada/)).toBeInTheDocument();
+    expect(select).toHaveAttribute('aria-invalid', 'true');
+    expect(select).toHaveFocus();
+  });
+
+  it('si las plantillas no cargan, el campo se sustituye por su error con reintento (escalón 2)', async () => {
+    mockedTemplates.mockRejectedValueOnce(new Error('boom')).mockResolvedValue([resinTemplate]);
+    const user = await openEditOf(item1);
+    expect(await screen.findByText('Plantillas no disponibles')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(await screen.findByRole('combobox', { name: 'Plantilla de evolución' })).toBeInTheDocument();
+  });
+
+  it('un diagnóstico no ofrece plantilla', async () => {
+    mockedTemplates.mockResolvedValue([resinTemplate]);
+    const user = await openEditOf(item1);
+    await screen.findByRole('combobox', { name: 'Plantilla de evolución' });
+    await user.selectOptions(screen.getByLabelText('Tipo'), 'DIAGNOSIS');
+    expect(screen.queryByRole('combobox', { name: 'Plantilla de evolución' })).not.toBeInTheDocument();
   });
 });

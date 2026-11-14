@@ -4,7 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
-import { lastSlotToday, sedeDayFromToday } from './support/clock';
+import { SEDE_TODAY_TZ, lastSlotToday, sedeDayFromToday } from './support/clock';
+import { E2E_TODAY_REGION } from './support/regional';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { API_URL, tenantOrigin } from './support/urls';
 
@@ -34,8 +35,11 @@ const lastName = `Cobertura${suffix}`.slice(0, 40);
 const otherLastName = `SinPlan${suffix}`.slice(0, 40);
 const payerName = 'Surco Salud';
 const payerOption = `${payerName} · Sistema público de salud`;
-const twoDaysAgo = sedeDayFromToday(-2);
-const tomorrow = sedeDayFromToday(1);
+// DX-460: la sede y el navegador en la zona segura de la suite: la franja de hoy vale a cualquier hora.
+const ZONE = SEDE_TODAY_TZ;
+test.use({ timezoneId: ZONE });
+const twoDaysAgo = sedeDayFromToday(-2, ZONE);
+const tomorrow = sedeDayFromToday(1, ZONE);
 
 const QA_DIR = process.env.E2E_QA_DIR;
 const VIEWPORTS = [
@@ -83,6 +87,7 @@ test.beforeAll(async ({ request }) => {
     fullName: admin.fullName,
     email: admin.email,
     password,
+    location: E2E_TODAY_REGION,
   });
   await addStaffViaApi(request, session, { ...reception, role: 'RECEPTION', password });
   const schedule = await request.put(`${API_URL}/locations/schedule`, {
@@ -333,7 +338,7 @@ test('una cita corta de hoy con cobertura vencida muestra la marca en la agenda 
   const providerId = members.find((m) => m.fullName === admin.fullName)!.userId;
   // DX-252: la última franja de hoy en la sede (23:55–23:59), no las 22:00 (en
   // el pasado si la suite corre de noche). La marca va en la fila de la hora.
-  const slot = lastSlotToday();
+  const slot = lastSlotToday('23:55', '23:59', ZONE);
   await apiPost(request, session, '/appointments', {
     patientId,
     providerId,

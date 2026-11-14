@@ -5,11 +5,17 @@ import { PaymentReceiptDialog } from './payment-receipt-dialog';
 import { getPaymentReceipt, sendPaymentReceipt } from '@/lib/payments/payment-receipts-api';
 import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
 import { ApiError } from '@/lib/api/client';
+import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
+import { getPaymentProofUrl } from '@/lib/payments/payment-proof-api';
 
 jest.mock('../../lib/payments/payment-receipts-api', () => ({
   ...jest.requireActual('../../lib/payments/payment-receipts-api'),
   getPaymentReceipt: jest.fn(),
   sendPaymentReceipt: jest.fn(),
+}));
+jest.mock('../../lib/payments/payment-proof-api', () => ({
+  ...jest.requireActual('../../lib/payments/payment-proof-api'),
+  getPaymentProofUrl: jest.fn(),
 }));
 jest.mock('sonner', () => ({
   toast: { success: jest.fn(), error: jest.fn() },
@@ -17,10 +23,12 @@ jest.mock('sonner', () => ({
 
 const mockedGet = getPaymentReceipt as jest.MockedFunction<typeof getPaymentReceipt>;
 const mockedSend = sendPaymentReceipt as jest.MockedFunction<typeof sendPaymentReceipt>;
+const mockedProofUrl = getPaymentProofUrl as jest.MockedFunction<typeof getPaymentProofUrl>;
 
 beforeEach(() => {
   mockedGet.mockReset();
   mockedSend.mockReset();
+  mockedProofUrl.mockReset();
   (toast.success as jest.Mock).mockReset();
   (toast.error as jest.Mock).mockReset();
 });
@@ -104,4 +112,71 @@ it('si el envío falla, el motivo en español va a un aviso con reintento y el r
     ),
   );
   expect(screen.getByTestId('receipt-document')).toBeInTheDocument();
+});
+
+// DX-515-bis: el encabezado del diálogo dice el título congelado en el recibo.
+it('con título propio congelado, el encabezado del diálogo lo dice; sin él, «Recibo de caja»', async () => {
+  const fixture = paymentReceiptFixture();
+  mockedGet.mockResolvedValue({ ...fixture, snapshot: { ...fixture.snapshot, title: 'Recibo de pago' } });
+  const { unmount } = render(<PaymentReceiptDialog token="tok" paymentId="pay-1" onOpenChange={() => undefined} />);
+  expect(await screen.findByRole('dialog', { name: 'Recibo de pago' })).toBeInTheDocument();
+  expect(screen.queryByRole('dialog', { name: /recibo de caja/i })).not.toBeInTheDocument();
+  unmount();
+
+  mockedGet.mockResolvedValue(fixture);
+  render(<PaymentReceiptDialog token="tok" paymentId="pay-2" onOpenChange={() => undefined} />);
+  const dialog = await screen.findByRole('dialog', { name: 'Recibo de caja' });
+  await within(dialog).findByTestId('receipt-document');
+  expect(screen.getByRole('dialog', { name: 'Recibo de caja' })).toBeInTheDocument();
+});
+
+it('DX-354: sin región de la sede el recibo sale con «—» y el aviso; Reintentar lo vuelve a leer', async () => {
+  mockedGet.mockResolvedValueOnce(paymentReceiptFixture({ regional: null }));
+  mockedGet.mockResolvedValueOnce(paymentReceiptFixture());
+  render(<PaymentReceiptDialog token="tok" paymentId="pay-1" onOpenChange={() => undefined} />);
+  const dialog = await screen.findByRole('dialog', { name: /recibo de caja/i });
+  expect(await within(dialog).findByTestId('receipt-document')).toHaveTextContent(/Emitido\s*—/);
+  expect(within(dialog).getByText(SEDE_LOCALE_ERROR)).toBeInTheDocument();
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Reintentar' }));
+  await waitFor(() => expect(within(dialog).queryByText(SEDE_LOCALE_ERROR)).not.toBeInTheDocument());
+  expect(within(dialog).getByTestId('receipt-document')).not.toHaveTextContent(/Emitido\s*—/);
+  expect(mockedGet).toHaveBeenCalledTimes(2);
+});
+
+it('DX-414: el pie del recibo (Cerrar, Enviar, imprimir) mide 44 px a 390 px', async () => {
+  mockedGet.mockResolvedValue(paymentReceiptFixture());
+  render(<PaymentReceiptDialog token="tok" paymentId="pay-1" onOpenChange={() => undefined} />);
+  const dialog = await screen.findByRole('dialog', { name: /recibo de caja/i });
+  await within(dialog).findByTestId('receipt-document');
+  const footer = within(dialog).getByRole('link', { name: /imprimir a4/i }).parentElement!;
+  expect(footer.className).toContain('max-sm:[&>*]:min-h-11');
+  // Cerrar, Enviar y las dos impresiones cuelgan del mismo pie.
+  expect(within(footer).getAllByRole('button').length + within(footer).getAllByRole('link').length).toBe(4);
+});
+
+// DX-389: el recibo de un abono con comprobante ofrece «Ver comprobante».
+describe('comprobante del cobro (DX-389)', () => {
+  it('con comprobante, el botón abre el visor con la URL firmada', async () => {
+    mockedGet.mockResolvedValue(paymentReceiptFixture());
+    mockedProofUrl.mockResolvedValue({
+      url: 'https://files.test/p.png?sig=1',
+      expiresAt: '2026-11-05T00:05:00.000Z',
+      disposition: 'inline',
+      mime: 'image/png',
+      name: 'captura.png',
+    });
+    render(<PaymentReceiptDialog token="tok" paymentId="pay-1" hasProof onOpenChange={() => undefined} />);
+    await screen.findByTestId('receipt-document');
+    await userEvent.click(screen.getByRole('button', { name: 'Ver comprobante' }));
+    expect(await screen.findByRole('img', { name: 'captura.png' })).toHaveAttribute('src', 'https://files.test/p.png?sig=1');
+    expect(mockedProofUrl).toHaveBeenCalledTimes(1);
+    expect(mockedProofUrl).toHaveBeenCalledWith('tok', 'pay-1', 'inline');
+  });
+
+  it('sin comprobante no hay botón', async () => {
+    mockedGet.mockResolvedValue(paymentReceiptFixture());
+    render(<PaymentReceiptDialog token="tok" paymentId="pay-1" onOpenChange={() => undefined} />);
+    await screen.findByTestId('receipt-document');
+    expect(screen.queryByRole('button', { name: 'Ver comprobante' })).not.toBeInTheDocument();
+  });
 });

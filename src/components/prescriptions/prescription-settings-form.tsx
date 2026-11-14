@@ -114,12 +114,6 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
     };
   }, [token, reloadKey]);
 
-  // Tras guardar, la barra desaparece (no hay cambios) y el foco caería a
-  // `<body>`: lo llevamos al aviso para no perder el sitio al teclado.
-  useEffect(() => {
-    if (notice) noticeRef.current?.focus();
-  }, [notice]);
-
   if (loadError) {
     return (
       <SectionError
@@ -225,11 +219,15 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
           </FormField>
         </div>
       </SettingRows>
+      {/* DX-546 · FE-110: tras guardar, la SaveBar lleva aquí el foco (`savedFocusTo`). */}
       <p
         ref={noticeRef}
         role="status"
         tabIndex={-1}
-        className={cn(notice ? 'text-sm text-success-text' : 'sr-only', 'focus:outline-none')}
+        className={cn(
+          notice ? 'text-sm text-success-text' : 'sr-only',
+          'rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text',
+        )}
       >
         {notice}
       </p>
@@ -238,6 +236,7 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
         dirty={dirty}
         saving={saving}
         form={formId}
+        savedFocusTo={noticeRef}
         error={saveError}
         saveLabel={copy.save}
         onDiscard={() => {

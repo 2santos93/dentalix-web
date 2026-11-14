@@ -10,14 +10,15 @@ import type { RegionalSettings } from './support/regional';
 import { API_URL, tenantOrigin } from './support/urls';
 import { regionalFormat } from '../src/lib/format/regional-format';
 import { addCivilDays, wallDay, wallInstant } from '../src/lib/time/wall-clock';
+import { SEDE_TODAY_TZ } from './support/clock';
 
 /**
  * e2e DX-378 (FE-076): la agenda pinta la hora con la zona y el reloj de la
  * SEDE, no con los del navegador.
  *
- * Una clínica nueva con su sede en Caracas (UTC−4), `es-VE` y 12 h, y el
- * navegador en Tokio (UTC+9): trece horas de diferencia, así que la hora del
- * navegador cambiaría hasta el día de la cita. Una cita a las 3:30 p. m. de
+ * Una clínica nueva con su sede en la zona segura de la suite (Caracas salvo
+ * cerca de su medianoche, DX-460), `es-VE` y 12 h, y el navegador en otra zona
+ * muy distinta: la hora del navegador cambiaría hasta el día de la cita. Una cita a las 3:30 p. m. de
  * la sede, dentro de dos días:
  *  1. Día (lista y columnas), Semana, Mes y el detalle dicen «3:30 p. m.»,
  *     en su día de la sede, a 1440 y 390 px sin scroll lateral.
@@ -38,11 +39,14 @@ const DB_SKIP = 'E2E_DATABASE_URL no definido: no se puede pasar a hoy una cita 
 const SEDE = {
   country: 'VE',
   currency: 'USD',
-  timeZone: 'America/Caracas',
+  timeZone: SEDE_TODAY_TZ,
   locale: 'es-VE',
   hourCycle: 'h12',
 } satisfies RegionalSettings;
-const BROWSER_ZONE = 'Asia/Tokyo';
+// Siempre lejos de la sede: de noche en Caracas, la zona segura puede ser Tokio.
+const BROWSER_ZONE = /Tokyo|Brisbane|Guadalcanal|Tarawa|Singapore|Bangkok/.test(SEDE.timeZone)
+  ? 'America/Lima'
+  : 'Asia/Tokyo';
 const fmt = regionalFormat({ locale: SEDE.locale, hourCycle: SEDE.hourCycle });
 
 const VIEWPORTS = [
@@ -134,13 +138,13 @@ test('la agenda (día, semana, mes y detalle) pinta la hora de la sede en 12 h, 
     await openAgenda(page, 'Día', futureDay);
     const card = page.getByTestId('day-column-appointment').filter({ hasText: futurePatient });
     await expect(card).toContainText(range, { timeout: 15_000 });
-    await expect(page.getByRole('button', { name: new RegExp(`^Detalle de la cita de ${range}`) })).toBeVisible();
+    await expect(page.getByRole('button', { name: new RegExp(`^${range}.*Detalle de la cita`) })).toBeVisible();
     await expect(page.getByText('3:00 p. m.', { exact: true }).first()).toBeAttached();
     await expectNoHorizontalScroll(page);
     await shoot(page, 'agenda-dia-columnas', viewport.width);
 
     // Detalle: la misma hora.
-    await card.getByRole('button', { name: new RegExp(`^Detalle de la cita de ${range}`) }).click();
+    await card.getByRole('button', { name: new RegExp(`^${range}.*Detalle de la cita`) }).click();
     const sheet = page.getByRole('dialog', { name: futurePatient });
     await expect(sheet).toContainText(range);
     await page.keyboard.press('Escape');
@@ -155,7 +159,7 @@ test('la agenda (día, semana, mes y detalle) pinta la hora de la sede en 12 h, 
     // Semana: la cita en la columna de SU día y con su hora.
     await openAgenda(page, 'Semana', futureDay);
     const weekCard = page.getByTestId('week-grid-appointment').filter({ hasText: futurePatient });
-    await expect(weekCard).toHaveAccessibleName(new RegExp(`^${range}`), { timeout: 15_000 });
+    await expect(weekCard).toHaveAccessibleName(new RegExp(`^${futurePatient} Agend\\. ${range}`), { timeout: 15_000 });
     await expect(page.locator(`[data-testid="week-grid-day-column"]`).filter({ has: weekCard })).toHaveCount(1);
     const columns = page.getByTestId('week-grid-day-column');
     const headers = page.getByTestId('week-day-header');

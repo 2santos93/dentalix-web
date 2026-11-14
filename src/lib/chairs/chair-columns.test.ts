@@ -1,9 +1,12 @@
 import {
   NO_CHAIR_COLUMN,
+  canDragByChair,
   chairColumnOf,
   chairColumns,
   chairDisplayName,
+  freeChairs,
   moveChairInOrder,
+  offeredProvider,
   proposeProvider,
   readColumnsBy,
   writeColumnsBy,
@@ -23,6 +26,31 @@ function chair(partial: Partial<Chair> & { id: string }): Chair {
     ...partial,
   };
 }
+
+describe('freeChairs (DX-492)', () => {
+  const NOW = new Date('2026-11-10T14:00:00.000Z');
+  const chair = (id: string, active = true) => ({ id, active }) as Chair;
+  const appt = (chairId: string | null, start: string, end: string, status = 'ARRIVED') => ({
+    chairId,
+    status,
+    start: `2026-11-10T${start}:00.000Z`,
+    end: `2026-11-10T${end}:00.000Z`,
+  });
+
+  it('quita los inactivos y los ocupados ahora; lo cancelado o ya terminado no ocupa', () => {
+    const free = freeChairs(
+      [chair('a'), chair('b'), chair('c'), chair('d'), chair('e', false)],
+      [
+        appt('a', '13:30', '14:30'),
+        appt('b', '13:30', '14:30', 'CANCELLED'),
+        appt('c', '13:00', '14:00'),
+        appt(null, '13:30', '14:30'),
+      ],
+      NOW,
+    );
+    expect(free.map((c) => c.id)).toEqual(['b', 'c', 'd']);
+  });
+});
 
 describe('columnas por sillón (DX-211)', () => {
   const chairs = [
@@ -65,6 +93,27 @@ describe('columnas por sillón (DX-211)', () => {
       expect(proposeProvider('', chair({ id: 'b' }), ['dr-sillon'])).toBe('');
       expect(proposeProvider('', withDefault, ['otra'])).toBe('');
       expect(proposeProvider('', null, ['dr-sillon'])).toBe('');
+    });
+  });
+
+  describe('DX-479: mover a un sillón no cambia el profesional solo', () => {
+    it('ofrece el profesional por defecto del sillón solo si es otro y sigue en el personal', () => {
+      expect(offeredProvider('dra-a', { defaultProviderId: 'dr-b' }, ['dra-a', 'dr-b'])).toBe('dr-b');
+      // El mismo profesional: nada que ofrecer.
+      expect(offeredProvider('dra-a', { defaultProviderId: 'dra-a' }, ['dra-a'])).toBeNull();
+      // Sin profesional por defecto, o sin sillón («Sin sillón»): nada.
+      expect(offeredProvider('dra-a', { defaultProviderId: null }, ['dra-a'])).toBeNull();
+      expect(offeredProvider('dra-a', null, ['dra-a'])).toBeNull();
+      // Ya no está en el personal: no se ofrece a alguien que no puede atender.
+      expect(offeredProvider('dra-a', { defaultProviderId: 'ex' }, ['dra-a', 'dr-b'])).toBeNull();
+    });
+
+    it('por sillón solo se arrastra lo agendado o confirmado', () => {
+      expect(canDragByChair('SCHEDULED')).toBe(true);
+      expect(canDragByChair('CONFIRMED')).toBe(true);
+      for (const status of ['ARRIVED', 'IN_PROGRESS', 'COMPLETED', 'NO_SHOW', 'CANCELLED']) {
+        expect(canDragByChair(status)).toBe(false);
+      }
     });
   });
 

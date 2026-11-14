@@ -36,11 +36,10 @@ const rawSuffix = process.env.E2E_RUN_SUFFIX ?? randomUUID();
 const suffix = rawSuffix.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 10);
 const password = 'Password123!';
 
-// Mismo formateador que la app (`formatCurrency`, locale `es`, dos decimales).
-const usd = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD', currencyDisplay: 'code', minimumFractionDigits: 2 });
-const money = (amount: number) => usd.format(amount);
 /** DX-386: «Cobrado»/«Pendiente» por ítem con el formato de la sede y el código ISO («USD 100,00»). */
 const sedeUsd = (amount: number) => moneyWithCode(amount, 'USD', regionalFormat(E2E_REGION));
+/** DX-354b: el modal de imputar y sus textos usan también el formato de la sede. */
+const money = sedeUsd;
 
 interface Seeded {
   patientId: string;
@@ -160,14 +159,14 @@ async function openPayments(panel: Locator) {
 async function openAllocation(page: Page, panel: Locator): Promise<Locator> {
   // UX v2: Recibo, Imputación y Anular viven en el «⋯» de la fila del abono.
   await panel.getByRole('button', { name: /^Acciones de abono/ }).first().click();
-  await page.getByRole('menuitem', { name: 'Imputación' }).click();
+  await page.getByRole('menuitem', { name: 'Imputación', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Imputar abono' });
   await expect(dialog.getByText(`Disponible para imputar: ${money(180)}`)).toBeVisible({ timeout: 15_000 });
   return dialog;
 }
 
 async function receptionSees(browser: Browser, origin: string, viewport: { width: number; height: number }, data: Seeded, email: string) {
-  const context = await browser.newContext({ viewport, locale: E2E_BROWSER_LOCALE, timezoneId: 'America/Bogota' });
+  const context = await browser.newContext({ viewport, locale: E2E_BROWSER_LOCALE, timezoneId: 'America/Caracas' });
   const page = await context.newPage();
   try {
     await loginAs(page, origin, email, password);
@@ -188,8 +187,8 @@ async function receptionSees(browser: Browser, origin: string, viewport: { width
       await expect(row.locator('td[data-label="Cobrado"]')).toHaveText(sedeUsd(paid));
     }
     // Solo lectura: recepción no imputa ni ve el plan clínico.
-    await expect(page.getByRole('button', { name: 'Imputación' })).toHaveCount(0);
-    await expect(page.getByRole('menuitem', { name: 'Imputación' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Imputación', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('menuitem', { name: 'Imputación', exact: true })).toHaveCount(0);
     await expect(page.getByRole('tab', { name: 'Plan de tratamiento' })).toHaveCount(0);
     await expectNoHorizontalScroll(page);
   } finally {
@@ -472,7 +471,7 @@ test('DX-051 axe: ítems del plan, «Ver por ítem» y el modal «Imputar abono�
       await expect(other.getByText('1 abono sin tasa')).toBeVisible();
       await openPayments(other);
       await other.getByRole('button', { name: /^Acciones de abono/ }).first().click();
-      await page.getByRole('menuitem', { name: 'Imputación' }).click();
+      await page.getByRole('menuitem', { name: 'Imputación', exact: true }).click();
       dialog = page.getByRole('dialog', { name: 'Imputar abono' });
       await expect(
         dialog.getByText('No hay tasa de cambio para la fecha de este abono: todavía no se puede imputar.'),

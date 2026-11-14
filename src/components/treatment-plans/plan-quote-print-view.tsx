@@ -1,9 +1,10 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, FileX, Lock, Printer } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
-import { getPlanQuote, type PlanQuote } from '@/lib/treatment-plans/plan-quote-api';
+import { issuePlanQuote, type PlanQuote } from '@/lib/treatment-plans/plan-quote-api';
+import { getPlan } from '@/lib/treatment-plans/treatment-plans-api';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Button } from '@/components/ui/button';
@@ -14,9 +15,10 @@ import { useExchangeRates, type ExchangeRatesState } from '@/components/payments
 import { ratePreviewCopy } from '@/components/payments/payment-rate-preview';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { documentFormat } from '@/lib/format/document-format';
+import { DocumentFormatNote } from '@/components/documents/document-format-note';
 import { quoteFromRates, ratePerBase } from '@/lib/payments/payment-rate';
-import { useLocationsState } from '@/lib/locations/use-locations-state';
-import { clinicBaseCurrency } from '@/lib/locations/location-settings';
+import { usePrintDocumentTitle } from '@/lib/print/use-print-document-title';
 
 const copy = {
   toolbar: 'Acciones del presupuesto',
@@ -63,12 +65,24 @@ interface PlanQuotePrintViewProps {
   backHref: string;
   /** En `false` no se pide nada y se muestra el aviso de acceso (la API daría 403). */
   allowed?: boolean;
+  /**
+   * DX-417 (ronda 1, M-6): el rol lee el plan clínico (`GET /treatment-plans/:id`,
+   * roles clínicos). Sin él (recepción) no se pide (sería un 403) y el pendiente
+   * se imprime sin su línea: el presupuesto no dice de dónde viene.
+   */
+  canReadPlan?: boolean;
 }
 
 /**
  * Vista imprimible del presupuesto (DX-012), fuera del shell, mismo patrón que
  * la del consentimiento y la receta: abre el diálogo de impresión UNA vez
  * cuando el presupuesto está en pantalla; la barra lleva `print:hidden`.
+ *
+ * DX-379: carga con `POST …/quote/issue`, así que abrirla fija la validez de un
+ * borrador o presentado sin fechas. Se llega desde «Imprimir presupuesto» (la
+ * ficha), «Ver el presupuesto completo» (el modal de aceptar) y «Presupuesto»
+ * (estado de cuenta): los tres imprimen al cargar, así que los tres cuentan
+ * como primera impresión. El modal de aceptar en sí sigue con el GET.
  */
 export function PlanQuotePrintView({
   token,
@@ -76,14 +90,19 @@ export function PlanQuotePrintView({
   planId,
   backHref,
   allowed = true,
+  canReadPlan = false,
 }: PlanQuotePrintViewProps) {
   const [data, setData] = useState<PlanQuote | null>(null);
+  // DX-417: el instante en que se aceptó el original si este es su presupuesto pendiente.
+  const [partialRestOf, setPartialRestOf] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deniedByApi, setDeniedByApi] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const printed = useRef(false);
   const forbidden = !allowed || deniedByApi;
+  // DX-354: fechas e importes del documento con el formato de la sede del presupuesto, no el del navegador.
+  const format = useMemo(() => (data ? documentFormat(data.regional) : null), [data]);
   // DX-376: la tasa es la de hoy en la sede; sin zona no se pide ninguna.
   const [second, setSecond] = useState('');
   const zone = useSedeTimeZone(token);
@@ -91,22 +110,22 @@ export function PlanQuotePrintView({
   const today = timeZone ? sedeToday(timeZone) : '';
   const rates = useExchangeRates(token, today, second !== '' && data !== null);
   const secondResult = data && second ? secondCurrencyOf(rates, data.currency, second, today) : null;
-  // DX-489: el precio de lista va en la moneda del catálogo (la común de las
-  // sedes). Se espera a saberla para pintar e imprimir. Si las sedes no
-  // cargan, el documento se ve con la cifra sin moneda, pero con el aviso y su
-  // Reintentar, y el diálogo de impresión NO se abre solo: imprimiría algo
-  // distinto de la pestaña (sin moneda ni «Ahorro por convenio») sin decirlo.
-  const locations = useLocationsState(token);
-  const catalogCurrency = locations.status === 'ready' ? clinicBaseCurrency(locations.locations) : null;
-  const ready = data !== null && locations.status !== 'loading';
-  const autoPrint = data !== null && locations.status === 'ready';
+  // DX-502: el precio de lista ya trae su moneda (la del catálogo congelada
+  // en cada ítem, `listPriceCurrency`): no hace falta leer las sedes.
+  const ready = data !== null;
+  const autoPrint = data !== null && format !== null;
 
   useEffect(() => {
     if (!allowed) return;
     let cancelled = false;
     async function load() {
       try {
-        const res = await getPlanQuote(token, patientId, planId);
+        // DX-379: imprimir fija la validez la primera vez (POST issue). DX-417: a la vez,
+        // si es el pendiente de una aceptación parcial (sin acceso al plan, sin la línea).
+        const [res, plan] = await Promise.all([
+          issuePlanQuote(token, patientId, planId),
+          canReadPlan ? getPlan(token, planId).catch(() => null) : Promise.resolve(null),
+        ]);
         if (cancelled) return;
         // La URL nombra al paciente: si el plan es de otro, no se imprime bajo
         // su ficha (el «Volver» llevaría a quien no es).
@@ -115,6 +134,15 @@ export function PlanQuotePrintView({
           setError(copy.loadError);
           return;
         }
+        const original =
+          !res.acceptance && plan?.splitFromPlanId
+            ? await getPlan(token, plan.splitFromPlanId).catch(() => null)
+            : null;
+        if (cancelled) return;
+        // El original sin fecha legible (o sin acceso): la línea sin fecha.
+        setPartialRestOf(
+          !res.acceptance && plan?.splitFromPlanId ? (original?.acceptedAt ?? 'unknown') : null,
+        );
         setData(res);
         setError(null);
       } catch (err) {
@@ -129,7 +157,7 @@ export function PlanQuotePrintView({
     return () => {
       cancelled = true;
     };
-  }, [token, patientId, planId, reloadKey, allowed]);
+  }, [token, patientId, planId, reloadKey, allowed, canReadPlan]);
 
   useEffect(() => {
     if (autoPrint && !printed.current) {
@@ -138,9 +166,10 @@ export function PlanQuotePrintView({
     }
   }, [autoPrint]);
 
+  // DX-118 (FE-033): título neutro en la pestaña; el del documento solo al imprimir.
+  usePrintDocumentTitle('Presupuesto', data ? copy.documentTitle(data.patient.name) : null);
   return (
     <div className="quote-print-page flex min-h-full flex-1 flex-col bg-surface-sunken print:min-h-0 print:bg-white">
-      {data ? <title>{copy.documentTitle(data.patient.name)}</title> : null}
       <div
         role="toolbar"
         aria-label={copy.toolbar}
@@ -169,17 +198,12 @@ export function PlanQuotePrintView({
               />
             </div>
           ) : null}
-          <Button type="button" onClick={() => window.print()} disabled={!ready}>
+          <Button type="button" onClick={() => window.print()} disabled={!ready || format === null}>
             <Printer aria-hidden />
             {copy.print}
           </Button>
         </div>
       </div>
-      {data && locations.status === 'error' ? (
-        <div className="px-4 pt-3 print:hidden" data-testid="quote-locations-error">
-          <SedeConfigError kind="currency" variant="note" onRetry={locations.retry} />
-        </div>
-      ) : null}
       {data && second ? (
         <div role="status" aria-live="polite" className="px-4 pt-3 text-sm text-ink print:hidden">
           {zone.status === 'error' ? (
@@ -201,13 +225,22 @@ export function PlanQuotePrintView({
 
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {data && ready ? (
-          <div className="mx-auto max-w-[210mm] sm:border sm:border-border print:border-0">
-            <PlanQuoteDocument
-              quote={data}
-              catalogCurrency={catalogCurrency}
-              secondCurrency={secondResult && 'value' in secondResult ? secondResult.value : null}
+          <>
+            <DocumentFormatNote
+              locationId={data.location.id}
+              onRetry={() => setReloadKey((k) => k + 1)}
+              className="mx-auto max-w-[210mm] px-4 pb-4 sm:px-0"
+              active={format === null}
             />
-          </div>
+            <div className="mx-auto max-w-[210mm] sm:border sm:border-border print:border-0">
+              <PlanQuoteDocument
+                quote={data}
+                format={format}
+                partialRestOf={partialRestOf}
+                secondCurrency={secondResult && 'value' in secondResult ? secondResult.value : null}
+              />
+            </div>
+          </>
         ) : forbidden ? (
           <div className="mx-auto max-w-xl px-4 py-8">
             <EmptyState

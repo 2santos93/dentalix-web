@@ -9,11 +9,11 @@
  * - Lo que no encaja (grupos que no son de 3, separadores mezclados, un
  *   separador suelto) es ambiguo: se devuelve un error con el motivo y el
  *   formulario no envía nada. Mejor preguntar que guardar 100 veces más.
- * - Hasta 2 decimales en TODAS las monedas, también COP y CLP: la API y la
+ * - Hasta 2 decimales en TODAS las monedas, también RSD y CLP: la API y la
  *   base guardan cualquier importe con céntimos (`@IsMoney`, `Decimal(…, 2)`)
- *   y un campo no se redondea al escribirlo. Así un precio o un saldo en COP
+ *   y un campo no se redondea al escribirlo. Así un precio o un saldo en RSD
  *   con céntimos que se precarga en un campo se guarda sin tocarlo. (El
- *   redondeo a la unidad de COP es solo de las líneas que se calculan, como
+ *   redondeo a la unidad de RSD es solo de las líneas que se calculan, como
  *   el descuento en bloque, con los `roundingDigits` que manda la API:
  *   `lib/money/line-rounding.ts`, DX-340.)
  * - Un importe pegado tal como lo pinta la app («1.500.000,50 USD»,
@@ -25,6 +25,10 @@
  * mucho 2 decimales): esto solo evita mandarle una cifra que no es la que
  * la persona quiso escribir.
  */
+
+import { currencyTextFor } from '@/lib/format/currency-text';
+import { clinicCurrencyTexts } from '@/lib/format/clinic-currency-texts';
+import { roundAmount } from '@/lib/money/round';
 
 /** Decimales que admite un importe escrito, en cualquier moneda. */
 const MONEY_DECIMALS = 2;
@@ -78,12 +82,17 @@ function normalizeSpaces(text: string): string {
 /**
  * Quita el símbolo o el código de la moneda del campo, delante o detrás, como
  * los pinta `formatCurrency` («150,50 USD», «150,50 EUR», DX-378) o como se
- * escriben a mano («$ 150,50», «150,50 €»). El código de otra moneda se queda y el
+ * escriben a mano («$ 150,50», «150,50 €»), o con el texto propio de la clínica
+ * para esa moneda (DX-517). El código de otra moneda se queda y el
  * texto no se entiende: mejor eso que guardar euros como dólares.
  */
 function stripCurrency(raw: string, currency: string): string {
   const text = normalizeSpaces(raw);
-  const affixes = currencyAffixes(currency);
+  // DX-517: también el texto propio de la clínica para ESA moneda («Bs. 1.234,50»).
+  const own = currencyTextFor(clinicCurrencyTexts(), currency)?.toLowerCase();
+  const affixes = own
+    ? [own, ...currencyAffixes(currency)].sort((x, y) => y.length - x.length)
+    : currencyAffixes(currency);
   const lower = text.toLowerCase();
   for (const affix of affixes) {
     if (lower.startsWith(affix)) {
@@ -131,7 +140,7 @@ function currencyAffixes(currency: string): string[] {
  */
 export function parseDecimalInput(raw: string, maxDecimals: number): DecimalParseResult {
   // Los espacios duros que trae un importe copiado de la propia app
-  // («150.000,00 COP» lleva U+00A0) cuentan como espacio.
+  // («150.000,00 VES» lleva U+00A0) cuentan como espacio.
   const text = normalizeSpaces(raw);
   if (text === '') return { ok: false, reason: 'empty', message: moneyInputCopy.empty };
   if (LEADING_SIGN.test(text) && parseDecimalInput(text.replace(LEADING_SIGN, ''), maxDecimals).ok) {
@@ -178,5 +187,5 @@ export function parseMoneyInput(text: string, currency: string): DecimalParseRes
 export function moneyInputText(amount: number): string {
   // Redondeado a céntimos: un total sumado en el cliente puede traer ruido de
   // coma flotante (0,1 + 0,2 = 0,30000000000000004) que no se volvería a leer.
-  return String(Math.round(amount * 100) / 100).replace('.', ',');
+  return String(roundAmount(amount)).replace('.', ',');
 }

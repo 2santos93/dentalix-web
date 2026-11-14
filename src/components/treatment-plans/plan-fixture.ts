@@ -12,6 +12,12 @@ export const PLAN_WITHOUT_OPTIONS = {
   rejectedAt: null,
   rejectionReason: null,
   rejectionNote: null,
+  // DX-379: sin validez guardada (plan anterior o sin presentar ni imprimir).
+  quoteIssuedOn: null,
+  quoteValidUntil: null,
+  quoteExpired: false,
+  // DX-417: no es el pendiente de una aceptación parcial.
+  splitFromPlanId: null,
 } as const;
 
 /**
@@ -27,7 +33,15 @@ export const ITEM_WITHOUT_DISCOUNT = {
   discountLocationId: null,
   // DX-105: sin convenio ni lista, el ítem no lleva foto de origen del precio.
   basePrice: null,
+  // DX-502: sin precio de catálogo, sin su moneda.
+  catalogCurrency: null,
   priceSource: null,
+  // DX-513-bis: sin foto de la referencia (como un ítem libre).
+  referenceCurrency: null,
+  referencePriceInPlan: null,
+  basePriceInPlan: null,
+  referenceRate: null,
+  baseRate: null,
   agreementId: null,
   agreementName: null,
   pricingLocationId: null,

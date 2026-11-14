@@ -5,11 +5,15 @@
 # propio paso y en local se corren todas con `all`.
 #
 #   scripts/e2e-ci.sh all                # todo, y para los servidores al final
-#   scripts/e2e-ci.sh setup|sync|db|api|web|test|skips|stop   # una fase
+#   scripts/e2e-ci.sh setup|sync|db|api|schema|web|test|skips|stop   # una fase
 #
 # `sync` (DX-350) falla si una lista que la API posee y la web copia byte a
 # byte (moneda sin decimales, zonas IANA, vectores de formato, países) diverge de la
 # de $API_DIR (scripts/check-api-reference-sync.mjs).
+#
+# `schema` (DX-537) falla si src/lib/api/schema.d.ts no es lo que genera la API
+# que está corriendo (la de $API_DIR, tras `api`): muestra el diff y el comando
+# para regenerarlo (README, «Regenerar el esquema de la API»).
 #
 # `skips` (DX-252) falla si el informe de `test` tiene tests saltados fuera de
 # e2e/allowed-skips.json, y los nombra (scripts/check-e2e-skips.mjs).
@@ -84,6 +88,12 @@ load_env() {
   # migrados (DX-262) se quedan «En cola» para siempre, y ese lote sin
   # terminar bloquea cualquier otra importación de la clínica demo.
   export APP_ROLE=all
+  # Una importación espera su turno detrás de lo que ya esté en la cola
+  # (por `runAt`). El barrido horario de la agenda de contingencia encola un
+  # trabajo por sede y la e2e crea más de cien clínicas: con los valores por
+  # defecto (4 cada 2 s) esa cola tarda más que la espera de los specs.
+  export JOBS_POLL_INTERVAL_MS=250
+  export JOBS_CONCURRENCY=16
   export DATABASE_URL
   export DIRECT_URL
   export JWT_ACCESS_TTL=900s
@@ -135,6 +145,9 @@ load_env() {
   # Topes de email en BD (DX-088): la suite reenvía una invitación al momento
   # de crearla; sin esto el enfriamiento de 60 s respondería 429.
   export MAIL_RECIPIENT_COOLDOWN_SECONDS=0
+  # DX-021-bis: las clínicas nuevas nacen exigiendo el MFA a sus ADMIN; la suite
+  # registra clínicas y entra con contraseña (e2e/two-factor lo prueba aparte).
+  export NEW_CLINIC_REQUIRE_ADMIN_MFA=false
   # DX-243: el spec de firma a distancia envía a la misma paciente de la demo
   # en cada corrida; con el tope diario de 5 una segunda corrida del día daría
   # 429 al enviar el enlace.
@@ -279,6 +292,41 @@ wait_for_worker() {
   return 1
 }
 
+# DX-537: el esquema commiteado debe ser el que publica la API contra la que
+# corre esta suite (`api_ref`). Una rama web que necesita un contrato nuevo
+# lanza la CI con api_ref=su rama de la API y commitea el esquema de esa rama.
+# Lee la API ya levantada por `api`; no toca BD ni web. Para probarla a mano,
+# E2E_API_PORT=3002 apunta al puerto de la API local.
+phase_schema() {
+  group "Esquema de la API (src/lib/api/schema.d.ts) al día"
+  local docs_url="${API_URL%/api/v1}/docs-json" generated status=0
+  generated="$(mktemp "${TMPDIR:-/tmp}/schema.XXXXXX")"
+  if ! (cd "$WEB_DIR" && ./node_modules/.bin/openapi-typescript "$docs_url" -o "$generated"); then
+    echo "No se pudo generar el esquema desde $docs_url." >&2
+    rm -f "$generated"
+    endgroup
+    return 1
+  fi
+  local rc=0
+  diff -u --label "src/lib/api/schema.d.ts (commiteado)" --label "generado desde la API" \
+    "$WEB_DIR/src/lib/api/schema.d.ts" "$generated" > "$LOG_DIR/schema.diff" || rc=$?
+  if [[ "$rc" -eq 0 ]]; then
+    echo "El esquema commiteado coincide con la API."
+  elif [[ "$rc" -eq 1 ]]; then
+    status=1
+    head -n 200 "$LOG_DIR/schema.diff"
+    echo "Diff completo: $LOG_DIR/schema.diff (en la CI, dentro del artefacto «playwright-...» en .e2e/logs/schema.diff)." >&2
+    echo "::error file=src/lib/api/schema.d.ts::El esquema commiteado no coincide con la API (rama o ref: la de dentalix-api de este run). Regenéralo y commitéalo: arranca esa API en el puerto 3002 y ejecuta 'npm run codegen' en la web (README, «Regenerar el esquema de la API»)."
+    echo "Regenerar: levantar dentalix-api en :3002 y, en dentalix-web, 'npm run codegen'." >&2
+  else
+    status=1
+    echo "::error::No se pudo comparar el esquema: diff terminó con código $rc al leer src/lib/api/schema.d.ts o el generado ($generated). No es un desfase del contrato." >&2
+  fi
+  rm -f "$generated"
+  endgroup
+  return "$status"
+}
+
 phase_web() {
   load_env
   group "Web: next build y next start en :$E2E_WEB_PORT"
@@ -359,6 +407,7 @@ case "$cmd" in
   sync) phase_sync ;;
   db) phase_db ;;
   api) phase_api ;;
+  schema) phase_schema ;;
   web) phase_web ;;
   test) phase_test "$@" ;;
   skips) phase_skips ;;
@@ -369,6 +418,7 @@ case "$cmd" in
     phase_sync
     phase_db
     phase_api
+    phase_schema
     phase_web
     # La guardia corre aunque Playwright falle (dice qué no se ejecutó). Si la
     # guardia falla sale con su código (set -e); si no, con el de Playwright.
@@ -378,7 +428,7 @@ case "$cmd" in
     exit "$st"
     ;;
   *)
-    echo "uso: $0 [all|setup|sync|db|api|web|test|skips|stop] [args de playwright]" >&2
+    echo "uso: $0 [all|setup|sync|db|api|schema|web|test|skips|stop] [args de playwright]" >&2
     exit 2
     ;;
 esac

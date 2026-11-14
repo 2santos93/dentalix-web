@@ -1,3 +1,6 @@
+import { dateIn, STAMP_SEDES } from '@/lib/test/stamp';
+import { clearSessionStore } from '@/lib/session/session-store';
+import { listLocations } from '@/lib/locations/locations-api';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { PatientCommunicationSection } from './patient-communication-section';
 import {
@@ -8,6 +11,10 @@ import {
 } from '@/lib/patients/communication-api';
 import { ApiError } from '@/lib/api/api-error';
 import { setupUser } from '@/lib/test/user';
+
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]),
+}));
 
 jest.mock('../../lib/patients/communication-api', () => ({
   ...jest.requireActual('../../lib/patients/communication-api'),
@@ -34,12 +41,12 @@ function comms(over: Partial<PatientCommunication> = {}): PatientCommunication {
     patientId: 'p1',
     contactChannel: 'EMAIL',
     clinicDefaultChannel: 'EMAIL',
-    phone: '+573101234567',
-    phoneE164: '+573101234567',
+    phone: '+584141234567',
+    phoneE164: '+584141234567',
     phoneStatus: 'VALID',
     phoneAmbiguous: false,
-    phoneInternational: '+57 310 1234567',
-    phoneCountry: 'CO',
+    phoneInternational: '+58 414 1234567',
+    phoneCountry: 'VE',
     email: 'ana@example.com',
     whatsappOptIn: null,
     reminderOptOut: null,
@@ -50,6 +57,9 @@ function comms(over: Partial<PatientCommunication> = {}): PatientCommunication {
       minor: false,
       responsiblePartyId: null,
     },
+    preferredLanguage: null,
+    patientLanguages: ['es'],
+    clinicLanguage: 'es',
     ...over,
   };
 }
@@ -86,7 +96,7 @@ describe('PatientCommunicationSection (DX-128)', () => {
     expect(screen.getByRole('status', { name: 'Cargando comunicaciones' })).toBeInTheDocument();
 
     const section = screen.getByRole('region', { name: 'Comunicaciones' });
-    expect(await within(section).findByText('+57 310 1234567')).toBeInTheDocument();
+    expect(await within(section).findByText('+58 414 1234567')).toBeInTheDocument();
     expect(within(section).getByText('Canal de los recordatorios').nextSibling).toHaveTextContent(
       'WhatsApp',
     );
@@ -212,7 +222,7 @@ describe('PatientCommunicationSection (DX-128)', () => {
     await user.click(await screen.findByRole('button', { name: 'Editar comunicaciones' }));
     const dialog = await screen.findByRole('dialog', { name: 'Comunicaciones del paciente' });
     await user.selectOptions(within(dialog).getByLabelText('Canal de los recordatorios'), 'WHATSAPP');
-    await user.type(within(dialog).getByLabelText('Móvil'), '310 123 4567');
+    await user.type(within(dialog).getByLabelText('Móvil'), '414 123 4567');
     await user.click(
       within(dialog).getByLabelText('Acepta que la clínica le escriba por WhatsApp'),
     );
@@ -221,7 +231,7 @@ describe('PatientCommunicationSection (DX-128)', () => {
 
     expect(mockedUpdate).toHaveBeenCalledWith('tok', 'p1', {
       contactChannel: 'WHATSAPP',
-      phone: '310 123 4567',
+      phone: '414 123 4567',
       whatsappOptIn: true,
       whatsappOptInSource: 'IN_PERSON',
     });
@@ -326,14 +336,14 @@ describe('PatientCommunicationSection (DX-128)', () => {
 
   it('avisa a la ficha del cambio guardado (el teléfono de «Datos» no se queda viejo)', async () => {
     mockedGet.mockResolvedValue(comms({ phone: null, phoneE164: null, phoneInternational: null, phoneStatus: 'MISSING' }));
-    const saved = comms({ phone: '+573101234567' });
+    const saved = comms({ phone: '+584141234567' });
     mockedUpdate.mockResolvedValue(saved);
     const onChanged = jest.fn();
     const user = setupUser();
     renderSection(true, onChanged);
     await user.click(await screen.findByRole('button', { name: 'Editar comunicaciones' }));
     const dialog = await screen.findByRole('dialog');
-    await user.type(within(dialog).getByLabelText('Móvil'), '310 123 4567');
+    await user.type(within(dialog).getByLabelText('Móvil'), '414 123 4567');
     await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
     await waitFor(() => expect(onChanged).toHaveBeenCalledWith(saved));
     expect(onChanged).toHaveBeenCalledTimes(1);
@@ -342,9 +352,10 @@ describe('PatientCommunicationSection (DX-128)', () => {
   it('un adulto no muestra destinatario; un menor, que los avisos van a su responsable (DX-203)', async () => {
     mockedGet.mockResolvedValueOnce(comms());
     const { unmount } = renderSection();
-    expect(await screen.findByText('+57 310 1234567')).toBeInTheDocument();
+    expect(await screen.findByText('+58 414 1234567')).toBeInTheDocument();
     expect(screen.queryByText('Destinatario de los avisos')).not.toBeInTheDocument();
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     mockedGet.mockResolvedValueOnce(
       comms({
@@ -390,4 +401,70 @@ it('no consulta avisos si el rol no puede editar comunicaciones', async () => {
   renderSection(false);
   await screen.findByText('Activos');
   expect(getPatientOptOutWarnings).not.toHaveBeenCalled();
+});
+
+describe('PatientCommunicationSection con cada sede (DX-354b)', () => {
+  const mockedSedes = listLocations as jest.Mock;
+  afterEach(() => mockedSedes.mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]));
+  const optOut = { at: '2026-10-21T03:30:00.000Z', source: 'PATIENT_REQUEST' as const, recordedBy: null };
+
+  it.each([['caracas'], ['berlin']] as const)('con la pantalla en %s: la baja con la fecha de su formato', async (key) => {
+    mockedSedes.mockResolvedValue([STAMP_SEDES[key]]);
+    mockedGet.mockResolvedValue(comms({ reminderOptOut: optOut as never }));
+    renderSection();
+    await waitFor(() =>
+      expect(screen.getByText(new RegExp(dateIn(key, optOut.at).replace(/\./g, '\\.')))).toBeInTheDocument(),
+    );
+  });
+
+  describe('DX-497: idioma de los mensajes', () => {
+    it('recepción ve «Idioma de la clínica» y los idiomas de la lista, y guarda solo el idioma', async () => {
+      mockedGet.mockResolvedValue(comms({ patientLanguages: ['es', 'en', 'ca'] }));
+      mockedUpdate.mockResolvedValue(comms({ preferredLanguage: 'en', patientLanguages: ['es', 'en', 'ca'] }));
+      const user = setupUser();
+      renderSection();
+      expect(await screen.findByTestId('patient-preferred-language')).toHaveTextContent('Idioma de la clínica');
+      await user.click(screen.getByRole('button', { name: 'Editar comunicaciones' }));
+      const dialog = await screen.findByRole('dialog');
+      const select = within(dialog).getByLabelText('Idioma de los mensajes');
+      expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual([
+        'Idioma de la clínica · Español (es)',
+        'English (en)',
+        'Català (ca)',
+      ]);
+      await user.selectOptions(select, 'en');
+      await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
+      await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+      expect(mockedUpdate).toHaveBeenCalledWith('tok', 'p1', { preferredLanguage: 'en' });
+      expect(await screen.findByTestId('patient-preferred-language')).toHaveTextContent('English (en)');
+    });
+
+    it('volver a «Idioma de la clínica» envía null', async () => {
+      mockedGet.mockResolvedValue(comms({ preferredLanguage: 'en', patientLanguages: ['es', 'en'] }));
+      mockedUpdate.mockResolvedValue(comms({ patientLanguages: ['es', 'en'] }));
+      const user = setupUser();
+      renderSection();
+      await user.click(await screen.findByRole('button', { name: 'Editar comunicaciones' }));
+      const dialog = await screen.findByRole('dialog');
+      await user.selectOptions(within(dialog).getByLabelText('Idioma de los mensajes'), '');
+      await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
+      await waitFor(() => expect(mockedUpdate).toHaveBeenCalledWith('tok', 'p1', { preferredLanguage: null }));
+    });
+
+    it('un idioma que la clínica quitó se ve «(no disponible) ca» y no se pierde al guardar otra cosa', async () => {
+      mockedGet.mockResolvedValue(comms({ preferredLanguage: 'ca', patientLanguages: ['es', 'en'] }));
+      mockedUpdate.mockResolvedValue(comms({ preferredLanguage: 'ca', reminderOptOut: null }));
+      const user = setupUser();
+      renderSection();
+      expect(await screen.findByTestId('patient-preferred-language')).toHaveTextContent('(no disponible) ca');
+      await user.click(screen.getByRole('button', { name: 'Editar comunicaciones' }));
+      const dialog = await screen.findByRole('dialog');
+      const select = within(dialog).getByLabelText('Idioma de los mensajes');
+      expect(select).toHaveValue('ca');
+      expect(within(select).getByRole('option', { name: '(no disponible) ca' })).toBeInTheDocument();
+      await user.click(within(dialog).getByLabelText('Dado de baja de los recordatorios automáticos'));
+      await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
+      await waitFor(() => expect(mockedUpdate).toHaveBeenCalledWith('tok', 'p1', { reminderOptOut: true }));
+    });
+  });
 });

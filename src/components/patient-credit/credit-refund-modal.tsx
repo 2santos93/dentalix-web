@@ -10,8 +10,7 @@ import { NativeSelect } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate } from '@/lib/format/date';
+import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 import { parseMoneyInput } from '@/lib/format/money';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
 import {
@@ -20,11 +19,16 @@ import {
   type RefundMethod,
 } from '@/lib/patient-credit/patient-credit-api';
 import type { AccountStatementMovement } from '@/lib/account-statement/account-statement-api';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { useSessionLocations } from '@/lib/session/session-store';
+import { FieldError } from '@/components/errors/field-error';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
 import { creditPreviewCopy, type CreditSource } from './credit-balance';
 import { CreditPreview } from './credit-preview';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
+import { amountCents } from '@/lib/money/round';
 
 export const REFUND_REASON_MIN = 3;
 export const REFUND_REASON_MAX = 500;
@@ -52,6 +56,8 @@ const copy = {
   submit: 'Devolver',
   // D1 (QA): el efectivo sale del cajón de UNA sede.
   cashFrom: (name: string) => `El efectivo sale de tu caja en ${name}.`,
+  // DX-442: la lista de sedes no cargó; sin ella no se sabe de qué caja sale.
+  locationsError: 'Sedes sin cargar',
   cashNeedsLocation:
     'Elige la sede de la caja de la que sale el efectivo: cámbiala en el selector de sede de arriba.',
   failed: 'No pudimos registrar la devolución.',
@@ -81,6 +87,7 @@ export function CreditRefundModal({
   planName,
   onDone,
 }: CreditRefundModalProps) {
+  const stamp = useSedeStamp(token);
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<RefundMethod>('CASH');
   const [reason, setReason] = useState('');
@@ -99,23 +106,29 @@ export function CreditRefundModal({
   const value = parsed.ok ? parsed.value : 0;
   // D1: la sede activa (la de `X-Location-Id`) y las sedes posibles. Con
   // varias y ninguna elegida, el efectivo no se puede devolver.
+  // DX-442: las sedes de la sesión (una lectura compartida, no otra petición);
+  // si fallan, se dice junto al medio de pago con reintento.
+  const requestLocations = useSessionLocations(token);
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
+  const [locationsError, setLocationsError] = useState(false);
+  const [locationsKey, setLocationsKey] = useState(0);
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
-    listLocations(token)
+    requestLocations()
       .then((data) => {
         if (cancelled) return;
         setLocations(data ?? []);
         setActiveLocationId(getActiveLocationId());
+        setLocationsError(false);
       })
       .catch(() => {
-        /* sin la lista no se nombra la sede; la API decide con su 400 */
+        if (!cancelled) setLocationsError(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [requestLocations, locationsKey]);
   const allowed = getTokenAllowedLocationIds(token);
   const usable = locations.filter((l) => l.isActive && (allowed === null || allowed.includes(l.id)));
   const activeLocation = usable.find((l) => l.id === activeLocationId) ?? (usable.length === 1 ? usable[0] : null);
@@ -127,8 +140,8 @@ export function CreditRefundModal({
     if (!parsed.ok || parsed.value <= 0) {
       setAmountError(parsed.ok || parsed.reason === 'empty' ? copy.invalidAmount : parsed.message);
       invalid = true;
-    } else if (Math.round(parsed.value * 100) > Math.round(source.credit * 100)) {
-      setAmountError(copy.overCredit(formatCurrency(source.credit, source.currency)));
+    } else if (amountCents(parsed.value) > amountCents(source.credit)) {
+      setAmountError(copy.overCredit(stamp.money(source.credit, source.currency)));
       invalid = true;
     }
     const trimmed = reason.trim();
@@ -180,16 +193,19 @@ export function CreditRefundModal({
       onSubmit={(e) => void handleSubmit(e)}
       submitLabel={copy.submit}
       submitting={submitting}
-      submitDisabled={cashBlocked}
+      // Sin el formato de la sede no se puede decir el tope de la devolución: no se envía a ciegas.
+      submitDisabled={cashBlocked || stamp.money(source.credit, source.currency) === NO_SEDE_FORMAT}
       error={error}
       destructive
     >
+      <SedeStampNote stamp={stamp} />
       <p className="rounded-lg bg-surface-sunken px-3 py-2 text-sm text-ink tabular-nums">
-        {creditPreviewCopy.source(planName(source.planId), formatCurrency(source.credit, source.currency))}
+        {creditPreviewCopy.source(planName(source.planId), stamp.money(source.credit, source.currency))}
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField htmlFor="cr-amount" label={copy.amount} error={amountError}>
           <MoneyInput
+            money={stamp.money}
             id="cr-amount"
             currency={source.currency}
             requirePositive
@@ -201,11 +217,13 @@ export function CreditRefundModal({
             }}
             aria-invalid={amountError ? true : undefined}
             aria-describedby={amountError ? fieldErrorId('cr-amount') : undefined}
+            className="h-11 sm:h-10"
           />
         </FormField>
         <FormField htmlFor="cr-method" label={copy.method}>
           <NativeSelect
             id="cr-method"
+            selectClassName="h-11 sm:h-10"
             value={method}
             disabled={submitting}
             onChange={(e) => setMethod(e.target.value as RefundMethod)}
@@ -219,7 +237,16 @@ export function CreditRefundModal({
         </FormField>
       </div>
       {method === 'CASH' ? (
-        cashBlocked ? (
+        locationsError ? (
+          <FieldError
+            label={copy.locationsError}
+            onRetry={() => {
+              requestLocations.invalidate();
+              setLocationsKey((n) => n + 1);
+            }}
+            className="self-start"
+          />
+        ) : cashBlocked ? (
           <Callout tone="warning" role="alert" data-testid="refund-cash-location">
             {copy.cashNeedsLocation}
           </Callout>
@@ -263,7 +290,7 @@ export function CreditRefundModal({
               onChange={(e) => toggle(p.id, e.target.checked)}
               label={
                 <span className="tabular-nums">
-                  {copy.payment(formatCurrency(p.amount, p.currency), formatCivilDate(p.paidOn))}
+                  {copy.payment(stamp.money(p.amount, p.currency), stamp.civilDate(p.paidOn))}
                 </span>
               }
             />
@@ -281,7 +308,7 @@ export function CreditRefundModal({
         rows={[
           {
             label: creditPreviewCopy.creditLeft,
-            value: formatCurrency(Math.max(0, source.credit - value), source.currency),
+            value: stamp.money(Math.max(0, source.credit - value), source.currency),
           },
         ]}
       />

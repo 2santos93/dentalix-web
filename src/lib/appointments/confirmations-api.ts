@@ -6,6 +6,8 @@ export type ConfirmationAppointment = components['schemas']['PublicConfirmationA
 export type PublicConfirmation = components['schemas']['PublicAppointmentConfirmationDto'];
 export type ConfirmationAction = components['schemas']['RespondAppointmentConfirmationDto']['action'];
 export type PublicCancellationPolicy = components['schemas']['PublicCancellationPolicyDto'];
+export type PublicWantsEarlierInput = components['schemas']['PublicWantsEarlierDto'];
+export type EarlierWindow = NonNullable<PublicWantsEarlierInput['preferredWindow']>;
 
 /**
  * `POST /appointments/:id/confirmation-link` — genera el enlace público (de un
@@ -54,5 +56,21 @@ export async function respondPublicConfirmation(
         ...(policy.acknowledgePolicy ? { acknowledgePolicy: true } : {}),
       },
     },
+  );
+}
+
+/**
+ * DX-437: `POST /public/appointment-confirmations/:token/wants-earlier` — el
+ * paciente pide (o quita) que le avisen si se libera un hueco antes, con su
+ * franja. Vale con el enlace pendiente o ya respondido. Devuelve la vista
+ * fresca, con `appointment.wantsEarlier` y `earlierWindow`.
+ */
+export async function setPublicWantsEarlier(
+  confirmationToken: string,
+  input: PublicWantsEarlierInput,
+): Promise<PublicConfirmation> {
+  return apiFetch<PublicConfirmation>(
+    `/public/appointment-confirmations/${encodeURIComponent(confirmationToken)}/wants-earlier`,
+    { method: 'POST', body: input },
   );
 }

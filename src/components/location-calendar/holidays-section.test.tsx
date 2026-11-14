@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { typeDate } from '@/components/appointments/date-segments-for-tests';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { HolidaysSection, holidaysCopy } from './holidays-section';
@@ -137,6 +138,7 @@ describe('HolidaysSection (DX-316, spec §7.2)', () => {
     expect(screen.getByRole('button', { name: copy.import })).toHaveAccessibleDescription('Nota de la vista');
     expect(screen.getByRole('button', { name: copy.add })).toBeEnabled();
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     mockedDelete.mockResolvedValue(undefined);
     const user = setupUser();
@@ -184,6 +186,13 @@ describe('HolidaysSection (DX-316, spec §7.2)', () => {
     await user.click(screen.getByRole('button', { name: holidayFormCopy.create }));
     const dialog = screen.getByRole('dialog');
     expect(await within(dialog).findByText('Ese día ya es festivo cada año: «Día de la sede».')).toBeInTheDocument();
+    // DX-316-bis: «Ver el festivo existente» cierra el modal, resalta la fila
+    // del festivo que choca y deja el foco en sus acciones.
+    await user.click(within(dialog).getByRole('button', { name: 'Ver el festivo existente' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const row = screen.getByText('Día de la sede').closest('tr');
+    expect(row).toHaveAttribute('data-highlighted', 'true');
+    await waitFor(() => expect(within(row!).getByRole('button')).toHaveFocus());
   });
 
   it('delete asks «¿Eliminar «{nombre}»? Los plazos ya calculados no cambian.» and removes the row', async () => {
@@ -244,6 +253,7 @@ describe('HolidaysSection (DX-316, spec §7.2)', () => {
     const { unmount } = render(<Harness location={usa} initial={[]} />);
     expect(screen.getAllByRole('button').filter((b) => b.classList.contains('bg-primary'))).toHaveLength(1);
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
     render(<Harness location={usa} initial={[mayo]} />);
     expect(screen.getAllByRole('button').filter((b) => b.classList.contains('bg-primary'))).toHaveLength(1);
     expect(screen.getByRole('button', { name: copy.add })).toHaveClass('bg-primary');

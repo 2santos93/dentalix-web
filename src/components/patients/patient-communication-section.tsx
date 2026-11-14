@@ -4,7 +4,8 @@ import * as React from 'react';
 import { useEffect, useId, useState } from 'react';
 import { MessageCircle } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { formatDate } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import {
   CHANNEL_LABELS,
   getPatientCommunication,
@@ -18,6 +19,7 @@ import {
   type WhatsappOptInSource,
 } from '@/lib/patients/communication-api';
 import { phoneRegionLabel } from '@/lib/locations/phone-regions';
+import { languageOptions, preferredLanguageLabel } from '@/lib/patients/patient-languages';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -82,6 +84,10 @@ const copy = {
     `Su contacto principal${name ? `, ${name}` : ''} (menor de edad)`,
   recipientMinorAlone:
     'El paciente: es menor de edad y no tiene responsable ni contacto registrado',
+  // DX-497: idioma del recordatorio y de la página de confirmar.
+  language: 'Idioma de los mensajes',
+  languageHint:
+    'En este idioma le llegan el recordatorio y la página para confirmar la cita, si hay traducción; si no, en el de la clínica. La fecha y la hora siguen el formato de la sede.',
 };
 
 function recipientLabel(recipient: PatientCommunication['recipient']): string {
@@ -102,6 +108,8 @@ interface Draft {
   optIn: boolean;
   optInSource: WhatsappOptInSource;
   optOut: boolean;
+  /** DX-497: '' = «Idioma de la clínica». */
+  language: string;
 }
 
 /**
@@ -119,6 +127,7 @@ function draftFrom(data: PatientCommunication): Draft {
     optIn: data.whatsappOptIn !== null,
     optInSource: data.whatsappOptIn?.source ?? 'IN_PERSON',
     optOut: data.reminderOptOut !== null,
+    language: data.preferredLanguage ?? '',
   };
 }
 
@@ -133,6 +142,7 @@ function changesOf(data: PatientCommunication, draft: Draft): UpdatePatientCommu
     if (draft.optIn) input.whatsappOptInSource = draft.optInSource;
   }
   if (draft.optOut !== (data.reminderOptOut !== null)) input.reminderOptOut = draft.optOut;
+  if (draft.language !== (data.preferredLanguage ?? '')) input.preferredLanguage = draft.language || null;
   return input;
 }
 
@@ -165,6 +175,7 @@ export function PatientCommunicationSection({
   onChanged,
 }: PatientCommunicationSectionProps) {
   const ids = useId();
+  const stamp = useSedeStamp(token);
   const [data, setData] = useState<PatientCommunication | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -303,7 +314,7 @@ export function PatientCommunicationSection({
             {optIn ? (
               <span className="tabular-nums">
                 {copy.optIn(
-                  formatDate(optIn.at),
+                  stamp.date(optIn.at),
                   OPT_IN_SOURCE_LABELS[optIn.source],
                   optIn.recordedBy?.fullName ?? null,
                 )}
@@ -315,10 +326,15 @@ export function PatientCommunicationSection({
           {data.recipient.minor || data.recipient.kind === 'RESPONSIBLE' ? (
             <Row label={copy.recipient}>{recipientLabel(data.recipient)}</Row>
           ) : null}
+          <Row label={copy.language}>
+            <span data-testid="patient-preferred-language">
+              {preferredLanguageLabel(data.preferredLanguage, data.patientLanguages)}
+            </span>
+          </Row>
           <Row label={copy.reminders}>
             {optOut ? (
               <Badge variant="warning" className="whitespace-normal tabular-nums">
-                {copy.optedOut(formatDate(optOut.at), OPT_OUT_SOURCE_LABELS[optOut.source])}
+                {copy.optedOut(stamp.date(optOut.at), OPT_OUT_SOURCE_LABELS[optOut.source])}
               </Badge>
             ) : (
               <span>{copy.remindersActive}</span>
@@ -357,6 +373,7 @@ export function PatientCommunicationSection({
           ) : undefined
         }
       />
+      <SedeStampNote stamp={stamp} />
       {content()}
 
       {draft ? (
@@ -433,6 +450,23 @@ export function PatientCommunicationSection({
               </NativeSelect>
             </FormField>
           ) : null}
+
+          <FormField htmlFor={`${ids}-language`} label={copy.language} hint={copy.languageHint}>
+            <NativeSelect
+              id={`${ids}-language`}
+              name="preferredLanguage"
+              value={draft.language}
+              onChange={(e) => setDraft({ ...draft, language: e.target.value })}
+            >
+              {languageOptions(data?.patientLanguages ?? [], data?.clinicLanguage ?? 'es', data?.preferredLanguage).map(
+                (o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ),
+              )}
+            </NativeSelect>
+          </FormField>
 
           <Checkbox
             id={`${ids}-optout`}

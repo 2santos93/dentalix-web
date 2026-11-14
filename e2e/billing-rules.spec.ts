@@ -46,7 +46,7 @@ test('plan rechazado: sin «Registrar abono», sin plan de pagos, ítems congela
     sex: 'F',
   });
   const plan = await apiPost<{ id: string }>(request, admin, `/patients/${patient.id}/treatment-plans`, {
-    currency: 'COP',
+    currency: 'USD',
   });
   await apiPost(request, admin, `/treatment-plans/${plan.id}/items`, {
     toothNumber: '16',
@@ -58,7 +58,7 @@ test('plan rechazado: sin «Registrar abono», sin plan de pagos, ítems congela
   // La API no admite el abono aunque alguien lo intente por fuera de la UI.
   const refused = await request.post(`${API_URL}/treatment-plans/${plan.id}/payments`, {
     headers: admin.headers,
-    data: { amount: 1000, currency: 'COP', paidAt: '2026-10-16', method: 'CASH' },
+    data: { amount: 1000, currency: 'USD', paidAt: '2026-10-16', method: 'CASH' },
   });
   expect(refused.status()).toBe(409);
   expect(((await refused.json()) as { message: string }).message).toBe(API_NOT_BILLABLE);

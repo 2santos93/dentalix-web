@@ -2,6 +2,7 @@ import { setActiveLocationId } from '@/lib/locations/location-store';
 import {
   apiErrorFromBody,
   buildRequestHeaders,
+  isInactiveLocationError,
   isStaleLocationError,
   NetworkError,
   refreshAccessToken,
@@ -98,6 +99,8 @@ export async function uploadImportFile<T>(
     const error = apiErrorFromBody(res.status, body, res.retryAfter);
     if (!isStaleLocationError(error, res.sentLocationId, token)) throw error;
     setActiveLocationId(null);
+    // SEC-014: con la sede desactivada se suelta, pero la subida no se repite.
+    if (isInactiveLocationError(error, res.sentLocationId)) throw error;
     opts.onProgress?.(0);
     res = await send(target, form, opts, token);
     body = parseJson(res.text);

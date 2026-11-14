@@ -5,10 +5,13 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   PAYMENT_METHOD_KIND_LABELS,
   PAYMENT_METHOD_KIND_OPTIONS,
+  PAYMENT_PROOF_POLICY_LABELS,
+  PAYMENT_PROOF_POLICY_OPTIONS,
   createPaymentMethod,
   updatePaymentMethod,
   type ClinicPaymentMethod,
   type PaymentMethodKind,
+  type PaymentProofPolicy,
 } from '@/lib/payments/payment-methods-api';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
@@ -29,6 +32,10 @@ export const paymentMethodFormCopy = {
   requiresReference: 'Pide referencia',
   requiresReferenceHint:
     'El abono con este medio exige el número de referencia del pago, y la caja avisa si se repite.',
+  // DX-389: «Pide comprobante» del cobro.
+  proofPolicy: 'Pide comprobante',
+  proofPolicyHint:
+    'La captura del pago móvil o de la transferencia que se guarda con el abono. Opcional la admite; Obligatorio no deja registrar el abono sin ella. Solo la ven administración y recepción.',
   create: 'Crear medio',
   save: 'Guardar cambios',
   invalidName: 'Escribe un nombre (hasta 60 caracteres).',
@@ -60,6 +67,7 @@ export function PaymentMethodFormModal({
   const [name, setName] = useState(method?.name ?? '');
   const [kind, setKind] = useState<PaymentMethodKind>(method?.kind ?? 'DIGITAL');
   const [requiresReference, setRequiresReference] = useState(method?.requiresReference ?? true);
+  const [proofPolicy, setProofPolicy] = useState<PaymentProofPolicy>(method?.proofPolicy ?? 'NONE');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -80,7 +88,7 @@ export function PaymentMethodFormModal({
     }
     setSubmitting(true);
     try {
-      const input = { name: trimmed, kind, requiresReference };
+      const input = { name: trimmed, kind, requiresReference, proofPolicy };
       const saved = editing
         ? await updatePaymentMethod(token, method.id, input)
         : await createPaymentMethod(token, input);
@@ -150,6 +158,20 @@ export function PaymentMethodFormModal({
         label={copy.requiresReference}
         description={copy.requiresReferenceHint}
       />
+      <FormField htmlFor="pm-proof-policy" label={copy.proofPolicy} hint={copy.proofPolicyHint} hintId="pm-proof-policy-hint">
+        <NativeSelect
+          id="pm-proof-policy"
+          value={proofPolicy}
+          aria-describedby="pm-proof-policy-hint"
+          onChange={(e) => setProofPolicy(e.target.value as PaymentProofPolicy)}
+        >
+          {PAYMENT_PROOF_POLICY_OPTIONS.map((p) => (
+            <option key={p} value={p}>
+              {PAYMENT_PROOF_POLICY_LABELS[p]}
+            </option>
+          ))}
+        </NativeSelect>
+      </FormField>
     </FormModal>
   );
 }

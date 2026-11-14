@@ -13,7 +13,7 @@ import { expectNoHorizontalOverflowInDialog, expectNoHorizontalScroll } from './
  *   - valoración previa (ASA, ayuno, Mallampati, peso, talla, acompañante y
  *     consentimiento) con IMC y reversores por peso calculados;
  *   - checklist previo con todos los obligatorios;
- *   - N₂O registrado hace 20 min (por la API): al reabrir, la alerta dice que
+ *   - N₂O registrado hace 17,5 min (por la API): al reabrir, la alerta dice que
  *     pasó el intervalo de 5 min sin toma; una toma la quita;
  *   - egreso con los 6 criterios, constantes al alta e indicaciones: la hoja
  *     queda cerrada, la ficha lo muestra tras recargar y la API responde 405
@@ -159,12 +159,14 @@ for (const viewport of VIEWPORTS) {
     await dialog.getByRole('button', { name: 'Cancelar' }).click();
     await expect(dialog).toBeHidden();
 
-    // 3. N₂O hace 20 min sin tomas: la hoja avisa del intervalo pasado.
+    // 3. N₂O hace 17,5 min sin tomas: la hoja avisa del intervalo pasado. La
+    // API cuenta ⌈hueco / 5⌉ − 1 hasta la toma: con 20 min justos, los
+    // segundos del test hasta la toma daban 4 en vez de 3.
     await post(`${sheetPath}/agents`, {
       kind: 'NITROUS_OXIDE',
       n2oPercent: 30,
       flowLpm: 6,
-      administeredAt: new Date(Date.now() - 20 * 60_000).toISOString(),
+      administeredAt: new Date(Date.now() - 17.5 * 60_000).toISOString(),
     });
     dialog = await openSheet();
     await expect(dialog.getByRole('alert')).toContainText('Pasó el intervalo de 5 min sin toma');
@@ -177,7 +179,7 @@ for (const viewport of VIEWPORTS) {
     await expect(dialog.getByText('Toma registrada.')).toBeVisible({ timeout: 10_000 });
     await expect(dialog.getByRole('alert')).toHaveCount(0);
     await expect(dialog.getByText(/Próxima toma antes de las/)).toBeVisible();
-    // 20 min sin toma con intervalo de 5: vencieron 3 (la del minuto 20 llegó).
+    // 17,5 min (hasta 20 con lo que tarda el test) con intervalo de 5: vencieron 3.
     await expect(dialog.getByText(/3 intervalos de 5 min vencidos sin toma/)).toBeVisible();
     // Con una toma, la tabla aparece: el diálogo no se ensancha (QA DX-407).
     await expectNoOverflow(page, dialog);

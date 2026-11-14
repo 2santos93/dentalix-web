@@ -1,3 +1,4 @@
+import { dateIn, STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { PatientAgreementSection } from './patient-agreement-section';
 import { listAgreements } from '@/lib/agreements/agreements-api';
@@ -10,6 +11,11 @@ import {
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
 import { agreementDto, coverageFor, patientAgreement } from './agreement-fixtures';
+import { listLocations } from '@/lib/locations/locations-api';
+import { utcSede } from '@/lib/test/sede-clock';
+
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 
 jest.mock('../../lib/agreements/agreements-api', () => ({
   ...jest.requireActual('../../lib/agreements/agreements-api'),
@@ -39,6 +45,7 @@ const renderSection = (onChanged?: () => void) =>
 describe('PatientAgreementSection (DX-105)', () => {
   beforeEach(() => {
     jest.resetAllMocks();
+    mockedLocations.mockResolvedValue([utcSede()]);
     mockedAgreements.mockResolvedValue([agreementDto('ag1', 'Sanavida 2026', sanavida)]);
     mockedCoverages.mockResolvedValue([]);
   });
@@ -164,6 +171,44 @@ describe('PatientAgreementSection (DX-105)', () => {
     expect(onChanged).toHaveBeenCalledTimes(1);
   });
 
+  it('DX-105-bis: asignar desde vacío deja el foco en «Cambiar» (el disparador «Asignar convenio» ya no existe)', async () => {
+    mockedGet.mockResolvedValueOnce({ current: null, history: [] });
+    mockedGet.mockResolvedValueOnce({ current: patientAgreement(), history: [] });
+    mockedAssign.mockResolvedValue(patientAgreement());
+    mockedCoverages.mockResolvedValue([coverageFor('c1', sanavida, 'Salud Plus')]);
+    renderSection();
+    const user = setupUser();
+
+    await user.click(await screen.findByRole('button', { name: 'Asignar convenio' }));
+    const dialog = await screen.findByRole('dialog');
+    await screen.findByRole('option', { name: /Sanavida 2026/ });
+    await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag1');
+    await user.click(within(dialog).getByRole('button', { name: 'Asignar' }));
+
+    await screen.findByTestId('agreement-current');
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Cambiar el convenio Sanavida 2026' })).toHaveFocus(),
+    );
+  });
+
+  it('DX-105-bis: si la relectura tras quitar falla, la bandera de foco se limpia y Reintentar no roba el foco', async () => {
+    mockedGet.mockResolvedValueOnce({ current: patientAgreement(), history: [] });
+    mockedGet.mockRejectedValueOnce(new ApiError(500, 'boom'));
+    mockedGet.mockResolvedValueOnce({ current: null, history: [] });
+    mockedRemove.mockResolvedValue(undefined);
+    renderSection();
+    const user = setupUser();
+
+    await user.click(await screen.findByRole('button', { name: 'Quitar el convenio Sanavida 2026' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Quitar' }));
+    await waitFor(() => expect(mockedRemove).toHaveBeenCalledTimes(1));
+    const retry = await screen.findByRole('button', { name: 'Reintentar' });
+    await user.click(retry);
+    const assign = await screen.findByRole('button', { name: 'Asignar convenio' });
+    // La bandera quedó limpia con el fallo: nadie mueve el foco a «Asignar convenio».
+    expect(assign).not.toHaveFocus();
+  });
+
   it('si quitar falla, el diálogo sigue abierto con el error y no notifica', async () => {
     mockedGet.mockResolvedValue({ current: patientAgreement(), history: [] });
     mockedRemove.mockRejectedValue(new ApiError(500, 'boom'));
@@ -175,5 +220,37 @@ describe('PatientAgreementSection (DX-105)', () => {
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Quitar' }));
     expect(await within(screen.getByRole('dialog')).findByRole('alert')).toBeInTheDocument();
     expect(onChanged).not.toHaveBeenCalled();
+  });
+});
+
+describe('PatientAgreementSection con cada sede (DX-354b)', () => {
+  const retired = patientAgreement({
+    id: 'pa0',
+    validFrom: '2025-01-01',
+    validTo: '2025-12-31',
+    retiredAt: '2026-01-15T03:30:00.000Z',
+    agreement: { ...patientAgreement().agreement, id: 'ag0', name: 'Convenio viejo' },
+  });
+
+  it.each([['caracas'], ['berlin']] as const)('con la pantalla en %s: vigencia civil y retirada con su formato', async (key) => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES[key]]);
+    mockedGet.mockResolvedValue({ current: patientAgreement(), history: [retired] });
+    renderSection();
+    const history = await screen.findByTestId('agreement-history');
+    const fmt = STAMP_FORMATS[key];
+    await waitFor(() =>
+      expect(history).toHaveTextContent(`${fmt.civilDate('2025-01-01')} – ${fmt.civilDate('2025-12-31')}`),
+    );
+    expect(history).toHaveTextContent(`Retirado el ${dateIn(key, '2026-01-15T03:30:00.000Z')}`);
+  });
+
+  it('sin formato: «—», nada de fechas inventadas y el aviso una vez', async () => {
+    mockedLocations.mockRejectedValue(new Error('red'));
+    mockedGet.mockResolvedValue({ current: patientAgreement(), history: [retired] });
+    renderSection();
+    const history = await screen.findByTestId('agreement-history');
+    await waitFor(() => expect(screen.getAllByText(/No se pudo saber el formato regional/)).toHaveLength(1));
+    expect(history).toHaveTextContent('— – —');
+    expect(history).toHaveTextContent('Retirado el —');
   });
 });

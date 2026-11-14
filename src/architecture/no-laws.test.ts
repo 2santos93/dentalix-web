@@ -75,8 +75,7 @@ describe('arquitectura: landing sin leyes ni regímenes (DX-369)', () => {
 /**
  * DX-323: ninguna pantalla cita una norma ni una autoridad de un país; el
  * producto es mundial y cada clínica escribe su base legal. Recorre la
- * producción de `src/` sin líneas de comentario (los comentarios son de
- * DX-371), y el contrato generado de la API con comentarios, porque sus
+ * producción de `src/`, comentarios incluidos (DX-371), y el contrato generado de la API con comentarios, porque sus
  * `@description` son textos que la API devuelve. La única excepción con nombre
  * congela las recetas emitidas antes de DX-324 (R12).
  */
@@ -110,7 +109,8 @@ function codeOf(line: string): string {
   return COMMENT_LINE.test(rest) ? '' : rest;
 }
 
-const citesLawInCode = (line: string): boolean => citesLaw(codeOf(line));
+/** Los comentarios cuentan (DX-371): una cita en un comentario justifica la regla con la ley de un país. */
+const citesLawInCode = (line: string): boolean => citesLaw(line);
 
 /** Cuántas veces aparece la línea fijada (sin sangría) en el texto del fichero. */
 const pinnedCount = (text: string, pinned: string): number =>
@@ -205,6 +205,10 @@ describe('arquitectura: ninguna pantalla nombra una ley ni una autoridad (DX-323
       "/* nota */ const basis = '" + 'Le' + "y 1581';",
       "/* a */ /* b */ subtitle: '" + 'Le' + "y 1581',",
       "const url = 'https://example.org // " + 'Le' + "y 1581';",
+      '// ' + 'Le' + 'y 1581',
+      ' * ' + 'Le' + 'y 1581',
+      '/* nota */ // ' + 'Le' + 'y 1581',
+      '/* ' + 'Le' + 'y 1581 */',
     ]) {
       expect({ text, caught: citesLawInCode(text) }).toEqual({ text, caught: true });
     }
@@ -219,10 +223,6 @@ describe('arquitectura: ninguna pantalla nombra una ley ni una autoridad (DX-323
       '(sic)',
       'basic',
       'artículos de limpieza',
-      '// ' + 'Le' + 'y 1581',
-      ' * ' + 'Le' + 'y 1581',
-      '/* nota */ // ' + 'Le' + 'y 1581',
-      '/* ' + 'Le' + 'y 1581 */',
     ]) {
       expect({ text, caught: citesLawInCode(text) }).toEqual({ text, caught: false });
     }
@@ -353,6 +353,53 @@ describe('arquitectura: sin Colombia (DX-323, DX-325)', () => {
       "  'America/Caracas',",
     ]) {
       expect({ line, caught: colombiaHit(line) !== null }).toEqual({ line, caught: false });
+    }
+  });
+});
+
+/**
+ * DX-330: el plazo de conservación de la HC es de la clínica. Ningún texto de
+ * producción de la ficha, de `lib/patients` ni de Ajustes › Historia clínica
+ * fija «15 años» ni «30 años», habla de retención «legal» o nombra una causal
+ * de un país. Sin comentarios: los de leyes son de DX-371. Los literales se
+ * arman por partes.
+ */
+const RETENTION_DIRS = ['components/patients', 'lib/patients', 'app/(app)/settings/historia-clinica'];
+const FIXED_TERM = new RegExp(
+  '\\b(?:15|30)\\s+a' + 'ños\\b|retención ' + 'legal|DD\\.\\s?' + 'HH\\.|\\bDI' + 'H\\b',
+  'i',
+);
+const fixedTermHit = (line: string): boolean => FIXED_TERM.test(codeOf(line));
+
+describe('arquitectura: el plazo de la HC es de la clínica (DX-330)', () => {
+  it('no production text of the patient record fixes a term, says «legal» or names a cause', () => {
+    const files = productionFiles().filter((path) => RETENTION_DIRS.some((dir) => rel(path).startsWith(`${dir}/`)));
+    expect(files.map(rel)).toEqual(
+      expect.arrayContaining([
+        'components/patients/patient-retention-section.tsx',
+        'components/patients/patient-record-header.tsx',
+        'lib/patients/patients-api.ts',
+      ]),
+    );
+    expect(offending(files, fixedTermHit)).toEqual([]);
+  });
+
+  it('the pattern catches a fixed term, «legal» and the cause, and skips the clinic term', () => {
+    for (const text of [
+      "hint: 'Se conserva 15 a" + "ños desde la última atención.',",
+      "double: 'Plazo doble (30 a" + "ños)',",
+      "title: 'Retención " + "legal',",
+      "NONE: 'Permanente (p. ej. víctimas de violaciones de DD. " + "HH./DI" + "H)',",
+    ]) {
+      expect({ text, caught: fixedTermHit(text) }).toEqual({ text, caught: true });
+    }
+    for (const text of [
+      '`Se conserva ${years} años desde la última atención.`',
+      "title: 'Retención',",
+      "const PERMANENT = 'Permanente (nunca se libera)';",
+      '// Se conserva 15 a' + 'ños (comentario)',
+    ]) {
+      expect({ text, caught: fixedTermHit(text) }).toEqual({ text, caught: false });
     }
   });
 });

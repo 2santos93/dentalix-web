@@ -4,11 +4,17 @@ import {
   ArrowLeftRight,
   BadgePercent,
   BellRing,
+  Hourglass,
   Building2,
+  Store,
   CalendarClock,
   CalendarDays,
   ClipboardClock,
   ClipboardList,
+  Repeat,
+  Stethoscope,
+  Coins,
+  FileClock,
   Clock,
   FileSignature,
   FileUp,
@@ -16,6 +22,7 @@ import {
   Handshake,
   History,
   IdCard,
+  KeyRound,
   Landmark,
   LifeBuoy,
   ListOrdered,
@@ -24,14 +31,19 @@ import {
   ScanBarcode,
   ShieldCheck,
   UserCheck,
+  Languages,
   UserRound,
   Wallet,
 } from 'lucide-react';
 import type { ClinicRole } from '@/lib/me/me-api';
+import { canManagePatientLanguages } from '@/lib/patients/patient-languages';
 import { canManageConsentTemplates } from '@/lib/consents/consents-api';
 import { canManagePrescriptionSettings } from '@/lib/prescriptions/prescriptions-api';
 import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
+import { canManageRecallTypes } from '@/lib/recall/recall-api';
+import { canManageSlotOfferSettings } from '@/lib/appointments/slot-offer-settings-api';
 import { canManageChairs } from '@/lib/chairs/chairs-api';
+import { canManageEquipment } from '@/lib/equipment/equipment-api';
 import { canManagePayers } from '@/lib/payers/payers-api';
 import { canManagePriceLists } from '@/lib/price-lists/price-lists-api';
 import { canManageAgreements } from '@/lib/agreements/agreements-api';
@@ -41,6 +53,7 @@ import { canManageReminders } from '@/lib/reminders/reminders-api';
 import { canManageDiscounts } from '@/lib/discounts/discounts-api';
 import { canManageCashSessions } from '@/lib/cash-sessions/cash-sessions-api';
 import { canManageExchangeRates } from '@/lib/exchange/exchange-settings-api';
+import { canManageCurrencyTexts } from '@/lib/exchange/currency-texts-api';
 import { canManageAnamnesisSettings } from '@/lib/clinical/medical-alerts';
 import { canManageDocumentTypeNames } from '@/lib/patients/document-type-names-api';
 import { canManagePatientSettings } from '@/lib/patients/patient-settings-api';
@@ -50,6 +63,8 @@ import { canManageLocationCalendar } from '@/lib/locations/location-calendar';
 import { canSearchImplantLots } from '@/lib/implants/implants-api';
 import { canReadSupportAccesses } from '@/lib/support-accesses/support-accesses-api';
 import { canReadAuditLog } from '@/lib/audit/audit-api';
+import { canManageClinicSettings } from '@/lib/clinic/clinic-settings-api';
+import { canManageSecurityPolicy } from '@/lib/auth/mfa-api';
 
 export interface SettingsEntry {
   href: string;
@@ -96,7 +111,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       {
         href: '/settings/profile',
         label: 'Mi perfil',
-        description: 'Tu nombre, tu foto y tu contraseña.',
+        description: 'Tu nombre, tu foto, tu contraseña y la verificación en dos pasos.',
         icon: UserRound,
       },
     ],
@@ -105,6 +120,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     id: 'clinica',
     title: 'Clínica y sedes',
     entries: [
+      // DX-019: marca y datos fiscales de la clínica.
+      {
+        href: '/settings/clinica',
+        label: 'Datos de la clínica',
+        description: 'Nombre, logo y color de la marca, y los datos fiscales y de contacto que salen en los documentos.',
+        icon: Store,
+        visible: canManageClinicSettings,
+      },
       // G1: alta y edición de sedes (moneda, zona, formato); DX-319: datos legales.
       {
         href: '/settings/sedes',
@@ -136,6 +159,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         icon: IdCard,
         visible: canManageDocumentTypeNames,
       },
+      // DX-497.
+      {
+        href: '/settings/idiomas-de-pacientes',
+        label: 'Idiomas de los pacientes',
+        description: 'Los idiomas en que se puede escribir a cada paciente: recordatorio y página para confirmar la cita.',
+        icon: Languages,
+        visible: canManagePatientLanguages,
+      },
     ],
   },
   {
@@ -165,6 +196,22 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         icon: Armchair,
         visible: canManageChairs,
       },
+      // DX-542.
+      {
+        href: '/settings/equipos',
+        label: 'Equipos biomédicos',
+        description: 'Inventario de equipos de cada sede, su hoja de vida y sus mantenimientos.',
+        icon: Stethoscope,
+        visible: canManageEquipment,
+      },
+      // DX-448: caducidad y antelación de la oferta de hueco por enlace.
+      {
+        href: '/settings/ofertas-de-hueco',
+        label: 'Ofertas de hueco',
+        description: 'Cuánto antes del hueco caduca el enlace de la oferta y con cuánta antelación se puede enviar.',
+        icon: Hourglass,
+        visible: canManageSlotOfferSettings,
+      },
       // DX-026.
       {
         href: '/settings/recordatorios',
@@ -172,6 +219,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Recordatorios por correo antes de cada cita, por sede.',
         icon: BellRing,
         visible: canManageReminders,
+      },
+      // DX-015-bis: tipos de recall, sus disparadores y la exclusión.
+      {
+        href: '/settings/recall',
+        label: 'Recall',
+        description: 'Cada cuánto vuelve el paciente, qué procedimientos reinician el plazo y qué controles se excluyen.',
+        icon: Repeat,
+        visible: canManageRecallTypes,
       },
     ],
   },
@@ -183,7 +238,8 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       {
         href: '/settings/caja',
         label: 'Caja',
-        description: 'Cómo se abre y se cierra la caja por turno.',
+        // DX-515-bis: también los medios de pago (DX-377) y el recibo (DX-515).
+        description: 'Cómo se abre y se cierra la caja por turno, con qué medios se cobra y qué dice el recibo.',
         icon: Wallet,
         visible: canManageCashSessions,
       },
@@ -194,6 +250,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Si la tasa del día la da un proveedor o la registra la clínica, y las tasas registradas.',
         icon: ArrowLeftRight,
         visible: canManageExchangeRates,
+      },
+      // DX-517.
+      {
+        href: '/settings/monedas',
+        label: 'Monedas',
+        description: 'Cómo se escribe cada moneda en importes, recibos y mensajes, y en qué moneda está el catálogo de precios.',
+        icon: Coins,
+        visible: canManageCurrencyTexts,
       },
       // DX-204.
       {
@@ -226,6 +290,13 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         icon: ListOrdered,
         visible: canManagePriceLists,
       },
+      // DX-379: la leen todos; solo ADMIN la cambia (la pantalla y la API).
+      {
+        href: '/settings/presupuestos',
+        label: 'Presupuestos',
+        description: 'Cuántos días valen los precios de un presupuesto.',
+        icon: FileClock,
+      },
     ],
   },
   {
@@ -236,7 +307,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       {
         href: '/settings/historia-clinica',
         label: 'Historia clínica',
-        description: 'Cuánto tiempo es válida la anamnesis antes de pedir que se revise.',
+        description: 'Vigencia de la anamnesis, conservación de la historia clínica y aviso de registro profesional.',
         icon: ClipboardClock,
         visible: canManageAnamnesisSettings,
       },
@@ -284,6 +355,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         label: 'Privacidad de datos',
         description: 'Política de tratamiento de datos que acepta el paciente.',
         icon: ShieldCheck,
+      },
+      // DX-021.
+      {
+        href: '/settings/seguridad',
+        label: 'Seguridad de la clínica',
+        description: 'Qué se exige para entrar a los datos de la clínica.',
+        icon: KeyRound,
+        visible: canManageSecurityPolicy,
       },
       // SEC-009.
       {

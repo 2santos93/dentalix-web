@@ -17,17 +17,20 @@ import {
   type CurrentCashSession,
 } from '@/lib/cash-sessions/cash-sessions-api';
 import {
+  AMOUNT_HIDDEN_TEXT,
   differenceText,
+  hasVisibleDifference,
   moneyList,
   sessionStatusKey,
 } from '@/lib/cash-sessions/presentation';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { invalidateLocations, loadLocations } from '@/lib/session/session-store';
 import { onLocationChange } from '@/lib/locations/location-store';
-import { locationCurrency, locationRegionalFormat, locationTimeZone } from '@/lib/locations/location-settings';
+import { locationCurrency, locationRegionalFormat } from '@/lib/locations/location-settings';
+import { useSedeStamp, type SedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatDateTimeInZone } from '@/lib/format/date';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { PageHeader } from '@/components/shared/page-header';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
@@ -37,6 +40,7 @@ import { ResultCount } from '@/components/shared/list-toolbar';
 import { SectionError } from '@/components/errors/section-error';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
@@ -57,11 +61,9 @@ const copy = {
   noSessionHint: 'Ábrela con el fondo con el que empiezas: los abonos que registres entran en ella.',
   requireOpen: 'Esta clínica exige caja abierta para cobrar en efectivo.',
   blindNote: 'Arqueo ciego: cuenta antes de ver lo esperado; lo verás cuando cierres la caja.',
+  // SEC-043: cierre a ciegas que no cuadró y llegó sin motivo.
+  unjustified: 'Sin justificar',
   openedAt: (when: string) => `Abierta el ${when}`,
-  // GLOBAL-G1: una caja cuya sede no tiene zona no pinta la hora en otra zona.
-  noZone: 'Por configurar',
-  noZoneHint: 'La sede no tiene zona horaria: se configura en Ajustes → Sedes.',
-  openedAtNoZone: 'Abierta (hora por configurar: la sede no tiene zona horaria)',
   float: 'Fondo',
   expectedTitle: 'Esperado hasta ahora',
   open: 'Abrir caja',
@@ -85,7 +87,7 @@ const copy = {
   colFloat: 'Fondo',
   colDifference: 'Diferencia',
   rowLabel: (when: string) => `turno del ${when}`,
-  rowLabelNoZone: (sede: string) => `turno de ${sede} (hora por configurar)`,
+  rowLabelNoFormat: (sede: string) => `turno de ${sede}`,
   print: 'Informe de cierre',
   empty: 'Aún no hay turnos de caja.',
   emptyHint: 'Cuando alguien abra una caja aparecerá aquí, con su cierre.',
@@ -130,6 +132,9 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
   const [outflowing, setOutflowing] = useState(false);
   const [modalKey, setModalKey] = useState(0);
   const [notice, setNotice] = useState('');
+  // Cada turno (y la caja actual) con el reloj, el formato y la moneda de SU sede (DX-354b, E1):
+  // también con «Todas las sedes», donde la lista mezcla sedes.
+  const stamp = useSedeStamp(token, [current?.locationId, ...(list?.items ?? []).map((item) => item.location.id)]);
 
   // La sede activa cambia la caja actual y la lista (la cabecera la pone apiFetch).
   useEffect(() => onLocationChange(() => setLocationKey((k) => k + 1)), []);
@@ -141,7 +146,7 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
       try {
         const [cur, locs] = await Promise.all([
           getCurrentCashSession(token),
-          listLocations(token).catch(() => [] as ClinicLocation[]),
+          loadLocations(token).catch(() => [] as ClinicLocation[]),
         ]);
         if (cancelled) return;
         setCurrent(cur);
@@ -193,13 +198,6 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
   const defaultCurrency = locationCurrency(sede);
   const currencyMissing = current !== null && defaultCurrency === null;
   const session = current?.session ?? null;
-  // La hora de apertura se lee en la zona de la sede de la caja; sin ella (sede
-  // sin configurar o sedes sin cargar) es `null` y se dice «Por configurar»,
-  // nunca en otra zona.
-  const openedAtIn = (instant: string, locationId: string): string | null => {
-    const zone = locationTimeZone(locations.find((l) => l.id === locationId));
-    return zone ? formatDateTimeInZone(instant, zone) : null;
-  };
 
   function afterChange(message: string) {
     setNotice(message);
@@ -235,6 +233,7 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
         <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
         </p>
+        <SedeStampNote stamp={stamp} />
 
         {currentLoading && !current ? (
           <div role="status" aria-label="Cargando" className="rounded-xl border border-border bg-surface p-6">
@@ -247,9 +246,13 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
           <CurrentSessionCard
             current={current}
             sedeName={sedeName}
-            openedAtIn={openedAtIn}
+            stamp={stamp}
             currencyMissing={currencyMissing}
-            onRetryLocations={() => setCurrentKey((k) => k + 1)}
+            onRetryLocations={() => {
+              // La sede no traía moneda: la lista cacheada de la sesión no sirve.
+              invalidateLocations();
+              setCurrentKey((k) => k + 1);
+            }}
             onOpen={() => {
               setModalKey((k) => k + 1);
               setOpening(true);
@@ -305,12 +308,12 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
             <DataList
               label={copy.tableLabel}
               rows={list?.items ?? []}
-              columns={shiftColumns(openedAtIn)}
+              columns={shiftColumns(stamp)}
               getRowKey={(item) => item.id}
               getRowHref={(item) => cashSessionHref(item.id)}
               getRowLabel={(item) => {
-                const when = openedAtIn(item.openedAt, item.location.id);
-                return when ? copy.rowLabel(when) : copy.rowLabelNoZone(item.location.name);
+                const when = stamp.maybe.dateTime(item.openedAt, item.location.id);
+                return when ? copy.rowLabel(when) : copy.rowLabelNoFormat(item.location.name);
               }}
               rowActions={(item) =>
                 item.status === 'CLOSED'
@@ -389,19 +392,16 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
  * línea 1; sede, quien abrió, estado y fondo en la 2. Toda la fila abre el
  * turno; el informe de un cierre va en «⋯».
  */
-function shiftColumns(
-  openedAtIn: (instant: string, locationId: string) => string | null,
-): DataListColumn<CashSessionSummary>[] {
+function shiftColumns(stamp: SedeStamp): DataListColumn<CashSessionSummary>[] {
+  const moneyIn = (locationId: string) => (amount: number, currency: string) => stamp.money(amount, currency, locationId);
   return [
     {
       id: 'opened',
       header: copy.colOpened,
       mobile: 'primary',
-      cell: (item) => {
-        const when = openedAtIn(item.openedAt, item.location.id);
-        return when ? <span className="tabular-nums">{when}</span> : <NoZoneLabel />;
-      },
-      mobileCell: (item) => openedAtIn(item.openedAt, item.location.id) ?? copy.noZone,
+      cell: (item) => stamp.dateTime(item.openedAt, item.location.id),
+      cellClassName: 'tabular-nums',
+      mobileCell: (item) => stamp.maybe.dateTime(item.openedAt, item.location.id),
     },
     { id: 'location', header: copy.colLocation, cell: (item) => item.location.name },
     { id: 'openedBy', header: copy.colOpenedBy, cell: (item) => item.openedBy.fullName ?? '—', mobileCell: (item) => item.openedBy.fullName },
@@ -410,7 +410,7 @@ function shiftColumns(
       header: copy.colStatus,
       cell: (item) => <StatusBadge kind="cashSession" status={sessionStatusKey(item)} />,
     },
-    { id: 'float', header: copy.colFloat, numeric: true, cell: (item) => moneyList(item.floats) },
+    { id: 'float', header: copy.colFloat, numeric: true, cell: (item) => moneyList(item.floats, undefined, moneyIn(item.location.id)) },
     {
       id: 'difference',
       header: copy.colDifference,
@@ -418,41 +418,55 @@ function shiftColumns(
       mobile: 'trailing',
       cell: (item) =>
         item.status === 'CLOSED' ? (
-          <span
-            className={cn(
-              'font-medium',
-              item.differences.some((d) => d.amount !== 0) ? 'text-danger-text' : 'text-ink',
-            )}
-          >
-            {differenceText(item.differences)}
+          <span className="inline-flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
+            <span
+              className={cn(
+                'font-medium',
+                hasVisibleDifference(item.differences)
+                  ? 'text-danger-text'
+                  : item.differences.some((d) => d.amount === null)
+                    ? 'text-muted'
+                    : 'text-ink',
+              )}
+            >
+              {differenceText(item.differences, moneyIn(item.location.id))}
+            </span>
+            {item.unjustifiedDifference ? (
+              <Badge variant="warning" dot>
+                {copy.unjustified}
+              </Badge>
+            ) : null}
           </span>
         ) : (
           <span className="text-muted">—</span>
         ),
       mobileCell: (item) =>
         item.status === 'CLOSED' ? (
-          <span className={cn(item.differences.some((d) => d.amount !== 0) && 'text-danger-text')}>
-            {differenceText(item.differences)}
+          <span className="inline-flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
+            <span
+              className={cn(
+                hasVisibleDifference(item.differences)
+                  ? 'text-danger-text'
+                  : item.differences.some((d) => d.amount === null) && 'text-muted',
+              )}
+            >
+              {differenceText(item.differences, moneyIn(item.location.id))}
+            </span>
+            {item.unjustifiedDifference ? (
+              <Badge variant="warning" dot>
+                {copy.unjustified}
+              </Badge>
+            ) : null}
           </span>
         ) : null,
     },
   ];
 }
 
-/** «Por configurar» con su explicación: la hora de una caja de una sede sin zona. */
-function NoZoneLabel() {
-  return (
-    <span className="flex flex-col">
-      <span className="font-medium text-ink">{copy.noZone}</span>
-      <span className="text-xs text-muted">{copy.noZoneHint}</span>
-    </span>
-  );
-}
-
 function CurrentSessionCard({
   current,
   sedeName,
-  openedAtIn,
+  stamp,
   currencyMissing,
   onRetryLocations,
   onOpen,
@@ -461,7 +475,8 @@ function CurrentSessionCard({
 }: {
   current: CurrentCashSession;
   sedeName: string;
-  openedAtIn: (instant: string, locationId: string) => string | null;
+  /** El pintor de la pantalla: hora e importes de la caja con el formato de SU sede (sin él, «—»). */
+  stamp: SedeStamp;
   /** La sede de la caja no tiene moneda (o las sedes no cargaron). */
   currencyMissing: boolean;
   onRetryLocations: () => void;
@@ -470,7 +485,7 @@ function CurrentSessionCard({
   onOutflow: () => void;
 }) {
   const session: CashSessionDetail | null = current.session;
-  const openedAt = session ? openedAtIn(session.openedAt, current.locationId) : null;
+  const openedAt = session ? stamp.dateTime(session.openedAt, current.locationId) : '';
   const headingId = React.useId();
   return (
     <section aria-labelledby={headingId} className="rounded-xl border border-border bg-surface">
@@ -481,14 +496,14 @@ function CurrentSessionCard({
           </h2>
           {session ? (
             <p className="text-sm text-muted tabular-nums">
-              {openedAt ? copy.openedAt(openedAt) : copy.openedAtNoZone} · {copy.float}{' '}
-              {moneyList(session.floats)}
+              {copy.openedAt(openedAt)} · {copy.float}{' '}
+              {moneyList(session.floats, undefined, (amount, currency) => stamp.money(amount, currency, current.locationId))}
             </p>
           ) : (
             <p className="text-sm text-muted">{copy.noSession}</p>
           )}
           {session ? (
-            <p className="text-sm text-muted tabular-nums">{copy.outflowsCount(session.outflows.length)}</p>
+            <p className="text-sm text-muted tabular-nums">{copy.outflowsCount(session.outflows.length + (session.creditRefunds?.length ?? 0))}</p>
           ) : null}
           {current.settings.requireOpenSession && session ? (
             <p className="text-sm text-muted">{copy.requireOpen}</p>
@@ -544,9 +559,13 @@ function CurrentSessionCard({
                     {PAYMENT_METHOD_LABELS[line.method]}{' '}
                     <span className="text-xs text-muted">{line.currency}</span>
                   </span>
-                  <span className={cn('font-medium tabular-nums', line.expected < 0 ? 'text-danger-text' : 'text-ink')}>
-                    {formatCurrency(line.expected, line.currency)}
-                  </span>
+                  {line.expected === null ? (
+                    <span className="text-sm text-muted">{AMOUNT_HIDDEN_TEXT}</span>
+                  ) : (
+                    <span className={cn('font-medium tabular-nums', line.expected < 0 ? 'text-danger-text' : 'text-ink')}>
+                      {stamp.money(line.expected, line.currency, current.locationId)}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>

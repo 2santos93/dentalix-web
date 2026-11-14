@@ -28,16 +28,16 @@ describe('rate-backlog-api', () => {
   });
 
   it('DX-402: GET /payments/rate-backlog/day con el día y la moneda', async () => {
-    const body = { date: '2026-10-28', currency: 'COP', count: 1, providerRateSaved: false };
+    const body = { date: '2026-10-28', currency: 'USD', count: 1, providerRateSaved: false };
     const spy = jest.fn().mockResolvedValue({ ok: true, json: async () => body });
     global.fetch = spy as unknown as typeof fetch;
 
-    await expect(getRateBacklogDay('tok', '2026-10-28', 'COP')).resolves.toEqual(body);
+    await expect(getRateBacklogDay('tok', '2026-10-28', 'USD')).resolves.toEqual(body);
     const [url, init] = spy.mock.calls[0];
     const parsed = new URL(String(url), 'http://x');
     expect(parsed.pathname).toMatch(/\/payments\/rate-backlog\/day$/);
     expect(parsed.searchParams.get('date')).toBe('2026-10-28');
-    expect(parsed.searchParams.get('currency')).toBe('COP');
+    expect(parsed.searchParams.get('currency')).toBe('USD');
     expect(init.headers.Authorization).toBe('Bearer tok');
   });
 

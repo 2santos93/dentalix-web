@@ -23,6 +23,13 @@ export type TreatmentPlanItemStatus = NonNullable<UpdateTreatmentPlanItemInput['
  * `Appointment`/`DentalCatalogItem`, there is no need to hand-type these.
  */
 export type TreatmentPlanItem = components['schemas']['TreatmentPlanItemDto'];
+/** DX-015-bis: un recall que creó o movió el cambio del ítem (p. ej. una profilaxis realizada). */
+export type ItemRecallUpdate = components['schemas']['ItemRecallUpdateDto'];
+/**
+ * Respuesta del PATCH del ítem: el ítem y, desde DX-015-bis, los recalls que
+ * movió. Opcional para leer igual una API anterior.
+ */
+export type UpdatedTreatmentPlanItem = TreatmentPlanItem & { recallUpdates?: ItemRecallUpdate[] };
 
 /**
  * `items`/`total` are only populated by `getPlan` (`GET /treatment-plans/:id`)
@@ -35,9 +42,8 @@ export type TreatmentPlanItem = components['schemas']['TreatmentPlanItemDto'];
  * `TreatmentPlan`/`TreatmentPlanDetail` entity, with no `@Exclude`/serializer
  * stripping — but the presentation `TreatmentPlanDto` class used purely for
  * Swagger documentation isn't `@ApiProperty()`-annotated for it, so
- * `openapi-typescript` doesn't generate it. Same situation/fix as
- * `Dashboard.incomes.byCurrency` in `dashboard-api.ts`: this intersects the
- * generated shape with the field by hand; drop it if the backend DTO is ever
+ * `openapi-typescript` doesn't generate it. This intersects the generated
+ * shape with the field by hand; drop it if the backend DTO is ever
  * annotated.
  */
 export type TreatmentPlan = Omit<components['schemas']['TreatmentPlanDto'], 'items'> & {
@@ -108,8 +114,8 @@ export async function updateItem(
   planId: string,
   itemId: string,
   patch: UpdateTreatmentPlanItemInput,
-): Promise<TreatmentPlanItem> {
-  return apiFetch<TreatmentPlanItem>(`/treatment-plans/${planId}/items/${itemId}`, {
+): Promise<UpdatedTreatmentPlanItem> {
+  return apiFetch<UpdatedTreatmentPlanItem>(`/treatment-plans/${planId}/items/${itemId}`, {
     method: 'PATCH',
     body: patch,
     token,

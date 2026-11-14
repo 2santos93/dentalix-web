@@ -8,7 +8,7 @@ describe('locationCurrency', () => {
   });
 
   it('sede sin moneda (sin configurar) → null, nunca la de su país', () => {
-    expect(locationCurrency(clinicLocation({ country: 'CO', currency: null }))).toBeNull();
+    expect(locationCurrency(clinicLocation({ country: 'VE', currency: null }))).toBeNull();
     expect(locationCurrency(clinicLocation({ currency: 'pesos' }))).toBeNull();
     expect(locationCurrency(null)).toBeNull();
   });
@@ -20,8 +20,8 @@ describe('locationTimeZone', () => {
     expect(locationTimeZone(clinicLocation({ timeZone: 'UTC' }))).toBe('UTC');
   });
 
-  it('sin zona o con una que no existe → null, nunca Bogotá', () => {
-    expect(locationTimeZone(clinicLocation({ country: 'CO', timeZone: null }))).toBeNull();
+  it('sin zona o con una que no existe → null, nunca Caracas', () => {
+    expect(locationTimeZone(clinicLocation({ country: 'VE', timeZone: null }))).toBeNull();
     expect(locationTimeZone(clinicLocation({ timeZone: 'Mars/Olympus' }))).toBeNull();
     expect(locationTimeZone(undefined)).toBeNull();
   });
@@ -29,7 +29,7 @@ describe('locationTimeZone', () => {
 
 describe('locationFormat', () => {
   it('the locale and hourCycle of the location, whatever its country', () => {
-    expect(locationFormat(clinicLocation({ country: 'CO', locale: 'en-US', hourCycle: 'h23' }))).toEqual({
+    expect(locationFormat(clinicLocation({ country: 'VE', locale: 'en-US', hourCycle: 'h23' }))).toEqual({
       locale: 'en-US',
       hourCycle: 'h23',
     });
@@ -53,15 +53,15 @@ describe('clinicBaseCurrency', () => {
   it('la moneda común de las sedes activas', () => {
     expect(clinicBaseCurrency([clinicLocation({ currency: 'JPY' })])).toBe('JPY');
     expect(
-      clinicBaseCurrency([clinicLocation({ id: 'a', currency: 'COP' }), clinicLocation({ id: 'b', currency: 'COP' })]),
-    ).toBe('COP');
+      clinicBaseCurrency([clinicLocation({ id: 'a', currency: 'USD' }), clinicLocation({ id: 'b', currency: 'USD' })]),
+    ).toBe('USD');
   });
 
   // Revisión D-3: el catálogo es de toda la clínica; con sedes en monedas
   // distintas el mismo precio no puede ser de una u otra según la sede elegida.
   it('sedes activas con monedas distintas → sin moneda', () => {
     expect(
-      clinicBaseCurrency([clinicLocation({ id: 'a', currency: 'COP' }), clinicLocation({ id: 'b', currency: 'EUR' })]),
+      clinicBaseCurrency([clinicLocation({ id: 'a', currency: 'USD' }), clinicLocation({ id: 'b', currency: 'EUR' })]),
     ).toBeNull();
   });
 
@@ -69,16 +69,16 @@ describe('clinicBaseCurrency', () => {
     expect(
       clinicBaseCurrency([
         clinicLocation({ id: 'x', currency: 'EUR', isActive: false }),
-        clinicLocation({ id: 'a', currency: 'COP' }),
+        clinicLocation({ id: 'a', currency: 'USD' }),
       ]),
-    ).toBe('COP');
+    ).toBe('USD');
   });
 
-  it('una sede activa sin moneda deja la clínica sin moneda común, nunca COP', () => {
+  it('una sede activa sin moneda deja la clínica sin moneda común, nunca USD', () => {
     expect(
-      clinicBaseCurrency([clinicLocation({ id: 'a', currency: 'COP' }), clinicLocation({ id: 'b', currency: null })]),
+      clinicBaseCurrency([clinicLocation({ id: 'a', currency: 'USD' }), clinicLocation({ id: 'b', currency: null })]),
     ).toBeNull();
-    expect(clinicBaseCurrency([clinicLocation({ country: 'CO', currency: null })])).toBeNull();
+    expect(clinicBaseCurrency([clinicLocation({ country: 'VE', currency: null })])).toBeNull();
   });
 
   it('sin sedes activas no hay moneda que adivinar', () => {

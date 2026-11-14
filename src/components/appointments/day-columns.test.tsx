@@ -1,3 +1,5 @@
+import { appointmentTypeTextColor, contrastRatio } from '@/lib/color/contrast';
+import { auditRenderedControls } from '@/lib/test/rendered-a11y';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DayColumns } from './day-columns';
@@ -34,7 +36,7 @@ const providers = [
   { userId: 'prov-3', fullName: 'Dra. Sara Paz', role: 'ADMIN' as const, locationIds: null },
 ];
 const hours: BusinessHours = {
-  timezone: 'America/Bogota',
+  timezone: 'America/Caracas',
   ranges: [
     { weekday: 1, startMinute: 9 * 60, endMinute: 13 * 60 },
     { weekday: 1, startMinute: 15 * 60, endMinute: 19 * 60 },
@@ -101,6 +103,18 @@ function renderColumns(props: Partial<React.ComponentProps<typeof DayColumns>> =
 }
 
 describe('DayColumns (DX-121)', () => {
+  it('DX-297 audits visible card words in order without losing provider or clinical chips', () => {
+    renderColumns({ appointments: [{ ...endo, wantsEarlier: true,
+      balance: { hasOverdue: true, overdueDays: 40 },
+      attendance: { noShows: 2, lateCancellations: 1 },
+      coverage: { status: 'EXPIRED', payerName: 'Synthetic payer', planName: null, validTo: '2030-01-01' },
+    }] });
+    const card = screen.getByText('María López').closest('button')!;
+    auditRenderedControls([{ html: document.body.innerHTML, selector: 'button[aria-label*="Detalle de la cita"]' }]);
+    expect(card).toHaveAccessibleName(/09:00–10:30 · Adelantar si hay hueco · María López · Endodoncia · Agendada · Saldo vencido · 40 días · 2 inasistencias · 1 cancelación tardía/);
+    expect(card).toHaveAccessibleName(/Dra. Ana Ríos/);
+    expect(card).toHaveAccessibleName(/Cobertura vencida/);
+  });
   it('pinta una columna por profesional con sus citas', () => {
     renderColumns();
     const columns = screen.getAllByTestId('day-column');
@@ -120,6 +134,36 @@ describe('DayColumns (DX-121)', () => {
     expect(dark).toHaveStyle({ backgroundColor: '#7C3AED', color: '#FFFFFF' });
     expect(bright).toHaveStyle({ backgroundColor: '#FBBF24', color: '#0F172A' });
     expect(within(dark).getByText(/Endodoncia · Agendada/)).toBeInTheDocument();
+  });
+
+  it.each(['CANCELLED', 'NO_SHOW'] as const)(
+    'la cita %s se apaga con relleno neutro y borde discontinuo, sin opacidad ni color del tipo (AA)',
+    (status) => {
+      renderColumns({
+        appointments: [
+          appointment({
+            id: 'apt-off',
+            status,
+            appointmentType: { id: 't', name: 'Endodoncia', durationMinutes: 30, color: '#7C3AED' },
+          }),
+        ],
+      });
+      const card = screen.getByTestId('day-column-appointment');
+      expect(card.className).not.toMatch(/opacity-/);
+      expect(card).toHaveClass('border-dashed', 'bg-surface-sunken', 'text-ink');
+      expect(card.getAttribute('style') ?? '').not.toMatch(/background-color/);
+    },
+  );
+
+  it('DX-180: el anillo de foco es de la tinta de la tarjeta y da 3:1 sobre sus colores', () => {
+    renderColumns();
+    const [card] = screen.getAllByTestId('day-column-appointment');
+    const button = within(card).getAllByRole('button')[0];
+    expect(button.className).toContain('focus-visible:ring-current');
+    expect(button.className).not.toContain('ring-primary');
+    for (const color of ['#0E7490', '#15803D', '#7C3AED', '#BE123C', '#38BDF8', '#FDE047']) {
+      expect(contrastRatio(appointmentTypeTextColor(color), color)!).toBeGreaterThanOrEqual(3);
+    }
   });
 
   it('un color que no es #RRGGBB nunca llega al estilo (cae al neutro)', () => {
@@ -177,9 +221,16 @@ describe('DayColumns (DX-121)', () => {
     expect(within(second).getAllByTestId('free-gap')).toHaveLength(2);
   });
 
+  it('DX-492: la columna vacía de otro día dice «Sin citas este día»', () => {
+    renderColumns({ now: new Date(`${DATE}T12:00:00.000Z`), date: '2031-03-04' });
+    const third = screen.getAllByTestId('day-column')[2];
+    expect(within(third).getByText('Sin citas este día')).toBeInTheDocument();
+    expect(within(third).queryByText('Sin citas hoy')).not.toBeInTheDocument();
+  });
+
   it('columna vacía: «Sin citas hoy» y «Nueva cita» con ese profesional', async () => {
     const user = userEvent.setup();
-    const { onNewAppointment } = renderColumns();
+    const { onNewAppointment } = renderColumns({ now: new Date(`${DATE}T12:00:00.000Z`) });
     const third = screen.getAllByTestId('day-column')[2];
     expect(within(third).getByText('Sin citas hoy')).toBeInTheDocument();
     await user.click(within(third).getByRole('button', { name: 'Nueva cita con Dra. Sara Paz' }));
@@ -213,6 +264,25 @@ describe('DayColumns (DX-121)', () => {
     expect(onRetry).toHaveBeenCalled();
   });
 
+  it('DX-237: el paso del flujo va en la tarjeta y no inicia el arrastre', () => {
+    renderColumns({ renderFlowAction: () => <button type="button">Llegó</button> });
+    const [step] = screen.getAllByRole('button', { name: 'Llegó' });
+    expect(step.closest('[data-no-drag]')).not.toBeNull();
+  });
+
+  it('DX-133: la columna vacía no tapa los huecos, y solo su botón recibe toques', () => {
+    renderColumns({ appointments: [] });
+    const button = screen.getAllByRole('button', { name: /Nueva cita/ })[0];
+    expect(button).toHaveClass('pointer-events-auto');
+    expect(button.parentElement?.closest('.pointer-events-none')).not.toBeNull();
+  });
+
+  it('DX-133: «Mover a…» amplía su zona táctil a 44 px en móvil', () => {
+    renderColumns();
+    const [move] = screen.getAllByRole('button', { name: /^Mover a…/ });
+    expect(move.className).toContain('max-sm:after:-inset-2');
+  });
+
   it('«Mover a…» se ofrece por teclado; sin permiso no hay ni «Mover a…» ni arrastre', async () => {
     const user = userEvent.setup();
     const { onMoveRequest } = renderColumns();
@@ -235,7 +305,7 @@ describe('DayColumns (DX-121)', () => {
   it('el detalle se abre con el nombre accesible de la cita', async () => {
     const user = userEvent.setup();
     const { onSelectAppointment } = renderColumns();
-    await user.click(screen.getByRole('button', { name: /detalle de la cita de 09:00–10:30 · maría lópez/i }));
+    await user.click(screen.getByRole('button', { name: /^09:00–10:30 · maría lópez.*detalle de la cita/i }));
     expect(onSelectAppointment).toHaveBeenCalledWith(endo);
   });
 
@@ -370,7 +440,7 @@ describe('DayColumns · chip «Saldo vencido» (DX-150)', () => {
     const chips = screen.getAllByTestId('overdue-chip');
     expect(chips).toHaveLength(1);
     expect(chips[0]).toHaveTextContent('Saldo vencido · 40 días');
-    expect(screen.getByRole('button', { name: /Saldo vencido · 40 días$/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /09:00–10:30 · María López · Endodoncia · Agendada · Saldo vencido · 40 días.*Detalle de la cita · Dra\. Ana Ríos$/ })).toBeInTheDocument();
   });
 });
 
@@ -402,7 +472,7 @@ describe('«Ocupar este hueco» (DX-210)', () => {
     const onFillOpening = jest.fn();
     renderColumns({ onFillOpening, now: BEFORE, appointments: [endo] });
     const gap = screen.getByRole('button', {
-      name: 'Ocupar el hueco libre de 10:30–13:00 · Dra. Ana Ríos',
+      name: 'Hueco libre · 10:30–13:00 · Ocupar con Dra. Ana Ríos',
     });
     await userEvent.click(gap);
     expect(onFillOpening).toHaveBeenCalledWith('prov-1', {
@@ -467,19 +537,19 @@ describe('«Ocupar este hueco» (DX-210)', () => {
 
   it('el chip va en la línea de la hora y el nombre no se encoge: en una cita corta se siguen leyendo', () => {
     renderColumns({ appointments: [{ ...endo, wantsEarlier: true }] });
-    const card = screen.getByRole('button', { name: /^Detalle de la cita de / });
+    const card = screen.getByRole('button', { name: / · Detalle de la cita · Dra\. Ana Ríos/ });
     const chip = within(card).getByTestId('wants-earlier-chip');
     const time = within(card).getByText(/^\d{2}:\d{2}–\d{2}:\d{2}$/);
     // Misma fila que la hora: no añade altura a la tarjeta de 30 min.
     expect(time.parentElement).toContainElement(chip);
     expect(time.parentElement).toHaveClass('shrink-0');
-    expect(within(card).getByText('María López')).toHaveClass('shrink-0');
+    expect(within(card).getByText('María López')).toHaveClass('truncate');
   });
 
   it('el nombre accesible de la tarjeta dice «Adelantar si hay hueco» (el aria-label tapa el chip)', () => {
     renderColumns({ appointments: [{ ...endo, wantsEarlier: true }] });
     expect(
-      screen.getByRole('button', { name: /^Detalle de la cita de .* · Adelantar si hay hueco$/ }),
+      screen.getByRole('button', { name: /^09:00–10:30 · Adelantar si hay hueco · María López · Endodoncia · Agendada · Detalle de la cita · Dra\. Ana Ríos$/ }),
     ).toBeInTheDocument();
   });
 });
@@ -538,7 +608,7 @@ describe('DayColumns: alertas médicas (DX-247)', () => {
 it.each(['SCHEDULED', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'ARRIVED', 'IN_CHAIR', 'READY_FOR_CHECKOUT'] as const)('DX-242: Día %s anuncia estado y tipo', (status) => {
   const labels = { SCHEDULED:'Agendada', CONFIRMED:'Confirmada', COMPLETED:'Completada', CANCELLED:'Cancelada', NO_SHOW:'No asistió', ARRIVED:'En espera', IN_CHAIR:'En sillón', READY_FOR_CHECKOUT:'Listo para cobrar' };
   renderColumns({ appointments:[appointment({ id:'status', status })] });
-  expect(screen.getByRole('button', { name: new RegExp('Detalle.*' + labels[status]) })).toHaveAccessibleName(expect.stringContaining('Endodoncia'));
+  expect(screen.getByRole('button', { name: new RegExp(labels[status] + '.*Detalle') })).toHaveAccessibleName(expect.stringContaining('Endodoncia'));
 });
 
 describe('DayColumns con el reloj de la sede (DX-378)', () => {
@@ -554,7 +624,7 @@ describe('DayColumns con el reloj de la sede (DX-378)', () => {
     // La franja empieza a las 08:30 (horario 9–19 con media hora de margen).
     expect(card).toHaveStyle({ top: `${30 * PX_PER_MINUTE}px` });
     expect(
-      screen.getByRole('button', { name: /detalle de la cita de 9:00 a\. m\. – 10:30 a\. m\. · maría lópez/i }),
+      screen.getByRole('button', { name: /^9:00 a\. m\. – 10:30 a\. m\. · maría lópez.*detalle de la cita/i }),
     ).toBeInTheDocument();
     expect(screen.getByText('9:00 a. m.')).toBeInTheDocument();
     expect(screen.getByText('12:00 p. m.')).toBeInTheDocument();
@@ -567,7 +637,7 @@ describe('DayColumns con el reloj de la sede (DX-378)', () => {
       appointments: [{ ...nine, locationId: 'madrid' }],
     });
     // 13:00 UTC del 3 de marzo son las 14:00 en Madrid.
-    expect(screen.getByRole('button', { name: /detalle de la cita de 14:00–15:30/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^14:00–15:30.*detalle de la cita/i })).toBeInTheDocument();
   });
 
   it('el arrastre suelta en la hora de la sede, no en la del navegador', () => {
@@ -628,7 +698,7 @@ describe('DayColumns por sillón (DX-211)', () => {
     expect(within(columns[2]).getByText('Juan López')).toBeInTheDocument();
     // El detalle sigue nombrando al profesional de la cita.
     expect(
-      screen.getByRole('button', { name: /detalle de la cita de .* · maría lópez · dra\. ana ríos/i }),
+      screen.getByRole('button', { name: /maría lópez · .*detalle de la cita · dra\. ana ríos/i }),
     ).toBeInTheDocument();
   });
 
@@ -650,3 +720,112 @@ describe('DayColumns por sillón (DX-211)', () => {
   });
 });
 
+
+describe('DayColumns por sillón: arrastre (DX-479)', () => {
+  const chairColumns = {
+    columns: [
+      { id: 'ch-1', label: 'Sillón 1' },
+      { id: 'ch-2', label: 'Sillón 2' },
+      { id: 'sin-sillon', label: 'Sin sillón' },
+    ],
+    columnOf: (a: Appointment) => a.chairId ?? 'sin-sillon',
+  };
+  // 09:00–10:30 con la Dra. Ana Ríos, en «Sillón 1».
+  const seated = appointment({ id: 'apt-s', chairId: 'ch-1', chair: { id: 'ch-1', name: 'Sillón 1', active: true } });
+  const done = appointment({
+    id: 'apt-d',
+    status: 'COMPLETED',
+    chairId: 'ch-2',
+    chair: { id: 'ch-2', name: 'Sillón 2', active: true },
+    start: new Date(`${DATE}T11:00:00`).toISOString(),
+    end: new Date(`${DATE}T11:30:00`).toISOString(),
+  });
+  // La franja visible empieza a las 08:30: 09:00 está 30 min más abajo.
+  const Y_0900 = 30 * PX_PER_MINUTE;
+  const Y_1100 = 150 * PX_PER_MINUTE;
+
+  let rectSpy: jest.SpyInstance;
+  beforeEach(() => {
+    rectSpy = jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const index = chairColumns.columns.findIndex((c) => c.id === this.dataset.chairColumn);
+      if (index >= 0) {
+        return { left: 100 + index * 200, right: 300 + index * 200, top: 0, bottom: 2000 } as DOMRect;
+      }
+      return { left: 0, right: 0, top: 0, bottom: 0 } as DOMRect;
+    });
+  });
+  afterEach(() => rectSpy.mockRestore());
+
+  function drag(card: HTMLElement, clientX: number, clientY: number, pointerId = 11) {
+    fireEvent.pointerDown(card, { pointerId, pointerType: 'mouse', button: 0, clientX: 150, clientY: 0 });
+    fireEvent.pointerMove(window, { pointerId, clientX, clientY });
+    const preview = screen.queryByTestId('drag-preview')?.textContent ?? null;
+    fireEvent.pointerUp(window, { pointerId, clientX, clientY });
+    return preview;
+  }
+
+  it('a otro sillón a la misma hora manda SOLO el sillón (el profesional no cambia), y lo dice la vista previa', () => {
+    const { onDrop } = renderColumns({ chairColumns, appointments: [seated, done] });
+    const card = screen.getAllByTestId('day-column-appointment')[0];
+    expect(card).toHaveClass('cursor-grab');
+    expect(drag(card, 350, Y_0900)).toBe('Mover a las 09:00 · Sillón 2');
+    expect(onDrop).toHaveBeenCalledWith(seated, { chairId: 'ch-2' });
+  });
+
+  it('a otra hora en el mismo sillón manda el hueco con SU profesional y sin sillón', () => {
+    const { onDrop } = renderColumns({ chairColumns, appointments: [seated, done] });
+    drag(screen.getAllByTestId('day-column-appointment')[0], 150, Y_1100);
+    expect(onDrop).toHaveBeenCalledWith(seated, {
+      start: new Date(`${DATE}T11:00:00`).toISOString(),
+      end: new Date(`${DATE}T12:30:00`).toISOString(),
+      providerId: 'prov-1',
+    });
+  });
+
+  it('a «Sin sillón» a otra hora manda el hueco y chairId null', () => {
+    const { onDrop } = renderColumns({ chairColumns, appointments: [seated, done] });
+    expect(drag(screen.getAllByTestId('day-column-appointment')[0], 550, Y_1100)).toBe(
+      'Mover a las 11:00 · Sin sillón',
+    );
+    expect(onDrop).toHaveBeenCalledWith(seated, {
+      start: new Date(`${DATE}T11:00:00`).toISOString(),
+      end: new Date(`${DATE}T12:30:00`).toISOString(),
+      providerId: 'prov-1',
+      chairId: null,
+    });
+  });
+
+  it('soltar donde estaba no hace nada', () => {
+    const { onDrop } = renderColumns({ chairColumns, appointments: [seated, done] });
+    drag(screen.getAllByTestId('day-column-appointment')[0], 150, Y_0900);
+    expect(onDrop).not.toHaveBeenCalled();
+  });
+
+  it('una cita completada no se arrastra (ni vista previa ni onDrop); su clic sigue abriendo el detalle', () => {
+    const { onDrop, onSelectAppointment } = renderColumns({ chairColumns, appointments: [seated, done] });
+    const completed = screen.getAllByTestId('day-column-appointment')[1];
+    expect(completed).not.toHaveClass('cursor-grab');
+    expect(drag(completed, 150, Y_0900, 12)).toBeNull();
+    expect(onDrop).not.toHaveBeenCalled();
+    fireEvent.click(within(completed).getAllByRole('button')[0]);
+    expect(onSelectAppointment).toHaveBeenCalledWith(done);
+  });
+});
+
+describe('DX-437: el chip «Adelantar si hay hueco» dice si lo pidió el paciente y su franja', () => {
+  it('con earlierRequestedAt y franja: «Adelantar si hay hueco · Pedido por el paciente · Mañanas»; sin ellos, solo la marca', () => {
+    const asked = appointment({
+      id: 'apt-ask',
+      wantsEarlier: true,
+      earlierWindow: 'MORNING',
+      earlierRequestedAt: '2026-11-01T12:00:00.000Z',
+    });
+    const staffMarked = appointment({ id: 'apt-staff', wantsEarlier: true, start: new Date(`${DATE}T11:00:00`).toISOString(), end: new Date(`${DATE}T11:30:00`).toISOString() });
+    renderColumns({ appointments: [asked, staffMarked] });
+    const chips = screen.getAllByTestId('wants-earlier-chip').map((c) => c.textContent);
+    expect(chips).toEqual(['Adelantar si hay hueco · Pedido por el paciente · Mañanas', 'Adelantar si hay hueco']);
+    expect(
+      screen.getByRole('button', { name: /Adelantar si hay hueco · Pedido por el paciente · Mañanas/ }),
+    ).toBeInTheDocument();
+  });
+});

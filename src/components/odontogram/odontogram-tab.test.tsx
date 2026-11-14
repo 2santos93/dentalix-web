@@ -1,4 +1,5 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { OdontogramTab } from './odontogram-tab';
 import { Toaster } from '@/components/errors/toaster';
@@ -30,6 +31,15 @@ jest.mock('../../lib/odontogram/odontogram-api', () => ({
   voidToothRecord: jest.fn(),
   VOID_REASON_MAX: 500,
 }));
+
+// DX-354b: el día de la carta y el de cada registro salen con el formato de la sede (es-VE).
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/locations').clinicLocation()]),
+}));
+
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
+import { regionalFormat } from '@/lib/format/regional-format';
 
 const mockedListCatalog = listCatalogItems as jest.MockedFunction<typeof listCatalogItems>;
 const mockedGetOdontogram = getOdontogram as jest.MockedFunction<typeof getOdontogram>;
@@ -140,11 +150,13 @@ describe('OdontogramTab', () => {
     mockedGetDentition.mockResolvedValue(adult);
   });
 
-  it('shows the full-page loading status only on the initial load', () => {
+  it('shows the full-page loading status only on the initial load', async () => {
     mockedGetOdontogram.mockReturnValue(new Promise(() => {}));
     mockedListCatalog.mockReturnValue(new Promise(() => {}));
     render(<OdontogramTab token="tok" patientId="p1" />);
     expect(screen.getByRole('status')).toHaveTextContent(/cargando odontograma/i);
+    // Deja que acabe la carga de las sedes (DX-354b) dentro de la prueba.
+    await act(async () => {});
   });
 
   it('dibuja la dentición mixta de un niño de 7 años y pinta un registro en el 64 (sin aviso de «no aparecen»)', async () => {
@@ -285,6 +297,39 @@ describe('OdontogramTab', () => {
     expect(link).toHaveTextContent('Documentos del diente');
   });
 
+  it('DX-354b (E9): sin la zona de la sede el selector «Ver la carta al» se sustituye por su error con Reintentar', async () => {
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetTimeline.mockResolvedValue([]);
+    mockedGetOdontogram.mockResolvedValue(initialGroups);
+    (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([clinicLocation({ timeZone: null })]);
+    try {
+      render(<OdontogramTab token="tok" patientId="p1" initialTooth="11" />);
+      expect(await screen.findByText('Sin zona de sede')).toBeInTheDocument();
+      expect(screen.queryByRole('group', { name: /ver la carta al/i })).not.toBeInTheDocument();
+    } finally {
+      (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([clinicLocation()]);
+    }
+  });
+
+  it('DX-354b: el aviso de la carta lleva el día con el formato de la sede (de-DE, en-US)', async () => {
+    const user = userEvent.setup();
+    const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetTimeline.mockResolvedValue([]);
+    mockedGetOdontogram.mockResolvedValue(initialGroups);
+    for (const [locale, hourCycle] of [['de-DE', 'h23'], ['en-US', 'h12']] as const) {
+      mockedLocations.mockResolvedValue([clinicLocation({ locale, hourCycle })]);
+      const { unmount } = render(<OdontogramTab token="tok" patientId="p1" initialTooth="11" />);
+      await screen.findByRole('form', { name: /registrar en el diente 11/i });
+      await typeAsOf(user, '2026-10-05');
+      const day = regionalFormat({ locale, hourCycle }).civilDate('2026-10-05');
+      expect(await screen.findByText(new RegExp(`carta al ${day.replace(/\./g, '\\.')} · solo lectura`, 'i'))).toBeInTheDocument();
+      unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
+    }
+    mockedLocations.mockResolvedValue([clinicLocation()]);
+  });
+
   it('«Ver la carta al» recarga a esa fecha en solo lectura, con aviso y sin acciones', async () => {
     const user = userEvent.setup();
     mockedListCatalog.mockResolvedValue(catalog);
@@ -365,6 +410,41 @@ describe('OdontogramTab', () => {
     mockedListCatalog.mockResolvedValue(catalog);
     render(<OdontogramTab token="tok" patientId="p1" />);
     expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar el odontograma.');
+  });
+
+  it('DX-117 (FE-022): abrir el odontograma y elegir un diente pide el catálogo una sola vez (y no otra al guardar)', async () => {
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetOdontogram.mockResolvedValue(initialGroups);
+    mockedGetTimeline.mockResolvedValue([]);
+    mockedAddRecord.mockResolvedValue(createdRecord);
+    const user = userEvent.setup();
+    render(<OdontogramTab token="tok" patientId="p1" />);
+
+    await screen.findByRole('group', { name: /odontograma/i });
+    await user.click(screen.getByRole('button', { name: '11' }));
+    expect(await screen.findByRole('radio', { name: /caries/i })).toBeInTheDocument();
+    expect(mockedListCatalog).toHaveBeenCalledTimes(1);
+
+    // Guardar recarga la carta, pero el catálogo de la clínica no cambia: no se vuelve a pedir.
+    await user.click(screen.getByRole('radio', { name: /caries/i }));
+    await user.click(screen.getByRole('checkbox', { name: /oclusal/i }));
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await waitFor(() => expect(mockedGetOdontogram).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText(/actualizando/i)).not.toBeInTheDocument());
+    expect(mockedListCatalog).toHaveBeenCalledTimes(1);
+  });
+
+  it('DX-117 (FE-022): si falla la carga inicial, Reintentar vuelve a pedir el catálogo', async () => {
+    const { ApiError } = jest.requireActual('../../lib/api/client');
+    mockedListCatalog.mockRejectedValueOnce(new ApiError(500, 'Error del servidor')).mockResolvedValue(catalog);
+    mockedGetOdontogram.mockResolvedValue(initialGroups);
+    const user = userEvent.setup();
+    render(<OdontogramTab token="tok" patientId="p1" />);
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /reintentar/i }));
+    await screen.findByRole('group', { name: /odontograma/i });
+    expect(mockedListCatalog).toHaveBeenCalledTimes(2);
   });
 
   it('keeps the chart and the tooth-record panel mounted (no full-page reload flash) on the refetch after a successful add', async () => {

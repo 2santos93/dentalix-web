@@ -3,6 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
 import { openPatientTab } from './support/patient-tabs';
+import { expectTouchTarget } from './support/touch-targets';
+import { E2E_REGION } from './support/regional';
+import { regionalFormat } from '../src/lib/format/regional-format';
+import { moneyWithCode } from '../src/lib/format/sede-number';
 
 /**
  * e2e (DX-253): saldo a favor en el estado de cuenta, a 1440 px y a 390 px.
@@ -19,8 +23,8 @@ import { openPatientTab } from './support/patient-tabs';
 const API = API_URL;
 const rawSuffix = process.env.E2E_RUN_SUFFIX ?? randomUUID();
 const suffix = rawSuffix.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 10);
-const usd = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD', currencyDisplay: 'code' });
-const money = (amount: number) => usd.format(amount);
+// DX-354b: la pantalla pinta con el formato de la sede (código delante en es-VE: «USD 300,00»).
+const money = (amount: number) => moneyWithCode(amount, 'USD', regionalFormat(E2E_REGION));
 
 async function seed(request: APIRequestContext, origin: string, token: string, tag: string) {
   const headers = { Authorization: `Bearer ${token}`, 'X-Tenant-Host': new URL(origin).host };
@@ -119,6 +123,12 @@ for (const viewport of [
     await credit.getByRole('button', { name: /^Acciones de/ }).click();
     await page.getByRole('menuitem', { name: /Devolver/ }).click();
     const refund = page.getByRole('dialog');
+    // DX-442 (FE-093): a 390 px los controles de «Devolver» miden al menos 44 px.
+    if (viewport.width === 390) {
+      for (const name of ['Importe a devolver', 'Cómo se devuelve', 'Motivo']) {
+        await expectTouchTarget(refund.getByLabel(name), { scope: refund, label: name });
+      }
+    }
     await refund.getByLabel('Importe a devolver').fill('40');
     await refund.getByLabel('Cómo se devuelve').selectOption('TRANSFER');
     await refund.getByLabel('Motivo').fill('El paciente se muda de ciudad');
@@ -128,7 +138,8 @@ for (const viewport of [
     const receipt = page.getByRole('dialog', { name: 'Devolución registrada' });
     const document = receipt.getByTestId('refund-document');
     await expect(document).toContainText(/DEV-[A-Z0-9]+-000001/);
-    await expect(document).toContainText(money(40));
+    // El comprobante pinta con la sede del documento y el código ISO delante.
+    await expect(document).toContainText(moneyWithCode(40, 'USD', regionalFormat(E2E_REGION)));
     await expect(document).toContainText('El paciente se muda de ciudad');
     await expect(receipt.getByTestId('signature-line')).toHaveCount(2);
 

@@ -7,7 +7,7 @@ import { API_URL } from './support/urls';
  * e2e (DX-319): nº de registro sanitario de la sede en Ajustes › Sedes → la
  * ficha de la sede (B6).
  *
- * Una clínica nueva: la tarjeta ya no habla del REPS; el ADMIN escribe un nº
+ * Una clínica nueva: la tarjeta ya no habla del código anterior; el ADMIN escribe un nº
  * libre (sin formato por país), activa «Mostrar el nº de registro en los
  * documentos» y guarda desde la barra «Cambios sin guardar» (sin cambios no
  * hay botón de guardar);
@@ -56,7 +56,7 @@ for (const viewport of VIEWPORTS) {
     const section = page.getByRole('region', { name: 'Nº de registro sanitario' });
     const field = section.getByLabel(/Nº de registro sanitario · Sede principal/);
     await expect(field).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(/REPS/)).toHaveCount(0);
+    await expect(page.getByText(/RE[P]S/)).toHaveCount(0);
     await expect(field).toHaveAttribute('maxlength', '64');
     const toggle = section.getByRole('checkbox', { name: /Mostrar el nº de registro en los documentos/ });
     await expect(toggle).not.toBeChecked();

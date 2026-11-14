@@ -28,8 +28,15 @@ Decimales de las monedas (DX-340, README de la API «Redondeo de importes»):
   (`GET /treatment-plans/:id` → `currencyDigits`; también `GET /currencies`).
   Helper: `line-rounding.ts`, espejo de `src/shared/money/line-rounding.ts`.
 - **Vectores** (`rounding-vectors.json`): los mismos casos que la API (RSD,
-  JPY, EUR y COP con 123,45 × 7,5 %, límites del descuento y total de
-  líneas); `line-rounding.test.ts` los comprueba aquí.
+  JPY, EUR y ALL con 123,45 × 7,5 %, límites del descuento, total de líneas
+  y, DX-488, el reparto de las cuotas de un plan de pagos en `installmentSplit`);
+  `line-rounding.test.ts` los comprueba aquí.
+- **Cuotas de un plan de pagos** (DX-488): `installmentSplit` (cuota base y última, en O(1); `null` fuera de 1…600 cuotas) reparte como
+  `generateSchedule` de la API, en unidades de `roundingDigits` de la moneda y
+  el resto en la última (JPY 10 000 en 3 = 3 333, 3 333 y 3 334; en USD y VES,
+  al céntimo como siempre). La vista previa de «Crear plan de pagos» lee los
+  dígitos de `GET /currencies` (`useCurrencyRoundingDigits`) y, sin ellos, dice
+  «se calcula al crear el plan»: no los adivina.
 
 Licencias de la lista de países (`iso3166-countries.json`): los códigos salen de
 `country-state-city` (GPL-3.0); son hechos de la norma ISO 3166-1 y no se copia
@@ -40,3 +47,5 @@ regiones y los indicativos salen de `libphonenumber-js` (MIT), sobre los
 metadatos de libphonenumber (Apache-2.0). Los nombres son de CLDR (Unicode
 License v3). La web no instala la librería: solo usa esta copia para elegir y
 nombrar la región.
+
+`round.ts` (DX-488-bis): único sitio de la web donde un importe se redondea a céntimos (`amountCents`, `roundAmount`, `centsToAmount`, `roundCents`, `amountText`); siempre 2 decimales, el redondeo por dígitos de moneda es de `line-rounding.ts`. La guarda `src/architecture/no-loose-money-rounding.test.ts` impide redondeos sueltos.

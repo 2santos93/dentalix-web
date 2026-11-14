@@ -1,13 +1,24 @@
+import { ClinicFiscalLines } from '@/components/brand/clinic-fiscal-lines';
 import * as React from 'react';
-import type { PlanQuote, PlanQuoteItem } from '@/lib/treatment-plans/plan-quote-api';
+import {
+  expiredAcceptanceLine,
+  partialAcceptanceLine,
+  partialRestLine,
+  type PlanQuote,
+  type PlanQuoteAcceptance,
+  type PlanQuoteItem,
+} from '@/lib/treatment-plans/plan-quote-api';
 import { SURFACE_LABELS } from '@/lib/odontogram/surface-labels';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate, formatDateTime } from '@/lib/format/date';
+import { documentTexts, type DocumentFormat } from '@/lib/format/document-format';
 import { convertWithRate, paymentRateCopy, ratePairLabel } from '@/lib/payments/payment-rate';
 import {
-  PRINTED_LIST_PRICE_FORMAT,
+  sedeListPriceFormat,
+  type ListPriceFormat,
   formatListPrice,
-  listPriceInPlanCurrency,
+  listPriceHiddenNote,
+  listPriceNote,
+  listPricesCurrency,
+  listPricesInPlanCurrency,
 } from '@/lib/treatment-plans/list-price';
 
 const copy = {
@@ -23,11 +34,6 @@ const copy = {
   agreementValue: (name: string, payer: string) => `${name} · ${payer}`,
   listPrice: (amount: string) => `Precio de lista ${amount}`,
   agreementSaving: 'Ahorro por convenio',
-  // DX-489: el precio de lista es el del catálogo, en su moneda.
-  listPriceNote: (catalogCurrency: string | null, planCurrency: string) =>
-    catalogCurrency
-      ? `El precio de lista es el del catálogo de la clínica, en ${catalogCurrency}: es de referencia y no se convierte a ${planCurrency}.`
-      : `El precio de lista es el del catálogo de la clínica, que puede estar en otra moneda: es de referencia y no se convierte a ${planCurrency}.`,
   noProfessional: 'Sin asignar',
   tableCaption: 'Procedimientos del presupuesto',
   colTooth: 'Diente',
@@ -57,6 +63,13 @@ const copy = {
   acceptedBy: (name: string, when: string) => `Aceptado y firmado por ${name} el ${when}`,
   signatureAlt: (name: string) => `Firma de ${name}`,
   recordedBy: (name: string) => `Registró la firma: ${name}`,
+  // DX-514: a distancia firmó el paciente (o su representante) por el enlace;
+  // el usuario de la clínica solo lo envió.
+  remoteSignedBy: (name: string, role: string | null, when: string) =>
+    `Firmado a distancia por ${name}${role ? ` (${role})` : ''} el ${when}`,
+  remotePatient: 'paciente',
+  remoteGuardian: (patient: string) => `representante de ${patient}`,
+  sentBy: (name: string, when: string) => `Enviado por ${name} el ${when}`,
   blankSignature: 'Firma de aceptación del paciente',
   blankName: 'Nombre y documento',
   blankDate: 'Fecha',
@@ -68,20 +81,31 @@ const copy = {
     'La huella no coincide con el contenido guardado: este presupuesto pudo alterarse fuera de Dentalix.',
 };
 
-const money = (value: number, currency: string) => formatCurrency(value, currency);
-const discount = (value: number, currency: string) =>
-  value > 0 ? `−${money(value, currency)}` : copy.noDiscount;
 
 /** ¿El ítem lleva «Precio de lista»? Solo cuando el precio cobrado es otro (convenio o lista de la sede). */
 function hasListPrice(item: PlanQuoteItem): item is PlanQuoteItem & { listPrice: number } {
   return item.listPrice !== null && item.listPrice !== item.unitPrice;
 }
 
-/** «Precio de lista» en la moneda del catálogo (DX-489), nunca en la del plan. */
-function listPriceOf(item: PlanQuoteItem, catalogCurrency: string | null): string | null {
-  return hasListPrice(item)
-    ? copy.listPrice(formatListPrice(item.listPrice, catalogCurrency, PRINTED_LIST_PRICE_FORMAT))
+/**
+ * «Precio de lista» en la moneda del catálogo (DX-489), nunca en la del plan:
+ * la que congeló el ítem al darlo de alta (DX-502); sin ella, no hay cifra.
+ */
+function listPriceOf(item: PlanQuoteItem, listFormat: ListPriceFormat): string | null {
+  const amount = hasListPrice(item)
+    ? formatListPrice(item.listPrice, item.listPriceCurrency, listFormat)
     : null;
+  return amount === null ? null : copy.listPrice(amount);
+}
+
+/** «paciente» o «representante de …»; `null` si la API no dice quién firmó. */
+function remoteSignerRole(
+  signerType: NonNullable<PlanQuoteAcceptance['remote']>['signerType'],
+  patientName: string,
+): string | null {
+  if (signerType === 'PATIENT') return copy.remotePatient;
+  if (signerType === 'GUARDIAN') return copy.remoteGuardian(patientName);
+  return null;
 }
 
 function surfacesOf(item: PlanQuoteItem): string {
@@ -109,14 +133,16 @@ export interface QuoteSecondCurrency {
 
 interface PlanQuoteDocumentProps {
   quote: PlanQuote;
-  /**
-   * DX-489: moneda del catálogo (`clinicBaseCurrency`), la del precio de
-   * lista; `null` si no se sabe. Si no es la del plan, el precio de lista va
-   * en la suya, con una nota, y no se pinta el «Ahorro por convenio».
-   */
-  catalogCurrency: string | null;
+  /** El formato de la sede del presupuesto (`documentFormat(quote.regional)`); `null` → «—» en fechas e importes. */
+  format: DocumentFormat | null;
   /** DX-376: total orientativo en otra moneda; sin ella, el presupuesto no cambia. */
   secondCurrency?: QuoteSecondCurrency | null;
+  /**
+   * DX-417: este presupuesto es el pendiente de una aceptación parcial: el
+   * instante en que se aceptó el original («Resto de la aceptación parcial
+   * del …»), o `'unknown'` si no se pudo leer («Resto de una aceptación parcial»).
+   */
+  partialRestOf?: string | null;
 }
 
 /**
@@ -130,10 +156,25 @@ interface PlanQuoteDocumentProps {
  * papel blanco y tinta oscura explícitos, también en modo oscuro. En pantalla
  * estrecha la tabla se apila en tarjetas; en papel siempre es tabla.
  */
-export function PlanQuoteDocument({ quote, catalogCurrency, secondCurrency = null }: PlanQuoteDocumentProps) {
+export function PlanQuoteDocument({ quote, format, secondCurrency = null, partialRestOf = null }: PlanQuoteDocumentProps) {
+  // DX-354: fechas, horas e importes con el formato de la sede del presupuesto y el código ISO.
+  const doc = documentTexts(format);
+  const money = doc.amount;
+  const discount = (value: number, currency: string) =>
+    value > 0 ? `−${money(value, currency)}` : copy.noDiscount;
+  const listFormat = sedeListPriceFormat(format?.fmt ?? null);
   const { acceptance, currency } = quote;
-  const listInPlanCurrency = listPriceInPlanCurrency(catalogCurrency, currency);
-  const listPriceNote = !listInPlanCurrency && quote.items.some(hasListPrice);
+  const expiredLine = acceptance ? expiredAcceptanceLine(acceptance, doc) : null;
+  // DX-417: fuera del contenido firmado (no entra en la huella).
+  const partialLine = acceptance ? partialAcceptanceLine(acceptance, currency, money) : null;
+  // DX-502: cada precio de lista lleva la moneda del catálogo que congeló su
+  // ítem (`listPriceCurrency`, de la API). Si alguno no está en la del plan
+  // (o no se sabe), va con la nota y sin «Ahorro por convenio».
+  // Sin moneda conocida, la cifra se oculta y lo explica su propia nota.
+  const listCurrencies = quote.items.filter(hasListPrice).map((item) => item.listPriceCurrency);
+  const listInPlanCurrency = listPricesInPlanCurrency(listCurrencies, currency);
+  const shownForeign = listCurrencies.filter((c): c is string => c !== null && c !== currency);
+  const hiddenListPrice = listCurrencies.includes(null);
   const organization=new Map((quote.visitOrganization??[]).map(v=>[v.itemId,v]));
   const orderedItems=[...quote.items].sort((a,b)=>(organization.get(a.id)?.visit??1)-(organization.get(b.id)?.visit??1));
   const visitTitle=(id:string)=>{const v=organization.get(id);return `Visita ${v?.visit??1}${v?.label?' · '+v.label:''}${v?.minDaysAfterPrevious?' · intervalo mínimo '+v.minDaysAfterPrevious+' días':''}`;};
@@ -156,8 +197,10 @@ export function PlanQuoteDocument({ quote, catalogCurrency, secondCurrency = nul
             />
           ) : null}
           <div className="min-w-0">
-            <p className="text-base font-semibold">{quote.clinicName}</p>
-            <p className="text-sm text-[#4b5563]">
+            <p className="break-words text-base font-semibold">{quote.clinicName}</p>
+            {/* DX-019: datos fiscales de la clínica y logo (DX-019-bis): los del momento de la firma si está firmado; si no, los de hoy. */}
+            <ClinicFiscalLines fiscal={quote.clinicFiscal} />
+            <p className="break-words text-sm text-[#4b5563]">
               {quote.location.name}
               {quote.location.address ? (
                 <>
@@ -173,12 +216,12 @@ export function PlanQuoteDocument({ quote, catalogCurrency, secondCurrency = nul
           <p className="mt-1 text-sm text-[#4b5563]">
             {copy.issuedOn}:{' '}
             <span className="font-medium text-[#111827] tabular-nums">
-              {formatCivilDate(quote.issuedOn)}
+              {doc.civilDate(quote.issuedOn)}
             </span>
           </p>
           <p className="text-sm text-[#4b5563]">
             <span className="font-medium text-[#111827]">{copy.validity(quote.validityDays)}</span>{' '}
-            <span className="tabular-nums">{copy.validUntil(formatCivilDate(quote.validUntil))}</span>
+            <span className="tabular-nums">{copy.validUntil(doc.civilDate(quote.validUntil))}</span>
           </p>
         </div>
       </header>
@@ -187,17 +230,17 @@ export function PlanQuoteDocument({ quote, catalogCurrency, secondCurrency = nul
         data-testid="quote-parties"
         className="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-3 print:grid-cols-3"
       >
-        <div>
+        <div className="min-w-0">
           <dt className="text-xs font-medium text-[#6b7280]">{copy.patient}</dt>
-          <dd className="font-medium">{quote.patient.name}</dd>
+          <dd className="break-words font-medium">{quote.patient.name}</dd>
         </div>
         <div>
           <dt className="text-xs font-medium text-[#6b7280]">{copy.document}</dt>
           <dd className="tabular-nums">{quote.patient.document ?? copy.noDocument}</dd>
         </div>
-        <div>
+        <div className="min-w-0">
           <dt className="text-xs font-medium text-[#6b7280]">{copy.professional}</dt>
-          <dd>{quote.professionalName ?? copy.noProfessional}</dd>
+          <dd className="break-words">{quote.professionalName ?? copy.noProfessional}</dd>
         </div>
         {quote.agreement ? (
           <div className="sm:col-span-3 print:col-span-3" data-testid="quote-agreement">
@@ -231,7 +274,7 @@ export function PlanQuoteDocument({ quote, catalogCurrency, secondCurrency = nul
               </tr>
             ) : (
               orderedItems.map((item,index) => {
-                const listLine = listPriceOf(item, catalogCurrency);
+                const listLine = listPriceOf(item, listFormat);
                 return (
                 <React.Fragment key={item.id}>{startsVisit(index)?<tr><th scope="rowgroup" colSpan={6} className="border-b border-[#d1d5db] bg-[#f3f4f6] py-3 text-left font-semibold">{visitTitle(item.id)}</th></tr>:null}<tr className="quote-item border-b border-[#e5e7eb] align-top">
                   <td className="py-2 pr-3 font-medium tabular-nums">{item.toothNumber || copy.noTooth}</td>
@@ -261,13 +304,14 @@ export function PlanQuoteDocument({ quote, catalogCurrency, secondCurrency = nul
             <li className="py-6 text-center text-sm text-[#4b5563]">{copy.emptyItems}</li>
           ) : (
             orderedItems.map((item,index) => {
-              const listLine = listPriceOf(item, catalogCurrency);
+              const listLine = listPriceOf(item, listFormat);
               return (
               <li key={item.id} className="py-3 text-sm">
                 {startsVisit(index)?<h2 className="mb-3 text-base font-semibold">{visitTitle(item.id)}</h2>:null}
+                {/* DX-514: un nombre largo sin espacios se parte; el importe no se encoge. */}
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="font-medium">{item.procedure}</span>
-                  <span className="font-medium tabular-nums">{money(item.subtotal, currency)}</span>
+                  <span className="min-w-0 break-words font-medium">{item.procedure}</span>
+                  <span className="shrink-0 font-medium tabular-nums">{money(item.subtotal, currency)}</span>
                 </div>
                 <p className="mt-0.5 text-xs text-[#4b5563]">
                   <span className="tabular-nums">{copy.toothLabel(item.toothNumber)}</span> · {surfacesOf(item)} ·{' '}
@@ -323,9 +367,14 @@ export function PlanQuoteDocument({ quote, catalogCurrency, secondCurrency = nul
             </React.Fragment>
           ))}
         </dl>
-        {listPriceNote ? (
+        {shownForeign.length > 0 ? (
           <p data-testid="quote-list-price-note" className="mt-2 ml-auto max-w-xs text-xs text-[#4b5563]">
-            {copy.listPriceNote(catalogCurrency, currency)}
+            {listPriceNote(listPricesCurrency(shownForeign), currency)}
+          </p>
+        ) : null}
+        {hiddenListPrice ? (
+          <p data-testid="quote-list-price-hidden-note" className="mt-2 ml-auto max-w-xs text-xs text-[#4b5563]">
+            {listPriceHiddenNote(currency)}
           </p>
         ) : null}
         {secondCurrency ? (
@@ -333,7 +382,7 @@ export function PlanQuoteDocument({ quote, catalogCurrency, secondCurrency = nul
             {copy.secondRate(
               ratePairLabel(currency, secondCurrency, money),
               paymentRateCopy.source[secondCurrency.source],
-              formatCivilDate(secondCurrency.date),
+              doc.civilDate(secondCurrency.date),
             )}{' '}
             {copy.secondNote(secondCurrency.currency)}
           </p>
@@ -346,28 +395,63 @@ export function PlanQuoteDocument({ quote, catalogCurrency, secondCurrency = nul
         className="quote-signature mt-10"
       >
         {acceptance ? (
-          <figure className="flex max-w-sm flex-col gap-2">
+          <figure className="flex min-w-0 max-w-sm flex-col gap-2">
             {/* eslint-disable-next-line @next/next/no-img-element -- data URL de la firma; next/image no la optimiza */}
             <img
               src={acceptance.signature}
               alt={copy.signatureAlt(acceptance.signerName)}
               className="h-24 w-full object-contain object-left-bottom"
             />
-            <figcaption className="border-t border-[#111827] pt-2 text-sm">
-              <span className="block font-medium">
-                {copy.acceptedBy(acceptance.signerName, formatDateTime(acceptance.acceptedAt))}
-              </span>
-              <span className="text-[#4b5563]">{copy.recordedBy(acceptance.acceptedByName)}</span>
+            <figcaption className="break-words border-t border-[#111827] pt-2 text-sm">
+              {acceptance.remote ? (
+                <>
+                  <span className="block font-medium">
+                    {copy.remoteSignedBy(
+                      acceptance.signerName,
+                      remoteSignerRole(acceptance.remote.signerType, quote.patient.name),
+                      doc.dateTime(acceptance.acceptedAt),
+                    )}
+                  </span>
+                  <span className="text-[#4b5563]">
+                    {copy.sentBy(acceptance.acceptedByName, doc.dateTime(acceptance.remote.sentAt))}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="block font-medium">
+                    {copy.acceptedBy(acceptance.signerName, doc.dateTime(acceptance.acceptedAt))}
+                  </span>
+                  <span className="text-[#4b5563]">{copy.recordedBy(acceptance.acceptedByName)}</span>
+                </>
+              )}
+              {/* DX-379 (C): cómo se aceptó un presupuesto vencido, con las fechas de la sede. */}
+              {expiredLine ? (
+                <span data-testid="quote-expired-acceptance" className="mt-1 block text-[#4b5563] tabular-nums">
+                  {expiredLine}
+                </span>
+              ) : null}
+              {partialLine ? (
+                <span data-testid="quote-partial-acceptance" className="mt-1 block text-[#4b5563] tabular-nums">
+                  {partialLine}
+                </span>
+              ) : null}
             </figcaption>
           </figure>
         ) : (
-          <div className="grid grid-cols-1 gap-8 text-sm text-[#4b5563] sm:grid-cols-3 print:grid-cols-3">
-            {[copy.blankSignature, copy.blankName, copy.blankDate].map((label) => (
-              <p key={label} className="border-t border-[#111827] pt-2 sm:mt-12 print:mt-12">
-                {label}
+          <>
+            {partialRestOf ? (
+              <p data-testid="quote-partial-rest" className="mb-4 text-sm text-[#4b5563] tabular-nums">
+                {partialRestLine(partialRestOf === 'unknown' ? null : doc.date(partialRestOf))}
               </p>
-            ))}
-          </div>
+            ) : null}
+            <div className="grid grid-cols-1 gap-8 text-sm text-[#4b5563] sm:grid-cols-3 print:grid-cols-3">
+              {[copy.blankSignature, copy.blankName, copy.blankDate].map((label) => (
+                <p key={label} className="border-t border-[#111827] pt-2 sm:mt-12 print:mt-12">
+                  {label}
+                </p>
+              ))}
+            </div>
+          </>
         )}
       </section>
 

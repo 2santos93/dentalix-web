@@ -1,3 +1,4 @@
+import { dateIn, STAMP_SEDES } from '@/lib/test/stamp';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { PatientCoverageSection } from './patient-coverage-section';
 import {
@@ -11,6 +12,11 @@ import {
 import { listPayers, type Payer } from '@/lib/payers/payers-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
+import { listLocations } from '@/lib/locations/locations-api';
+import { utcSede } from '@/lib/test/sede-clock';
+
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 
 jest.mock('../../lib/patients/coverages-api', () => ({
   ...jest.requireActual('../../lib/patients/coverages-api'),
@@ -89,6 +95,7 @@ async function rowAction(
 describe('PatientCoverageSection (DX-153)', () => {
   beforeEach(() => {
     jest.resetAllMocks();
+    mockedLocations.mockResolvedValue([utcSede()]);
     mockRole = 'RECEPTION';
     mockedPayers.mockResolvedValue([sanavida, colsanavida]);
   });
@@ -471,5 +478,19 @@ describe('PatientCoverageSection (DX-153)', () => {
       await screen.findByTestId('coverage-row');
       expect(screen.queryByRole('button', { name: /^Verificar/ })).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('PatientCoverageSection con cada sede (DX-354b)', () => {
+  it.each([['caracas'], ['berlin']] as const)('con la pantalla en %s: «Verificada por … el …» con su formato', async (key) => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES[key]]);
+    mockedList.mockResolvedValue([
+      coverage({ verifiedAt: '2026-10-21T03:30:00.000Z', verifiedById: 'admin-1', verifiedByName: 'Ana Gómez' }),
+    ]);
+    renderSection();
+    const row = (await screen.findAllByTestId('coverage-row'))[0];
+    await waitFor(() =>
+      expect(row).toHaveTextContent(`Verificada por Ana Gómez el ${dateIn(key, '2026-10-21T03:30:00.000Z')}`),
+    );
   });
 });

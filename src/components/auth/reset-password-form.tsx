@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
@@ -18,7 +18,12 @@ import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/shared/form-field';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
-import { AUTH_FORM_CLASS, AUTH_LINK_CLASS, AUTH_SUBMIT_CLASS } from './auth-layout';
+import {
+  AUTH_FORM_CLASS,
+  AUTH_LINK_CLASS,
+  AUTH_SUBMIT_CLASS,
+  FOCUSABLE_TITLE_CLASS,
+} from './auth-layout';
 import { PasswordInput } from './password-input';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
@@ -68,14 +73,32 @@ const HINT_ID = 'reset-password-hint';
 const MIN = 8;
 const MAX = 200;
 
-/** Estado del enlace que traen los 404/410 de la API al guardar. */
-function statusFromError(err: unknown): Exclude<PasswordResetTokenStatus, 'VALID'> | null {
+type InvalidStatus = Exclude<PasswordResetTokenStatus, 'VALID'>;
+
+/**
+ * DX-114: código estable que la API pone en el cuerpo del 404/410 al guardar
+ * (`RESET_TOKEN_*`). Decide el estado sin leer el texto del mensaje.
+ */
+const STATUS_BY_CODE: Record<string, InvalidStatus> = {
+  RESET_TOKEN_INVALID: 'INVALID',
+  RESET_TOKEN_EXPIRED: 'EXPIRED',
+  RESET_TOKEN_USED: 'USED',
+};
+
+/**
+ * Estado del enlace que traen los 404/410 de la API al guardar. Manda el
+ * `code`; sin código (una API anterior a DX-114 durante un despliegue, o un
+ * código desconocido) se cae al status HTTP: 404 → INVALID y 410 → USED.
+ * El 410 sin código ya no mira el texto («caduc…»): el mensaje no es un
+ * contrato. Si alguna vez acierta mal, el peor caso es decir «ya se usó» a un
+ * enlace caducado, con la misma salida (pedir uno nuevo).
+ */
+function statusFromError(err: unknown): InvalidStatus | null {
   if (!(err instanceof ApiError)) return null;
-  if (err.status === 404) return 'INVALID';
-  if (err.status === 410) {
-    return /caduc/i.test(apiErrorMessage(err, { fallback: '' })) ? 'EXPIRED' : 'USED';
-  }
-  return null;
+  if (err.status !== 404 && err.status !== 410) return null;
+  const byCode = err.code ? STATUS_BY_CODE[err.code] : undefined;
+  if (byCode) return byCode;
+  return err.status === 404 ? 'INVALID' : 'USED';
 }
 
 /**
@@ -94,6 +117,19 @@ export function ResetPasswordForm({ resetToken }: { resetToken: string }) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // DX-114 (R5): si el enlace deja de servir AL GUARDAR, el formulario (y el
+  // botón con el foco) desaparece; el foco pasa al título del estado para que
+  // el lector de pantalla lo anuncie en vez de caer en <body>. Al abrir la
+  // página no se mueve: ese título ya es el contenido principal.
+  const invalidHeadingRef = useRef<HTMLHeadingElement>(null);
+  const focusInvalidHeading = useRef(false);
+  useEffect(() => {
+    if (status && status !== 'VALID' && focusInvalidHeading.current) {
+      focusInvalidHeading.current = false;
+      invalidHeadingRef.current?.focus();
+    }
+  }, [status]);
 
   useEffect(() => {
     let cancelled = false;
@@ -135,6 +171,7 @@ export function ResetPasswordForm({ resetToken }: { resetToken: string }) {
     } catch (err) {
       const tokenStatus = statusFromError(err);
       if (tokenStatus) {
+        focusInvalidHeading.current = true;
         setStatus(tokenStatus);
       } else {
         setError(apiErrorMessage(err, { fallback: copy.genericError }));
@@ -143,93 +180,116 @@ export function ResetPasswordForm({ resetToken }: { resetToken: string }) {
     }
   }
 
-  if (loadError) {
-    return <SectionError description={loadError} onRetry={() => setReloadKey((k) => k + 1)} />;
-  }
+  // DX-114 (R5): región viva siempre montada (sin role, para no sumar otro
+  // `status` al de «Verificando…»). Recibe el título del estado cuando el
+  // enlace no sirve, tanto al abrir como al guardar; vacía mientras carga o
+  // vale. Al guardar, además, el foco va al título (ver arriba).
+  const announcement = status && status !== 'VALID' ? INVALID_COPY[status].title : '';
 
-  if (!status) {
-    return (
-      <p role="status" className="flex items-center gap-2 text-sm text-muted">
-        <Loader2 className="size-4 animate-spin" aria-hidden /> {copy.loading}
-      </p>
-    );
-  }
+  function body(): React.ReactNode {
+    if (loadError) {
+      return <SectionError description={loadError} onRetry={() => setReloadKey((k) => k + 1)} />;
+    }
 
-  if (status !== 'VALID') {
-    const { title, message } = INVALID_COPY[status];
+    if (!status) {
+      return (
+        <p role="status" className="flex items-center gap-2 text-sm text-muted">
+          <Loader2 className="size-4 animate-spin" aria-hidden /> {copy.loading}
+        </p>
+      );
+    }
+
+    if (status !== 'VALID') {
+      const { title, message } = INVALID_COPY[status];
+      return (
+        <div className="flex flex-col gap-3">
+          <h2
+            ref={invalidHeadingRef}
+            tabIndex={-1}
+            className={FOCUSABLE_TITLE_CLASS}
+          >
+            {title}
+          </h2>
+          <p className="text-sm text-muted">{message}</p>
+          <Button asChild size="lg" className={AUTH_SUBMIT_CLASS}>
+            <Link href={FORGOT_PASSWORD_PATH}>{copy.requestNew}</Link>
+          </Button>
+          <Link href="/login" className={`self-center ${AUTH_LINK_CLASS}`}>
+            {copy.backToLogin}
+          </Link>
+        </div>
+      );
+    }
+
     return (
-      <div className="flex flex-col gap-3">
-        <h2 className="t-title text-ink">{title}</h2>
-        <p className="text-sm text-muted">{message}</p>
-        <Button asChild size="lg" className={AUTH_SUBMIT_CLASS}>
-          <Link href={FORGOT_PASSWORD_PATH}>{copy.requestNew}</Link>
+      <form onSubmit={handleSubmit} noValidate className={AUTH_FORM_CLASS}>
+        <p className="text-sm text-muted">{copy.intro}</p>
+        <FormField
+          htmlFor="reset-password-new"
+          label={copy.passwordLabel}
+          hint={copy.passwordHint}
+          hintId={HINT_ID}
+        >
+          <PasswordInput
+            id="reset-password-new"
+            name="password"
+            autoComplete="new-password"
+            required
+            minLength={MIN}
+            maxLength={MAX}
+            disabled={submitting}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? ERROR_ID : HINT_ID}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            visible={showPassword}
+            onVisibleChange={setShowPassword}
+            showLabel={copy.showPassword}
+            hideLabel={copy.hidePassword}
+          />
+        </FormField>
+
+        <FormField htmlFor="reset-password-confirm" label={copy.confirmLabel}>
+          <Input
+            id="reset-password-confirm"
+            name="confirm"
+            type={showPassword ? 'text' : 'password'}
+            autoComplete="new-password"
+            required
+            maxLength={MAX}
+            disabled={submitting}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? ERROR_ID : undefined}
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+          />
+        </FormField>
+
+        {error ? (
+          <InlineError id={ERROR_ID} variant="summary">
+            {error}
+          </InlineError>
+        ) : null}
+
+        <Button type="submit" size="lg" disabled={submitting} className={AUTH_SUBMIT_CLASS}>
+          {submitting ? (
+            <>
+              <Loader2 className="animate-spin" /> {copy.submitting}
+            </>
+          ) : (
+            copy.submit
+          )}
         </Button>
-        <Link href="/login" className={`self-center ${AUTH_LINK_CLASS}`}>
-          {copy.backToLogin}
-        </Link>
-      </div>
+      </form>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className={AUTH_FORM_CLASS}>
-      <p className="text-sm text-muted">{copy.intro}</p>
-      <FormField
-        htmlFor="reset-password-new"
-        label={copy.passwordLabel}
-        hint={copy.passwordHint}
-        hintId={HINT_ID}
-      >
-        <PasswordInput
-          id="reset-password-new"
-          name="password"
-          autoComplete="new-password"
-          required
-          minLength={MIN}
-          maxLength={MAX}
-          disabled={submitting}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? ERROR_ID : HINT_ID}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          visible={showPassword}
-          onVisibleChange={setShowPassword}
-          showLabel={copy.showPassword}
-          hideLabel={copy.hidePassword}
-        />
-      </FormField>
-
-      <FormField htmlFor="reset-password-confirm" label={copy.confirmLabel}>
-        <Input
-          id="reset-password-confirm"
-          name="confirm"
-          type={showPassword ? 'text' : 'password'}
-          autoComplete="new-password"
-          required
-          maxLength={MAX}
-          disabled={submitting}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? ERROR_ID : undefined}
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-        />
-      </FormField>
-
-      {error ? (
-        <InlineError id={ERROR_ID} variant="summary">
-          {error}
-        </InlineError>
-      ) : null}
-
-      <Button type="submit" size="lg" disabled={submitting} className={AUTH_SUBMIT_CLASS}>
-        {submitting ? (
-          <>
-            <Loader2 className="animate-spin" /> {copy.submitting}
-          </>
-        ) : (
-          copy.submit
-        )}
-      </Button>
-    </form>
+    <>
+      <div aria-live="polite" aria-atomic="true" className="sr-only" data-testid="reset-password-live">
+        {announcement}
+      </div>
+      {body()}
+    </>
   );
 }

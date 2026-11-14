@@ -1,0 +1,35 @@
+/** Textos del recibo resumen de un periodo (DX-401), compartidos por el diálogo y el documento. */
+export const receiptsSummaryCopy = {
+  trigger: 'Resumen de recibos',
+  title: 'Resumen de recibos',
+  description: 'Los recibos de caja del paciente en un periodo, con el total por moneda. Se imprime o se envía igual.',
+  from: 'Desde',
+  to: 'Hasta',
+  presets: 'Atajos de periodo',
+  preparing: 'Preparando el periodo…',
+  loading: 'Cargando los recibos…',
+  loadError: 'No pudimos cargar los recibos del periodo.',
+  forbiddenTitle: 'Tu rol no tiene acceso a los recibos de caja.',
+  forbiddenHint: 'Es un dato financiero: lo ven administración y recepción.',
+  emptyTitle: 'No hay abonos en ese periodo',
+  emptyHint: 'Prueba con otro periodo, por ejemplo «Este año».',
+  listLabel: 'Recibos del periodo',
+  totalsLabel: 'Totales por moneda',
+  total: (currency: string) => `Total ${currency}`,
+  // `count` de la API: formas de pago no anuladas (un cobro dividido suma una por moneda).
+  lineCount: (n: number) => (n === 1 ? '1 abono' : `${n} abonos`),
+  sameReceipt: 'Mismo recibo',
+  voided: 'Anulado',
+  voidReason: (reason: string) => `Motivo: ${reason}`,
+  voidedExcluded: (n: number) =>
+    n === 1 ? '1 recibo anulado: no cuenta en el total.' : `${n} recibos anulados: no cuentan en el total.`,
+  restricted: 'Solo incluye los abonos de tus sedes.',
+  close: 'Cerrar',
+  print: 'Imprimir',
+  send: 'Enviar por email',
+  sending: 'Enviando…',
+  sent: (to: string) => `Enviado a ${to}.`,
+  sentToResponsible: (to: string) => `Enviado al responsable del paciente (${to}).`,
+  sendError: 'No pudimos enviar el resumen.',
+};
+

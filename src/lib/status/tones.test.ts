@@ -18,6 +18,12 @@ describe('vocabulario de estados (tones.ts)', () => {
     expect(statusTone('treatmentPlan', 'REJECTED')).toBe('danger');
     expect(statusTone('treatmentPlan', 'CANCELLED')).toBe('neutral');
     expect(statusTone('treatmentPlan', 'DRAFT')).toBe('neutral');
+    expect(statusTone('equipmentMaintenance', 'OVERDUE')).toBe('danger');
+    expect(statusTone('equipmentMaintenance', 'DUE_SOON')).toBe('warning');
+    expect(statusTone('equipment', 'RETIRED')).toBe('neutral');
+    // DX-546 · FE-115: un mantenimiento anulado es un registro retirado, no un fallo.
+    expect(statusTone('equipmentMaintenanceRecord', 'VOIDED')).toBe('neutral');
+    expect(statusLabel('equipmentMaintenanceRecord', 'VOIDED')).toBe('Anulado');
   });
 
   it('«Anulado», «Pendiente», «Parcial» y «Vencido» tienen un solo tono en todo el producto', () => {
@@ -55,5 +61,23 @@ describe('vocabulario de estados (tones.ts)', () => {
     for (const classes of Object.values(TONE_CLASSES)) {
       expect(Object.values(classes).join(' ')).not.toMatch(/primary|accent/);
     }
+  });
+
+  it('DX-379: un presupuesto vencido es danger, como todo «Vencido»', () => {
+    expect(statusTone('quoteValidity', 'EXPIRED')).toBe('danger');
+    expect(statusLabel('quoteValidity', 'EXPIRED')).toBe('Vencido');
+  });
+
+  it('DX-379 B: el precio que sube pide atención, el que baja favorece y el igual es neutro', () => {
+    expect(statusTones('priceChange')).toEqual({ UP: 'warning', DOWN: 'success', SAME: 'neutral' });
+    expect(statusLabels('priceChange')).toEqual({ UP: 'Sube', DOWN: 'Baja', SAME: 'Sin cambio' });
+  });
+
+  it('DX-417: el aceptado en parte es info (como Aceptado) y su pendiente espera respuesta (warning)', () => {
+    expect(statusTones('planSplit')).toEqual({ PARTIAL: 'info', PENDING_REST: 'warning' });
+    expect(statusLabels('planSplit')).toEqual({
+      PARTIAL: 'Aceptado parcialmente',
+      PENDING_REST: 'Pendiente de aceptación parcial',
+    });
   });
 });

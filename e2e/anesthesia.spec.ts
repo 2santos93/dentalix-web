@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
 import { openPatientTab } from './support/patient-tabs';
+import { expectTouchTarget } from './support/touch-targets';
 
 /**
  * e2e (DX-307): anestesia local en la evolución.
@@ -104,10 +105,18 @@ for (const viewport of VIEWPORTS) {
     const dialog = page.getByRole('dialog', { name: 'Anestesia local' });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText('Aún no hay anestesia registrada en esta evolución.')).toBeVisible();
-    await dialog.getByRole('button', { name: 'Cargar anestésicos sugeridos' }).click();
+    const loadSamples = dialog.getByRole('button', { name: 'Cargar anestésicos sugeridos' });
+    // DX-442 (FE-093): a 390 px los controles del modal miden al menos 44 px.
+    if (viewport.width === 390) await expectTouchTarget(loadSamples, { scope: dialog, label: 'Cargar anestésicos' });
+    await loadSamples.click();
 
     const anesthetic = dialog.getByLabel('Anestésico');
     await expect(anesthetic).toBeVisible({ timeout: 10_000 });
+    if (viewport.width === 390) {
+      for (const name of ['Anestésico', 'Carpules', 'Técnica', 'Zona o dientes (FDI)']) {
+        await expectTouchTarget(dialog.getByLabel(name), { scope: dialog, label: name });
+      }
+    }
     await anesthetic.selectOption({ label: 'Articaína 4 % con epinefrina 1:100.000 · 1,7 ml · desde 4 años' });
     await dialog.getByLabel('Carpules').fill('3');
     await dialog.getByLabel('Técnica').selectOption('NERVE_BLOCK');
@@ -115,6 +124,9 @@ for (const viewport of VIEWPORTS) {
 
     // Menor de 12 años sin peso: lo pide antes de guardar.
     await expect(dialog.getByText('Menor de 12 años: anota el peso antes de guardar.')).toBeVisible();
+    if (viewport.width === 390) {
+      await expectTouchTarget(dialog.getByLabel('Peso del paciente (kg)'), { scope: dialog, label: 'Peso' });
+    }
     await dialog.getByLabel('Peso del paciente (kg)').fill('20');
     await expect(dialog.getByText(/204 mg · 146 % del máximo/)).toBeVisible({ timeout: 10_000 });
     await expect(dialog.getByText(/Dosis máxima superada: 204 mg de 140 mg \(146 %\)/)).toBeVisible();

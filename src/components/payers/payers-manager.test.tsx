@@ -165,7 +165,7 @@ describe('PayersManager (DX-153)', () => {
 
   it('edita un pagador existente', async () => {
     const user = setupUser();
-    mockedUpdate.mockResolvedValue({ ...sanavida, name: 'Sanavida Colombia' });
+    mockedUpdate.mockResolvedValue({ ...sanavida, name: 'Sanavida Caracas' });
     render(<PayersManager token="tok" allowed />);
     const table = await screen.findByRole('table', { name: 'Pagadores' });
     // La fila abre la edición.
@@ -173,15 +173,15 @@ describe('PayersManager (DX-153)', () => {
     const dialog = await screen.findByRole('dialog');
     const name = within(dialog).getByLabelText('Nombre');
     await user.clear(name);
-    await user.type(name, 'Sanavida Colombia');
+    await user.type(name, 'Sanavida Caracas');
     await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
     await waitFor(() =>
       expect(mockedUpdate).toHaveBeenCalledWith('tok', 'payer-1', {
-        name: 'Sanavida Colombia',
+        name: 'Sanavida Caracas',
         type: 'PUBLIC_SYSTEM',
       }),
     );
-    expect(await within(table).findByText('Sanavida Colombia')).toBeInTheDocument();
+    expect(await within(table).findByText('Sanavida Caracas')).toBeInTheDocument();
   });
 
   it('desactiva y activa; si falla avisa con reintento y no cambia la lista', async () => {

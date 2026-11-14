@@ -20,15 +20,15 @@ describe('reference fetchers', () => {
   });
 
   it('searchCities builds the querystring (countryCode required, q + limit optional)', async () => {
-    await searchCities('tok', { countryCode: 'CO', q: 'bog', limit: 10 });
+    await searchCities('tok', { countryCode: 'VE', q: 'car', limit: 10 });
     expect(mockedApiFetch).toHaveBeenCalledWith(
-      '/cities?countryCode=CO&q=bog&limit=10',
+      '/cities?countryCode=VE&q=car&limit=10',
       { token: 'tok' },
     );
   });
 
   it('searchCities omits q and limit when absent', async () => {
-    await searchCities('tok', { countryCode: 'CO' });
-    expect(mockedApiFetch).toHaveBeenCalledWith('/cities?countryCode=CO', { token: 'tok' });
+    await searchCities('tok', { countryCode: 'VE' });
+    expect(mockedApiFetch).toHaveBeenCalledWith('/cities?countryCode=VE', { token: 'tok' });
   });
 });

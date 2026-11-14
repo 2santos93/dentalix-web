@@ -12,7 +12,7 @@ import {
   type PlanVisits,
   type VisitAssignment,
 } from "@/lib/treatment-plans/plan-visits-api";
-import { formatCivilDate } from "@/lib/format/date";
+import { useSedeStamp } from "@/lib/locations/sede-stamp";
 import { apiErrorMessage } from "@/lib/api/error-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +54,8 @@ export function PlanVisitsBoard({
   /** Avisa si hay alguna visita por agendar (la pestaña elige la primaria). */
   onSchedulableChange?: (hasSchedulable: boolean) => void;
 }) {
+  // DX-354b: la fecha mínima sugerida con el formato de la sede; el aviso único es el de la pestaña del plan.
+  const stamp = useSedeStamp(token);
   const editable =
     (role === "DENTIST" || role === "ADMIN") &&
     ["DRAFT", "PRESENTED", "ACCEPTED"].includes(plan.status);
@@ -298,7 +300,7 @@ export function PlanVisitsBoard({
                 <p className="text-sm text-muted">
                   Fecha mínima sugerida:{" "}
                   <time dateTime={visit.minimumDate}>
-                    {formatCivilDate(visit.minimumDay)}
+                    {stamp.civilDate(visit.minimumDay)}
                   </time>
                 </p>
               ) : null}

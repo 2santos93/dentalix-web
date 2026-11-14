@@ -43,9 +43,9 @@ const VIEWPORTS = [
 const LOCATION_KEY = 'dentalix.activeLocationId';
 
 // Mismo formateador que la app (`formatCurrency`, locale `es`): solo la cifra.
-const cop = new Intl.NumberFormat('es', { style: 'currency', currency: 'COP', currencyDisplay: 'code' });
+const usd = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD', currencyDisplay: 'code' });
 function figure(amount: number): string {
-  return cop.format(amount).split(/\s/)[0];
+  return usd.format(amount).split(/\s/)[0];
 }
 
 interface Location {
@@ -68,7 +68,7 @@ function apiClient(request: APIRequestContext, session: ApiSession) {
   };
 }
 
-/** Paciente con un plan aceptado y un abono en COP registrado en `locationId`. */
+/** Paciente con un plan aceptado y un abono en USD registrado en `locationId`. */
 async function patientWithPayment(
   call: ReturnType<typeof apiClient>,
   tag: string,
@@ -91,7 +91,7 @@ async function patientWithPayment(
     defaultPrice: amount * 2,
   });
   const plan = await call<{ id: string }>('post', `/patients/${patient.id}/treatment-plans`, {
-    currency: 'COP',
+    currency: 'USD',
   });
   const item = await call<{ id: string }>('post', `/treatment-plans/${plan.id}/items`, {
     toothNumber: '11',
@@ -101,7 +101,7 @@ async function patientWithPayment(
   await call(
     'post',
     `/treatment-plans/${plan.id}/payments`,
-    { amount, currency: 'COP', paidAt: new Date().toISOString(), method: 'CASH' },
+    { amount, currency: 'USD', paidAt: new Date().toISOString(), method: 'CASH' },
     locationId,
   );
   return patient;
@@ -134,7 +134,7 @@ async function openDayList(page: Page, origin: string, day: string): Promise<voi
 async function receptionPage(browser: Browser, width: number, height: number): Promise<Page> {
   const context = await browser.newContext({
     viewport: { width, height },
-    timezoneId: 'America/Bogota',
+    timezoneId: 'America/Caracas',
     locale: E2E_BROWSER_LOCALE,
   });
   return context.newPage();

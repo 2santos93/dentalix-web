@@ -58,7 +58,7 @@ export function SectionError({
       {onRetry || secondaryAction ? (
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
           {onRetry ? (
-            <Button type="button" onClick={onRetry}>
+            <Button type="button" onClick={onRetry} className="max-sm:min-h-11">
               {retryLabel}
             </Button>
           ) : null}

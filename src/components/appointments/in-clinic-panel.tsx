@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
-import { MapPin, Armchair, CalendarClock, Maximize2 } from 'lucide-react';
+import { MapPin, Armchair, ArrowRightLeft, CalendarClock, Maximize2 } from 'lucide-react';
 import type { ClinicRole } from '@/lib/me/me-api';
 import {
   inClinicCount,
@@ -38,6 +38,9 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { SectionHeader } from '@/components/ui/section-header';
 import { Badge } from '@/components/ui/badge';
 import { triageLabels } from '@/lib/appointments/walk-in';
+import { canMoveAppointments } from '@/lib/appointments/appointments-api';
+import { chairDisplayName } from '@/lib/chairs/chair-columns';
+import { InClinicMoveDialog } from '@/components/appointments/in-clinic-move-dialog';
 
 export const inClinicCopy = {
   title: 'En clínica',
@@ -77,6 +80,9 @@ export const inClinicCopy = {
   arrivedAt: (time: string, punctuality: string) => `Llegó ${time} · ${punctuality}`,
   // Sin cita no hay hora con la que comparar: solo la llegada.
   arrivedAtWalkIn: (time: string) => `Llegó ${time}`,
+  // DX-492: el sillón de cada paciente y cómo cambiarlo.
+  moveTo: 'Mover a…',
+  moveToFor: (patient: string) => `Mover a… la cita de ${patient}`,
 };
 
 type GroupKey = keyof typeof inClinicCopy.groups;
@@ -99,6 +105,10 @@ interface InClinicPanelProps {
    * de sede visible de la app; quien pinta el panel en una hoja la cierra antes.
    */
   onChooseLocation?: () => void;
+  /** DX-492: con sesión, «Mover a…» en cada persona (cambiar de sillón). */
+  token?: string;
+  /** Tras mover una cita, además de releer el panel (la agenda de al lado). */
+  onMoved?: () => void;
 }
 
 /**
@@ -115,6 +125,8 @@ export function InClinicPanel({
   className,
   showTitle = true,
   onChooseLocation = focusLocationSwitcher,
+  token,
+  onMoved,
 }: InClinicPanelProps) {
   const titleId = useId();
   const { view, loading, error, localeMissing, noLocation, reload } = state;
@@ -123,6 +135,8 @@ export function InClinicPanel({
   // G1-B: las horas se pintan con el formato y el reloj que manda la vista; sin ellos, ninguno.
   const fmt = view ? inClinicFormat(view) : null;
   const panelRef = useRef<HTMLElement>(null);
+  const [movingId, setMovingId] = useState<string | null>(null);
+  const canMove = token !== undefined && canMoveAppointments(role);
   const pendingFocus = useRef<{
     id: string;
     group: GroupKey;
@@ -134,10 +148,13 @@ export function InClinicPanel({
   } | null>(null);
   const [focusCompletion, setFocusCompletion] = useState(0);
   const panelRunner: PatientFlowRunner = {
+    token: runner.token,
     pendingId: runner.pendingId,
+    // DX-538-bis: el fallo de un paso, junto a sus botones dentro de la hoja.
+    error: runner.error,
     claimingKey: runner.claimingKey,
     claim: runner.claim,
-    run: async (id, action, name) => {
+    run: async (id, action, name, checkoutPending) => {
       const source = GROUPS.find((group) => view?.[group].some((item) => item.appointmentId === id)) ?? 'waiting';
       const destination = action === 'SEAT' ? 'inChair' : action === 'READY' ? 'readyForCheckout' : source;
       const intent = {
@@ -150,7 +167,7 @@ export function InClinicPanel({
         failed: false,
       };
       pendingFocus.current = intent;
-      const succeeded = await runner.run(id, action, name);
+      const succeeded = await runner.run(id, action, name, checkoutPending);
       if (pendingFocus.current === intent) {
         intent.settled = true;
         intent.failed = succeeded === false;
@@ -288,9 +305,25 @@ export function InClinicPanel({
               onRetry={reload}
               runner={panelRunner}
               showEmptyHint={inClinicCount(view) > 0}
+              onMove={canMove ? setMovingId : undefined}
             />
           ))}
           <p className="text-xs text-muted">{inClinicCopy.refreshHint}</p>
+          {movingId && token ? (
+            <InClinicMoveDialog
+              key={movingId}
+              token={token}
+              appointmentId={movingId}
+              locationId={view.locationId}
+              clock={{ timeZone: view.timeZone, fmt }}
+              onClose={() => setMovingId(null)}
+              onMoved={() => {
+                setMovingId(null);
+                reload();
+                onMoved?.();
+              }}
+            />
+          ) : null}
         </div>
       )}
     </section>
@@ -307,6 +340,7 @@ function InClinicGroup({
   onRetry,
   runner,
   showEmptyHint,
+  onMove,
 }: {
   group: GroupKey;
   title: string;
@@ -318,6 +352,8 @@ function InClinicGroup({
   onRetry: () => void;
   runner: PatientFlowRunner;
   showEmptyHint: boolean;
+  /** Abre «Mover a…» de una cita. */
+  onMove?: (appointmentId: string) => void;
 }) {
   const headingId = useId();
   return (
@@ -357,6 +393,12 @@ function InClinicGroup({
                       {inClinicCopy.appointmentAt(timeInZone(item.start, tz, fmt))}
                       {item.providerName ? ` · ${item.providerName}` : ''}
                     </p>
+                    {item.chair ? (
+                      <p data-testid="in-clinic-chair" className="flex min-w-0 items-center gap-1 text-xs text-muted">
+                        <Armchair aria-hidden className="size-3.5 shrink-0" />
+                        <span className="min-w-0 truncate">{chairDisplayName(item.chair)}</span>
+                      </p>
+                    ) : null}
                     {item.arrivedAt ? (
                       <p className="text-xs tabular-nums text-muted">
                         {item.walkIn
@@ -380,14 +422,29 @@ function InClinicGroup({
                   )}
                 </div>
                 <ReservedElsewhereNotice item={item} runner={runner} onRetry={onRetry} />
-                <PatientFlowActions
-                  appointmentId={item.appointmentId}
-                  status={item.status}
-                  role={role}
-                  isToday
-                  patientName={name}
-                  runner={runner}
-                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <PatientFlowActions
+                    appointmentId={item.appointmentId}
+                    status={item.status}
+                    role={role}
+                    isToday
+                    patientName={name}
+                    runner={runner}
+                  />
+                  {onMove ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      aria-label={inClinicCopy.moveToFor(name)}
+                      onClick={() => onMove(item.appointmentId)}
+                      className="h-11 sm:h-9"
+                    >
+                      <ArrowRightLeft aria-hidden />
+                      {inClinicCopy.moveTo}
+                    </Button>
+                  ) : null}
+                </div>
               </li>
             );
           })}

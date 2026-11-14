@@ -11,7 +11,7 @@ describe('listAuditEvents', () => {
   });
 
   function mockFetch() {
-    const body = { items: [], nextCursor: null, timeZone: 'America/Bogota' };
+    const body = { items: [], nextCursor: null, timeZone: 'America/Caracas' };
     const spy = jest.fn().mockResolvedValue({ ok: true, json: async () => body });
     global.fetch = spy as unknown as typeof fetch;
     return spy;
@@ -34,8 +34,8 @@ describe('listAuditEvents', () => {
       actorUserId: undefined,
       action: 'VIEW',
       resourceType: 'MEDICAL_HISTORY',
-      from: '2026-10-01T05:00:00.000Z',
-      to: '2026-10-17T05:00:00.000Z',
+      from: '2026-10-01T04:00:00.000Z',
+      to: '2026-10-17T04:00:00.000Z',
       cursor: 'abc',
       limit: 25,
     });
@@ -44,8 +44,8 @@ describe('listAuditEvents', () => {
       patientId: 'p-1',
       action: 'VIEW',
       resourceType: 'MEDICAL_HISTORY',
-      from: '2026-10-01T05:00:00.000Z',
-      to: '2026-10-17T05:00:00.000Z',
+      from: '2026-10-01T04:00:00.000Z',
+      to: '2026-10-17T04:00:00.000Z',
       cursor: 'abc',
       limit: '25',
     });

@@ -1,4 +1,5 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { auditRenderedControls } from '@/lib/test/rendered-a11y';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppShell } from './app-shell';
 import { getInClinic } from '@/lib/appointments/patient-flow';
@@ -13,12 +14,12 @@ jest.mock('../../lib/appointments/patient-flow', () => ({
   ...jest.requireActual('../../lib/appointments/patient-flow'),
   getInClinic: jest.fn(),
 }));
-// DX-439: el contador de «Pendiente de cerrar» (un fallo deja 0).
-jest.mock('../../lib/appointments/closing-queue-api', () => ({
-  ...jest.requireActual('../../lib/appointments/closing-queue-api'),
-  getClosingQueueCount: jest.fn().mockResolvedValue({ total: 0 }),
+// DX-439 / DX-503: los contadores del menú salen de `GET /work-queues/summary`.
+jest.mock('../../lib/work-queues/work-queues-api', () => ({
+  ...jest.requireActual('../../lib/work-queues/work-queues-api'),
+  getWorkQueuesSummary: jest.fn().mockResolvedValue({ generatedAt: '', items: [] }),
 }));
-import { getClosingQueueCount } from '../../lib/appointments/closing-queue-api';
+import { getWorkQueuesSummary } from '../../lib/work-queues/work-queues-api';
 jest.mock('next-themes', () => ({
   useTheme: () => ({ resolvedTheme: 'light', setTheme: jest.fn() }),
 }));
@@ -56,6 +57,48 @@ describe('AppShell', () => {
   beforeEach(() => {
     window.localStorage.clear();
     mockAccessToken = 'T';
+    jest.mocked(getWorkQueuesSummary).mockResolvedValue({ generatedAt: '', items: [] });
+  });
+
+  it('DX-065: «Saltar al contenido» es la primera parada y lleva al contenido', async () => {
+    render(<AppShell><h1>Synthetic</h1></AppShell>);
+    await userEvent.tab();
+    const skip = screen.getByRole('link', { name: 'Saltar al contenido' });
+    expect(skip).toHaveFocus();
+    expect(skip).toHaveAttribute('href', '#contenido');
+    expect(screen.getByRole('main')).toHaveAttribute('id', 'contenido');
+  });
+
+  it('DX-297 separates the visible anamnesis label and badge in expanded and rail navigation', async () => {
+    mockAccessToken = tokenForRole('ADMIN');
+    jest.mocked(getWorkQueuesSummary).mockResolvedValue({
+      generatedAt: '',
+      items: [{ key: 'ANAMNESIS_REVIEW', status: 'OK', count: 12 }],
+    } as Awaited<ReturnType<typeof getWorkQueuesSummary>>);
+    const view = render(<AppShell><h1>Synthetic</h1></AppShell>);
+    await waitFor(() => expect(screen.getAllByTestId('anamnesis-inbox-count')[0]).toHaveTextContent('12'));
+    const snapshots = [{ html: view.container.innerHTML, selector: 'a[href="/anamnesis-por-revisar"]' }];
+    await userEvent.click(screen.getByRole('button', { name: 'Colapsar menú' }));
+    snapshots.push({ html: view.container.innerHTML, selector: 'a[href="/anamnesis-por-revisar"]' });
+    auditRenderedControls(snapshots);
+    expect(screen.getByRole('link', { name: 'Anamnesis 12 · por revisar' })).toHaveTextContent('12');
+  });
+
+  it('DX-439: el contador de cierre mantiene el límite de palabra en navegación expandida y rail', async () => {
+    mockAccessToken = tokenForRole('ADMIN');
+    jest.mocked(getWorkQueuesSummary).mockResolvedValue({
+      generatedAt: '',
+      items: [{ key: 'CLOSING_QUEUE', status: 'OK', count: 12 }],
+    } as Awaited<ReturnType<typeof getWorkQueuesSummary>>);
+    const view = render(<AppShell><h1>Synthetic</h1></AppShell>);
+    await screen.findAllByRole('link', { name: 'Pendiente de cerrar 12' });
+    const expandedText = screen.getByRole('link', { name: 'Pendiente de cerrar 12' }).textContent;
+    const snapshots = [{ html: view.container.innerHTML, selector: 'a[href="/agenda/pendiente-de-cerrar"]' }];
+    await userEvent.click(screen.getByRole('button', { name: 'Colapsar menú' }));
+    snapshots.push({ html: view.container.innerHTML, selector: 'a[href="/agenda/pendiente-de-cerrar"]' });
+    auditRenderedControls(snapshots);
+    expect(expandedText).toBe('Pendiente de cerrar 12');
+    expect(screen.getByRole('link', { name: 'Pendiente de cerrar 12' })).toHaveTextContent('12');
   });
 
   // La caja es dato financiero: PAYMENT_ROLES en la API (ADMIN + RECEPTION).
@@ -86,7 +129,7 @@ describe('AppShell', () => {
   // DASHBOARD_ROLES, CATALOG_READ_ROLES, INVENTORY_ROLES, STAFF_WRITE_ROLES,
   // CLOSING_QUEUE_ROLES (DX-439), TREATMENT_PLAN_FOLLOW_UP_ROLES (Presupuestos, DX-040)
   // RECEIVABLES_ROLES (Cartera, DX-145) y REPORT_ROLES + PRODUCTION_REPORT_ROLES
-  // (Reportes, DX-014 y DX-423).
+  // (Reportes, DX-014 y DX-423) y UNALLOCATED_PAYMENTS_ROLES (Reportes › «Cobrado sin imputar», DX-399).
   const ROLE_NAV: Record<string, { visible: string[]; hidden: string[] }> = {
     ADMIN: {
       visible: [
@@ -115,8 +158,8 @@ describe('AppShell', () => {
       hidden: ['Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Personal', 'Auditoría', 'Reportes', 'Pendiente de cerrar'],
     },
     RECEPTION: {
-      visible: ['Inicio', 'Pacientes', 'Agenda', 'Caja', 'Cartera', 'Presupuestos', 'Pendiente de cerrar'],
-      hidden: ['Gastos', 'Catálogo', 'Inventario', 'Personal', 'Auditoría', 'Reportes'],
+      visible: ['Inicio', 'Pacientes', 'Agenda', 'Caja', 'Cartera', 'Reportes', 'Presupuestos', 'Pendiente de cerrar'],
+      hidden: ['Gastos', 'Catálogo', 'Inventario', 'Personal', 'Auditoría'],
     },
   };
   it.each(Object.keys(ROLE_NAV))('el menú de %s solo enseña lo que su rol puede abrir', async (role) => {
@@ -189,6 +232,44 @@ describe('AppShell', () => {
     expect(
       screen.getAllByRole('button', { name: /ana gómez|cuenta/i }).length,
     ).toBeGreaterThanOrEqual(2);
+  });
+
+  it('DX-224: «¿Quién llama?» tiene botón en la cabecera y se abre con Alt+Mayús+Q', async () => {
+    mockAccessToken = tokenForRole('RECEPTION');
+    const user = userEvent.setup();
+    render(
+      <AppShell>
+        <p>contenido</p>
+      </AppShell>,
+    );
+    // Barra lateral y barra superior del teléfono: un botón en cada una.
+    const buttons = await screen.findAllByRole('button', { name: /¿quién llama\?/i });
+    expect(buttons.length).toBeGreaterThanOrEqual(2);
+    expect(buttons[0]).toHaveAttribute('aria-keyshortcuts', 'Alt+Shift+Q');
+
+    await user.click(buttons[0]);
+    expect(await screen.findByRole('dialog', { name: '¿Quién llama?' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    // El atajo: Alt+Mayús+Q (`code`, no `key`: con Option, macOS cambia el carácter).
+    fireEvent.keyDown(document.body, { altKey: true, shiftKey: true, code: 'KeyQ', key: 'Œ' });
+    expect(await screen.findByRole('dialog', { name: '¿Quién llama?' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Número de teléfono')).toHaveFocus();
+  });
+
+  it('DX-224: Ctrl+Q, Alt+Q y Alt+Mayús+⌘+Q no abren «¿Quién llama?»', async () => {
+    mockAccessToken = tokenForRole('ADMIN');
+    render(
+      <AppShell>
+        <p>contenido</p>
+      </AppShell>,
+    );
+    await screen.findAllByRole('button', { name: /¿quién llama\?/i });
+    fireEvent.keyDown(document.body, { ctrlKey: true, code: 'KeyQ', key: 'q' });
+    fireEvent.keyDown(document.body, { altKey: true, code: 'KeyQ', key: 'q' });
+    fireEvent.keyDown(document.body, { altKey: true, shiftKey: true, metaKey: true, code: 'KeyQ', key: 'q' });
+    expect(screen.queryByRole('dialog', { name: '¿Quién llama?' })).not.toBeInTheDocument();
   });
 
   it('includes an Inventario nav link pointing to /inventory', async () => {
@@ -286,7 +367,7 @@ describe('AppShell', () => {
       expect(groupsOf(nav)).toEqual([
         [null, ['/dashboard', '/agenda', '/patients']],
         ['Atención', ['/agenda/pendiente-de-cerrar', '/presupuestos']],
-        ['Finanzas', ['/caja', '/caja/cartera']],
+        ['Finanzas', ['/caja', '/caja/cartera', '/reportes']],
         ['Administración', ['/settings']],
       ]);
       expect(nav.queryByText('Clínica')).not.toBeInTheDocument();
@@ -404,7 +485,8 @@ describe('AppShell', () => {
         </AppShell>
       </BrandingProvider>,
     );
-    expect(within(screen.getByRole('banner')).getByText('Clínica Sonrisa Norte')).toBeInTheDocument();
+    // Dos nodos: el CSS enseña uno u otro según haya selector de sede (DX-523).
+    expect(within(screen.getByRole('banner')).getAllByText('Clínica Sonrisa Norte').length).toBeGreaterThan(0);
     expect(screen.queryByText('Dentalix')).not.toBeInTheDocument();
   });
 
@@ -465,7 +547,7 @@ describe('AppShell', () => {
         </AppShell>,
       );
       const aside = within(document.querySelector('aside') as HTMLElement);
-      await user.click(aside.getByRole('button', { name: 'Buscar' }));
+      await user.click(aside.getByRole('button', { name: /^Buscar… (⌘K|Ctrl K)$/ }));
       expect(await screen.findByTestId('command-palette')).toBeInTheDocument();
       // Esc la cierra aunque el foco esté en el combobox expandido.
       await user.keyboard('{Escape}');
@@ -476,7 +558,10 @@ describe('AppShell', () => {
   it('DX-439: «Pendiente de cerrar» lleva su contador en la barra lateral, la hoja «Más» y la paleta', async () => {
     const user = userEvent.setup();
     mockAccessToken = tokenForRole('RECEPTION');
-    (getClosingQueueCount as jest.Mock).mockResolvedValueOnce({ total: 3 });
+    (getWorkQueuesSummary as jest.Mock).mockResolvedValueOnce({
+      generatedAt: '',
+      items: [{ key: 'CLOSING_QUEUE', status: 'OK', count: 3 }],
+    });
     try {
       render(
         <AppShell>
@@ -484,13 +569,13 @@ describe('AppShell', () => {
         </AppShell>,
       );
       const aside = within(document.querySelector('aside') as HTMLElement);
-      const link = await aside.findByRole('link', { name: 'Pendiente de cerrar · 3' });
+      const link = await aside.findByRole('link', { name: 'Pendiente de cerrar 3' });
       expect(link).toHaveAttribute('href', '/agenda/pendiente-de-cerrar');
       expect(within(link).getByTestId('closing-queue-count')).toHaveTextContent('3');
       // En el teléfono no es pestaña: va a «Más», con el mismo contador.
       await user.click(within(screen.getByTestId('bottom-tab-bar')).getByRole('button', { name: 'Más' }));
       const sheet = within(await screen.findByTestId('more-sheet'));
-      expect(sheet.getByRole('link', { name: 'Pendiente de cerrar · 3' })).toBeInTheDocument();
+      expect(sheet.getByRole('link', { name: 'Pendiente de cerrar 3' })).toBeInTheDocument();
       window.dispatchEvent(new PopStateEvent('popstate'));
       await waitFor(() => expect(screen.queryByTestId('more-sheet')).not.toBeInTheDocument());
       await user.keyboard('{Control>}k{/Control}');
@@ -498,7 +583,46 @@ describe('AppShell', () => {
       await user.type(palette.getByRole('combobox'), 'cerrar');
       expect(palette.getByRole('option', { name: 'Pendiente de cerrar' })).toBeInTheDocument();
     } finally {
-      (getClosingQueueCount as jest.Mock).mockResolvedValue({ total: 0 });
+      (getWorkQueuesSummary as jest.Mock).mockResolvedValue({ generatedAt: '', items: [] });
+    }
+  });
+
+  it('DX-503: el menú pide solo sus listas (pendiente de cerrar y anamnesis) en una lectura', async () => {
+    mockAccessToken = tokenForRole('DENTIST');
+    (getWorkQueuesSummary as jest.Mock).mockClear();
+    (getWorkQueuesSummary as jest.Mock).mockResolvedValueOnce({
+      generatedAt: '',
+      items: [
+        { key: 'CLOSING_QUEUE', status: 'OK', count: 2 },
+        { key: 'ANAMNESIS_REVIEW', status: 'OK', count: 7 },
+      ],
+    });
+    render(
+      <AppShell>
+        <p>contenido</p>
+      </AppShell>,
+    );
+    const aside = within(document.querySelector('aside') as HTMLElement);
+    expect(await aside.findByRole('link', { name: 'Pendiente de cerrar 2' })).toBeInTheDocument();
+    expect(aside.getByRole('link', { name: 'Anamnesis 7 · por revisar' })).toBeInTheDocument();
+    expect(getWorkQueuesSummary).toHaveBeenCalledWith(expect.any(String), ['CLOSING_QUEUE', 'ANAMNESIS_REVIEW']);
+  });
+
+  it('DX-503: la asistente no sondea «Pendiente de cerrar»; recepción no sondea anamnesis', async () => {
+    for (const [role, keys] of [
+      ['ASSISTANT', ['ANAMNESIS_REVIEW']],
+      ['RECEPTION', ['CLOSING_QUEUE']],
+    ] as const) {
+      mockAccessToken = tokenForRole(role);
+      (getWorkQueuesSummary as jest.Mock).mockClear();
+      const { unmount } = render(
+        <AppShell>
+          <p>contenido</p>
+        </AppShell>,
+      );
+      await waitFor(() => expect(getWorkQueuesSummary).toHaveBeenCalled());
+      for (const call of (getWorkQueuesSummary as jest.Mock).mock.calls) expect(call[1]).toEqual(keys);
+      unmount();
     }
   });
 

@@ -10,12 +10,13 @@ import {
   CLOSING_SECTION_TITLES,
   getClosingQueue,
   type ClosingAppointment,
+  type ClosingKeptOverbook,
   type ClosingQueue,
   type ClosingQueueSection,
   type ClosingTreatment,
 } from '@/lib/appointments/closing-queue-api';
 import { getPlan, type TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import { useLocationsState } from '@/lib/locations/use-locations-state';
 import { ApiError } from '@/lib/api/api-error';
 import { notifyClosingQueueChanged } from '@/components/appointments/closing-queue-count';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
@@ -69,6 +70,12 @@ export const closingQueueCopy = {
   itemDone: (patient: string) => `Procedimiento de ${patient} marcado como realizado.`,
   dismissed: 'Pendiente descartado.',
   alreadyClosed: 'Ese pendiente ya estaba cerrado o descartado: la lista se actualizó.',
+  // DX-509-bis: urgencias que siguen en sobrecupo porque alguien lo decidió.
+  keptTitle: 'Sobrecupos mantenidos',
+  keptHint:
+    'Urgencias que compartieron la hora del profesional con otra cita porque alguien decidió mantenerlas en sobrecupo. Solo para revisar: no hay nada que cerrar.',
+  colKept: 'Mantenido por',
+  keptBy: (name: string | null, when: string) => `${name ?? 'Usuario sin nombre'} · ${when}`,
   withoutZone: (names: string) =>
     `Sin zona horaria configurada: ${names}. Sus citas no aparecen aquí hasta configurarla en Ajustes → Sedes.`,
 };
@@ -122,8 +129,9 @@ export function ClosingQueueView({ token }: { token: string }) {
   const [cancelling, setCancelling] = useState<Cancelling | null>(null);
   const [evolutionFor, setEvolutionFor] = useState<ClosingAppointment | null>(null);
   const [markingDone, setMarkingDone] = useState<MarkingDone | null>(null);
-  const [locations, setLocations] = useState<ClinicLocation[]>([]);
-  const [locationsKey, setLocationsKey] = useState(0);
+  // La lista de sedes de la sesión (DX-487): sin otra petición por pantalla.
+  const locationsState = useLocationsState(token);
+  const locations = locationsState.status === 'ready' ? locationsState.locations : [];
 
   useEffect(() => {
     let cancelled = false;
@@ -145,18 +153,6 @@ export function ClosingQueueView({ token }: { token: string }) {
       cancelled = true;
     };
   }, [token, reloadKey]);
-
-  useEffect(() => {
-    let cancelled = false;
-    listLocations(token)
-      .then((data) => {
-        if (!cancelled) setLocations(data ?? []);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [token, locationsKey]);
 
   /**
    * Tras cerrar o descartar: relee la lista (el contenido sigue en pantalla si
@@ -377,6 +373,10 @@ export function ClosingQueueView({ token }: { token: string }) {
         ) : null}
       </AsyncSection>
 
+      {queue && queue.keptOverbooks.total > 0 ? (
+        <KeptOverbooksSection fmt={fmt} total={queue.keptOverbooks.total} rows={queue.keptOverbooks.items} />
+      ) : null}
+
       {dismissing ? (
         <DismissClosingDialog
           key={`${dismissing.section}-${dismissing.appointmentId}-${dismissing.planItemId ?? ''}`}
@@ -462,7 +462,7 @@ export function ClosingQueueView({ token }: { token: string }) {
           activeLocationId={markingDone.row.locationId}
           locationName={markingDone.row.locationName}
           locations={locations}
-          onRetryLocations={() => setLocationsKey((k) => k + 1)}
+          onRetryLocations={locationsState.retry}
           appointmentId={markingDone.row.appointmentId}
           preferredPerformerId={markingDone.row.professionalId}
           onSaved={() => {
@@ -473,6 +473,69 @@ export function ClosingQueueView({ token }: { token: string }) {
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * DX-509-bis: los sobrecupos mantenidos a sabiendas del período (informativo:
+ * no suman en el contador ni se descartan). Quién lo decidió y cuándo, en la
+ * hora de la sede de la cita.
+ */
+function KeptOverbooksSection({
+  fmt,
+  total,
+  rows,
+}: {
+  fmt: RegionalFormat | null;
+  total: number;
+  rows: ClosingKeptOverbook[];
+}) {
+  const headingId = 'cierre-sobrecupos-titulo';
+  const columns: DataListColumn<ClosingKeptOverbook>[] = [
+    {
+      id: 'patient',
+      header: copy.colPatient,
+      mobile: 'primary',
+      cell: (row) => (
+        <span data-testid="closing-row-KEPT_OVERBOOK" className="font-medium text-ink">
+          {row.patientName}
+        </span>
+      ),
+    },
+    { id: 'when', header: copy.colWhen, mobile: 'meta', cellClassName: 'tabular-nums', cell: (row) => when(row, fmt) },
+    { id: 'professional', header: copy.colProfessional, cell: (row) => row.professionalName ?? copy.noProfessional },
+    { id: 'location', header: copy.colLocation, cell: (row) => row.locationName },
+    {
+      id: 'kept',
+      header: copy.colKept,
+      cell: (row) => copy.keptBy(row.keptByName, fmt ? fmt.dateTime(new Date(row.keptAt), row.timeZone) : '—'),
+    },
+  ];
+  return (
+    <section
+      id="cierre-sobrecupos"
+      aria-labelledby={headingId}
+      className="mt-8 flex scroll-mt-4 flex-col gap-3"
+    >
+      <div className="flex flex-col gap-1">
+        <h2 id={headingId} className="t-title flex items-center gap-2 text-ink">
+          {copy.keptTitle}
+          <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-semibold tabular-nums text-ink">
+            {total}
+          </span>
+        </h2>
+        <p className="text-sm text-muted">{copy.keptHint}</p>
+      </div>
+      <DataList
+        label={copy.keptTitle}
+        rows={rows}
+        columns={columns}
+        getRowKey={(row) => row.appointmentId}
+        getRowHref={(row) => `/patients/${row.patientId}`}
+        getRowLabel={(row) => row.patientName}
+      />
+      {rows.length < total ? <p className="text-xs text-muted">{copy.truncated(rows.length, total)}</p> : null}
+    </section>
   );
 }
 

@@ -22,6 +22,8 @@ interface ConfirmDialogProps {
   onConfirm: () => void;
   /** In-flight state on the confirm action. */
   confirming?: boolean;
+  /** Etiqueta del botón mientras `confirming` (p. ej. «Deshaciendo…»); por defecto, la misma. */
+  confirmingLabel?: string;
   /** Renders the confirm as a destructive (danger) action. Defaults to true. */
   destructive?: boolean;
   /** Optional error, e.g. the action failed server-side. */
@@ -49,6 +51,7 @@ export function ConfirmDialog({
   cancelLabel = 'Cancelar',
   onConfirm,
   confirming = false,
+  confirmingLabel,
   destructive = true,
   error,
   onCloseAutoFocus,
@@ -75,7 +78,7 @@ export function ConfirmDialog({
             loading={confirming}
             onClick={onConfirm}
           >
-            {confirmLabel}
+            {confirming && confirmingLabel ? confirmingLabel : confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

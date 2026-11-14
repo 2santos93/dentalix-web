@@ -7,6 +7,7 @@ import {
 import type { Appointment } from './appointments-api';
 import { locationClock } from '@/lib/locations/sede-clock';
 import { clinicLocation } from '@/lib/test/locations';
+import { PUBLIC_REGIONAL_VE } from '@/lib/test/document-regional';
 
 // Sede en Caracas (UTC−4) y 12 h; Jest corre con TZ=UTC.
 const CLOCK = locationClock(clinicLocation({ timeZone: 'America/Caracas', locale: 'es-VE', hourCycle: 'h12' }))!;
@@ -47,12 +48,16 @@ describe('confirmationMessage', () => {
         end: '2026-10-20T14:30:00.000Z',
         providerName: 'Dra. Pérez',
         locationName: 'Sede Norte',
-        locationAddress: 'Calle 100 # 15-20',
+        locationAddress: 'Av. Libertador 100',
+        wantsEarlier: false,
+        earlierWindow: null,
+        earlierAllowed: true,
+        ...PUBLIC_REGIONAL_VE,
       },
       clock: CLOCK,
     });
     expect(text).toBe(
-      'Hola Ana, te recordamos tu cita del martes, 20 de octubre a las 10:00 a. m. con Dra. Pérez en Sede Norte (Calle 100 # 15-20). ' +
+      'Hola Ana, te recordamos tu cita del martes, 20 de octubre a las 10:00 a. m. con Dra. Pérez en Sede Norte (Av. Libertador 100). ' +
         'Confírmala, cancélala o pide que te llamemos aquí: https://demo.dentalix.app/confirmar/tok',
     );
   });
@@ -67,6 +72,10 @@ describe('confirmationMessage', () => {
         providerName: null,
         locationName: 'Sede principal',
         locationAddress: null,
+        wantsEarlier: false,
+        earlierWindow: null,
+        earlierAllowed: true,
+        ...PUBLIC_REGIONAL_VE,
       },
       clock: CLOCK,
     });
@@ -85,8 +94,8 @@ describe('longAppointmentDay', () => {
 
 describe('whatsAppUrl', () => {
   it('wa.me con el número E.164 sin + y el texto codificado', () => {
-    expect(whatsAppUrl('573105550101', 'Hola Ana & co: https://x/y?z=1')).toBe(
-      'https://wa.me/573105550101?text=Hola%20Ana%20%26%20co%3A%20https%3A%2F%2Fx%2Fy%3Fz%3D1',
+    expect(whatsAppUrl('584145550101', 'Hola Ana & co: https://x/y?z=1')).toBe(
+      'https://wa.me/584145550101?text=Hola%20Ana%20%26%20co%3A%20https%3A%2F%2Fx%2Fy%3Fz%3D1',
     );
   });
 });

@@ -1,9 +1,12 @@
 import type { AuditAction, AuditEvent, AuditResourceType } from './audit-api';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { BadgeProps } from '@/components/ui/badge';
-import { formatDate } from '@/lib/format/date';
+import { NO_SEDE_FORMAT, sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeMinute, type SedeClock } from '@/lib/locations/sede-clock';
 import { DOC_TYPE_LABEL, genericDocTypeName } from '@/lib/patients/doc-type';
 import type { DocType } from '@/lib/patients/patients-api';
+import { centsToAmount, roundCents } from '@/lib/money/round';
 
 // Copy en español (i18n-ready), como el resto de etiquetas de dominio.
 
@@ -72,6 +75,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   STAFF_MEMBER: 'Miembro del personal',
   // DX-136: recibo de caja de un abono (ver, reimprimir, enviar).
   PAYMENT_RECEIPT: 'Recibo de caja',
+  // DX-401: resumen de los recibos de un paciente en un periodo.
+  PAYMENT_RECEIPT_SUMMARY: 'Resumen de recibos',
   // DX-170: plantillas de evolución (crear, editar, desactivar, ejemplos).
   CLINICAL_NOTE_TEMPLATE: 'Plantilla de evolución',
   // SEC-009: un ADMIN verifica o elimina un dominio personalizado.
@@ -81,6 +86,10 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   // DX-150: cobranza (gestión de cobro y compromiso de pago).
   COLLECTION_NOTE: 'Gestión de cobro',
   PAYMENT_PROMISE: 'Compromiso de pago',
+  PATIENT_RECALL: 'Recall del paciente',
+  RECALL_CONTACT: 'Contacto de recall',
+  // DX-015-bis (D14): Ajustes › Recall (crear, editar, retirar, disparadores).
+  RECALL_TYPE: 'Tipo de recall',
   // DX-204: topes de descuento por rol y umbral del motivo.
   DISCOUNT_POLICY: 'Política de descuentos',
   // DX-210: oferta de un hueco libre a un candidato.
@@ -103,6 +112,9 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   // DX-233: horario de un profesional por sede y sus excepciones por fecha.
   PROVIDER_SCHEDULE: 'Horario del profesional',
   CHAIR: 'Sillón',
+  // DX-542: equipos biomédicos de la sede y sus mantenimientos.
+  EQUIPMENT: 'Equipo biomédico',
+  EQUIPMENT_MAINTENANCE: 'Mantenimiento de equipo',
   // DX-099: anamnesis por enlace (enlace, envío, revisión, anulación).
   MEDICAL_HISTORY_SUBMISSION: 'Anamnesis por enlace',
   // DX-243: firma a distancia (enviar, abrir, código, bloqueo, firma, anular).
@@ -200,6 +212,8 @@ const PATIENT_CONFIRMATION_REASONS = new Set([
   'CONFIRMATION_LINK_CONFIRMED',
   'CONFIRMATION_LINK_CANCELLED',
   'CONFIRMATION_LINK_CALL_REQUESTED',
+  'CONFIRMATION_LINK_EARLIER_REQUESTED',
+  'CONFIRMATION_LINK_EARLIER_CLEARED',
 ]);
 
 /**
@@ -249,9 +263,33 @@ export function signatureRequestDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && SIGNATURE_REASONS[metadata.reason]) ?? null;
 }
 
+const TREATMENT_PLAN_ACCEPTANCE_REASONS: Record<string, string> = {
+  QUOTE_EXPIRED_ORIGINAL_PRICES: 'Presupuesto vencido aceptado con los precios originales',
+  QUOTE_EXPIRED_REPRICED: 'Presupuesto vencido aceptado con los precios actualizados',
+  ACCEPT_REPRICE_PREVIEW: 'Vista previa de los precios actualizados para aceptar',
+  // DX-417: aceptación parcial (la firma, su vista previa y el alta del pendiente).
+  PLAN_PARTIALLY_ACCEPTED: 'Presupuesto aceptado en parte',
+  ACCEPT_PARTIAL_PREVIEW: 'Vista previa de la aceptación parcial',
+  PLAN_SPLIT_PENDING: 'Presupuesto pendiente creado por una aceptación parcial',
+};
+
+/**
+ * DX-379 (C): cómo se aceptó un presupuesto vencido (o su vista previa); DX-417:
+ * la aceptación parcial. null si no es de ello.
+ */
+export function treatmentPlanAcceptanceDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && TREATMENT_PLAN_ACCEPTANCE_REASONS[metadata.reason]) ?? null;
+}
+
 const STAFF_LOGIN_REASONS: Record<string, string> = {
   LOGIN_UNLOCKED: 'Desbloqueo del inicio de sesión',
   LOGIN_UNLOCK_REFUSED: 'Desbloqueo del inicio de sesión rechazado (sin cambios)',
+  // DX-021: inicio de sesión con segundo factor.
+  MFA_TOTP: 'Con código de la app',
+  MFA_RECOVERY_CODE: 'Con un código de recuperación',
+  MFA_ENROLLED: 'Activó la verificación en dos pasos al entrar',
+  INVALID_MFA_CODE: 'Código de verificación incorrecto',
+  INVALID_EMAIL_CODE: 'Código del correo incorrecto',
 };
 
 /**
@@ -275,6 +313,19 @@ const STAFF_REASONS: Record<string, string> = {
   CLINIC_REGISTERED: 'Clínica registrada',
   OWN_NAME_CHANGED: 'Cambió su propio nombre',
   SESSIONS_REVOKED: 'Cambió su contraseña y cerró sus demás sesiones',
+  // DX-021: verificación en dos pasos de la cuenta propia.
+  MFA_ENROLLMENT_STARTED: 'Empezó a activar la verificación en dos pasos',
+  MFA_ENABLED: 'Activó la verificación en dos pasos y cerró sus demás sesiones',
+  MFA_DISABLED: 'Desactivó la verificación en dos pasos y cerró sus demás sesiones',
+  MFA_RECOVERY_CODES_REGENERATED: 'Generó códigos de recuperación nuevos',
+  MFA_TRUSTED_DEVICE_ADDED: 'Marcó un dispositivo de confianza',
+  MFA_TRUSTED_DEVICE_USED: 'Entró desde un dispositivo de confianza, sin código',
+  MFA_TRUSTED_DEVICES_REVOKED: 'Revocó dispositivos de confianza',
+  MFA_RESET_LOST_DEVICE: 'Restableció la verificación en dos pasos: perdió el móvil',
+  MFA_RESET_DEVICE_REPLACED: 'Restableció la verificación en dos pasos: cambió de móvil',
+  MFA_RESET_SECURITY_INCIDENT: 'Restableció la verificación en dos pasos: incidente de seguridad',
+  MFA_RESET_BY_SUPPORT: 'Soporte de Dentalix restableció la verificación en dos pasos',
+  MFA_RESET_REFUSED: 'Restablecimiento de la verificación rechazado (sin cambios)',
   // PUT /staff/:userId/locations (anterior a DX-359): sin antes ni después.
   LOCATIONS_CHANGED: 'Sedes del miembro cambiadas',
 };
@@ -398,11 +449,27 @@ const CHAIR_REASONS: Record<string, string> = {
   CHAIR_ORDER: 'Orden de los sillones',
   CHAIR_DEACTIVATED: 'Sillón desactivado',
   CHAIR_REACTIVATED: 'Sillón reactivado',
+  // DX-542: la baja de un equipo biomédico.
+  EQUIPMENT_RETIRED: 'Equipo dado de baja',
 };
 
-/** DX-211: qué se hizo con un sillón (orden, desactivar, reactivar), o null. */
+/** DX-211: qué se hizo con un sillón (orden, desactivar, reactivar) o, DX-542, la baja de un equipo; o null. */
 export function chairDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && CHAIR_REASONS[metadata.reason]) ?? null;
+}
+
+/**
+ * DX-015-bis: por dónde se creó o cambió un recall del paciente fuera del PUT
+ * de la ficha (`via`). Tipado con el enum de la API: uno nuevo no compila sin su etiqueta.
+ */
+const RECALL_VIA_LABELS: Record<NonNullable<AuditMetadata['via']>, string> = {
+  DEFAULT: 'Recall por defecto',
+  CLINICAL_ENTRY: 'Desde la evolución',
+};
+
+/** DX-015-bis: «Recall por defecto» o «Desde la evolución»; null sin `via` o con uno desconocido. */
+export function recallViaDetail(metadata: AuditMetadata): string | null {
+  return (metadata.via && Object.hasOwn(RECALL_VIA_LABELS, metadata.via) && RECALL_VIA_LABELS[metadata.via]) || null;
 }
 
 /** DX-407: qué parte de la hoja de sedación se registró, o null si no es de ella. */
@@ -458,32 +525,73 @@ export function implantSearchDetail(metadata: AuditMetadata): string | null {
 
 const WEEKDAY_SHORT = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 
-function minuteLabel(m: number): string {
-  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-}
-
 type ScheduleEntry = NonNullable<AuditMetadata['scheduleChange']>['after'][number];
 
-function scheduleEntryLabel(e: ScheduleEntry): string {
+/** Un día o una excepción con el reloj de la sede (DX-354): «lun 8:00 a. m.–1:00 p. m.» o «22 de octubre no trabaja». */
+function scheduleEntryLabel(e: ScheduleEntry, fmt: RegionalFormat): string {
   const when =
     e.date !== undefined
-      ? `${e.date.slice(8, 10)}/${e.date.slice(5, 7)}`
+      ? fmt.civilLongDate(e.date, { weekday: false, year: false })
       : WEEKDAY_SHORT[e.weekday ?? 0];
   if (e.off) return `${when} no trabaja`;
-  return `${when} ${minuteLabel(e.startMinute ?? 0)}–${minuteLabel(e.endMinute ?? 0)}`;
+  return `${when} ${sedeMinute(e.startMinute ?? 0, fmt)}–${sedeMinute(e.endMinute ?? 0, fmt)}`;
 }
 
 /**
  * DX-233: horario de un profesional antes y después (semanal o una
  * excepción por fecha): «Antes: lun 08:00–13:00 · Después: …». null si el
- * evento no es un cambio de horario.
+ * evento no es un cambio de horario. DX-354: las horas y las fechas con el
+ * formato y el reloj de la sede de la pantalla (`fmt`), nunca 24 h a mano; sin
+ * él, «—».
  */
-export function scheduleChangeDetail(metadata: AuditMetadata): string | null {
+export function scheduleChangeDetail(metadata: AuditMetadata, fmt: RegionalFormat | null): string | null {
   const change = metadata.scheduleChange;
   if (!change) return null;
   const side = (entries: ScheduleEntry[]) =>
-    entries.length === 0 ? 'sin horario' : entries.map(scheduleEntryLabel).join(', ');
+    entries.length === 0
+      ? 'sin horario'
+      : fmt
+        ? entries.map((e) => scheduleEntryLabel(e, fmt)).join(', ')
+        : NO_SEDE_FORMAT;
   return `Antes: ${side(change.before)} · Después: ${side(change.after)}`;
+}
+
+/** Nombre de cada miembro del personal por su `userId` (minúsculas). */
+export type StaffNames = ReadonlyMap<string, string>;
+
+export function staffNameMap(staff: readonly { userId: string; fullName: string }[]): StaffNames {
+  return new Map(staff.map((m) => [m.userId.toLowerCase(), m.fullName]));
+}
+
+/** Quien ya no está en el personal: nunca su id. */
+export const FORMER_PROVIDER = 'profesional retirado';
+
+/**
+ * DX-133-bis: una cita movida (`reason` APPOINTMENT_MOVED), con la hora y el
+ * profesional antes y después: «Cita movida · Antes: 10/11/2026 1:00 p. m.,
+ * Ana Pérez · Después: 10/11/2026 2:00 p. m., Luis Gómez». La hora va con el
+ * reloj de la sede de la cita (`clock`); sin él, «—», nunca otro formato
+ * (DX-354). Sin la lista del personal (no cargó) no se nombra a nadie: solo
+ * «otro profesional» si cambió. null si el evento no es un movimiento.
+ */
+export function appointmentMoveDetail(
+  metadata: AuditMetadata,
+  clock: SedeClock | null,
+  staff: StaffNames | null,
+): string | null {
+  if (metadata.reason !== 'APPOINTMENT_MOVED') return null;
+  const move = metadata.move;
+  // DX-436-bis: «Asignar» desde «Ocupar este hueco».
+  const what = move?.via === 'OPENING' ? 'Cita movida a un hueco liberado' : 'Cita movida';
+  if (!move) return what;
+  const when = (iso: string) => (clock ? clock.fmt.dateTime(new Date(iso), clock.timeZone) : NO_SEDE_FORMAT);
+  const who = (id: string) => staff?.get(id.toLowerCase()) ?? FORMER_PROVIDER;
+  if (!staff) {
+    const parts = [what, `${when(move.from.start)} → ${when(move.to.start)}`];
+    if (move.from.providerId.toLowerCase() !== move.to.providerId.toLowerCase()) parts.push('otro profesional');
+    return parts.join(' · ');
+  }
+  return `${what} · Antes: ${when(move.from.start)}, ${who(move.from.providerId)} · Después: ${when(move.to.start)}, ${who(move.to.providerId)}`;
 }
 
 /** DX-200: etiqueta de un estado de la cita en el registro de auditoría. */
@@ -526,9 +634,11 @@ const PLAN_ITEM_ATTRIBUTION_REASONS: Record<string, string> = {
  * DX-050: un ADMIN corrigió quién o cuándo realizó un ítem del plan, o el ítem
  * salió de «Realizado» («Corrección de quién lo realizó · Fecha 20/10/2026 →
  * 19/10/2026»). La metadata solo trae ids e instantes: se dice qué cambió, no
- * nombres. null si el evento no es de la atribución.
+ * nombres. null si el evento no es de la atribución. DX-354: las fechas con la
+ * zona y el formato de la sede de la pantalla (`clock`); sin él, «—».
  */
-export function planItemAttributionDetail(metadata: AuditMetadata): string | null {
+export function planItemAttributionDetail(metadata: AuditMetadata, clock: SedeClock | null): string | null {
+  const formatDate = (iso: string) => (clock ? clock.fmt.date(new Date(iso), clock.timeZone) : NO_SEDE_FORMAT);
   const what = metadata.reason ? PLAN_ITEM_ATTRIBUTION_REASONS[metadata.reason] : undefined;
   if (!what) return null;
   const change = metadata.attribution;
@@ -556,12 +666,16 @@ const CONFIRMATION_LINK_REASONS: Record<string, string> = {
   CONFIRMATION_LINK_CONFIRMED: 'Cita confirmada',
   CONFIRMATION_LINK_CANCELLED: 'Cita cancelada',
   CONFIRMATION_LINK_CALL_REQUESTED: 'Pidió que lo llamen',
+  // DX-437
+  CONFIRMATION_LINK_EARLIER_REQUESTED: 'Pidió que le avisen si se libera un hueco antes',
+  CONFIRMATION_LINK_EARLIER_CLEARED: 'Quitó el aviso de hueco anterior',
 };
 
 /** De dónde salió: recepción con el botón de la agenda o el paciente con el enlace. */
 const CONFIRMATION_LINK_ORIGINS: Partial<Record<AuditOrigin, string>> = {
   STAFF: 'por el personal',
   LINK: 'desde el enlace del paciente',
+  PUBLIC_LINK: 'desde el enlace del paciente',
 };
 
 /**
@@ -655,6 +769,17 @@ function ageOf(code: string): string | null {
   return match ? match[1] : null;
 }
 
+/** DX-379: «1 día», «45 días». */
+function quoteDays(days: string): string {
+  return days === '1' ? '1 día' : `${days} días`;
+}
+
+/** DX-379: `QT_V45` → `45`. */
+function quoteDaysOf(code: string): string | null {
+  const match = /^QT_V(\d+)$/.exec(code);
+  return match ? match[1] : null;
+}
+
 interface PrescriptionSettingsCode {
   words: boolean;
   record: boolean;
@@ -721,16 +846,57 @@ function exchangeRateSourceDetail(from: string, to: string): string | null {
   return `Tasa de cambio: ${before} → ${after}`;
 }
 
+/**
+ * DX-330: «Conservación de la historia clínica · 2 historias mantienen su fecha».
+ * Solo la bajada; la subida la pinta `configChangeItems` (antes y después).
+ */
+function retentionSettingsDetail(metadata: AuditMetadata): string | null {
+  const change = metadata.retentionTermChange;
+  if (!change || change.direction !== 'DOWN') return null;
+  const n = change.protectedPatients;
+  if (!Number.isInteger(n) || n < 0) return null;
+  const parts = ['Conservación de la historia clínica'];
+  if (n > 0) parts.push(n === 1 ? '1 historia mantiene su fecha' : `${n} historias mantienen su fecha`);
+  if (change.withinCorrectionWindow) parts.push('corrección de una subida');
+  return parts.join(' · ');
+}
+
 export function clinicSettingsDetail(metadata: AuditMetadata): string | null {
+  // DX-330: sin `statusChange` (el antes y el después van en `configChange`);
+  // va antes del `return null` de abajo o no llegaría nunca.
+  if (metadata.reason === 'CLINICAL_RECORD_RETENTION_SETTINGS') {
+    return retentionSettingsDetail(metadata);
+  }
   // DX-327: sin `statusChange` ni valores (son texto libre); va antes del
   // `return null` de abajo o no llegaría nunca.
   if (metadata.reason === 'DOCUMENT_TYPE_NAMES_SETTINGS') {
     return documentTypeNamesDetail(metadata.changedFields);
   }
+  // DX-497: la lista antes y después la pinta `configChangeItems`.
+  if (metadata.reason === 'PATIENT_LANGUAGES_SETTINGS') return 'Idiomas de los pacientes';
   if (!metadata.statusChange) return null;
   const { from, to } = metadata.statusChange;
   if (metadata.reason === 'PRESCRIPTION_SETTINGS') return prescriptionSettingsDetail(from, to);
   if (metadata.reason === 'EXCHANGE_RATE_SOURCE') return exchangeRateSourceDetail(from, to);
+  // DX-540: el aviso de registro profesional de las evoluciones (OFF/ON).
+  if (metadata.reason === 'CLINICAL_ENTRY_LICENSE_WARNING') {
+    if (from === 'OFF' && to === 'ON') return 'Aviso de registro profesional en las evoluciones: activado';
+    if (from === 'ON' && to === 'OFF') return 'Aviso de registro profesional en las evoluciones: desactivado';
+    return null;
+  }
+  // DX-021: solo el sentido del cambio.
+  if (metadata.reason === 'MFA_POLICY') {
+    if (to === 'ALL_MFA_REQUIRED') return 'Verificación en dos pasos: obligatoria para todo el equipo';
+    return to === 'ADMIN_MFA_REQUIRED'
+      ? 'Verificación en dos pasos: obligatoria para administradores'
+      : 'Verificación en dos pasos: opcional para administradores';
+  }
+  // DX-379: Ajustes › Presupuestos, `QT_V{días}`.
+  if (metadata.reason === 'QUOTE_SETTINGS') {
+    const before = quoteDaysOf(from);
+    const after = quoteDaysOf(to);
+    return before === null || after === null ? null : `Validez del presupuesto: ${quoteDays(before)} → ${quoteDays(after)}`;
+  }
   if (metadata.reason !== 'MAJORITY_AGE_SETTINGS') return null;
   const before = ageOf(from);
   const after = ageOf(to);
@@ -761,7 +927,82 @@ export function exchangeRateBackupDetail(metadata: AuditMetadata): string | null
   return metadata.origin ? `${what} · ${ORIGIN_LABELS[metadata.origin]}` : what;
 }
 
+/**
+ * DX-381: alta de una tasa de cambio manual: «VES · 29/10/2026 · 36,5» (moneda,
+ * día y tasa con el formato de la sede; hasta 8 decimales, como la API). Sin
+ * formato de sede, «—» en lugar del día y de la tasa, nunca otro formato.
+ * null si el evento no trae `exchangeRate`.
+ */
+export function exchangeRateDetail(metadata: AuditMetadata, fmt: RegionalFormat | null): string | null {
+  const rate = metadata.exchangeRate;
+  if (!rate) return null;
+  const value = Number(rate.rate);
+  const shown = fmt && Number.isFinite(value) ? fmt.number(value, { min: 0, max: 8 }) : NO_SEDE_FORMAT;
+  return `${rate.currency} · ${sedeCivilDate(rate.day, fmt)} · ${shown}`;
+}
+
+/**
+ * DX-401: el periodo del resumen de recibos, «Periodo 01/11/2026 – 30/11/2026»
+ * con el formato de la sede («—» sin él). null si el evento no trae `period`.
+ */
+export function receiptsSummaryPeriodDetail(metadata: AuditMetadata, fmt: RegionalFormat | null): string | null {
+  const period = metadata.period;
+  if (!period) return null;
+  return `Periodo ${sedeCivilDate(period.from, fmt)} – ${sedeCivilDate(period.to, fmt)}`;
+}
+
+/** «2 ítems · 100,00 EUR» o «sin imputar»: un lado de la reimputación de un abono. */
+function allocationSide(
+  lines: readonly { amount: number }[],
+  currency: string,
+  fmt: RegionalFormat | null,
+): string {
+  if (lines.length === 0) return 'sin imputar';
+  const total = centsToAmount(roundCents(lines.reduce((sum, l) => sum + l.amount * 100, 0)));
+  return `${lines.length} ${lines.length === 1 ? 'ítem' : 'ítems'} · ${sedeMoney(total, currency, fmt)}`;
+}
+
+/**
+ * DX-051/DX-399: un ADMIN reasignó la imputación de un abono. Dice la regla
+ * (fijada a mano o devuelta al reparto automático) y el antes y el después, con
+ * el importe en la moneda del plan y el formato de la sede: «Imputación fijada
+ * a mano · antes: 1 ítem · 100,00 EUR → después: 1 ítem · 25,50 EUR». Los ítems
+ * exactos y sus importes van en la metadata. null si el evento no es de ello.
+ */
+export function paymentAllocationDetail(metadata: AuditMetadata, fmt: RegionalFormat | null): string | null {
+  const allocation = metadata.allocation;
+  if (metadata.reason !== 'PAYMENT_REALLOCATED' || !allocation) return null;
+  const what = allocation.mode === 'MANUAL' ? 'Imputación fijada a mano' : 'Imputación devuelta al reparto automático';
+  // En AUTO el reparto lo hace el sistema después de guardar: el evento no inventa un «después».
+  const after =
+    allocation.mode === 'AUTO' && allocation.after.length === 0
+      ? 'lo reparte el sistema'
+      : allocationSide(allocation.after, allocation.currency, fmt);
+  return `${what} · antes: ${allocationSide(allocation.before, allocation.currency, fmt)} → después: ${after}`;
+}
+
 /** DX-316: qué cambió en el calendario de una sede, o null si el evento no es de él. */
 export function locationCalendarDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && LOCATION_CALENDAR_REASONS[metadata.reason]) ?? null;
+}
+
+/**
+ * DX-515: recibo no fiscal, y DX-517: el texto propio de cada moneda (el antes
+ * y el después los pinta `configChangeItems`).
+ */
+const RECEIPT_REASONS: Record<string, string> = {
+  CURRENCY_TEXTS: 'Texto de las monedas',
+  // DX-019: Ajustes › Datos de la clínica.
+  CLINIC_PROFILE: 'Datos de la clínica',
+  CLINIC_LOGO: 'Logo de la clínica',
+  RECEIPT_SETTINGS: 'Título y leyenda del recibo',
+  RECEIPT_LEGEND: 'Leyenda del recibo de la sede',
+  EXTERNAL_INVOICE_NUMBER: 'Nº de factura externa del abono',
+  // DX-516: ajustes por medio de pago (sobre el medio).
+  PAYMENT_METHOD_ADJUSTMENT_CREATED: 'Ajuste por medio de pago creado',
+  PAYMENT_METHOD_ADJUSTMENT_UPDATED: 'Ajuste por medio de pago cambiado',
+};
+
+export function receiptDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && RECEIPT_REASONS[metadata.reason]) ?? null;
 }

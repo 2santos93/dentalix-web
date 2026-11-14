@@ -1,6 +1,8 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { AcceptInvitationForm } from '@/components/auth/accept-invitation-form';
 import { AuthLayout } from '@/components/auth/auth-layout';
+import { randomHeroImage } from '@/lib/auth/hero-images';
 import { authContext } from '@/components/auth/auth-clinic';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
@@ -10,6 +12,13 @@ const copy = {
   loginPrompt: '¿Ya tienes cuenta?',
   loginLink: 'Inicia sesión',
   caption: 'Únete al equipo de tu clínica',
+};
+
+// El token va en la URL: que no se indexe ni salga en el Referer hacia
+// terceros (DX-118, FE-034).
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+  referrer: 'no-referrer',
 };
 
 // `params` is a Promise in this Next version (see AGENTS.md /
@@ -26,8 +35,10 @@ export default async function AcceptInvitationPage({
   return (
     <AuthLayout
       clinic={clinic}
+      fromHost
       task={copy.task}
       caption={copy.caption}
+      heroImage={randomHeroImage()}
       footer={
         <>
           {copy.loginPrompt}{' '}

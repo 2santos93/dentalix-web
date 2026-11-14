@@ -20,6 +20,9 @@ jest.mock('../../lib/data-consents/data-consents-api', () => ({
   recordDataConsents: jest.fn(),
 }));
 
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]),
+}));
 const mockedGet = getPatientDataConsents as jest.MockedFunction<typeof getPatientDataConsents>;
 const mockedPolicies = getPrivacyPolicies as jest.MockedFunction<typeof getPrivacyPolicies>;
 const mockedRecord = recordDataConsents as jest.MockedFunction<typeof recordDataConsents>;

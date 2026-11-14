@@ -1,4 +1,4 @@
-import { formatDateTime } from '@/lib/format/date';
+import type { SedePainters } from '@/lib/locations/sede-stamp';
 import { parseMoneyInput } from '@/lib/format/money';
 import type { ToothSurface } from '@/lib/odontogram/odontogram-api';
 import type { DentalCatalogItem } from '@/lib/odontogram/catalog-api';
@@ -59,11 +59,22 @@ export const copy = {
     createdAt: string,
     status: TreatmentPlanStatus,
     number: number,
-    optionLabel?: string | null,
+    optionLabel: string | null | undefined,
+    stamp: Pick<SedePainters, 'dateTime'>,
+    // DX-417: el presupuesto pendiente de una aceptación parcial (no tiene etiqueta de opción).
+    pendingRest = false,
   ) =>
-    `Plan ${number} · ${formatDateTime(createdAt)} — ${PLAN_STATUS_LABELS[status]}${optionLabel ? ` · ${optionLabel}` : ''}`,
+    `Plan ${number} · ${stamp.dateTime(createdAt)} — ${PLAN_STATUS_LABELS[status]}${optionLabel ? ` · ${optionLabel}` : ''}${pendingRest ? ' · pendiente' : ''}`,
+  // DX-417: los enlaces entre el plan aceptado en parte y su presupuesto pendiente.
+  partialPendingLink: (date: string) => `Lo no aceptado está en el presupuesto pendiente del ${date}`,
+  partialRestLink: (date: string) => `Resto del plan aceptado el ${date}`,
+  partiallyAccepted: 'Presupuesto aceptado en parte',
+  viewPendingPlan: 'Ver el pendiente',
+  partiallyAcceptedHint: 'Lo no aceptado quedó en un presupuesto pendiente, enlazado desde este plan.',
   detailHeading: 'Detalle del plan',
   planStatusLabel: 'Estado del plan',
+  // DX-379 (C): un presupuesto vencido no pasa a «Aceptado» desde el selector (la API: 409 QUOTE_EXPIRED).
+  planStatusExpiredHint: 'Vencido: acéptalo con firma para elegir cómo.',
   loadingPlanDetail: 'Cargando plan…',
   // No «Intenta de nuevo.» — `SectionError` has its own retry button.
   genericPlanDetailError: 'No pudimos cargar el plan.',
@@ -111,14 +122,16 @@ export const copy = {
   removeConfirm: 'Quitar ítem',
   genericItemUpdateError: 'No pudimos actualizar el estado del ítem. Intenta de nuevo.',
   genericRemoveItemError: 'No pudimos quitar el ítem. Intenta de nuevo.',
-  itemStatusSelectLabel: (tooth: string) => `Estado del ítem del diente ${tooth}`,
+  itemStatusSelectLabel: (item: ItemRef) => `Estado del ${itemRefText(item)}`,
   // DX-050: quién lo realizó. Corregirlo es solo de la administración.
   correctAttribution: 'Corregir',
-  correctAttributionFor: (tooth: string) => `Corregir quién realizó el ítem del diente ${tooth}`,
+  correctAttributionFor: (item: ItemRef) => `Corregir quién realizó el ${itemRefText(item)}`,
   // DX-305: un realizado «Sin atribuir» se atribuye con quién, cuándo y dónde.
   attributeItem: 'Atribuir',
-  attributeItemFor: (tooth: string) => `Atribuir quién, cuándo y dónde se realizó el ítem del diente ${tooth}`,
+  attributeItemFor: (item: ItemRef) => `Atribuir quién, cuándo y dónde se realizó el ${itemRefText(item)}`,
   markDoneSubject: (procedure: string, tooth: string) => `${procedure} · diente ${tooth}`,
+  // DX-455: la evolución que se abre tras marcar hecho un procedimiento con plantilla.
+  evolutionSaved: 'Evolución guardada en la historia clínica.',
   addItemHeading: 'Agregar ítem',
   invalidToothNumber: 'Número de diente inválido. Usa la notación FDI (ej. 11, 26, 55).',
   procedureLabel: 'Procedimiento',
@@ -153,13 +166,19 @@ export const copy = {
   itemDiscount: (amount: string) => `Descuento −${amount}`,
   // SEC-041: el precio por debajo del de catálogo cuenta como descuento.
   itemPriceReduction: (amount: string, catalog: string) => `Rebaja −${amount} (catálogo ${catalog})`,
-  priceBelowCatalogOtherCurrency: (catalog: string) =>
-    `Precio de catálogo: ${catalog}, en otra moneda y sin convertir. Se compara con el tope de tu rol y sale en el informe de descuentos.`,
+  // DX-513-bis: la referencia se convirtió del catálogo en otra moneda.
+  itemReferenceConverted: (catalog: string, rate: string) => `Catálogo ${catalog}, ${rate}`,
+  // DX-513-bis: el catálogo en otra moneda se convierte con la tasa de hoy.
+  referenceConverted: (catalog: string, converted: string, rate: string) =>
+    `Catálogo: ${catalog} ≈ ${converted} (${rate}).`,
+  // DX-502: la moneda del catálogo no se sabe: sin cifra. Cuenta como descuento.
+  priceBelowCatalogUnknownCurrency:
+    'Precio de catálogo en una moneda que no se sabe, sin convertir. Se compara con el tope de tu rol y sale en el informe de descuentos.',
   priceBelowCatalogDetail: (reduction: string, catalog: string) =>
     `Rebaja de ${reduction} sobre ${catalog}. Se compara con el tope de tu rol y sale en el informe de descuentos.`,
   // DX-204: motivo del descuento y «Descuento %» sobre varios ítems.
   itemDiscountReason: (reason: string) => `Motivo: ${reason}`,
-  selectItem: (tooth: string) => `Seleccionar el ítem del diente ${tooth}`,
+  selectItem: (item: ItemRef) => `Seleccionar el ${itemRefText(item)}`,
   selectAll: 'Seleccionar todos',
   clearSelection: 'Quitar selección',
   selectedCount: (n: number) =>
@@ -214,6 +233,8 @@ export const copy = {
   invalidPaymentAmount: 'Escribe un importe mayor que 0.',
   invalidPaymentCurrency: 'Ingresa una moneda válida.',
   invalidPaymentDate: 'Ingresa una fecha válida.',
+  futurePaymentDate: 'La fecha de pago no puede ser posterior a hoy.',
+  paymentRecorded: (amount: string) => `Abono registrado: ${amount}.`,
   genericAddPaymentError: 'No pudimos registrar el abono. Intenta de nuevo.',
   paymentsTableCaption: 'Abonos del plan de tratamiento',
   colPaymentDate: 'Fecha',
@@ -235,6 +256,8 @@ export const copy = {
   manualAllocation: 'Fijada a mano',
   // DX-051: abre «Imputar abono» (solo ADMIN).
   allocationAction: 'Imputación',
+  // DX-399: el detalle de solo lectura de a qué ítems se imputó el abono.
+  viewAllocationAction: 'Ver imputación',
   emptyPaymentsTitle: 'Este plan todavía no tiene abonos.',
   emptyPaymentsDescription: 'Registra el primer abono con «Registrar abono».',
 
@@ -284,6 +307,39 @@ export function feeReferences(items: TreatmentPlanItem[]): ReadonlyMap<string, F
 
 export function procedureName(item: TreatmentPlanItem, catalogById: Map<string, DentalCatalogItem>): string {
   return catalogById.get(item.catalogItemId)?.labelEs ?? item.catalogItemId;
+}
+
+/**
+ * DX-546 · FE-111: cómo se nombra un ítem en sus controles (estado, selección,
+ * atribución): el diente si lo tiene, siempre el procedimiento y, si otro ítem
+ * de la misma lista se llamaría igual, su número en la lista.
+ */
+export interface ItemRef {
+  tooth: string;
+  procedure: string;
+  /** 1-based; `null` si el nombre ya es único. */
+  position: number | null;
+}
+
+function itemRefText({ tooth, procedure, position }: ItemRef): string {
+  return `ítem${position === null ? '' : ` ${position}`}${tooth ? ` del diente ${tooth}` : ''} · ${procedure}`;
+}
+
+/** El `ItemRef` de cada ítem de la lista, por id: nombres únicos dentro de ella. */
+export function itemRefs(
+  items: readonly TreatmentPlanItem[],
+  catalogById: Map<string, DentalCatalogItem>,
+): Map<string, ItemRef> {
+  const base = items.map((item) => ({ tooth: item.toothNumber, procedure: procedureName(item, catalogById) }));
+  const key = (ref: { tooth: string; procedure: string }) => `${ref.tooth}\u0000${ref.procedure}`;
+  const counts = new Map<string, number>();
+  for (const ref of base) counts.set(key(ref), (counts.get(key(ref)) ?? 0) + 1);
+  return new Map(
+    items.map((item, i) => [
+      item.id,
+      { ...base[i], position: (counts.get(key(base[i])) ?? 0) > 1 ? i + 1 : null },
+    ]),
+  );
 }
 
 export function surfacesLabel(item: TreatmentPlanItem): string {

@@ -21,7 +21,7 @@ jest.mock('../../lib/auth/token-role', () => ({ getTokenRole: jest.fn() }));
 jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 jest.mock('../../lib/locations/use-sede-time-zone', () => ({
   ...jest.requireActual('../../lib/locations/use-sede-time-zone'),
-  useSedeTimeZone: jest.fn(() => ({ status: 'ready', timeZone: 'America/Bogota' })),
+  useSedeTimeZone: jest.fn(() => ({ status: 'ready', timeZone: 'America/Caracas' })),
   sedeToday: () => '2026-10-17',
 }));
 jest.mock('../../lib/appointments/staff-api', () => ({
@@ -55,8 +55,15 @@ function row(overrides: Partial<DiscountReportItem> = {}): DiscountReportItem {
     patientName: 'Ana Pérez',
     toothNumber: '36',
     procedure: 'Corona libre de metal',
-    currency: 'COP',
+    currency: 'USD',
     catalogPrice: null,
+    catalogCurrency: null,
+    referenceCurrency: null,
+    referencePriceInPlan: null,
+    basePriceInPlan: null,
+    rate: null,
+    baseRate: null,
+    agreementUnmeasured: false,
     price: 1200000,
     priceReduction: 0,
     itemDiscount: 180000,
@@ -91,7 +98,7 @@ function report(items: DiscountReportItem[], overrides: Partial<DiscountReport> 
     totals: items.length
       ? [
           {
-            currency: 'COP',
+            currency: 'USD',
             items: items.length,
             gross: 1200000,
             discount: 180000,
@@ -100,6 +107,7 @@ function report(items: DiscountReportItem[], overrides: Partial<DiscountReport> 
         ]
       : [],
     agreementTotals: [],
+    agreementUnmeasuredTotals: [],
     items,
     total: items.length,
     page: 1,
@@ -134,7 +142,7 @@ function mockPhone(): () => void {
 describe('DiscountReportView (DX-204)', () => {
   beforeEach(() => {
     mockedReport.mockReset();
-    mockedZone.mockReturnValue({ status: 'ready', timeZone: 'America/Bogota' });
+    mockedZone.mockReturnValue({ status: 'ready', timeZone: 'America/Caracas' });
     mockedFormat.mockReturnValue({ status: 'ready', fmt: regionalFormat({ locale: 'es-ES', hourCycle: 'h23' }) });
     mockedCsv.mockReset();
     mockedRole.mockReturnValue('ADMIN');
@@ -144,9 +152,9 @@ describe('DiscountReportView (DX-204)', () => {
     mockedFormat.mockReturnValue({ status: 'ready', fmt: regionalFormat({ locale: 'en-US', hourCycle: 'h12' }) });
     mockedReport.mockResolvedValue(report([row()]));
     render(<DiscountReportView token="tok" />);
-    const summary = await screen.findByTestId('discount-total-COP');
+    const summary = await screen.findByTestId('discount-total-USD');
     expect(within(summary).getByText('15%')).toBeInTheDocument();
-    expect(within(summary).getByText(/^COP\s180,000\.00$/)).toBeInTheDocument();
+    expect(within(summary).getByText(/^USD\s180,000\.00$/)).toBeInTheDocument();
     expect(within(await findRow()).getByText(/^\d{2}\/\d{2}\/\d{4}$/)).toBeInTheDocument();
   });
 
@@ -168,12 +176,12 @@ describe('DiscountReportView (DX-204)', () => {
         page: 1,
       }),
     );
-    const summary = await screen.findByTestId('discount-total-COP');
+    const summary = await screen.findByTestId('discount-total-USD');
     expect(within(summary).getByText('15 %')).toBeInTheDocument();
     expect(within(summary).getByText(/180\.000,00/)).toBeInTheDocument();
     expect(screen.getByTestId('scope-marker')).toHaveTextContent('Sede principal');
     // La moneda y los ítems encabezan la fila del resumen; no son una métrica más.
-    expect(within(summary).getByText('COP · 1 ítem')).toBeInTheDocument();
+    expect(within(summary).getByText('USD · 1 ítem')).toBeInTheDocument();
     const tableRow = await findRow();
     expect(within(tableRow).getByRole('link', { name: 'Ana Pérez' })).toHaveAttribute(
       'href',
@@ -205,6 +213,38 @@ describe('DiscountReportView (DX-204)', () => {
     expect(within(tableRow).getByText(/Precio rebajado a 800\.000,00/)).toBeInTheDocument();
   });
 
+  it('DX-513-bis: una rebaja frente al catálogo en otra moneda dice la cifra del catálogo en su moneda y la tasa congelada', async () => {
+    mockedReport.mockResolvedValue(
+      report([
+        row({
+          currency: 'VES',
+          catalogPrice: 4.5,
+          referenceCurrency: 'USD',
+          referencePriceInPlan: 3960,
+          rate: { fromPerBase: 1, toPerBase: 880, source: 'MANUAL', rateDate: '2026-10-10' },
+          price: 3900,
+          priceReduction: 60,
+          itemDiscount: 0,
+          discount: 60,
+          percent: 1.52,
+        }),
+      ]),
+    );
+    render(<DiscountReportView token="tok" />);
+    const tableRow = await findRow();
+    expect(within(tableRow).getByText(/Precio rebajado a 3\.?900,00 VES/)).toBeInTheDocument();
+    expect(within(tableRow).getByText(/^Catálogo 4,50 USD · tasa 1 USD = 880 VES del 10\/10\/2026, manual$/)).toBeInTheDocument();
+  });
+
+  it('DX-513-bis: sin tasa (misma moneda), no hay línea de catálogo convertido', async () => {
+    mockedReport.mockResolvedValue(
+      report([row({ catalogPrice: 1000000, referenceCurrency: 'USD', referencePriceInPlan: 1000000, price: 800000, priceReduction: 200000, discount: 200000, itemDiscount: 0, percent: 20 })]),
+    );
+    render(<DiscountReportView token="tok" />);
+    const tableRow = await findRow();
+    expect(within(tableRow).queryByText(/^Catálogo /)).not.toBeInTheDocument();
+  });
+
   it('SEC-047: la rebaja de convenio sale aparte, con quién asignó el convenio y quién creó el ítem', async () => {
     const agreed = row({
       priceSource: 'AGREEMENT_PERCENT',
@@ -229,15 +269,15 @@ describe('DiscountReportView (DX-204)', () => {
     mockedReport.mockResolvedValue(
       report([agreed], {
         totals: [],
-        agreementTotals: [{ currency: 'COP', items: 1, reduction: 2000000 }],
+        agreementTotals: [{ currency: 'USD', items: 1, reduction: 2000000 }],
       }),
     );
     render(<DiscountReportView token="tok" />);
     // M1: las rebajas de convenio tienen su propio total, aparte de DX-204.
-    const summary = await screen.findByTestId('agreement-total-COP');
-    expect(within(summary).getByText('COP · 1 ítem con rebaja de convenio')).toBeInTheDocument();
+    const summary = await screen.findByTestId('agreement-total-USD');
+    expect(within(summary).getByText('USD · 1 ítem con rebaja de convenio')).toBeInTheDocument();
     expect(within(summary).getByText(/2\.000\.000,00/)).toBeInTheDocument();
-    expect(screen.queryByTestId('discount-total-COP')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('discount-total-USD')).not.toBeInTheDocument();
     const tableRow = await findRow();
     expect(within(tableRow).getByText(/Convenio «Cortesía socios»/)).toHaveTextContent(/−\s?2\.000\.000,00.*100 %/);
     expect(within(tableRow).getByText('Convenio asignado por Dr. Owner')).toBeInTheDocument();
@@ -249,6 +289,63 @@ describe('DiscountReportView (DX-204)', () => {
     expect(within(tableRow).getByTestId('discount-author')).toHaveTextContent('Dr. Owner');
     // Sin descuento propio: no se pinta un «−0» como si lo hubiera.
     expect(within(tableRow).queryByText(/^−\s?0,00/)).not.toBeInTheDocument();
+  });
+
+  // M1 (DX-513-bis): convenio por % con el catálogo en otra moneda. La
+  // rebaja y su % se miden sobre la base CONVERTIDA (`basePriceInPlan`); la
+  // base cruda está en VES y nunca se pinta con la moneda del plan.
+  describe('M1: convenio por % entre monedas', () => {
+    const crossAgreement = (overrides: Partial<DiscountReportItem> = {}) =>
+      row({
+        currency: 'USD',
+        priceSource: 'AGREEMENT_PERCENT',
+        agreementName: 'Seguros Caracas',
+        catalogCurrency: 'VES',
+        referenceCurrency: 'VES',
+        catalogPrice: 3240,
+        basePrice: 3600,
+        referencePriceInPlan: 3.68,
+        basePriceInPlan: 4.09,
+        rate: { fromPerBase: 880, toPerBase: 1, source: 'MANUAL', rateDate: '2026-10-10' },
+        price: 3.68,
+        priceReduction: 0,
+        itemDiscount: 0,
+        discount: 0,
+        percent: 0,
+        reason: null,
+        reasonNote: null,
+        agreementReduction: 0.41,
+        agreementPercent: 10.02,
+        ...overrides,
+      });
+
+    it('la base del % es la convertida, en la moneda del plan', async () => {
+      mockedReport.mockResolvedValue(
+        report([crossAgreement()], {
+          totals: [],
+          agreementTotals: [{ currency: 'USD', items: 1, reduction: 0.41 }],
+        }),
+      );
+      render(<DiscountReportView token="tok" />);
+      const tableRow = await findRow();
+      const line = within(tableRow).getByText(/Convenio «Seguros Caracas»/);
+      expect(line).toHaveTextContent(/de 4,09\sUSD\)$/);
+      expect(line).not.toHaveTextContent(/3\.?600/);
+    });
+
+    it('sin base convertida, la base va con SU moneda (VES), nunca con la del plan', async () => {
+      mockedReport.mockResolvedValue(
+        report([crossAgreement({ basePriceInPlan: null })], {
+          totals: [],
+          agreementTotals: [{ currency: 'USD', items: 1, reduction: 0.41 }],
+        }),
+      );
+      render(<DiscountReportView token="tok" />);
+      const tableRow = await findRow();
+      const line = within(tableRow).getByText(/Convenio «Seguros Caracas»/);
+      expect(line).toHaveTextContent(/de 3\.?600,00\sVES\)$/);
+      expect(line).not.toHaveTextContent(/3\.?600,00\sUSD/);
+    });
   });
 
   it('B5: sin quien asignó el convenio, el autor es quien creó el ítem', async () => {
@@ -269,7 +366,7 @@ describe('DiscountReportView (DX-204)', () => {
             createdByName: 'Dra. Ríos',
           }),
         ],
-        { totals: [], agreementTotals: [{ currency: 'COP', items: 1, reduction: 10000 }] },
+        { totals: [], agreementTotals: [{ currency: 'USD', items: 1, reduction: 10000 }] },
       ),
     );
     render(<DiscountReportView token="tok" />);
@@ -321,7 +418,7 @@ describe('DiscountReportView (DX-204)', () => {
               agreementAssignedByName: 'Dr. Owner',
             }),
           ],
-          { totals: [], agreementTotals: [{ currency: 'COP', items: 1, reduction: 2000000 }] },
+          { totals: [], agreementTotals: [{ currency: 'USD', items: 1, reduction: 2000000 }] },
         ),
       );
       render(<DiscountReportView token="tok" />);
@@ -332,6 +429,177 @@ describe('DiscountReportView (DX-204)', () => {
       const amount = within(card).getByTestId('discount-card-amount');
       expect(amount).not.toHaveTextContent(/Convenio «/);
       expect(amount).toHaveTextContent(/−\s?2\.000\.000,00/);
+    });
+  });
+
+  // DX-513-ter (test 15): lista de convenio en USD (3,50) con el catálogo en
+  // VES (3.600 Bs.). Medida: la rebaja sobre la base convertida y una línea
+  // con el catálogo en su moneda y la tasa congelada. Sin medir: una línea
+  // neutra «sin referencia comparable» y «Sin medir» en el importe.
+  describe('DX-513-ter: lista de convenio entre monedas', () => {
+    const RATE_880 = { fromPerBase: 880, toPerBase: 1, source: 'MANUAL' as const, rateDate: '2026-11-07' };
+    const listAgreement = (overrides: Partial<DiscountReportItem> = {}) =>
+      row({
+        currency: 'USD',
+        priceSource: 'AGREEMENT_PRICE_LIST',
+        agreementName: 'Empresa',
+        catalogCurrency: 'VES',
+        referenceCurrency: 'USD',
+        catalogPrice: 3.5,
+        referencePriceInPlan: 3.5,
+        basePrice: 3600,
+        price: 3.5,
+        priceReduction: 0,
+        itemDiscount: 0,
+        discount: 0,
+        percent: 0,
+        reason: null,
+        reasonNote: null,
+        discountById: null,
+        discountByName: null,
+        agreementAssignedById: 'adm-1',
+        agreementAssignedByName: 'Dr. Owner',
+        ...overrides,
+      });
+    const measured = () =>
+      listAgreement({ basePriceInPlan: 4.09, baseRate: RATE_880, agreementReduction: 0.59, agreementPercent: 14.43 });
+    const unmeasured = () => listAgreement({ itemId: 'item-2', agreementUnmeasured: true });
+
+    it('medida: la rebaja sobre la base convertida y el catálogo en VES con su tasa; nunca «1 USD = 880 USD»', async () => {
+      mockedReport.mockResolvedValue(
+        report([measured()], { totals: [], agreementTotals: [{ currency: 'USD', items: 1, reduction: 0.59 }] }),
+      );
+      render(<DiscountReportView token="tok" />);
+      const tableRow = await findRow();
+      expect(within(tableRow).getByText(/Convenio «Empresa»/)).toHaveTextContent(
+        /^Convenio «Empresa»: −0,59\sUSD \(14,43\s%\sde 4,09\sUSD\)$/,
+      );
+      expect(
+        within(tableRow).getByText(/^Catálogo 3\.?600,00 VES · tasa 1 USD = 880 VES del 07\/11\/2026, manual$/),
+      ).toBeInTheDocument();
+      expect(document.body).not.toHaveTextContent(/1 USD = 880 USD/);
+      expect(within(tableRow).queryByText('Sin medir')).not.toBeInTheDocument();
+    });
+
+    it('sin medir: línea neutra «sin referencia comparable», «Sin medir» en el importe (no «−0») y el autor del convenio', async () => {
+      mockedReport.mockResolvedValue(
+        report([unmeasured()], { totals: [], agreementUnmeasuredTotals: [{ currency: 'USD', items: 1 }] }),
+      );
+      render(<DiscountReportView token="tok" />);
+      const tableRow = await findRow();
+      const line = within(tableRow).getByText(/sin referencia comparable/);
+      expect(line).toHaveTextContent('Convenio «Empresa»: sin referencia comparable (catálogo en VES, plan en USD)');
+      expect(line).toHaveClass('text-muted');
+      expect(within(tableRow).getByText('Sin medir')).toBeInTheDocument();
+      expect(within(tableRow).queryByText(/^−\s?0,00/)).not.toBeInTheDocument();
+      expect(within(tableRow).queryByText(/^Catálogo /)).not.toBeInTheDocument();
+      // Es un convenio, no un descuento sin motivo: ni aviso ni «Sin registrar».
+      expect(within(tableRow).getByText('Convenio Empresa')).toBeInTheDocument();
+      expect(within(tableRow).queryByText('Sin motivo')).not.toBeInTheDocument();
+      expect(within(tableRow).getByTestId('discount-author')).toHaveTextContent('Dr. Owner');
+    });
+
+    it('sin medir y con descuento propio: el descuento sale y la línea neutra también', async () => {
+      mockedReport.mockResolvedValue(
+        report([unmeasured()].map((r) => ({ ...r, itemDiscount: 0.5, discount: 0.5, percent: 14.29, reason: 'PROMOTION' }))),
+      );
+      render(<DiscountReportView token="tok" />);
+      const tableRow = await findRow();
+      expect(within(tableRow).getByText(/^−\s?0,50\sUSD$/)).toBeInTheDocument();
+      expect(within(tableRow).getByText(/sin referencia comparable/)).toBeInTheDocument();
+      expect(within(tableRow).queryByText('Sin medir')).not.toBeInTheDocument();
+    });
+
+    it('el resumen cuenta las filas sin medir por moneda, sin cifra', async () => {
+      mockedReport.mockResolvedValue(
+        report([measured(), unmeasured()], {
+          totals: [],
+          agreementTotals: [{ currency: 'USD', items: 1, reduction: 0.59 }],
+          agreementUnmeasuredTotals: [{ currency: 'USD', items: 3 }],
+        }),
+      );
+      render(<DiscountReportView token="tok" />);
+      const summary = await screen.findByTestId('agreement-unmeasured-USD');
+      expect(summary).toHaveTextContent(/^USD · 3 ítems de convenio sin referencia comparable$/);
+      expect(screen.getByTestId('agreement-total-USD')).toHaveTextContent('USD · 1 ítem con rebaja de convenio');
+    });
+
+    it('solo filas sin medir: el resumen sale igual', async () => {
+      mockedReport.mockResolvedValue(
+        report([unmeasured()], { totals: [], agreementUnmeasuredTotals: [{ currency: 'USD', items: 1 }] }),
+      );
+      render(<DiscountReportView token="tok" />);
+      expect(await screen.findByTestId('agreement-unmeasured-USD')).toHaveTextContent(
+        'USD · 1 ítem de convenio sin referencia comparable',
+      );
+    });
+
+    // DX-513-quater: lista de convenio con la moneda del catálogo NULL.
+    it('moneda del catálogo desconocida: la frase propia, nunca «catálogo en ,», «Sin medir» y el resumen sin cifra', async () => {
+      const unknownCatalog = () =>
+        listAgreement({ itemId: 'item-3', catalogCurrency: null, basePriceInPlan: 3600, agreementUnmeasured: true });
+      mockedReport.mockResolvedValue(
+        report([unknownCatalog()], { totals: [], agreementUnmeasuredTotals: [{ currency: 'USD', items: 1 }] }),
+      );
+      render(<DiscountReportView token="tok" />);
+      const tableRow = await findRow();
+      expect(within(tableRow).getByText(/sin referencia comparable/)).toHaveTextContent(
+        'Convenio «Empresa»: sin referencia comparable (moneda del catálogo desconocida, plan en USD)',
+      );
+      expect(screen.queryByText(/catálogo en ,/)).not.toBeInTheDocument();
+      expect(within(tableRow).getByText('Sin medir')).toBeInTheDocument();
+      expect(await screen.findByTestId('agreement-unmeasured-USD')).toHaveTextContent(
+        /^USD · 1 ítem de convenio sin referencia comparable$/,
+      );
+      expect(screen.queryByTestId('agreement-total-USD')).not.toBeInTheDocument();
+    });
+
+    it('convenio por % con la moneda del catálogo NULL: se sigue midiendo', async () => {
+      mockedReport.mockResolvedValue(
+        report(
+          [
+            listAgreement({
+              priceSource: 'AGREEMENT_PERCENT',
+              catalogCurrency: null,
+              basePrice: 3600,
+              basePriceInPlan: 3600,
+              catalogPrice: 3240,
+              referencePriceInPlan: 3240,
+              price: 3240,
+              agreementReduction: 360,
+              agreementPercent: 10,
+            }),
+          ],
+          { totals: [], agreementTotals: [{ currency: 'USD', items: 1, reduction: 360 }] },
+        ),
+      );
+      render(<DiscountReportView token="tok" />);
+      const tableRow = await findRow();
+      expect(within(tableRow).getByText(/Convenio «Empresa»/)).toHaveTextContent(
+        /^Convenio «Empresa»: −360,00\sUSD \(10\s%\sde 3\.?600,00\sUSD\)$/,
+      );
+      expect(within(tableRow).queryByText('Sin medir')).not.toBeInTheDocument();
+    });
+
+    describe('teléfono (<640px)', () => {
+      let restore: () => void;
+      beforeEach(() => {
+        restore = mockPhone();
+      });
+      afterEach(() => restore());
+
+      it('la línea 2 lleva la frase neutra y el importe dice «Sin medir»', async () => {
+        mockedReport.mockResolvedValue(report([measured(), unmeasured()], { totals: [] }));
+        render(<DiscountReportView token="tok" />);
+        const cards = within(await screen.findByRole('list', { name: 'Descuentos del periodo' })).getAllByRole(
+          'listitem',
+        );
+        expect(cards[0]).toHaveTextContent(/Catálogo 3\.?600,00 VES · tasa 1 USD = 880 VES/);
+        expect(within(cards[0]).getByTestId('discount-card-amount')).toHaveTextContent(/−\s?0,59/);
+        expect(cards[1]).toHaveTextContent('Convenio «Empresa»: sin referencia comparable (catálogo en VES, plan en USD)');
+        expect(within(cards[1]).getByTestId('discount-card-amount')).toHaveTextContent(/^Sin medir$/);
+        expect(cards[1]).toHaveTextContent('Dado por: Dr. Owner');
+      });
     });
   });
 

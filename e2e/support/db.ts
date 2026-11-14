@@ -55,6 +55,23 @@ export function postponeRateRetry(paymentId: string, hours: number): void {
 }
 
 /**
+ * DX-452: adelanta el próximo tick del barrido del reparto de abonos
+ * (`payment-allocations.sweep`, cron de cada minuto en la API) a este
+ * instante. El worker de la suite (APP_ROLE=all, JOBS_POLL_INTERVAL_MS=250)
+ * lo ve en su siguiente vuelta, encola el barrido y lo corre: el test no
+ * espera al minuto del cron. Es el mismo estado que el worker escribe al
+ * sincronizar la tarea (`job_schedules.nextRunAt`); la API no cambia. El
+ * barrido es idempotente y `singleton`: si el anterior sigue en curso, este
+ * tick se salta y el siguiente `fireAllocationsSweepNow` (o el cron) lo recoge.
+ */
+export function fireAllocationsSweepNow(): void {
+  if (!E2E_DATABASE_URL) throw new Error('E2E_DATABASE_URL no definido');
+  execFileSync('psql', [E2E_DATABASE_URL, '-v', 'ON_ERROR_STOP=1'], {
+    input: `UPDATE job_schedules SET "nextRunAt" = timezone('UTC', now()) WHERE "name" = 'payment-allocations.sweep.every-minute';`,
+  });
+}
+
+/**
  * Lleva la última rotación de la familia del refresh `refreshToken` (claim
  * `sid`) fuera de la gracia de la API (JWT_REFRESH_REUSE_GRACE_SECONDS, ≤ 60
  * s): desde ahí, reusar el token anterior es reuso (401 y sesión revocada).
@@ -68,4 +85,33 @@ export function ageRefreshRotation(refreshToken: string): void {
   execFileSync('psql', [E2E_DATABASE_URL, '-v', 'ON_ERROR_STOP=1', '-v', `sid=${claims.sid}`], {
     input: `UPDATE refresh_sessions SET "rotatedAt" = "rotatedAt" - interval '5 minutes' WHERE id = :'sid'::uuid;`,
   });
+}
+
+/**
+ * DX-379 (C): el presupuesto del plan vence (su último día válido pasa a hace
+ * dos días en UTC, que en cualquier sede de América ya es pasado). La API no
+ * deja fechar la emisión: la pone el día de la sede al presentar.
+ */
+export function expirePlanQuote(planId: string): void {
+  if (!E2E_DATABASE_URL) throw new Error('E2E_DATABASE_URL no definido');
+  execFileSync('psql', [E2E_DATABASE_URL, '-v', 'ON_ERROR_STOP=1', '-v', `id=${planId}`], {
+    input: `UPDATE treatment_plans SET "quoteIssuedOn" = (timezone('UTC', now()))::date - 3, "quoteValidUntil" = (timezone('UTC', now()))::date - 2 WHERE id = :'id';`,
+  });
+}
+
+/**
+ * DX-342: el responsable se dio de alta hace `days` días (cuando el paciente
+ * aún era menor). La API pone `createdAt` al dar de alta y no deja fecharlo:
+ * sin esto, un paciente que ya cumplió la mayoría de edad no puede tener un
+ * responsable «de cuando era menor».
+ */
+export function backdateResponsibleParty(partyId: string, days: number): void {
+  if (!E2E_DATABASE_URL) throw new Error('E2E_DATABASE_URL no definido');
+  execFileSync(
+    'psql',
+    [E2E_DATABASE_URL, '-v', 'ON_ERROR_STOP=1', '-v', `id=${partyId}`, '-v', `days=${Math.trunc(days)}`],
+    {
+      input: `UPDATE patient_responsible_parties SET "createdAt" = "createdAt" - make_interval(days => :days) WHERE id = :'id';`,
+    },
+  );
 }

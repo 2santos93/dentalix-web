@@ -13,8 +13,8 @@ import { API_URL } from './support/urls';
  *   - «Nueva evolución» con diagnóstico principal K02.1 (buscando «caries») y
  *     relacionado K05.1 en el 36: la evolución los muestra con código y texto;
  *   - DX-318: no hay chip «RDA» ni la ficha pide datos del RDA a la API;
- *   - DX-320: el catálogo no tiene columna ni campo «Código CUPS»;
- *   - DX-319: la sede ya no tiene REPS (ver location-health-registration.spec).
+ *   - DX-320: el catálogo no tiene columna ni campo «código externo»;
+ *   - DX-319: la sede ya no tiene código de habilitación anterior (ver location-health-registration.spec).
  * En escritorio (1440px) y móvil (390px), sin scroll horizontal ni errores en
  * la consola del navegador.
  */
@@ -36,7 +36,7 @@ async function expectNoHorizontalScroll(page: Page): Promise<void> {
 
 for (const viewport of VIEWPORTS) {
  for (const scheme of ['light', 'dark'] as const) {
-  test(`evolución con CIE-10, sin chip RDA ni CUPS en el catálogo (${viewport.name}, ${scheme})`, async ({
+  test(`evolución con CIE-10, sin chip RDA ni código externo en el catálogo (${viewport.name}, ${scheme})`, async ({
     page,
   }) => {
     test.setTimeout(120_000);
@@ -127,15 +127,15 @@ for (const viewport of VIEWPORTS) {
     await expectNoHorizontalScroll(page);
     await shot('ficha');
 
-    // 3. DX-320: el catálogo no muestra ni pide código CUPS.
+    // 3. DX-320: el catálogo no muestra ni pide código externo.
     await page.goto(`${origin}/catalog?item=${procedure.id}`);
     const edit = page.getByRole('dialog', { name: 'Editar ítem' });
     await expect(edit).toBeVisible({ timeout: 15_000 });
-    await expect(edit.getByLabel(/CUPS/i)).toHaveCount(0);
-    await expect(edit.getByText(/CUPS/i)).toHaveCount(0);
+    await expect(edit.getByLabel(/CU[P]S/i)).toHaveCount(0);
+    await expect(edit.getByText(/CU[P]S/i)).toHaveCount(0);
     await edit.getByRole('button', { name: 'Cancelar' }).click();
     await expect(edit).toBeHidden();
-    await expect(page.getByRole('columnheader', { name: /CUPS/i })).toHaveCount(0);
+    await expect(page.getByRole('columnheader', { name: /CU[P]S/i })).toHaveCount(0);
     await expectNoHorizontalScroll(page);
     await shot('catalogo');
 

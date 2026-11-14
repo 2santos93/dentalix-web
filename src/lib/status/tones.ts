@@ -90,6 +90,38 @@ const treatmentPlan = {
   CANCELLED: s('neutral', 'Cancelado'),
 } satisfies Presentations<Schemas['TreatmentPlanStatus']>;
 
+/**
+ * Validez del presupuesto (DX-379). Solo el vencido lleva chip, con su fecha
+ * como texto propio («Vencido · valía hasta el 03/11/2026»); el vigente es una línea
+ * secundaria («Válido hasta el …»), sin chip. El servidor decide si venció
+ * (`quoteExpired`, con el día de la sede): la web no lo recalcula.
+ */
+const quoteValidity = {
+  EXPIRED: s('danger', 'Vencido'),
+} satisfies Presentations<'EXPIRED'>;
+
+/**
+ * Aceptación parcial del presupuesto (DX-417), un chip junto al estado: el
+ * original queda «Aceptado parcialmente» (info, el tono de Aceptado) y el
+ * presupuesto nuevo con lo no aceptado espera la respuesta del paciente
+ * (warning, el tono de Presentado).
+ */
+const planSplit = {
+  PARTIAL: s('info', 'Aceptado parcialmente'),
+  PENDING_REST: s('warning', 'Pendiente de aceptación parcial'),
+} satisfies Presentations<'PARTIAL' | 'PENDING_REST'>;
+
+/**
+ * Cómo cambia un precio al actualizarlo (DX-379 B): sube pide atención
+ * (warning: el paciente pagará más), baja es a favor del paciente (success) y
+ * sin cambio es neutro. Colorea la diferencia de la vista previa.
+ */
+const priceChange = {
+  UP: s('warning', 'Sube'),
+  DOWN: s('success', 'Baja'),
+  SAME: s('neutral', 'Sin cambio'),
+} satisfies Presentations<'UP' | 'DOWN' | 'SAME'>;
+
 const treatmentPlanItem = {
   PROPOSED: s('neutral', 'Propuesto'),
   ACCEPTED: s('info', 'Aceptado'),
@@ -251,11 +283,68 @@ const signatureRequest = {
   COMPLETE: s('success', 'Completo'),
 } satisfies Presentations<Schemas['SignatureRequestStatus']>;
 
+// ── Recall (DX-015) ─────────────────────────────────────────────────────────
+
+/** Por llamar pide una acción; con cita está reconocido; pausado o retirado, sin juicio. */
+const recall = {
+  DUE: s('warning', 'Por llamar'),
+  UPCOMING: s('neutral', 'Al día'),
+  SCHEDULED: s('info', 'Con cita'),
+  PAUSED: s('neutral', 'En pausa'),
+  INACTIVE: s('neutral', 'Retirado'),
+} satisfies Presentations<Schemas['RecallStatus']>;
+
+// ── Equipos biomédicos (DX-542) ─────────────────────────────────────────────
+
+/**
+ * Programa de mantenimiento del equipo en el día de su sede: vencido es un
+ * fallo, «Vence pronto» pide agendarlo, «Al día» (como el recall) y «Sin
+ * programar» no piden nada.
+ */
+const equipmentMaintenance = {
+  OVERDUE: s('danger', 'Vencido'),
+  DUE_SOON: s('warning', 'Vence pronto'),
+  UP_TO_DATE: s('neutral', 'Al día'),
+  UNSCHEDULED: s('neutral', 'Sin programar'),
+} satisfies Presentations<Schemas['EquipmentMaintenanceStatus']>;
+
+/**
+ * DX-546 · FE-115: un mantenimiento de la hoja de vida de un equipo. No se
+ * edita ni se borra: si estaba mal, se anula con motivo. Anulado = registro
+ * retirado, neutro como en el resto del producto, nunca rojo.
+ */
+const equipmentMaintenanceRecord = {
+  VOIDED: s('neutral', 'Anulado'),
+} satisfies Presentations<'VOIDED'>;
+
+/** Activo como el personal; dado de baja es un cierre sin juicio. */
+const equipment = {
+  ACTIVE: s('success', 'Activo'),
+  RETIRED: s('neutral', 'Dado de baja'),
+} satisfies Presentations<Schemas['EquipmentStatus']>;
+
+/**
+ * DX-342: revisión del paso a la mayoría de edad. Pendiente pide revisar a
+ * quién van los avisos; vencida lleva tiempo sin revisar; revisada está hecha.
+ */
+const majorityReview = {
+  PENDING: s('warning', 'Pendiente'),
+  OVERDUE: s('danger', 'Vencida'),
+  REVIEWED: s('success', 'Revisado'),
+} satisfies Presentations<'PENDING' | 'OVERDUE' | 'REVIEWED'>;
+
 export const STATUS_PRESENTATION = {
+  majorityReview,
+  equipmentMaintenance,
+  equipmentMaintenanceRecord,
+  equipment,
   appointment,
   punctuality,
   reminder,
   treatmentPlan,
+  quoteValidity,
+  planSplit,
+  priceChange,
   treatmentPlanItem,
   toothRecord,
   clinicalRecord,
@@ -266,6 +355,7 @@ export const STATUS_PRESENTATION = {
   installment,
   expense,
   paymentPromise,
+  recall,
   cashSession,
   paymentMethod,
   coverage,

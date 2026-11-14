@@ -14,6 +14,8 @@ import {
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { DateField } from '@/components/ui/date-field';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
@@ -54,13 +56,6 @@ interface RegisterImplantModalProps {
   onRegistered: (implant: PatientImplant) => void;
 }
 
-/** Hoy (YYYY-MM-DD) en la zona del navegador: tope del selector de fecha. */
-function todayLocal(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
 /** Vacío → `undefined`; texto que no es un número → `null` (no se envía). */
 function parseMm(text: string): number | undefined | null {
   const normalized = text.trim().replace(',', '.');
@@ -99,7 +94,12 @@ export function RegisterImplantModal({
   const [diameter, setDiameter] = useState('');
   const [length, setLength] = useState('');
   const [sanitaryRegistration, setSanitaryRegistration] = useState('');
-  const [placedOn, setPlacedOn] = useState(todayLocal);
+  // DX-354b (E9): «hoy» es el de la sede de la pantalla, no el del navegador. `null` = sin tocar: se muestra y se envía el de la sede.
+  const zone = useSedeTimeZone(token);
+  const timeZone = readyTimeZone(zone);
+  const today = timeZone ? sedeToday(timeZone) : null;
+  const [pickedOn, setPickedOn] = useState<string | null>(null);
+  const placedOn = pickedOn ?? today ?? '';
   const [notes, setNotes] = useState('');
   const [catalog, setCatalog] = useState<ImplantCatalogEntry[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -181,6 +181,7 @@ export function RegisterImplantModal({
       onSubmit={handleSubmit}
       submitLabel={copy.submit}
       submitting={submitting}
+      submitDisabled={placedOn === ''}
       error={error}
       size="lg"
     >
@@ -293,13 +294,19 @@ export function RegisterImplantModal({
           />
         </FormField>
         <FormField htmlFor={id('placed-on')} label={copy.placedOn}>
-          <DateField
-            id={id('placed-on')}
-            max={todayLocal()}
-            required
-            value={placedOn || null}
-            onChange={(value) => setPlacedOn(value ?? '')}
-          />
+          {zone.status === 'error' ? (
+            // Sin la zona de la sede no hay «hoy» con el que topar la fecha: el campo se sustituye por su error (escalón 2).
+            <SedeConfigError kind="timeZone" variant="field" retryId={id('placed-on')} onRetry={zone.retry} />
+          ) : (
+            <DateField
+              id={id('placed-on')}
+              max={today ?? undefined}
+              required
+              disabled={today === null}
+              value={placedOn || null}
+              onChange={(value) => setPickedOn(value ?? '')}
+            />
+          )}
         </FormField>
         <FormField htmlFor={id('udi')} label={copy.udi} className="sm:col-span-2">
           <Input

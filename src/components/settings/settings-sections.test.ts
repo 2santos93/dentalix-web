@@ -8,7 +8,14 @@ const hrefsFor = (role: ClinicRole | null) =>
 
 // Las pantallas que se abren para todos los roles: las lee cualquiera y solo
 // ADMIN las cambia (la pantalla y la API lo deciden, no el índice).
-const FOR_EVERYONE = ['/settings/profile', '/settings/sedes', '/settings/horarios', '/settings/privacidad'];
+// DX-379: «Presupuestos» (la validez) también: la leen todos.
+const FOR_EVERYONE = [
+  '/settings/profile',
+  '/settings/sedes',
+  '/settings/horarios',
+  '/settings/presupuestos',
+  '/settings/privacidad',
+];
 
 describe('Índice de Ajustes (DX-282)', () => {
   it('agrupa por tema, en este orden', () => {
@@ -23,10 +30,16 @@ describe('Índice de Ajustes (DX-282)', () => {
     ]);
   });
 
-  it('ADMIN ve las 26 pantallas de ajustes (Mi perfil incluido), cada una una sola vez', () => {
+  it('ADMIN ve las 34 pantallas de ajustes (Mi perfil incluido), cada una una sola vez', () => {
     const hrefs = hrefsFor('ADMIN');
-    expect(hrefs).toHaveLength(26);
-    expect(new Set(hrefs).size).toBe(26);
+    expect(hrefs).toHaveLength(34);
+    expect(new Set(hrefs).size).toBe(34);
+  });
+
+  it('la entrada de Historia clínica dice también el plazo de conservación (DX-330)', () => {
+    const section = visibleSettingsSections('ADMIN').find((s) => s.id === 'historia');
+    const entry = section?.entries.find((e) => e.href === '/settings/historia-clinica');
+    expect(entry?.description).toBe('Vigencia de la anamnesis, conservación de la historia clínica y aviso de registro profesional.');
   });
 
   it('las herramientas y los registros van aparte de las políticas', () => {
@@ -81,6 +94,13 @@ describe('Índice de Ajustes (DX-282)', () => {
     }
   });
 
+  it('DX-497: Idiomas de los pacientes solo para ADMIN', () => {
+    expect(hrefsFor('ADMIN')).toContain('/settings/idiomas-de-pacientes');
+    for (const role of ['DENTIST', 'ASSISTANT', 'RECEPTION', null] as const) {
+      expect(hrefsFor(role)).not.toContain('/settings/idiomas-de-pacientes');
+    }
+  });
+
   it('no deja ninguna pantalla de /settings sin entrada', () => {
     // El índice es el mapa completo (B6): Mi perfil en «Tu cuenta». Cualquier
     // carpeta nueva en /settings tiene que salir en el índice: si no, la
@@ -95,7 +115,7 @@ describe('Índice de Ajustes (DX-282)', () => {
   });
 
   it.each(['DENTIST', 'ASSISTANT', 'RECEPTION'] as const)(
-    '%s solo ve Mi perfil, Sedes, Horarios y Privacidad de datos',
+    '%s solo ve Mi perfil, Sedes, Horarios, Presupuestos y Privacidad de datos',
     (role) => {
       expect(hrefsFor(role)).toEqual(FOR_EVERYONE);
       // Las secciones que se quedan vacías no se pintan.
@@ -103,6 +123,7 @@ describe('Índice de Ajustes (DX-282)', () => {
         'Tu cuenta',
         'Clínica y sedes',
         'Agenda',
+        'Cobro',
         'Datos y seguridad',
       ]);
     },
@@ -110,5 +131,38 @@ describe('Índice de Ajustes (DX-282)', () => {
 
   it('sin rol legible (token de plataforma o basura) no enseña nada de administración', () => {
     expect(hrefsFor(null)).toEqual(FOR_EVERYONE);
+  });
+});
+
+describe('Monedas (DX-517)', () => {
+  it('solo ADMIN la ve, en Cobro, justo tras «Tasa de cambio»', () => {
+    const cobro = visibleSettingsSections('ADMIN').find((section) => section.id === 'cobro');
+    const labels = cobro?.entries.map((entry) => entry.label) ?? [];
+    expect(labels.indexOf('Monedas')).toBe(labels.indexOf('Tasa de cambio') + 1);
+    for (const role of ['RECEPTION', 'DENTIST', 'ASSISTANT'] as const) {
+      expect(hrefsFor(role)).not.toContain('/settings/monedas');
+    }
+  });
+});
+
+describe('Datos de la clínica (DX-019)', () => {
+  it('primera entrada de «Clínica y sedes», solo para ADMIN', () => {
+    const clinic = SETTINGS_SECTIONS.find((s) => s.id === 'clinica')!;
+    expect(clinic.entries[0]).toMatchObject({ href: '/settings/clinica', label: 'Datos de la clínica' });
+    for (const role of ['RECEPTION', 'DENTIST', 'ASSISTANT'] as const) {
+      expect(hrefsFor(role)).not.toContain('/settings/clinica');
+    }
+  });
+});
+
+describe('Presupuestos (DX-379)', () => {
+  it('en Cobro, tras «Listas de precios», para todos los roles', () => {
+    const cobro = visibleSettingsSections('ADMIN').find((section) => section.id === 'cobro');
+    const labels = cobro?.entries.map((entry) => entry.label) ?? [];
+    expect(labels.indexOf('Presupuestos')).toBe(labels.indexOf('Listas de precios') + 1);
+    for (const role of ['RECEPTION', 'DENTIST', 'ASSISTANT', null] as const) {
+      const own = visibleSettingsSections(role).find((section) => section.id === 'cobro');
+      expect(own?.entries.map((entry) => entry.label)).toEqual(['Presupuestos']);
+    }
   });
 });

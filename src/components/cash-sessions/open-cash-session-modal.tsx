@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { InlineError } from '@/components/errors/inline-error';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
 
 const copy = {
   title: 'Abrir caja',
@@ -71,6 +72,7 @@ export function OpenCashSessionModal({
   defaultCurrency,
   onOpened,
 }: OpenCashSessionModalProps) {
+  const stamp = useSedeStamp(token);
   const baseId = useId();
   const [rows, setRows] = useState<FloatRow[]>([{ key: 0, currency: defaultCurrency, amount: '' }]);
   const [notes, setNotes] = useState('');
@@ -156,6 +158,7 @@ export function OpenCashSessionModal({
               />
             </div>
             <MoneyInput
+              money={stamp.money}
               id={amountId}
               aria-label={copy.amount(index + 1)}
               currency={row.currency}

@@ -13,15 +13,17 @@ jest.mock('../../lib/payment-plans/payment-plan-api', () => ({
 const mockedList = listBillablePlans as jest.MockedFunction<typeof listBillablePlans>;
 
 const withPaymentPlan: BillablePlan = {
-  id: 'plan-cop',
+  id: 'plan-usd',
   status: 'ACCEPTED',
-  currency: 'COP',
+  currency: 'USD',
   createdAt: '2026-08-01T15:00:00.000Z',
   total: 3000000,
   paid: 0,
   paidOtherCurrencies: [],
   balance: 3000000,
   hasActivePaymentPlan: true,
+  paymentsWithoutRate: [],
+  rateProviderTimedOut: false,
 };
 
 it('si todos los planes ya tienen cuotas, no manda a recepción a la pestaña clínica que no ve', async () => {

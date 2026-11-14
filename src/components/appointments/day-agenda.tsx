@@ -1,6 +1,7 @@
 'use client';
 import type { ReactNode } from 'react';
 import { AttendanceBadge } from '@/components/appointments/attendance-badge';
+import { OverbookedChip } from '@/components/appointments/overbooked-chip';
 import { OverdueChip } from '@/components/collections/overdue-chip';
 import { CoverageChip } from '@/components/patients/coverage-chip';
 import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
@@ -16,6 +17,7 @@ import { sedeTimeRange, type AgendaClock } from '@/lib/locations/sede-clock';
 import { AppointmentStatusSelect } from './appointment-status-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
+import { chairDisplayName } from '@/lib/chairs/chair-columns';
 import { statusOptionsFor } from '@/lib/appointments/patient-flow';
 import type { ClinicRole } from '@/lib/me/me-api';
 
@@ -34,7 +36,7 @@ const copy = {
   reasonFallback: '—',
   heading: 'Agenda del día',
   /** Nombre accesible del selector de estado (más el estado actual), filled in with the row's time range — e.g. "Estado de la cita de 09:00–09:30". */
-  statusSelectLabel: (timeRange: string) => `Estado de la cita de ${timeRange}`,
+  statusSelectLabel: (timeRange: string, patient: string) => `Estado de la cita de ${timeRange} de ${patient}`,
   updatingStatus: 'Actualizando…',
   detail: 'Detalle',
   /** `aria-label` del botón de detalle de una fila, p. ej. "Detalle de la cita de 09:00–09:30". */
@@ -114,6 +116,8 @@ function DetailButton({
 }
 
 interface StatusSelectProps {
+  /** DX-299: dos citas a la misma hora se distinguen por el paciente. */
+  patient: string;
   appointment: Appointment;
   timeRange: string;
   onStatusChange: (
@@ -133,12 +137,12 @@ interface StatusSelectProps {
  * aplica con Enter o con un clic/toque en una opción. Rendered once per row
  * per responsive variant when `onStatusChange` is passed to `DayAgenda`.
  */
-function StatusSelect({ appointment, timeRange, onStatusChange, updating, role }: StatusSelectProps) {
+function StatusSelect({ appointment, timeRange, patient, onStatusChange, updating, role }: StatusSelectProps) {
   return (
     <span className="inline-flex items-center gap-2">
       <AppointmentStatusSelect
         variant="chip"
-        label={copy.statusSelectLabel(timeRange)}
+        label={copy.statusSelectLabel(timeRange, patient)}
         data-testid="appointment-status-select"
         value={appointment.status}
         options={statusOptionsFor(appointment.status, role)}
@@ -275,15 +279,22 @@ export function DayAgenda({
                         patientName={patientLabel(appointment, patientNames)}
                       />
                       <ConfirmationBadge appointment={appointment} />
-                      <OverdueChip balance={appointment.balance} />
+                      <OverdueChip balance={appointment.balance} fmt={clock.fmt} />
                       <CoverageChip coverage={appointment.coverage} compact />
                       <AttendanceBadge counts={appointment.attendance} />
+                      {/* DX-509: solo mientras es sobrecupo. */}
+                      <OverbookedChip overbooked={appointment.overbooked} status={appointment.status} />
                     </span>
                     {renderActions?.(appointment)}
                   </td>
                   {providerName && (
                     <td className="px-4 py-3 text-ink">
                       {providerName(appointment.providerId) ?? copy.reasonFallback}
+                      {appointment.chair ? (
+                        <span className="block text-xs text-muted" data-testid="day-agenda-chair">
+                          {chairDisplayName(appointment.chair)}
+                        </span>
+                      ) : null}
                     </td>
                   )}
                   <td className="px-4 py-3 text-muted">
@@ -292,6 +303,7 @@ export function DayAgenda({
                   <td className="px-4 py-3">
                     {onStatusChange ? (
                       <StatusSelect
+                        patient={patientLabel(appointment, patientNames)}
                         appointment={appointment}
                         timeRange={timeRange}
                         onStatusChange={onStatusChange}
@@ -336,28 +348,38 @@ export function DayAgenda({
                 </time>
                 {!onStatusChange && <StatusBadge status={appointment.status} />}
               </div>
+              {/* Un nombre largo sin espacios se parte en vez de empujar la
+                  alerta médica fuera de la tarjeta a 390 px. */}
               <p className="mt-2 flex items-center gap-2 font-medium text-ink">
-                {patientLabel(appointment, patientNames)}
-                <MedicalAlertIndicator
-                  flags={appointment.medicalAlerts}
-                  patientName={patientLabel(appointment, patientNames)}
-                  size="default"
-                />
+                <span className="min-w-0 [overflow-wrap:anywhere]">{patientLabel(appointment, patientNames)}</span>
+                <span className="shrink-0">
+                  <MedicalAlertIndicator
+                    flags={appointment.medicalAlerts}
+                    patientName={patientLabel(appointment, patientNames)}
+                    size="default"
+                  />
+                </span>
               </p>
-              <p className="mt-0.5 text-muted">
-                {[providerName?.(appointment.providerId), appointment.reason ?? copy.reasonFallback]
+              <p className="mt-0.5 text-muted [overflow-wrap:anywhere]">
+                {[
+                  providerName?.(appointment.providerId),
+                  appointment.chair ? chairDisplayName(appointment.chair) : null,
+                  appointment.reason ?? copy.reasonFallback,
+                ]
                   .filter(Boolean)
                   .join(' · ')}
               </p>
               <ConfirmationBadge appointment={appointment} className="mt-2" />
-              <OverdueChip balance={appointment.balance} className="mt-2" />
+              <OverdueChip balance={appointment.balance} className="mt-2" fmt={clock.fmt} />
               <CoverageChip coverage={appointment.coverage} compact className="mt-2" />
               <AttendanceBadge counts={appointment.attendance} className="mt-2" />
+              <OverbookedChip overbooked={appointment.overbooked} status={appointment.status} className="mt-2" />
               {renderActions?.(appointment)}
               {(onStatusChange || onSelectAppointment) && (
                 <div className="mt-3 flex items-center justify-between gap-2">
                   {onStatusChange ? (
                     <StatusSelect
+                      patient={patientLabel(appointment, patientNames)}
                       appointment={appointment}
                       timeRange={timeRange}
                       onStatusChange={onStatusChange}

@@ -1,4 +1,5 @@
 import type { PlanQuote } from '@/lib/treatment-plans/plan-quote-api';
+import { REGIONAL_VE } from '@/lib/test/document-regional';
 
 /** Presupuesto de ejemplo para los tests de los componentes (DX-012). */
 export function planQuoteFixture(overrides: Partial<PlanQuote> = {}): PlanQuote {
@@ -8,10 +9,12 @@ export function planQuoteFixture(overrides: Partial<PlanQuote> = {}): PlanQuote 
     planId: 'plan-1',
     patientId: 'p1',
     planStatus: 'DRAFT',
-    currency: 'COP',
+    currency: 'VES',
+    regional: REGIONAL_VE,
     clinicName: 'Clínica Sonrisas',
     clinicLogoUrl: 'https://cdn.example.com/logo.png',
-    location: { id: 'loc-1', name: 'Sede principal', address: 'Calle 93 # 14-20' },
+    clinicFiscal: null,
+    location: { id: 'loc-1', name: 'Sede principal', address: 'Av. Francisco de Miranda 93' },
     patient: { name: 'Ana Pérez', document: 'Documento nacional DOC-1020' },
     professionalName: 'Dra. Laura Gómez',
     issuedOn: '2026-10-16',
@@ -29,6 +32,7 @@ export function planQuoteFixture(overrides: Partial<PlanQuote> = {}): PlanQuote 
         subtotal: 3150000,
         listPrice: null,
         agreementName: null,
+        listPriceCurrency: null,
       },
       {
         id: 'i2',
@@ -41,9 +45,10 @@ export function planQuoteFixture(overrides: Partial<PlanQuote> = {}): PlanQuote 
         subtotal: 150000,
         listPrice: null,
         agreementName: null,
+        listPriceCurrency: null,
       },
     ],
-    totals: [{ currency: 'COP', gross: 3650000, discount: 350000, net: 3300000, agreementSaving: 0 }],
+    totals: [{ currency: 'VES', gross: 3650000, discount: 350000, net: 3300000, agreementSaving: 0 }],
     contentHash: 'c'.repeat(64),
     acceptance: null,
     ...overrides,
@@ -60,4 +65,14 @@ export const SIGNED_ACCEPTANCE: NonNullable<PlanQuote['acceptance']> = {
   ipAddress: null,
   userAgent: null,
   remote: null,
+  // DX-379 (C): la aceptación de ejemplo no es de un presupuesto vencido.
+  quoteValidUntil: null,
+  expiredMode: null,
+  expiredReason: null,
+  expiredNote: null,
+  repricingId: null,
+  // DX-417: aceptado entero.
+  pendingPlanId: null,
+  pendingItemIds: null,
+  pendingTotal: null,
 };

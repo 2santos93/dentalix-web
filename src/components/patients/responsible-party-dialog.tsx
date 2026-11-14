@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useEffect, useId, useState } from 'react';
 import { Check, Loader2, Search, X } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { getTokenRole } from '@/lib/auth/token-role';
 import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
 import { listPatients, type DocType, type Patient } from '@/lib/patients/patients-api';
 import {
@@ -53,6 +54,7 @@ export const responsibleDialogCopy = {
   docType: 'Tipo de documento',
   docTypeNone: 'Sin documento',
   docNumber: 'Número de documento',
+  docNumberHidden: 'El documento lo gestionan administración y recepción.',
   email: 'Email',
   emailHint: 'A él le llegan los avisos del paciente si es menor o no tiene email.',
   emailInvalid: 'Revisa el email: le falta algo (p. ej. nombre@dominio.com).',
@@ -138,6 +140,8 @@ export function ResponsiblePartyDialog({
 }: ResponsiblePartyDialogProps) {
   const ids = useId();
   const editing = party !== null;
+  // SEC-044: la API no entrega el documento al personal clínico ni acepta que lo escriba.
+  const docHidden = ['DENTIST', 'ASSISTANT'].includes(getTokenRole(token) ?? '');
   const [draft, setDraft] = useState<Draft>(() => draftFrom(party));
   const docTypeNames = useDocumentTypeNames(token);
   const [query, setQuery] = useState('');
@@ -223,7 +227,7 @@ export function ResponsiblePartyDialog({
             // Pre-flight I1: el contacto viaja entero, así que la etiqueta
             // también (la actual, o null); omitirla no la conservaría.
             docTypeLabel: draft.docType ? normalizeDocTypeLabel(draft.docTypeLabel) : null,
-            docNumber: draft.docNumber.trim() || null,
+            ...(docHidden ? {} : { docNumber: draft.docNumber.trim() || null }),
             email: draft.email.trim() || null,
             phone: draft.phone.trim() || null,
           }
@@ -406,15 +410,19 @@ export function ResponsiblePartyDialog({
                 ))}
               </NativeSelect>
             </FormField>
-            <FormField htmlFor={`${ids}-docnumber`} label={copy.docNumber}>
-              <Input
-                id={`${ids}-docnumber`}
-                value={draft.docNumber}
-                maxLength={60}
-                autoComplete="off"
-                onChange={(e) => set('docNumber', e.target.value)}
-              />
-            </FormField>
+            {docHidden ? (
+              editing ? <p className="text-sm text-text-muted sm:self-end">{copy.docNumberHidden}</p> : null
+            ) : (
+              <FormField htmlFor={`${ids}-docnumber`} label={copy.docNumber}>
+                <Input
+                  id={`${ids}-docnumber`}
+                  value={draft.docNumber}
+                  maxLength={60}
+                  autoComplete="off"
+                  onChange={(e) => set('docNumber', e.target.value)}
+                />
+              </FormField>
+            )}
             {draft.docType ? (
               <DocTypeLabelField
                 id={`${ids}-doctypelabel`}

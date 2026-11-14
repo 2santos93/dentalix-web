@@ -2,16 +2,18 @@ import { test, expect, type APIRequestContext, type Page } from './support/test'
 import { randomUUID } from 'node:crypto';
 import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
-import { expectTouchTarget } from './support/touch-targets';
+import { expectTouchTarget, TOUCH_TARGET_PX, touchPx } from './support/touch-targets';
+import { dataList, dataListRows } from './support/data-list';
+import { DEMO_CURRENCY } from './support/demo';
 
 /**
  * e2e (DX-390): cobro dividido en varias formas de pago con un solo recibo.
  *
  * Contra la clínica DEMO sembrada (`npm run seed:demo` en la API), con sus
  * medios iniciales y «Pago móvil» (pide referencia):
- *   - recepción abre «Registrar abono», cobra una parte en efectivo en pesos y
- *     pulsa «Añadir otra forma de pago» para el resto por «Pago móvil» en
- *     dólares; el modal enseña el total y lo pendiente en la moneda del plan;
+ *   - recepción abre «Registrar abono», cobra una parte en efectivo en dólares
+ *     (la moneda del plan y de la sede principal) y pulsa «Añadir otra forma de
+ *     pago» para otra parte por «Pago móvil» en bolívares; el modal enseña el total y lo pendiente en la moneda del plan;
  *   - sin la referencia que pide el medio, el error sale en su campo;
  *   - el cobro deja dos abonos con el MISMO recibo, y ese recibo lleva las dos
  *     formas de pago.
@@ -34,7 +36,7 @@ interface Seeded {
   headers: Record<string, string>;
 }
 
-/** Paciente con un plan en COP aceptado, sembrado como ADMIN por la API. */
+/** Paciente con un plan en la moneda de la sede (USD) aceptado, sembrado como ADMIN por la API. */
 async function seedPatient(request: APIRequestContext, origin: string, tag: string): Promise<Seeded> {
   const host = new URL(origin).host;
   const login = await request.post(`${API_URL}/auth/login`, {
@@ -63,15 +65,15 @@ async function seedPatient(request: APIRequestContext, origin: string, tag: stri
     kind: 'PROCEDURE',
     labelEs: `Corona DX390 ${tag}`,
     color: '#3366CC',
-    defaultPrice: 900_000,
+    defaultPrice: 900,
   });
   const plan = await send<{ id: string }>('post', `/patients/${patient.id}/treatment-plans`, {
-    currency: 'COP',
+    currency: DEMO_CURRENCY,
   });
   const item = await send<{ id: string }>('post', `/treatment-plans/${plan.id}/items`, {
     toothNumber: '16',
     catalogItemId: catalog.id,
-    price: 900_000,
+    price: 900,
   });
   await send('patch', `/treatment-plans/${plan.id}/items/${item.id}`, { status: 'ACCEPTED' });
   return { patientId: patient.id, planId: plan.id, headers };
@@ -115,10 +117,10 @@ for (const viewport of [
     await expect(dialog.getByLabel('Plan')).toBeVisible({ timeout: 15_000 });
 
     // Primera forma de pago: efectivo en la moneda del plan.
-    await dialog.locator('#rp-amount').fill('100000');
+    await dialog.locator('#rp-amount').fill('100');
     await dialog.locator('#rp-method').selectOption({ label: 'Efectivo' });
 
-    // «Añadir otra forma de pago»: el resto por «Pago móvil» en dólares.
+    // «Añadir otra forma de pago»: otra parte por «Pago móvil» en bolívares (20 USD a la tasa de la demo).
     const add = dialog.getByRole('button', { name: 'Añadir otra forma de pago' });
     if (viewport.width === 390) {
       // Medido con el diálogo en reposo (su entrada escala el contenido).
@@ -126,15 +128,21 @@ for (const viewport of [
     }
     await add.click();
     const second = dialog.getByTestId('split-line-2');
-    await second.getByLabel('Importe').fill('20');
-    await second.getByLabel('Moneda').selectOption('USD');
+    // DX-442 (FE-093): a 390 px los controles de la línea miden al menos 44 px.
+    if (viewport.width === 390) {
+      for (const name of ['Importe', 'Moneda', 'Método']) {
+        await expectTouchTarget(second.getByLabel(name), { scope: dialog, label: `línea 2 · ${name}` });
+      }
+    }
+    await second.getByLabel('Importe').fill('5000');
+    await second.getByLabel('Moneda').selectOption('VES');
     await second.getByLabel('Método').selectOption({ label: 'Pago móvil' });
 
     // Total y pendiente en la moneda del plan.
     const summary = dialog.getByTestId('split-summary');
-    await expect(summary).toContainText('Cobro en la moneda del plan (COP)');
+    await expect(summary).toContainText(`Cobro en la moneda del plan (${DEMO_CURRENCY})`);
     await expect(summary).toContainText('Pendiente del plan');
-    await expect(summary).toContainText(/900\.000,00/);
+    await expect(summary).toContainText(/900,00/);
     await expectNoHorizontalScroll(page);
 
     // La referencia que pide el medio se marca en SU campo.
@@ -145,7 +153,11 @@ for (const viewport of [
     await reference.fill(`PM ${tag}`);
     await dialog.getByRole('button', { name: 'Registrar abono' }).click();
     await expect(dialog).toBeHidden({ timeout: 15_000 });
-    await expect(page.getByText(/Cobro registrado: .* en 2 formas de pago/)).toBeVisible();
+    // DX-414: el aviso del cobro (con su recibo) queda a la vista —en pantalla,
+    // no solo en el DOM— a 390 y a 1440 px; lleva el número del recibo único.
+    const notice = page.getByText(/Cobro registrado: .* en 2 formas de pago .* recibo [A-Z0-9]+-\d+/);
+    await expect(notice).toBeVisible();
+    await expect(notice).toBeInViewport();
 
     // Dos abonos con el MISMO recibo, y el recibo lleva las dos formas de pago.
     const list = await request.get(`${API_URL}/treatment-plans/${seeded.planId}/payments`, {
@@ -162,11 +174,84 @@ for (const viewport of [
       split: { lines: { currency: string; paymentMethodName: string }[]; total: { currency: string } } | null;
     };
     expect(body.split?.lines.map((l) => [l.currency, l.paymentMethodName])).toEqual([
-      ['COP', 'Efectivo'],
-      ['USD', 'Pago móvil'],
+      [DEMO_CURRENCY, 'Efectivo'],
+      ['VES', 'Pago móvil'],
     ]);
-    expect(body.split?.total.currency).toBe('COP');
+    expect(body.split?.total.currency).toBe(DEMO_CURRENCY);
     await expectNoHorizontalScroll(page);
+
+    // DX-414 (C1): en el estado de cuenta las dos líneas se ven juntas con el distintivo del recibo único.
+    const receiptNumber = payments[0].receiptNumber;
+    const splitLabel = `Cobro dividido · 2 formas · ${receiptNumber}`;
+    await page.goto(`${origin}/patients/${seeded.patientId}?tab=account-statement`);
+    const statement = page.locator('#tabpanel-account-statement');
+    await expect(statement.getByRole('button', { name: 'Registrar abono' })).toBeVisible({ timeout: 15_000 });
+    await expect(statement.getByText(splitLabel).locator('visible=true')).toHaveCount(2, { timeout: 15_000 });
+    await expectNoHorizontalScroll(page);
+
+    // DX-414 (C2): a 390 px, «Registrar abono», el pie del recibo y los botones de anular miden 44 px
+    // (con `expect.poll` tras la animación del diálogo).
+    if (viewport.width === 390) {
+      await expectTouchTarget(statement.getByRole('button', { name: 'Registrar abono' }), {
+        label: 'Registrar abono (estado de cuenta)',
+      });
+      // El abono que creó este test (el de «Pago móvil» con su referencia), no «el primero».
+      const ownRow = dataListRows(dataList(statement, 'Movimientos (abonos)')).filter({ hasText: `Ref. PM ${tag}` });
+      await expect(ownRow).toHaveCount(1);
+      await ownRow.getByRole('button', { name: /^Acciones de abono/ }).click();
+      await page.getByRole('menuitem', { name: 'Recibo' }).click();
+      const receiptDialog = page.getByRole('dialog', { name: /recibo de caja/i });
+      await expect(receiptDialog.getByTestId('receipt-document')).toBeVisible({ timeout: 15_000 });
+      const footerControls = [
+        receiptDialog.getByRole('button', { name: 'Cerrar', exact: true }).last(),
+        receiptDialog.getByRole('button', { name: /enviar/i }),
+        receiptDialog.getByRole('link', { name: /tirilla 80 mm/i }),
+        receiptDialog.getByRole('link', { name: /imprimir a4/i }),
+      ];
+      for (const control of footerControls) {
+        await expect
+          .poll(async () => touchPx((await control.boundingBox())?.height ?? 0), { message: 'pie del recibo: 44 px' })
+          .toBeGreaterThanOrEqual(TOUCH_TARGET_PX);
+      }
+      await page.keyboard.press('Escape');
+      await expect(receiptDialog).toBeHidden();
+
+      await ownRow.getByRole('button', { name: /^Acciones de abono/ }).click();
+      await page.getByRole('menuitem', { name: 'Anular' }).click();
+      const voidDialog = page.getByRole('dialog', { name: '¿Anular este abono?' });
+      await expect(voidDialog).toBeVisible();
+      await expectTouchTarget(voidDialog.getByRole('button', { name: 'Anular abono' }), {
+        scope: voidDialog,
+        label: 'Anular abono',
+      });
+      await expectTouchTarget(voidDialog.getByRole('button', { name: 'Cancelar' }), {
+        scope: voidDialog,
+        label: 'Cancelar anular',
+      });
+      await page.keyboard.press('Escape');
+      await expect(voidDialog).toBeHidden();
+    }
+
+    // DX-414 (C4): la pestaña Plan dice el medio real («Pago móvil») y su referencia, no «Transferencia».
+    // Recepción no ve la pestaña Plan (`patientTabAccess`: solo roles clínicos y ADMIN): la mira un ADMIN.
+    const adminContext = await browser.newContext({ viewport });
+    const adminPage = await adminContext.newPage();
+    await login(adminPage, origin, ADMIN_EMAIL);
+    await adminPage.goto(`${origin}/patients/${seeded.patientId}?tab=treatment-plans`);
+    const plan = adminPage.locator('#tabpanel-treatment-plans');
+    await expect(plan.getByRole('heading', { name: 'Detalle del plan' })).toBeVisible({ timeout: 15_000 });
+    const disclosure = plan.getByRole('button', { name: /^Abonos registrados\s+\d+ abonos?$/ });
+    if ((await disclosure.getAttribute('aria-expanded')) === 'false') await disclosure.click();
+    await expect(plan.getByText('Pago móvil').first()).toBeVisible({ timeout: 15_000 });
+    await expect(plan.getByText(`Ref. PM ${tag}`).first()).toBeVisible();
+    // Solo el texto visible de la lista de abonos del plan (no el panel entero ni el DOM oculto).
+    await expect(
+      dataList(plan, 'Abonos del plan de tratamiento').getByText('Transferencia').locator('visible=true'),
+    ).toHaveCount(0);
+    // (a 390 px la línea del teléfono dice «Cobro dividido · 2 formas»; el recibo ya va en su línea)
+    await expect(plan.getByText(/Cobro dividido · 2 formas/).first()).toBeVisible();
+    await expectNoHorizontalScroll(adminPage);
+    await adminContext.close();
     await context.close();
   });
 }

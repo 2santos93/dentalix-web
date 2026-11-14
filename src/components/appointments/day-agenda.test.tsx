@@ -176,6 +176,23 @@ describe('DayAgenda', () => {
     );
   });
 
+  it('DX-299: dos citas a la misma hora se distinguen por el paciente en el selector', () => {
+    const { container } = render(
+      <DayAgenda
+        clock={CLOCK}
+        appointments={[earlier, { ...earlier, id: 'apt-2', patientId: 'pat-2' }]}
+        loading={false}
+        onStatusChange={jest.fn()}
+        patientNames={{ 'pat-1': 'Ana García', 'pat-2': 'Laura Castro' }}
+      />,
+    );
+    const table = container.querySelector('table') as HTMLElement;
+    const [first, second] = within(table).getAllByRole('combobox');
+    expect(first.getAttribute('aria-label') ?? first).not.toEqual(second.getAttribute('aria-label') ?? second);
+    expect(first).toHaveAccessibleName(expect.stringContaining('de Ana García'));
+    expect(second).toHaveAccessibleName(expect.stringContaining('de Laura Castro'));
+  });
+
   it('does NOT render a status select when onStatusChange is not provided (backward compatible, read-only badge only)', () => {
     render(<DayAgenda clock={CLOCK} appointments={[earlier]} loading={false} />);
     expect(screen.queryAllByRole('combobox')).toHaveLength(0);
@@ -195,7 +212,7 @@ describe('DayAgenda', () => {
       expect(desktopSelects[1]).toHaveTextContent('Confirmada');
       // DX-295: el nombre lleva el estado actual para el lector de pantalla.
       expect(desktopSelects[0]).toHaveAccessibleName(
-        `Estado de la cita de ${timeLabel(earlier.start, earlier.end)}: Agendada`,
+        `Estado de la cita de ${timeLabel(earlier.start, earlier.end)} de pat-1: Agendada`,
       );
 
       const mobileList = screen.getAllByRole('list').find((l) => l.tagName === 'UL') as HTMLElement;

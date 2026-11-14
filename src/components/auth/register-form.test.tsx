@@ -147,7 +147,8 @@ describe('RegisterForm', () => {
       errorId,
     );
     expect(screen.getByLabelText(/correo/i)).toHaveAttribute('aria-describedby', errorId);
-    expect(screen.getByLabelText('Contraseña')).toHaveAttribute('aria-describedby', errorId);
+    // DX-118: la contraseña lleva además su ayuda (FormField la asocia sola).
+    expect(screen.getByLabelText('Contraseña').getAttribute('aria-describedby')?.split(' ')).toContain(errorId);
   });
 
   // DX-029: la respuesta del registro es la misma exista o no el correo.

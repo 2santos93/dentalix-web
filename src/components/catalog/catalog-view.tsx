@@ -2,7 +2,12 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { ApiError } from '@/lib/api/api-error';
+import { listNoteTemplates, type NoteTemplate } from '@/lib/clinical-notes/note-templates-api';
+import { FieldError } from '@/components/errors/field-error';
+import { getTokenRole } from '@/lib/auth/token-role';
 import {
+  canWriteCatalog,
   listCatalogDirectory,
   listCatalogItems,
   createCatalogItem,
@@ -28,10 +33,12 @@ import type { RowAction } from '@/components/shared/row-actions';
 import { ListToolbar, ResultCount } from '@/components/shared/list-toolbar';
 import { notifyError } from '@/components/errors/notify';
 import { ClinicWideNote } from '@/components/locations/clinic-wide-note';
-import { formatAmount, formatCurrency } from '@/lib/format/currency';
+import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 import { useLocationsState } from '@/lib/locations/use-locations-state';
 import { clinicBaseCurrency, hasActiveLocationWithoutCurrency } from '@/lib/locations/location-settings';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { useSedeStamp, type SedePainters } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 
 type CatalogKind = 'PROCEDURE' | 'DIAGNOSIS';
 
@@ -97,6 +104,7 @@ const copy = {
   empty: 'El catálogo todavía está vacío.',
   emptyHint:
     'Agrega tu primer procedimiento para poder usarlo en los planes de tratamiento.',
+  emptyHintReadOnly: 'Lo prepara el administrador de la clínica.',
   searchLabel: 'Buscar por nombre, código o categoría',
   searchPlaceholder: 'Buscar…',
   filterKindLabel: 'Filtrar por tipo',
@@ -124,7 +132,30 @@ const copy = {
   // diagnóstico no se cobra, así que su «sin precio» es lo normal y va en «—».
   noPrice: 'Sin precio',
   priceFallback: '—',
+  // DX-455: la plantilla que se sugiere al marcar hecho el procedimiento.
+  templateLabel: 'Plantilla de evolución',
+  templateHint: 'Opcional. Al marcar hecho este procedimiento en un plan, la evolución se abre con esta plantilla.',
+  templateNone: 'Sin plantilla',
+  templateInactive: (name: string) => `${name} (desactivada)`,
+  templateMissing: 'Plantilla no disponible',
+  templateInactiveHint: (name: string) =>
+    `«${name}» está desactivada: no se sugiere al marcar hecho. Actívala en Ajustes → Plantillas de evolución o elige otra.`,
+  templatesLoading: 'Cargando plantillas…',
+  templatesError: 'Plantillas no disponibles',
 };
+
+/**
+ * ¿El 400/404 de la API es de la plantilla ligada? Va junto a su campo. La API
+ * no manda código para estos: se reconoce su texto en español (el que ya
+ * filtra `apiErrorMessage`), que siempre nombra la plantilla.
+ */
+function isTemplateLinkError(err: unknown): boolean {
+  return (
+    err instanceof ApiError &&
+    (err.status === 400 || err.status === 404) &&
+    /plantilla/i.test(apiErrorMessage(err, ''))
+  );
+}
 
 /**
  * `label` es el nombre a secas: sirve para el filtro de la barra y para la
@@ -153,21 +184,24 @@ const DEFAULT_COLOR = '#0E7490';
  * siempre en USD). Mientras no se sabe la moneda — cargando, o si las sedes no
  * cargaron — el importe va sin símbolo: nunca con una moneda que no es la suya.
  */
-function formatPrice(price: number, currency: string | null | undefined): string {
-  return currency ? formatCurrency(price, currency) : formatAmount(price);
+function formatPrice(price: number, currency: string | null | undefined, stamp: SedePainters): string {
+  if (currency) return stamp.money(price, currency);
+  return stamp.fmt ? stamp.fmt.number(price, { min: 2, max: 2 }) : NO_SEDE_FORMAT;
 }
 
 /** La celda de precio: importe, «Sin precio» (procedimiento) o nada (diagnóstico). */
 function PriceCell({
   item,
   currency,
+  stamp,
   fallback,
 }: {
   item: DentalCatalogItem;
   currency: string | null;
+  stamp: SedePainters;
   fallback: React.ReactNode;
 }) {
-  if (item.defaultPrice != null) return <>{formatPrice(item.defaultPrice, currency)}</>;
+  if (item.defaultPrice != null) return <>{formatPrice(item.defaultPrice, currency, stamp)}</>;
   if (item.kind === 'PROCEDURE') return <Badge variant="warning">{copy.noPrice}</Badge>;
   return <>{fallback}</>;
 }
@@ -199,15 +233,24 @@ interface CatalogViewProps {
  * history in `ToothRecord` / plan items that reference it is preserved.
  */
 export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
-  // Moneda base de la clínica (la común de sus sedes activas, GLOBAL-G1). Con
-  // sedes en monedas distintas, el importe va sin símbolo. Si las sedes no
-  // cargaron o alguna no tiene moneda tampoco lleva símbolo, y además se dice
-  // con `SedeConfigError`: nunca una moneda de reserva.
+  // DX-064: Odontólogo y Asistente leen el catálogo; escribir es de ADMIN, como en la API.
+  const canWrite = canWriteCatalog(getTokenRole(token));
+  const stamp = useSedeStamp(token);
+  // Moneda del catálogo (DX-502-ter). La API la manda con cada página, igual para
+  // todos los roles: la que fijó la clínica en Ajustes o, sin ella, la común de
+  // sus sedes activas (`null` si no se sabe). Hasta que llega la primera página
+  // (`undefined`) rige la regla de antes: la común de las sedes activas
+  // (GLOBAL-G1). Con sedes en monedas distintas, el importe va sin símbolo. Si
+  // las sedes no cargaron o alguna no tiene moneda tampoco lleva símbolo, y
+  // además se dice con `SedeConfigError`: nunca una moneda de reserva.
   const locationsState = useLocationsState(token);
-  const currency = locationsState.status === 'ready' ? clinicBaseCurrency(locationsState.locations) : null;
+  const [serverCurrency, setServerCurrency] = useState<string | null | undefined>(undefined);
+  const sedesCurrency = locationsState.status === 'ready' ? clinicBaseCurrency(locationsState.locations) : null;
+  const currency = serverCurrency !== undefined ? serverCurrency : sedesCurrency;
   const currencyUnknown =
-    locationsState.status === 'error' ||
-    (locationsState.status === 'ready' && hasActiveLocationWithoutCurrency(locationsState.locations));
+    currency === null &&
+    (locationsState.status === 'error' ||
+      (locationsState.status === 'ready' && hasActiveLocationWithoutCurrency(locationsState.locations)));
   const [items, setItems] = useState<DentalCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -225,6 +268,14 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [category, setCategory] = useState('');
   const [allowDiscount, setAllowDiscount] = useState(true);
+  // DX-455: '' = sin plantilla.
+  const [templateLink, setTemplateLink] = useState('');
+  const [templateError, setTemplateError] = useState<string | null>(null);
+  const templateSelectRef = React.useRef<HTMLSelectElement>(null);
+  // Todas las plantillas (también las desactivadas, para nombrar la ligada).
+  const [noteTemplates, setNoteTemplates] = useState<NoteTemplate[] | null>(null);
+  const [noteTemplatesFailed, setNoteTemplatesFailed] = useState(false);
+  const [noteTemplatesKey, setNoteTemplatesKey] = useState(0);
   const [priceError, setPriceError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -309,6 +360,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
         if (cancelled) return;
         setItems(data.items);
         setTotal(data.total);
+        setServerCurrency(data.catalogCurrency);
         // El backend acota `pageSize`: se lee de la respuesta, no se asume.
         setPageSize(data.pageSize);
         // Una sola fila devuelta alguna vez basta para saber que el catálogo no
@@ -342,6 +394,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
       .then((data) => {
         setItems(data.items);
         setTotal(data.total);
+        setServerCurrency(data.catalogCurrency);
         setPageSize(data.pageSize);
         if (data.total > 0) setHasAny(true);
         setLoadError(null);
@@ -353,7 +406,27 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
       });
   }
 
+  // DX-455: las plantillas se piden al abrir el formulario (solo ADMIN lo abre).
+  useEffect(() => {
+    if (!showForm || !token) return;
+    let cancelled = false;
+    listNoteTemplates(token, { includeInactive: true })
+      .then((data) => {
+        if (cancelled) return;
+        setNoteTemplates(data);
+        setNoteTemplatesFailed(false);
+      })
+      .catch(() => {
+        if (!cancelled) setNoteTemplatesFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showForm, token, noteTemplatesKey]);
+
   function resetForm() {
+    setTemplateLink('');
+    setTemplateError(null);
     setName('');
     setKind('PROCEDURE');
     setCode('');
@@ -379,6 +452,8 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
     setColor(item.color);
     setCategory(item.category ?? '');
     setAllowDiscount(item.allowDiscount ?? true);
+    setTemplateLink(item.clinicalNoteTemplateId ?? '');
+    setTemplateError(null);
     setEditingItem(item);
     setFormError(null);
     setShowForm(true);
@@ -387,7 +462,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
   // DX-212: `/catalog?item=<id>` abre ese ítem en edición una vez cargado.
   const [openedInitial, setOpenedInitial] = useState(false);
   useEffect(() => {
-    if (!initialItemId || openedInitial || !token) return;
+    if (!initialItemId || openedInitial || !token || !canWrite) return;
     let cancelled = false;
     listCatalogItems(token)
       .then((all) => {
@@ -403,7 +478,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [initialItemId, openedInitial, token]);
+  }, [canWrite, initialItemId, openedInitial, token]);
 
   // Builds the shared payload from the current form fields. Empty optional
   // fields are omitted (so a blank price/category doesn't send anything) — a
@@ -416,16 +491,30 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
       kind,
       labelEs: name.trim(),
       color,
-      allowDiscount,
+      // DX-105-bis: la casilla solo existe en los procedimientos; un diagnóstico no la manda.
+      ...(kind === 'PROCEDURE' ? { allowDiscount } : {}),
       ...(defaultPrice !== undefined ? { defaultPrice } : {}),
       ...(trimmedCategory ? { category: trimmedCategory } : {}),
+      ...templateLinkPatch(),
     };
+  }
+
+  /**
+   * DX-455: la plantilla solo se manda si cambió (una ligada que se desactivó
+   * después daría 400 al volver a mandarla). Un diagnóstico no lleva: si el
+   * ítem pasa a diagnóstico, se desliga.
+   */
+  function templateLinkPatch(): { clinicalNoteTemplateId?: string | null } {
+    const stored = editingItem?.clinicalNoteTemplateId ?? null;
+    const wanted = kind === 'PROCEDURE' && templateLink !== '' ? templateLink : null;
+    return wanted === stored ? {} : { clinicalNoteTemplateId: wanted };
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setFormError(null);
     setPriceError(null);
+    setTemplateError(null);
     // DX-241: la lectura común de los campos de dinero, en la moneda de la
     // clínica (la de los precios del catálogo).
     const parsedPrice = price.trim() === '' ? null : parseMoneyInput(price, currency ?? '');
@@ -451,7 +540,13 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
       const fallback = editingItem
         ? copy.genericUpdateError
         : copy.genericCreateError;
-      setFormError(apiErrorMessage(err, fallback));
+      if (isTemplateLinkError(err)) {
+        // DX-455: el error de la plantilla va junto a su campo, con el foco.
+        setTemplateError(apiErrorMessage(err, fallback));
+        templateSelectRef.current?.focus();
+      } else {
+        setFormError(apiErrorMessage(err, fallback));
+      }
     } finally {
       setSaving(false);
     }
@@ -523,10 +618,10 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
       header: copy.colPrice,
       numeric: true,
       mobile: 'trailing',
-      cell: (item) => <PriceCell item={item} currency={currency} fallback={copy.priceFallback} />,
+      cell: (item) => <PriceCell item={item} currency={currency} stamp={stamp} fallback={copy.priceFallback} />,
       mobileCell: (item) =>
         item.defaultPrice == null && item.kind === 'DIAGNOSIS' ? null : (
-          <PriceCell item={item} currency={currency} fallback={null} />
+          <PriceCell item={item} currency={currency} stamp={stamp} fallback={null} />
         ),
     },
     {
@@ -578,9 +673,11 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
           value={searchInput}
           onChange={setSearchInput}
           action={
-            <Button type="button" onClick={openCreate}>
-              <Plus /> {copy.addToggle}
-            </Button>
+            canWrite ? (
+              <Button type="button" onClick={openCreate}>
+                <Plus /> {copy.addToggle}
+              </Button>
+            ) : undefined
           }
         >
           <NativeSelect
@@ -678,6 +775,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
               error={priceError}
             >
               <MoneyInput
+                money={stamp.money}
                 id="catalog-price"
                 currency={currency ?? ''}
                 value={price}
@@ -720,19 +818,41 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
             </FormField>
           </div>
 
-          <Checkbox
-            id="catalog-allow-discount"
-            checked={allowDiscount}
-            onChange={(e) => setAllowDiscount(e.target.checked)}
-            label={copy.allowDiscountLabel}
-            description={copy.allowDiscountHint}
-          />
+          {/* DX-105-bis: un diagnóstico no tiene precio: nada que descontar. */}
+          {kind === 'PROCEDURE' ? (
+            <Checkbox
+              id="catalog-allow-discount"
+              checked={allowDiscount}
+              onChange={(e) => setAllowDiscount(e.target.checked)}
+              label={copy.allowDiscountLabel}
+              description={copy.allowDiscountHint}
+            />
+          ) : null}
+          {kind === 'PROCEDURE' ? (
+            <TemplateLinkField
+              templates={noteTemplates}
+              failed={noteTemplatesFailed}
+              onRetry={() => {
+                setNoteTemplatesFailed(false);
+                setNoteTemplates(null);
+                setNoteTemplatesKey((k) => k + 1);
+              }}
+              value={templateLink}
+              onChange={(next) => {
+                setTemplateLink(next);
+                setTemplateError(null);
+              }}
+              error={templateError}
+              selectRef={templateSelectRef}
+            />
+          ) : null}
         </FormModal>
 
         {currencyUnknown ? (
           // Los precios siguen siendo correctos (sin símbolo): una nota, no una sección rota.
           <SedeConfigError kind="currency" variant="note" onRetry={locationsState.retry} />
         ) : null}
+        <SedeStampNote stamp={stamp} />
 
         {!loading && !loadError && hasAny ? (
           <ResultCount
@@ -752,7 +872,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
           // que solo esa ofrece limpiar los filtros.
           isEmpty={items.length === 0}
           emptyTitle={isFiltering ? copy.noMatches : copy.empty}
-          emptyDescription={isFiltering ? copy.noMatchesHint : copy.emptyHint}
+          emptyDescription={isFiltering ? copy.noMatchesHint : canWrite ? copy.emptyHint : copy.emptyHintReadOnly}
           emptyAction={
             isFiltering ? (
               <Button
@@ -772,7 +892,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
             rows={items}
             columns={columns}
             getRowKey={(item) => item.id}
-            onRowClick={openEdit}
+            onRowClick={canWrite ? openEdit : undefined}
             leading={(item) => (
               <span
                 aria-hidden
@@ -780,7 +900,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
                 style={{ backgroundColor: item.color }}
               />
             )}
-            rowActions={rowActions}
+            rowActions={canWrite ? rowActions : undefined}
             getRowLabel={(item) => item.labelEs}
           />
         </AsyncSection>
@@ -794,5 +914,77 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
         />
       </div>
     </>
+  );
+}
+
+/**
+ * DX-455: «Plantilla de evolución» del procedimiento: las activas y «Sin
+ * plantilla». Si la ligada se desactivó, se sigue viendo («… (desactivada)»,
+ * no elegible) para que la administración entienda por qué no se sugiere.
+ */
+function TemplateLinkField({
+  templates,
+  failed,
+  onRetry,
+  value,
+  onChange,
+  error,
+  selectRef,
+}: {
+  templates: NoteTemplate[] | null;
+  failed: boolean;
+  onRetry: () => void;
+  value: string;
+  onChange: (next: string) => void;
+  error: string | null;
+  selectRef: React.Ref<HTMLSelectElement>;
+}) {
+  const id = 'catalog-note-template';
+  const active = (templates ?? [])
+    .filter((t) => t.active)
+    .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  const linked = value ? (templates ?? []).find((t) => t.id === value) ?? null : null;
+  const linkedUnavailable = value !== '' && templates !== null && (!linked || !linked.active);
+  const hint =
+    linkedUnavailable && linked ? copy.templateInactiveHint(linked.name) : copy.templateHint;
+
+  if (failed) {
+    return (
+      <FormField htmlFor={id} label={copy.templateLabel}>
+        <FieldError label={copy.templatesError} onRetry={onRetry} retryId={id} className="h-11 sm:h-10" />
+      </FormField>
+    );
+  }
+  if (templates === null) {
+    return (
+      <FormField htmlFor={id} label={copy.templateLabel}>
+        <p id={id} role="status" className="flex h-11 items-center text-sm text-muted sm:h-10">
+          {copy.templatesLoading}
+        </p>
+      </FormField>
+    );
+  }
+  return (
+    <FormField htmlFor={id} label={copy.templateLabel} hint={hint} error={error}>
+      <NativeSelect
+        id={id}
+        ref={selectRef}
+        value={value}
+        aria-invalid={error ? true : undefined}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option value="">{copy.templateNone}</option>
+        {linkedUnavailable ? (
+          <option value={value} disabled>
+            {linked ? copy.templateInactive(linked.name) : copy.templateMissing}
+          </option>
+        ) : null}
+        {active.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
+          </option>
+        ))}
+      </NativeSelect>
+    </FormField>
   );
 }

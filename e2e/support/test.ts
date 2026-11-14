@@ -1,6 +1,22 @@
-import { test as base, expect } from '@playwright/test';
+import { test as base, expect, type BrowserContext } from '@playwright/test';
 
 export * from '@playwright/test';
+
+/**
+ * Las violaciones de CSP que registre la consola de `context`. Para un contexto
+ * propio (`browser.newContext`), que el guardián automático no ve: el test
+ * llama a `expectNone()` antes de cerrarlo (DX-514).
+ */
+export function watchCspViolations(context: BrowserContext): { expectNone(): void } {
+  const violations: string[] = [];
+  context.on('console', (msg) => {
+    const text = msg.text();
+    if (/Content Security Policy/i.test(text)) violations.push(text);
+  });
+  return {
+    expectNone: () => expect(violations, 'violaciones de CSP en la consola del navegador').toEqual([]),
+  };
+}
 
 /**
  * `test` de la suite con un guardián de CSP (DX-062): cualquier violación de la
@@ -11,13 +27,9 @@ export * from '@playwright/test';
 export const test = base.extend<{ cspGuard: void }>({
   cspGuard: [
     async ({ context }, use) => {
-      const violations: string[] = [];
-      context.on('console', (msg) => {
-        const text = msg.text();
-        if (/Content Security Policy/i.test(text)) violations.push(text);
-      });
+      const csp = watchCspViolations(context);
       await use();
-      expect(violations, 'violaciones de CSP en la consola del navegador').toEqual([]);
+      csp.expectNone();
     },
     { auto: true },
   ],

@@ -191,6 +191,16 @@ shifting OKLCH lightness only. The root layout injects it. Components never
 hardcode a hue and never put text in `primary` on a surface — text uses
 `primary-text`.
 
+**Choosing it (DX-019).** Ajustes › Datos de la clínica edits the color with a live
+preview of the derived family in both themes, because contrast is never at risk: only the
+exact hex may change. It warns (`lib/color/brand-color.ts`, never blocks) when white text
+misses AA on the chosen color, saying whether buttons get a darker tone or dark text, and
+when its OKLCH hue is < 30° from danger, warning or success (chroma ≥ .04). The server
+resolves the brand from the page's host on every host — subdomains, `*.localhost` and verified
+custom domains — so the first HTML already carries it (DX-517-ter). Only when the API did not
+answer in time (`status: 'unknown'`) does `BrandingProvider` fetch it in the browser; after
+saving it swaps the brand in place, without a reload (other users see it within 30 s).
+
 **The One Accent Rule.** The accent marks the primary action, the active item,
 selection and focus — ≤ 10% of any screen. If a screen reads as "the teal
 screen", pull back to ink and neutrals.
@@ -347,10 +357,10 @@ an English keyboard:
 - Anything else (`1.50.0`, `1.500,000`, a trailing separator) is **ambiguous**: the form
   does not submit and the field says why, in Spanish, next to it (rung 4, `InlineError`
   via `FormField`, with `aria-invalid` + `aria-describedby`). Asking beats storing 100×.
-- Up to 2 decimals in **every** currency, COP and CLP included: the API and the database
-  store every amount with cents (`Decimal(…, 2)`), so a COP price or balance with cents
+- Up to 2 decimals in **every** currency, RSD and CLP included: the API and the database
+  store every amount with cents (`Decimal(…, 2)`), so an RSD price or balance with cents
   that pre-fills a field saves untouched. The server stays the authority on amounts.
-- An amount pasted as the app paints it (`1.500.000,50 US$`, `150.000,00 COP`, `150,50 €`,
+- An amount pasted as the app paints it (`1.500.000,50 US$`, `150.000,00 USD`, `150,50 €`,
   Intl's hard spaces included) reads the same; another currency's code does not.
 - Above the API's cap (9.999.999.999,99) the field says so instead of sending it.
 - Text input with `inputMode="decimal"`, never `type="number"` (it silently drops a
@@ -364,8 +374,85 @@ shows that field's error, the preview stays silent so the message is not read tw
 A filter (e.g. Cartera's minimum balance) uses the same parser but no preview: nothing
 is saved.
 
+### Money (display)
+Every amount on screen, on paper (receipts, statements, prints) and in a user-facing CSV is
+painted by ONE helper: `formatCurrency` (`src/lib/format/currency.ts`) or, where the sede is
+known, `moneyWithCode`/`sedeMoney` (`src/lib/format/sede-number.ts`). No screen builds an
+`Intl.NumberFormat({ style: 'currency' })` of its own.
+
+**The Code Rule (DX-378).** An amount carries the ISO 4217 **code** of its currency
+(«450,00 USD», «VES 1.234,50»), never a CLDR symbol: in a multi-currency product «$» or
+«US$» do not mean the same in every country. Decimals follow DX-340 (2, or 0 for a
+currency without minor units when the amount is whole); separators follow the locale.
+A view never calls `formatCurrency` (no location): on a screen with a sede it paints through
+`useSedeStamp` (`stamp.money(amount, currency, locationId?)`) or, in `lib/**`, through the
+`stampPainters` it receives as a parameter; both end in `moneyWithCode` and render «—» while the
+location format loads (DX-522, DX-354b; `money-with-sede-guard.test.ts`, which has no pending
+list left: no file outside `lib/format/**` imports `formatCurrency`).
+
+**The Currency Text Rule (DX-517).** A clinic may say how it writes a currency it uses
+(Ajustes › Monedas, ADMIN only, audited): a map ISO code → text of 1–8 characters on one
+line («VES» → «Bs.»). When a currency has a text, that text takes the **code's place, in the
+position and with the spacing the locale gives the code** — «Bs. 1.234,50» in `es-VE`,
+«1.234,50 Bs.» in `de-DE` (`moneyWithCurrencyText`, `src/lib/format/currency-text.ts`).
+Without a text, nothing changes: the code, exactly as before.
+- The map arrives with the clinic's branding (root layout) and is set in the browser before
+  any child paints (`CurrencyTextsSync`), so the ~170 call sites never thread it. It is never
+  set on the server (module state is shared by every clinic's requests). Only when the server
+  could not tell (`status: 'unknown'`: the API did not answer in time) does the tab paint with
+  its last copy and ask the branding from the browser; a different map remounts the tree
+  once. With `clinic` or `none` there is no browser fetch and no remount (DX-517-ter).
+- A receipt **freezes** the map in its snapshot when issued; it is painted (screen, print,
+  email) with the frozen map, never today's: reprinting an old receipt never changes it.
+- The API formats the same way (`fmt.money(amount, currency, texts)`): the receipt email
+  and the reminder say exactly what the screen says. Web and API share golden vectors
+  (`currency-text.cases.json`, byte-for-byte copy checked in CI).
+- No country's symbol lives in code or in a default: the map starts empty.
+- A pasted amount written with the clinic's text («Bs. 1.234,50») reads like the code.
+
 ### Dates and times
-No native `<input type="date">`, `type="time"` or `type="datetime-local"`: the browser paints
+**Whose clock paints it (DX-354b).** Every date, time and amount of the staff app is painted
+with the zone, the locale and the 12/24 h clock of **the sede of the data**, never the browser's
+and never a hand-composed `dd/mm/yyyy` or `HH:mm`:
+- **The sede of the data.** A record that carries a `locationId` (an appointment, a payment, a
+  cash shift, an expense, an implant, a prescription, a follow-up, an anamnesis request) is
+  painted with THAT sede, row by row: in «Todas las sedes» a Caracas appointment reads
+  «9:00 a. m.» and a Berlin one «15:00» in the same list. Inside one row the date, the time and
+  the amount always come from the same clock.
+- **The reference sede.** A record with no sede (a template, a policy, the clinical history, an
+  aggregated ledger) is painted with the sede of the screen: the active one, or the main one
+  (the oldest active) in «Todas las sedes».
+- **The painter.** `useSedeStamp(token, locationIds?)` (`src/lib/locations/sede-stamp.ts`) gives
+  `stamp.date`, `time`, `dateTime`, `civilDate` and `money`, each with an optional `locationId`;
+  `stamp.maybe.*` return `null` instead of «—» for a `DataList` `mobileCell` (a mobile cell is
+  omitted, never «—»). `lib/**` has no hooks: it receives `stampPainters(clock)` (or a
+  `civilDate` painter) as a parameter. A civil day (`YYYY-MM-DD`, a birth date, a due date) goes
+  through `civilDate` and never through a zone; an instant goes through `date`/`dateTime`.
+- **A missing format is «—» plus one notice.** If the sede is loading, failed, or has no
+  zone/locale/clock, the value is «—» and `<SedeStampNote stamp={stamp} />` explains it ONCE per
+  screen or modal (with «Reintentar», and «Configurar sede» only for ADMIN). While loading there
+  is «—» and no notice. A sentence whose date is incidental («Tienes hasta el …») leaves the date
+  out rather than ending in «—»; a sentence whose date is the subject keeps the «—». Never
+  another sede's format, never the browser's. A button or a message that is sent or announced
+  (WhatsApp follow-up, an `aria-label`) never contains «—»: it is disabled or loses the phrase.
+- **Screen readers.** The notice lives in a `role="status"` region that is mounted empty and
+  filled afterwards (`SedeStampNote`, `DocumentFormatNote active={missing}`: always mounted,
+  never inside a conditional; `sede-clock-guard` rule 5). A bare «—» in a table cell is wrapped
+  by `DataList` in `MissingValue`, which says «Sin dato» to a screen reader.
+- **«Today».** `sedeToday(timeZone)` with `useSedeTimeZone`, or `civilDateInZone(iso, timeZone)`
+  for the day of an instant. Near midnight the browser may be a day ahead of the sede (Tokyo is
+  13 h ahead of Caracas): form maxima, the week of the roster and «this month» use the sede's
+  day. Without a zone the date field is replaced by `SedeConfigError variant="field"`.
+- **No sede at all.** The platform console (`/admin`, Dentalix staff) writes instants as
+  `platformInstant(iso)`, ISO 8601 with its zone: `2026-11-03 14:05 UTC`. It may only be
+  imported from `components/platform/**`.
+- **Guards.** `sede-clock-guard` (nothing but the five neutral helpers is imported from
+  `lib/format/date`; no literal-locale `Intl`/`toLocale*`; no `fmt.money`; `platformInstant`
+  only in the console; `DocumentFormatNote` always mounted) and `hand-composed-time-guard` (no
+  local `Date` getter, no `padStart` on both sides of a `:` or a `/`) fail CI; neither has a
+  list of pending screens. Examples use Venezuela and USD/VES; nothing here is country-specific.
+
+**Native inputs.** No native `<input type="date">`, `type="time"` or `type="datetime-local"`: the browser paints
 them in ITS language, not the clinic's — a Spanish receptionist on an English Chrome sees
 `mm/dd/yyyy` and 04/05 changes month. In a clinical record that is a patient-safety bug. Use
 the primitives in `src/components/ui` (react-aria segmented fields); a jest guard
@@ -496,6 +583,14 @@ circles spends the accent budget on decoration.
 focus (`title=` does neither on touch/keyboard). Never the only accessible name.
 `Popover`: anchored interactive layer (filters, pickers). Both float: surface + border +
 `shadow-overlay`.
+
+**A row action that exists but cannot run (DX-432).** `RowAction.disabledReason` keeps the item
+in the «⋯» as `aria-disabled` (still reachable by keyboard, never Radix `disabled`, which drops
+it from the focus order) and prints the reason under its label, tied with `aria-describedby`:
+a tooltip would be invisible on touch. Choosing it does nothing and the menu stays open. Used
+for «Anular» on a payment that backs a refund and for the credit actions when reception's cap
+is 0. After an action whose origin row is gone (a transfer, a just-issued refund receipt), focus
+lands on the section heading (`titleFocusable`), not on `<body>`.
 
 ### Error States
 Severity follows what a user can still do, not how bad the failure sounds. The
@@ -644,9 +739,20 @@ screen it opens; a group with no visible entries disappears.
     Cerrar sesión. The Android back button closes it (a history entry is pushed on open).
 - **Command palette** (⌘K / Ctrl+K anywhere; the sidebar trigger; the phone search button):
   one input + grouped listbox — *Pacientes* (name or document, 200ms debounce, ≥2 chars),
-  *Ir a* (sections the role can open; settings screens while typing), *Acciones* (Nueva cita,
-  Nuevo paciente). Combobox/listbox ARIA with `aria-activedescendant`; arrows, Ctrl+Home/End,
+  *Ir a* (sections the role can open; settings screens while typing — and, while typing,
+  «Mi día» → `/dashboard#pendientes`: the «Pendientes» block of Inicio, every role, never a
+  sidebar entry of its own), *Acciones* (Nueva cita, Nuevo paciente). Combobox/listbox ARIA with `aria-activedescendant`; arrows, Ctrl+Home/End,
   Enter. Accent-insensitive matching. Full-screen on phones.
+- **«¿Quién llama?»** (DX-224; Alt+Shift+Q anywhere, `code` not `key` because Option rewrites the
+  character on macOS; the second button under the sidebar search, the phone-bar button): a
+  `Dialog` (full-screen under 640px) with one phone field. Any format; under 7 digits the
+  `InlineError` «Escribe el número completo» sits by the field and nothing is sent. A paste of a
+  full number searches at once. Results are one 12px-radius row per patient (name, «Alerta clínica»
+  badge only when the API sent `hasCriticalAlert` — RECEPTION never gets the key —, the
+  «Saldo vencido» chip, next appointment and last visit painted with THEIR sede's clock, pending
+  balance by ISO code for ADMIN/RECEPTION only) with «Nueva cita» and «Abrir ficha». None:
+  «Ningún paciente con ese número» + «Crear paciente» (the phone travels in memory, never in the
+  URL). A failed search is rung 1 (`SectionError` + «Reintentar»), and a failed retry stays there.
 - **System chrome:** `viewport-fit=cover` and a `theme-color` per scheme set to the canvas
   token (light `#F7F9FC`, dark `#0B0F14`) — never the accent.
 
@@ -717,6 +823,14 @@ policies) — and each entry's label is **exactly** its page's title.
 - **Lists** in settings follow Tables (`DataList`, row → edit, `RowActions` «⋯»;
   Desactivar = reversible, Eliminar = irreversible with consequences). Empty list: no
   «0 items» count, the primary lives inside the `EmptyState`.
+
+### Access pages (login, register, reset, invitation)
+- One `AuthLayout`. From `lg` up, the right half is a full-bleed photograph that rotates on every
+  load (`randomHeroImage()`, picked in the server component and passed as a prop; owner decision,
+  2026-11-04, which supersedes the earlier "no photography" rule). Neutral black veil
+  (`from-black/80` to `black/20`, never a brand-coloured gradient) and the caption in white on it;
+  AA in light and dark, under any tenant accent. Without a photo: `surface-sunken` and the caption.
+- Below `lg` there is no photo and it is never downloaded (lazy image inside a `display: none` panel).
 
 ### Odontogram (signature)
 - FDI-numbered tooth map on a paper field; teeth are precise vector marks, 5 selectable surfaces

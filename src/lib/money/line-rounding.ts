@@ -9,10 +9,11 @@
  * importe es otra cosa (`formatCurrency`, dígitos de formato CLDR).
  */
 
+import { amountCents, centsToAmount } from './round';
+
 /** Decimales del redondeo por línea: los importes tienen como mucho 2. */
 export type RoundingDigits = 0 | 1 | 2;
 
-const HUNDRED = BigInt(100);
 const TEN_THOUSAND = BigInt(10000);
 const TWO = BigInt(2);
 
@@ -31,7 +32,7 @@ export function unitCents(digits: RoundingDigits): bigint {
 
 /** Importe → céntimos BigInt (redondeo al céntimo más cercano, como la API). */
 export function bigCents(amount: number): bigint {
-  return BigInt(Math.round(amount * 100));
+  return BigInt(amountCents(amount));
 }
 
 /** Un % (hasta 2 decimales) en puntos básicos: 7,5 % → 750. */
@@ -53,7 +54,7 @@ export function percentOfCentsInUnits(
 
 /** Unidades de la moneda → importe. */
 export function unitsToAmount(units: bigint, digits: RoundingDigits): number {
-  return Number(units * unitCents(digits)) / Number(HUNDRED);
+  return centsToAmount(Number(units * unitCents(digits)));
 }
 
 export interface MoneyLine {
@@ -63,12 +64,40 @@ export interface MoneyLine {
 
 /** Importe de una línea en céntimos exactos: precio − descuento. */
 export function lineCents(line: MoneyLine): number {
-  return Math.round(line.price * 100) - Math.round(line.discount * 100);
+  return amountCents(line.price) - amountCents(line.discount);
 }
 
 /** Total de un documento: la suma exacta de sus líneas. */
 export function linesTotal(lines: readonly MoneyLine[]): number {
-  return lines.reduce((sum, line) => sum + lineCents(line), 0) / 100;
+  return centsToAmount(lines.reduce((sum, line) => sum + lineCents(line), 0));
+}
+
+/** Máximo de cuotas de un plan de pagos: el mismo tope que la API (1…600). */
+export const MAX_INSTALLMENTS = 600;
+
+/**
+ * Cuotas de un plan de pagos (DX-488), espejo de `generateSchedule` de la API:
+ * en unidades de `roundingDigits` de la moneda (1, 10 o 100 céntimos), las
+ * cuotas 1…n−1 valen `floor(financiado / unidad / n) · unidad` (`base`) y la
+ * última el resto, céntimos sueltos incluidos (`last`): JPY 10000 en 3 = 3333,
+ * 3333, 3334. Con 2 dígitos es el reparto al céntimo de siempre. Solo calcula
+ * esas dos cifras (O(1)): nunca un array de `count` elementos, así un número
+ * de cuotas tecleado enorme no congela la pantalla. `null` si `count` no es un
+ * entero entre 1 y `MAX_INSTALLMENTS` o el financiado es negativo.
+ */
+export function installmentSplit(
+  financed: number,
+  count: number,
+  digits: RoundingDigits,
+): { base: number; last: number } | null {
+  const financedCents = amountCents(financed);
+  if (!Number.isInteger(count) || count < 1 || count > MAX_INSTALLMENTS || financedCents < 0) return null;
+  const unit = unitCents(digits);
+  const baseCents = Number((BigInt(financedCents) / unit / BigInt(count)) * unit);
+  return {
+    base: centsToAmount(baseCents),
+    last: centsToAmount(financedCents - baseCents * (count - 1)),
+  };
 }
 
 /**

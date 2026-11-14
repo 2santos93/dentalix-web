@@ -60,7 +60,7 @@ export default defineConfig({
     baseURL: `http://localhost:${WEB_PORT}`,
     // La zona de la sede, no la del runner (en GitHub, UTC): así las fechas y
     // horas que pinta la UI no dependen de la máquina.
-    timezoneId: 'America/Bogota',
+    timezoneId: 'America/Caracas',
     // Idioma sin región: la suite no recibe ninguna sugerencia de país (DX-312
     // P1). Ni `en-US` (del runner) ni otro con región, que sugeriría su país.
     locale: E2E_BROWSER_LOCALE,
@@ -80,8 +80,8 @@ export default defineConfig({
     {
       // DX-485 (FE-098): un teléfono con dedo (`hasTouch` + `isMobile`, que
       // activan `pointer: coarse`) a 390 px. SOLO el spec de objetivos
-      // táctiles: la suite entera no se repite aquí (la E2E de CI ya va
-      // justa de tiempo, OPS-053).
+      // táctiles: la suite entera no se repite aquí (duplicaría el tiempo de
+      // cada shard de la E2E de CI, que tiene 35 min de tope; OPS-053, DX-457).
       name: 'touch',
       testMatch: TOUCH_SPEC,
       use: {

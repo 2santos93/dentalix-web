@@ -11,15 +11,17 @@ import {
 import { followUpWhatsAppHref } from '@/lib/treatment-plans/plan-options';
 import {
   followUpAmount,
+  followUpValidity,
   groupFollowUp,
   type FollowUpGroup,
 } from '@/lib/treatment-plans/follow-up-groups';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { loadLocations } from '@/lib/session/session-store';
 import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { fetchClinicName } from '@/lib/clinic-branding';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatDate } from '@/lib/format/date';
+import { useSedeStamp, type SedePainters } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { NativeSelect } from '@/components/ui/native-select';
 import { FormField } from '@/components/shared/form-field';
@@ -28,6 +30,9 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { Pagination } from '@/components/shared/pagination';
 import { ResultCount } from '@/components/shared/list-toolbar';
 import { RejectPlanModal } from './reject-plan-modal';
+import { QuoteValidity } from './quote-validity';
+import { telHref } from '@/lib/receivables/presentation';
+import { ExternalLink } from '@/components/shared/external-link';
 
 export const pendingFollowUpCopy = {
   scopeAll: 'Todas las sedes',
@@ -53,6 +58,8 @@ export const pendingFollowUpCopy = {
   whatsapp: 'WhatsApp',
   whatsappLabel: (name: string) => `WhatsApp a ${name}`,
   noWhatsApp: 'El teléfono no sirve para WhatsApp',
+  whatsappUnavailableLabel: (name: string) =>
+    `WhatsApp a ${name}: no disponible hasta que la sede tenga su formato regional`,
   reject: 'Marcar rechazado',
   rejectAll: (n: number) => `Marcar rechazadas las ${n} opciones`,
   rejectOne: (label: string) => `Marcar rechazada: ${label}`,
@@ -76,11 +83,6 @@ const AGE_OPTIONS = [7, 15, 30, 60] as const;
 
 interface PendingFollowUpViewProps {
   token: string;
-}
-
-/** `tel:` sin espacios ni guiones (el `+` se conserva). */
-function telHref(phone: string): string {
-  return `tel:${phone.replace(/[^\d+]/g, '')}`;
 }
 
 /**
@@ -161,6 +163,12 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
 
   // D2: una fila por conversación (las opciones A/B del mismo plan juntas).
   const groups = groupFollowUp(data?.items ?? []);
+  // DX-354b: fecha, importe y WhatsApp de cada fila, con el reloj de la sede donde se
+  // presentó (E1); un solo aviso para la pantalla si alguna sede no tiene formato.
+  const stamp = useSedeStamp(
+    token,
+    groups.map((g) => g.presentedLocationId),
+  );
 
   function rejectActions(group: FollowUpGroup) {
     const open = (planIds: string[], subject: string) => () => {
@@ -225,7 +233,7 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
               {row.options.map((o) => (
                 // Una línea por opción (Z1): a 1440 px el monto bajaba solo a otra línea.
                 <li key={o.planId} className="t-caption whitespace-nowrap text-muted tabular-nums">
-                  {o.optionLabel ?? copy.noOption} · {formatCurrency(o.total, o.currency)}
+                  {o.optionLabel ?? copy.noOption} · {stamp.money(o.total, o.currency, o.presentedLocationId)}
                 </li>
               ))}
             </ul>
@@ -241,24 +249,59 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
       header: copy.colAmount,
       numeric: true,
       mobile: 'trailing',
-      cell: (row) => <span className="whitespace-nowrap font-medium text-ink">{followUpAmount(row.options)}</span>,
+      cell: (row) => <span className="whitespace-nowrap font-medium text-ink">{followUpAmount(row.options, (amount, code) => stamp.money(amount, code, row.presentedLocationId))}</span>,
     },
     {
       id: 'presented',
       header: copy.colPresented,
-      cell: (row) => (
-        <span className="tabular-nums">
-          {formatDate(row.presentedAt)}
-          <span className="t-caption block text-muted">{copy.daysAgo(row.daysSincePresented)}</span>
-        </span>
-      ),
-      // En el teléfono, la antigüedad es lo que decide a quién llamar.
-      mobileCell: (row) => copy.daysAgo(row.daysSincePresented),
+      cell: (row) => {
+        const validity = followUpValidity(row.options);
+        return (
+          <span className="tabular-nums">
+            {stamp.date(row.presentedAt, row.presentedLocationId)}
+            <span className="t-caption block text-muted">{copy.daysAgo(row.daysSincePresented)}</span>
+            {/* DX-379: si los precios siguen valiendo, o desde cuándo no. */}
+            {validity ? (
+              <span className="mt-1 block">
+                <QuoteValidity
+                  // «Por seguir» solo lista presentados.
+                  status="PRESENTED"
+                  validUntil={validity.validUntil}
+                  expired={validity.expired}
+                  locationId={validity.locationId}
+                  stamp={stamp}
+                />
+              </span>
+            ) : null}
+          </span>
+        );
+      },
+      // En el teléfono, la antigüedad es lo que decide a quién llamar; el
+      // vencido también (sin formato de la sede, la celda no lleva «—»).
+      mobileCell: (row) => {
+        const validity = followUpValidity(row.options);
+        return (
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>{copy.daysAgo(row.daysSincePresented)}</span>
+            {validity ? (
+              <QuoteValidity
+                // «Por seguir» solo lista presentados.
+                status="PRESENTED"
+                validUntil={validity.validUntil}
+                expired={validity.expired}
+                locationId={validity.locationId}
+                stamp={stamp}
+                omitWithoutFormat
+              />
+            ) : null}
+          </span>
+        );
+      },
     },
     {
       id: 'contact',
       header: copy.colPhone,
-      cell: (row) => <ContactLinks row={row} clinicName={clinicName} />,
+      cell: (row) => <ContactLinks row={row} clinicName={clinicName} stamp={stamp} />,
     },
   ];
 
@@ -281,6 +324,8 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
             </NativeSelect>
           </FormField>
         </div>
+
+        <SedeStampNote stamp={stamp} />
 
         <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
@@ -362,9 +407,20 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
 }
 
 /** Llamar (\`tel:\`) y WhatsApp prellenado: el bloque de contacto de la fila. */
-function ContactLinks({ row, clinicName }: { row: FollowUpGroup; clinicName: string | null }) {
+function ContactLinks({
+  row,
+  clinicName,
+  stamp,
+}: {
+  row: FollowUpGroup;
+  clinicName: string | null;
+  stamp: SedePainters;
+}) {
   if (!row.patientPhone) return <span className="text-muted">{copy.noPhone}</span>;
-  const whatsapp = followUpWhatsAppHref(row, clinicName);
+  const whatsapp = followUpWhatsAppHref(row, clinicName, stamp);
+  // El mensaje lleva la fecha de la presentación con el formato de la sede: sin él no se
+  // envía (nunca «—» dentro del texto). El botón se deshabilita y el aviso de la pantalla dice por qué.
+  const blockedByFormat = Boolean(row.patientWhatsApp) && stamp.maybe.date(row.presentedAt, row.presentedLocationId) === null;
   return (
     <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1">
       <a
@@ -376,16 +432,24 @@ function ContactLinks({ row, clinicName }: { row: FollowUpGroup; clinicName: str
         <span className="tabular-nums">{row.patientPhone}</span>
       </a>
       {whatsapp ? (
-        <a
+        <ExternalLink
           href={whatsapp}
-          target="_blank"
-          rel="noopener noreferrer"
           aria-label={copy.whatsappLabel(row.patientName)}
           className={contactLinkClass}
         >
           <MessageCircle aria-hidden className="size-4 text-muted" />
           {copy.whatsapp}
-        </a>
+        </ExternalLink>
+      ) : blockedByFormat ? (
+        <button
+          type="button"
+          disabled
+          aria-label={copy.whatsappUnavailableLabel(row.patientName)}
+          className={`${contactLinkClass} cursor-not-allowed text-muted opacity-60 no-underline hover:no-underline`}
+        >
+          <MessageCircle aria-hidden className="size-4 text-muted" />
+          {copy.whatsapp}
+        </button>
       ) : (
         <span className="t-caption text-muted">{copy.noWhatsApp}</span>
       )}
@@ -406,7 +470,7 @@ export function FollowUpScopeMarker({ token }: { token: string }) {
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
-    listLocations(token)
+    loadLocations(token)
       .then((list) => {
         if (cancelled) return;
         setLocations(list ?? []);

@@ -119,6 +119,11 @@ export function useSedeClock(token: string, locationId?: string | null): SedeClo
   return result.status === 'ready' ? result : { ...result, retry: state.retry };
 }
 
+/** El reloj de la sede cuando ya cargó; `null` mientras carga o en error (lo que lo usa se pinta «—»). */
+export function readyClock(state: SedeClockState): AgendaClock | null {
+  return state.status === 'ready' ? state.clock : null;
+}
+
 /** La hora del instante en la zona y con el reloj de la sede; «—» sin reloj. */
 export function sedeTime(iso: string, clock: SedeClock | null): string {
   return clock ? clock.fmt.time(new Date(iso), clock.timeZone) : NO_SEDE_FORMAT;

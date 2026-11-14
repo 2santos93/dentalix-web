@@ -9,6 +9,10 @@ export interface SectionHeaderProps extends Omit<React.HTMLAttributes<HTMLDivEle
   /** Nivel del título: `h2` dentro de una página, `h3` dentro de una pestaña o tarjeta. */
   as?: 'h2' | 'h3' | 'h4';
   titleId?: string;
+  /** El título puede recibir el foco por programa (no por Tab): tras una acción que recarga la sección. */
+  titleFocusable?: boolean;
+  /** Ref del título (p. ej. el destino del foco de la SaveBar, DX-546). */
+  titleRef?: React.Ref<HTMLHeadingElement>;
 }
 
 /**
@@ -22,6 +26,8 @@ export function SectionHeader({
   actions,
   as: Heading = 'h2',
   titleId,
+  titleFocusable = false,
+  titleRef,
   className,
   ...props
 }: SectionHeaderProps) {
@@ -31,7 +37,17 @@ export function SectionHeader({
       {...props}
     >
       <div className="flex min-w-0 flex-col gap-1">
-        <Heading id={titleId} className="t-title text-ink">
+        <Heading
+          ref={titleRef}
+          id={titleId}
+          tabIndex={titleFocusable ? -1 : undefined}
+          // El anillo de foco del producto (DESIGN.md → Focus), también aquí.
+          className={cn(
+            't-title text-ink',
+            titleFocusable &&
+              'rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text',
+          )}
+        >
           {title}
         </Heading>
         {description ? <p className="text-sm text-muted">{description}</p> : null}

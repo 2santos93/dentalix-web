@@ -62,8 +62,11 @@ for (const scrollbar of ['native', 'classic'] as const) {
       await page.emulateMedia({ colorScheme });
       await page.setViewportSize({ width: 1366, height: 768 });
       // Solo el contador es sintético; sesión, sedes y navegación usan la API real.
-      await page.route('**/medical-history/submissions/summary', (route) =>
-        route.fulfill({ json: { submitted: 12 } }));
+      // DX-503: los contadores del menú salen de `GET /work-queues/summary`.
+      await page.route('**/work-queues/summary*', (route) =>
+        route.fulfill({
+          json: { generatedAt: new Date().toISOString(), items: [{ key: 'ANAMNESIS_REVIEW', status: 'OK', count: 12 }] },
+        }));
       await signIn(page, admin.email);
       await expect(page.locator('aside').getByTestId('anamnesis-inbox-count')).toHaveText('12');
       if (scrollbar === 'classic') {
@@ -84,7 +87,8 @@ for (const scrollbar of ['native', 'classic'] as const) {
         });
         const links = nav.getByRole('link');
         await expect(links).toHaveCount(15);
-        await expect(nav.getByRole('link', { name: 'Anamnesis por revisar · 12', exact: true })).toBeVisible();
+        await expect(nav.getByRole('link', { name: 'Anamnesis 12 · por revisar', exact: true })).toBeVisible();
+        await expect(nav.locator('a[href="/agenda/pendiente-de-cerrar"]')).toHaveCount(1);
         await links.first().focus();
         const initialScroll = await nav.evaluate((el) => el.scrollTop);
         for (let index = 1; index < await links.count(); index++) {

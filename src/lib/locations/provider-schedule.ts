@@ -181,11 +181,6 @@ function formatIso(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** `YYYY-MM-DD` del día local del navegador (el «hoy» de la agenda). */
-export function localDateString(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
 export function addDaysIso(date: string, n: number): string {
   const d = parseIso(date);
   d.setUTCDate(d.getUTCDate() + n);

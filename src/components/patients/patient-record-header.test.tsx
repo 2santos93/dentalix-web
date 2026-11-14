@@ -2,11 +2,18 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PatientRecordHeader } from './patient-record-header';
 import type { Patient } from '@/lib/patients/patients-api';
+import { retentionChip } from './patient-retention-section';
+import { testStamp } from '@/lib/test/stamp';
+import { FORMAT_ES } from '@/lib/test/document-regional';
+import { act } from 'react';
+import { setupUser } from '@/lib/test/user';
+import { imagingExportMenuAction } from './imaging-export-dialog';
 
 function patient(overrides: Partial<Patient> = {}): Patient {
   return {
     id: 'p1',
     tenantId: 't1',
+    patientCode: '1013',
     firstName: 'Carlos',
     lastName: 'Mejía',
     docType: 'NATIONAL_ID',
@@ -40,14 +47,14 @@ function patient(overrides: Partial<Patient> = {}): Patient {
 
 describe('PatientRecordHeader', () => {
   it('pone el nombre del paciente en el h1 de la página', () => {
-    render(<PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} />);
+    render(<PatientRecordHeader fmt={FORMAT_ES.fmt} patient={patient()} loading={false} onEdit={() => {}} />);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Carlos Mejía');
   });
 
   it('saca edad, documento y teléfono a la cabecera, sin abrir ninguna pestaña', () => {
     render(
-      <PatientRecordHeader
-        patient={patient({ phone: '+57 300 000 0000' })}
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
+        patient={patient({ phone: '+58 412 000 0000' })}
         loading={false}
         onEdit={() => {}}
       />,
@@ -55,12 +62,12 @@ describe('PatientRecordHeader', () => {
     const strip = screen.getByRole('list', { name: /datos de identificación/i });
     expect(strip).toHaveTextContent(/años/);
     expect(strip).toHaveTextContent('ID local DOC-1002');
-    expect(strip).toHaveTextContent('Tel. +57 300 000 0000');
+    expect(strip).toHaveTextContent('Tel. +58 412 000 0000');
   });
 
   it('shows the international phone of the API, or the stored one when it has none (DX-387)', () => {
     const { rerender } = render(
-      <PatientRecordHeader
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
         patient={patient({ phone: '0412-1234567', phoneInternational: '+58 412 1234567' })}
         loading={false}
         onEdit={() => {}}
@@ -69,7 +76,7 @@ describe('PatientRecordHeader', () => {
     expect(screen.getByText('Tel. +58 412 1234567')).toBeInTheDocument();
     expect(screen.queryByText(/0412-1234567/)).not.toBeInTheDocument();
     rerender(
-      <PatientRecordHeader
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
         patient={patient({ phone: 'llamar por la tarde', phoneInternational: null })}
         loading={false}
         onEdit={() => {}}
@@ -81,7 +88,7 @@ describe('PatientRecordHeader', () => {
   it('a long phone wraps inside the strip instead of widening the header at 390 px (DX-387)', () => {
     const phone = '+58 412 1234567 ext. 123456';
     render(
-      <PatientRecordHeader
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
         patient={patient({ phone: '04121234567x123456', phoneInternational: phone })}
         loading={false}
         onEdit={() => {}}
@@ -94,14 +101,14 @@ describe('PatientRecordHeader', () => {
 
   it('omite entero el dato que falta en vez de dejar un marcador vacío', () => {
     render(
-      <PatientRecordHeader
-        patient={patient({ birthDate: null, docNumber: null, phone: '+57 300 000 0000' })}
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
+        patient={patient({ birthDate: null, docNumber: null, phone: '+58 412 000 0000' })}
         loading={false}
         onEdit={() => {}}
       />,
     );
     const strip = screen.getByRole('list', { name: /datos de identificación/i });
-    expect(strip).toHaveTextContent('Tel. +57 300 000 0000');
+    expect(strip).toHaveTextContent('Tel. +58 412 000 0000');
     expect(strip).not.toHaveTextContent('—');
     expect(strip).not.toHaveTextContent(/años/);
     expect(strip).not.toHaveTextContent('ID local');
@@ -109,7 +116,7 @@ describe('PatientRecordHeader', () => {
 
   it('prints the docTypeName of the DTO, or the generic name when it is missing', () => {
     const { rerender } = render(
-      <PatientRecordHeader
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
         patient={patient({ docTypeLabel: 'Documento A', docTypeName: 'Documento A' })}
         loading={false}
         onEdit={() => {}}
@@ -120,7 +127,7 @@ describe('PatientRecordHeader', () => {
 
     // API anterior en el hueco del despliegue: sin `docTypeName`, el genérico.
     rerender(
-      <PatientRecordHeader
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
         patient={patient({ docType: 'PASSPORT', docTypeLabel: undefined, docTypeName: undefined })}
         loading={false}
         onEdit={() => {}}
@@ -132,7 +139,7 @@ describe('PatientRecordHeader', () => {
 
   it('no pinta la tira cuando no hay ni un dato que poner', () => {
     render(
-      <PatientRecordHeader
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
         patient={patient({ birthDate: null, docNumber: null, phone: null })}
         loading={false}
         onEdit={() => {}}
@@ -147,45 +154,45 @@ describe('PatientRecordHeader', () => {
     // filtran por sede a propósito. La marca lo declara en vez de dejar que
     // el usuario lo deduzca.
     const { rerender } = render(
-      <PatientRecordHeader patient={null} loading onEdit={() => {}} />,
+      <PatientRecordHeader fmt={FORMAT_ES.fmt} patient={null} loading onEdit={() => {}} />,
     );
     expect(screen.getByText(/ficha centralizada · todas las sedes/i)).toBeInTheDocument();
 
-    rerender(<PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} />);
+    rerender(<PatientRecordHeader fmt={FORMAT_ES.fmt} patient={patient()} loading={false} onEdit={() => {}} />);
     expect(screen.getByText(/ficha centralizada · todas las sedes/i)).toBeInTheDocument();
   });
 
   it('mientras carga anuncia la carga y no ofrece editar', () => {
-    render(<PatientRecordHeader patient={null} loading onEdit={() => {}} />);
+    render(<PatientRecordHeader fmt={FORMAT_ES.fmt} patient={null} loading onEdit={() => {}} />);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/cargando paciente/i);
     expect(screen.queryByRole('button', { name: /editar datos/i })).not.toBeInTheDocument();
   });
 
   it('deja un h1 real cuando el paciente no se pudo cargar', () => {
-    render(<PatientRecordHeader patient={null} loading={false} onEdit={() => {}} />);
+    render(<PatientRecordHeader fmt={FORMAT_ES.fmt} patient={null} loading={false} onEdit={() => {}} />);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Paciente');
   });
 
   it('«Editar datos» es la única acción primaria y vive en la cabecera', async () => {
     const onEdit = jest.fn();
     const user = userEvent.setup();
-    render(<PatientRecordHeader patient={patient()} loading={false} onEdit={onEdit} />);
+    render(<PatientRecordHeader fmt={FORMAT_ES.fmt} patient={patient()} loading={false} onEdit={onEdit} />);
 
     await user.click(screen.getByRole('button', { name: /editar datos/i }));
     expect(onEdit).toHaveBeenCalledTimes(1);
   });
 
   it('D2: en una pestaña con primaria propia, «Editar datos» baja a secundaria', () => {
-    const { rerender } = render(<PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} />);
+    const { rerender } = render(<PatientRecordHeader fmt={FORMAT_ES.fmt} patient={patient()} loading={false} onEdit={() => {}} />);
     expect(screen.getByRole('button', { name: /editar datos/i }).className).toMatch(/(^|\s)bg-primary(\s|$)/);
-    rerender(<PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} editPrimary={false} />);
+    rerender(<PatientRecordHeader fmt={FORMAT_ES.fmt} patient={patient()} loading={false} onEdit={() => {}} editPrimary={false} />);
     const edit = screen.getByRole('button', { name: /editar datos/i });
     expect(edit.className).not.toMatch(/(^|\s)bg-primary(\s|$)/);
     expect(edit.className).toMatch(/border-border/);
   });
 
   it('mantiene la vuelta a la lista de pacientes', () => {
-    render(<PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} />);
+    render(<PatientRecordHeader fmt={FORMAT_ES.fmt} patient={patient()} loading={false} onEdit={() => {}} />);
     expect(screen.getByRole('link', { name: /volver a pacientes/i })).toHaveAttribute(
       'href',
       '/patients',
@@ -196,22 +203,22 @@ describe('PatientRecordHeader', () => {
 describe('PatientRecordHeader · saldo vencido (DX-150)', () => {
   it('muestra el chip con el importe que manda la API (ADMIN/RECEPTION)', () => {
     render(
-      <PatientRecordHeader
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
         patient={patient({
-          balance: { hasOverdue: true, overdueDays: 75, amounts: [{ currency: 'COP', amount: 300000 }] },
+          balance: { hasOverdue: true, overdueDays: 75, amounts: [{ currency: 'USD', amount: 300000 }] },
         })}
         loading={false}
         onEdit={() => {}}
       />,
     );
     expect(screen.getByTestId('overdue-chip').textContent?.replace(/\s/g, ' ')).toMatch(
-      /^Saldo vencido · 75 días · .*300\.000/,
+      /^Saldo vencido · 75 días · 300\.000,00 USD/,
     );
   });
 
   it('sin importe para DENTIST/ASSISTANT y sin chip si no hay saldo vencido', () => {
     const { rerender } = render(
-      <PatientRecordHeader
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
         patient={patient({ balance: { hasOverdue: true, overdueDays: 5 } })}
         loading={false}
         onEdit={() => {}}
@@ -219,7 +226,7 @@ describe('PatientRecordHeader · saldo vencido (DX-150)', () => {
     );
     expect(screen.getByTestId('overdue-chip')).toHaveTextContent(/^Saldo vencido · 5 días$/);
     rerender(
-      <PatientRecordHeader
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
         patient={patient({ balance: { hasOverdue: false, overdueDays: null } })}
         loading={false}
         onEdit={() => {}}
@@ -239,7 +246,7 @@ describe('PatientRecordHeader · cobertura vencida (DX-153)', () => {
 
   it('muestra el chip con una cobertura vencida', () => {
     render(
-      <PatientRecordHeader
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
         patient={patient({ coverage: coverage('EXPIRED') })}
         loading={false}
         onEdit={() => {}}
@@ -250,7 +257,7 @@ describe('PatientRecordHeader · cobertura vencida (DX-153)', () => {
 
   it.each(['ACTIVE', 'NONE', 'NOT_STARTED'] as const)('no lo muestra con %s', (status) => {
     render(
-      <PatientRecordHeader
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
         patient={patient({ coverage: coverage(status) })}
         loading={false}
         onEdit={() => {}}
@@ -261,7 +268,7 @@ describe('PatientRecordHeader · cobertura vencida (DX-153)', () => {
 
   it('convive con el chip de saldo vencido', () => {
     render(
-      <PatientRecordHeader
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
         patient={patient({
           coverage: coverage('EXPIRED'),
           balance: { hasOverdue: true, overdueDays: 10 },
@@ -285,7 +292,7 @@ describe('PatientRecordHeader · chip de convenio (DX-105)', () => {
 
   it('muestra «Convenio: nombre» con un convenio vigente', () => {
     render(
-      <PatientRecordHeader
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
         patient={patient({ agreement: agreement('ACTIVE') })}
         loading={false}
         onEdit={() => {}}
@@ -298,7 +305,7 @@ describe('PatientRecordHeader · chip de convenio (DX-105)', () => {
     'no lo muestra con %s',
     (status) => {
       render(
-        <PatientRecordHeader
+        <PatientRecordHeader fmt={FORMAT_ES.fmt}
           patient={patient({ agreement: agreement(status) })}
           loading={false}
           onEdit={() => {}}
@@ -310,7 +317,7 @@ describe('PatientRecordHeader · chip de convenio (DX-105)', () => {
 
   it('convive con el chip de cobertura vencida', () => {
     render(
-      <PatientRecordHeader
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
         patient={patient({
           agreement: agreement('ACTIVE'),
           coverage: { status: 'EXPIRED', payerName: 'Sanavida', planName: null, validTo: '2026-01-31' },
@@ -335,7 +342,7 @@ describe('PatientRecordHeader: alerta médica (DX-247)', () => {
 
   it('la cabecera (que encabeza el plan y el odontograma) muestra la alerta con su titular', async () => {
     const user = userEvent.setup();
-    render(<PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} medicalAlerts={flags} />);
+    render(<PatientRecordHeader fmt={FORMAT_ES.fmt} patient={patient()} loading={false} onEdit={() => {}} medicalAlerts={flags} />);
     expect(screen.getByTestId('record-medical-alert')).toHaveTextContent('Requiere premedicación');
     await user.click(screen.getByRole('button', { name: 'Alertas médicas de Carlos Mejía' }));
     expect(screen.getByTestId('medical-alert-popover')).toHaveTextContent('Requiere profilaxis antibiótica');
@@ -343,7 +350,7 @@ describe('PatientRecordHeader: alerta médica (DX-247)', () => {
 
   it('sin anamnesis lo dice; al día y sin alertas no pinta nada', () => {
     const { rerender } = render(
-      <PatientRecordHeader
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
         patient={patient()}
         loading={false}
         onEdit={() => {}}
@@ -352,7 +359,7 @@ describe('PatientRecordHeader: alerta médica (DX-247)', () => {
     );
     expect(screen.getByTestId('record-medical-alert')).toHaveTextContent('Sin anamnesis');
     rerender(
-      <PatientRecordHeader
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
         patient={patient()}
         loading={false}
         onEdit={() => {}}
@@ -368,11 +375,11 @@ describe('PatientRecordHeader: alertas sin comprobar (DX-247)', () => {
     const user = userEvent.setup();
     const onRetry = jest.fn();
     const { rerender } = render(
-      <PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} medicalAlerts={null} />,
+      <PatientRecordHeader fmt={FORMAT_ES.fmt} patient={patient()} loading={false} onEdit={() => {}} medicalAlerts={null} />,
     );
     expect(screen.getByText('Comprobando alertas…')).toBeInTheDocument();
     rerender(
-      <PatientRecordHeader
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
         patient={patient()}
         loading={false}
         onEdit={() => {}}
@@ -400,7 +407,7 @@ describe('PatientRecordHeader: insignia de asistencia (DX-279)', () => {
 
   it('muestra «2 inasistencias · 1 cancelación tardía (12 meses)»', () => {
     render(
-      <PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} attendance={summary(2, 1)} />,
+      <PatientRecordHeader fmt={FORMAT_ES.fmt} patient={patient()} loading={false} onEdit={() => {}} attendance={summary(2, 1)} />,
     );
     expect(screen.getByTestId('attendance-badge')).toHaveTextContent(
       '2 inasistencias · 1 cancelación tardía (12 meses)',
@@ -409,11 +416,11 @@ describe('PatientRecordHeader: insignia de asistencia (DX-279)', () => {
 
   it('sin incidencias no hay insignia; mientras carga solo lo anuncia', () => {
     const { rerender } = render(
-      <PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} attendance={null} />,
+      <PatientRecordHeader fmt={FORMAT_ES.fmt} patient={patient()} loading={false} onEdit={() => {}} attendance={null} />,
     );
     expect(screen.getByRole('status', { name: '' })).toHaveTextContent('Comprobando inasistencias…');
     rerender(
-      <PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} attendance={summary(0, 0)} />,
+      <PatientRecordHeader fmt={FORMAT_ES.fmt} patient={patient()} loading={false} onEdit={() => {}} attendance={summary(0, 0)} />,
     );
     expect(screen.queryByTestId('attendance-badge')).not.toBeInTheDocument();
     expect(screen.queryByText('Comprobando inasistencias…')).not.toBeInTheDocument();
@@ -423,7 +430,7 @@ describe('PatientRecordHeader: insignia de asistencia (DX-279)', () => {
     const user = userEvent.setup();
     const onRetry = jest.fn();
     render(
-      <PatientRecordHeader
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
         patient={patient()}
         loading={false}
         onEdit={() => {}}
@@ -448,7 +455,7 @@ describe('PatientRecordHeader: cabecera compacta (UX v2 · K3)', () => {
   };
 
   it('cada alerta clínica es un chip a la vista, y la anamnesis caducada se dice aparte', () => {
-    render(<PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} medicalAlerts={critical} />);
+    render(<PatientRecordHeader fmt={FORMAT_ES.fmt} patient={patient()} loading={false} onEdit={() => {}} medicalAlerts={critical} />);
     const lines = screen.getAllByTestId('record-alert-line');
     expect(lines).toHaveLength(2);
     expect(screen.getByRole('group', { name: 'Avisos del paciente' })).toHaveTextContent('Anamnesis caducada');
@@ -458,7 +465,7 @@ describe('PatientRecordHeader: cabecera compacta (UX v2 · K3)', () => {
     const user = userEvent.setup();
     const onArchive = jest.fn();
     render(
-      <PatientRecordHeader
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
         patient={patient()}
         loading={false}
         onEdit={() => {}}
@@ -475,20 +482,138 @@ describe('PatientRecordHeader: cabecera compacta (UX v2 · K3)', () => {
   });
 
   it('sin acciones de menú no hay «⋯»; «Editar datos» sigue siendo la acción primaria', () => {
-    render(<PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} />);
+    render(<PatientRecordHeader fmt={FORMAT_ES.fmt} patient={patient()} loading={false} onEdit={() => {}} />);
     expect(screen.queryByRole('button', { name: 'Más acciones' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Editar datos' })).toBeInTheDocument();
   });
 
-  it('la retención legal es un chip neutro al final de la fila', () => {
+  it('la retención es un chip neutro al final de la fila', () => {
     render(
-      <PatientRecordHeader
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
         patient={patient()}
         loading={false}
         onEdit={() => {}}
-        retention={{ text: 'Retención hasta 28/02/2039', hint: 'Se conserva 15 años.' }}
+        retention={{ text: 'Retención hasta 28/02/2039', hint: 'Se conserva 20 años.' }}
       />,
     );
     expect(screen.getByTestId('record-retention')).toHaveTextContent('Retención hasta 28/02/2039');
+  });
+
+  it('el chip usa la ayuda del plazo de la clínica, o la del plazo anterior (DX-330)', () => {
+    const base = patient({
+      lastAttentionAt: '2024-02-29T15:00:00.000Z',
+      retentionExtended: 'NONE',
+      retentionUntil: '2044-02-28',
+      underRetention: true,
+      clinicRetentionYears: 20,
+      retentionFromPreviousTerm: false,
+    });
+    expect(retentionChip(base, testStamp())?.hint).toBe(
+      'Se conserva 20 años desde la última atención. Mientras dure, el paciente no se puede archivar.',
+    );
+    const previous = retentionChip({ ...base, retentionUntil: '2039-02-28', retentionFromPreviousTerm: true }, testStamp());
+    expect(previous?.hint).toBe(
+      'Se conserva hasta el 28/02/2039 por el plazo anterior de la clínica. Mientras dure, el paciente no se puede archivar.',
+    );
+    expect(previous?.hint).not.toMatch(/15 años|legal/);
+  });
+});
+
+describe('PatientRecordHeader: código del paciente (DX-484)', () => {
+  function mockClipboard(writeText: jest.Mock) {
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  }
+
+  it('muestra «Código 1042» y «Copiar» copia SOLO el código, con anuncio y marca ✓', async () => {
+    const user = setupUser();
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    mockClipboard(writeText);
+    render(
+      <PatientRecordHeader fmt={FORMAT_ES.fmt} patient={patient({ patientCode: '1042' })} loading={false} onEdit={() => {}} />,
+    );
+    const code = screen.getByTestId('patient-code');
+    expect(code).toHaveTextContent('1042');
+    expect(code).toHaveClass('t-id');
+    expect(code.parentElement).toHaveTextContent('Código1042');
+    const status = screen.getByTestId('patient-code-status');
+    expect(status).toHaveAttribute('aria-live', 'polite');
+    expect(status).toBeEmptyDOMElement();
+
+    await user.click(screen.getByRole('button', { name: 'Copiar el código del paciente 1042' }));
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith('1042');
+    expect(status).toHaveTextContent('Código copiado');
+  });
+
+  it('la marca de «copiado» se va a los ~2 s', async () => {
+    jest.useFakeTimers();
+    try {
+      const writeText = jest.fn().mockResolvedValue(undefined);
+      mockClipboard(writeText);
+      render(
+        <PatientRecordHeader fmt={FORMAT_ES.fmt} patient={patient({ patientCode: '1042' })} loading={false} onEdit={() => {}} />,
+      );
+      await act(async () => {
+        screen.getByRole('button', { name: 'Copiar el código del paciente 1042' }).click();
+      });
+      expect(screen.getByText('Código copiado')).toBeInTheDocument();
+      act(() => {
+        jest.advanceTimersByTime(2000);
+      });
+      expect(screen.queryByText('Código copiado')).not.toBeInTheDocument();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('si el navegador no deja copiar, dice que se seleccione a mano y el código es seleccionable', async () => {
+    const user = setupUser();
+    mockClipboard(jest.fn().mockRejectedValue(new Error('denied')));
+    render(
+      <PatientRecordHeader fmt={FORMAT_ES.fmt} patient={patient({ patientCode: '1042' })} loading={false} onEdit={() => {}} />,
+    );
+    const button = screen.getByRole('button', { name: 'Copiar el código del paciente 1042' });
+    await user.click(button);
+    const message = await screen.findByText(/selecciona el código y cópialo a mano/);
+    expect(message).toHaveAttribute('aria-live', 'polite');
+    expect(button).toHaveAccessibleDescription(/cópialo a mano/);
+    expect(screen.getByTestId('patient-code')).toHaveClass('select-all');
+  });
+
+  it('el código no entra en la tira de identidad (que sigue sin pintarse vacía)', () => {
+    render(
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
+        patient={patient({ patientCode: '1042', birthDate: null, docNumber: null, phone: null })}
+        loading={false}
+        onEdit={() => {}}
+      />,
+    );
+    expect(screen.queryByRole('list', { name: /datos de identificación/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId('patient-code')).toHaveTextContent('1042');
+  });
+});
+
+describe('PatientRecordHeader: «Datos para el software de imagen» en el «⋯» (DX-484)', () => {
+  it.each(['DENTIST', 'ASSISTANT', 'ADMIN'] as const)('%s la ve en el menú, con icono', async (role) => {
+    const user = setupUser();
+    const onSelect = jest.fn();
+    const action = imagingExportMenuAction(role, onSelect);
+    render(
+      <PatientRecordHeader fmt={FORMAT_ES.fmt}
+        patient={patient()}
+        loading={false}
+        onEdit={() => {}}
+        menuActions={action ? [action] : []}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Más acciones' }));
+    const item = await screen.findByRole('menuitem', { name: 'Datos para el software de imagen' });
+    expect(item.querySelector('svg')).not.toBeNull();
+    await user.click(item);
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['RECEPTION', null] as const)('%s no la ve', (role) => {
+    expect(imagingExportMenuAction(role, () => {})).toBeNull();
   });
 });

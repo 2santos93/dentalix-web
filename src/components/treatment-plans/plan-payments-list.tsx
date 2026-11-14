@@ -9,7 +9,11 @@ import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import { frozenRateLabel, paymentRateCopy } from '@/lib/payments/payment-rate';
 import type { Payment } from '@/lib/payments/payments-api';
 import { statusLabel } from '@/lib/status/tones';
+import { movementReferenceLabel } from '@/lib/account-statement/presentation';
+import { SplitPaymentBadge, splitPaymentLabel } from '@/components/payments/split-payment-badge';
 import { copy } from './treatment-plans-tab-copy';
+import { paymentProofViewerCopy } from '@/components/payments/payment-proof-viewer';
+import { externalInvoiceCopy } from '@/components/payments/external-invoice-modal';
 
 /**
  * DX-375: «Sin tasa» junto al importe de un abono que no tenía tasa de su día
@@ -45,8 +49,14 @@ interface PlanPaymentsListProps {
   manualPaymentIds?: ReadonlySet<string>;
   /** DX-051: abre «Imputar abono»; solo ADMIN y en un plan que se cobra. */
   onAllocate?: (paymentId: string) => void;
+  /** DX-399: abre «Imputación del abono», de solo lectura (a qué ítems fue y con qué regla). */
+  onViewAllocation?: (paymentId: string) => void;
   /** DX-375/DX-378/DX-386: formato de la sede para importe, día y tasa congelada; `null` mientras carga («—»). */
   fmt: RegionalFormat | null;
+  /** DX-515: anota el nº de la factura fiscal externa del abono (ADMIN y recepción). */
+  onExternalInvoice?: (payment: Payment) => void;
+  /** DX-389: abre el comprobante del cobro; solo ADMIN y recepción (y solo si el abono lo tiene). */
+  onViewProof?: (payment: Payment) => void;
 }
 
 /** El nombre de la fila para el «⋯»: «Acciones de abono PRI-000001» (o su importe, sin serie). */
@@ -71,6 +81,11 @@ export function paymentRowActionsButton(payment: Payment, fmt: RegionalFormat | 
  * con borde por fila y «Anular», destructivo, pesaba lo mismo que «Recibo».
  * Anular sigue pasando por su confirmación con motivo.
  */
+/** El nombre del medio de un abono: el de la clínica (DX-377) o, sin él, su método. */
+function mediumName(p: Payment): string {
+  return p.paymentMethodName ?? (p.method ? statusLabel('paymentMethod', p.method) : copy.paymentMethodFallback);
+}
+
 export function PlanPaymentsList({
   payments,
   voidingPaymentId,
@@ -79,8 +94,18 @@ export function PlanPaymentsList({
   billable = true,
   manualPaymentIds,
   onAllocate,
+  onViewAllocation,
   fmt,
+  onExternalInvoice,
+  onViewProof,
 }: PlanPaymentsListProps) {
+  // DX-414: cuántas líneas tiene cada cobro dividido entre los abonos del plan.
+  const splitCounts = new Map<string, number>();
+  for (const p of payments) if (p.splitId) splitCounts.set(p.splitId, (splitCounts.get(p.splitId) ?? 0) + 1);
+  // El recibo ya va en su línea: en el teléfono basta «Cobro dividido · 2 formas».
+  const splitLabelOf = (p: Payment) =>
+    splitPaymentLabel({ splitLines: splitCounts.get(p.splitId ?? '') ?? null, receiptNumber: null });
+
   const columns: DataListColumn<Payment>[] = [
     {
       id: 'date',
@@ -91,16 +116,29 @@ export function PlanPaymentsList({
     {
       id: 'receipt',
       header: copy.colPaymentReceipt,
-      cell: (p) =>
-        p.receiptNumber ? (
-          <span className="t-id">{p.receiptNumber}</span>
-        ) : (
-          <span className="text-muted">{copy.paymentReceiptLegacy}</span>
-        ),
+      cell: (p) => (
+        <>
+          {p.receiptNumber ? (
+            <span className="t-id">{p.receiptNumber}</span>
+          ) : (
+            <span className="text-muted">{copy.paymentReceiptLegacy}</span>
+          )}
+          {/* DX-414: las líneas de un cobro dividido, juntas por su recibo único. */}
+          <SplitPaymentBadge splitLines={splitCounts.get(p.splitId ?? '') ?? null} receiptNumber={p.receiptNumber} />
+          {/* DX-515: la factura fiscal emitida fuera, bajo su recibo. */}
+          {p.externalInvoiceNumber ? (
+            <span className="t-caption mt-0.5 block break-all font-mono text-muted">
+              {externalInvoiceCopy.inline(p.externalInvoiceNumber)}
+            </span>
+          ) : null}
+        </>
+      ),
       // En el teléfono, las marcas van en la línea 2: en la 1 recortarían la fecha.
       mobileCell: (p) => (
         <>
           {copy.paymentReceiptMobile(p.receiptNumber)}
+          {splitLabelOf(p) ? ` · ${splitLabelOf(p)}` : null}
+          {p.externalInvoiceNumber ? ` · ${externalInvoiceCopy.inline(p.externalInvoiceNumber)}` : null}
           {manualPaymentIds?.has(p.id) ? (
             <>
               {' '}
@@ -136,13 +174,27 @@ export function PlanPaymentsList({
     {
       id: 'method',
       header: copy.colPaymentMethod,
-      cell: (p) =>
-        p.method ? (
-          <StatusBadge kind="paymentMethod" status={p.method} />
-        ) : (
-          <span className="text-muted">{copy.paymentMethodFallback}</span>
-        ),
-      mobileCell: (p) => (p.method ? statusLabel('paymentMethod', p.method) : null),
+      // DX-414: el medio con que la clínica cobró (DX-377) y su referencia; el
+      // método antiguo llama «Transferencia» a un pago móvil.
+      cell: (p) => (
+        <>
+          {p.method ? (
+            <StatusBadge kind="paymentMethod" status={p.method}>
+              {mediumName(p)}
+            </StatusBadge>
+          ) : (
+            <span className="text-muted">{copy.paymentMethodFallback}</span>
+          )}
+          {movementReferenceLabel(p) ? (
+            <span className="t-caption mt-1 block font-mono text-muted">
+              <span className="sr-only"> · </span>
+              {movementReferenceLabel(p)}
+            </span>
+          ) : null}
+        </>
+      ),
+      mobileCell: (p) =>
+        [p.method ? mediumName(p) : null, movementReferenceLabel(p)].filter(Boolean).join(' · ') || null,
     },
     {
       id: 'notes',
@@ -155,6 +207,15 @@ export function PlanPaymentsList({
   function actionsFor(p: Payment): RowAction[] {
     const voiding = voidingPaymentId === p.id;
     const actions: RowAction[] = [{ label: copy.receiptAction, onSelect: () => onReceipt(p.id) }];
+    if (onViewProof && p.hasProof) {
+      actions.push({ label: paymentProofViewerCopy.action, onSelect: () => onViewProof(p) });
+    }
+    if (onExternalInvoice) {
+      actions.push({ label: externalInvoiceCopy.action, onSelect: () => onExternalInvoice(p) });
+    }
+    if (onViewAllocation) {
+      actions.push({ label: copy.viewAllocationAction, onSelect: () => onViewAllocation(p.id) });
+    }
     if (onAllocate) {
       actions.push({
         label: copy.allocationAction,

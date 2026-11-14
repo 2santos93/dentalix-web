@@ -12,7 +12,8 @@ import {
   type PatientConsent,
   type PatientConsentSummary,
 } from '@/lib/consents/consents-api';
-import { formatDateTime } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import type { ClinicRole } from '@/lib/me/me-api';
 import { AsyncSection } from '@/components/shared/async-section';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +25,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PatientSignatureRequestsSection } from '@/components/signature-requests/patient-signature-requests-section';
 import { CountersignConsentModal } from './countersign-consent-modal';
 import { NewConsentModal } from './new-consent-modal';
+import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
   heading: 'Consentimientos',
@@ -38,11 +40,10 @@ const copy = {
   colDocument: 'Documento',
   colSigner: 'Firmante',
   colProfessional: 'Profesional',
-  rowLabel: (title: string, when: string) => `«${title}» del ${when}`,
+  rowLabel: (title: string, when: string | null) => (when ? `«${title}» del ${when}` : `«${title}»`),
   signer: (name: string, type: string) => `${name} (${type.toLowerCase()})`,
   version: (v: number) => `Versión ${v} de la plantilla`,
   print: 'Ver e imprimir',
-  newTab: '(se abre en otra pestaña)',
   // DX-243: firma a distancia.
   receptionSupport:
     'Envía consentimientos a firmar a distancia y sigue su estado. El documento firmado lo ven los profesionales.',
@@ -130,6 +131,7 @@ function ClinicalConsents({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const stamp = useSedeStamp(token);
   const [modalOpen, setModalOpen] = useState(false);
   // Cada apertura monta un modal nuevo: nada (ni una firma) pasa de una a otra.
   const [modalKey, setModalKey] = useState(0);
@@ -205,16 +207,14 @@ function ClinicalConsents({
       // El documento es el enlace a su vista imprimible (otra pestaña).
       cell: (consent) => (
         <span className="flex flex-col">
-          <a
+          <ExternalLink
             href={consentPrintHref(patientId, consent.id)}
-            target="_blank"
-            rel="noopener"
             className="inline-flex items-center gap-1.5 font-medium text-ink underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
           >
             {consent.title}
             <Printer aria-hidden className="size-3.5 text-muted" />
-            <span className="sr-only"> · {copy.print} {copy.newTab}</span>
-          </a>
+            <span className="sr-only"> · {copy.print}</span>
+          </ExternalLink>
           <span className="t-caption">{copy.version(consent.templateVersion)}</span>
         </span>
       ),
@@ -222,8 +222,9 @@ function ClinicalConsents({
     {
       id: 'signedAt',
       header: copy.colSignedAt,
-      cell: (consent) => <span className="tnum">{formatDateTime(consent.signedAt)}</span>,
-      mobileCell: (consent) => formatDateTime(consent.signedAt),
+      cellClassName: 'tnum',
+      cell: (consent) => stamp.dateTime(consent.signedAt),
+      mobileCell: (consent) => stamp.maybe.dateTime(consent.signedAt),
     },
     {
       id: 'signer',
@@ -276,6 +277,8 @@ function ClinicalConsents({
         </Callout>
       ) : null}
 
+      <SedeStampNote stamp={stamp} />
+
       <AsyncSection
         loading={loading}
         error={error}
@@ -291,7 +294,7 @@ function ClinicalConsents({
           rows={consents}
           columns={columns}
           getRowKey={(consent) => consent.id}
-          getRowLabel={(consent) => copy.rowLabel(consent.title, formatDateTime(consent.signedAt))}
+          getRowLabel={(consent) => copy.rowLabel(consent.title, stamp.maybe.dateTime(consent.signedAt))}
           rowActions={(consent) => [
             ...(awaitsMe(consent)
               ? [{ label: copy.countersign, icon: <PenLine aria-hidden />, onSelect: () => countersign(consent) }]

@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink as ExternalLinkIcon } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { useMediaQuery } from '@/lib/hooks/use-media-query';
 import { InlineError } from '@/components/errors/inline-error';
@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
   loading: 'Cargando el documento',
@@ -152,10 +153,10 @@ export function SignedFileViewerDialog({
       <div className="flex flex-col items-start gap-3 rounded-lg border border-border bg-bg p-4">
         <p className="text-sm text-muted">{copy.pdfOnMobile}</p>
         <Button asChild className="min-h-11 w-full">
-          <a href={url} target="_blank" rel="noopener noreferrer" onClick={openFresh}>
-            <ExternalLink aria-hidden />
+          <ExternalLink href={url} onClick={openFresh}>
+            <ExternalLinkIcon aria-hidden />
             {copy.open}
-          </a>
+          </ExternalLink>
         </Button>
       </div>
     );
@@ -171,16 +172,14 @@ export function SignedFileViewerDialog({
         {openError ? <InlineError variant="summary">{openError}</InlineError> : null}
         <div className="min-w-0">{body}</div>
         {url && (image || wide) ? (
-          <a
+          <ExternalLink
             href={url}
-            target="_blank"
-            rel="noopener noreferrer"
             onClick={openFresh}
             className="inline-flex min-h-11 items-center gap-2 self-start text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
           >
-            <ExternalLink className="size-4" aria-hidden />
+            <ExternalLinkIcon className="size-4" aria-hidden />
             {copy.openInNewTab}
-          </a>
+          </ExternalLink>
         ) : null}
       </DialogContent>
     </Dialog>

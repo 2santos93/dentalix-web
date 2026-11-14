@@ -3,14 +3,17 @@ import { PublicConfirmationView } from './public-confirmation-view';
 import {
   getPublicConfirmation,
   respondPublicConfirmation,
+  setPublicWantsEarlier,
   type PublicConfirmation,
 } from '../../lib/appointments/confirmations-api';
 import { ApiError } from '../../lib/api/client';
+import { PUBLIC_REGIONAL_VE } from '@/lib/test/document-regional';
 
 // jest.mock no reescribe alias: rutas relativas (ver otros *.test.tsx).
 jest.mock('../../lib/appointments/confirmations-api', () => ({
   getPublicConfirmation: jest.fn(),
   respondPublicConfirmation: jest.fn(),
+  setPublicWantsEarlier: jest.fn(),
 }));
 jest.mock('../../lib/api/client', () => ({
   // La clase real: `apiErrorMessage` la reconoce con `instanceof`.
@@ -19,6 +22,7 @@ jest.mock('../../lib/api/client', () => ({
 
 const get = getPublicConfirmation as jest.Mock;
 const respond = respondPublicConfirmation as jest.Mock;
+const setEarlier = setPublicWantsEarlier as jest.Mock;
 
 const APPOINTMENT = {
   patientFirstName: 'Ana',
@@ -26,12 +30,19 @@ const APPOINTMENT = {
   end: '2026-10-20T14:30:00.000Z',
   providerName: 'Dra. Pérez',
   locationName: 'Sede Norte',
-  locationAddress: 'Calle 100 # 15-20',
+  locationAddress: 'Av. Libertador 100',
+  ...PUBLIC_REGIONAL_VE,
+  // DX-437
+  wantsEarlier: false,
+  earlierWindow: null,
+  earlierAllowed: true,
 };
 const CLINIC = { name: 'Clínica Sonrisa', primaryColor: '#7C3AED', logoUrl: null };
 
 function view(overrides: Partial<PublicConfirmation> = {}): PublicConfirmation {
   return {
+    // DX-497: sin preferencia, el idioma de la clínica.
+    language: 'es',
     status: 'PENDING',
     clinic: CLINIC,
     appointment: APPOINTMENT,
@@ -39,6 +50,9 @@ function view(overrides: Partial<PublicConfirmation> = {}): PublicConfirmation {
     respondedAt: null,
     cancellationPolicy: null,
     isLate: false,
+    // DX-469
+    calendarAvailable: false,
+    googleCalendarUrl: null,
     ...overrides,
   };
 }
@@ -56,15 +70,115 @@ describe('PublicConfirmationView', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent(/cargando/i);
     expect(await screen.findByRole('heading', { name: 'Clínica Sonrisa' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByText(/hola ana/i)).toBeInTheDocument();
-    expect(screen.getByText(/martes, 20 de octubre/i)).toBeInTheDocument();
-    expect(screen.getByText('14:00–14:30')).toBeInTheDocument();
+    // 14:00 UTC es 10:00 a. m. en Caracas (la sede de la cita), no la hora del navegador.
+    expect(screen.getByText(/martes 20 de octubre de 2026/i)).toBeInTheDocument();
+    expect(screen.getByText('10:00 a. m. – 10:30 a. m.')).toBeInTheDocument();
     expect(screen.getByText('Dra. Pérez')).toBeInTheDocument();
     expect(screen.getByText('Sede Norte')).toBeInTheDocument();
-    expect(screen.getByText('Calle 100 # 15-20')).toBeInTheDocument();
+    expect(screen.getByText('Av. Libertador 100')).toBeInTheDocument();
     expect(get).toHaveBeenCalledWith('tok-1');
     // Abrir NO responde: solo el clic del paciente lo hace.
     expect(respond).not.toHaveBeenCalled();
+  });
+
+  it('DX-354: sede Tokio h23, el día y el rango de hora son los de la sede, no los del navegador', async () => {
+    get.mockResolvedValueOnce(
+      view({
+        appointment: {
+          ...APPOINTMENT,
+          start: '2026-10-20T16:00:00.000Z',
+          end: '2026-10-20T16:30:00.000Z',
+          timeZone: 'Asia/Tokyo',
+          locale: 'ja-JP',
+          hourCycle: 'h23',
+        },
+      }),
+    );
+    render(<PublicConfirmationView confirmationToken="tok-1" />);
+    await screen.findByRole('heading', { name: 'Clínica Sonrisa' });
+    // 16:00 UTC ya es el miércoles 21, 01:00 en Tokio.
+    expect(screen.getByText(/miércoles 21 de octubre de 2026/i)).toBeInTheDocument();
+    expect(screen.getByText('01:00–01:30')).toBeInTheDocument();
+  });
+
+  it('DX-354: sede h12 en-US, el rango lleva «a. m./p. m.» y el cargo por inasistencia el código ISO', async () => {
+    get.mockResolvedValueOnce(
+      view({
+        appointment: { ...APPOINTMENT, timeZone: 'America/New_York', locale: 'en-US', hourCycle: 'h12' },
+        cancellationPolicy: {
+          policyVersionId: 'pv-1',
+          noticeHours: 24,
+          text: '',
+          suggestedFee: 1234.5,
+          currency: 'USD',
+        },
+      }),
+    );
+    render(<PublicConfirmationView confirmationToken="tok-1" />);
+    await screen.findByRole('heading', { name: 'Clínica Sonrisa' });
+    expect(screen.getByText('10:00 a. m. – 10:30 a. m.')).toBeInTheDocument();
+    expect(screen.getByTestId('public-cancellation-policy').textContent?.replace(/\s/g, ' ')).toContain('USD 1,234.50');
+  });
+
+  it('DX-354: sin formato de la sede, «—» y «Llama a la clínica», nunca la hora del navegador', async () => {
+    get.mockResolvedValueOnce(
+      view({ appointment: { ...APPOINTMENT, timeZone: null, locale: null, hourCycle: null } }),
+    );
+    render(<PublicConfirmationView confirmationToken="tok-1" />);
+    await screen.findByRole('heading', { name: 'Clínica Sonrisa' });
+    expect(screen.getByText('Llama a la clínica para confirmar la hora de tu cita.')).toBeInTheDocument();
+    expect(screen.queryByText(/14:00|10:00|octubre/)).not.toBeInTheDocument();
+    expect(screen.getAllByText('—')).toHaveLength(2);
+  });
+
+  describe('DX-354: sede sin formato y cancelación tardía con cargo', () => {
+    const lateWithFee = (
+      appointment: Partial<PublicConfirmation['appointment'] & object> = { timeZone: null, locale: null, hourCycle: null },
+    ) =>
+      view({
+        appointment: { ...APPOINTMENT, ...appointment },
+        isLate: true,
+        cancellationPolicy: { policyVersionId: 'pv-1', noticeHours: 24, text: '', suggestedFee: 1234.5, currency: 'USD' },
+      });
+
+    it('no se puede aceptar el cargo en línea: sin «Cancelar cita» ni casilla, el aviso de llamar a la clínica y nunca el cargo como «—»', async () => {
+      get.mockResolvedValueOnce(lateWithFee());
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      await screen.findByRole('heading', { name: 'Clínica Sonrisa' });
+      expect(screen.getByTestId('public-fee-needs-clinic')).toHaveTextContent(/llama a la clínica para cancelar/i);
+      expect(screen.queryByRole('button', { name: 'Cancelar cita' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('checkbox', { name: /acepto la política/i })).not.toBeInTheDocument();
+      expect(screen.queryByText(/Cargo por inasistencia/)).not.toBeInTheDocument();
+      expect(screen.queryByTestId('public-late-cancellation')).not.toBeInTheDocument();
+      // Confirmar y pedir que lo llamen siguen disponibles.
+      expect(screen.getByRole('button', { name: 'Confirmar asistencia' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Quiero que me llamen' })).toBeEnabled();
+    });
+
+    it('a tiempo (sin cargo) sigue pudiendo cancelar', async () => {
+      get.mockResolvedValueOnce(
+        view({
+          appointment: { ...APPOINTMENT, timeZone: null, locale: null, hourCycle: null } as never,
+          isLate: false,
+          cancellationPolicy: { policyVersionId: 'pv-1', noticeHours: 24, text: '', suggestedFee: 1234.5, currency: 'USD' },
+        }),
+      );
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      await screen.findByRole('heading', { name: 'Clínica Sonrisa' });
+      expect(screen.getByRole('button', { name: 'Cancelar cita' })).toBeEnabled();
+      expect(screen.queryByTestId('public-fee-needs-clinic')).not.toBeInTheDocument();
+    });
+
+    it('con formato de sede el cargo se ve con su código y se cancela como siempre', async () => {
+      get.mockResolvedValueOnce(lateWithFee({ timeZone: 'America/New_York', locale: 'en-US', hourCycle: 'h12' }));
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      await screen.findByRole('heading', { name: 'Clínica Sonrisa' });
+      expect(screen.getByTestId('public-cancellation-policy').textContent?.replace(/\s/g, ' ')).toContain('USD 1,234.50');
+      expect(screen.getByRole('button', { name: 'Cancelar cita' })).toBeEnabled();
+      expect(screen.queryByTestId('public-fee-needs-clinic')).not.toBeInTheDocument();
+    });
   });
 
   it('aplica el color de la clínica al bloque (white-label)', async () => {
@@ -112,6 +226,7 @@ describe('PublicConfirmationView', () => {
     get.mockResolvedValueOnce(view({ status: 'EXPIRED', appointment: null }));
     render(<PublicConfirmationView confirmationToken="tok-1" />);
     expect(await screen.findByRole('heading', { name: /enlace ya no es válido/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
@@ -119,6 +234,7 @@ describe('PublicConfirmationView', () => {
     get.mockRejectedValueOnce(new ApiError(404, 'Confirmation link not found'));
     render(<PublicConfirmationView confirmationToken="nope" />);
     expect(await screen.findByRole('heading', { name: /enlace no válido/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
   });
 
   it('error de red al cargar: error de sección con reintento', async () => {
@@ -129,6 +245,7 @@ describe('PublicConfirmationView', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/no pudimos cargar tu cita/i);
     fireEvent.click(screen.getByRole('button', { name: /reintentar/i }));
     expect(await screen.findByRole('heading', { name: 'Clínica Sonrisa' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(get).toHaveBeenCalledTimes(2);
   });
 
@@ -164,6 +281,7 @@ describe('PublicConfirmationView', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Cancelar cita' }));
 
     expect(await screen.findByRole('heading', { name: /enlace ya no es válido/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
   });
 
   describe('política de cancelación (DX-291)', () => {
@@ -172,7 +290,7 @@ describe('PublicConfirmationView', () => {
       noticeHours: 24,
       text: 'Las citas no avisadas se cobran.',
       suggestedFee: 50000,
-      currency: 'COP',
+      currency: 'USD',
     };
 
     it('muestra el texto, las horas y el importe; a tiempo no avisa ni pide aceptación', async () => {
@@ -183,7 +301,7 @@ describe('PublicConfirmationView', () => {
       expect(section).toHaveTextContent('Las citas no avisadas se cobran.');
       expect(section).toHaveTextContent(/50\.000/);
       expect(screen.queryByText(/menos de 24 h de aviso/i)).not.toBeInTheDocument();
-      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+      expect(screen.queryByRole('checkbox', { name: /acepto la política/i })).not.toBeInTheDocument();
     });
 
     it('tarde: avisa «Cancelación con menos de 24 h de aviso» y cancelar sin aceptar no envía nada', async () => {
@@ -231,5 +349,163 @@ describe('PublicConfirmationView', () => {
         }),
       );
     });
+  });
+});
+
+describe('PublicConfirmationView · «Avisarme si se libera un hueco antes» (DX-437)', () => {
+  beforeEach(() => {
+    get.mockReset();
+    setEarlier.mockReset();
+  });
+
+  it('con la cita pendiente: la casilla manda wantsEarlier true (franja ANY), enseña el selector y lo anuncia; «Mañanas» manda MORNING', async () => {
+    get.mockResolvedValue(view());
+    setEarlier
+      .mockResolvedValueOnce(view({ appointment: { ...APPOINTMENT, wantsEarlier: true, earlierWindow: 'ANY' } }))
+      .mockResolvedValueOnce(view({ appointment: { ...APPOINTMENT, wantsEarlier: true, earlierWindow: 'MORNING' } }));
+    render(<PublicConfirmationView confirmationToken="tok" />);
+    const box = await screen.findByRole('checkbox', { name: 'Si se libera un hueco antes, avísame' });
+    expect(screen.queryByLabelText('Franja')).not.toBeInTheDocument();
+    fireEvent.click(box);
+    await waitFor(() => expect(setEarlier).toHaveBeenCalledWith('tok', { wantsEarlier: true, preferredWindow: 'ANY' }));
+    expect(await screen.findByText('Listo. Te avisaremos si se libera un hueco antes.')).toBeInTheDocument();
+    const select = screen.getByLabelText('Franja');
+    expect(select).toHaveValue('ANY');
+    expect(select).toHaveClass('h-11');
+    fireEvent.change(select, { target: { value: 'MORNING' } });
+    await waitFor(() =>
+      expect(setEarlier).toHaveBeenLastCalledWith('tok', { wantsEarlier: true, preferredWindow: 'MORNING' }),
+    );
+    expect(await screen.findByText('Listo. Te avisaremos si se libera un hueco antes (mañanas).')).toBeInTheDocument();
+  });
+
+  it('quitar la marca manda wantsEarlier false sin franja y lo anuncia', async () => {
+    get.mockResolvedValue(view({ appointment: { ...APPOINTMENT, wantsEarlier: true, earlierWindow: 'AFTERNOON' } }));
+    setEarlier.mockResolvedValue(view());
+    render(<PublicConfirmationView confirmationToken="tok" />);
+    const box = await screen.findByRole('checkbox', { name: 'Si se libera un hueco antes, avísame' });
+    expect(box).toBeChecked();
+    expect(screen.getByLabelText('Franja')).toHaveValue('AFTERNOON');
+    fireEvent.click(box);
+    await waitFor(() => expect(setEarlier).toHaveBeenCalledWith('tok', { wantsEarlier: false }));
+    expect(await screen.findByText('Listo. No te avisaremos de huecos anteriores.')).toBeInTheDocument();
+  });
+
+  it('sin permiso de la API (earlierAllowed false) o con la cita cancelada no se ofrece; ya confirmada, sí', async () => {
+    get.mockResolvedValueOnce(view({ appointment: { ...APPOINTMENT, earlierAllowed: false } }));
+    const { unmount } = render(<PublicConfirmationView confirmationToken="tok" />);
+    await screen.findByText('Hola Ana,');
+    expect(screen.queryByTestId('public-earlier-request')).not.toBeInTheDocument();
+    unmount();
+
+    get.mockResolvedValueOnce(view({ status: 'RESPONDED', response: 'cancel', respondedAt: '2026-10-01T00:00:00.000Z' }));
+    const second = render(<PublicConfirmationView confirmationToken="tok" />);
+    await screen.findByText('Ya respondiste');
+    expect(screen.queryByTestId('public-earlier-request')).not.toBeInTheDocument();
+    second.unmount();
+
+    get.mockResolvedValueOnce(view({ status: 'RESPONDED', response: 'confirm', respondedAt: '2026-10-01T00:00:00.000Z' }));
+    render(<PublicConfirmationView confirmationToken="tok" />);
+    await screen.findByText('Ya respondiste');
+    expect(screen.getByTestId('public-earlier-request')).toBeInTheDocument();
+  });
+
+  it('un 400 (la cita ya no se puede adelantar) muestra el motivo de la API y relee', async () => {
+    get.mockResolvedValue(view());
+    setEarlier.mockRejectedValue(new ApiError(400, 'La cita es hoy: ya no hay huecos anteriores.'));
+    render(<PublicConfirmationView confirmationToken="tok" />);
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Si se libera un hueco antes, avísame' }));
+    expect(await screen.findByText('La cita es hoy: ya no hay huecos anteriores.')).toBeInTheDocument();
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+  });
+
+  it('un fallo de red lo dice y deja volver a intentar', async () => {
+    get.mockResolvedValue(view());
+    setEarlier.mockRejectedValueOnce(new Error('red')).mockResolvedValueOnce(
+      view({ appointment: { ...APPOINTMENT, wantsEarlier: true, earlierWindow: 'ANY' } }),
+    );
+    render(<PublicConfirmationView confirmationToken="tok" />);
+    const box = await screen.findByRole('checkbox', { name: 'Si se libera un hueco antes, avísame' });
+    fireEvent.click(box);
+    expect(
+      await screen.findByText('No pudimos guardar tu preferencia. Revisa tu conexión e intenta de nuevo.'),
+    ).toBeInTheDocument();
+    fireEvent.click(box);
+    expect(await screen.findByText('Listo. Te avisaremos si se libera un hueco antes.')).toBeInTheDocument();
+  });
+});
+
+describe('PublicConfirmationView · «Añadir a mi calendario» (DX-469)', () => {
+  const GOOGLE = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=Cita';
+  beforeEach(() => get.mockReset());
+
+  it('con calendarAvailable: el .ics del mismo origen (descarga) y Google en pestaña nueva, de 44 px', async () => {
+    get.mockResolvedValue(view({ calendarAvailable: true, googleCalendarUrl: GOOGLE }));
+    render(<PublicConfirmationView confirmationToken="tok/1" />);
+    const section = await screen.findByTestId('public-calendar-links');
+    expect(section).toHaveAccessibleName('Añadir a mi calendario');
+    const ics = screen.getByRole('link', { name: 'Apple, Outlook u otro (.ics)' });
+    expect(ics).toHaveAttribute('href', '/api/v1/public/appointment-confirmations/tok%2F1/calendar.ics');
+    expect(ics).toHaveAttribute('download', 'cita.ics');
+    expect(ics).toHaveClass('min-h-11');
+    const google = screen.getByRole('link', { name: /^Google Calendar/ });
+    expect(google).toHaveAttribute('href', GOOGLE);
+    expect(google).toHaveAttribute('target', '_blank');
+    expect(google).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('sin calendarAvailable (cancelada, pasada o caducada) no se ofrece', async () => {
+    get.mockResolvedValue(view());
+    render(<PublicConfirmationView confirmationToken="tok" />);
+    await screen.findByText('Hola Ana,');
+    expect(screen.queryByTestId('public-calendar-links')).not.toBeInTheDocument();
+  });
+
+  it('ya respondida y vigente, también se ofrece', async () => {
+    get.mockResolvedValue(
+      view({ status: 'RESPONDED', response: 'confirm', respondedAt: '2026-10-01T00:00:00.000Z', calendarAvailable: true, googleCalendarUrl: GOOGLE }),
+    );
+    render(<PublicConfirmationView confirmationToken="tok" />);
+    expect(await screen.findByTestId('public-calendar-links')).toBeInTheDocument();
+  });
+});
+
+describe('PublicConfirmationView · idioma del paciente (DX-497)', () => {
+  beforeEach(() => {
+    get.mockReset();
+    respond.mockReset();
+    setEarlier.mockReset();
+  });
+
+  it('abre en inglés si el paciente tiene «en»; la fecha y la hora siguen la sede', async () => {
+    get.mockResolvedValueOnce(view({ language: 'en' }));
+    render(<PublicConfirmationView confirmationToken="tok-1" />);
+    expect(await screen.findByText(/hello ana/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /confirm attendance/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /cancel appointment/i })).toBeInTheDocument();
+    // DX-315: el formato es el de la sede (es-VE), no el del idioma.
+    expect(screen.getByText(/martes 20 de octubre de 2026/i)).toBeInTheDocument();
+    expect(screen.getByText('10:00 a. m. – 10:30 a. m.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Language')).toHaveValue('en');
+    expect(document.documentElement.lang).toBe('en');
+  });
+
+  it('un idioma sin traducción (ca) abre en el de la clínica', async () => {
+    get.mockResolvedValueOnce(view({ language: 'ca' }));
+    render(<PublicConfirmationView confirmationToken="tok-1" />);
+    expect(await screen.findByText(/hola ana/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Idioma')).toHaveValue('es');
+  });
+
+  it('el selector cambia el idioma de la página sin llamar a la API (la ficha no cambia)', async () => {
+    get.mockResolvedValueOnce(view({ language: 'es' }));
+    render(<PublicConfirmationView confirmationToken="tok-1" />);
+    await screen.findByText(/hola ana/i);
+    fireEvent.change(screen.getByLabelText('Idioma'), { target: { value: 'en' } });
+    expect(screen.getByText(/hello ana/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /please call me/i })).toBeInTheDocument();
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(respond).not.toHaveBeenCalled();
+    expect(setEarlier).not.toHaveBeenCalled();
   });
 });

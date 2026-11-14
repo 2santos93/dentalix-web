@@ -21,19 +21,18 @@ describe('sedeMoney / sedeCivilDate (DX-378)', () => {
 });
 
 describe('moneyWithCode (DX-378: producto bimonetario)', () => {
-  const co = regionalFormat({ locale: 'es-CO', hourCycle: 'h12' });
   const ve = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
   const es = regionalFormat({ locale: 'es', hourCycle: 'h23' });
   const us = regionalFormat({ locale: 'en-US', hourCycle: 'h12' });
   const plain = (text: string) => text.replace(/\u00a0/g, ' ');
 
   it('siempre el código ISO, nunca «$» ni «US$» ni «Bs.S»: separadores de la sede', () => {
-    expect(plain(moneyWithCode(2195000, 'COP', co))).toBe('COP 2.195.000,00');
-    expect(plain(moneyWithCode(2195000, 'USD', co))).toBe('USD 2.195.000,00');
+    expect(plain(moneyWithCode(2195000, 'EUR', ve))).toBe('EUR 2.195.000,00');
+    expect(plain(moneyWithCode(2195000, 'USD', ve))).toBe('USD 2.195.000,00');
     expect(plain(moneyWithCode(2195000, 'VES', ve))).toBe('VES 2.195.000,00');
-    expect(plain(moneyWithCode(2195000, 'COP', es))).toBe('2.195.000,00 COP');
-    expect(plain(moneyWithCode(2195000.5, 'COP', us))).toBe('COP 2,195,000.50');
-    for (const fmt of [co, ve, es, us]) expect(moneyWithCode(10, 'USD', fmt)).not.toMatch(/\$/);
+    expect(plain(moneyWithCode(2195000, 'EUR', es))).toBe('2.195.000,00 EUR');
+    expect(plain(moneyWithCode(2195000.5, 'EUR', us))).toBe('EUR 2,195,000.50');
+    for (const fmt of [ve, es, us]) expect(moneyWithCode(10, 'USD', fmt)).not.toMatch(/\$/);
   });
 
   it('mismos decimales que formatCurrency: sin decimales solo en una moneda sin unidad menor con importe entero', () => {

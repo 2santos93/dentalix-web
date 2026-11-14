@@ -12,7 +12,7 @@ import { axeInBothThemes } from './support/axe';
 
 /**
  * e2e DX-291 (porción 2 de DX-279): la clínica tiene una política de 24 h con
- * cargo de 50.000 COP. El paciente abre el enlace de confirmación 5 h antes:
+ * cargo de 50.000 USD. El paciente abre el enlace de confirmación 5 h antes:
  * ve el texto de la política y «Cancelación con menos de 24 h de aviso»; sin
  * marcar la aceptación no puede cancelar; con ella, cancela. El ADMIN abre la
  * cita en la agenda, «Generar cargo» por 40.000 (no deja más de 50.000) y
@@ -66,7 +66,7 @@ test.beforeAll(async ({ request }) => {
   await apiPost(request, session, `/locations/${principal}/cancellation-policy`, {
     noticeHours: 24,
     suggestedFee: 50000,
-    currency: 'COP',
+    currency: 'USD',
     patientText: POLICY_TEXT,
   });
 });
@@ -201,10 +201,10 @@ async function flow(page: Page, request: Parameters<typeof apiPost>[0], width: n
   await loginAs(page, origin, reception.email, password);
   await page.goto(`${origin}/patients/${patientId}?tab=account-statement`);
   const statement = page.locator('#tabpanel-account-statement');
-  await expect(statement.getByRole('region', { name: 'Resumen en COP' })).toBeVisible({ timeout: 15_000 });
+  await expect(statement.getByRole('region', { name: 'Resumen en USD' })).toBeVisible({ timeout: 15_000 });
   await statement.getByRole('button', { name: 'Registrar abono' }).click();
   const payDialog = page.getByRole('dialog', { name: 'Registrar abono' });
-  await expect(payDialog.getByLabel('Plan').locator('option:checked')).toContainText(/Saldo COP\s40\.000/, {
+  await expect(payDialog.getByLabel('Plan').locator('option:checked')).toContainText(/Saldo USD\s40\.000/, {
     timeout: 10_000,
   });
   await payDialog.getByLabel('Importe').fill('40.000');
@@ -212,7 +212,7 @@ async function flow(page: Page, request: Parameters<typeof apiPost>[0], width: n
   await expectNoHorizontalScroll(page);
   await payDialog.getByRole('button', { name: 'Registrar abono' }).click();
   await expect(payDialog).toBeHidden({ timeout: 10_000 });
-  await expect(statement.getByRole('region', { name: 'Resumen en COP' }).getByTestId('balance')).toContainText(
+  await expect(statement.getByRole('region', { name: 'Resumen en USD' }).getByTestId('balance')).toContainText(
     '0',
     { timeout: 10_000 },
   );

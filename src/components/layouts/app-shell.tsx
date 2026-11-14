@@ -2,7 +2,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Ellipsis, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react';
+import { Ellipsis, PanelLeftClose, PanelLeftOpen, Phone, Search } from 'lucide-react';
 import { UserMenu, useLogout } from '@/components/profile/user-menu';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { useSessionBootstrap } from '@/lib/auth/use-session-bootstrap';
@@ -11,12 +11,11 @@ import type { ClinicRole } from '@/lib/me/me-api';
 import { LocationSwitcher } from '@/components/locations/location-switcher';
 import { getSidebarCollapsed, setSidebarCollapsed } from '@/lib/ui/sidebar-store';
 import { cn } from '@/lib/utils';
-import { SessionLocationsProvider } from '@/lib/locations/session-locations';
 import { SedeDateLocaleProvider } from '@/components/locations/sede-date-locale-provider';
 import { InClinicProvider, useInClinic } from '@/components/appointments/use-in-clinic';
 import { waitingForYouLabel } from '@/lib/appointments/patient-flow';
-import { useAnamnesisInboxCount } from '@/components/anamnesis/use-anamnesis-inbox-count';
-import { ClosingQueueCountProvider, useClosingQueueCount } from '@/components/appointments/closing-queue-count';
+import { useClosingQueueCount } from '@/components/appointments/closing-queue-count';
+import { WorkQueuesProvider, useWorkQueueCount } from '@/components/work-queues/work-queues-context';
 import { canSeeClosingQueue } from '@/lib/appointments/closing-queue-api';
 import { useClinicBranding } from '@/components/brand/branding-context';
 import { ClinicBrand, ClinicLogo } from '@/components/brand/clinic-brand';
@@ -32,13 +31,16 @@ import {
 } from './nav-config';
 import { CommandPalette, ShortcutHint } from './command-palette';
 import { MoreSheet } from './more-sheet';
+import { CallerLookupDialog } from '@/components/caller-lookup/caller-lookup-dialog';
 import { TABLET_QUERY, useMediaQuery, useVirtualKeyboardOpen } from './use-shell-media';
 
 const copy = {
+  skipToContent: 'Saltar al contenido',
   collapse: 'Colapsar menú',
   expand: 'Expandir menú',
   search: 'Buscar',
   searchLong: 'Buscar…',
+  caller: '¿Quién llama?',
   more: 'Más',
   mainNav: 'Principal',
   sections: 'Secciones',
@@ -59,16 +61,16 @@ const copy = {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.accessToken);
   const pathname = usePathname();
-  return <SessionLocationsProvider token={token}>
-    <InClinicProvider token={token} enabled={getTokenRole(token) === 'DENTIST' || pathname.startsWith('/agenda')}>
+  // FE-031: `/me` y `/locations` salen de la caché de sesión
+  // (`session-store.ts`), no de un proveedor: renovar el token no los relee.
+  return <InClinicProvider token={token} enabled={getTokenRole(token) === 'DENTIST' || pathname.startsWith('/agenda')}>
       <SedeDateLocaleProvider token={token}>
-        {/* DX-439: una sola lectura del contador para el menú y la Agenda. */}
-        <ClosingQueueCountProvider token={token} enabled={canSeeClosingQueue(getTokenRole(token))} pathname={pathname}>
+        {/* DX-503: una sola lectura de las listas de trabajo para el menú, la Agenda e Inicio. */}
+        <WorkQueuesProvider token={token} pathname={pathname}>
           <AppShellContent>{children}</AppShellContent>
-        </ClosingQueueCountProvider>
+        </WorkQueuesProvider>
       </SedeDateLocaleProvider>
-    </InClinicProvider>
-  </SessionLocationsProvider>;
+    </InClinicProvider>;
 }
 
 function AppShellContent({ children }: { children: React.ReactNode }) {
@@ -76,8 +78,8 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
   const accessToken = useAuthStore((s) => s.accessToken);
   const branding = useClinicBranding();
   // Todas las pantallas de la app pasan por aquí: al cargar, la sesión se
-  // recupera de la cookie HttpOnly (DX-062). Las páginas esperan a que esté
-  // resuelta (`_hasHydrated`) antes de mandar a /login.
+  // recupera de la cookie HttpOnly (DX-062). `RequireSession` (en el layout de
+  // `(app)`) espera a que esté resuelta (`_hasHydrated`) antes de mandar a /login.
   useSessionBootstrap();
   // El rol se resuelve en un efecto y no en el render: el token sale del store
   // en memoria, que en SSR está vacío, y leerlo durante el render haría que el
@@ -105,11 +107,8 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
   const waitingForYou =
     role === 'DENTIST' && inClinic.view?.scope === 'MINE' ? inClinic.view.waiting.length : 0;
   // DX-099: anamnesis enviadas por los pacientes y aún sin revisar (sus sedes).
-  const anamnesisCount = useAnamnesisInboxCount(
-    accessToken,
-    role === 'ADMIN' || role === 'DENTIST' || role === 'ASSISTANT',
-    pathname,
-  );
+  // DX-503: sale de la misma lectura que «Mi día» (WorkQueuesProvider).
+  const anamnesisCount = useWorkQueueCount('ANAMNESIS_REVIEW');
   // DX-439: pendientes de cierre de las secciones de su rol, en sus sedes.
   const closingQueueCount = useClosingQueueCount();
   const closingCount = canSeeClosingQueue(role) ? closingQueueCount : 0;
@@ -124,7 +123,12 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
   const navLabel = (href: string) => {
     const label = fullLabel(href);
     if (href === '/agenda' && waitingForYou > 0) return `${label} · ${waitingForYouLabel(waitingForYou)}`;
-    if (inboxCount(href) > 0) return `${label} · ${inboxCount(href)}`;
+    if (inboxCount(href) > 0) {
+      const count = inboxCount(href);
+      // Preserve the visible label-and-count sequence for label-in-name checks.
+      if (href === ANAMNESIS_HREF) return `Anamnesis ${count} · por revisar`;
+      return `${label} ${count}`;
+    }
     return label;
   };
   const hasCount = (href: string) => (href === '/agenda' && waitingForYou > 0) || inboxCount(href) > 0;
@@ -169,6 +173,38 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // DX-224: «¿Quién llama?» con Alt+Mayús+Q (Option+Mayús+Q en Mac). Se lee
+  // `code` y no `key`: con Option, macOS cambia el carácter. No choca con ⌘K
+  // ni con los atajos de la agenda, el odontograma y el periodontograma (que
+  // no llevan Alt).
+  const [callerOpen, setCallerOpen] = React.useState(false);
+  // El atajo no espera al rol (que se resuelve en otro efecto): se registra al
+  // montar el shell. `callerReady` se activa en ESE mismo efecto y los botones
+  // solo se pintan con él: ver el botón garantiza que el atajo ya funciona.
+  const [callerReady, setCallerReady] = React.useState(false);
+  React.useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (
+        event.altKey &&
+        event.shiftKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.repeat &&
+        !event.defaultPrevented &&
+        event.code === 'KeyQ'
+      ) {
+        event.preventDefault();
+        setCallerOpen((open) => !open);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    function arm() {
+      setCallerReady(true);
+    }
+    arm();
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const [moreOpen, setMoreOpen] = React.useState(false);
   const keyboardOpen = useVirtualKeyboardOpen();
   const { loggingOut, logout } = useLogout();
@@ -195,6 +231,13 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
     // Y nada de `flex-1` aquí: siendo hijo flex de <body> (flex-col),
     // `flex: 1 1 0%` haría que mandara el crecimiento y no `h-[100dvh]`.
     <div className="flex h-[100dvh] min-h-0">
+      {/* DX-065: primera parada de tabulador: evita recorrer el menú en cada pantalla. */}
+      <a
+        href="#contenido"
+        className="sr-only rounded-lg bg-surface px-4 py-3 text-sm font-medium text-ink shadow-sm focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-50 focus:outline-2 focus:outline-primary-text"
+      >
+        {copy.skipToContent}
+      </a>
       <aside
         className={cn(
           'hidden shrink-0 flex-col border-r border-border bg-surface transition-[width] duration-200 md:flex',
@@ -211,7 +254,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
               onClick={toggleSidebar}
               aria-label={copy.expand}
               title={copy.expand}
-              className="group flex size-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="group flex size-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
             >
               <span aria-hidden className="flex group-hover:hidden group-focus-visible:hidden">
                 <BrandMark name={branding.name} logoUrl={branding.logoUrl} />
@@ -228,7 +271,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
                 onClick={toggleSidebar}
                 aria-label={copy.collapse}
                 title={copy.collapse}
-                className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
               >
                 <PanelLeftClose aria-hidden className="size-4" />
               </button>
@@ -236,16 +279,17 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
           )}
         </div>
         {/* Disparador discreto de la paleta, con el atajo a la vista. */}
-        <div className={cn('shrink-0 pb-2', collapsed ? 'flex justify-center px-2' : 'px-3')}>
+        <div className={cn('shrink-0 pb-2', collapsed ? 'flex justify-center px-2' : 'flex gap-1.5 px-3')}>
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
-            aria-label={copy.search}
+            // Expandido, el nombre es el texto visible («Buscar…» y el atajo): label-in-name.
+            aria-label={collapsed ? copy.search : undefined}
             aria-keyshortcuts="Meta+K Control+K"
             title={collapsed ? `${copy.search} (⌘K / Ctrl K)` : undefined}
             className={cn(
-              'flex items-center rounded-md border border-border bg-surface text-sm text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-              collapsed ? 'size-10 justify-center' : 'h-9 w-full gap-2 px-2.5',
+              'flex items-center rounded-md border border-border bg-surface text-sm text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text',
+              collapsed ? 'size-10 justify-center' : 'h-9 min-w-0 flex-1 gap-2 px-2.5',
             )}
           >
             <Search aria-hidden className="size-4 shrink-0" />
@@ -256,6 +300,22 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
               </>
             )}
           </button>
+          {/* DX-224: «¿Quién llama?» junto a la búsqueda, en la MISMA fila (no
+              suma alto a la barra lateral: sidebar-scrollbars mide el scroll a
+              900 px). En el raíl no cabe: ahí, el atajo y la paleta (⌘K). */}
+          {callerReady && !collapsed ? (
+            <button
+              type="button"
+              onClick={() => setCallerOpen(true)}
+              aria-label={copy.caller}
+              aria-keyshortcuts="Alt+Shift+Q"
+              aria-haspopup="dialog"
+              title={`${copy.caller} (Alt Mayús Q)`}
+              className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
+            >
+              <Phone aria-hidden className="size-4" />
+            </button>
+          ) : null}
         </div>
         <nav
           aria-label={copy.sections}
@@ -309,6 +369,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
                     >
                       <Icon className="size-4 shrink-0" />
                       {!collapsed && <span className="min-w-0 truncate">{label}</span>}
+                      {!collapsed && inboxCount(href) > 0 ? ' ' : null}
                       {inboxCount(href) > 0 && (
                         <InboxCount href={href} count={inboxCount(href)} variant={collapsed ? 'rail' : 'full'} />
                       )}
@@ -318,7 +379,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
                         href="/agenda/en-clinica"
                         aria-label={waitingForYouLabel(waitingForYou)}
                         className={cn(
-                          'rounded-full focus-visible:outline-2 focus-visible:outline-primary',
+                          'rounded-full focus-visible:outline-2 focus-visible:outline-primary-text',
                           collapsed && 'absolute right-0 -top-1',
                         )}
                       >
@@ -347,19 +408,36 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
         {/* Barra superior SOLO en el teléfono: marca de la clínica, sede,
             búsqueda y cuenta. El título de la pantalla es su propio H1 (no
             se repite aquí). */}
-        <header className="flex shrink-0 items-center gap-1 border-b border-border bg-surface pl-4 pr-2 pt-[env(safe-area-inset-top)] md:hidden">
-          <div className="flex h-14 min-w-0 flex-1 items-center">
-            <ShellBrand name={branding.name} logoUrl={branding.logoUrl} />
+        <header className="group/phonebar flex shrink-0 items-center gap-1 border-b border-border bg-surface pl-4 pr-2 pt-[env(safe-area-inset-top)] md:hidden">
+          {/* DX-523: con selector de sede, la marca se queda en su logo o sus
+              iniciales y la sede usa el ancho libre, con el nombre entero. */}
+          <div className="flex h-14 min-w-0 flex-1 items-center group-has-[[data-location-switcher]]/phonebar:flex-none">
+            <span className="contents group-has-[[data-location-switcher]]/phonebar:hidden">
+              <ShellBrand name={branding.name} logoUrl={branding.logoUrl} />
+            </span>
+            <span className="hidden group-has-[[data-location-switcher]]/phonebar:contents">
+              <BrandMark name={branding.name} logoUrl={branding.logoUrl} />
+              {branding.name && <span className="sr-only">{branding.name}</span>}
+            </span>
           </div>
-          {/* La sede, compacta (pin + rótulo corto, nombre entero en el nombre
-              accesible): la marca de la clínica se queda el ancho y ya no se
-              cortan las dos a 390 px. */}
           <LocationSwitcher variant="phone" />
+          {callerReady ? (
+            <button
+              type="button"
+              onClick={() => setCallerOpen(true)}
+              aria-label={copy.caller}
+              aria-keyshortcuts="Alt+Shift+Q"
+              aria-haspopup="dialog"
+              className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
+            >
+              <Phone aria-hidden className="size-5" />
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
             aria-label={copy.search}
-            className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
           >
             <Search aria-hidden className="size-5" />
           </button>
@@ -372,7 +450,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
             `relative` no es decorativo: sin él, un descendiente `absolute` sin
             ancestro posicionado toma como bloque contenedor el documento y lo
             estira (el `sr-only` de `Pagination`). */}
-        <main className="relative flex min-h-0 flex-1 flex-col overflow-y-auto bg-canvas px-4 py-6 md:px-8 md:py-8">
+        <main id="contenido" tabIndex={-1} className="relative flex min-h-0 flex-1 flex-col overflow-y-auto bg-canvas px-4 py-6 outline-none md:px-8 md:py-8">
           <div className="mx-auto w-full max-w-6xl">{children}</div>
         </main>
 
@@ -400,7 +478,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
                     aria-current={active ? 'page' : undefined}
                     aria-label={hasCount(href) || long ? navLabel(href) : undefined}
                     className={cn(
-                      'relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[0.6875rem] font-medium leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
+                      'relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[0.6875rem] font-medium leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-text',
                       active ? 'text-primary-text' : 'text-muted hover:text-ink',
                     )}
                   >
@@ -411,7 +489,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
                         <span className="absolute -right-3 -top-1.5">{countBadge(href, 'inline')}</span>
                       )}
                     </span>
-                    <span className="max-w-full truncate px-0.5">{text}</span>
+                    <span className="max-w-full truncate glyph-room px-0.5">{text}</span>
                   </Link>
                 </li>
               );
@@ -423,7 +501,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
                 aria-haspopup="dialog"
                 aria-expanded={moreOpen}
                 className={cn(
-                  'relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[0.6875rem] font-medium leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
+                  'relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[0.6875rem] font-medium leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-text',
                   activeInMore ? 'text-primary-text' : 'text-muted hover:text-ink',
                 )}
               >
@@ -446,7 +524,14 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
         onLogout={() => void logout()}
         loggingOut={loggingOut}
       />
-      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} token={accessToken} role={role} />
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        token={accessToken}
+        role={role}
+        onOpenCaller={() => setCallerOpen(true)}
+      />
+      <CallerLookupDialog open={callerOpen} onOpenChange={setCallerOpen} token={accessToken} role={role} />
     </div>
   );
 }
@@ -484,9 +569,12 @@ function BrandMark({ name, logoUrl }: { name: string | null; logoUrl: string | n
       .map((w) => w[0]!.toUpperCase())
       .join('');
     return (
-      <span className="flex size-8 items-center justify-center rounded-lg bg-primary-subtle text-xs font-semibold text-primary-subtle-text">
-        {initials || '·'}
-      </span>
+      // Decorativa, dentro de un botón con su propio nombre: en `content` y no
+      // como texto, para que el nombre incluya lo visible (WCAG 2.5.3).
+      <span
+        data-initials={initials || '·'}
+        className="flex size-8 items-center justify-center rounded-lg bg-primary-subtle text-xs font-semibold text-primary-subtle-text before:content-[attr(data-initials)]"
+      />
     );
   }
   return <Logo size={28} decorative />;

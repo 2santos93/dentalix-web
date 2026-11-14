@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import type { ClinicDocumentTypeNames } from './doc-type';
+import { onLocationChange } from '@/lib/locations/location-store';
 import { getDocumentTypeNames } from './document-type-names-api';
 
 /**
@@ -10,6 +11,9 @@ import { getDocumentTypeNames } from './document-type-names-api';
  */
 export function useDocumentTypeNames(token: string | null | undefined): ClinicDocumentTypeNames {
   const [names, setNames] = useState<ClinicDocumentTypeNames>({});
+  // DX-524: los nombres son los de la sede activa; al cambiarla se vuelven a pedir.
+  const [locationTick, setLocationTick] = useState(0);
+  useEffect(() => onLocationChange(() => setLocationTick((n) => n + 1)), []);
   useEffect(() => {
     if (!token) return;
     let alive = true;
@@ -27,6 +31,6 @@ export function useDocumentTypeNames(token: string | null | undefined): ClinicDo
     return () => {
       alive = false;
     };
-  }, [token]);
+  }, [token, locationTick]);
   return names;
 }

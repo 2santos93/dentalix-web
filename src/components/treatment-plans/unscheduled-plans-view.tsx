@@ -1,5 +1,7 @@
 "use client";
 import * as React from "react";
+import { useSessionLocations } from "@/lib/session/session-store";
+import { FieldError } from "@/components/errors/field-error";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
@@ -8,7 +10,6 @@ import {
   type UnscheduledPlan,
 } from "@/lib/treatment-plans/plan-visits-api";
 import {
-  listLocations,
   type ClinicLocation,
 } from "@/lib/locations/locations-api";
 import { getActiveLocationId } from "@/lib/locations/location-store";
@@ -22,6 +23,7 @@ import { FormField } from "@/components/shared/form-field";
 import { cn } from "@/lib/utils";
 import { AsyncSection } from "@/components/shared/async-section";
 import { ScheduleVisitDialog } from "./schedule-visit-dialog";
+import { ExternalLink } from '@/components/shared/external-link';
 export function UnscheduledPlansView({ token }: { token: string }) {
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
   const [locationId, setLocationId] = useState(
@@ -34,6 +36,9 @@ export function UnscheduledPlansView({ token }: { token: string }) {
     if (!clock) return NO_SEDE_FORMAT;
     return day ? clock.fmt.civilDate(day) : clock.fmt.date(new Date(instant), clock.timeZone);
   };
+  const requestLocations = useSessionLocations(token);
+  const [locationsFailed, setLocationsFailed] = useState(false);
+  const [locationsAttempt, setLocationsAttempt] = useState(0);
   const [age, setAge] = useState(0);
   const [cursor, setCursor] = useState<string | undefined>();
   const [history, setHistory] = useState<(string | undefined)[]>([]);
@@ -44,15 +49,19 @@ export function UnscheduledPlansView({ token }: { token: string }) {
   const [booking, setBooking] = useState<UnscheduledPlan | null>(null);
   useEffect(() => {
     let cancelled = false;
-    listLocations(token)
+    requestLocations()
       .then((l) => {
-        if (!cancelled) setLocations(l ?? []);
+        if (cancelled) return;
+        setLocations(l ?? []);
+        setLocationsFailed(false);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setLocationsFailed(true);
+      });
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [requestLocations, locationsAttempt]);
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -110,6 +119,15 @@ export function UnscheduledPlansView({ token }: { token: string }) {
       </p>
       <div className="grid gap-3 sm:grid-cols-2 lg:max-w-2xl">
         <FormField htmlFor="unscheduled-location" label="Sede">
+          {locationsFailed ? (
+            <FieldError
+              label="No pudimos cargar las sedes."
+              onRetry={() => {
+                requestLocations.invalidate();
+                setLocationsAttempt((n) => n + 1);
+              }}
+            />
+          ) : (
           <NativeSelect
             id="unscheduled-location"
             name="unscheduled-location"
@@ -127,6 +145,7 @@ export function UnscheduledPlansView({ token }: { token: string }) {
               </option>
             ))}
           </NativeSelect>
+          )}
         </FormField>
         <FormField htmlFor="unscheduled-age" label="Días desde la aceptación">
           <NativeSelect
@@ -174,7 +193,9 @@ export function UnscheduledPlansView({ token }: { token: string }) {
                 <p className="mt-1 text-sm text-muted">
                   Visita {item.nextVisit}
                   {item.visitLabel ? ` · ${item.visitLabel}` : ""} ·{" "}
-                  {item.itemCount} tratamientos pendientes
+                  {item.itemCount === 1
+                    ? "1 tratamiento pendiente"
+                    : `${item.itemCount} tratamientos pendientes`}
                 </p>
                 <p className="mt-1 text-sm text-muted">
                   Fecha mínima:{" "}
@@ -184,12 +205,9 @@ export function UnscheduledPlansView({ token }: { token: string }) {
                   · {item.daysSinceAccepted} días desde la aceptación
                 </p>
               </div>
-              <div className="flex items-baseline gap-2 lg:flex-col lg:items-end">
-                <span className="t-data font-semibold text-ink">
-                  {sedeMoney(item.total, item.currency, clock?.fmt ?? null)}
-                </span>
-                <span className="text-sm text-muted">{item.currency}</span>
-              </div>
+              <span className="t-data font-semibold text-ink lg:text-right">
+                {sedeMoney(item.total, item.currency, clock?.fmt ?? null)}
+              </span>
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
@@ -201,15 +219,13 @@ export function UnscheduledPlansView({ token }: { token: string }) {
                   Agendar
                 </Button>
                 {item.patientWhatsApp ? (
-                  <a
+                  <ExternalLink
                     href={`https://wa.me/${item.patientWhatsApp}?text=${encodeURIComponent("Hola, te contactamos desde la clínica para coordinar tu próxima cita. ¿Qué horario te viene bien?")}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     aria-label={`WhatsApp a ${item.patientName}`}
                     className={cn(buttonVariants({ variant: "ghost" }), "min-h-11")}
                   >
                     WhatsApp
-                  </a>
+                  </ExternalLink>
                 ) : null}
               </div>
             </li>
@@ -259,6 +275,7 @@ export function UnscheduledPlansView({ token }: { token: string }) {
             minimumDate: booking.minimumDate,
             minimumDay: booking.minimumDay,
             planItemIds: booking.planItemIds,
+            planItems: booking.planItems,
           }}
           onClose={() => setBooking(null)}
           onCreated={() => {

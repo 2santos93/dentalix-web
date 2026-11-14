@@ -2,18 +2,22 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { Printer } from 'lucide-react';
+import { RateProviderNotice } from '@/components/payments/rate-provider-notice';
+import { Callout } from '@/components/ui/callout';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   familyAccountStatementPrintHref,
   getFamilyAccountStatement,
   type FamilyAccountStatement,
 } from '@/lib/account-statement/account-statement-api';
-import { statementCopy } from '@/lib/account-statement/presentation';
+import { shownSummaryRows, statementCopy } from '@/lib/account-statement/presentation';
 import { RELATIONSHIP_LABELS } from '@/lib/patients/responsible-parties-api';
-import { formatCurrency } from '@/lib/format/currency';
+import { sedeMoney } from '@/lib/format/sede-number';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { Button } from '@/components/ui/button';
 import { SectionError } from '@/components/errors/section-error';
 import { familyStatementCopy } from './family-account-statement-document';
+import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
   ...familyStatementCopy,
@@ -40,6 +44,8 @@ export function FamilyAccountStatementSection({
   /** Cambia cuando se registra o anula un abono en la ficha. */
   refreshKey?: number;
 }) {
+  // DX-522: importes con el formato de la sede y el código ISO; cargando, «—».
+  const fmt = readyFormat(useSedeFormat(token));
   const [data, setData] = useState<FamilyAccountStatement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -78,11 +84,11 @@ export function FamilyAccountStatementSection({
         </div>
         {data ? (
           <Button asChild variant="secondary" className="max-sm:w-full">
-            <a href={familyAccountStatementPrintHref(patientId)} target="_blank" rel="noopener noreferrer">
+            <ExternalLink href={familyAccountStatementPrintHref(patientId)}>
               <Printer aria-hidden />
               {copy.print}
               <span className="sr-only"> {copy.printHint}</span>
-            </a>
+            </ExternalLink>
           </Button>
         ) : null}
       </div>
@@ -97,6 +103,13 @@ export function FamilyAccountStatementSection({
         />
       ) : (
         <div className="flex flex-col gap-3">
+          {data.rateProviderTimedOut ? (
+            <RateProviderNotice onRetry={() => setReloadKey((k) => k + 1)} />
+          ) : data.paymentsWithoutRateCount > 0 ? (
+            <Callout tone="warning" role="status">
+              {statementCopy.withoutRateIncomplete(data.paymentsWithoutRateCount)}
+            </Callout>
+          ) : null}
           <ul className="flex flex-col divide-y divide-border-subtle rounded-xl border border-border bg-surface">
             {data.members.map((m) => (
               <li
@@ -114,13 +127,13 @@ export function FamilyAccountStatementSection({
                   </span>
                 </span>
                 <span className="flex flex-col text-sm tabular-nums text-ink sm:items-end">
-                  {m.summary.length === 0 ? (
+                  {shownSummaryRows(m.summary).length === 0 ? (
                     <span className="text-muted">{copy.noBalance}</span>
                   ) : (
-                    m.summary.map((s) => (
+                    shownSummaryRows(m.summary).map((s) => (
                       <span key={s.currency}>
-                        {copy.colBalance}: {formatCurrency(Math.abs(s.balance), s.currency)}
-                        {s.balance < 0 ? ` ${statementCopy.inFavor}` : ''}
+                        {copy.colBalance}: {sedeMoney(Math.abs(s.convertedBalance), s.currency, fmt)}
+                        {s.convertedBalance < 0 ? ` ${statementCopy.inFavor}` : ''}
                       </span>
                     ))
                   )}
@@ -132,7 +145,7 @@ export function FamilyAccountStatementSection({
           {data.totals.some((t) => t.openingBalance > 0) ? (
             <p className="t-caption text-muted">{statementCopy.balanceIncludesOpening}</p>
           ) : null}
-          {data.totals.map((t) => (
+          {shownSummaryRows(data.totals).map((t) => (
             <p
               key={t.currency}
               data-testid="family-total"
@@ -142,8 +155,8 @@ export function FamilyAccountStatementSection({
                 {copy.totalsHeading} ({t.currency})
               </span>
               <span>
-                {formatCurrency(Math.abs(t.balance), t.currency)}
-                {t.balance < 0 ? ` ${statementCopy.inFavor}` : ''}
+                {sedeMoney(Math.abs(t.convertedBalance), t.currency, fmt)}
+                {t.convertedBalance < 0 ? ` ${statementCopy.inFavor}` : ''}
               </span>
             </p>
           ))}

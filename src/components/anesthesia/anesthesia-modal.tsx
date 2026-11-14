@@ -430,7 +430,12 @@ export function AnesthesiaModal({
             description={canManageCatalog ? anesthesiaCopy.emptyCatalogAdmin : anesthesiaCopy.emptyCatalogOther}
             action={
               canManageCatalog ? (
-                <Button type="button" onClick={() => void handleLoadSamples()} disabled={loadingSamples}>
+                <Button
+                  type="button"
+                  onClick={() => void handleLoadSamples()}
+                  disabled={loadingSamples}
+                  className="max-sm:min-h-11"
+                >
                   {anesthesiaCopy.loadSamples}
                 </Button>
               ) : undefined
@@ -458,6 +463,7 @@ export function AnesthesiaModal({
         <FormField htmlFor={`${id}-anesthetic`} label={anesthesiaCopy.anesthetic} error={errors.anesthetic}>
           <NativeSelect
             id={`${id}-anesthetic`}
+            selectClassName="h-11 sm:h-10"
             value={anestheticId}
             onChange={(e) => {
               setAnestheticId(e.target.value);
@@ -496,6 +502,7 @@ export function AnesthesiaModal({
           <FormField htmlFor={`${id}-technique`} label={anesthesiaCopy.technique}>
             <NativeSelect
               id={`${id}-technique`}
+              selectClassName="h-11 sm:h-10"
               value={technique}
               onChange={(e) => setTechnique(e.target.value as AnesthesiaTechnique)}
             >

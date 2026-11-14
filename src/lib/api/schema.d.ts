@@ -117,7 +117,7 @@ export interface paths {
         put?: never;
         /**
          * Inicia sesión en la clínica del host (o en plataforma desde el apex)
-         * @description SEC-008: un superadmin SIN membresía en la clínica solo entra como acceso de soporte (break-glass): necesita el MFA enrolado (`/platform/mfa`), `mfaCode` y `breakGlassReason`. Recibe solo un access token ADMIN de vida corta (`breakGlass: true`, `expiresAt`), sin refresh, y el acceso queda en `GET /support-accesses` de la clínica.
+         * @description DX-021-bis: en el apex la contraseña no basta: responde siempre `MfaChallengeDto`. SEC-066: toda alta forzada (superadmin en el apex o miembro de una clínica con el MFA obligatorio) exige además el código enviado al correo de la cuenta (`emailCodeRequired`, `emailCodeRef`); si no se pudo enviar (ya salió uno a esta cuenta desde este cliente hace menos de 1 min), 429 con `Retry-After`. SEC-008: un superadmin SIN membresía en la clínica solo entra como acceso de soporte (break-glass): necesita el MFA enrolado (`/platform/mfa`), `mfaCode` y `breakGlassReason`. Recibe solo un access token ADMIN de vida corta (`breakGlass: true`, `expiresAt`), sin refresh, y el acceso queda en `GET /support-accesses` de la clínica.
          */
         post: operations["AuthController_loginHandler"];
         delete?: never;
@@ -220,6 +220,124 @@ export interface paths {
         get: operations["PublicSubdomainsController_availability"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Completa el login con el código de la app o un código de recuperación
+         * @description Queda en la auditoría de la clínica: LOGIN (`MFA_TOTP` / `MFA_RECOVERY_CODE`) o LOGIN_FAILED (`INVALID_MFA_CODE`). Un código de la app vale una sola vez; uno de recuperación, también.
+         */
+        post: operations["LoginMfaController_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login/mfa/enrollment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Alta forzada: genera el secreto (pendiente) y el otpauth URI
+         * @description DX-021-bis, SEC-066: exige `emailCode`, el código de 8 dígitos que el login envió al correo de la cuenta (superadmin o miembro de clínica; el login lo indica con `emailCodeRequired`). Es de ESE `mfaToken`: no vale para otra cuenta ni otra clínica, caduca con él (10 min) y admite 10 intentos. Un código erróneo queda en la auditoría (LOGIN_FAILED `INVALID_EMAIL_CODE`, en la clínica o en plataforma) y cuenta para la espera por cuenta y cliente.
+         */
+        post: operations["LoginMfaController_startEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login/mfa/enrollment/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Alta forzada: confirma con un código, activa la verificación y abre la sesión
+         * @description Exige otra vez el `emailCode` del correo (sin él no se activa, no hay sesión ni códigos de recuperación). Devuelve los 10 códigos de recuperación (una sola vez). Queda auditado (UPDATE STAFF_MEMBER `MFA_ENABLED` y LOGIN `MFA_ENROLLED`).
+         */
+        post: operations["LoginMfaController_confirmEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/security-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Política de seguridad de la clínica */
+        get: operations["SecurityPolicyController_get"];
+        /**
+         * Cambia la política de seguridad de la clínica (solo ADMIN)
+         * @description Para endurecerla, quien la cambia debe tener ya su MFA activo (409 si no). Cierra las sesiones de quienes quedan obligados sin tenerlo. Queda en la auditoría con el antes, el después y cuántas sesiones se cerraron.
+         */
+        put: operations["SecurityPolicyController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/{userId}/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** ¿Tiene este miembro la verificación activa? */
+        get: operations["StaffMfaController_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/{userId}/mfa/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restablece la verificación de otro miembro: contraseña y segundo factor de quien lo hace, con motivo
+         * @description Borra su secreto y sus códigos, cierra sus sesiones, deja sin valor sus dispositivos de confianza y le avisa por correo. Queda en la auditoría (`MFA_RESET_<motivo>`). Nunca la propia, la de un superadmin ni la de una cuenta con acceso a otra clínica (`MFA_RESET_REFUSED`).
+         */
+        post: operations["StaffMfaController_reset"];
         delete?: never;
         options?: never;
         head?: never;
@@ -376,6 +494,141 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Estado de tu verificación en dos pasos */
+        get: operations["MyMfaController_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/trusted-devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tus dispositivos de confianza: los que no piden el código durante 30 días */
+        get: operations["MyMfaController_trustedDevices"];
+        put?: never;
+        post?: never;
+        /**
+         * Revoca todos tus dispositivos de confianza
+         * @description Queda en la auditoría (`MFA_TRUSTED_DEVICES_REVOKED`).
+         */
+        delete: operations["MyMfaController_revokeAllTrustedDevices"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/trusted-devices/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoca uno de tus dispositivos de confianza
+         * @description Queda en la auditoría (`MFA_TRUSTED_DEVICES_REVOKED`).
+         */
+        delete: operations["MyMfaController_revokeTrustedDevice"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/enrollment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Inicia el alta: con tu contraseña, genera el secreto (pendiente) y el otpauth URI para el QR */
+        post: operations["MyMfaController_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/enrollment/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirma el alta con un código de la app: la activa, devuelve 10 códigos de recuperación y cierra tus demás sesiones
+         * @description Queda en la auditoría (UPDATE STAFF_MEMBER, `MFA_ENABLED`) sin secreto ni códigos.
+         */
+        post: operations["MyMfaController_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Desactiva la verificación: contraseña actual + código de la app (o de recuperación); cierra tus demás sesiones
+         * @description No se puede si es obligatoria para ti (cuenta de soporte o clínica que la exige a los ADMIN). Queda en la auditoría (`MFA_DISABLED`).
+         */
+        post: operations["MyMfaController_disable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/recovery-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Genera 10 códigos de recuperación nuevos (los anteriores dejan de valer): contraseña + código
+         * @description Queda en la auditoría (`MFA_RECOVERY_CODES_REGENERATED`).
+         */
+        post: operations["MyMfaController_regenerate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/files/avatars/{name}": {
         parameters: {
             query?: never;
@@ -386,6 +639,66 @@ export interface paths {
         get: operations["FilesController_getAvatar"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/logos/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["FilesController_getLogo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/coming-of-age": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pacientes que pasan a la mayoría de edad en un período (DX-342)
+         * @description Pacientes con responsable cuya fecha de mayoría de edad (nacimiento + mayoría de edad de la clínica) cae en [from, to], más los ya adultos PENDING con la mayoría antes de `from` (`overdue`). Un miembro restringido a unas sedes solo ve a los pacientes de esas sedes (la de su última cita atendida); un paciente sin citas atendidas solo lo ve quien no está restringido. ADMIN y RECEPTION; el resto, 403 en español.
+         */
+        get: operations["PatientMajorityReviewController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/majority-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estado del paso a la mayoría de edad del paciente (DX-342)
+         * @description Para el aviso y el modal de la ficha. La edad cuenta en el día civil de la sede activa o principal. Lo ven los 4 roles, como los responsables.
+         */
+        get: operations["PatientMajorityReviewController_get"];
+        put?: never;
+        /**
+         * Revisar el paso a la mayoría de edad (DX-342)
+         * @description PATIENT_SELF: los envíos van al propio paciente (sin email: a nadie). KEEP_RESPONSIBLE: siguen yendo a su responsable con su consentimiento. Vale para su fecha de mayoría de edad vigente; rige la última. Queda en la auditoría (motivo MAJORITY_REVIEWED) con la decisión y el largo de la nota, nunca su texto.
+         */
+        post: operations["PatientMajorityReviewController_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -420,11 +733,35 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Historias que salen de retención legal (solo ADMIN)
-         * @description DX-039. Pacientes vivos cuya HC ya no está en retención o deja de estarlo dentro de `withinDays` (NONE: 15 años, DOUBLE: 30 años desde la última atención; PERMANENT nunca sale). Orden: la que antes vence. Paginada, con tope. Solo informa: no purga nada.
+         * Historias que salen de retención (solo ADMIN)
+         * @description DX-039. Pacientes vivos cuya HC ya no está en retención o deja de estarlo dentro de `withinDays` (NONE: el plazo de la clínica, DOUBLE: el doble, desde la última atención; PERMANENT nunca sale). Una reducción del plazo no adelanta la lista: la fecha de fin que una historia ya tenía se respeta. Orden: `lastAttentionAt` ascendente; con esa fecha fijada, una fila puede aparecer más tarde que su última atención, y `retentionUntil` es la fecha efectiva. Paginada, con tope. Solo informa: no purga nada.
          */
         get: operations["PatientsController_retentionExpiring"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/retention/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Plazo de conservación de la historia clínica de la clínica
+         * @description DX-330. `effectiveYears` es el plazo que rige (el guardado, nunca por debajo del mínimo de plataforma). `correctionWindow` aparece durante las 24 horas siguientes a una subida.
+         */
+        get: operations["PatientsController_retentionSettings"];
+        /**
+         * Cambia el plazo de conservación de la historia clínica; queda en la auditoría
+         * @description DX-330. Subir aplica desde la siguiente petición. Reducir pide `confirmReduction: true`: las historias que ya estaban en retención mantienen su fecha de fin y el plazo nuevo se aplica al resto y a las atenciones nuevas. Si el valor no cambia, responde 200 sin evento de auditoría.
+         */
+        put: operations["PatientsController_updateRetention"];
         post?: never;
         delete?: never;
         options?: never;
@@ -453,6 +790,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/languages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Idiomas de los pacientes de la clínica (DX-497) */
+        get: operations["PatientsController_languages"];
+        /**
+         * Cambia los idiomas que la ficha ofrece al paciente; queda en la auditoría
+         * @description DX-497. Solo ADMIN. Etiquetas BCP 47 normalizadas, sin repetidos, con el idioma de la clínica siempre incluido. Quitar un idioma no borra el de ningún paciente (la ficha lo enseña «(no disponible)»). Si la lista no cambia, 200 sin evento de auditoría.
+         */
+        put: operations["PatientsController_updateLanguages"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/document-type-names": {
         parameters: {
             query?: never;
@@ -462,7 +820,7 @@ export interface paths {
         };
         /**
          * Nombre local de cada tipo de documento de la clínica (DX-327)
-         * @description Null = sin nombre local: se usa el genérico. El nombre visible de un documento es la etiqueta del paciente, si no el nombre local de la clínica para su tipo, si no el genérico (R17). La importación de pacientes reconoce también estos nombres, antes que los genéricos (R19).
+         * @description Null = sin nombre local: se usa el genérico. El nombre visible de un documento es la etiqueta del paciente, si no el nombre local de la clínica para su tipo, si no el genérico (R17). La importación de pacientes reconoce también estos nombres, antes que los genéricos (R19). DX-524: `names` son los de la clínica; `effective`, los que rigen en la sede activa (los de la sede sobre los de la clínica, por tipo).
          */
         get: operations["PatientsController_documentTypeNames"];
         /**
@@ -489,12 +847,32 @@ export interface paths {
         post?: never;
         /**
          * Archivar paciente (borrado blando, solo ADMIN)
-         * @description DX-039. Retira al paciente de los listados (`deletedAt`); su HC se conserva siempre. Si la HC está en retención legal (15 años desde la última atención, 30 con DOUBLE, siempre con PERMANENT) responde 409 `CLINICAL_RECORD_RETENTION` con la fecha hasta la que se conserva. Un paciente sin atenciones clínicas se archiva, salvo que tenga citas programadas o confirmadas (409 `PATIENT_HAS_PENDING_APPOINTMENTS`: hay que cancelarlas o cerrarlas antes). DX-461: en la misma transacción anula sus enlaces públicos vivos (ofertas de hueco, firma y presupuesto a distancia, copia del PDF firmado y anamnesis): sus rutas públicas responden como a un enlace caducado y desarchivar no los reactiva. Si anuló alguno, queda un audit_event (UPDATE de PATIENT, `PATIENT_ARCHIVED_LINKS_REVOKED`) con cuántos de cada tipo.
+         * @description DX-039. Retira al paciente de los listados (`deletedAt`); su HC se conserva siempre. Si la HC está en retención (el plazo de la clínica desde la última atención, el doble con DOUBLE, siempre con PERMANENT) responde 409 `CLINICAL_RECORD_RETENTION` con la fecha hasta la que se conserva. Un paciente sin atenciones clínicas se archiva, salvo que tenga citas programadas o confirmadas (409 `PATIENT_HAS_PENDING_APPOINTMENTS`: hay que cancelarlas o cerrarlas antes). DX-461: en la misma transacción anula sus enlaces públicos vivos (ofertas de hueco, firma y presupuesto a distancia, copia del PDF firmado y anamnesis): sus rutas públicas responden como a un enlace caducado y desarchivar no los reactiva. Si anuló alguno, queda un audit_event (UPDATE de PATIENT, `PATIENT_ARCHIVED_LINKS_REVOKED`) con cuántos de cada tipo.
          */
         delete: operations["PatientsController_archive"];
         options?: never;
         head?: never;
         patch: operations["PatientsController_update"];
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/imaging-export.txt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Datos del paciente para el software de imagen (texto)
+         * @description DX-484. Fichero de texto UTF-8 con fin de línea CRLF y una línea «Etiqueta: valor» por dato: código del paciente, apellidos y nombre (también sin tildes), fecha de nacimiento (dd.mm.aaaa y aaaa-mm-dd) y sexo; «Sin indicar» si falta. Solo identificación: ni documento, ni contacto, ni datos clínicos. Solo el personal clínico (DENTIST, ASSISTANT, ADMIN); cada descarga deja un evento EXPORT en la auditoría. 404 como `GET /patients/:id`.
+         */
+        get: operations["PatientsController_imagingExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/patients/{id}/live-public-links": {
@@ -532,7 +910,7 @@ export interface paths {
         head?: never;
         /**
          * Cambiar la retención extendida de la HC (solo ADMIN)
-         * @description DX-039. NONE (15 años), DOUBLE (30) o PERMANENT. Motivo obligatorio: queda con el autor y la fecha en el rastro de retención del paciente; el registro de auditoría guarda quién y cuándo (sin el motivo).
+         * @description DX-039. NONE (el plazo de la clínica), DOUBLE (el doble) o PERMANENT. Motivo obligatorio: queda con el autor y la fecha en el rastro de retención del paciente; el registro de auditoría guarda quién y cuándo (sin el motivo).
          */
         patch: operations["PatientsController_changeRetention"];
         trace?: never;
@@ -602,7 +980,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Responsables del paciente y de quién es responsable (DX-203) */
+        /**
+         * Responsables del paciente y de quién es responsable (DX-203)
+         * @description SEC-044: DENTIST y ASSISTANT reciben `docNumber` del responsable en null (contacto y paciente responsable); ADMIN y RECEPTION, completo. Cada lectura deja un evento de auditoría VIEW (motivo RESPONSIBLE_PARTIES) en la ficha del paciente.
+         */
         get: operations["PatientResponsiblePartiesController_list"];
         put?: never;
         /**
@@ -687,6 +1068,128 @@ export interface paths {
          */
         get: operations["CollectionsController_list"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exchange/rates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tasas de un día para la clínica, según su fuente (DX-374)
+         * @description Con fuente AUTOMATIC, las del proveedor (caché diaria). Con MANUAL, solo las que la clínica registró para ese día: una moneda sin tasa NO aparece en `rates` y nunca se pide al proveedor. SEC-054: un día sin guardar solo se pide al proveedor dentro de la ventana de la clínica y con su presupuesto de fallos de caché (429 al superarlo). DX-384: con MANUAL y `currencies`, si alguna no tiene tasa ese día se devuelve la última fecha anterior, dentro del plazo de la clínica, que las tiene todas; `rateDate` dice de qué día son las tasas.
+         */
+        get: operations["ExchangeController_rates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exchange/convert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ExchangeController_convert"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exchange/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fuente de la tasa de cambio de la clínica y plazo de la última tasa registrada (DX-374, DX-384) */
+        get: operations["ExchangeSettingsController_settings"];
+        /**
+         * Cambia la fuente de la tasa de cambio de la clínica; queda en la auditoría
+         * @description DX-374. Pasar a MANUAL fija `manualSince` = hoy en la sede principal: desde ese día la tasa sale de las manuales y los días anteriores siguen con la automática, así que los saldos de antes del cambio no se mueven. Guardar MANUAL otra vez conserva el día. Volver a AUTOMATIC lo limpia: los días del periodo manual vuelven a la tasa automática hasta que cada abono congele su tasa (DX-375). DX-402: con MANUAL, la tasa manual de un día anterior a `manualSince` sirve de tasa de respaldo a los abonos de ese día que siguen sin tasa (si el proveedor no tiene la de ese día). Evento CLINIC_SETTINGS con reason EXCHANGE_RATE_SOURCE y el antes y el después; si la fuente no cambia, 200 sin evento. DX-384: `manualRateMaxAgeDays` (0..30, 3 por defecto) es hasta cuántos días de antigüedad puede tener la última tasa manual que se usa cuando no hay la del día del abono (0 = solo la del mismo día); cualquiera de los dos campos puede ir solo. Si cambia, evento CLINIC_SETTINGS con reason EXCHANGE_RATE_MAX_AGE y el antes y el después, en la misma transacción, y los abonos aplazados «sin tasa» se intentan ya. Solo ADMIN (403 al resto).
+         */
+        put: operations["ExchangeSettingsController_updateClinicSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exchange/manual-rates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Últimas tasas de cambio manuales de la clínica (DX-374)
+         * @description Del día más reciente al más antiguo y, dentro del día, por moneda.
+         */
+        get: operations["ExchangeSettingsController_manualRates"];
+        put?: never;
+        /**
+         * Registra la tasa de cambio de un día y una moneda; queda en la auditoría
+         * @description DX-374. Unidades de la moneda por 1 USD. Se usa cuando la fuente de la clínica es MANUAL, para los días desde `manualSince` (se puede dejar registrada antes de cambiarla). DX-402: la de un día anterior a `manualSince` sirve, con MANUAL, de tasa de respaldo a los abonos de ese día que siguen sin tasa si el proveedor no tiene la de ese día (GET /payments/rate-backlog/day dice cuántos); nunca cambia una tasa ya congelada. Una tasa ya registrada para ese día y moneda no se sobrescribe: si ningún abono la usó, se corrige con PUT /exchange/manual-rates/:id.
+         */
+        post: operations["ExchangeSettingsController_register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exchange/manual-rates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Corrige una tasa manual que ningún abono usó; queda en la auditoría
+         * @description DX-375. Solo cambia la tasa (unidades de la moneda por 1 USD); el día y la moneda no. Cada abono congela la tasa con que se convirtió al registrarse, así que una tasa que ya usa algún abono no se cambia: 409 MANUAL_EXCHANGE_RATE_IN_USE (también lo impide la BD). Corregir una sin usar sí afecta a los abonos que la congelen después.
+         */
+        put: operations["ExchangeSettingsController_correct"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exchange/currency-texts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Texto propio de cada moneda de la clínica (DX-517) */
+        get: operations["ClinicCurrencyTextsController_texts"];
+        /**
+         * Cambia el texto propio de las monedas de la clínica
+         * @description DX-517. Sustituye la lista entera; vacía = sin textos propios. El texto ocupa el lugar del código ISO en la posición que da el formato de la sede. Queda en la auditoría con el antes y el después. Los recibos ya emitidos conservan su foto.
+         */
+        put: operations["ClinicCurrencyTextsController_update"];
         post?: never;
         delete?: never;
         options?: never;
@@ -988,6 +1491,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/lookup-by-phone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * «¿Quién llama?»: pacientes que tienen ese teléfono (DX-224)
+         * @description Lee el número en cualquier formato (sin «+», con el prefijo de la sede activa) y lo compara por E.164 completo con el teléfono del paciente y el de sus responsables (contacto o paciente). Varios pacientes con el mismo número (grupo familiar) salen todos, hasta 20 (`truncated` avisa si hay más). Cada uno trae su próxima cita, su última visita (solo de las sedes del miembro) y su saldo. `hasCriticalAlert` solo para los roles clínicos. Un evento de lectura por paciente; el número no se registra.
+         */
+        post: operations["CallerLookupController_find"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/medical-history": {
         parameters: {
             query?: never;
@@ -1066,7 +1589,7 @@ export interface paths {
         put?: never;
         /**
          * Registra una evolución (inalterable, DX-038)
-         * @description DX-170: con `templateId`, el texto compuesto se guarda en `notes` (enviado ya revisado, o compuesto por el servidor con `answers`). Con `appointmentId`, la evolución queda ligada a la cita.
+         * @description DX-170: con `templateId`, el texto compuesto se guarda en `notes` (enviado ya revisado, o compuesto por el servidor con `answers`). Con `appointmentId`, la evolución queda ligada a la cita. DX-540: congela el registro profesional del autor (`authorProfessionalLicense`) y, si la clínica tiene el aviso activo y el autor no lo tiene, responde `warnings: [{ code: PROFESSIONAL_LICENSE_MISSING }]` sin bloquear la firma. DX-015-bis (D18): con `recall`, fija el intervalo del recall de ese tipo en la misma transacción (`recallUpdates`).
          */
         post: operations["ClinicalEntriesController_create"];
         delete?: never;
@@ -1113,6 +1636,47 @@ export interface paths {
         head?: never;
         /** No permitido: una evolución no se edita (DX-038) */
         patch: operations["ClinicalEntriesController_rejectPatch"];
+        trace?: never;
+    };
+    "/api/v1/clinical-entries/signing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Registro profesional del usuario y aviso que traería su firma (DX-540)
+         * @description Para avisar en «Nueva evolución» antes de guardar. Mismo cálculo que el alta.
+         */
+        get: operations["ClinicalEntrySettingsController_signing"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clinical-entries/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ajustes de las evoluciones de la clínica (DX-540) */
+        get: operations["ClinicalEntrySettingsController_settings"];
+        /**
+         * Cambia los ajustes de las evoluciones de la clínica; queda en la auditoría
+         * @description DX-540. Aplica a la siguiente firma; una evolución ya firmada no cambia. Si nada cambia, responde 200 sin evento de auditoría.
+         */
+        put: operations["ClinicalEntrySettingsController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/clinical-note-templates": {
@@ -1167,7 +1731,7 @@ export interface paths {
         head?: never;
         /**
          * Editar o desactivar una plantilla
-         * @description Las evoluciones ya guardadas no cambian: llevan su texto compuesto. `prompts`, si viene, sustituye todas las preguntas.
+         * @description Las evoluciones ya guardadas no cambian: llevan su texto compuesto. `prompts`, si viene, sustituye todas las preguntas: las que llevan el `id` de una pregunta de la plantilla lo conservan (una evolución en curso sigue guardándose), las demás son nuevas. `version` activa el control optimista (409 si cambió).
          */
         patch: operations["ClinicalNoteTemplatesController_update"];
         trace?: never;
@@ -1639,6 +2203,22 @@ export interface paths {
         patch: operations["AppointmentsController_update"];
         trace?: never;
     };
+    "/api/v1/appointments/{id}/checkout-checklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AppointmentsController_getCheckoutChecklist"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/appointments/{id}/plan-items/{planItemId}/claim": {
         parameters: {
             query?: never;
@@ -2091,6 +2671,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["EquipmentController_list"];
+        put?: never;
+        post: operations["EquipmentController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/maintenance-due": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mantenimientos de equipos vencidos o por vencer («Mi día»)
+         * @description DX-543: equipos ACTIVOS con el próximo preventivo vencido (OVERDUE) o que vence hoy o en los próximos 30 días (DUE_SOON), contados en el día de la sede de cada equipo, con la misma regla que `nextMaintenanceOn`/`maintenanceStatus` de la lista. Fuera: al día, sin programar y dados de baja. En la sede activa (`X-Location-Id`); sin ella, las sedes permitidas al usuario (vista consolidada). De lo más urgente a lo menos. Solo ADMIN.
+         */
+        get: operations["EquipmentController_listMaintenanceDue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["EquipmentController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["EquipmentController_update"];
+        trace?: never;
+    };
+    "/api/v1/equipment/{id}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["EquipmentController_retire"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/{id}/maintenances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["EquipmentController_addMaintenance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/{id}/maintenances/{maintenanceId}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["EquipmentController_void"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payment-methods": {
         parameters: {
             query?: never;
@@ -2121,6 +2801,38 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["PaymentMethodsController_update"];
+        trace?: never;
+    };
+    "/api/v1/payment-methods/{id}/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PaymentMethodsController_addAdjustment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payment-methods/{id}/adjustments/{adjustmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["PaymentMethodsController_changeAdjustment"];
         trace?: never;
     };
     "/api/v1/waitlist": {
@@ -2279,6 +2991,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/slot-offer-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Caducidad anticipada y antelación mínima de la oferta de hueco por enlace (DX-448) */
+        get: operations["SlotOfferSettingsController_settings"];
+        /**
+         * Cambia la caducidad anticipada y la antelación mínima de la oferta de hueco; queda en la auditoría (DX-448)
+         * @description Aplica a las ofertas que se envíen después; las ya enviadas conservan su caducidad. Si nada cambia, responde 200 sin evento de auditoría.
+         */
+        put: operations["SlotOfferSettingsController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/appointments/{id}/confirmation-link": {
         parameters: {
             query?: never;
@@ -2299,6 +3032,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/appointment-confirmations/{token}/calendar.ics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * DX-469: la cita del enlace como evento de calendario (.ics)
+         * @description RFC 5545: inicio y fin en UTC (el instante de la sede), clínica y profesional en el título, la sede y su dirección; sin motivo ni tratamiento. UID estable por cita (reprogramar actualiza, no duplica); una cancelada lleva STATUS:CANCELLED; VALARM con la antelación de la sede (`calendarAlarmHours` de los ajustes de recordatorio, 24 por defecto, 0 sin alarma). Vale con el enlace pendiente o ya respondido mientras la cita no haya terminado; caducado, revocado o cita pasada, 410. Solo lee: no se audita.
+         */
+        get: operations["PublicAppointmentConfirmationsController_calendarIcs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/appointment-confirmations/{token}": {
         parameters: {
             query?: never;
@@ -2313,6 +3066,26 @@ export interface paths {
          * @description DX-361: una respuesta registrada queda en la auditoría de la clínica de la cita como UPDATE de APPOINTMENT, sin usuario (el paciente), origen LINK y `reason` CONFIRMATION_LINK_CONFIRMED, CONFIRMATION_LINK_CANCELLED o CONFIRMATION_LINK_CALL_REQUESTED. Sin el token ni la URL; un enlace desconocido, caducado o ya usado no deja evento.
          */
         post: operations["PublicAppointmentConfirmationsController_respond"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/appointment-confirmations/{token}/wants-earlier": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * DX-437: el paciente pide (o quita) que le avisen si se libera un hueco antes
+         * @description Pone o quita «Adelantar si hay hueco» en la cita del enlace, con la franja (MORNING, AFTERNOON o ANY) y la marca de que lo pidió el paciente. Vale con el enlace pendiente o ya respondido; caducado o sin efecto, 410. La cita tiene que estar agendada o confirmada, en el futuro y en un día posterior a hoy en la sede (400 en español si no). Queda en la auditoría como UPDATE de APPOINTMENT, sin usuario, origen PUBLIC_LINK y `reason` CONFIRMATION_LINK_EARLIER_REQUESTED o CONFIRMATION_LINK_EARLIER_CLEARED. Mismo límite de peticiones por IP que el resto del enlace.
+         */
+        post: operations["PublicAppointmentConfirmationsController_wantsEarlier"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2543,6 +3316,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/treatment-plans/{planId}/quote/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Imprime el presupuesto: la primera impresión fija su validez (DX-379)
+         * @description Devuelve lo mismo que GET quote. Si el plan está en borrador o presentado, sin firmar y sin validez guardada, la fija: emitido hoy (día de la sede) y válido los días del ajuste de la clínica (GET /treatment-plan-settings). Presentar el plan también la fija. Reimprimir otro día, o tras cambiar el ajuste, devuelve las mismas fechas. Idempotente; queda en la auditoría como PRINT.
+         */
+        post: operations["PlanQuoteController_issue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/treatment-plans/{planId}/acceptance": {
         parameters: {
             query?: never;
@@ -2553,6 +3346,46 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["PlanQuoteController_accept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/treatment-plans/{planId}/acceptance/reprice-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vista previa del presupuesto con los precios actualizados para aceptarlo vencido (DX-379)
+         * @description Recotiza TODOS los ítems propuestos con el precio vigente (la misma función que …/reprice/preview) y compone el presupuesto como se firmaría (precios y validez nuevos), sin escribir nada. Para aceptar con `expired.mode = REPRICE` se envían `repricing.previewHash` (como `expired.repricePreviewHash`) y `quote.contentHash` (como `contentHash`).
+         */
+        post: operations["PlanQuoteController_acceptanceRepricePreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/treatment-plans/{planId}/acceptance/partial-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vista previa de aceptar solo algunos procedimientos del presupuesto (DX-417)
+         * @description Compone el presupuesto de lo aceptado como se firmaría (`accepted`, con su `contentHash`), lo que pasaría al presupuesto pendiente (`pending`) y los totales del plan entero (`original`); aceptado + pendiente = original, ítem a ítem. No escribe ni bloquea. Para firmar: POST …/acceptance con `partial.itemIds` (los mismos) y `contentHash` = `accepted.contentHash`. Con un presupuesto vencido que se acepta actualizando los precios, `reprice: true` recotiza TODO el plan (sin escribir) y parte el resultado: `repricing.previewHash` va en `expired.repricePreviewHash`.
+         */
+        post: operations["PlanQuoteController_partialAcceptancePreview"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2570,6 +3403,67 @@ export interface paths {
         get: operations["PriceQuoteController_quote"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/treatment-plan-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cuántos días vale un presupuesto en la clínica (DX-379) */
+        get: operations["QuoteSettingsController_settings"];
+        /**
+         * Cambia cuántos días vale un presupuesto; queda en la auditoría (DX-379)
+         * @description Aplica a los presupuestos que se emitan después (presentar el plan o imprimirlo por primera vez); los ya emitidos conservan sus fechas. Si nada cambia, responde 200 sin evento de auditoría.
+         */
+        put: operations["QuoteSettingsController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/treatment-plans/{planId}/reprice/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vista previa de «Actualizar precios» (DX-379), sin escribir
+         * @description Cada ítem propuesto con el precio que tendría hoy (la misma resolución que el alta: convenio → lista de la sede → catálogo, convertido con la tasa de hoy si el catálogo está en otra moneda), conservando la proporción precio / lista y descuento / precio. Los que no tienen precio vigente o tasa se listan sin tocarlos. Devuelve la huella que exige `/reprice/apply`.
+         */
+        post: operations["PlanRepricingController_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/treatment-plans/{planId}/reprice/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Aplica «Actualizar precios» (DX-379) con la huella de la vista previa
+         * @description Recalcula la recotización con el plan bloqueado (la misma función que la vista previa) y, si su huella es `previewHash`, escribe en una transacción los precios y la foto de cada ítem, reinicia la validez del presupuesto solo si se recotizan TODOS los ítems propuestos vivos (`validityRenewed`; emitido hoy en la sede del plan + días del ajuste; un borrador sin fechas queda con fechas; si no, conserva la que tenía) y guarda la recotización con el antes y el después. Un enlace de firma a distancia (DX-415) pendiente deja de valer si el presupuesto cambió.
+         */
+        post: operations["PlanRepricingController_apply"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2633,107 +3527,6 @@ export interface paths {
          */
         get: operations["DiscountReportController_csv"];
         put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/exchange/rates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Tasas de un día para la clínica, según su fuente (DX-374)
-         * @description Con fuente AUTOMATIC, las del proveedor (caché diaria). Con MANUAL, solo las que la clínica registró para ese día: una moneda sin tasa NO aparece en `rates` y nunca se pide al proveedor. SEC-054: un día sin guardar solo se pide al proveedor dentro de la ventana de la clínica y con su presupuesto de fallos de caché (429 al superarlo).
-         */
-        get: operations["ExchangeController_rates"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/exchange/convert": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["ExchangeController_convert"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/exchange/settings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Fuente de la tasa de cambio de la clínica (DX-374) */
-        get: operations["ExchangeSettingsController_settings"];
-        /**
-         * Cambia la fuente de la tasa de cambio de la clínica; queda en la auditoría
-         * @description DX-374. Pasar a MANUAL fija `manualSince` = hoy en la sede principal: desde ese día la tasa sale de las manuales y los días anteriores siguen con la automática, así que los saldos de antes del cambio no se mueven. Guardar MANUAL otra vez conserva el día. Volver a AUTOMATIC lo limpia: los días del periodo manual vuelven a la tasa automática hasta que cada abono congele su tasa (DX-375). DX-402: con MANUAL, la tasa manual de un día anterior a `manualSince` sirve de tasa de respaldo a los abonos de ese día que siguen sin tasa (si el proveedor no tiene la de ese día). Evento CLINIC_SETTINGS con reason EXCHANGE_RATE_SOURCE y el antes y el después; si la fuente no cambia, 200 sin evento.
-         */
-        put: operations["ExchangeSettingsController_updateClinicSettings"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/exchange/manual-rates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Últimas tasas de cambio manuales de la clínica (DX-374)
-         * @description Del día más reciente al más antiguo y, dentro del día, por moneda.
-         */
-        get: operations["ExchangeSettingsController_manualRates"];
-        put?: never;
-        /**
-         * Registra la tasa de cambio de un día y una moneda; queda en la auditoría
-         * @description DX-374. Unidades de la moneda por 1 USD. Se usa cuando la fuente de la clínica es MANUAL, para los días desde `manualSince` (se puede dejar registrada antes de cambiarla). DX-402: la de un día anterior a `manualSince` sirve, con MANUAL, de tasa de respaldo a los abonos de ese día que siguen sin tasa si el proveedor no tiene la de ese día (GET /payments/rate-backlog/day dice cuántos); nunca cambia una tasa ya congelada. Una tasa ya registrada para ese día y moneda no se sobrescribe: si ningún abono la usó, se corrige con PUT /exchange/manual-rates/:id.
-         */
-        post: operations["ExchangeSettingsController_register"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/exchange/manual-rates/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Corrige una tasa manual que ningún abono usó; queda en la auditoría
-         * @description DX-375. Solo cambia la tasa (unidades de la moneda por 1 USD); el día y la moneda no. Cada abono congela la tasa con que se convirtió al registrarse, así que una tasa que ya usa algún abono no se cambia: 409 MANUAL_EXCHANGE_RATE_IN_USE (también lo impide la BD). Corregir una sin usar sí afecta a los abonos que la congelen después.
-         */
-        put: operations["ExchangeSettingsController_correct"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2806,6 +3599,68 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/tenant/branding/by-host": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Marca pública de la clínica de un host
+         * @description La pide el servidor web con el host de la página para pintar la marca en el primer HTML. Mismos campos que GET /public/tenant/branding. Un host desconocido o mal formado da 404.
+         */
+        get: operations["PublicBrandingByHostController_branding"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clinic/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Datos de la clínica (DX-019) */
+        get: operations["ClinicSettingsController_settings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Cambia los datos de la clínica
+         * @description DX-019. Solo cambian los campos enviados; vacío o null borra un dato (salvo el nombre y el color). El identificador fiscal es texto libre, sin validar el formato de ningún país. Queda en la auditoría con el antes y el después. Los recibos ya emitidos conservan su foto. DX-502-bis: la moneda del catálogo (ISO 4217 de la referencia de monedas) solo cambia la de los ítems nuevos del plan.
+         */
+        patch: operations["ClinicSettingsController_update"];
+        trace?: never;
+    };
+    "/api/v1/clinic/settings/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sube el logo de la clínica
+         * @description DX-019. PNG, JPG o WebP de hasta 1 MB. El tipo se comprueba por los bytes y la imagen se re-codifica antes de guardarla: sin metadatos, estática (primer fotograma), con ≤ 1024 px de lado; un WebP se guarda como PNG. Lo que no decodifica se rechaza. SVG no se admite. Es público por diseño (marca).
+         */
+        post: operations["ClinicSettingsController_uploadLogo"];
+        /** Quita el logo de la clínica (DX-019) */
+        delete: operations["ClinicSettingsController_deleteLogo"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2896,6 +3751,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payments/proofs/upload-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Autorización para subir el comprobante de un cobro al almacén
+         * @description POST prefirmado de pocos minutos para UN fichero (JPG, PNG, WebP o PDF de 1 B a 10 MB) con el SHA-256 declarado. El navegador envía `target.fields` y el fichero (campo `file`, al final) a `target.url` y después entrega el `uploadId` al registrar el abono (`proofUploadId`). El almacén es privado: el comprobante solo se ve con una URL firmada de corta vida.
+         */
+        post: operations["PaymentsController_proofUploadUrl"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/{id}/proof/url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** URL firmada (5 min) para ver o descargar el comprobante del cobro */
+        get: operations["PaymentsController_proofUrl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payments": {
         parameters: {
             query?: never;
@@ -2903,7 +3795,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Caja: abonos del período con resumen por moneda y método */
+        /**
+         * Caja: abonos del período con resumen por moneda y método
+         * @description SEC-043: con «arqueo ciego», quien no es ADMIN recibe los abonos que cuentan en una caja aún abierta sin importe ni moneda (`amountHidden`), y el resumen no los suma: `blindHidden` lo indica. Recibo y anulación funcionan igual; las cifras vuelven al cerrarla.
+         */
         get: operations["PaymentsController_listCash"];
         put?: never;
         post?: never;
@@ -2922,7 +3817,7 @@ export interface paths {
         };
         /**
          * Caja en CSV: abonos del período con medio y referencia
-         * @description Mismos filtros que `GET /payments` (período, método y medio) y la misma sede (`X-Location-Id`), sin paginar: hasta 10 000 abonos. UTF-8 con BOM y CRLF; celdas protegidas contra fórmulas; importes con los decimales de su moneda. Columnas: Fecha, Sede, Paciente, Destino, Medio, Referencia, Moneda, Importe.
+         * @description Mismos filtros que `GET /payments` (período, método, medio y nº de factura externa) y la misma sede (`X-Location-Id`), sin paginar: hasta 10 000 abonos. UTF-8 con BOM y CRLF; celdas protegidas contra fórmulas; importes con los decimales de su moneda. Columnas: Fecha, Sede, Paciente, Destino, Medio, Referencia, Factura externa, Moneda, Importe. SEC-043: con «arqueo ciego», quien no es ADMIN recibe los abonos de cajas aún abiertas sin moneda ni ajustes, con «Oculto durante el arqueo» en Importe y Total cobrado (no suman en una hoja de cálculo).
          */
         get: operations["PaymentsController_listCashCsv"];
         put?: never;
@@ -3005,6 +3900,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payments/{id}/external-invoice-number": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Anotar el nº de la factura fiscal externa de un abono
+         * @description Texto libre (hasta 64 caracteres en una línea); null o vacío lo quita. En un cobro dividido se guarda en todas sus líneas (un recibo, una factura). El recibo emitido no cambia. Auditado con el antes y el después.
+         */
+        put: operations["PaymentsController_updateExternalInvoiceNumber"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payments/{id}": {
         parameters: {
             query?: never;
@@ -3017,7 +3932,7 @@ export interface paths {
         post?: never;
         /**
          * Anular un abono (con motivo; queda quién y cuándo)
-         * @description Borrado lógico: el abono deja de sumar pero se conserva con `voidedById`, `voidedAt` y `voidReason`. ADMIN anula cualquier abono; RECEPTION solo los que registró ella misma el mismo día (calendario de la sede del abono). Si el abono contaba para un compromiso de pago cumplido del paciente en su moneda y ya no queda cubierto, el compromiso vuelve a OPEN (o BROKEN si su día ya pasó en la zona de su sede), en la misma transacción y auditado (DX-215).
+         * @description Borrado lógico: el abono deja de sumar pero se conserva con `voidedById`, `voidedAt` y `voidReason`. Exige acceso a la sede persistida del abono, también sin cabecera o en vista consolidada. ADMIN anula cualquier abono; RECEPTION solo los que registró ella misma el mismo día (calendario de la sede del abono). Si el abono contaba para un compromiso de pago cumplido del paciente en su moneda y ya no queda cubierto, el compromiso vuelve a OPEN (o BROKEN si su día ya pasó en la zona de su sede), en la misma transacción y auditado (DX-215).
          */
         delete: operations["PaymentsController_remove"];
         options?: never;
@@ -3082,6 +3997,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/payment-receipts/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ver el resumen de los recibos de caja de un paciente en un período
+         * @description Los recibos emitidos del día `from` al `to` (ambos inclusive, en la zona de la sede de cada recibo), con su número, sede, forma de pago e importe; los anulados, marcados y fuera de los totales. Totales por moneda: nunca se suman monedas distintas. Período sin recibos: 200 con la lista vacía.
+         */
+        get: operations["PaymentReceiptSummaryController_view"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/payment-receipts/summary/print": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Imprimir el resumen (lo deja en la auditoría y lo devuelve)
+         * @description Devuelve el MISMO resumen que GET; la vista imprimible lo pide por aquí para que cada impresión quede registrada.
+         */
+        post: operations["PaymentReceiptSummaryController_print"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/payment-receipts/summary/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enviar el resumen por email al paciente
+         * @description Encola (outbox, DX-088) el MISMO resumen al email de la ficha del paciente, con el documento enmascarado. DX-203: el de un menor o de un paciente sin email va al responsable que recibe avisos (`sentToResponsible`).
+         */
+        post: operations["PaymentReceiptSummaryController_email"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payments/{id}/allocations": {
         parameters: {
             query?: never;
@@ -3139,6 +4114,47 @@ export interface paths {
          */
         get: operations["PaymentRateBacklogController_day"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payment-receipts/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Título y leyenda del recibo de la clínica y de cada sede (DX-515) */
+        get: operations["ReceiptSettingsController_settings"];
+        /**
+         * Cambia el título y la leyenda del recibo de la clínica
+         * @description DX-515. Vacío o null = sin configurar. Aplica a los recibos que se emitan desde ahora; queda en la auditoría con el antes y el después.
+         */
+        put: operations["ReceiptSettingsController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payment-receipts/settings/locations/{locationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * La leyenda propia de una sede (o volver a la de la clínica)
+         * @description DX-515. override false = la sede usa la leyenda de la clínica; true con leyenda vacía = la sede no imprime ninguna.
+         */
+        put: operations["ReceiptSettingsController_updateLocation"];
         post?: never;
         delete?: never;
         options?: never;
@@ -3231,7 +4247,7 @@ export interface paths {
         };
         /**
          * Totales de la cartera por antigüedad, sin pacientes
-         * @description Los `totals` de GET /receivables/aging con los mismos filtros, sin filas. Por moneda, sin convertir.
+         * @description Los `totals` de GET /receivables/aging con los mismos filtros, sin filas. Por moneda; lo abonado en otra moneda, convertido a la del plan (DX-472-bis).
          */
         get: operations["ReceivablesController_summary"];
         put?: never;
@@ -3251,9 +4267,29 @@ export interface paths {
         };
         /**
          * Cartera por antigüedad: deudores de la sede con tramos 0–30/31–60/61–90/>90 por moneda
-         * @description El saldo de cada paciente es el de su estado de cuenta (mismo cálculo), repartido por antigüedad: cada cuota desde su vencimiento; el saldo sin cuotas desde la aceptación (o presentación, o creación) del plan, con `ageApproximate`. Días civiles de la zona de la sede. Por moneda, sin convertir; el saldo a favor va aparte. Sin datos clínicos. DX-150: cada fila trae su última gestión de cobro y su último compromiso de pago; filtros `providerId` y `hasPromise`.
+         * @description El saldo de cada paciente es el de su estado de cuenta (mismo cálculo), repartido por antigüedad: cada cuota desde su vencimiento; el saldo sin cuotas desde la aceptación (o presentación, o creación) del plan, con `ageApproximate`. Días civiles de la zona de la sede. Por moneda; lo abonado en otra moneda cuenta convertido a la del plan, como en el estado de cuenta (DX-472-bis; avisos `paymentsWithoutRateCount` y `rateProviderTimedOut`); el saldo a favor va aparte. Sin datos clínicos. DX-150: cada fila trae su última gestión de cobro y su último compromiso de pago; filtros `providerId` y `hasPromise`.
          */
         get: operations["ReceivablesController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/receivables/credit-balances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pacientes con saldo a favor, por sede y moneda
+         * @description Una fila por paciente, sede y moneda, con el saldo a favor que dice su estado de cuenta (mismo cálculo: lo abonado de más o en un plan cancelado o rechazado, ya descontados traspasos y devoluciones; un plan con deuda no lo compensa; la suma de las filas de un paciente en una moneda es la del estado de cuenta). La sede es donde está el dinero: la del plan que lo originó o, sin ella, la del abono que lo creó, no la de la última cita. `locationId` y las sedes del miembro filtran por esa sede. Antigüedad: día civil del abono que originó el saldo, en la zona de su sede. Orden: moneda (código ISO), importe descendente, paciente. Paginada por desplazamiento como la cartera por antigüedad. Sin datos clínicos. Solo administración y recepción.
+         */
+        get: operations["ReceivablesController_creditBalances"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3474,6 +4510,206 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/unallocated-payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cobrado sin imputar / a cuenta, por abono
+         * @description Abonos vivos a un plan que se cobra (ni cancelado ni rechazado) de pacientes vivos, con base en la moneda del plan, cuyo día civil (en la zona de la sede del abono) cae en el período y cuya sede ve quien consulta (DX-089). `allocated` es la suma de sus imputaciones vivas y `unallocated` la base menos lo imputado (> 0), en la moneda del plan (el abono convertido con la tasa de su día; los totales van por moneda y no se suman entre monedas): son las cifras de GET /payments/:id/allocations, MENOS lo que el plan ya devolvió o traspasó de su saldo a favor (DX-253): ese dinero se descuenta por plan de los abonos más recientes primero (LIFO) y solo de los registrados ANTES de la devolución o el traspaso, nunca por debajo de 0, y el abono que queda en 0 desaparece. El saldo a favor RECIBIDO por un traspaso no es un abono: aparece en Cartera › Saldo a favor, no aquí. Los abonos en otra moneda sin tasa para su día (sin base) no se pueden imputar: se cuentan en `paymentsWithoutRateCount`. Sin datos clínicos.
+         */
+        get: operations["UnallocatedPaymentsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/unallocated-payments.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cobrado sin imputar / a cuenta en CSV (mismos filtros, sin paginar)
+         * @description Abonos vivos a un plan que se cobra (ni cancelado ni rechazado) de pacientes vivos, con base en la moneda del plan, cuyo día civil (en la zona de la sede del abono) cae en el período y cuya sede ve quien consulta (DX-089). `allocated` es la suma de sus imputaciones vivas y `unallocated` la base menos lo imputado (> 0), en la moneda del plan (el abono convertido con la tasa de su día; los totales van por moneda y no se suman entre monedas): son las cifras de GET /payments/:id/allocations, MENOS lo que el plan ya devolvió o traspasó de su saldo a favor (DX-253): ese dinero se descuenta por plan de los abonos más recientes primero (LIFO) y solo de los registrados ANTES de la devolución o el traspaso, nunca por debajo de 0, y el abono que queda en 0 desaparece. El saldo a favor RECIBIDO por un traspaso no es un abono: aparece en Cartera › Saldo a favor, no aquí. Los abonos en otra moneda sin tasa para su día (sin base) no se pueden imputar: se cuentan en `paymentsWithoutRateCount`. Sin datos clínicos. Las mismas filas que la pantalla, todas, con el período y la sede en la cabecera y los totales por moneda al final; UTF-8 con BOM; celdas protegidas contra fórmulas. Cada descarga deja un evento EXPORT en la auditoría.
+         */
+        get: operations["UnallocatedPaymentsController_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/recovered-slots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Huecos recuperados: liberados, rellenados, por la lista, tiempo hasta rellenar y valor
+         * @description Hueco liberado: cita cancelada o en inasistencia cuya cancelación o marca fue al menos 1 h antes de su inicio (DX-279), con el inicio en el período (días civiles de la zona de cada sede, DX-097). Recuperado: una cita viva no cancelada del MISMO profesional y la MISMA sede que se solapa con el hueco y llegó a él (creada, o movida según el rastro de auditoría) después de liberarse y antes de que terminara; si solo ocupa parte, cuenta como relleno parcial con sus minutos. Un sobrecupo creado antes de la cancelación no cuenta. Cada minuto de una cita cuenta en un solo hueco. «Por la lista»: la cita nació de un pendiente de «Pendientes por agendar» o de una oferta ACEPTADA de ese hueco (DX-210/DX-435). Valor recuperado: precio − descuento de los ítems del plan ligados a las citas recuperadas, por moneda y sin convertir; sin ítems, «sin valorar». Ofertas: las de huecos que empiezan en el período. Tasa de cancelación: canceladas ÷ agendadas del período. Solo ADMIN; un miembro restringido (DX-089) solo ve sus sedes. Sin datos de pacientes.
+         */
+        get: operations["RecoveredSlotsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/recovered-slots.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Huecos recuperados en CSV (mismos filtros, auditado)
+         * @description Hueco liberado: cita cancelada o en inasistencia cuya cancelación o marca fue al menos 1 h antes de su inicio (DX-279), con el inicio en el período (días civiles de la zona de cada sede, DX-097). Recuperado: una cita viva no cancelada del MISMO profesional y la MISMA sede que se solapa con el hueco y llegó a él (creada, o movida según el rastro de auditoría) después de liberarse y antes de que terminara; si solo ocupa parte, cuenta como relleno parcial con sus minutos. Un sobrecupo creado antes de la cancelación no cuenta. Cada minuto de una cita cuenta en un solo hueco. «Por la lista»: la cita nació de un pendiente de «Pendientes por agendar» o de una oferta ACEPTADA de ese hueco (DX-210/DX-435). Valor recuperado: precio − descuento de los ítems del plan ligados a las citas recuperadas, por moneda y sin convertir; sin ítems, «sin valorar». Ofertas: las de huecos que empiezan en el período. Tasa de cancelación: canceladas ÷ agendadas del período. Solo ADMIN; un miembro restringido (DX-089) solo ve sus sedes. Sin datos de pacientes. Solo agregados: el total, una fila por profesional y una por semana, con una columna de valor por moneda. UTF-8 con BOM; celdas protegidas contra fórmulas. Cada descarga queda en auditoría (EXPORT).
+         */
+        get: operations["RecoveredSlotsController_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/chair-occupancy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ocupación por sillón: minutos abiertos, reservados y atendidos por sede y sillón
+         * @description Ocupación = reservados ÷ abiertos, por sede y sillón (DX-211), en días civiles de la zona de cada sede (DX-097). Abiertos (de cada sillón): el horario semanal de la sede (DX-122) en el período, menos los cierres de toda la sede (bloqueos sin profesional que no admiten citas) y los festivos de la sede (DX-316; los recurrentes, el mismo día y mes de cada año). Una sede sin tramos en su horario («sin restricción» en la agenda) sale como «Sin horario»: sin abiertos ni porcentajes. Reservados: minutos de las citas no canceladas (las inasistencias incluidas), recortados al período y al horario abierto; en un sillón las citas que se pisan cuentan una vez. Atendidos: lo mismo con las citas atendidas (COMPLETED). Las inasistencias (NO_SHOW) cuentan como reservadas y no atendidas, y van aparte. Porcentajes de 0 a 1 con tope en 1. Las citas sin sillón van en «Sin sillón» (sumadas cita a cita, sin porcentaje) y no entran en el total de la sede, que suma sus sillones sobre abiertos × sillones. Un sillón desactivado solo sale si tuvo citas. Solo ADMIN; un miembro restringido (DX-089) solo ve sus sedes. Sin datos de pacientes.
+         */
+        get: operations["ChairOccupancyController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/chair-occupancy.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ocupación por sillón en CSV (mismos filtros, auditado)
+         * @description Ocupación = reservados ÷ abiertos, por sede y sillón (DX-211), en días civiles de la zona de cada sede (DX-097). Abiertos (de cada sillón): el horario semanal de la sede (DX-122) en el período, menos los cierres de toda la sede (bloqueos sin profesional que no admiten citas) y los festivos de la sede (DX-316; los recurrentes, el mismo día y mes de cada año). Una sede sin tramos en su horario («sin restricción» en la agenda) sale como «Sin horario»: sin abiertos ni porcentajes. Reservados: minutos de las citas no canceladas (las inasistencias incluidas), recortados al período y al horario abierto; en un sillón las citas que se pisan cuentan una vez. Atendidos: lo mismo con las citas atendidas (COMPLETED). Las inasistencias (NO_SHOW) cuentan como reservadas y no atendidas, y van aparte. Porcentajes de 0 a 1 con tope en 1. Las citas sin sillón van en «Sin sillón» (sumadas cita a cita, sin porcentaje) y no entran en el total de la sede, que suma sus sillones sobre abiertos × sillones. Un sillón desactivado solo sale si tuvo citas. Solo ADMIN; un miembro restringido (DX-089) solo ve sus sedes. Sin datos de pacientes. Una fila por sillón, la de «Sin sillón» y el total de cada sede, con la fórmula en la cabecera. UTF-8 con BOM; celdas protegidas contra fórmulas. Cada descarga queda en auditoría (EXPORT).
+         */
+        get: operations["ChairOccupancyController_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/patient-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Enlaces del paciente: enviados, abiertos, completados y caducados sin abrir por tipo y sede
+         * @description Por tipo de enlace y sede: los ENVIADOS en el período (fecha de envío en la zona de la sede del enlace, DX-097) y, de esos mismos, los abiertos, los completados y los caducados sin abrir, mirados ahora (`asOf`). Tasas = parte ÷ enviados, en % con 1 decimal; sin envíos, null. Mediana de horas del envío al completado. Anamnesis: abierta = la página avisó de la apertura o se envió; completada = enviada. Firma (consentimiento o presupuesto): abierta = pidió el código, lo verificó o firmó; completada = firmada. Confirmación de cita: completada = respondida (confirmar, cancelar o «llámenme»); no guarda la apertura, así que abiertos y caducados sin abrir van en null. Indicaciones postoperatorias (solo email y WhatsApp): abierta = primera apertura; no tienen paso de completar (null). Caducado sin abrir: pasó su caducidad sin abrirse ni completarse; un enlace anulado o reemplazado no cuenta. Sede: la del enlace; en la confirmación, la de la cita. Solo ADMIN; un miembro restringido (DX-089) solo ve sus sedes. Sin datos de pacientes.
+         */
+        get: operations["PatientLinksController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/profitability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rentabilidad por sede: ingresos − gastos en base Caja o Devengo
+         * @description Ingresos − gastos de cada sede que ve quien consulta (DX-089: un miembro restringido solo ve las suyas) y el «Total del grupo», que suma solo esas sedes. `basis=CASH` («Caja»): abonos no anulados − pagos de gastos no anulados, por fecha de pago. `basis=ACCRUAL` («Devengo»): producción realizada (precio − descuento de los ítems DONE, en la sede donde se realizaron) − gastos no anulados por fecha de factura, pagados o no. Días civiles en la zona de cada sede (DX-097). Gastos por categoría. Importes por moneda, sin convertir ni restar monedas distintas. `definition` trae la definición de la base (cabecera y «Cómo se calcula»). Sin datos de pacientes. La cabecera X-Location-Id no acota.
+         */
+        get: operations["ProfitabilityController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/profitability.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rentabilidad por sede en CSV (mismos filtros y definición)
+         * @description Ingresos − gastos de cada sede que ve quien consulta (DX-089: un miembro restringido solo ve las suyas) y el «Total del grupo», que suma solo esas sedes. `basis=CASH` («Caja»): abonos no anulados − pagos de gastos no anulados, por fecha de pago. `basis=ACCRUAL` («Devengo»): producción realizada (precio − descuento de los ítems DONE, en la sede donde se realizaron) − gastos no anulados por fecha de factura, pagados o no. Días civiles en la zona de cada sede (DX-097). Gastos por categoría. Importes por moneda, sin convertir ni restar monedas distintas. `definition` trae la definición de la base (cabecera y «Cómo se calcula»). Sin datos de pacientes. La cabecera X-Location-Id no acota. Por sede (y el total) y moneda: ingresos, una línea por categoría de gasto, total de gastos, resultado y margen, con la base en cada línea; UTF-8 con BOM; celdas protegidas contra fórmulas.
+         */
+        get: operations["ProfitabilityController_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/profitability/lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Detalle de una cifra: los movimientos que la forman
+         * @description Mismos filtros y alcance que el informe, más el lado (`INCOME`/`EXPENSE`), la moneda y, en los gastos, la categoría: los abonos, procedimientos realizados, pagos de gastos o gastos que suman la cifra, del más reciente al más antiguo, con el `total` de todas las filas. Sin `locationId`, las de todas las sedes visibles (la cifra del total del grupo). Sin datos de pacientes.
+         */
+        get: operations["ProfitabilityController_lines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/closing-queue": {
         parameters: {
             query?: never;
@@ -3681,7 +4917,7 @@ export interface paths {
         };
         /**
          * Una caja: fondo, abonos, anulados, ajustes, arqueo y cierres
-         * @description Con «arqueo ciego» y la caja abierta, quien no es ADMIN recibe `expected` y `payments` a null.
+         * @description Con «arqueo ciego» y la caja abierta, quien no es ADMIN recibe `expected`, `payments`, `voidedPayments` y `adjustments` a null, y los cierres anteriores sin líneas (SEC-043).
          */
         get: operations["CashSessionsController_detail"];
         put?: never;
@@ -3703,7 +4939,7 @@ export interface paths {
         put?: never;
         /**
          * Cerrar la caja con el arqueo por moneda y método
-         * @description Calcula el esperado (fondo + abonos del turno + ajustes) y guarda contado y diferencia. Una diferencia distinta de 0 exige motivo. El cierre es inmutable y deja la fecha de bloqueo sugerida (DX-091).
+         * @description Calcula el esperado (fondo + abonos del turno + ajustes) y guarda contado y diferencia. Una diferencia distinta de 0 exige motivo (400), salvo en un cierre a ciegas de quien no es ADMIN: ese se guarda siempre y, si no cuadra y no trae motivo, queda marcado «diferencia sin justificar» (SEC-043). El cierre es inmutable y deja la fecha de bloqueo sugerida (DX-091).
          */
         post: operations["CashSessionsController_close"];
         delete?: never;
@@ -4252,6 +5488,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/locations/{id}/holiday": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** DX-358: ¿es festivo ese día en la sede? Solo para avisar al agendar */
+        get: operations["LocationCalendarController_holidayOnDay"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/locations/{id}/calendar/working-weekdays": {
         parameters: {
             query?: never;
@@ -4443,7 +5696,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/platform/mfa/enrollment": {
+    "/api/v1/platform/mfa/recovery-codes": {
         parameters: {
             query?: never;
             header?: never;
@@ -4453,30 +5706,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Inicia el alta del MFA: genera un secreto (pendiente hasta confirmarlo) y devuelve el otpauth URI
-         * @description Queda en platform_audit_events (MFA_ENROLLMENT_STARTED) sin el secreto ni el URI.
+         * Genera 10 códigos de recuperación nuevos (los anteriores dejan de valer): contraseña + código
+         * @description Queda en platform_audit_events (MFA_RECOVERY_CODES_REGENERATED) sin los códigos.
          */
-        post: operations["PlatformMfaController_start"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/platform/mfa/enrollment/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Confirma el alta con un código de la app y activa el MFA
-         * @description Queda en platform_audit_events (MFA_ENABLED) sin el código ni el secreto.
-         */
-        post: operations["PlatformMfaController_confirm"];
+        post: operations["PlatformMfaController_regenerate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4999,6 +6232,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/medical-history/{token}/opened": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Marcar la primera apertura del enlace (para «Enlaces del paciente»)
+         * @description La llama la página al mostrar el cuestionario: el GET es de solo lectura porque los previsualizadores de enlaces lo abren solos. Solo cuenta la primera vez (las siguientes no cambian nada). Sin auditoría: la apertura queda en el envío.
+         */
+        post: operations["PublicMedicalHistoryController_opened"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/signature-requests/options": {
         parameters: {
             query?: never;
@@ -5346,6 +6599,26 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["PrescriptionTemplatesController_update"];
+        trace?: never;
+    };
+    "/api/v1/public/prescriptions/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Verificar una receta por su código (el del QR impreso)
+         * @description Válida, anulada (solo el día) o «no se puede verificar» si el hash no casa con el contenido. Nada clínico. Cada consulta de una receta encontrada queda en la auditoría de la clínica como VIEW de PRESCRIPTION, origen PUBLIC_LINK, reason PRESCRIPTION_VERIFIED o PRESCRIPTION_INTEGRITY_MISMATCH. Admite el código agrupado con guiones y en minúsculas.
+         */
+        get: operations["PublicPrescriptionVerificationController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/patients/{patientId}/implants": {
@@ -5898,6 +7171,231 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/recall/unconfigured": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sin recall configurado: atendidos sin recall ni cita
+         * @description DX-015-bis (D17): pacientes vivos con al menos una cita atendida en los últimos 24 meses (antes de «hoy» en su sede), sin ningún recall activo de un tipo vivo y sin cita futura agendada o confirmada ni una en curso. La sede del paciente es la de su última cita atendida. Orden: la última visita más reciente primero, después el apellido.
+         */
+        get: operations["RecallController_unconfigured"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recall/due": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lista de llamada: pacientes con el control vencido y sin cita
+         * @description Recalls activos vencidos (o que vencen en ≤ withinDays) cuyo paciente no tiene cita futura agendada o confirmada ni una en curso, en cualquier sede; sin pausa vigente ni paciente archivado. Vencimiento (guardado) = MAX(último control fijado a mano, último procedimiento disparador del tipo realizado) + intervalo; una cita atendida sin ese procedimiento ya no lo mueve (DX-015-bis). Ordenada por días de vencido.
+         */
+        get: operations["RecallController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recall/due/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cuántos pacientes hay por llamar (recall) */
+        get: operations["RecallController_count"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recall/{recallId}/contacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Registrar un contacto de recall (append-only)
+         * @description Canal, desenlace y una nota corta (≤ 280, sin datos clínicos). «Agendó» (BOOKED) exige la cita creada, del mismo paciente. No se edita ni se borra: una corrección es otro contacto.
+         */
+        post: operations["RecallController_contact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/recalls/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Programar el recall de un tipo con su intervalo por defecto
+         * @description DX-015-bis (D15): solo crea. Intervalo = el por defecto del tipo (Ajustes › Recall). Base: con `appointmentId` (la cita que se despide en la salida), el día civil de esa cita en la zona de su sede (y esa sede); sin él, el de la última cita atendida del paciente; sin ninguna, hoy en la sede activa. `source` MANUAL. D9: si el tipo tiene grupo de exclusión, desactiva los demás recalls activos del paciente de ese grupo (`recallUpdates`). También recepción; elegir otro intervalo, editarlo o reactivarlo es el PUT clínico.
+         */
+        post: operations["PatientRecallsController_createDefaultRecall"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/recalls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recalls del paciente y su historial de contactos
+         * @description Cada recall (uno por tipo) con su vencimiento y estado: DUE, UPCOMING, SCHEDULED (ya tiene cita), PAUSED o INACTIVE.
+         */
+        get: operations["PatientRecallsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/recalls/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Fijar (o cambiar, pausar, retirar) el recall de un tipo
+         * @description «Control cada 6 meses»: intervalo (1–36 meses), día del último control (por defecto hoy en la sede), pausa hasta un día con motivo, o `active: false` para retirarlo. Un recall por paciente y tipo. DX-015-bis: lo fijado queda como `manualDoneAt`; la base es el máximo con el último procedimiento disparador realizado. D9: dar de alta o reactivar el recall de un tipo con grupo de exclusión desactiva los demás recalls activos del paciente de ese grupo (`recallUpdates`).
+         */
+        put: operations["PatientRecallsController_set"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recall-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tipos de recall de la clínica
+         * @description Vivos (activos o no), por su orden: nombre, intervalo por defecto, activo, orden, clave de compatibilidad (HYGIENE/CHECKUP), grupo de exclusión y los procedimientos del catálogo cuyo DONE mueve su reloj (con su código y su nombre).
+         */
+        get: operations["RecallTypesController_list"];
+        put?: never;
+        /**
+         * Crear un tipo de recall
+         * @description Nombre 1–60 (único entre los vivos sin distinguir mayúsculas), intervalo por defecto 1–36 meses, activo, orden (por defecto, el último), grupo de exclusión y tipo de cita al agendar opcionales. Sin disparadores: se fijan con PUT /recall-types/:id/triggers.
+         */
+        post: operations["RecallTypesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recall-types/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Retirar un tipo de recall (borrado lógico)
+         * @description Sus recalls se conservan pero dejan de salir en la lista y en la ficha. Higiene y Control (con clave del enum) no se retiran: se desactivan (409).
+         */
+        delete: operations["RecallTypesController_remove"];
+        options?: never;
+        head?: never;
+        /**
+         * Editar un tipo de recall
+         * @description Cualquier campo. Cambiar el intervalo por defecto NO cambia los recalls que ya existen: solo los que se creen después. Desactivarlo deja de crear recalls por procedimiento; los que hay siguen. Cambiar el grupo de exclusión no desactiva nada por sí solo: se aplica en el siguiente DONE o PUT del paciente. El tipo de cita al agendar tiene que ser uno vivo y activo de la clínica (null lo quita).
+         */
+        patch: operations["RecallTypesController_update"];
+        trace?: never;
+    };
+    "/api/v1/recall-types/{id}/triggers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Fijar los procedimientos que disparan un tipo
+         * @description Reemplaza el conjunto. Solo procedimientos vivos del catálogo de la clínica (o los que el tipo ya tenía); uno puede disparar varios tipos.
+         */
+        put: operations["RecallTypesController_triggers"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-queues/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recuentos de las listas de trabajo del rol («Mi día»)
+         * @description Cada número es el de su lista (closing-queue/count, submissions/summary, pending-follow-up/count, unscheduled/count, waitlist, recall/due/count, receivables/aging/summary, inventory lowStockOnly) con sus filtros por defecto, en la sede activa. ADMIN: todas. DENTIST: pendiente de cerrar (lo suyo) y anamnesis. RECEPTION: pendiente de cerrar (desenlace), presupuestos por seguir, aceptados sin agendar, lista de espera, recall y cartera. ASSISTANT: anamnesis y bajo stock. Una lista que falla sale con `status: ERROR` y `count: null`; las demás llegan igual.
+         */
+        get: operations["WorkQueuesController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5905,7 +7403,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -5939,6 +7437,11 @@ export interface components {
         AuditAppointmentMoveDto: {
             from: components["schemas"]["AuditAppointmentSlotDto"];
             to: components["schemas"]["AuditAppointmentSlotDto"];
+            /**
+             * @description DX-436-bis: `OPENING` = «Asignar» desde «Ocupar este hueco»; sin él, un reagendado.
+             * @enum {string}
+             */
+            via?: "OPENING";
         };
         AuditStatusChangeDto: {
             /** @example CONFIRMED */
@@ -6076,6 +7579,45 @@ export interface components {
             /** @description Las monedas de la cotización (ISO 4217). */
             currencies: string[];
         };
+        AuditExchangeRateDto: {
+            /** @description ISO 4217, nunca USD. */
+            currency: string;
+            /**
+             * Format: date
+             * @example 2026-10-29
+             */
+            day: string;
+            /**
+             * @description Unidades de la moneda por 1 USD, decimal en texto.
+             * @example 36.5
+             */
+            rate: string;
+        };
+        AuditAllocationLineDto: {
+            /**
+             * Format: uuid
+             * @description El ítem del plan.
+             */
+            itemId: string;
+            /**
+             * @description En la moneda del plan.
+             * @example 25.5
+             */
+            amount: number;
+        };
+        AuditAllocationDto: {
+            /** @description ISO 4217: la moneda del plan. */
+            currency: string;
+            /**
+             * @description MANUAL: el ADMIN fijó la imputación a mano. AUTO: la devolvió al reparto automático.
+             * @enum {string}
+             */
+            mode: "MANUAL" | "AUTO";
+            /** @description Origen: las líneas de antes de guardar. */
+            before: components["schemas"]["AuditAllocationLineDto"][];
+            /** @description Destino: las líneas que quedaron (tras el reparto). */
+            after: components["schemas"]["AuditAllocationLineDto"][];
+        };
         AuditConfigChangeDto: {
             /**
              * @description Valores antes del cambio (o del retiro).
@@ -6096,6 +7638,38 @@ export interface components {
                 [key: string]: (string | number | boolean | (string | number)[]) | null;
             };
         };
+        AuditRetentionTermChangeDto: {
+            /**
+             * @description Dirección según el plazo vigente.
+             * @enum {string}
+             */
+            direction: "UP" | "DOWN";
+            /** @description Pacientes que conservan una fecha posterior a la del plazo nuevo; 0 en una subida. */
+            protectedPatients: number;
+            /** @description Plazo vigente antes del cambio, en años. */
+            effectiveBefore: number;
+            /** @description Plazo vigente después del cambio, en años. */
+            effectiveAfter: number;
+            /** @description Una bajada que corrige una subida de hace menos de 24 horas. */
+            withinCorrectionWindow: boolean;
+        };
+        AuditPeriodDto: {
+            /**
+             * @description Primer día (AAAA-MM-DD), inclusive.
+             * @example 2026-10-01
+             */
+            from: string;
+            /**
+             * @description Último día (AAAA-MM-DD), inclusive.
+             * @example 2026-10-31
+             */
+            to: string;
+        };
+        /**
+         * @description DX-015-bis: por dónde se creó o cambió un recall (`PATIENT_RECALL`) fuera del PUT de la ficha: DEFAULT = «Programar recall» con el intervalo por defecto del tipo; CLINICAL_ENTRY = el intervalo fijado al registrar la evolución.
+         * @enum {string}
+         */
+        AuditRecallVia: "DEFAULT" | "CLINICAL_ENTRY";
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
             changedFields?: string[];
@@ -6129,8 +7703,18 @@ export interface components {
             staffAccess?: components["schemas"]["AuditStaffAccessChangeDto"];
             /** @description DX-402: el barrido congeló en un abono (`reason` EXCHANGE_RATE_BACKUP, `origin` JOB, sin usuario) la tasa manual de un día anterior a «manual desde», como tasa de respaldo de un día sin tasa del proveedor. Solo días y monedas; ni importes ni la tasa. */
             exchangeRateBackup?: components["schemas"]["AuditExchangeRateBackupDto"];
+            /** @description DX-381: alta de una tasa de cambio manual (`resourceId` = la tasa): moneda, día y tasa. Nada del autor ni de los abonos. */
+            exchangeRate?: components["schemas"]["AuditExchangeRateDto"];
+            /** @description DX-051/DX-399: un ADMIN reasignó la imputación de un abono (`resourceId` = el abono, `reason` PAYMENT_REALLOCATED): modo, moneda del plan y las líneas (ítem e importe) de antes y de después. Nada del paciente. */
+            allocation?: components["schemas"]["AuditAllocationDto"];
             /** @description DX-360: configuración de la clínica (sedes, horario, recordatorios, dominios, política de datos, tipos de cita, pagadores, plantillas, inventario): los campos que cambiaron con su antes y después, o un lado en un alta o un retiro. El texto libre o largo (cuerpo de una plantilla, notas, motivo) solo figura en `changedFields`; nunca secretos (token de un dominio) ni datos de pacientes. */
             configChange?: components["schemas"]["AuditConfigChangeDto"];
+            /** @description DX-330: cambio del plazo de conservación de la historia clínica (`reason` CLINICAL_RECORD_RETENTION_SETTINGS): dirección, pacientes protegidos, plazos vigentes y si corrigió una subida reciente. Solo códigos y enteros. */
+            retentionTermChange?: components["schemas"]["AuditRetentionTermChangeDto"];
+            /** @description DX-401: el período (días civiles, ambos inclusive) del resumen de recibos del paciente que se vio, imprimió o envió. Solo las dos fechas. */
+            period?: components["schemas"]["AuditPeriodDto"];
+            /** @description DX-015-bis: por dónde se creó o cambió un recall (`PATIENT_RECALL`) fuera del PUT de la ficha: DEFAULT = «Programar recall» con el intervalo por defecto del tipo; CLINICAL_ENTRY = el intervalo fijado al registrar la evolución. */
+            via?: components["schemas"]["AuditRecallVia"];
         };
         AuditEventDto: {
             /** Format: uuid */
@@ -6217,18 +7801,6 @@ export interface components {
             /** @description Subdominio de la clínica recién creada */
             subdomain: string;
         };
-        LoginDto: {
-            /** @example ana@clinica.com */
-            email: string;
-            password: string;
-            /**
-             * @description SEC-008: código TOTP de 6 dígitos. Solo para el acceso de soporte (break-glass) de un superadmin a una clínica en la que no es miembro; en cualquier otro login se ignora.
-             * @example 123456
-             */
-            mfaCode?: string;
-            /** @description SEC-008: motivo del acceso de soporte (10–500 caracteres). La clínica lo ve en «Accesos de soporte». */
-            breakGlassReason?: string;
-        };
         AuthTokensDto: {
             accessToken: string;
             /** @description Solo sin `X-Refresh-Transport: cookie` (clientes antiguos). En modo cookie el refresh viaja en la cookie HttpOnly `dentalix_rt` (Path=/api/v1/auth) y no se devuelve aquí. Nunca en un acceso break-glass. */
@@ -6240,6 +7812,39 @@ export interface components {
              * @description SEC-008: caducidad del token break-glass (ISO 8601).
              */
             expiresAt?: string;
+        };
+        MfaChallengeDto: {
+            /**
+             * @description `MFA_REQUIRED`: pide el código de la app (o uno de recuperación) en POST /auth/login/mfa. `MFA_ENROLLMENT_REQUIRED`: la clínica (o la cuenta de soporte) exige la verificación y aún no está activa: alta forzada en /auth/login/mfa/enrollment.
+             * @enum {string}
+             */
+            mfa: "MFA_REQUIRED" | "MFA_ENROLLMENT_REQUIRED";
+            /** @description Token intermedio de un solo uso (5 min; 10 en el alta). No da acceso a ninguna ruta de datos. */
+            mfaToken: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /**
+             * @description DX-021-bis, SEC-066: alta forzada (de un superadmin o de un miembro de clínica): se envió un código al correo de la cuenta que exigen POST /auth/login/mfa/enrollment y /enrollment/confirm. Viene siempre con `mfa: MFA_ENROLLMENT_REQUIRED`.
+             * @enum {boolean}
+             */
+            emailCodeRequired?: true;
+            /**
+             * @description DX-021-bis: referencia que lleva el correo de este intento, para distinguirlo de otros.
+             * @example A1F3
+             */
+            emailCodeRef?: string;
+        };
+        LoginDto: {
+            /** @example ana@clinica.com */
+            email: string;
+            password: string;
+            /**
+             * @description SEC-008: código TOTP de 6 dígitos. Solo para el acceso de soporte (break-glass) de un superadmin a una clínica en la que no es miembro; en cualquier otro login se ignora.
+             * @example 123456
+             */
+            mfaCode?: string;
+            /** @description SEC-008: motivo del acceso de soporte (10–500 caracteres). La clínica lo ve en «Accesos de soporte». */
+            breakGlassReason?: string;
         };
         RefreshDto: Record<string, never>;
         LogoutDto: Record<string, never>;
@@ -6256,18 +7861,46 @@ export interface components {
             token: string;
         };
         /**
-         * @description VALID: se puede usar. EXPIRED: caducó (30 min). USED: ya se usó. INVALID: no existe, fue reemplazado por uno más reciente o no vale en esta clínica.
+         * @description VALID: se puede usar. EXPIRED: caducó (30 min). USED: ya se usó. INVALID: no existe, fue reemplazado por uno más reciente, quedó invalidado por un cambio de contraseña o no vale en esta clínica.
          * @enum {string}
          */
         PasswordResetTokenStatus: "VALID" | "EXPIRED" | "USED" | "INVALID";
         PasswordResetTokenStatusDto: {
-            /** @description VALID: se puede usar. EXPIRED: caducó (30 min). USED: ya se usó. INVALID: no existe, fue reemplazado por uno más reciente o no vale en esta clínica. */
+            /** @description VALID: se puede usar. EXPIRED: caducó (30 min). USED: ya se usó. INVALID: no existe, fue reemplazado por uno más reciente, quedó invalidado por un cambio de contraseña o no vale en esta clínica. */
             status: components["schemas"]["PasswordResetTokenStatus"];
         };
         ResetPasswordDto: {
             /** @description Token del enlace recibido por email. */
             token: string;
             password: string;
+        };
+        ResetTokenNotFoundErrorDto: {
+            /** @example 404 */
+            statusCode: number;
+            /** @example Not Found */
+            error: string;
+            /**
+             * @example RESET_TOKEN_INVALID
+             * @enum {string}
+             */
+            code: "RESET_TOKEN_INVALID";
+            /** @example El enlace para restablecer la contraseña no es válido o ya fue reemplazado por uno más reciente. Pide un enlace nuevo. */
+            message: string;
+        };
+        /**
+         * @description RESET_TOKEN_EXPIRED: caducó (30 min). RESET_TOKEN_USED: ya se usó.
+         * @enum {string}
+         */
+        ResetTokenGoneCode: "RESET_TOKEN_EXPIRED" | "RESET_TOKEN_USED";
+        ResetTokenGoneErrorDto: {
+            /** @example 410 */
+            statusCode: number;
+            /** @example Gone */
+            error: string;
+            /** @description RESET_TOKEN_EXPIRED: caducó (30 min). RESET_TOKEN_USED: ya se usó. */
+            code: components["schemas"]["ResetTokenGoneCode"];
+            /** @example El enlace para restablecer la contraseña caducó (vale 30 minutos). Pide un enlace nuevo. */
+            message: string;
         };
         /**
          * @description available = se puede registrar; taken = ya es de una clínica (también dada de baja); invalid = no cumple el formato (minúsculas, números y guiones, 1–63, sin guion al principio ni al final); reserved = dirección de la plataforma (www, api…).
@@ -6282,6 +7915,85 @@ export interface components {
             subdomain: string;
             /** @description available = se puede registrar; taken = ya es de una clínica (también dada de baja); invalid = no cumple el formato (minúsculas, números y guiones, 1–63, sin guion al principio ni al final); reserved = dirección de la plataforma (www, api…). */
             status: components["schemas"]["SubdomainAvailability"];
+        };
+        VerifyLoginMfaDto: {
+            /**
+             * @description Código de 6 dígitos de la app.
+             * @example 123456
+             */
+            code?: string;
+            /**
+             * @description Uno de los códigos de recuperación (cada uno vale una sola vez).
+             * @example ABCD-EFGH-IJKL-MNOP
+             */
+            recoveryCode?: string;
+            /** @description El `mfaToken` que devolvió POST /auth/login. */
+            mfaToken: string;
+            /** @description DX-021-bis: no volver a pedir el código en este navegador durante 30 días (solo en modo cookie; nunca para un superadmin). */
+            rememberDevice?: boolean;
+        };
+        StartLoginMfaEnrollmentDto: {
+            /** @description El `mfaToken` (MFA_ENROLLMENT_REQUIRED) del login. */
+            mfaToken: string;
+            /**
+             * @description DX-021-bis, SEC-066: obligatorio en el alta forzada (`emailCodeRequired`): el código de 8 dígitos de ESTE token, enviado al correo de la cuenta. 10 intentos fallidos en total; agotados, el token queda inservible y hay que volver a entrar.
+             * @example 12345678
+             */
+            emailCode?: string;
+        };
+        MfaEnrollmentDto: {
+            /**
+             * @description Secreto en base32 para escribirlo a mano en la app. Solo en esta respuesta.
+             * @example JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP
+             */
+            secret: string;
+            /** @example otpauth://totp/Dentalix:ana%40clinica.com?secret=JBSWY3DPEHPK3PXP&issuer=Dentalix&algorithm=SHA1&digits=6&period=30 */
+            otpauthUri: string;
+        };
+        ConfirmLoginMfaEnrollmentDto: {
+            /** @description El `mfaToken` (MFA_ENROLLMENT_REQUIRED) del login. */
+            mfaToken: string;
+            /**
+             * @description DX-021-bis, SEC-066: obligatorio en el alta forzada (`emailCodeRequired`): el código de 8 dígitos de ESTE token, enviado al correo de la cuenta. 10 intentos fallidos en total; agotados, el token queda inservible y hay que volver a entrar.
+             * @example 12345678
+             */
+            emailCode?: string;
+            /** @example 123456 */
+            code: string;
+        };
+        MfaEnrolledSessionDto: {
+            accessToken: string;
+            /** @description Solo sin `X-Refresh-Transport: cookie` (ver AuthTokensDto). */
+            refreshToken?: string;
+            /** @description 10 códigos de recuperación de un solo uso. No se vuelven a mostrar. */
+            recoveryCodes: string[];
+        };
+        SecurityPolicyDto: {
+            /** @description DX-021: exige la verificación en dos pasos a los ADMIN de la clínica. Quien no la tenga pasa por el alta forzada en su próximo inicio de sesión. */
+            requireAdminMfa: boolean;
+            /** @description DX-021-bis: la exige a todos los miembros (implica `requireAdminMfa`). Sin indicarlo, se conserva. */
+            requireAllMfa?: boolean;
+        };
+        StaffMfaStatusDto: {
+            enabled: boolean;
+            /** Format: date-time */
+            enabledAt: string | null;
+        };
+        ResetMemberMfaDto: {
+            /**
+             * @description Código de 6 dígitos de la app.
+             * @example 123456
+             */
+            code?: string;
+            /**
+             * @description Uno de los códigos de recuperación (cada uno vale una sola vez).
+             * @example ABCD-EFGH-IJKL-MNOP
+             */
+            recoveryCode?: string;
+            /** @description Tu contraseña actual (re-autenticación). */
+            currentPassword: string;
+            /** @enum {string} */
+            reason: "LOST_DEVICE" | "DEVICE_REPLACED" | "SECURITY_INCIDENT";
         };
         CreateInvitationDto: {
             fullName: string;
@@ -6358,6 +8070,169 @@ export interface components {
             /** @description URL absoluta y estable del avatar (FILES_PUBLIC_BASE_URL vigente + clave) */
             avatarUrl: string;
         };
+        MyMfaStatusDto: {
+            enabled: boolean;
+            /** Format: date-time */
+            enabledAt: string | null;
+            /** @description Códigos de recuperación sin usar (0 sin MFA). */
+            recoveryCodesRemaining: number;
+            /** @description Obligatorio para ti en esta clínica (cuenta de soporte de Dentalix, o ADMIN de una clínica que lo exige): no se puede desactivar. */
+            required: boolean;
+        };
+        TrustedDeviceDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Chrome en macOS */
+            label: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            lastUsedAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        StartMyMfaDto: {
+            /** @description Contraseña actual (re-autenticación). */
+            currentPassword: string;
+        };
+        ConfirmMyMfaDto: {
+            /** @example 123456 */
+            code: string;
+        };
+        MyMfaEnabledDto: {
+            enabled: boolean;
+            /** Format: date-time */
+            enabledAt: string | null;
+            /** @description Códigos de recuperación sin usar (0 sin MFA). */
+            recoveryCodesRemaining: number;
+            /** @description Obligatorio para ti en esta clínica (cuenta de soporte de Dentalix, o ADMIN de una clínica que lo exige): no se puede desactivar. */
+            required: boolean;
+            recoveryCodes: string[];
+            /** @description Access token nuevo: activar el MFA cierra tus demás sesiones (tokenVersion + 1). En modo cookie el refresh nuevo llega en la cookie. */
+            accessToken: string;
+            refreshToken?: string;
+        };
+        ReauthMfaDto: {
+            /**
+             * @description Código de 6 dígitos de la app.
+             * @example 123456
+             */
+            code?: string;
+            /**
+             * @description Uno de los códigos de recuperación (cada uno vale una sola vez).
+             * @example ABCD-EFGH-IJKL-MNOP
+             */
+            recoveryCode?: string;
+            /** @description Contraseña actual (re-autenticación). */
+            currentPassword: string;
+        };
+        RecoveryCodesDto: {
+            /** @description 10 códigos de un solo uso. Solo se muestran en esta respuesta. */
+            recoveryCodes: string[];
+        };
+        /**
+         * @description NOT_APPLICABLE: menor, sin fecha de nacimiento o sin responsable dado de alta antes de su mayoría de edad. PENDING: cumplió la mayoría de edad con responsable y no está revisado para su fecha de mayoría de edad vigente (mientras tanto avisos, recibos y estados de cuenta van a su propio email o a nadie). REVIEWED: revisado; rige `decision`.
+         * @enum {string}
+         */
+        MajorityReviewStatus: "NOT_APPLICABLE" | "PENDING" | "REVIEWED";
+        ComingOfAgeItemDto: {
+            /** Format: uuid */
+            patientId: string;
+            /** @example Sofía Rondón */
+            fullName: string;
+            /** @example 1042 */
+            patientCode: string;
+            /**
+             * Format: date
+             * @example 2008-11-20
+             */
+            birthDate: string;
+            /**
+             * Format: date
+             * @example 2026-11-20
+             */
+            majorityDate: string;
+            /**
+             * @description Mayoría de edad de la clínica.
+             * @example 18
+             */
+            majorityAge: number;
+            /** @description NOT_APPLICABLE: menor, sin fecha de nacimiento o sin responsable dado de alta antes de su mayoría de edad. PENDING: cumplió la mayoría de edad con responsable y no está revisado para su fecha de mayoría de edad vigente (mientras tanto avisos, recibos y estados de cuenta van a su propio email o a nadie). REVIEWED: revisado; rige `decision`. */
+            status: components["schemas"]["MajorityReviewStatus"];
+            /** @description Ya adulto y PENDING con la mayoría de edad antes de `from` (atrasado). */
+            overdue: boolean;
+            /** @description Responsables vivos. */
+            responsiblesCount: number;
+            /**
+             * Format: uuid
+             * @description Sede del paciente: la de su última cita atendida; null sin ninguna.
+             */
+            locationId: string | null;
+            locationName: string | null;
+        };
+        ComingOfAgeListDto: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            /** @example 18 */
+            majorityAge: number;
+            /** @description El miembro está restringido a unas sedes (DX-525): solo ve a los pacientes de esas sedes. */
+            restrictedToLocations: boolean;
+            /** @description Primero los atrasados (`overdue`), luego por fecha de mayoría de edad y nombre. */
+            items: components["schemas"]["ComingOfAgeItemDto"][];
+        };
+        /**
+         * @description Solo con REVIEWED. PATIENT_SELF: los envíos van al propio paciente (sin email: a nadie). KEEP_RESPONSIBLE: el paciente consiente que sigan yendo a su responsable (regla general DX-203).
+         * @enum {string}
+         */
+        MajorityReviewDecision: "PATIENT_SELF" | "KEEP_RESPONSIBLE";
+        /** @enum {string} */
+        ResponsibleRelationship: "MOTHER" | "FATHER" | "LEGAL_GUARDIAN" | "GRANDPARENT" | "SIBLING" | "SPOUSE" | "CHILD" | "OTHER";
+        MajorityReviewResponsibleDto: {
+            /**
+             * Format: uuid
+             * @description Id del vínculo
+             */
+            id: string;
+            /** @example Carmen Rondón */
+            name: string;
+            relationship: components["schemas"]["ResponsibleRelationship"];
+            receivesNotices: boolean;
+            isPayer: boolean;
+        };
+        MajorityReviewViewDto: {
+            /** @description NOT_APPLICABLE: menor, sin fecha de nacimiento o sin responsable dado de alta antes de su mayoría de edad. PENDING: cumplió la mayoría de edad con responsable y no está revisado para su fecha de mayoría de edad vigente (mientras tanto avisos, recibos y estados de cuenta van a su propio email o a nadie). REVIEWED: revisado; rige `decision`. */
+            status: components["schemas"]["MajorityReviewStatus"];
+            /**
+             * Format: date
+             * @description Día en que cumple la mayoría de edad de la clínica (el 29/2 cae el 1/3 de un año no bisiesto); null sin fecha de nacimiento.
+             * @example 2026-11-20
+             */
+            majorityDate: string | null;
+            /**
+             * @description Mayoría de edad de la clínica con la que se cuenta.
+             * @example 18
+             */
+            majorityAge: number;
+            /** @description Solo con REVIEWED. PATIENT_SELF: los envíos van al propio paciente (sin email: a nadie). KEEP_RESPONSIBLE: el paciente consiente que sigan yendo a su responsable (regla general DX-203). */
+            decision: components["schemas"]["MajorityReviewDecision"] | null;
+            /**
+             * Format: date-time
+             * @description Solo con REVIEWED.
+             */
+            reviewedAt: string | null;
+            /** @description Quién lo revisó (solo con REVIEWED); null si ya no es de la clínica. */
+            reviewedByName: string | null;
+            /** @description Responsables vivos, en orden de alta. */
+            responsibles: components["schemas"]["MajorityReviewResponsibleDto"][];
+        };
+        ReviewMajorityDto: {
+            /** @description PATIENT_SELF: los envíos van al propio paciente (sin email: a nadie). KEEP_RESPONSIBLE: el paciente consiente que sigan yendo a su responsable (regla general DX-203). */
+            decision: components["schemas"]["MajorityReviewDecision"];
+            /** @description Nota libre (p. ej. con quién se habló). Se guarda con la revisión; nunca va a la auditoría. */
+            note?: string | null;
+        };
         /** @enum {string} */
         DocType: "NATIONAL_ID" | "PASSPORT" | "RESIDENCE_PERMIT" | "TAX_ID" | "OTHER";
         /** @enum {string} */
@@ -6370,7 +8245,7 @@ export interface components {
         RecordDataConsentsDto: {
             /**
              * Format: uuid
-             * @description Versión de la política que se le mostró al titular. Debe ser la vigente (409 si cambió).
+             * @description Versión de la política que se le mostró al paciente. Debe ser la vigente (409 si cambió).
              */
             policyVersionId: string;
             decisions: components["schemas"]["ConsentDecisionDto"][];
@@ -6537,7 +8412,7 @@ export interface components {
             address?: string;
             /**
              * @description ISO 3166-1 alpha-2
-             * @example CO
+             * @example VE
              */
             countryCode?: string;
             /**
@@ -6560,6 +8435,11 @@ export interface components {
             dataConsentPolicyVersion?: string;
             maritalStatus?: string;
             occupation?: string;
+            /**
+             * @description DX-497: idioma preferido (BCP 47) de lo que se le envía (recordatorio, página de confirmar). null o ausente = «Idioma de la clínica». Tiene que estar en la lista de la clínica (GET /patients/languages); si no, 400.
+             * @example en
+             */
+            preferredLanguage?: string | null;
             physicianName?: string;
             physicianPhone?: string;
             emergencyContactName?: string;
@@ -6569,7 +8449,7 @@ export interface components {
             medicalHistory?: components["schemas"]["SaveMedicalHistoryDto"];
         };
         /**
-         * @description Retención extendida de la HC: NONE = 15 años desde la última atención, DOUBLE = 30 años, PERMANENT = nunca se libera. Solo ADMIN la cambia.
+         * @description Retención extendida de la HC: NONE = el plazo de la clínica desde la última atención, DOUBLE = el doble de ese plazo, PERMANENT = nunca se libera. Solo ADMIN la cambia.
          * @enum {string}
          */
         RetentionExtension: "NONE" | "DOUBLE" | "PERMANENT";
@@ -6587,6 +8467,11 @@ export interface components {
             id: string;
             /** Format: uuid */
             tenantId: string;
+            /**
+             * @description DX-484: código del paciente en su clínica (dígitos, sin ceros a la izquierda). Lo asigna el sistema en el alta, es único en la clínica y no cambia nunca, ni al archivar; es el que se da al software de imagen.
+             * @example 1042
+             */
+            patientCode: string;
             firstName: string;
             lastName: string;
             docType: components["schemas"]["DocType"];
@@ -6647,7 +8532,7 @@ export interface components {
              * @description DX-039: fecha de la última atención clínica (evolución registrada o cita atendida). La mantiene la BD y nunca retrocede.
              */
             lastAttentionAt: string | null;
-            /** @description Retención extendida de la HC: NONE = 15 años desde la última atención, DOUBLE = 30 años, PERMANENT = nunca se libera. Solo ADMIN la cambia. */
+            /** @description Retención extendida de la HC: NONE = el plazo de la clínica desde la última atención, DOUBLE = el doble de ese plazo, PERMANENT = nunca se libera. Solo ADMIN la cambia. */
             retentionExtended: components["schemas"]["RetentionExtension"];
             /**
              * Format: date
@@ -6655,8 +8540,15 @@ export interface components {
              * @example 2039-02-28
              */
             retentionUntil: string | null;
-            /** @description Si hoy la HC está en retención legal: archivar o borrar al paciente responde 409 CLINICAL_RECORD_RETENTION. */
+            /** @description Si hoy la HC está en retención: archivar o borrar al paciente responde 409 CLINICAL_RECORD_RETENTION. */
             underRetention: boolean;
+            /**
+             * @description Plazo vigente de la clínica en años (NONE); DOUBLE es el doble. PERMANENT no caduca.
+             * @example 15
+             */
+            clinicRetentionYears: number;
+            /** @description La fecha de fin sale del plazo anterior de la clínica: se redujo y esta historia ya estaba en retención (DX-330). */
+            retentionFromPreviousTerm: boolean;
             /**
              * Format: date-time
              * @description DX-039: cuándo se vaciaron sus datos no clínicos (supresión parcial).
@@ -6669,6 +8561,11 @@ export interface components {
             importBatchId: string | null;
             /** @description DX-128: canal de los avisos automáticos (EMAIL, WHATSAPP o NONE). Detalle en GET /patients/:id/communication. */
             contactChannel: components["schemas"]["ContactChannel"];
+            /**
+             * @description DX-497: idioma preferido (BCP 47); null = «Idioma de la clínica». Puede no estar ya en la lista de la clínica (se quitó): la ficha lo enseña «(no disponible)» y los envíos salen en el idioma de la clínica.
+             * @example en
+             */
+            preferredLanguage: string | null;
             /** Format: date-time */
             whatsappOptInAt: string | null;
             whatsappOptInSource: components["schemas"]["WhatsappOptInSource"] | null;
@@ -6706,6 +8603,11 @@ export interface components {
             id: string;
             /** Format: uuid */
             tenantId: string;
+            /**
+             * @description DX-484: código del paciente en su clínica (dígitos, sin ceros a la izquierda). Lo asigna el sistema en el alta, es único en la clínica y no cambia nunca, ni al archivar; es el que se da al software de imagen.
+             * @example 1042
+             */
+            patientCode: string;
             firstName: string;
             lastName: string;
             docType: components["schemas"]["DocType"];
@@ -6766,7 +8668,7 @@ export interface components {
              * @description DX-039: fecha de la última atención clínica (evolución registrada o cita atendida). La mantiene la BD y nunca retrocede.
              */
             lastAttentionAt: string | null;
-            /** @description Retención extendida de la HC: NONE = 15 años desde la última atención, DOUBLE = 30 años, PERMANENT = nunca se libera. Solo ADMIN la cambia. */
+            /** @description Retención extendida de la HC: NONE = el plazo de la clínica desde la última atención, DOUBLE = el doble de ese plazo, PERMANENT = nunca se libera. Solo ADMIN la cambia. */
             retentionExtended: components["schemas"]["RetentionExtension"];
             /**
              * Format: date
@@ -6774,8 +8676,15 @@ export interface components {
              * @example 2039-02-28
              */
             retentionUntil: string | null;
-            /** @description Si hoy la HC está en retención legal: archivar o borrar al paciente responde 409 CLINICAL_RECORD_RETENTION. */
+            /** @description Si hoy la HC está en retención: archivar o borrar al paciente responde 409 CLINICAL_RECORD_RETENTION. */
             underRetention: boolean;
+            /**
+             * @description Plazo vigente de la clínica en años (NONE); DOUBLE es el doble. PERMANENT no caduca.
+             * @example 15
+             */
+            clinicRetentionYears: number;
+            /** @description La fecha de fin sale del plazo anterior de la clínica: se redujo y esta historia ya estaba en retención (DX-330). */
+            retentionFromPreviousTerm: boolean;
             /**
              * Format: date-time
              * @description DX-039: cuándo se vaciaron sus datos no clínicos (supresión parcial).
@@ -6788,6 +8697,11 @@ export interface components {
             importBatchId: string | null;
             /** @description DX-128: canal de los avisos automáticos (EMAIL, WHATSAPP o NONE). Detalle en GET /patients/:id/communication. */
             contactChannel: components["schemas"]["ContactChannel"];
+            /**
+             * @description DX-497: idioma preferido (BCP 47); null = «Idioma de la clínica». Puede no estar ya en la lista de la clínica (se quitó): la ficha lo enseña «(no disponible)» y los envíos salen en el idioma de la clínica.
+             * @example en
+             */
+            preferredLanguage: string | null;
             /** Format: date-time */
             whatsappOptInAt: string | null;
             whatsappOptInSource: components["schemas"]["WhatsappOptInSource"] | null;
@@ -6817,12 +8731,117 @@ export interface components {
             page: number;
             pageSize: number;
         };
+        RetentionCorrectionWindowDto: {
+            /** @description Plazo vigente justo antes de la subida: volver a él, o a uno mayor, no fija ninguna fecha. */
+            previousYears: number;
+            /**
+             * Format: date-time
+             * @description Instante en que la ventana se cierra (subida + 24 h).
+             */
+            until: string;
+        };
+        RetentionSettingsDto: {
+            /** @description Plazo guardado por la clínica, en años. El que rige es `effectiveYears`. */
+            clinicalRecordRetentionYears: number;
+            /** @description Plazo que rige: el guardado, nunca por debajo del mínimo de plataforma. */
+            effectiveYears: number;
+            /** @description Mínimo de plataforma, en años. */
+            platformMinimumYears: number;
+            /** @description Máximo que admite la clínica, en años. */
+            maximumYears: number;
+            /** @description Presente durante las 24 horas siguientes a una subida; null si no hay ventana abierta. */
+            correctionWindow: components["schemas"]["RetentionCorrectionWindowDto"] | null;
+        };
+        RetentionReductionUnconfirmedErrorDto: {
+            /** @example 409 */
+            statusCode: number;
+            /** @example Conflict */
+            error: string;
+            /**
+             * @example RETENTION_REDUCTION_UNCONFIRMED
+             * @enum {string}
+             */
+            code: "RETENTION_REDUCTION_UNCONFIRMED";
+            message: string;
+            /** @description Plazo vigente antes del cambio. */
+            previousYears: number;
+            /** @description Plazo vigente tras el cambio. */
+            newYears: number;
+            /** @description Historias que mantendrían una fecha de fin anterior. */
+            protectedPatients: number;
+            /** @description La reducción corrige una subida de hace menos de 24 horas. */
+            withinCorrectionWindow: boolean;
+        };
+        RetentionSettingsBusyErrorDto: {
+            /** @example 409 */
+            statusCode: number;
+            /** @example Conflict */
+            error: string;
+            /**
+             * @example RETENTION_SETTINGS_BUSY
+             * @enum {string}
+             */
+            code: "RETENTION_SETTINGS_BUSY";
+            message: string;
+        };
+        UpdateRetentionSettingsDto: {
+            /**
+             * @description Plazo de conservación en años: entero entre el mínimo de plataforma y el máximo. El rango se valida en el caso de uso.
+             * @example 20
+             */
+            clinicalRecordRetentionYears: number;
+            /**
+             * @description Confirma una reducción del plazo. Sin él, reducir responde 409 `RETENTION_REDUCTION_UNCONFIRMED` y no guarda nada. En una subida o sin cambio se ignora.
+             * @enum {boolean}
+             */
+            confirmReduction?: true;
+        };
+        RetentionSettingsUpdateResultDto: {
+            /** @description Plazo guardado por la clínica, en años. El que rige es `effectiveYears`. */
+            clinicalRecordRetentionYears: number;
+            /** @description Plazo que rige: el guardado, nunca por debajo del mínimo de plataforma. */
+            effectiveYears: number;
+            /** @description Mínimo de plataforma, en años. */
+            platformMinimumYears: number;
+            /** @description Máximo que admite la clínica, en años. */
+            maximumYears: number;
+            /** @description Presente durante las 24 horas siguientes a una subida; null si no hay ventana abierta. */
+            correctionWindow: components["schemas"]["RetentionCorrectionWindowDto"] | null;
+            /** @description Historias en retención que mantienen una fecha de fin anterior tras una reducción; 0 si no hubo reducción. */
+            protectedPatients: number;
+        };
         PatientSettingsDto: {
             /**
              * @description Edad desde la que el paciente es adulto en esta clínica (Ajustes › Mayoría de edad).
              * @example 18
              */
             majorityAge: number;
+        };
+        PatientLanguagesDto: {
+            /**
+             * @example [
+             *       "es",
+             *       "en",
+             *       "ca"
+             *     ]
+             */
+            languages: string[];
+            /**
+             * @description Idioma de la clínica: el de los pacientes con «Idioma de la clínica» (null) y el de los envíos sin traducción.
+             * @example es
+             */
+            clinicLanguage: string;
+        };
+        UpdatePatientLanguagesDto: {
+            /**
+             * @description Etiquetas BCP 47 que la ficha ofrece como idioma preferido. Se normalizan («EN» → «en»), sin repetidos, y siempre incluyen el idioma de la clínica («es»). Quitar uno no toca a los pacientes que lo tenían.
+             * @example [
+             *       "es",
+             *       "en",
+             *       "ca"
+             *     ]
+             */
+            languages: string[];
         };
         DocumentTypeNamesValuesDto: {
             /** @description Documento nacional */
@@ -6835,6 +8854,12 @@ export interface components {
             TAX_ID?: string | null;
             /** @description Otro documento */
             OTHER?: string | null;
+        };
+        DocumentTypeNamesViewDto: {
+            /** @description Nombre local de cada tipo. En el PUT se sustituyen los cinco: una clave ausente queda sin nombre. */
+            names: components["schemas"]["DocumentTypeNamesValuesDto"];
+            /** @description Los nombres que rigen en la sede activa (X-Location-Id): los de la sede sobre los de la clínica, por tipo. Sin sede activa, los de la clínica. `names` sigue siendo solo los de la clínica. */
+            effective: components["schemas"]["DocumentTypeNamesValuesDto"];
         };
         DocumentTypeNamesDto: {
             /** @description Nombre local de cada tipo. En el PUT se sustituyen los cinco: una clave ausente queda sin nombre. */
@@ -6852,6 +8877,11 @@ export interface components {
             overdueDays: number | null;
             /** @description Solo para ADMIN y RECEPTION, y solo con saldo vencido. DENTIST y ASSISTANT no lo reciben. */
             amounts?: components["schemas"]["OverdueAmountDto"][];
+            /**
+             * @description DX-472-bis: solo presente (true) si el saldo no cuenta algún abono en otra moneda (sin tasa, o el chip no lo convierte en vivo): la marca puede faltar o quedarse corta. El estado de cuenta lo detalla.
+             * @enum {boolean}
+             */
+            incomplete?: true;
         };
         /**
          * @description NONE: sin convenio asignado. INACTIVE: el convenio está desactivado. EXPIRED / NOT_STARTED: la vigencia del convenio o de la asignación terminó o no empezó. ACTIVE: el resto.
@@ -6869,6 +8899,11 @@ export interface components {
             id: string;
             /** Format: uuid */
             tenantId: string;
+            /**
+             * @description DX-484: código del paciente en su clínica (dígitos, sin ceros a la izquierda). Lo asigna el sistema en el alta, es único en la clínica y no cambia nunca, ni al archivar; es el que se da al software de imagen.
+             * @example 1042
+             */
+            patientCode: string;
             firstName: string;
             lastName: string;
             docType: components["schemas"]["DocType"];
@@ -6929,7 +8964,7 @@ export interface components {
              * @description DX-039: fecha de la última atención clínica (evolución registrada o cita atendida). La mantiene la BD y nunca retrocede.
              */
             lastAttentionAt: string | null;
-            /** @description Retención extendida de la HC: NONE = 15 años desde la última atención, DOUBLE = 30 años, PERMANENT = nunca se libera. Solo ADMIN la cambia. */
+            /** @description Retención extendida de la HC: NONE = el plazo de la clínica desde la última atención, DOUBLE = el doble de ese plazo, PERMANENT = nunca se libera. Solo ADMIN la cambia. */
             retentionExtended: components["schemas"]["RetentionExtension"];
             /**
              * Format: date
@@ -6937,8 +8972,15 @@ export interface components {
              * @example 2039-02-28
              */
             retentionUntil: string | null;
-            /** @description Si hoy la HC está en retención legal: archivar o borrar al paciente responde 409 CLINICAL_RECORD_RETENTION. */
+            /** @description Si hoy la HC está en retención: archivar o borrar al paciente responde 409 CLINICAL_RECORD_RETENTION. */
             underRetention: boolean;
+            /**
+             * @description Plazo vigente de la clínica en años (NONE); DOUBLE es el doble. PERMANENT no caduca.
+             * @example 15
+             */
+            clinicRetentionYears: number;
+            /** @description La fecha de fin sale del plazo anterior de la clínica: se redujo y esta historia ya estaba en retención (DX-330). */
+            retentionFromPreviousTerm: boolean;
             /**
              * Format: date-time
              * @description DX-039: cuándo se vaciaron sus datos no clínicos (supresión parcial).
@@ -6951,6 +8993,11 @@ export interface components {
             importBatchId: string | null;
             /** @description DX-128: canal de los avisos automáticos (EMAIL, WHATSAPP o NONE). Detalle en GET /patients/:id/communication. */
             contactChannel: components["schemas"]["ContactChannel"];
+            /**
+             * @description DX-497: idioma preferido (BCP 47); null = «Idioma de la clínica». Puede no estar ya en la lista de la clínica (se quitó): la ficha lo enseña «(no disponible)» y los envíos salen en el idioma de la clínica.
+             * @example en
+             */
+            preferredLanguage: string | null;
             /** Format: date-time */
             whatsappOptInAt: string | null;
             whatsappOptInSource: components["schemas"]["WhatsappOptInSource"] | null;
@@ -6986,7 +9033,7 @@ export interface components {
             address?: string | null;
             /**
              * @description ISO 3166-1 alpha-2
-             * @example CO
+             * @example VE
              */
             countryCode?: string | null;
             /**
@@ -7008,7 +9055,7 @@ export interface components {
             statusCode: number;
             /** @example CLINICAL_RECORD_RETENTION */
             code: string;
-            /** @example La historia clínica de este paciente está en retención legal hasta el 28/02/2039 (…) */
+            /** @example La historia clínica de este paciente está en retención hasta el 28/02/2039 (…) */
             message: string;
             /** Format: date */
             retentionUntil: string | null;
@@ -7030,7 +9077,7 @@ export interface components {
         SetRetentionExtensionDto: {
             /** @description Motivo (obligatorio). Queda en el rastro de retención del paciente con el autor y la fecha; no se copia al registro de auditoría. */
             reason: string;
-            /** @description NONE = 15 años, DOUBLE = 30 años, PERMANENT = nunca se libera (p. ej. víctimas de violaciones de DD. HH./DIH). */
+            /** @description NONE = el plazo de la clínica, DOUBLE = el doble de ese plazo, PERMANENT = nunca se libera. */
             retentionExtended: components["schemas"]["RetentionExtension"];
         };
         PartialSuppressionDto: {
@@ -7105,6 +9152,25 @@ export interface components {
             reminderOptOut: components["schemas"]["ReminderOptOutDto"] | null;
             /** @description A quién se dirigen los avisos (como Dentrix Ascend: un menor, a su tutor o contacto principal). Usan el correo y el móvil de la ficha. */
             recipient: components["schemas"]["CommunicationRecipientDto"];
+            /**
+             * @description DX-497: idioma preferido (BCP 47) del recordatorio y de la página de confirmar. null = «Idioma de la clínica». Si ya no está en `patientLanguages`, la ficha lo enseña «(no disponible)».
+             * @example en
+             */
+            preferredLanguage: string | null;
+            /**
+             * @description DX-497: idiomas que ofrece la clínica (opciones del desplegable).
+             * @example [
+             *       "es",
+             *       "en",
+             *       "ca"
+             *     ]
+             */
+            patientLanguages: string[];
+            /**
+             * @description DX-497: idioma de la clínica.
+             * @example es
+             */
+            clinicLanguage: string;
         };
         PatientOptOutMatchWarningDto: {
             /** Format: uuid */
@@ -7123,6 +9189,11 @@ export interface components {
             whatsappOptInSource?: components["schemas"]["WhatsappOptInSource"];
             /** @description true anota la baja de los recordatorios a petición del paciente (origen STAFF); false la quita y los reactiva. */
             reminderOptOut?: boolean;
+            /**
+             * @description DX-497: idioma preferido (BCP 47). null o vacío = «Idioma de la clínica». Tiene que estar en la lista de la clínica (400 si no). Queda en la auditoría con el antes y el después.
+             * @example en
+             */
+            preferredLanguage?: string | null;
         };
         /**
          * @description PATIENT: otro paciente de la clínica (sus datos salen de su ficha). CONTACT: contacto sin ficha.
@@ -7145,8 +9216,6 @@ export interface components {
             /** @description DX-387: el teléfono en formato internacional de la librería, con su extensión, leído con la región por defecto de la sede (la activa o la principal; en una sede, la suya). null si no hay teléfono o no se puede leer de una sola forma: la web muestra entonces `phone` tal cual. */
             phoneInternational: string | null;
         };
-        /** @enum {string} */
-        ResponsibleRelationship: "MOTHER" | "FATHER" | "LEGAL_GUARDIAN" | "GRANDPARENT" | "SIBLING" | "SPOUSE" | "CHILD" | "OTHER";
         ResponsiblePartyDto: {
             /** Format: uuid */
             id: string;
@@ -7337,6 +9406,140 @@ export interface components {
         PatientCollectionsDto: {
             notes: components["schemas"]["CollectionNoteDto"][];
             promises: components["schemas"]["PaymentPromiseDto"][];
+        };
+        /**
+         * @description DX-374: de dónde salen las tasas para la clínica: AUTOMATIC (el proveedor) o MANUAL (las que registró la clínica para ese día).
+         * @enum {string}
+         */
+        ExchangeRateSource: "AUTOMATIC" | "MANUAL";
+        RatesResponseDto: {
+            /** @enum {string} */
+            base: "USD";
+            /** @description DX-374: de dónde salen las tasas para la clínica: AUTOMATIC (el proveedor) o MANUAL (las que registró la clínica para ese día). */
+            source: components["schemas"]["ExchangeRateSource"];
+            /** @description Units of each currency per 1 USD, for the requested date, keyed by its ISO 4217 code (3 letters). Con fuente MANUAL solo trae las monedas con tasa registrada ese día: una moneda que NO aparece está «sin tasa» (no se inventa, no se toma la de otro día ni se pide al proveedor) y convertirla responde 400 EXCHANGE_RATE_MISSING. */
+            rates: {
+                [key: string]: number;
+            };
+            /**
+             * @description DX-384: día civil (AAAA-MM-DD) de estas tasas. Es el pedido (`date`) salvo con fuente MANUAL cuando se pidieron `currencies` sin tasa ese día y se devuelve la última fecha anterior dentro del plazo de la clínica que las tiene todas. Nunca posterior a `date`.
+             * @example 2026-10-30
+             */
+            rateDate: string;
+        };
+        ConvertResponseDto: {
+            /** @example 100 */
+            amount: number;
+            /** @description Código ISO 4217 de 3 letras. */
+            from: string;
+            /** @description Código ISO 4217 de 3 letras. */
+            to: string;
+            /** @example 2026-07-01 */
+            date: string;
+            /**
+             * @description DX-384: día civil de la tasa usada. Es `date` salvo con tasa manual cuando la clínica no registró la de ese día y se usó la última dentro de su plazo.
+             * @example 2026-06-30
+             */
+            rateDate: string;
+            /** @example 400000 */
+            result: number;
+            /**
+             * @description Effective from→to rate actually applied.
+             * @example 4000
+             */
+            rateUsed: number;
+        };
+        ExchangeRateSettingsDto: {
+            /**
+             * @description De dónde sale la tasa del día: AUTOMATIC (proveedor) o MANUAL (la que registra la clínica).
+             * @example MANUAL
+             */
+            source: components["schemas"]["ExchangeRateSource"];
+            /**
+             * @description Día civil (sede principal) desde el que rige la fuente MANUAL: los días anteriores se convierten con la tasa automática. Null con AUTOMATIC.
+             * @example 2026-10-30
+             */
+            manualSince: string | null;
+            /**
+             * @description DX-384. Con fuente MANUAL, hasta cuántos días de antigüedad puede tener la última tasa manual registrada que se usa cuando no hay tasa del día del abono (día civil de su sede). 0 = solo la tasa del mismo día. El abono congela esa tasa con su fecha; registrar después la del día no la cambia. Pasado el plazo, el abono queda «sin tasa». Nunca se usa una tasa anterior a `manualSince` (esas son el respaldo de DX-402 de su propio día). 3 por defecto en una clínica nueva; en el PUT, sin este campo el plazo no cambia.
+             * @example 3
+             */
+            manualRateMaxAgeDays: number;
+            /** @description Moneda base de las tasas: cada tasa son unidades de la moneda por 1 de esta. No lleva tasa propia. */
+            baseCurrency: string;
+        };
+        UpdateExchangeRateSettingsDto: {
+            /**
+             * @description AUTOMATIC: la tasa del día sale del proveedor (por defecto). MANUAL: desde hoy, la que registra la clínica para cada día y moneda; sin ella, la moneda queda «sin tasa» (salvo el plazo de `manualRateMaxAgeDays`). Los días anteriores al paso a MANUAL siguen con la automática. Sin este campo la fuente no cambia.
+             * @example MANUAL
+             */
+            source?: components["schemas"]["ExchangeRateSource"];
+            /**
+             * @description DX-384. Con fuente MANUAL, hasta cuántos días de antigüedad puede tener la última tasa manual registrada que se usa cuando no hay tasa del día del abono (día civil de su sede). 0 = solo la tasa del mismo día. El abono congela esa tasa con su fecha; registrar después la del día no la cambia. Pasado el plazo, el abono queda «sin tasa». Nunca se usa una tasa anterior a `manualSince` (esas son el respaldo de DX-402 de su propio día). 3 por defecto en una clínica nueva; en el PUT, sin este campo el plazo no cambia.
+             * @example 3
+             */
+            manualRateMaxAgeDays?: number;
+        };
+        ManualExchangeRateAuthorDto: {
+            /** Format: uuid */
+            userId: string;
+            /** @example Dra. Ana Pérez */
+            fullName: string | null;
+        };
+        ManualExchangeRateDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description Día civil de la tasa.
+             * @example 2026-10-30
+             */
+            date: string;
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /**
+             * @description Unidades de la moneda por 1 USD.
+             * @example 36.5
+             */
+            rate: number;
+            createdBy: components["schemas"]["ManualExchangeRateAuthorDto"];
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * @description DX-375: algún abono ya congeló esta tasa (como moneda del abono o de destino), así que no se puede cambiar (PUT responde 409).
+             * @example false
+             */
+            inUse: boolean;
+        };
+        RegisterManualExchangeRateDto: {
+            /**
+             * @description Día civil de la tasa (AAAA-MM-DD), desde 2000-01-01 y nunca posterior a hoy en la zona de la sede activa (o de la principal).
+             * @example 2026-10-30
+             */
+            date: string;
+            /** @description Código ISO 4217 de la lista de monedas (GET /currencies). USD no: es la base. */
+            currency: string;
+            /**
+             * @description Unidades de la moneda por 1 USD, mayor que 0 y con hasta 8 decimales.
+             * @example 36.5
+             */
+            rate: number;
+        };
+        CorrectManualExchangeRateDto: {
+            /**
+             * @description La tasa corregida: unidades de la moneda por 1 USD, mayor que 0 y con hasta 8 decimales.
+             * @example 36.75
+             */
+            rate: number;
+        };
+        CurrencyTextEntryDto: {
+            /** @description Código ISO 4217 de una moneda del catálogo. */
+            currency: string;
+            /** @description Texto que sustituye al código en los importes: 1 a 8 caracteres en una línea (se recorta). */
+            text: string;
+        };
+        ClinicCurrencyTextsDto: {
+            /** @description El mapa entero, en orden de código. Vacío = nada configurado: los importes llevan el código ISO (DX-378). */
+            entries: components["schemas"]["CurrencyTextEntryDto"][];
         };
         /** @enum {string} */
         PayerType: "INSURER" | "PREPAID_PLAN" | "PUBLIC_SYSTEM" | "EMPLOYER" | "OTHER";
@@ -7576,7 +9779,7 @@ export interface components {
             payerId: string;
             kind: components["schemas"]["AgreementKind"];
             /** @description Obligatorio con PERCENT_DISCOUNT; no va con PRICE_LIST. */
-            percent?: Record<string, never>;
+            percent?: number | null;
             /** @description { "<categoría del catálogo>": <0–100> }, hasta 50 categorías de 80 caracteres. Solo PERCENT_DISCOUNT. */
             percentByCategory?: {
                 [key: string]: number;
@@ -7646,6 +9849,11 @@ export interface components {
             allowDiscount: boolean;
             /** @default true */
             active: boolean;
+            /**
+             * Format: uuid
+             * @description DX-455: plantilla de evolución que se sugiere al marcar hecho el procedimiento; null = ninguna (quitarla no cambia las evoluciones guardadas). Debe ser de esta clínica (404) y estar activa (400); solo en procedimientos (400 en un diagnóstico).
+             */
+            clinicalNoteTemplateId?: string | null;
         };
         DentalCatalogItemDto: {
             /** Format: uuid */
@@ -7663,7 +9871,19 @@ export interface components {
             defaultPrice: number | null;
             /** @description DX-105: false = la prestación no admite descuentos (ni % de convenio ni discrecionales). */
             allowDiscount: boolean;
+            /** @description DX-502-ter: moneda del `defaultPrice`, la del catálogo de la clínica; null si no se sabe. Solo la traen las lecturas (`GET /catalog/items`); es la misma en todos los ítems. */
+            catalogCurrency?: string | null;
             active: boolean;
+            /**
+             * Format: uuid
+             * @description DX-455: plantilla de evolución ligada al procedimiento (el vínculo guardado, aunque la plantilla esté desactivada); null = ninguna. Es lo que edita la pantalla del catálogo.
+             */
+            clinicalNoteTemplateId: string | null;
+            /**
+             * Format: uuid
+             * @description DX-455: plantilla a sugerir al marcar hecho el procedimiento: `clinicalNoteTemplateId` si la plantilla está activa; null si no hay o está desactivada.
+             */
+            suggestedClinicalNoteTemplateId: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -7675,6 +9895,8 @@ export interface components {
             total: number;
             page: number;
             pageSize: number;
+            /** @description DX-502-ter: moneda del `defaultPrice` de los ítems (la que fijó la clínica en Ajustes o, sin ella, la común de sus sedes activas); null si no se sabe. La ven todos los roles que leen el catálogo. */
+            catalogCurrency: string | null;
         };
         UpdateCatalogItemDto: {
             code?: string;
@@ -7691,6 +9913,11 @@ export interface components {
             /** @description DX-105: false = la prestación no admite descuentos. */
             allowDiscount?: boolean;
             active?: boolean;
+            /**
+             * Format: uuid
+             * @description DX-455: plantilla de evolución que se sugiere al marcar hecho el procedimiento; null = ninguna (quitarla no cambia las evoluciones guardadas). Debe ser de esta clínica (404) y estar activa (400); solo en procedimientos (400 en un diagnóstico).
+             */
+            clinicalNoteTemplateId?: string | null;
         };
         LocationDto: {
             /** Format: uuid */
@@ -7709,6 +9936,8 @@ export interface components {
             phoneInternational: string | null;
             /** @description Prefijo telefónico por defecto de la sede: la región (ISO 3166-1 alfa-2) cuyo prefijo se añade a los números escritos sin +. Se sugiere desde el país al crear la sede. null: sin prefijo telefónico por defecto. */
             defaultPhoneRegion: string | null;
+            /** @description DX-524: nombre propio de la sede para cada tipo de documento (texto libre de hasta 60 caracteres, distinto por tipo). Solo ADMIN; queda auditado. Una clave ausente no cambia; null o vacío vuelve a heredar el nombre de la clínica (DX-327) y, sin este, el genérico. Siempre trae los cinco; null = hereda. */
+            docTypeNames: components["schemas"]["DocumentTypeNamesValuesDto"];
             isActive: boolean;
             /** @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies. null = sede sin configurar (fase 1). */
             currency: string | null;
@@ -7807,6 +10036,8 @@ export interface components {
              * @enum {boolean}
              */
             confirmRegionalChange?: true;
+            /** @description DX-524: nombre propio de la sede para cada tipo de documento (texto libre de hasta 60 caracteres, distinto por tipo). Solo ADMIN; queda auditado. Una clave ausente no cambia; null o vacío vuelve a heredar el nombre de la clínica (DX-327) y, sin este, el genérico. */
+            docTypeNames?: components["schemas"]["DocumentTypeNamesValuesDto"];
             /** @description Desactivar una sede la oculta para operar; no se puede desactivar la última activa. */
             isActive?: boolean;
         };
@@ -7883,6 +10114,68 @@ export interface components {
             upserted: number;
             /** @description Precios quitados (filas con price null). */
             removed: number;
+        };
+        CallerLookupDto: {
+            /** @description El número, en cualquier formato (con espacios, puntos, guiones o paréntesis, con o sin «+»). Sin «+», con el prefijo por defecto de la sede activa. Va en el cuerpo: nunca en la URL ni en los logs. */
+            phone: string;
+        };
+        CallerLocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @description Zona horaria IANA de la sede. */
+            timeZone: string;
+        };
+        CallerNextAppointmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            start: string;
+            location: components["schemas"]["CallerLocationDto"];
+        };
+        CallerLastVisitDto: {
+            /** Format: date-time */
+            start: string;
+            location: components["schemas"]["CallerLocationDto"];
+        };
+        CallerAmountDto: {
+            /** @description Código ISO 4217. */
+            currency: string;
+            amount: number;
+        };
+        CallerOverdueDto: {
+            hasOverdue: boolean;
+            overdueDays: number | null;
+            /** @description Vencido por moneda. Solo ADMIN y RECEPTION. */
+            amounts?: components["schemas"]["CallerAmountDto"][];
+            /** @description Algún abono en otra moneda no cuenta (sin tasa). */
+            incomplete?: boolean;
+        };
+        CallerBalanceDto: {
+            overdue: components["schemas"]["CallerOverdueDto"];
+            /** @description Saldo pendiente por moneda (código ISO). Vacío para DENTIST y ASSISTANT, que solo ven la marca de vencido. */
+            pending: components["schemas"]["CallerAmountDto"][];
+        };
+        CallerMatchDto: {
+            /** Format: uuid */
+            id: string;
+            firstName: string;
+            lastName: string;
+            /**
+             * @description PATIENT: el número es el del paciente. RESPONSIBLE_PARTY: es el de alguno de sus responsables (contacto o paciente).
+             * @enum {string}
+             */
+            matchedBy: "PATIENT" | "RESPONSIBLE_PARTY";
+            nextAppointment: components["schemas"]["CallerNextAppointmentDto"] | null;
+            lastVisit: components["schemas"]["CallerLastVisitDto"] | null;
+            balance: components["schemas"]["CallerBalanceDto"];
+            /** @description Solo para los roles clínicos (DENTIST, ASSISTANT, ADMIN); RECEPTION no recibe la clave. */
+            hasCriticalAlert?: boolean;
+        };
+        CallerLookupResponseDto: {
+            matches: components["schemas"]["CallerMatchDto"][];
+            /** @description Hay más pacientes con ese número que los 20 devueltos: afinar la búsqueda. */
+            truncated: boolean;
         };
         SafetyFlagsDto: {
             /** @description DERIVADA: true solo con un «Sí» explícito al embarazo (`pregnancy`). No dice si se contestó «No». */
@@ -8041,10 +10334,22 @@ export interface components {
              */
             toothFdi?: string | null;
         };
+        ClinicalEntryRecallInputDto: {
+            /**
+             * Format: uuid
+             * @description Tipo de recall de la clínica (GET /recall-types). Inexistente o retirado: 422 y no se guarda la evolución.
+             */
+            recallTypeId: string;
+            /**
+             * @description Cada cuántos meses vuelve (p. ej. 3 = «control en 3 meses»)
+             * @example 3
+             */
+            intervalMonths: number;
+        };
         CreateClinicalEntryDto: {
             /**
              * Format: date-time
-             * @description Fecha de atención (fecha civil). Si falta: el día de la cita ligada en la zona de su sede o, sin cita, ahora.
+             * @description Fecha de atención (fecha civil). Si falta: el día de la cita ligada en la zona de su sede o, sin cita, ahora. Con cita debe ser el día de la cita y sin cita no puede ser futura (día civil de la sede): si no, 400. Una hora exactamente 00:00:00.000Z se lee como fecha civil (ese día); con otra hora es un instante y se lee en la zona de la sede.
              */
             entryDate?: string;
             reason?: string;
@@ -8064,6 +10369,8 @@ export interface components {
             answers?: components["schemas"]["ClinicalEntryAnswerDto"][];
             /** @description DX-212: diagnósticos CIE-10, guardados en la misma transacción e inalterables. Como máximo 1 PRINCIPAL y 3 RELACIONADO (400 en español si no); los relacionados exigen el principal. Opcional: sin diagnóstico la evolución se guarda igual. */
             diagnoses?: components["schemas"]["ClinicalEntryDiagnosisInputDto"][];
+            /** @description DX-015-bis (D18): el intervalo del recall de un tipo, en la misma transacción que la evolución. Si el paciente no tiene recall de ese tipo, se crea (MANUAL) con la base en el día de la evolución y su sede (la de la cita o la activa); si lo tiene, solo cambia el intervalo (la base no) y, si estaba inactivo, se reactiva. Un alta o una reactivación de un tipo con grupo de exclusión desactiva los demás recalls activos del grupo. La respuesta lo devuelve en `recallUpdates`. */
+            recall?: components["schemas"]["ClinicalEntryRecallInputDto"];
         };
         ClinicalEntryAppointmentDto: {
             /** Format: uuid */
@@ -8112,6 +10419,84 @@ export interface components {
             /** @description 0 = principal; 1..3 = relacionados */
             position: number;
         };
+        /**
+         * @description PROFESSIONAL_LICENSE_MISSING: la clínica avisa y el autor firmó sin registro profesional.
+         * @enum {string}
+         */
+        ClinicalEntryWarningCode: "PROFESSIONAL_LICENSE_MISSING";
+        ClinicalEntryWarningDto: {
+            /** @description PROFESSIONAL_LICENSE_MISSING: la clínica avisa y el autor firmó sin registro profesional. */
+            code: components["schemas"]["ClinicalEntryWarningCode"];
+            /** @description Texto en español para mostrarlo tal cual */
+            message: string;
+        };
+        RecallReplacementDto: {
+            /** Format: uuid */
+            recallTypeId: string;
+            /** @example Mantenimiento periodontal */
+            recallTypeName: string;
+        };
+        ItemRecallUpdateDto: {
+            /** Format: uuid */
+            recallId: string;
+            /** Format: uuid */
+            recallTypeId: string;
+            /** @example Higiene */
+            recallTypeName: string;
+            /**
+             * Format: date
+             * @description Vencimiento del recall tras el cambio (día civil)
+             * @example 2027-10-10
+             */
+            dueAt: string;
+            /** @description D9: la exclusión lo acaba de desactivar porque otro recall de un tipo del mismo grupo pasó a activo («Recall de Higiene desactivado: lo sustituye Mantenimiento periodontal»). Sigue ahí (inactivo): reactivarlo es un PUT o un DONE posterior de su procedimiento. */
+            deactivated: boolean;
+            /** @description El tipo que lo sustituye; null si no se desactivó */
+            replacedBy: components["schemas"]["RecallReplacementDto"] | null;
+        };
+        CreatedClinicalEntryDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: date-time */
+            entryDate: string;
+            reason: string | null;
+            notes: string;
+            /** Format: uuid */
+            performedById: string | null;
+            /**
+             * @description DX-540: registro profesional del autor congelado al firmar (inalterable). null si no lo tenía o en evoluciones anteriores.
+             * @example RP-12345
+             */
+            authorProfessionalLicense: string | null;
+            /**
+             * Format: uuid
+             * @description DX-170: cita ligada (null en las evoluciones sueltas)
+             */
+            appointmentId: string | null;
+            /**
+             * Format: uuid
+             * @description DX-170: plantilla con la que se redactó (solo procedencia; el texto está en notes)
+             */
+            templateId: string | null;
+            appointment: components["schemas"]["ClinicalEntryAppointmentDto"] | null;
+            /**
+             * Format: date-time
+             * @description Fecha de registro: la fija el servidor
+             */
+            createdAt: string;
+            /** @description Adendas de corrección, en orden cronológico (DX-038) */
+            addenda: components["schemas"]["ClinicalEntryAddendumDto"][];
+            /** @description DX-212: diagnósticos CIE-10, el principal primero (vacío en las evoluciones sin diagnóstico) */
+            diagnoses: components["schemas"]["ClinicalEntryDiagnosisDto"][];
+            /** @description DX-540: avisos de la firma; vacío si no hay nada que avisar. No se guardan con la evolución. */
+            warnings: components["schemas"]["ClinicalEntryWarningDto"][];
+            /** @description DX-015-bis (D18): con `recall`, el recall que fijó la evolución (creado, con otro intervalo o reactivado) y, tras él, los que la exclusión desactivó (`deactivated: true`); vacío sin `recall`. */
+            recallUpdates: components["schemas"]["ItemRecallUpdateDto"][];
+        };
         ClinicalEntryDto: {
             /** Format: uuid */
             id: string;
@@ -8125,6 +10510,11 @@ export interface components {
             notes: string;
             /** Format: uuid */
             performedById: string | null;
+            /**
+             * @description DX-540: registro profesional del autor congelado al firmar (inalterable). null si no lo tenía o en evoluciones anteriores.
+             * @example RP-12345
+             */
+            authorProfessionalLicense: string | null;
             /**
              * Format: uuid
              * @description DX-170: cita ligada (null en las evoluciones sueltas)
@@ -8151,6 +10541,24 @@ export interface components {
             reason: string;
             /** @description Texto aclaratorio que corrige o completa la evolución */
             text: string;
+        };
+        ClinicalEntrySigningDto: {
+            /**
+             * @description Registro profesional del usuario en esta clínica (el que se congelaría al firmar); null si no lo tiene.
+             * @example RP-12345
+             */
+            professionalLicense: string | null;
+            /** @description Ajuste de la clínica (ver /clinical-entries/settings) */
+            warnMissingProfessionalLicense: boolean;
+            /** @description Los avisos que traería la firma ahora mismo (los mismos que devolvería el alta). */
+            warnings: components["schemas"]["ClinicalEntryWarningDto"][];
+        };
+        ClinicalEntrySettingsDto: {
+            /**
+             * @description Avisar al firmar una evolución si el autor no tiene registro profesional. No bloquea la firma. false al crear la clínica.
+             * @example true
+             */
+            warnMissingProfessionalLicense: boolean;
         };
         /** @enum {string} */
         ClinicalNotePromptType: "ONE" | "MULTI" | "TEXT";
@@ -8187,7 +10595,14 @@ export interface components {
             category: string | null;
             /** @example Resina en superficie {{Superficie}} con {{Material}}. */
             body: string;
+            /**
+             * @description DX-455: atajo («#resina») tal como se escribió; null = sin atajo. Se compara sin distinguir mayúsculas.
+             * @example #resina
+             */
+            shortcut: string | null;
             active: boolean;
+            /** @description Versión optimista: se envía de vuelta en el PATCH; sube en 1 con cada edición */
+            version: number;
             prompts: components["schemas"]["ClinicalNoteTemplatePromptDto"][];
             /** Format: date-time */
             createdAt: string;
@@ -8195,6 +10610,11 @@ export interface components {
             updatedAt: string;
         };
         NotePromptInputDto: {
+            /**
+             * Format: uuid
+             * @description Id de la pregunta existente que se conserva al editar (upsert por id). Sin id, o con uno que no es de la plantilla, es una pregunta nueva.
+             */
+            id?: string;
             label: string;
             type: components["schemas"]["ClinicalNotePromptType"];
             /** @description Obligatorias (1 a 20) en ONE y MULTI; vacías en TEXT */
@@ -8211,6 +10631,11 @@ export interface components {
             prompts: components["schemas"]["NotePromptInputDto"][];
             /** @description Por defecto, true */
             active?: boolean;
+            /**
+             * @description DX-455: atajo para insertar la plantilla escribiendo en la nota: «#» y de 2 a 30 letras (cualquier alfabeto, con tildes), números, «-» o «_», sin espacios. Se guarda tal como se escribe y se compara sin distinguir mayúsculas. Único por clínica (también frente a las desactivadas, que conservan el suyo) y ninguno puede empezar por otro (#re choca con #resina): 409 con `code` NOTE_SHORTCUT_CONFLICT. null o "" = sin atajo.
+             * @example #resina
+             */
+            shortcut?: string | null;
         };
         UpdateClinicalNoteTemplateDto: {
             name?: string;
@@ -8220,6 +10645,13 @@ export interface components {
             prompts?: components["schemas"]["NotePromptInputDto"][];
             /** @description false = desactivarla (sale del selector) */
             active?: boolean;
+            /**
+             * @description DX-455: atajo para insertar la plantilla escribiendo en la nota: «#» y de 2 a 30 letras (cualquier alfabeto, con tildes), números, «-» o «_», sin espacios. Se guarda tal como se escribe y se compara sin distinguir mayúsculas. Único por clínica (también frente a las desactivadas, que conservan el suyo) y ninguno puede empezar por otro (#re choca con #resina): 409 con `code` NOTE_SHORTCUT_CONFLICT. null o "" = sin atajo.
+             * @example #resina
+             */
+            shortcut?: string | null;
+            /** @description Versión que el cliente leyó (la `version` de la plantilla). Si la plantilla ya cambió: 409 «La plantilla cambió, recárgala». Obligatoria. */
+            version: number;
         };
         AnestheticProductDto: {
             /** Format: uuid */
@@ -9121,7 +11553,7 @@ export interface components {
             providerId?: string;
             /**
              * Format: uuid
-             * @description DX-211: sillón de la cita. De esta clínica (si no, 404), de la sede de la cita y activo (si no, 400). Otra cita viva en ese sillón y franja: 409 «El sillón X ya está ocupado de HH:MM a HH:MM» (horas de la sede). Sin él, nada cambia.
+             * @description DX-211: sillón de la cita. De esta clínica (si no, 404), de la sede de la cita y activo (si no, 400). Otra cita viva en ese sillón y franja: 409 «El sillón X ya está ocupado de HH:MM a HH:MM» (horas de la sede). Sin él, nada cambia. `null` no es «sin sillón»: 400 (DX-492-bis).
              */
             chairId?: string;
             /** Format: date-time */
@@ -9150,6 +11582,11 @@ export interface components {
             durationMinutes: number;
             color: string;
         };
+        /**
+         * @description DX-437: franja en la que el paciente quiere adelantar la cita (solo con wantsEarlier). null = cualquiera / lo marcó el personal.
+         * @enum {string}
+         */
+        EarlierWindow: "MORNING" | "AFTERNOON" | "ANY";
         /**
          * @description DX-279: quién canceló — PATIENT_LINK (enlace del paciente), STAFF_FOR_PATIENT (el personal por el paciente) o CLINIC (la clínica; nunca tardía).
          * @enum {string}
@@ -9309,6 +11746,13 @@ export interface components {
             callbackRequestedAt: string | null;
             /** @description DX-210: «Adelantar si hay hueco». Se apaga al moverla a un hueco libre. */
             wantsEarlier: boolean;
+            /** @description DX-437: franja en la que el paciente quiere adelantar la cita (solo con wantsEarlier). null = cualquiera / lo marcó el personal. */
+            earlierWindow: components["schemas"]["EarlierWindow"] | null;
+            /**
+             * Format: date-time
+             * @description DX-437: cuándo pidió EL PACIENTE adelantar la cita desde el enlace de confirmación. null = lo marcó el personal o no está marcada.
+             */
+            earlierRequestedAt: string | null;
             /**
              * Format: date-time
              * @description DX-200: cuándo recepción marcó «Llegó» (reloj del servidor). null en las citas antiguas o si se deshizo la llegada.
@@ -9443,6 +11887,13 @@ export interface components {
             callbackRequestedAt: string | null;
             /** @description DX-210: «Adelantar si hay hueco». Se apaga al moverla a un hueco libre. */
             wantsEarlier: boolean;
+            /** @description DX-437: franja en la que el paciente quiere adelantar la cita (solo con wantsEarlier). null = cualquiera / lo marcó el personal. */
+            earlierWindow: components["schemas"]["EarlierWindow"] | null;
+            /**
+             * Format: date-time
+             * @description DX-437: cuándo pidió EL PACIENTE adelantar la cita desde el enlace de confirmación. null = lo marcó el personal o no está marcada.
+             */
+            earlierRequestedAt: string | null;
             /**
              * Format: date-time
              * @description DX-200: cuándo recepción marcó «Llegó» (reloj del servidor). null en las citas antiguas o si se deshizo la llegada.
@@ -9530,6 +11981,11 @@ export interface components {
              * @description Tipo de cita urgente (activo y con «Urgencia»). Sin él, el primer tipo urgente activo por nombre.
              */
             appointmentTypeId?: string;
+            /**
+             * Format: uuid
+             * @description DX-492: sillón activo de la sede. Ocupado a la hora de la cita: 409 con su nombre y horas; de otra sede o desactivado: 400; de otra clínica: 404.
+             */
+            chairId?: string;
             /** @description Señales de triaje de recepción: PAIN (dolor), SWELLING (inflamación), INFECTION (infección), FEVER (fiebre), BLEEDING (sangrado), TRAUMA (traumatismo). Otro valor: 400. */
             triageFlags?: components["schemas"]["TriageFlag"][];
             triageNote?: string;
@@ -9580,6 +12036,13 @@ export interface components {
             callbackRequestedAt: string | null;
             /** @description DX-210: «Adelantar si hay hueco». Se apaga al moverla a un hueco libre. */
             wantsEarlier: boolean;
+            /** @description DX-437: franja en la que el paciente quiere adelantar la cita (solo con wantsEarlier). null = cualquiera / lo marcó el personal. */
+            earlierWindow: components["schemas"]["EarlierWindow"] | null;
+            /**
+             * Format: date-time
+             * @description DX-437: cuándo pidió EL PACIENTE adelantar la cita desde el enlace de confirmación. null = lo marcó el personal o no está marcada.
+             */
+            earlierRequestedAt: string | null;
             /**
              * Format: date-time
              * @description DX-200: cuándo recepción marcó «Llegó» (reloj del servidor). null en las citas antiguas o si se deshizo la llegada.
@@ -9668,6 +12131,8 @@ export interface components {
              * @description Fin del hueco (cabe al menos la duración pedida).
              */
             end: string;
+            /** @description DX-492: el sillón libre en todo el hueco. Solo si se pidió `chairIds`. */
+            chair?: components["schemas"]["ChairSummaryDto"];
         };
         OpeningsDto: {
             /** @example UTC */
@@ -9676,6 +12141,8 @@ export interface components {
             openings: components["schemas"]["OpeningDto"][];
             /** @description Había más de 200 huecos: acota el rango. */
             truncated: boolean;
+            /** @description DX-533: la sede no tiene horario configurado y los huecos se buscaron en el horario de alta (lun–vie 9:00–13:00 y 15:00–19:00, sáb 9:00–13:00, hora de la sede). Reservar fuera de él sigue permitido. */
+            defaultHours: boolean;
         };
         InClinicItemDto: {
             /** Format: uuid */
@@ -9687,6 +12154,12 @@ export interface components {
             /** Format: uuid */
             providerId: string;
             providerName: string | null;
+            /**
+             * Format: uuid
+             * @description DX-492: el sillón de la cita.
+             */
+            chairId: string | null;
+            chair: components["schemas"]["ChairSummaryDto"] | null;
             /** Format: date-time */
             start: string;
             /** Format: date-time */
@@ -9822,6 +12295,13 @@ export interface components {
             callbackRequestedAt: string | null;
             /** @description DX-210: «Adelantar si hay hueco». Se apaga al moverla a un hueco libre. */
             wantsEarlier: boolean;
+            /** @description DX-437: franja en la que el paciente quiere adelantar la cita (solo con wantsEarlier). null = cualquiera / lo marcó el personal. */
+            earlierWindow: components["schemas"]["EarlierWindow"] | null;
+            /**
+             * Format: date-time
+             * @description DX-437: cuándo pidió EL PACIENTE adelantar la cita desde el enlace de confirmación. null = lo marcó el personal o no está marcada.
+             */
+            earlierRequestedAt: string | null;
             /**
              * Format: date-time
              * @description DX-200: cuándo recepción marcó «Llegó» (reloj del servidor). null en las citas antiguas o si se deshizo la llegada.
@@ -9882,6 +12362,35 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        CheckoutRecallTypeDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Higiene */
+            name: string;
+            /**
+             * @description Intervalo por defecto del tipo, en meses (el que usará D15)
+             * @example 6
+             */
+            defaultIntervalMonths: number;
+        };
+        CheckoutChecklistDto: {
+            /** Format: uuid */
+            appointmentId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: date-time */
+            nextAppointmentStart: string | null;
+            /** @description Día civil del recall activo más cercano. */
+            recallDueOn: string | null;
+            hasPhone: boolean;
+            hasEmail: boolean;
+            /** @description Dio de baja los recordatorios: tener el dato no basta. */
+            remindersOptedOut: boolean;
+            /** @description DX-015-bis (D16): sin próxima cita ni recall activo, los tipos de recall activos de la clínica en su orden, para «Programar recall de <tipo> (N meses)» (POST /patients/:id/recalls/default); vacío en cualquier otro caso. */
+            recallTypes: components["schemas"]["CheckoutRecallTypeDto"][];
+            /** @description Saldo vencido (`hasOverdue`, `overdueDays`, `amounts`); null si el rol no cobra. */
+            balance: components["schemas"]["OverdueBalanceDto"] | null;
+        };
         UpdateAppointmentDto: {
             /** @description Ítems aceptados del mismo paciente para esta cita (DX-256). [] desvincula al editar. */
             planItemIds?: string[];
@@ -9896,7 +12405,7 @@ export interface components {
             providerId?: string;
             /**
              * Format: uuid
-             * @description DX-211: cambiar el sillón (de la sede de la cita y activo; si no, 400/404) o quitarlo con null. Al cambiarlo o reagendar una cita con sillón se mira que esté libre en la franja (409 con su nombre y horas). Cambiar solo el sillón no anula el enlace de confirmación; queda auditado como movimiento.
+             * @description DX-211: cambiar el sillón (de la sede de la cita y activo; si no, 400/404) o quitarlo con null. Al cambiarlo o reagendar una cita con sillón se mira que esté libre en la franja (409 con su nombre y horas, `code: APPOINTMENT_OVERLAP` y `scope: chair`; DX-492-bis). Un valor que no es un id: 400 en español. Cambiar solo el sillón no anula el enlace de confirmación; queda auditado como movimiento.
              */
             chairId?: string | null;
             /**
@@ -9927,6 +12436,14 @@ export interface components {
             wantsEarlier?: boolean;
             /** @description DX-446: «Mover igualmente» en un hueco reservado (bloque RESERVED) con un tipo no permitido y sin liberar. Solo ADMIN y DENTIST (403 para el resto); 5–300 caracteres en una línea. El motivo queda en `appointment_reserved_overrides`; `audit_event` (`reservedSlotOverride`) solo guarda el id de esa fila y los bloques. */
             overrideReason?: string;
+            /** @description DX-509: al reactivar (desde CANCELLED o NO_SHOW) una urgencia en sobrecupo cuya hora ya ocupa otra cita del profesional, `true` la mantiene en sobrecupo a sabiendas (`audit_event` `WALK_IN_OVERBOOK_KEPT`). Sin él ese caso es 409 `OVERBOOK_SLOT_TAKEN`. Con el hueco libre deja de ser sobrecupo sola (`WALK_IN_OVERBOOK_CLEARED`); moverla a otra hora u otro profesional también. En cualquier otro cambio se ignora. */
+            keepOverbooked?: boolean;
+            /** @description DX-202: lo que faltaba al completar la cita desde la salida del paciente. No bloquea: queda en la auditoría. */
+            checkoutPending?: ("NEXT_VISIT" | "PAYMENT" | "PHONE" | "EMAIL")[];
+        };
+        UndoArrivalDto: {
+            /** @description DX-509: para una urgencia en sobrecupo cuya hora ya ocupa otra cita del profesional, `true` la deja agendada y en sobrecupo a sabiendas (`audit_event` `WALK_IN_OVERBOOK_KEPT`). Sin él ese caso es 409 `OVERBOOK_SLOT_TAKEN`. Con el hueco libre deja de ser sobrecupo sola (`WALK_IN_OVERBOOK_CLEARED`). Se ignora en una cita que no es sobrecupo. */
+            keepOverbooked?: boolean;
         };
         MoveToOpeningDto: {
             /** Format: date-time */
@@ -10061,13 +12578,26 @@ export interface components {
             professionalSpecialty?: string;
         };
         StaffLocationsDto: {
-            /** @description true = sin restricción: trabaja en todas las sedes (siempre en un ADMIN) y `locationIds` va vacío */
+            /**
+             * @description true = sin restricción: trabaja en todas las sedes (siempre en un ADMIN) y `locationIds` va vacío
+             * @example false
+             */
             all: boolean;
-            /** @description Sedes activas en las que puede trabajar. Con `all: false` y vacío, sus sedes ya no están activas */
+            /**
+             * @description Sedes activas en las que puede trabajar. Con `all: false` y vacío, sus sedes ya no están activas
+             * @example [
+             *       "c6a90d5a-9b1c-4b1e-8e41-d3125c016078"
+             *     ]
+             */
             locationIds: string[];
         };
         ReplaceStaffLocationsDto: {
-            /** @description Sedes activas de esta clínica. [] = todas. Los duplicados se ignoran */
+            /**
+             * @description Sedes activas de esta clínica. [] = todas. Los duplicados se ignoran. Se asignan con PUT /staff/:userId/locations tras la invitación; crear invitaciones y PATCH /staff/:userId no aceptan locationIds
+             * @example [
+             *       "c6a90d5a-9b1c-4b1e-8e41-d3125c016078"
+             *     ]
+             */
             locationIds: string[];
         };
         ScheduleRangeDto: {
@@ -10077,11 +12607,20 @@ export interface components {
             startMinute: number;
             endMinute: number;
         };
+        LocationScheduleDto: {
+            /**
+             * @description Zona IANA de la sede (`Location.timeZone`, de solo lectura aquí: se cambia en PATCH /locations/:id). Siempre presente: una sede sin zona válida responde 409 `LOCATION_TIMEZONE_REQUIRED`.
+             * @example America/Caracas
+             */
+            timezone: string;
+            /** @description Tramos vigentes de la semana. Un día sin tramos = cerrado; lista vacía = sede sin restricción. */
+            ranges: components["schemas"]["ScheduleRangeDto"][];
+        };
         ReplaceLocationScheduleDto: {
             /**
              * @deprecated
              * @description Obsoleto (G1): la zona es un dato de la sede (PATCH /locations/:id) y nunca se guarda desde aquí. Solo se acepta, para una web antigua, si es igual a la zona de la sede; distinta (o sede sin zona) es 400.
-             * @example Europe/Madrid
+             * @example America/Caracas
              */
             timezone?: string;
             /** @description La semana COMPLETA. Un día sin tramos = cerrado. Lista vacía = sede sin restricción. */
@@ -10322,12 +12861,28 @@ export interface components {
             timeZone: string | null;
             ranges: components["schemas"]["WeeklyRangeDto"][];
         };
+        ScheduleAffectedAppointmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            patientName: string;
+        };
+        ScheduleAffectedAppointmentsDto: {
+            total: number;
+            sample: components["schemas"]["ScheduleAffectedAppointmentDto"][];
+        };
         ProviderScheduleDto: {
             /** Format: uuid */
             providerId: string;
             /** @description false = sin horario configurado: se le puede citar en cualquier horario de la sede (sin restricción). */
             configured: boolean;
             locations: components["schemas"]["ProviderLocationScheduleDto"][];
+            affectedAppointments?: components["schemas"]["ScheduleAffectedAppointmentsDto"];
         };
         ProviderLocationScheduleInputDto: {
             /** Format: uuid */
@@ -10338,6 +12893,8 @@ export interface components {
         ReplaceProviderScheduleDto: {
             /** @description El horario COMPLETO del profesional, todas sus sedes. Las sedes que no vengan (o vengan sin tramos) dejan de tener horario suyo. Lista vacía = sin horario: se le puede citar en cualquier horario de la sede. */
             locations: components["schemas"]["ProviderLocationScheduleInputDto"][];
+            /** @description DX-267: guardar aunque deje citas fuera. Sin esto, 409 con el recuento y una muestra. Las citas no se mueven. */
+            confirmAffected?: boolean;
         };
         MinuteRangeDto: {
             /**
@@ -10378,7 +12935,9 @@ export interface components {
             /** @description Tramos de ese día en esa sede (prevalecen sobre el semanal); como mucho 7. Vacío = «no trabaja» ese día en esa sede. */
             ranges: components["schemas"]["MinuteRangeDto"][];
             /** @example Cubre a la Dra. Ruiz */
-            note?: Record<string, never> | null;
+            note?: string | null;
+            /** @description DX-267: guardar aunque deje citas fuera. Sin esto, 409 con el recuento y una muestra. Las citas no se mueven. */
+            confirmAffected?: boolean;
         };
         SetProviderOverrideResultDto: {
             /** Format: uuid */
@@ -10397,6 +12956,7 @@ export interface components {
             note: string | null;
             /** @description Había otra excepción para esa sede y fecha y se reemplazó. */
             replaced: boolean;
+            affectedAppointments?: components["schemas"]["ScheduleAffectedAppointmentsDto"];
         };
         RosterLocationDto: {
             /** Format: uuid */
@@ -10507,16 +13067,355 @@ export interface components {
              */
             defaultProviderId?: string | null;
         };
+        /** @enum {string} */
+        EquipmentCategory: "AUTOCLAVE" | "DENTAL_UNIT" | "XRAY" | "COMPRESSOR" | "CURING_LIGHT" | "ULTRASONIC_SCALER" | "OTHER";
+        /** @enum {string} */
+        EquipmentRiskClass: "I" | "IIA" | "IIB" | "III";
+        /** @enum {string} */
+        EquipmentStatus: "ACTIVE" | "RETIRED";
+        /**
+         * @description En el día de la sede: OVERDUE (antes de hoy), DUE_SOON (hoy a +30 días), UP_TO_DATE o UNSCHEDULED. null si está dado de baja.
+         * @enum {string}
+         */
+        EquipmentMaintenanceStatus: "OVERDUE" | "DUE_SOON" | "UP_TO_DATE" | "UNSCHEDULED";
+        EquipmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            /** Format: uuid */
+            chairId: string | null;
+            chairName: string | null;
+            /** @example Autoclave sala 1 */
+            name: string;
+            category: components["schemas"]["EquipmentCategory"];
+            brand: string | null;
+            model: string | null;
+            serialNumber: string | null;
+            /** @description Registro sanitario del producto (texto libre). */
+            sanitaryRegistration: string | null;
+            riskClass: components["schemas"]["EquipmentRiskClass"] | null;
+            /**
+             * Format: date
+             * @example 2026-11-06
+             */
+            acquiredOn: string | null;
+            /** @description Periodicidad del mantenimiento preventivo en meses. */
+            maintenanceIntervalMonths: number | null;
+            status: components["schemas"]["EquipmentStatus"];
+            /**
+             * Format: date
+             * @example 2026-11-06
+             */
+            retiredOn: string | null;
+            retiredReason: string | null;
+            notes: string | null;
+            /**
+             * Format: date
+             * @description Último mantenimiento vivo (de cualquier tipo).
+             * @example 2026-11-06
+             */
+            lastMaintenanceOn: string | null;
+            /**
+             * Format: date
+             * @description Próximo preventivo: el que fijó el último preventivo vivo (o su fecha + la periodicidad); sin preventivos, la adquisición + la periodicidad. null = sin programar.
+             * @example 2026-11-06
+             */
+            nextMaintenanceOn: string | null;
+            /** @description En el día de la sede: OVERDUE (antes de hoy), DUE_SOON (hoy a +30 días), UP_TO_DATE o UNSCHEDULED. null si está dado de baja. */
+            maintenanceStatus: components["schemas"]["EquipmentMaintenanceStatus"] | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ListEquipmentResponseDto: {
+            items: components["schemas"]["EquipmentDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        /**
+         * @description OVERDUE: la fecha ya pasó en el día de la sede. DUE_SOON: es hoy o en los próximos 30 días.
+         * @enum {string}
+         */
+        EquipmentMaintenanceDueStatus: "OVERDUE" | "DUE_SOON";
+        EquipmentMaintenanceDueItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Unidad dental Sillón 1 */
+            name: string;
+            category: components["schemas"]["EquipmentCategory"];
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            /** Format: uuid */
+            chairId: string | null;
+            chairName: string | null;
+            /**
+             * Format: date
+             * @description Día del próximo preventivo en la sede del equipo (la misma regla que `nextMaintenanceOn` de la lista).
+             * @example 2026-11-06
+             */
+            nextMaintenanceOn: string;
+            /** @description OVERDUE: la fecha ya pasó en el día de la sede. DUE_SOON: es hoy o en los próximos 30 días. */
+            maintenanceStatus: components["schemas"]["EquipmentMaintenanceDueStatus"];
+            /**
+             * @description Días de la sede hasta esa fecha: 0 = hoy, negativo = días de retraso.
+             * @example -31
+             */
+            daysUntilDue: number;
+        };
+        EquipmentMaintenanceDueResponseDto: {
+            /**
+             * Format: date-time
+             * @description Instante del cálculo.
+             */
+            generatedAt: string;
+            /** @description Los primeros `limit` avisos, de lo más urgente a lo menos (fecha más antigua primero; a igual fecha, sede, nombre e id). */
+            items: components["schemas"]["EquipmentMaintenanceDueItemDto"][];
+            /** @description Todos los avisos del alcance (vencidos + vencen pronto). */
+            total: number;
+        };
+        /** @enum {string} */
+        EquipmentMaintenanceKind: "PREVENTIVE" | "CORRECTIVE" | "CALIBRATION";
+        EquipmentMaintenanceDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            equipmentId: string;
+            kind: components["schemas"]["EquipmentMaintenanceKind"];
+            /**
+             * Format: date
+             * @description Día en que se hizo (de la sede).
+             * @example 2026-11-06
+             */
+            performedOn: string;
+            technician: string | null;
+            company: string | null;
+            description: string;
+            /** @example 120.5 */
+            cost: number | null;
+            /** @description ISO 4217; solo con costo. */
+            currency: string | null;
+            /**
+             * Format: date
+             * @description Próximo mantenimiento que dejó fijado: el explícito o, en un preventivo, la fecha + la periodicidad del equipo.
+             * @example 2026-11-06
+             */
+            nextDueOn: string | null;
+            /**
+             * Format: uuid
+             * @description Quién lo registró.
+             */
+            createdById: string;
+            createdByName: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            voidedAt: string | null;
+            /** Format: uuid */
+            voidedById: string | null;
+            voidReason: string | null;
+        };
+        EquipmentDetailDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            /** Format: uuid */
+            chairId: string | null;
+            chairName: string | null;
+            /** @example Autoclave sala 1 */
+            name: string;
+            category: components["schemas"]["EquipmentCategory"];
+            brand: string | null;
+            model: string | null;
+            serialNumber: string | null;
+            /** @description Registro sanitario del producto (texto libre). */
+            sanitaryRegistration: string | null;
+            riskClass: components["schemas"]["EquipmentRiskClass"] | null;
+            /**
+             * Format: date
+             * @example 2026-11-06
+             */
+            acquiredOn: string | null;
+            /** @description Periodicidad del mantenimiento preventivo en meses. */
+            maintenanceIntervalMonths: number | null;
+            status: components["schemas"]["EquipmentStatus"];
+            /**
+             * Format: date
+             * @example 2026-11-06
+             */
+            retiredOn: string | null;
+            retiredReason: string | null;
+            notes: string | null;
+            /**
+             * Format: date
+             * @description Último mantenimiento vivo (de cualquier tipo).
+             * @example 2026-11-06
+             */
+            lastMaintenanceOn: string | null;
+            /**
+             * Format: date
+             * @description Próximo preventivo: el que fijó el último preventivo vivo (o su fecha + la periodicidad); sin preventivos, la adquisición + la periodicidad. null = sin programar.
+             * @example 2026-11-06
+             */
+            nextMaintenanceOn: string | null;
+            /** @description En el día de la sede: OVERDUE (antes de hoy), DUE_SOON (hoy a +30 días), UP_TO_DATE o UNSCHEDULED. null si está dado de baja. */
+            maintenanceStatus: components["schemas"]["EquipmentMaintenanceStatus"] | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description Todos sus mantenimientos (también los anulados), del más antiguo al más reciente. */
+            maintenances: components["schemas"]["EquipmentMaintenanceDto"][];
+        };
+        CreateEquipmentDto: {
+            /**
+             * Format: uuid
+             * @description Sillón de la MISMA sede (activo); null = ninguno.
+             */
+            chairId?: string | null;
+            brand?: string | null;
+            model?: string | null;
+            serialNumber?: string | null;
+            /** @description Registro sanitario del producto (texto libre). */
+            sanitaryRegistration?: string | null;
+            riskClass?: components["schemas"]["EquipmentRiskClass"] | null;
+            /**
+             * Format: date
+             * @description No futura en la sede.
+             * @example 2026-11-06
+             */
+            acquiredOn?: string | null;
+            /** @description Periodicidad del preventivo en meses; null = sin programa. */
+            maintenanceIntervalMonths?: number | null;
+            notes?: string | null;
+            /**
+             * Format: uuid
+             * @description Sede del equipo.
+             */
+            locationId: string;
+            /** @example Autoclave sala 1 */
+            name: string;
+            category: components["schemas"]["EquipmentCategory"];
+        };
+        UpdateEquipmentDto: {
+            /**
+             * Format: uuid
+             * @description Sillón de la MISMA sede (activo); null = ninguno.
+             */
+            chairId?: string | null;
+            brand?: string | null;
+            model?: string | null;
+            serialNumber?: string | null;
+            /** @description Registro sanitario del producto (texto libre). */
+            sanitaryRegistration?: string | null;
+            riskClass?: components["schemas"]["EquipmentRiskClass"] | null;
+            /**
+             * Format: date
+             * @description No futura en la sede.
+             * @example 2026-11-06
+             */
+            acquiredOn?: string | null;
+            /** @description Periodicidad del preventivo en meses; null = sin programa. */
+            maintenanceIntervalMonths?: number | null;
+            notes?: string | null;
+            /**
+             * Format: uuid
+             * @description Trasladar a otra sede: quita el sillón, salvo que venga uno de la sede nueva. No admite null.
+             */
+            locationId?: string;
+            /** @description No admite null ni vacío. */
+            name?: string;
+            /** @description No admite null. */
+            category?: components["schemas"]["EquipmentCategory"];
+        };
+        RetireEquipmentDto: {
+            /**
+             * Format: date
+             * @description Día de la baja; por defecto hoy en la sede. No futura ni anterior a la adquisición.
+             * @example 2026-11-06
+             */
+            retiredOn?: string;
+            reason: string;
+        };
+        RecordMaintenanceDto: {
+            kind: components["schemas"]["EquipmentMaintenanceKind"];
+            /**
+             * Format: date
+             * @description No futura en la sede.
+             * @example 2026-11-06
+             */
+            performedOn: string;
+            technician?: string | null;
+            company?: string | null;
+            description: string;
+            /** @description Mayor que 0, 2 decimales como mucho; siempre con `currency`. */
+            cost?: number | null;
+            /** @description ISO 4217 de 3 letras; solo con costo. */
+            currency?: string | null;
+            /**
+             * Format: date
+             * @description Próximo mantenimiento explícito (posterior a la fecha). Sin él, un preventivo suma la periodicidad del equipo.
+             * @example 2026-11-06
+             */
+            nextDueOn?: string | null;
+        };
+        VoidMaintenanceDto: {
+            reason: string;
+        };
         /**
          * @description Tipo base: efectivo, tarjeta, transferencia, digital u otro. El abono sigue guardando el método antiguo derivado (DIGITAL → TRANSFER).
          * @enum {string}
          */
         PaymentMethodKind: "CASH" | "CARD" | "TRANSFER" | "DIGITAL" | "OTHER";
         /**
+         * @description DX-389 «Pide comprobante»: NONE no lo admite, OPTIONAL lo admite y REQUIRED lo exige al registrar el abono.
+         * @enum {string}
+         */
+        PaymentProofPolicy: "NONE" | "OPTIONAL" | "REQUIRED";
+        /**
          * @description Medio inicial equivalente a este método antiguo; null si lo creó la clínica.
          * @enum {string}
          */
         PaymentMethod: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+        /**
+         * @description Impuesto, recargo o descuento (genéricos).
+         * @enum {string}
+         */
+        PaymentAdjustmentType: "TAX" | "SURCHARGE" | "DISCOUNT";
+        /** @enum {string} */
+        PaymentAdjustmentCalculation: "PERCENT" | "FIXED";
+        PaymentMethodAdjustmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            paymentMethodId: string;
+            /** @description Impuesto, recargo o descuento (genéricos). */
+            type: components["schemas"]["PaymentAdjustmentType"];
+            /** @example Impuesto 3 % */
+            label: string;
+            calculation: components["schemas"]["PaymentAdjustmentCalculation"];
+            /** @description Porcentaje (0, 100] con hasta 2 decimales; solo PERCENT. */
+            percent: number | null;
+            /** @description Importe fijo; solo FIXED. */
+            fixedAmount: number | null;
+            /** @description Moneda del importe fijo: el ajuste solo se aplica a abonos en esa moneda. */
+            fixedCurrency: string | null;
+            active: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         PaymentMethodDto: {
             /** Format: uuid */
             id: string;
@@ -10527,8 +13426,12 @@ export interface components {
             active: boolean;
             /** @description Si el abono con este medio exige la referencia del pago. */
             requiresReference: boolean;
+            /** @description DX-389 «Pide comprobante»: NONE no lo admite, OPTIONAL lo admite y REQUIRED lo exige al registrar el abono. */
+            proofPolicy: components["schemas"]["PaymentProofPolicy"];
             /** @description Medio inicial equivalente a este método antiguo; null si lo creó la clínica. */
             legacyMethod: components["schemas"]["PaymentMethod"] | null;
+            /** @description DX-516: sus ajustes (activos o no; hasta 5 activos). Vacío por defecto. */
+            adjustments: components["schemas"]["PaymentMethodAdjustmentDto"][];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -10542,6 +13445,8 @@ export interface components {
             active?: boolean;
             /** @description Sin indicarlo, no pide referencia. */
             requiresReference?: boolean;
+            /** @description Sin indicarlo, NONE (no pide comprobante). */
+            proofPolicy?: components["schemas"]["PaymentProofPolicy"];
         };
         UpdatePaymentMethodDto: {
             /** @example Pago móvil */
@@ -10551,6 +13456,36 @@ export interface components {
             active?: boolean;
             /** @description Sin indicarlo, no pide referencia. */
             requiresReference?: boolean;
+            /** @description Sin indicarlo, NONE (no pide comprobante). */
+            proofPolicy?: components["schemas"]["PaymentProofPolicy"];
+        };
+        CreatePaymentAdjustmentDto: {
+            type: components["schemas"]["PaymentAdjustmentType"];
+            /** @example Impuesto 3 % */
+            label: string;
+            calculation: components["schemas"]["PaymentAdjustmentCalculation"];
+            /** @description Con PERCENT: (0, 100], hasta 2 decimales. */
+            percent?: number | null;
+            /** @description Con FIXED: > 0, con los decimales de redondeo de su moneda (DX-340). */
+            fixedAmount?: number | null;
+            /** @description Con FIXED: moneda del catálogo. */
+            fixedCurrency?: string | null;
+            /** @description Sin indicarlo, activo. */
+            active?: boolean;
+        };
+        UpdatePaymentAdjustmentDto: {
+            type?: components["schemas"]["PaymentAdjustmentType"];
+            /** @example Impuesto 3 % */
+            label?: string;
+            calculation?: components["schemas"]["PaymentAdjustmentCalculation"];
+            /** @description Con PERCENT: (0, 100], hasta 2 decimales. */
+            percent?: number | null;
+            /** @description Con FIXED: > 0, con los decimales de redondeo de su moneda (DX-340). */
+            fixedAmount?: number | null;
+            /** @description Con FIXED: moneda del catálogo. */
+            fixedCurrency?: string | null;
+            /** @description Sin indicarlo, activo. */
+            active?: boolean;
         };
         /** @enum {string} */
         WaitlistStatus: "OPEN" | "SCHEDULED" | "DISMISSED";
@@ -10665,6 +13600,11 @@ export interface components {
              * @description Si falta, el tipo de la entrada si sigue activo.
              */
             appointmentTypeId?: string;
+            /**
+             * Format: uuid
+             * @description DX-492: sillón de la sede de la entrada (el que devolvió «Buscar hueco»).
+             */
+            chairId?: string;
             reason?: string;
             notes?: string;
         };
@@ -10778,8 +13718,13 @@ export interface components {
             /** @description Tope de ofertas por paciente y día. */
             offerCap: number;
             linkOffers: components["schemas"]["SlotLinkOffersDto"];
-            /** @description DX-435: quedan al menos 20 minutos para el hueco (se puede enviar oferta con enlace). */
+            /** @description DX-435: al enlace le quedaría al menos la antelación mínima de la clínica (DX-448; 20 minutos de plataforma), contando su caducidad anticipada: se puede enviar oferta con enlace. */
             linkOfferOpen: boolean;
+            /**
+             * @description DX-448: por qué ya no se ofrece por enlace, con los minutos de la clínica (el mismo texto que el 409); `null` si se puede.
+             * @example null
+             */
+            linkOfferClosedMessage: string | null;
             items: components["schemas"]["OpeningCandidateDto"][];
             /** @description Había más de 50 candidatos. */
             truncated: boolean;
@@ -10945,6 +13890,45 @@ export interface components {
             /** @description Solo con `OPEN` o `ACCEPTED`. */
             offer: components["schemas"]["PublicSlotOfferDetailsDto"] | null;
         };
+        SlotOfferSettingsDto: {
+            /**
+             * @description Minutos antes del hueco en que caduca el enlace, ya resueltos: si la clínica no eligió, los de la instalación.
+             * @example 60
+             */
+            expiryLeadMinutes: number;
+            /**
+             * @description Vida mínima del enlace para ofrecer el hueco por enlace (minutos).
+             * @example 20
+             */
+            minLeadMinutes: number;
+            /**
+             * @description La caducidad anticipada de la instalación (`WAITLIST_LINK_OFFER_EXPIRY_LEAD_MINUTES`, 0 = al empezar): la que rige hasta que la clínica elige la suya.
+             * @example 0
+             */
+            defaultExpiryLeadMinutes: number;
+            /**
+             * @description La antelación mínima de plataforma.
+             * @example 20
+             */
+            defaultMinLeadMinutes: number;
+        };
+        UpdateSlotOfferSettingsDto: {
+            /**
+             * @description Minutos antes del inicio del hueco en que caduca el enlace de la oferta (0 = al empezar el hueco). Cambiarlo no toca las ofertas ya enviadas.
+             * @example 60
+             */
+            expiryLeadMinutes: number;
+            /**
+             * @description Vida mínima del enlace (minutos hasta que caduca) para poder ofrecer el hueco por enlace. 20 de plataforma.
+             * @example 20
+             */
+            minLeadMinutes: number;
+        };
+        /**
+         * @description DX-354: reloj de la sede de la cita, en crudo. null si la sede no lo tiene: la página pinta «—» y pide llamar a la clínica.
+         * @enum {string}
+         */
+        HourCycle: "h12" | "h23";
         PublicConfirmationAppointmentDto: {
             /** @description Solo el nombre de pila. */
             patientFirstName: string | null;
@@ -10955,6 +13939,27 @@ export interface components {
             providerName: string | null;
             locationName: string;
             locationAddress: string | null;
+            /**
+             * @description DX-354: zona IANA de la sede de la cita, en crudo. null si la sede no la tiene.
+             * @example America/Caracas
+             */
+            timeZone: string | null;
+            /**
+             * @description DX-354: formato regional (BCP 47) de la sede de la cita, en crudo. null si la sede no lo tiene.
+             * @example es-VE
+             */
+            locale: string | null;
+            /**
+             * @description DX-354: reloj de la sede de la cita, en crudo. null si la sede no lo tiene: la página pinta «—» y pide llamar a la clínica.
+             * @example h12
+             */
+            hourCycle: components["schemas"]["HourCycle"] | null;
+            /** @description DX-437: el paciente pidió que le avisen si se libera un hueco antes («Adelantar si hay hueco»). */
+            wantsEarlier: boolean;
+            /** @description DX-437: franja pedida (solo con wantsEarlier). null = cualquiera. */
+            earlierWindow: components["schemas"]["EarlierWindow"] | null;
+            /** @description DX-437: se puede pedir (o quitar) ahora: cita agendada o confirmada, futura y de un día posterior a hoy en la sede. */
+            earlierAllowed: boolean;
         };
         ConfirmationLinkDto: {
             /** @description URL pública en el host de la clínica. Contiene el token en claro: se entrega solo aquí. */
@@ -10989,6 +13994,15 @@ export interface components {
         };
         PublicAppointmentConfirmationDto: {
             /**
+             * @description DX-497: idioma (BCP 47) en que abre la página: el preferido del paciente de la cita o, sin preferencia, el de la clínica. Sin traducción para él, la página sale en el de la clínica; el paciente puede cambiarlo en la página sin tocar su ficha.
+             * @example en
+             */
+            language: string;
+            /** @description DX-469: se puede añadir la cita al calendario (enlace válido, cita no cancelada y aún no terminada): `GET …/:token/calendar.ics` y `googleCalendarUrl`. */
+            calendarAvailable: boolean;
+            /** @description DX-469: «Añadir a Google Calendar» (plantilla de evento, sin datos clínicos). null si `calendarAvailable` es false. */
+            googleCalendarUrl: string | null;
+            /**
              * @description PENDING: puede responder. RESPONDED: ya respondió (ver `response`). EXPIRED: caducado o sin efecto.
              * @enum {string}
              */
@@ -11016,6 +14030,19 @@ export interface components {
              */
             policyVersionId?: string | null;
         };
+        PublicWantsEarlierDto: {
+            /** @description `true` = avisarme si se libera un hueco antes; `false` = quitar la petición. */
+            wantsEarlier: boolean;
+            /** @description Franja preferida; sin ella, ANY. Se ignora con `wantsEarlier: false`. */
+            preferredWindow?: components["schemas"]["EarlierWindow"];
+        };
+        PlanVisitItemDetailDto: {
+            /** Format: uuid */
+            id: string;
+            toothNumber: string;
+            surfaces: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
+            procedureName: string;
+        };
         UnscheduledPlanDto: {
             /** Format: uuid */
             planId: string;
@@ -11038,6 +14065,7 @@ export interface components {
             minimumDate: string;
             minimumDay: string;
             planItemIds: string[];
+            planItems: components["schemas"]["PlanVisitItemDetailDto"][];
         };
         UnscheduledPlansPageDto: {
             items: components["schemas"]["UnscheduledPlanDto"][];
@@ -11069,6 +14097,7 @@ export interface components {
              */
             minimumDay: string;
             planItemIds: string[];
+            planItems: components["schemas"]["PlanVisitItemDetailDto"][];
         };
         PlanVisitsDto: {
             /** Format: uuid */
@@ -11112,6 +14141,14 @@ export interface components {
             presentedLocationId: string;
             /** @description Días completos desde la presentación */
             daysSincePresented: number;
+            /**
+             * Format: date
+             * @description DX-379: último día en que vale el presupuesto de esta opción (inclusive); null en planes presentados antes de DX-379 (nunca vencen)
+             * @example 2026-12-09
+             */
+            quoteValidUntil: string | null;
+            /** @description DX-379: hoy, en la zona de la sede de la presentación, es posterior a quoteValidUntil */
+            quoteExpired: boolean;
             /** @description Moneda del plan (código ISO 4217 de 3 letras). */
             currency: string;
             /** @description Σ (precio − descuento) de los ítems vivos, en `currency` */
@@ -11137,6 +14174,25 @@ export interface components {
         };
         /** @enum {string} */
         TreatmentPlanRejectionReason: "PRICE" | "FEAR" | "SECOND_OPINION" | "OTHER_OPTION_ACCEPTED" | "OTHER";
+        ReferenceRateDto: {
+            /**
+             * @description Unidades de la moneda de la referencia (`referenceCurrency`) por 1 USD.
+             * @example 880
+             */
+            fromPerBase: number;
+            /**
+             * @description Unidades de la moneda del plan por 1 USD.
+             * @example 1
+             */
+            toPerBase: number;
+            /** @description De dónde salió la tasa: del proveedor o la manual de la clínica. */
+            source: components["schemas"]["ExchangeRateSource"];
+            /**
+             * @description Día civil (AAAA-MM-DD) de la tasa usada; con tasa manual puede ser anterior al del ítem (DX-384).
+             * @example 2026-11-07
+             */
+            rateDate: string;
+        };
         TreatmentPlanItemDto: {
             /** @default 1 */
             visit: number;
@@ -11155,11 +14211,23 @@ export interface components {
             catalogPrice: number | null;
             /** @description DX-105: precio de catálogo (`defaultPrice`) en el alta. Null en ítems anteriores a DX-105 o sin precio de catálogo. */
             basePrice: number | null;
+            /** @description DX-502: moneda de `basePrice`, la del catálogo (común a las sedes activas) al dar de alta el ítem, congelada. Null si no había una común o no hay precio de catálogo. Puede no ser la del plan: no se convierte. */
+            catalogCurrency: string | null;
             /**
              * @description DX-105: de dónde salió `catalogPrice` (convenio por %, lista del convenio, lista de la sede o catálogo). Null en ítems anteriores a DX-105.
              * @enum {string|null}
              */
             priceSource: "CATALOG" | "PRICE_LIST" | "AGREEMENT_PERCENT" | "AGREEMENT_PRICE_LIST" | null;
+            /** @description DX-513-bis: moneda de `catalogPrice` al escribir el ítem (la del plan para las listas, la del catálogo para el resto). Null si no se supo, en los libres y en los anteriores sin foto. */
+            referenceCurrency: string | null;
+            /** @description DX-513-bis: `catalogPrice` en la moneda del plan, congelado al escribir el ítem (convertido con `referenceRate` si su moneda era otra). Es la referencia del descuento: un precio por debajo cuenta (tope por rol y motivo). Null en los libres y en los anteriores sin foto (se miden como en DX-513). */
+            referencePriceInPlan: number | null;
+            /** @description DX-513-bis: `basePrice` en la moneda del plan, congelado con la referencia. DX-513-ter: en una lista de convenio con el catálogo en otra moneda, convertido con `baseRate`. Null si no hay o no había tasa para expresarlo. */
+            basePriceInPlan: number | null;
+            /** @description DX-513-bis: la tasa (de la moneda del catálogo a la del plan) con que se convirtió la referencia (`catalogPrice` en `referenceCurrency`); null si no hizo falta. DX-513-ter: siempre null en las listas (`PRICE_LIST`, `AGREEMENT_PRICE_LIST`), cuya referencia ya está en la moneda del plan: su tasa va en `baseRate`. */
+            referenceRate: components["schemas"]["ReferenceRateDto"] | null;
+            /** @description DX-513-ter: en un ítem de lista de convenio con el catálogo en otra moneda, la tasa del día (de `catalogCurrency` a la del plan) con que se convirtió `basePrice` a `basePriceInPlan`, congelada al darlo de alta. Null si no hizo falta, si no había tasa ese día o si el ítem no es de lista. */
+            baseRate: components["schemas"]["ReferenceRateDto"] | null;
             /**
              * Format: uuid
              * @description DX-105: convenio con el que se resolvió el precio
@@ -11235,7 +14303,7 @@ export interface components {
              */
             minorUnits: number;
             /**
-             * @description Decimales a los que Dentalix redondea cada línea (descuento en bloque, precio por convenio); el total de un documento es la suma de sus líneas. Puede ser menor que minorUnits (RSD, COP: 0).
+             * @description Decimales a los que Dentalix redondea cada línea (descuento en bloque, precio por convenio); el total de un documento es la suma de sus líneas. Puede ser menor que minorUnits (RSD, ALL: 0).
              * @example 0
              */
             roundingDigits: number;
@@ -11287,6 +14355,16 @@ export interface components {
             optionGroupId: string | null;
             /** @example Opción A: implante */
             optionLabel: string | null;
+            /**
+             * Format: uuid
+             * @description DX-417: este plan es el presupuesto pendiente que dejó la aceptación parcial de ese plan (con los procedimientos no aceptados); null si no. «Resto del plan aceptado el …»
+             */
+            splitFromPlanId: string | null;
+            /**
+             * Format: uuid
+             * @description DX-417: este plan se aceptó en parte («Aceptado parcialmente») y lo no aceptado está en ese plan pendiente; null si no. En la lista y en GET by id
+             */
+            partialPendingPlanId?: string | null;
             /** Format: date-time */
             presentedAt: string | null;
             /**
@@ -11294,6 +14372,20 @@ export interface components {
              * @description Sede donde se presentó (la del request o la principal)
              */
             presentedLocationId: string | null;
+            /**
+             * Format: date
+             * @description DX-379: día de emisión del presupuesto (día civil de la sede), fijado al presentarlo o al imprimirlo por primera vez (POST …/quote/issue). null = plan anterior a DX-379 o borrador nunca impreso
+             * @example 2026-11-09
+             */
+            quoteIssuedOn: string | null;
+            /**
+             * Format: date
+             * @description DX-379: último día en que vale el presupuesto (inclusive). Lo fijan presentar (siempre) o la primera impresión; editar ítems o cambiar el ajuste de días no lo mueve. null = sin validez guardada (nunca vence)
+             * @example 2026-12-09
+             */
+            quoteValidUntil: string | null;
+            /** @description DX-379: el presupuesto venció — hoy, en la zona de la sede del plan (la de su presentación o, sin presentar, la del request), es posterior a quoteValidUntil. Solo puede ser true en borrador (DRAFT) o presentado (PRESENTED): aceptado (con o sin firma), completado, rechazado o cancelado es siempre false. También false si quoteValidUntil es null. Lo calcula el servidor: la web no lo recalcula con la fecha del navegador */
+            quoteExpired: boolean;
             /** Format: date-time */
             rejectedAt: string | null;
             rejectionReason: components["schemas"]["TreatmentPlanRejectionReason"] | null;
@@ -11355,7 +14447,7 @@ export interface components {
             surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             /** Format: uuid */
             catalogItemId: string;
-            /** @description Precio explícito (máx. 2 decimales). Si se omite, la API lo resuelve (DX-105): convenio vigente del paciente → lista de precios activa de la sede → precio de catálogo; sin ninguno, 400. El resuelto queda como referencia (`catalogPrice`): un precio por debajo cuenta como descuento (tope del rol y motivo de la política) y, si la prestación no admite descuentos, 400 */
+            /** @description Precio explícito (máx. 2 decimales). Si se omite, la API lo resuelve (DX-105): convenio vigente del paciente → lista de precios activa de la sede → precio de catálogo; sin ninguno, 400. El resuelto queda como referencia (`catalogPrice`): un precio por debajo cuenta como descuento (tope del rol y motivo de la política) y, si la prestación no admite descuentos, 400. DX-513: no cuenta si la referencia es el precio de catálogo en otra moneda conocida (`catalogCurrency` distinta de la del plan, sin convertir); con la moneda del catálogo desconocida, sí */
             price?: number;
             /** @description Descuento en la moneda del plan (máx. 2 decimales, default 0); nunca mayor que el precio (400). DX-204: por encima del tope del rol, 403; en un plan aceptado, 409 */
             discount?: number;
@@ -11426,6 +14518,111 @@ export interface components {
             surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             notes?: string;
         };
+        UpdatedTreatmentPlanItemDto: {
+            /** @default 1 */
+            visit: number;
+            visitLabel?: string | null;
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            planId: string;
+            toothNumber: string;
+            surfaces: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
+            /** Format: uuid */
+            catalogItemId: string;
+            /** @description Precio de REFERENCIA al dar de alta el ítem (null = ítem libre). DX-105: el resuelto (convenio → lista de precios de la sede → catálogo). Un precio por debajo cuenta como descuento (SEC-041): tope del rol, motivo e informe de descuentos. */
+            catalogPrice: number | null;
+            /** @description DX-105: precio de catálogo (`defaultPrice`) en el alta. Null en ítems anteriores a DX-105 o sin precio de catálogo. */
+            basePrice: number | null;
+            /** @description DX-502: moneda de `basePrice`, la del catálogo (común a las sedes activas) al dar de alta el ítem, congelada. Null si no había una común o no hay precio de catálogo. Puede no ser la del plan: no se convierte. */
+            catalogCurrency: string | null;
+            /**
+             * @description DX-105: de dónde salió `catalogPrice` (convenio por %, lista del convenio, lista de la sede o catálogo). Null en ítems anteriores a DX-105.
+             * @enum {string|null}
+             */
+            priceSource: "CATALOG" | "PRICE_LIST" | "AGREEMENT_PERCENT" | "AGREEMENT_PRICE_LIST" | null;
+            /** @description DX-513-bis: moneda de `catalogPrice` al escribir el ítem (la del plan para las listas, la del catálogo para el resto). Null si no se supo, en los libres y en los anteriores sin foto. */
+            referenceCurrency: string | null;
+            /** @description DX-513-bis: `catalogPrice` en la moneda del plan, congelado al escribir el ítem (convertido con `referenceRate` si su moneda era otra). Es la referencia del descuento: un precio por debajo cuenta (tope por rol y motivo). Null en los libres y en los anteriores sin foto (se miden como en DX-513). */
+            referencePriceInPlan: number | null;
+            /** @description DX-513-bis: `basePrice` en la moneda del plan, congelado con la referencia. DX-513-ter: en una lista de convenio con el catálogo en otra moneda, convertido con `baseRate`. Null si no hay o no había tasa para expresarlo. */
+            basePriceInPlan: number | null;
+            /** @description DX-513-bis: la tasa (de la moneda del catálogo a la del plan) con que se convirtió la referencia (`catalogPrice` en `referenceCurrency`); null si no hizo falta. DX-513-ter: siempre null en las listas (`PRICE_LIST`, `AGREEMENT_PRICE_LIST`), cuya referencia ya está en la moneda del plan: su tasa va en `baseRate`. */
+            referenceRate: components["schemas"]["ReferenceRateDto"] | null;
+            /** @description DX-513-ter: en un ítem de lista de convenio con el catálogo en otra moneda, la tasa del día (de `catalogCurrency` a la del plan) con que se convirtió `basePrice` a `basePriceInPlan`, congelada al darlo de alta. Null si no hizo falta, si no había tasa ese día o si el ítem no es de lista. */
+            baseRate: components["schemas"]["ReferenceRateDto"] | null;
+            /**
+             * Format: uuid
+             * @description DX-105: convenio con el que se resolvió el precio
+             */
+            agreementId: string | null;
+            /** @description DX-105: nombre del convenio en el alta (foto: no cambia si se renombra) */
+            agreementName: string | null;
+            /**
+             * Format: uuid
+             * @description DX-105: sede con la que se resolvió el precio
+             */
+            pricingLocationId: string | null;
+            price: number;
+            /** @description Descuento en la moneda del plan (0 si no hay) */
+            discount: number;
+            /**
+             * @description DX-204: motivo del descuento vigente
+             * @enum {string|null}
+             */
+            discountReason: "LOYALTY" | "FAMILY_OR_STAFF" | "PROMOTION" | "FINANCIAL_HARDSHIP" | "SERVICE_RECOVERY" | "OTHER" | null;
+            discountReasonNote: string | null;
+            /**
+             * Format: uuid
+             * @description DX-204: quién dio el descuento vigente, incluida la rebaja de precio frente al catálogo (SEC-041); null sin descuento o anterior a DX-204
+             */
+            discountById: string | null;
+            /**
+             * Format: date-time
+             * @description DX-204: cuándo (hora del servidor)
+             */
+            discountAt: string | null;
+            /**
+             * Format: uuid
+             * @description DX-204: sede donde se dio (la activa o la principal)
+             */
+            discountLocationId: string | null;
+            /** @enum {string} */
+            status: "PROPOSED" | "ACCEPTED" | "DONE";
+            /**
+             * Format: uuid
+             * @description DX-050: usuario que realizó el procedimiento. Null fuera de DONE y en los DONE anteriores a DX-050 («Sin atribuir»)
+             */
+            performedById: string | null;
+            /** @description DX-050: su nombre (también si ya no es miembro activo de la clínica) */
+            performedByName: string | null;
+            /**
+             * Format: uuid
+             * @description DX-050: sede donde se realizó (la del request al marcarlo)
+             */
+            performedLocationId: string | null;
+            /** @description DX-050: su nombre */
+            performedLocationName: string | null;
+            /**
+             * Format: date-time
+             * @description DX-050: cuándo se realizó (hora del servidor al marcarlo)
+             */
+            completedAt: string | null;
+            /**
+             * Format: uuid
+             * @description SEC-050: el ítem es el cargo vigente por inasistencia o cancelación tardía de esta cita (DX-291). Su precio, descuento y estado no cambian ni se quita del plan (409 a todo rol): se anula con `POST /appointments/{id}/cancellation-fee/void`, con motivo. null en cualquier otro ítem.
+             */
+            cancellationFeeAppointmentId: string | null;
+            notes: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description Recalls que creó, recalculó o reactivó el cambio (DONE, salida de DONE o corrección de fecha o sede de un procedimiento disparador) y, tras ellos, los que la exclusión desactivó (`deactivated: true`); vacío si ninguno */
+            recallUpdates: components["schemas"]["ItemRecallUpdateDto"][];
+        };
         PlanQuoteVisitDto: {
             /** Format: uuid */
             itemId: string;
@@ -11433,11 +14630,35 @@ export interface components {
             label: string | null;
             minDaysAfterPrevious: number;
         };
+        ClinicFiscalDto: {
+            legalName: string | null;
+            /** @description Null = el nombre genérico («Id. fiscal»). */
+            taxIdLabel: string | null;
+            /** @description Texto libre, sin formato de ningún país. */
+            taxId: string | null;
+            address: string | null;
+            email: string | null;
+            phone: string | null;
+        };
         PlanQuoteLocationDto: {
             /** Format: uuid */
             id: string;
             name: string;
             address: string | null;
+        };
+        DocumentRegionalDto: {
+            /**
+             * @description Zona IANA de la sede.
+             * @example America/Caracas
+             */
+            timeZone: string;
+            /**
+             * @description Locale canónico: separadores y orden de las fechas.
+             * @example es-VE
+             */
+            locale: string;
+            /** @description Reloj de la sede: 12 h o 24 h. */
+            hourCycle: components["schemas"]["HourCycle"];
         };
         PlanQuotePatientDto: {
             name: string;
@@ -11468,6 +14689,8 @@ export interface components {
             listPrice: number | null;
             /** @description Convenio con que se fijó el precio del ítem (v2). Null si no hubo convenio. */
             agreementName: string | null;
+            /** @description DX-502: moneda ISO 4217 de `listPrice`, la del catálogo al dar de alta el ítem (congelada; en v1/v2/v3, la guardada en el ítem). Puede no ser la del plan: no se convierte. Null si no se sabe: la web oculta la cifra y pone la nota de referencia. */
+            listPriceCurrency: string | null;
         };
         PlanQuoteTotalDto: {
             /** @description Código ISO 4217 de 3 letras. */
@@ -11478,11 +14701,13 @@ export interface components {
             discount: number;
             /** @description gross − discount */
             net: number;
-            /** @description Ahorro por convenio (v2): Σ max(0, precio de lista − precio de referencia) de los ítems con convenio, en la moneda del plan. 0 en v1. */
+            /** @description Ahorro por convenio (v2): Σ max(0, precio de lista − precio de referencia) de los ítems con convenio, en la moneda del plan. v4 (DX-502): solo los ítems cuyo precio de lista está en la moneda del plan (nunca resta monedas distintas). 0 en v1. */
             agreementSaving: number;
         };
         /** @enum {string} */
         SignatureRequestChannel: "EMAIL";
+        /** @enum {string} */
+        ConsentSignerType: "PATIENT" | "GUARDIAN";
         PlanQuoteRemoteAcceptanceDto: {
             /** Format: uuid */
             signatureRequestId: string;
@@ -11495,7 +14720,18 @@ export interface components {
             openedAt: string;
             /** Format: date-time */
             verifiedAt: string;
+            signerType?: components["schemas"]["ConsentSignerType"];
         };
+        /**
+         * @description DX-379 (C): null si el presupuesto no estaba vencido. ORIGINAL_PRICES: «Aceptado con los precios del presupuesto vencido el {quoteValidUntil}. Motivo: {expiredReason}[: {expiredNote}]». REPRICE: «Precios actualizados el {acceptedAt} antes de aceptar».
+         * @enum {string}
+         */
+        ExpiredQuoteAcceptanceMode: "REPRICE" | "ORIGINAL_PRICES";
+        /**
+         * @description Motivo de ORIGINAL_PRICES; null en el resto.
+         * @enum {string}
+         */
+        ExpiredQuoteAcceptanceReason: "CLINIC_DELAY" | "PRICE_COMMITMENT" | "LOYALTY" | "FINANCIAL_HARDSHIP" | "OTHER";
         PlanQuoteAcceptanceDto: {
             signerName: string;
             /** @description data:image/png;base64,… */
@@ -11505,7 +14741,7 @@ export interface components {
              * @description Hora del servidor
              */
             acceptedAt: string;
-            /** @description Quien registró la firma (usuario de la clínica) */
+            /** @description Quien registró la firma (usuario de la clínica). A distancia (DX-514): quien envió el enlace; el firmante es `signerName`. */
             acceptedByName: string;
             /** @description SHA-256 de contentHash + firmante + firma + hora */
             acceptanceHash: string;
@@ -11516,15 +14752,40 @@ export interface components {
             userAgent: string | null;
             /** @description DX-415: «Aceptado a distancia» por el paciente con enlace y código; null si se firmó en la clínica. */
             remote: components["schemas"]["PlanQuoteRemoteAcceptanceDto"] | null;
+            /**
+             * Format: date
+             * @description DX-379 (C): último día válido del presupuesto al firmar (antes de actualizar precios). Null en aceptaciones anteriores o sin validez guardada. Fuera del contenido firmado.
+             * @example 2026-11-03
+             */
+            quoteValidUntil: string | null;
+            /** @description DX-379 (C): null si el presupuesto no estaba vencido. ORIGINAL_PRICES: «Aceptado con los precios del presupuesto vencido el {quoteValidUntil}. Motivo: {expiredReason}[: {expiredNote}]». REPRICE: «Precios actualizados el {acceptedAt} antes de aceptar». */
+            expiredMode: components["schemas"]["ExpiredQuoteAcceptanceMode"] | null;
+            /** @description Motivo de ORIGINAL_PRICES; null en el resto. */
+            expiredReason: components["schemas"]["ExpiredQuoteAcceptanceReason"] | null;
+            expiredNote: string | null;
+            /**
+             * Format: uuid
+             * @description REPRICE: la recotización hecha en la firma (treatment_plan_repricings, source ACCEPT).
+             */
+            repricingId: string | null;
+            /**
+             * Format: uuid
+             * @description DX-417: aceptación PARCIAL. El presupuesto pendiente (plan PRESENTED) con los procedimientos no aceptados; null si se aceptó entero. Fuera del contenido firmado.
+             */
+            pendingPlanId: string | null;
+            /** @description DX-417: los procedimientos que quedaron pendientes al firmar (aunque luego se edite el pendiente); null si se aceptó entero. */
+            pendingItemIds: string[] | null;
+            /** @description DX-417: total de lo pendiente al firmar, en la moneda del plan. Línea del documento: «Aceptación parcial: N procedimientos ({moneda} {pendingTotal}) quedan en un presupuesto pendiente.». null si se aceptó entero. */
+            pendingTotal: number | null;
         };
         PlanQuoteDocumentDto: {
             /** @description Organización clínica actual; separada del contenido firmado. */
             visitOrganization?: components["schemas"]["PlanQuoteVisitDto"][];
             /**
-             * @description 2 = con convenio y ahorro (DX-105); 1 = foto firmada antes de DX-105 (sin convenio).
+             * @description 4 = con la moneda de cada precio de lista (DX-502) y los datos fiscales congelados si la clínica los tiene; 3 = con datos fiscales congelados (DX-019); 2 = con convenio y ahorro (DX-105); 1 = foto firmada antes de DX-105 (sin convenio).
              * @enum {number}
              */
-            version: 1 | 2;
+            version: 1 | 2 | 3 | 4;
             /** Format: uuid */
             planId: string;
             /** Format: uuid */
@@ -11535,7 +14796,11 @@ export interface components {
             currency: string;
             clinicName: string;
             clinicLogoUrl: string | null;
+            /** @description DX-019: datos fiscales. Aceptado: los congelados al firmar; null si no los llevaba (nunca los de hoy). */
+            clinicFiscal: components["schemas"]["ClinicFiscalDto"] | null;
             location: components["schemas"]["PlanQuoteLocationDto"];
+            /** @description DX-354: zona, locale y reloj de la sede del presupuesto (la de la firma si ya se aceptó). null si le falta algo: el presupuesto se lee igual y la web pinta «—». No forma parte del contenido firmado. */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             patient: components["schemas"]["PlanQuotePatientDto"];
             /** @description Profesional que creó el plan */
             professionalName: string | null;
@@ -11557,6 +14822,23 @@ export interface components {
             contentHash: string;
             acceptance: components["schemas"]["PlanQuoteAcceptanceDto"] | null;
         };
+        ExpiredAcceptanceDto: {
+            /** @description REPRICE: actualizar los precios de TODOS los ítems propuestos antes de firmar (exige `repricePreviewHash`; `contentHash` es el del presupuesto recotizado de POST …/acceptance/reprice-preview). ORIGINAL_PRICES: aceptar con los precios del presupuesto vencido (exige `reason`). */
+            mode: components["schemas"]["ExpiredQuoteAcceptanceMode"];
+            /** @description Motivo de ORIGINAL_PRICES (obligatorio). OTHER exige `note`. Con REPRICE no se envía. */
+            reason?: components["schemas"]["ExpiredQuoteAcceptanceReason"];
+            /**
+             * @description Obligatoria con OTHER. Con REPRICE no se envía.
+             * @example Se respetó el precio acordado en la primera consulta
+             */
+            note?: string;
+            /** @description REPRICE: el `repricing.previewHash` de POST …/acceptance/reprice-preview. Si los precios vigentes cambiaron desde entonces: 409 `REPRICE_PREVIEW_STALE`. */
+            repricePreviewHash?: string;
+        };
+        PartialAcceptanceItemsDto: {
+            /** @description Ítems vivos de ESTE plan que se aceptan (404 si alguno no lo es). Al menos uno y no todos (todos: 400, que se acepte entero). Los ítems ya aceptados o realizados tienen que estar (400). */
+            itemIds: string[];
+        };
         AcceptTreatmentPlanDto: {
             /** @description Nombre de quien firma (el paciente o su representante) */
             signerName: string;
@@ -11564,10 +14846,161 @@ export interface components {
             signature: string;
             /** @description El contentHash del presupuesto que se mostró (GET …/quote). Si el presupuesto cambió desde entonces: 409. */
             contentHash: string;
+            /** @description DX-379 (C): obligatorio si el presupuesto está vencido (sin él: 409 `QUOTE_EXPIRED`); con un presupuesto no vencido: 400. */
+            expired?: components["schemas"]["ExpiredAcceptanceDto"];
+            /** @description DX-417: aceptar solo estos procedimientos (presupuesto PRESENTED, sin abonos, plan de cuotas ni saldo a favor). Los demás pasan, con su mismo id, a un plan nuevo PRESENTED enlazado al original (`splitFromPlanId`). `contentHash` es entonces el de `accepted` en POST …/acceptance/partial-preview. Con `expired.mode = REPRICE` se recotiza TODO el plan y después se parte (la vista previa, con `reprice: true`). */
+            partial?: components["schemas"]["PartialAcceptanceItemsDto"];
+        };
+        /**
+         * @description De dónde sale la referencia; null en un ítem libre.
+         * @enum {string}
+         */
+        PriceSource: "CATALOG" | "PRICE_LIST" | "AGREEMENT_PERCENT" | "AGREEMENT_PRICE_LIST";
+        RepricingPriceDto: {
+            /** @description Precio del ítem, en la moneda del plan. */
+            price: number;
+            /** @description Descuento del ítem, en la moneda del plan. */
+            discount: number;
+            /** @description Importe de la línea: precio − descuento. */
+            total: number;
+            /** @description Precio de lista (la referencia) en la moneda del plan; null en un ítem libre o anterior sin foto. */
+            listPrice: number | null;
+            /** @description De dónde sale la referencia; null en un ítem libre. */
+            priceSource: components["schemas"]["PriceSource"] | null;
+            /** Format: uuid */
+            agreementId: string | null;
+            agreementName: string | null;
+        };
+        RepricingLineDto: {
+            /** Format: uuid */
+            itemId: string;
+            /** Format: uuid */
+            catalogItemId: string;
+            /** @description Pieza (FDI); vacía en un ítem sin pieza. */
+            toothNumber: string;
+            /** @description Cómo está ahora. */
+            before: components["schemas"]["RepricingPriceDto"];
+            /** @description Cómo queda con el precio vigente (D-4: guarda la proporción precio / lista y descuento / precio, redondeado una vez a la moneda del plan). */
+            after: components["schemas"]["RepricingPriceDto"];
+            /** @description after.total − before.total (puede ser negativa o 0). */
+            difference: number;
+            /** @description false = el precio y su foto no cambian (se aplica igual: la validez se reinicia). */
+            changed: boolean;
+        };
+        /**
+         * @description NOT_PROPOSED: aceptado, realizado o descartado. CANCELLATION_FEE: cargo vigente por inasistencia. NO_CURRENT_PRICE: el procedimiento no tiene precio vigente (o es 0, o ya no está en el catálogo): no se pone a 0. NO_RATE: el precio vigente está en otra moneda y no hay tasa de hoy (`currency`).
+         * @enum {string}
+         */
+        RepricingSkipReason: "NOT_PROPOSED" | "CANCELLATION_FEE" | "NO_CURRENT_PRICE" | "NO_RATE";
+        RepricingSkipDto: {
+            /** Format: uuid */
+            itemId: string;
+            /** Format: uuid */
+            catalogItemId: string;
+            toothNumber: string;
+            /** @description NOT_PROPOSED: aceptado, realizado o descartado. CANCELLATION_FEE: cargo vigente por inasistencia. NO_CURRENT_PRICE: el procedimiento no tiene precio vigente (o es 0, o ya no está en el catálogo): no se pone a 0. NO_RATE: el precio vigente está en otra moneda y no hay tasa de hoy (`currency`). */
+            reason: components["schemas"]["RepricingSkipReason"];
+            /** @description Con NO_RATE, la moneda sin tasa; null en el resto. */
+            currency: string | null;
+        };
+        RepricingRateDto: {
+            /**
+             * @description Unidades de la moneda de la referencia (`referenceCurrency`) por 1 USD.
+             * @example 880
+             */
+            fromPerBase: number;
+            /**
+             * @description Unidades de la moneda del plan por 1 USD.
+             * @example 1
+             */
+            toPerBase: number;
+            /** @description De dónde salió la tasa: del proveedor o la manual de la clínica. */
+            source: components["schemas"]["ExchangeRateSource"];
+            /**
+             * @description Día civil (AAAA-MM-DD) de la tasa usada; con tasa manual puede ser anterior al del ítem (DX-384).
+             * @example 2026-11-07
+             */
+            rateDate: string;
+            /** @description Moneda del catálogo (de la que se convirtió) en ISO 4217; `fromPerBase` es de esta moneda. */
+            currency: string;
+        };
+        RepricingValidityDto: {
+            /**
+             * @description Día de emisión (AAAA-MM-DD, día civil de la sede del plan).
+             * @example 2026-11-09
+             */
+            issuedOn: string;
+            /**
+             * @description Último día válido (AAAA-MM-DD, inclusive).
+             * @example 2026-12-09
+             */
+            validUntil: string;
+        };
+        RepricingTotalsDto: {
+            /** @description Total del plan (todas sus líneas vivas) ahora. */
+            before: number;
+            /** @description Total del plan recotizado. */
+            after: number;
+            /** @description after − before. */
+            difference: number;
+        };
+        RepricingPreviewDto: {
+            /** Format: uuid */
+            planId: string;
+            /** @description Moneda del plan (ISO 4217). */
+            currency: string;
+            /** @description SHA-256 de lo que se aplicaría (líneas antes y después, saltados, tasa y validez nueva): se manda tal cual a `/reprice/apply`. */
+            previewHash: string;
+            /** @description Ítems que se recotizan (por id). */
+            lines: components["schemas"]["RepricingLineDto"][];
+            /** @description Ítems que no se tocan y por qué (por id). */
+            skipped: components["schemas"]["RepricingSkipDto"][];
+            /** @description La tasa de hoy usada (de la moneda del catálogo a la del plan); null si no hizo falta convertir. */
+            rate: components["schemas"]["RepricingRateDto"] | null;
+            /** @description La validez guardada antes de recotizar; null si el plan no tenía (borrador nunca emitido). */
+            previousValidity: components["schemas"]["RepricingValidityDto"] | null;
+            /** @description true = se recotizan TODOS los ítems propuestos vivos del plan y la validez se renueva (emitido hoy en la sede del plan + días del ajuste). false = selección parcial o algún propuesto saltado (sin precio vigente o sin tasa): la validez no cambia. */
+            validityRenewed: boolean;
+            /** @description Con `validityRenewed: false`, por qué, para la pantalla («Quedan ítems con precios anteriores: la validez no se renueva.»); null si se renueva. */
+            validityNote: string | null;
+            /** @description La validez con la que queda el plan: la nueva si `validityRenewed`, si no la que ya tenía (null en un borrador nunca emitido). */
+            validity: components["schemas"]["RepricingValidityDto"] | null;
+            totals: components["schemas"]["RepricingTotalsDto"];
+        };
+        AcceptanceRepricePreviewDto: {
+            /** @description La recotización de todos los ítems propuestos. Su `previewHash` va en `expired.repricePreviewHash` de la aceptación. */
+            repricing: components["schemas"]["RepricingPreviewDto"];
+            /** @description El presupuesto como se firmaría, con los precios y la validez nuevos. Su `contentHash` va en `contentHash` de la aceptación. */
+            quote: components["schemas"]["PlanQuoteDocumentDto"];
+        };
+        PartialAcceptancePreviewRequestDto: {
+            /** @description Ítems vivos de ESTE plan que se aceptan (404 si alguno no lo es). Al menos uno y no todos (todos: 400, que se acepte entero). Los ítems ya aceptados o realizados tienen que estar (400). */
+            itemIds: string[];
+            /** @description Solo con un presupuesto vencido que se aceptará actualizando los precios (`expired.mode = REPRICE`): recotiza TODO el plan como …/acceptance/reprice-preview y parte el resultado. Con un presupuesto no vencido: 400. */
+            reprice?: boolean;
+        };
+        PartialAcceptancePendingDto: {
+            items: components["schemas"]["PlanQuoteItemDto"][];
+            /** @description Una fila por moneda (la del plan) */
+            totals: components["schemas"]["PlanQuoteTotalDto"][];
+        };
+        PartialAcceptanceOriginalDto: {
+            /** @description Aceptado + pendiente, ítem a ítem (sin repartos) */
+            totals: components["schemas"]["PlanQuoteTotalDto"][];
+        };
+        PartialAcceptancePreviewDto: {
+            /** @description El presupuesto de lo aceptado, como se firmaría. Su `contentHash` va en `contentHash` de la aceptación con `partial`. */
+            accepted: components["schemas"]["PlanQuoteDocumentDto"];
+            pending: components["schemas"]["PartialAcceptancePendingDto"];
+            original: components["schemas"]["PartialAcceptanceOriginalDto"];
+            /** @description Con `reprice: true`: la recotización de TODO el plan; su `previewHash` va en `expired.repricePreviewHash`. Si no, null. */
+            repricing: components["schemas"]["RepricingPreviewDto"] | null;
         };
         PriceQuoteDto: {
             /** @description Precio de catálogo (`defaultPrice`); null si no tiene */
             basePrice: number | null;
+            /** @description DX-502: moneda de `basePrice`: la del catálogo, común a todas las sedes activas de la clínica (no solo las del usuario). Null si no hay una común. Puede no ser la del plan (`currency`): no se convierte. */
+            catalogCurrency: string | null;
             /** @description Precio de referencia resuelto (el `catalogPrice` que tendría el ítem); null = sin precio: hay que indicarlo */
             price: number | null;
             /**
@@ -11582,6 +15015,65 @@ export interface components {
             allowDiscount: boolean;
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
+            /** @description DX-513-bis: moneda de `price` (la del plan para las listas, la del catálogo para el resto). Null si no se sabe o no hay precio. */
+            referenceCurrency: string | null;
+            /** @description DX-513-bis: `price` en la moneda del plan (convertido con `rate` si está en otra): el precio que se propone y la referencia del descuento. Null sin precio o sin tasa (`rateMissing`). */
+            referencePriceInPlan: number | null;
+            /** @description DX-513-bis: la tasa de hoy en la sede con la que se convertiría; null si no hace falta. */
+            rate: components["schemas"]["ReferenceRateDto"] | null;
+            /** @description DX-513-bis: hace falta una tasa (referencia en otra moneda) y no la hay hoy: el alta respondería 422 `DISCOUNT_REFERENCE_RATE_MISSING`. */
+            rateMissing: boolean;
+            /** @description DX-513-bis: con `rateMissing`, la moneda sin tasa (la que falta registrar); null si no falta. */
+            missingRateCurrency: string | null;
+        };
+        QuoteSettingsDto: {
+            /**
+             * @description Días civiles que vale un presupuesto desde que se emite (al presentarlo o al imprimirlo por primera vez). 30 de plataforma. Cambiarlo no toca los presupuestos ya emitidos.
+             * @example 30
+             */
+            validityDays: number;
+        };
+        RepricePlanDto: {
+            /** @description Ítems vivos de ESTE plan a recotizar (404 si alguno no lo es; 409 si alguno no está propuesto o es un cargo por inasistencia). Sin ellos (o vacío), todos los propuestos; el resto sale en `skipped`. */
+            itemIds?: string[];
+        };
+        ApplyRepricingDto: {
+            /** @description Ítems vivos de ESTE plan a recotizar (404 si alguno no lo es; 409 si alguno no está propuesto o es un cargo por inasistencia). Sin ellos (o vacío), todos los propuestos; el resto sale en `skipped`. */
+            itemIds?: string[];
+            /** @description La huella (`previewHash`) que devolvió la vista previa. Si los precios vigentes, la tasa, los ítems o la validez cambiaron desde entonces, 409 `REPRICE_PREVIEW_STALE` y nada cambia. */
+            previewHash: string;
+        };
+        AppliedRepricingDto: {
+            /** Format: uuid */
+            planId: string;
+            /** @description Moneda del plan (ISO 4217). */
+            currency: string;
+            /** @description SHA-256 de lo que se aplicaría (líneas antes y después, saltados, tasa y validez nueva): se manda tal cual a `/reprice/apply`. */
+            previewHash: string;
+            /** @description Ítems que se recotizan (por id). */
+            lines: components["schemas"]["RepricingLineDto"][];
+            /** @description Ítems que no se tocan y por qué (por id). */
+            skipped: components["schemas"]["RepricingSkipDto"][];
+            /** @description La tasa de hoy usada (de la moneda del catálogo a la del plan); null si no hizo falta convertir. */
+            rate: components["schemas"]["RepricingRateDto"] | null;
+            /** @description La validez guardada antes de recotizar; null si el plan no tenía (borrador nunca emitido). */
+            previousValidity: components["schemas"]["RepricingValidityDto"] | null;
+            /** @description true = se recotizan TODOS los ítems propuestos vivos del plan y la validez se renueva (emitido hoy en la sede del plan + días del ajuste). false = selección parcial o algún propuesto saltado (sin precio vigente o sin tasa): la validez no cambia. */
+            validityRenewed: boolean;
+            /** @description Con `validityRenewed: false`, por qué, para la pantalla («Quedan ítems con precios anteriores: la validez no se renueva.»); null si se renueva. */
+            validityNote: string | null;
+            /** @description La validez con la que queda el plan: la nueva si `validityRenewed`, si no la que ya tenía (null en un borrador nunca emitido). */
+            validity: components["schemas"]["RepricingValidityDto"] | null;
+            totals: components["schemas"]["RepricingTotalsDto"];
+            /**
+             * Format: uuid
+             * @description La recotización guardada (`treatment_plan_repricings`); la auditoría la enlaza en `params.repricingId`.
+             */
+            repricingId: string;
+            /** Format: date-time */
+            appliedAt: string;
+            /** @description true = repetición con la misma Idempotency-Key: devuelve lo ya aplicado, sin volver a escribir. */
+            replayed: boolean;
         };
         DiscountMaxPercentByRoleDto: {
             /** @description Administración (por defecto 100) */
@@ -11638,6 +15130,12 @@ export interface components {
             /** @description Suma de las rebajas de convenio (precio de catálogo − precio del convenio) */
             reduction: number;
         };
+        AgreementUnmeasuredTotalDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @description Líneas de convenio «sin referencia comparable» en esta moneda (no se suman en `agreementTotals`) */
+            items: number;
+        };
         DiscountReportItemDto: {
             /** Format: uuid */
             itemId: string;
@@ -11661,11 +15159,25 @@ export interface components {
             procedure: string;
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
-            /** @description SEC-041: precio de catálogo al dar de alta el ítem (null = ítem libre) */
+            /** @description SEC-041: precio de catálogo al dar de alta el ítem (null = ítem libre). DX-513-bis: en SU moneda (`referenceCurrency`), que puede no ser la del plan */
             catalogPrice: number | null;
+            /** @description DX-502: moneda de `basePrice` (la del catálogo al dar de alta el ítem); null si no se supo. En un ítem de lista no es la de `catalogPrice` */
+            catalogCurrency: string | null;
+            /** @description DX-513-bis: moneda de `catalogPrice` (la del plan para las listas, la del catálogo para el resto); null si no se sabe o el ítem es libre */
+            referenceCurrency: string | null;
+            /** @description DX-513-bis: `catalogPrice` en la moneda del plan, congelado al escribir el ítem (convertido con `rate` si estaba en otra moneda): la rebaja se mide frente a él. Null en los ítems anteriores sin foto (se miden como en DX-513) */
+            referencePriceInPlan: number | null;
+            /** @description DX-513-bis: `basePrice` en la moneda del plan, congelado con la referencia (la rebaja de convenio se mide con él) */
+            basePriceInPlan: number | null;
+            /** @description DX-513-bis: la tasa congelada (de la moneda del catálogo a la del plan) con que se convirtió la referencia; null si no hizo falta. El informe nunca convierte al consultar. DX-513-ter: siempre null en las listas, cuya referencia ya está en la moneda del plan: su tasa va en `baseRate` */
+            rate: components["schemas"]["ReferenceRateDto"] | null;
+            /** @description DX-513-ter: en una lista de convenio con el catálogo en otra moneda, la tasa del día (de `catalogCurrency` a la del plan) con que se convirtió `basePrice` a `basePriceInPlan` al dar de alta el ítem; null si no */
+            baseRate: components["schemas"]["ReferenceRateDto"] | null;
+            /** @description DX-513-ter: ítem de convenio con el catálogo en otra moneda conocida y sin la base congelada en la moneda del plan (no había tasa al darlo de alta, o es anterior), o lista de convenio con la moneda del catálogo desconocida (NULL; DX-513-quater): su rebaja de convenio no se puede medir sin convertir al consultar. Se señala «sin referencia comparable»: `agreementReduction` es 0 y no suma en `agreementTotals` */
+            agreementUnmeasured: boolean;
             /** @description Precio pactado del ítem */
             price: number;
-            /** @description SEC-041: rebaja del precio frente al de catálogo (0 si no la hay) */
+            /** @description SEC-041: rebaja del precio frente al de catálogo (0 si no la hay), en la moneda del plan. DX-513-bis: frente a `referencePriceInPlan` (la referencia convertida y congelada) si el ítem la tiene; en un ítem anterior sin ella, DX-513: 0 si la referencia está en otra moneda conocida; con la moneda del catálogo desconocida cuenta */
             priceReduction: number;
             /** @description Descuento del ítem (campo `discount`) */
             itemDiscount: number;
@@ -11704,7 +15216,7 @@ export interface components {
             agreementName: string | null;
             /** @description DX-105: precio de catálogo al dar de alta el ítem (sin convenio) */
             basePrice: number | null;
-            /** @description SEC-047: rebaja de convenio (precio de catálogo − precio del convenio; 0 sin convenio). Aparte del descuento total */
+            /** @description SEC-047: rebaja de convenio (precio de catálogo − precio del convenio; 0 sin convenio ni si `agreementUnmeasured`). Aparte del descuento total */
             agreementReduction: number;
             /** @description SEC-047: % de la rebaja de convenio sobre el precio de catálogo, 2 decimales */
             agreementPercent: number;
@@ -11731,116 +15243,14 @@ export interface components {
             totals: components["schemas"]["DiscountReportTotalDto"][];
             /** @description SEC-047: rebajas de convenio por moneda. Van aparte: `totals` solo cuenta los descuentos (como en DX-204) */
             agreementTotals: components["schemas"]["AgreementReductionTotalDto"][];
+            /** @description DX-513-ter: líneas de convenio sin medir por moneda (catálogo en otra moneda sin la base congelada, o lista de convenio con la moneda del catálogo desconocida), sin importe. Aparte de `agreementTotals` */
+            agreementUnmeasuredTotals: components["schemas"]["AgreementUnmeasuredTotalDto"][];
             /** @description Página de ítems, más recientes primero */
             items: components["schemas"]["DiscountReportItemDto"][];
             /** @description Líneas del periodo (todas las páginas): descuentos y rebajas de convenio */
             total: number;
             page: number;
             pageSize: number;
-        };
-        /**
-         * @description DX-374: de dónde salen las tasas para la clínica: AUTOMATIC (el proveedor) o MANUAL (las que registró la clínica para ese día).
-         * @enum {string}
-         */
-        ExchangeRateSource: "AUTOMATIC" | "MANUAL";
-        RatesResponseDto: {
-            /** @enum {string} */
-            base: "USD";
-            /** @description DX-374: de dónde salen las tasas para la clínica: AUTOMATIC (el proveedor) o MANUAL (las que registró la clínica para ese día). */
-            source: components["schemas"]["ExchangeRateSource"];
-            /** @description Units of each currency per 1 USD, for the requested date, keyed by its ISO 4217 code (3 letters). Con fuente MANUAL solo trae las monedas con tasa registrada ese día: una moneda que NO aparece está «sin tasa» (no se inventa, no se toma la de otro día ni se pide al proveedor) y convertirla responde 400 EXCHANGE_RATE_MISSING. */
-            rates: {
-                [key: string]: number;
-            };
-        };
-        ConvertResponseDto: {
-            /** @example 100 */
-            amount: number;
-            /** @description Código ISO 4217 de 3 letras. */
-            from: string;
-            /** @description Código ISO 4217 de 3 letras. */
-            to: string;
-            /** @example 2026-07-01 */
-            date: string;
-            /** @example 400000 */
-            result: number;
-            /**
-             * @description Effective from→to rate actually applied.
-             * @example 4000
-             */
-            rateUsed: number;
-        };
-        ExchangeRateSettingsDto: {
-            /**
-             * @description AUTOMATIC: la tasa del día sale del proveedor (por defecto). MANUAL: desde hoy, la que registra la clínica para cada día y moneda; sin ella, la moneda queda «sin tasa». Los días anteriores al paso a MANUAL siguen con la automática.
-             * @example MANUAL
-             */
-            source: components["schemas"]["ExchangeRateSource"];
-            /**
-             * @description Día civil (sede principal) desde el que rige la fuente MANUAL: los días anteriores se convierten con la tasa automática. Null con AUTOMATIC.
-             * @example 2026-10-30
-             */
-            manualSince: string | null;
-            /** @description Moneda base de las tasas: cada tasa son unidades de la moneda por 1 de esta. No lleva tasa propia. */
-            baseCurrency: string;
-        };
-        UpdateExchangeRateSettingsDto: {
-            /**
-             * @description AUTOMATIC: la tasa del día sale del proveedor (por defecto). MANUAL: desde hoy, la que registra la clínica para cada día y moneda; sin ella, la moneda queda «sin tasa». Los días anteriores al paso a MANUAL siguen con la automática.
-             * @example MANUAL
-             */
-            source: components["schemas"]["ExchangeRateSource"];
-        };
-        ManualExchangeRateAuthorDto: {
-            /** Format: uuid */
-            userId: string;
-            /** @example Dra. Ana Pérez */
-            fullName: string | null;
-        };
-        ManualExchangeRateDto: {
-            /** Format: uuid */
-            id: string;
-            /**
-             * @description Día civil de la tasa.
-             * @example 2026-10-30
-             */
-            date: string;
-            /** @description Código ISO 4217 de 3 letras. */
-            currency: string;
-            /**
-             * @description Unidades de la moneda por 1 USD.
-             * @example 36.5
-             */
-            rate: number;
-            createdBy: components["schemas"]["ManualExchangeRateAuthorDto"];
-            /** Format: date-time */
-            createdAt: string;
-            /**
-             * @description DX-375: algún abono ya congeló esta tasa (como moneda del abono o de destino), así que no se puede cambiar (PUT responde 409).
-             * @example false
-             */
-            inUse: boolean;
-        };
-        RegisterManualExchangeRateDto: {
-            /**
-             * @description Día civil de la tasa (AAAA-MM-DD), desde 2000-01-01 y nunca posterior a hoy en la zona de la sede activa (o de la principal).
-             * @example 2026-10-30
-             */
-            date: string;
-            /** @description Código ISO 4217 de la lista de monedas (GET /currencies). USD no: es la base. */
-            currency: string;
-            /**
-             * @description Unidades de la moneda por 1 USD, mayor que 0 y con hasta 8 decimales.
-             * @example 36.5
-             */
-            rate: number;
-        };
-        CorrectManualExchangeRateDto: {
-            /**
-             * @description La tasa corregida: unidades de la moneda por 1 USD, mayor que 0 y con hasta 8 decimales.
-             * @example 36.75
-             */
-            rate: number;
         };
         CreateDomainDto: {
             /**
@@ -11901,6 +15311,53 @@ export interface components {
             name: string;
             primaryColor: string;
             logoUrl: string | null;
+            /** @description DX-517: texto propio de cada moneda {código ISO → texto}; vacío = los importes llevan el código ISO. Lo usa la web para pintar todos los importes. */
+            currencyTexts: {
+                [key: string]: string;
+            };
+        };
+        ClinicSettingsDto: {
+            /** @example Clínica Sonrisas */
+            name: string;
+            legalName: string | null;
+            /** @description Texto libre, sin formato de ningún país. */
+            taxId: string | null;
+            /** @description Null = el nombre genérico («Id. fiscal»). */
+            taxIdLabel: string | null;
+            fiscalAddress: string | null;
+            contactEmail: string | null;
+            contactPhone: string | null;
+            /** @example #0E7490 */
+            primaryColor: string;
+            /** @description URL pública del logo. */
+            logoUrl: string | null;
+            /** @description Falta la razón social o el identificador fiscal: los recibos dicen «Datos fiscales pendientes». */
+            fiscalDataPending: boolean;
+            /** @description DX-502-bis. Moneda del catálogo de precios fijada por la clínica (ISO 4217): la de los ítems nuevos del plan. Null = sin fijar: la común de las sedes activas, o ninguna. */
+            catalogCurrency: string | null;
+        };
+        UpdateClinicSettingsDto: {
+            /** @description Nombre comercial (obligatorio si se envía). 1..120. */
+            name?: string;
+            /** @description Razón social. Vacío o null = sin dato. 1..160. */
+            legalName?: string | null;
+            /** @description Identificador fiscal, texto libre sin formato de ningún país. 1..64. */
+            taxId?: string | null;
+            /** @description Cómo llama la clínica a su identificador fiscal (p. ej. «ID fiscal»). Null = el genérico. 1..40. */
+            taxIdLabel?: string | null;
+            /** @description Dirección fiscal, una línea. 1..250. */
+            fiscalAddress?: string | null;
+            /** @description Email de contacto de la clínica. */
+            contactEmail?: string | null;
+            /** @description Teléfono de contacto, texto libre. 1..40. */
+            contactPhone?: string | null;
+            /**
+             * @description Color de la marca, #RRGGBB.
+             * @example #0E7490
+             */
+            primaryColor?: string;
+            /** @description DX-502-bis. Moneda del catálogo de precios: código ISO 4217 de una moneda admitida (GET /currencies). Es la que se congela en los ítems NUEVOS del plan, para mostrar el precio de lista y el ahorro por convenio; los ítems ya creados no cambian. Vacío o null = sin fijar: la moneda común de las sedes activas, o ninguna. */
+            catalogCurrency?: string | null;
         };
         CurrencyDto: {
             /**
@@ -11909,7 +15366,7 @@ export interface components {
              */
             minorUnits: number;
             /**
-             * @description Decimales a los que Dentalix redondea cada línea (descuento en bloque, precio por convenio); el total de un documento es la suma de sus líneas. Puede ser menor que minorUnits (RSD, COP: 0).
+             * @description Decimales a los que Dentalix redondea cada línea (descuento en bloque, precio por convenio); el total de un documento es la suma de sus líneas. Puede ser menor que minorUnits (RSD, ALL: 0).
              * @example 0
              */
             roundingDigits: number;
@@ -11939,6 +15396,49 @@ export interface components {
             code: string;
             /** @example Caries de la dentina */
             labelEs: string;
+        };
+        CreatePaymentProofUploadDto: {
+            /** @example captura-pago-movil.png */
+            name?: string;
+            /** @example image/png */
+            mimeType?: string;
+            /** @description Tamaño en bytes (1 B – 10 MB) */
+            size: number;
+            /** @description SHA-256 del contenido en hex. El almacén rechaza un contenido con otra huella. */
+            sha256: string;
+        };
+        PaymentProofTargetDto: {
+            /** @enum {string} */
+            method: "POST";
+            /** @description Adónde se envía el formulario: el bucket (S3) o la API (disco, en desarrollo) */
+            url: string;
+            /** @description Campos del formulario, en este orden y ANTES del fichero, que va al final en el campo `file` */
+            fields: {
+                [key: string]: string;
+            };
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        PaymentProofUploadDto: {
+            /**
+             * Format: uuid
+             * @description Se entrega al registrar el abono (`proofUploadId`), en su cuerpo.
+             */
+            uploadId: string;
+            target: components["schemas"]["PaymentProofTargetDto"];
+            /** @description Tamaño máximo en bytes */
+            maxBytes: number;
+        };
+        PaymentProofUrlDto: {
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @enum {string} */
+            disposition: "inline" | "attachment";
+            /** @enum {string} */
+            mime: "application/pdf" | "image/jpeg" | "image/png" | "image/webp";
+            /** @description Nombre original, solo para mostrar. */
+            name: string;
         };
         CashPaymentMethodRefDto: {
             /** Format: uuid */
@@ -11978,6 +15478,22 @@ export interface components {
             /** @example Saldo migrado */
             concept: string;
         };
+        PaymentAdjustmentLineDto: {
+            type: components["schemas"]["PaymentAdjustmentType"];
+            /** @example Impuesto 3 % */
+            label: string;
+            calculation: components["schemas"]["PaymentAdjustmentCalculation"];
+            /** @description Con PERCENT. */
+            percent: number | null;
+            /** @description Con FIXED. */
+            fixedAmount: number | null;
+            /** @description El importe del abono sobre el que se calculó. */
+            base: number;
+            /** @description Importe del ajuste (> 0), en la moneda del abono. */
+            amount: number;
+            /** @description Código ISO 4217 (la moneda del abono). */
+            currency: string;
+        };
         CashPaymentDto: {
             /** Format: uuid */
             id: string;
@@ -12005,15 +15521,22 @@ export interface components {
             registeredOn: string;
             /** @description Si `registeredOn` es hoy en la zona de la sede del abono. */
             registeredToday: boolean;
-            /** @example 150000 */
-            amount: number;
-            /** @description Código ISO 4217 de 3 letras. */
-            currency: string;
+            /**
+             * @description SEC-043: `null` con `amountHidden`.
+             * @example 150000
+             */
+            amount: number | null;
+            /** @description Código ISO 4217 de 3 letras. SEC-043: `null` con `amountHidden`. */
+            currency: string | null;
+            /** @description SEC-043: rige el arqueo ciego, quien consulta no es ADMIN y el abono cuenta en una caja aún abierta. Va sin `amount`, `currency`, `collectedAmount`, `notes` ni `reference` (null) y sin `adjustments` (vacío), y no suma en el resumen. Recibo y anulación funcionan igual. Las cifras vuelven al cerrar la caja. */
+            amountHidden: boolean;
             /** @enum {string|null} */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
             /** @description DX-377: medio de pago (el inicial de su método si el abono es de una réplica anterior). */
             paymentMethod: components["schemas"]["CashPaymentMethodRefDto"] | null;
             reference: string | null;
+            /** @description DX-515: nº de la factura fiscal emitida fuera de Dentalix; null si no se anotó. */
+            externalInvoiceNumber: string | null;
             notes: string | null;
             location: components["schemas"]["CashLocationRefDto"];
             patient: components["schemas"]["CashPatientRefDto"];
@@ -12031,6 +15554,20 @@ export interface components {
              * @example 2
              */
             splitLines: number | null;
+            /**
+             * @description DX-414: número del recibo de caja del abono (DX-136); todas las líneas de un cobro dividido llevan el de su recibo único. `null` en un abono anterior a la numeración.
+             * @example PRI-000123
+             */
+            receiptNumber: string | null;
+            /** @description DX-389: el abono tiene comprobante del cobro. Se ve con `GET /payments/:id/proof/url`. */
+            hasProof: boolean;
+            /** @description DX-516: ajustes por medio de pago congelados en el abono (vacío sin ajustes). */
+            adjustments: components["schemas"]["PaymentAdjustmentLineDto"][];
+            /**
+             * @description DX-516: lo cobrado = importe + impuestos + recargos − descuentos (sin ajustes, el importe). El saldo del plan se mueve por `amount`. SEC-043: `null` con `amountHidden`.
+             * @example 103
+             */
+            collectedAmount: number | null;
         };
         CashScopeDto: {
             /** @description Sede activa del request (X-Location-Id), o null = todas las sedes. */
@@ -12075,6 +15612,27 @@ export interface components {
             /** @example 2 */
             count: number;
         };
+        CashAdjustmentTotalDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            type: components["schemas"]["PaymentAdjustmentType"];
+            /**
+             * @description Suma (en positivo) sin convertir.
+             * @example 3
+             */
+            total: number;
+            /**
+             * @description Número de líneas de ajuste.
+             * @example 1
+             */
+            count: number;
+        };
+        CashCollectedTotalDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @example 103 */
+            total: number;
+        };
         CashPaymentsSummaryDto: {
             /** @description Número de abonos del período */
             count: number;
@@ -12084,6 +15642,10 @@ export interface components {
             byMethod: components["schemas"]["CashMethodTotalDto"][];
             /** @description DX-377: total por medio de pago de la clínica y moneda. */
             byPaymentMethod: components["schemas"]["CashPaymentMethodTotalDto"][];
+            /** @description DX-516: ajustes por medio de pago de los abonos del período, por moneda y tipo (vacío sin ajustes). */
+            adjustments: components["schemas"]["CashAdjustmentTotalDto"][];
+            /** @description DX-516: lo cobrado por moneda: abonos + impuestos + recargos − descuentos (sin ajustes, igual que `byCurrency`). */
+            collected: components["schemas"]["CashCollectedTotalDto"][];
         };
         CashPaymentsResponseDto: {
             items: components["schemas"]["CashPaymentDto"][];
@@ -12098,17 +15660,19 @@ export interface components {
             scope: components["schemas"]["CashScopeDto"];
             /** @description Resumen del período entero con los mismos filtros. */
             summary: components["schemas"]["CashPaymentsSummaryDto"];
+            /** @description SEC-043: rige el arqueo ciego y quien consulta no es ADMIN: el resumen no suma los abonos que cuentan en una caja aún abierta y esas filas van sin importe (`amountHidden`). Las cifras vuelven al cerrarla. */
+            blindHidden: boolean;
         };
         RecordPaymentDto: {
             /**
-             * @description Must be a finite number > 0, with at most 2 decimal places
+             * @description Número finito mayor que 0, con como mucho 2 decimales.
              * @example 100
              */
             amount: number;
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
-             * @description Cuándo se pagó el abono: un instante ISO 8601 con hora (p. ej. `2026-10-17T01:00:00.000Z`, que es el 16/10 a las 20:00 en UTC−5) o solo el día civil `YYYY-MM-DD`, que se guarda al mediodía de la zona horaria de la sede del abono (DX-097). La caja y el dashboard lo cuentan en su día civil en la zona de la sede. GET .../balance busca la tasa de cambio por su fecha UTC. DX-054: 400 si va a más de 24 h en el futuro (un día civil cuenta desde su primer instante en UTC+14); las fechas pasadas no tienen límite. También en el abono al saldo migrado.
+             * @description Cuándo se pagó el abono: un instante ISO 8601 con hora (p. ej. `2026-10-17T01:00:00.000Z`, que es el 16/10 a las 20:00 en UTC−5) o solo el día civil `YYYY-MM-DD`, que se guarda al mediodía de la zona horaria de la sede del abono (DX-097). La caja y el dashboard lo cuentan en su día civil en la zona de la sede. GET .../balance busca la tasa de cambio por su fecha UTC. DX-075: un día civil posterior a hoy en la zona de la sede es 400 («La fecha del abono no puede ser posterior a hoy en la sede.»). DX-054: un instante a más de 24 h en el futuro es 400 (también un día civil si la sede no tiene zona); las fechas pasadas no tienen límite. También en el abono al saldo migrado.
              * @example 2026-10-16
              */
             paidAt: string;
@@ -12126,6 +15690,11 @@ export interface components {
             reference?: string;
             /** @description Motivo para confirmar una referencia repetida tras el 409. Se guarda en el abono; la auditoría registra la confirmación y los abonos repetidos. Más de 300 caracteres: 400 en español. */
             duplicateReferenceReason?: string;
+            /**
+             * Format: uuid
+             * @description DX-389: el `uploadId` de `POST /payments/proofs/upload-url` (el comprobante ya subido al almacén). Si el medio «Pide comprobante» = REQUIRED y no llega: 400; si es NONE y llega: 400. Se comprueba (tamaño, huella y tipo por contenido: JPG, PNG, WebP o PDF de hasta 10 MB) al registrar el abono.
+             */
+            proofUploadId?: string;
             notes?: string;
         };
         FrozenExchangeRateDto: {
@@ -12141,10 +15710,10 @@ export interface components {
              * @example 1
              */
             toPerBase: number;
-            /** @description AUTOMATIC: la del proveedor; MANUAL: la que registró la clínica para ese día */
+            /** @description AUTOMATIC: la del proveedor; MANUAL: la que registró la clínica (para ese día o, DX-384, la última dentro del plazo de la clínica) */
             source: components["schemas"]["ExchangeRateSource"];
             /**
-             * @description Día civil (AAAA-MM-DD) de la tasa: el del abono en su sede
+             * @description Día civil (AAAA-MM-DD) de la tasa USADA. Es el del abono en su sede salvo con fuente MANUAL cuando la clínica no registró la de ese día y se usó la última dentro de su plazo (DX-384, `manualRateMaxAgeDays`): entonces es anterior al del abono. Se congela con el abono: registrar después la tasa del día no lo cambia.
              * @example 2026-10-30
              */
             date: string;
@@ -12196,6 +15765,8 @@ export interface components {
             paymentMethodName: string | null;
             /** @description Referencia del pago tal como la dio el pagador (DX-377). */
             reference: string | null;
+            /** @description DX-515: nº de la factura fiscal emitida fuera de Dentalix (texto libre); null si no se anotó. */
+            externalInvoiceNumber: string | null;
             /** @description Motivo con que se confirmó una referencia repetida (DX-377); null si no se repetía. */
             duplicateReferenceReason: string | null;
             /** @description Solo en la respuesta del alta: ids de los abonos con la misma referencia y medio que se confirmaron con motivo. */
@@ -12225,6 +15796,15 @@ export interface components {
             frozenRate: components["schemas"]["FrozenExchangeRateDto"] | null;
             /** @description DX-375: la tasa del abono. NOT_NEEDED: está en la moneda de su destino. FROZEN: congeló su tasa al registrarse (o el barrido, si se cobró sin tasa) y saldos y totales la usan siempre, aunque la tasa cambie después. MISSING: «sin tasa»: no había tasa de su día; no cuenta en el saldo del plan hasta que se registre (Ajustes › Tasa de cambio) y el barrido de cada minuto la congele. LEGACY: anterior a la tasa congelada y aún sin congelar: se convierte con la tasa de su día, como antes, hasta que el barrido la congele. */
             exchangeRateStatus: components["schemas"]["PaymentExchangeRateStatus"];
+            /** @description DX-516: ajustes por medio de pago congelados en el abono (vacío sin ajustes). */
+            adjustments: components["schemas"]["PaymentAdjustmentLineDto"][];
+            /**
+             * @description DX-516: lo cobrado = importe + impuestos + recargos − descuentos (sin ajustes, el importe). El saldo del plan se mueve por `amount`.
+             * @example 103
+             */
+            collectedAmount: number;
+            /** @description DX-389: el abono tiene comprobante del cobro. La clave del almacén no sale nunca: se ve con `GET /payments/:id/proof/url`. */
+            hasProof: boolean;
         };
         SplitPaymentLineDto: {
             /** @example 50 */
@@ -12240,10 +15820,15 @@ export interface components {
             reference?: string;
             /** @description Motivo para confirmar la referencia repetida de esta línea. */
             duplicateReferenceReason?: string;
+            /**
+             * Format: uuid
+             * @description DX-389: el `uploadId` del comprobante de ESTA línea (cada línea, el suyo). Mismas reglas que en el abono suelto.
+             */
+            proofUploadId?: string;
         };
         RecordSplitPaymentDto: {
             /**
-             * @description El día civil `YYYY-MM-DD` (o un instante con `Z` o desfase) de TODO el cobro, como en un abono (DX-097). DX-054: 400 si va a más de 24 h en el futuro.
+             * @description El día civil `YYYY-MM-DD` (o un instante con `Z` o desfase) de TODO el cobro, como en un abono (DX-097). DX-075: un día civil posterior a hoy en la sede es 400. DX-054: un instante a más de 24 h en el futuro es 400.
              * @example 2026-10-30
              */
             paidAt: string;
@@ -12305,7 +15890,7 @@ export interface components {
              */
             billable: number;
             /**
-             * @description Σ de lo imputado al ítem
+             * @description Σ de lo imputado al ítem por los abonos más lo que le cubre el saldo recibido por traspaso (paidByTransfersIn, DX-399-quater)
              * @example 60
              */
             paid: number;
@@ -12314,6 +15899,11 @@ export interface components {
              * @example 40
              */
             balance: number;
+            /**
+             * @description DX-399-quater: de `paid`, lo que cubre el saldo que el plan recibió por traspaso de otro plan del paciente y que ninguna devolución ni traspaso de salida gastó. Cubre lo que los abonos no cubren, después de ellos. Ausente si es 0
+             * @example 30
+             */
+            paidByTransfersIn?: number;
         };
         PlanBalanceWithItemsDto: {
             /** @description Código ISO 4217 de 3 letras. */
@@ -12343,20 +15933,25 @@ export interface components {
             /** @description DX-375: abonos vivos «sin tasa» (en otra moneda y sin tasa de su día): no cuentan en paid, así que el saldo está incompleto hasta que se registre la tasa (Ajustes › Tasa de cambio) y el barrido la congele. Vacío si no hay ninguno. */
             paymentsWithoutRate: components["schemas"]["PaymentWithoutRateDto"][];
             /**
-             * @description DX-054: el proveedor de tasas no respondió a tiempo (el saldo espera como mucho 4 s a las conversiones en vivo). Los abonos que esperaban su tasa salen en paymentsWithoutRate y no suman en paid: el saldo está incompleto y volver a pedirlo lo completa cuando el proveedor responda. Nunca es un 500.
+             * @description DX-054: el proveedor de tasas no respondió a tiempo (el saldo espera como mucho 4 s a las conversiones en vivo), se sabe que no contesta o su cupo está agotado: no es que falte la tasa. Los abonos que esperaban su tasa salen en paymentsWithoutRate y no suman en paid: el saldo está incompleto y volver a pedirlo lo completa cuando el proveedor responda. Nunca es un 500.
              * @example false
              */
             rateProviderTimedOut: boolean;
             /**
-             * @description Σ de lo imputado a los ítems
+             * @description Σ de lo imputado a los ítems por los abonos (sin `paidByTransfersIn`): Σ `items[].paid` = `allocated` + Σ `items[].paidByTransfersIn` (DX-399-quater)
              * @example 150
              */
             allocated: number;
             /**
-             * @description Cobrado (con base) que aún no está imputado a ningún ítem
+             * @description Cobrado (con base) sin imputar a ningún ítem, NETO de lo devuelto o traspasado del saldo a favor que se atribuye a los abonos (DX-399-ter, también en un plan cancelado o rechazado): la suma de `onAccount` de `GET /payments/:id/allocations` de los abonos del plan y, si el plan se cobra, lo que da el informe «Cobrado sin imputar»
              * @example 30
              */
             unallocated: number;
+            /**
+             * @description DX-399-quater: lo que el plan recibió por traspaso y que no gastó ninguna salida ni cubre ningún ítem: sigue a cuenta del plan, aparte de `unallocated` (que es de los abonos). Ausente si es 0
+             * @example 30
+             */
+            transfersInOnAccount?: number;
             /**
              * @description Abonos vivos sin base (sin tasa): no se imputan
              * @example 0
@@ -12365,6 +15960,20 @@ export interface components {
             /** @description Abonos cuya imputación fijó un ADMIN a mano */
             manualPaymentIds: string[];
             items: components["schemas"]["PlanItemBalanceDto"][];
+        };
+        ExternalInvoiceNumberDto: {
+            /**
+             * @description Nº de la factura fiscal emitida fuera de Dentalix, texto libre sin formato, hasta 64 caracteres en una línea. null o vacío lo quita.
+             * @example 00-000123
+             */
+            externalInvoiceNumber: string | null;
+        };
+        ExternalInvoiceNumberResultDto: {
+            /** Format: uuid */
+            paymentId: string;
+            externalInvoiceNumber: string | null;
+            /** @description Los abonos que lo llevan: el pedido o, en un cobro dividido, todas sus líneas. */
+            paymentIds: string[];
         };
         VoidPaymentDto: {
             /**
@@ -12406,6 +16015,8 @@ export interface components {
             reference: string | null;
             /** @description La línea en la moneda del plan con su tasa congelada; null «sin tasa». */
             equivalentAmount: number | null;
+            /** @description DX-516: ajustes del medio de esta línea; ausente si no tiene ninguno. */
+            adjustments?: components["schemas"]["PaymentAdjustmentLineDto"][];
             /** @description Como `exchangeRate` del recibo, para esta línea. */
             exchangeRate: components["schemas"]["ReceiptExchangeRateDto"] | null;
         };
@@ -12419,6 +16030,20 @@ export interface components {
             lines: components["schemas"]["ReceiptSplitViewLineDto"][];
             total: components["schemas"]["ReceiptSplitTotalDto"];
         };
+        ReceiptRegionalDto: {
+            /**
+             * @description Zona IANA de la sede.
+             * @example America/Caracas
+             */
+            timeZone: string;
+            /**
+             * @description Locale canónico: separadores y orden de las fechas.
+             * @example es-VE
+             */
+            locale: string;
+            /** @description Reloj de la sede: 12 h o 24 h. */
+            hourCycle: components["schemas"]["HourCycle"];
+        };
         ReceiptClinicDto: {
             /** @example Clínica Demo */
             name: string;
@@ -12426,6 +16051,8 @@ export interface components {
             legalName: string | null;
             /** @description Identificador fiscal de la clínica (DX-019). */
             taxId: string | null;
+            /** @description Nombre que la clínica da a su identificador fiscal, congelado al emitir (DX-019). Ausente = el genérico. */
+            taxIdLabel?: string;
             address: string | null;
         };
         ReceiptLocationDto: {
@@ -12471,6 +16098,8 @@ export interface components {
              * @example 2026-10-17
              */
             paidOn: string;
+            /** @description DX-516: ajustes por medio de pago congelados al emitir; ausente sin ajustes, en los recibos anteriores y en un cobro dividido (van en cada línea). */
+            adjustments?: components["schemas"]["PaymentAdjustmentLineDto"][];
         };
         ReceiptPlanDto: {
             /** Format: uuid */
@@ -12524,6 +16153,8 @@ export interface components {
             reference: string | null;
             /** @description La línea en la moneda del plan con su tasa congelada; null «sin tasa». */
             equivalentAmount: number | null;
+            /** @description DX-516: ajustes del medio de esta línea; ausente si no tiene ninguno. */
+            adjustments?: components["schemas"]["PaymentAdjustmentLineDto"][];
         };
         ReceiptSnapshotSplitDto: {
             lines: components["schemas"]["ReceiptSplitLineDto"][];
@@ -12550,6 +16181,20 @@ export interface components {
             split?: components["schemas"]["ReceiptSnapshotSplitDto"] | null;
             /** @example Este documento no es factura */
             legalNotice: string;
+            /**
+             * @description DX-515: el título del recibo que configuró la clínica, congelado al emitir. Ausente si no tenía (se imprime «Recibo de caja»).
+             * @example Recibo de pago
+             */
+            title?: string;
+            /**
+             * @description DX-515: la leyenda de la clínica o de la sede, congelada al emitir. Ausente si no había: no se imprime nada, también al reimprimir un recibo anterior a que se configurara.
+             * @example Este recibo no es una factura
+             */
+            legend?: string;
+            /** @description DX-517: el texto propio de cada moneda que tenía la clínica al emitir (código ISO → texto), congelado. Ausente si no tenía ninguno: los importes llevan el código ISO, también al reimprimir. */
+            currencyTexts?: {
+                [key: string]: string;
+            };
         };
         PaymentReceiptDto: {
             /** Format: uuid */
@@ -12575,6 +16220,8 @@ export interface components {
             exchangeRate: components["schemas"]["ReceiptExchangeRateDto"] | null;
             /** @description DX-390: el cobro dividido del recibo (todas sus formas de pago, cada una con su tasa congelada, y el total en la moneda del plan); null en un abono suelto. El recibo de cualquier línea es el del cobro. */
             split: components["schemas"]["ReceiptSplitDto"] | null;
+            /** @description DX-521: zona, locale y reloj con los que pintar las fechas y los importes del recibo. La región congelada en la foto al emitir; en un recibo anterior (o «sin serie»), la de hoy de su sede; null si la sede no tiene los tres ajustes válidos. La foto no la repite en `snapshot`. */
+            regional: components["schemas"]["ReceiptRegionalDto"] | null;
             /** @description Foto inmutable al emitir (en los «sin serie», los datos de hoy). */
             snapshot: components["schemas"]["ReceiptSnapshotDto"];
         };
@@ -12586,6 +16233,93 @@ export interface components {
             sentTo: string;
             /** @description DX-203: salió al email del responsable (un menor o un paciente sin email). */
             sentToResponsible: boolean;
+        };
+        ReceiptSummaryPatientDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example María Fernanda Rondón */
+            fullName: string;
+            /**
+             * @description Número del documento enmascarado como en el recibo (nunca en claro); null sin documento.
+             * @example ****5678
+             */
+            documentMasked: string | null;
+            /**
+             * @description Nombre visible del tipo de documento (DX-327), con los nombres de la clínica.
+             * @example Documento nacional
+             */
+            documentTypeName: string;
+            /**
+             * @description Código del paciente (DX-484).
+             * @example 1042
+             */
+            patientCode: string;
+        };
+        ReceiptSummaryLineDto: {
+            /**
+             * Format: uuid
+             * @description El abono del recibo (en un cobro dividido, el de su línea 1): `GET /payments/:id/receipt`.
+             */
+            paymentId: string;
+            /**
+             * @description Número del recibo (serie y consecutivo), o `REC-xxxxxxxx` en un abono anterior a la numeración. Se repite en cada forma de pago de un cobro dividido.
+             * @example CCS-000123
+             */
+            receiptNumber: string;
+            /**
+             * @description Día civil de emisión en la zona de la sede del recibo.
+             * @example 2026-10-15
+             */
+            issuedOn: string;
+            /**
+             * @description Sede del recibo (la de su foto).
+             * @example Sede Altamira
+             */
+            locationName: string;
+            /**
+             * @description Medio de pago de la clínica o, sin él, el método (Efectivo, Tarjeta…).
+             * @example Pago móvil
+             */
+            methodLabel: string;
+            /**
+             * @description Importe en su moneda.
+             * @example 150
+             */
+            amount: number;
+            /** @description Código ISO 4217 de la moneda del importe. */
+            currency: string;
+            /** @description Recibo anulado: no suma en los totales. */
+            voided: boolean;
+            voidReason: string | null;
+        };
+        ReceiptSummaryTotalDto: {
+            /** @description Código ISO 4217. */
+            currency: string;
+            /** @example 150 */
+            amount: number;
+            /** @description Formas de pago no anuladas en esa moneda. */
+            count: number;
+        };
+        PaymentReceiptSummaryDto: {
+            patient: components["schemas"]["ReceiptSummaryPatientDto"];
+            /** @description Datos de HOY de la clínica (el resumen se emite hoy). */
+            clinic: components["schemas"]["ReceiptClinicDto"];
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+            /** Format: date-time */
+            generatedAt: string;
+            /** @description DX-525: quien consulta solo ve sus sedes; los recibos de las demás no salen. */
+            restrictedToLocations: boolean;
+            /** @description Una fila por forma de pago, en orden de emisión; vacía si no hay recibos. */
+            receipts: components["schemas"]["ReceiptSummaryLineDto"][];
+            /** @description Total por moneda de lo NO anulado (las monedas nunca se suman entre sí). */
+            totals: components["schemas"]["ReceiptSummaryTotalDto"][];
+            /** @description Recibos anulados. */
+            voidedCount: number;
+            /** @example Resumen de abonos: no es un documento fiscal. Cada abono tiene su recibo de caja con el número indicado. */
+            notice: string;
         };
         /**
          * @description Estado del plan: rechazado o cancelado no admite reasignar (409 en el PUT) y sus `items` vienen vacíos
@@ -12623,6 +16357,11 @@ export interface components {
              */
             paidByOthers: number;
             /**
+             * @description DX-399-quater: lo que le cubre el saldo que el plan recibió por traspaso, después de todos los abonos (también este). No resta de `free`: los abonos van primero, así que imputar este abono al ítem lo desplaza y lo recibido vuelve a quedar a cuenta del plan. Ausente si es 0
+             * @example 30
+             */
+            paidByTransfersIn?: number;
+            /**
              * @description Lo que este abono puede imputarle: billable − paidByOthers
              * @example 70
              */
@@ -12636,6 +16375,11 @@ export interface components {
              * @example NOR-000123
              */
             receiptNumber: string | null;
+            /**
+             * Format: uuid
+             * @description Sede del abono: el importe y la fecha se pintan con el formato de esa sede
+             */
+            locationId: string;
             /** Format: uuid */
             treatmentPlanId: string;
             /**
@@ -12665,6 +16409,16 @@ export interface components {
             allocated: number;
             /** @example 20 */
             unallocated: number | null;
+            /**
+             * @description De lo sin imputar a ítems, lo que el plan ya devolvió o traspasó de su saldo a favor (DX-253) y se atribuye a este abono. Cada salida gasta primero lo que el plan recibió por traspaso (DX-399-ter, llegara antes o después) y solo el resto resta de abonos registrados antes que ella, empezando por el más reciente. 0 si no hay
+             * @example 20
+             */
+            creditOut: number;
+            /**
+             * @description A cuenta neto: `unallocated − creditOut`. Es la cifra que da el informe «Cobrado sin imputar» para este abono (y la que no aparece si es 0). null sin tasa
+             * @example 10
+             */
+            onAccount: number | null;
             /** @description Versión de la imputación: se reenvía como expectedVersion */
             version: string;
             allocations: components["schemas"]["PaymentAllocationLineDto"][];
@@ -12705,6 +16459,11 @@ export interface components {
              * @example NOR-000123
              */
             receiptNumber: string | null;
+            /**
+             * Format: uuid
+             * @description Sede del abono: el importe y la fecha se pintan con el formato de esa sede
+             */
+            locationId: string;
             /** Format: uuid */
             treatmentPlanId: string;
             /**
@@ -12734,6 +16493,16 @@ export interface components {
             allocated: number;
             /** @example 20 */
             unallocated: number | null;
+            /**
+             * @description De lo sin imputar a ítems, lo que el plan ya devolvió o traspasó de su saldo a favor (DX-253) y se atribuye a este abono. Cada salida gasta primero lo que el plan recibió por traspaso (DX-399-ter, llegara antes o después) y solo el resto resta de abonos registrados antes que ella, empezando por el más reciente. 0 si no hay
+             * @example 20
+             */
+            creditOut: number;
+            /**
+             * @description A cuenta neto: `unallocated − creditOut`. Es la cifra que da el informe «Cobrado sin imputar» para este abono (y la que no aparece si es 0). null sin tasa
+             * @example 10
+             */
+            onAccount: number | null;
             /** @description Versión de la imputación: se reenvía como expectedVersion */
             version: string;
             allocations: components["schemas"]["PaymentAllocationLineDto"][];
@@ -12781,6 +16550,47 @@ export interface components {
             providerRateSaved: boolean;
             /** @description Abonos de ese día que necesitan esa moneda y otra distinta de USD sin tasa manual ese día: la de respaldo solo les servirá cuando se registre también la otra. */
             otherRatesMissing: components["schemas"]["PaymentRateOtherMissingDto"];
+        };
+        LocationReceiptLegendViewDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sede Norte */
+            name: string;
+            isActive: boolean;
+            /** @description La sede usa su propia leyenda (aunque sea ninguna). */
+            override: boolean;
+            legend: string | null;
+        };
+        ReceiptSettingsViewDto: {
+            /**
+             * @description Título del recibo de caja, hasta 60 caracteres en una línea. null o vacío = sin título propio (la web imprime «Recibo de caja»).
+             * @example Recibo de pago
+             */
+            title: string | null;
+            /**
+             * @description Leyenda del recibo, hasta 250 caracteres en una línea. null o vacío = no se imprime ninguna.
+             * @example Este recibo no es una factura
+             */
+            legend: string | null;
+            locations: components["schemas"]["LocationReceiptLegendViewDto"][];
+        };
+        ReceiptSettingsDto: {
+            /**
+             * @description Título del recibo de caja, hasta 60 caracteres en una línea. null o vacío = sin título propio (la web imprime «Recibo de caja»).
+             * @example Recibo de pago
+             */
+            title: string | null;
+            /**
+             * @description Leyenda del recibo, hasta 250 caracteres en una línea. null o vacío = no se imprime ninguna.
+             * @example Este recibo no es una factura
+             */
+            legend: string | null;
+        };
+        LocationReceiptLegendDto: {
+            /** @description true = la sede imprime SU leyenda (`legend`; vacía = ninguna) en vez de la de la clínica. false = usa la de la clínica. */
+            override: boolean;
+            /** @description Leyenda del recibo, hasta 250 caracteres en una línea. null o vacío = no se imprime ninguna. Se ignora con override false. */
+            legend?: string | null;
         };
         CreatePaymentPlanDto: {
             /**
@@ -12846,7 +16656,7 @@ export interface components {
              * @description Número de cuota; null si el próximo vencimiento es el down payment
              * @example 2
              */
-            sequence: Record<string, never> | null;
+            sequence: number | null;
             /** Format: date-time */
             dueDate: string;
             /** @example 100 */
@@ -12889,7 +16699,34 @@ export interface components {
              */
             startDate: string;
             /**
-             * @description Total pagado, convertido a currency del plan
+             * @description DX-472: el billable de GET /treatment-plans/:id/balance: lo cobrable del plan de tratamiento (ítems ACCEPTED|DONE; 0 si está cancelado o rechazado). No es totalToFinance, que es lo que se pactó financiar.
+             * @example 1200
+             */
+            billable: number;
+            /**
+             * @description DX-472: el paid de /balance: abonos vivos convertidos a la moneda del plan. Los «sin tasa» (paymentsWithoutRate) no suman.
+             * @example 300
+             */
+            paid: number;
+            /**
+             * @description DX-472: el creditMovements de /balance: traspasos y devoluciones de saldo a favor, con signo.
+             * @example 0
+             */
+            creditMovements: number;
+            /**
+             * @description DX-472: el balance de /balance: billable - paid - creditMovements. No es remaining, que se mide contra totalToFinance.
+             * @example 900
+             */
+            balance: number;
+            /** @description DX-472: los paymentsWithoutRate de /balance: abonos que no suman en paid por no tener tasa. */
+            paymentsWithoutRate: components["schemas"]["PaymentWithoutRateDto"][];
+            /**
+             * @description DX-472: el proveedor de tasas no respondió a tiempo. paid está incompleto y, mientras tanto, ninguna cuota sale OVERDUE: quedan PARTIAL o PENDING, y overdueCount y overdueAmount en 0. Volver a pedirlo lo completa. Nunca es un 500.
+             * @example false
+             */
+            rateProviderTimedOut: boolean;
+            /**
+             * @description paid + creditMovements: lo que cubre cuotas (un traspaso cubre como un abono; una devolución deja de cubrir). Difiere de paid a propósito.
              * @example 300
              */
             paidTotal: number;
@@ -12923,6 +16760,8 @@ export interface components {
             /** @example Clínica Sonrisas */
             name: string;
             logoUrl: string | null;
+            /** @description DX-019: datos fiscales y de contacto. */
+            fiscal: components["schemas"]["ClinicFiscalDto"];
         };
         AccountStatementPatientDto: {
             /** Format: uuid */
@@ -12973,7 +16812,7 @@ export interface components {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /**
-             * @description Σ ítems ACCEPTED|DONE de los planes no cancelados en esta moneda
+             * @description Σ ítems ACCEPTED|DONE de los planes no cancelados en esta moneda (Σ billable de esos planes)
              * @example 3000000
              */
             budgeted: number;
@@ -12988,7 +16827,7 @@ export interface components {
              */
             openingPending: number;
             /**
-             * @description Σ abonos no anulados en esta moneda (sin convertir)
+             * @description Σ abonos no anulados en esta moneda, sin convertir: lo entregado en ella, la cifra de la cartera. Lo que cuadra con plans[] es convertedPaid.
              * @example 1200000
              */
             paid: number;
@@ -12998,10 +16837,20 @@ export interface components {
              */
             creditMovements: number;
             /**
-             * @description budgeted + openingBalance - paid (negativo = saldo a favor)
+             * @description budgeted + openingBalance - paid - creditMovements (negativo = saldo a favor), sin convertir: la cifra de la cartera. Lo que cuadra con plans[] es convertedBalance.
              * @example 1950000
              */
             balance: number;
+            /**
+             * @description DX-472: Σ plans[].paid en esta moneda (abonos convertidos a ella, como en /balance) más los abonos a saldos migrados de esta moneda. Difiere de paid a propósito: si todos los abonos son en la moneda del plan, coincide.
+             * @example 1200000
+             */
+            convertedPaid: number;
+            /**
+             * @description DX-472: budgeted + openingBalance - convertedPaid - creditMovements: el saldo que cuadra con plans[].
+             * @example 1950000
+             */
+            convertedBalance: number;
             /** @example 1 */
             overdueCount: number;
             /**
@@ -13030,14 +16879,19 @@ export interface components {
              */
             createdAt: string;
             /**
-             * @description Ítems ACCEPTED|DONE
+             * @description Ítems ACCEPTED|DONE, aunque el plan esté cancelado o rechazado. Difiere de billable a propósito: es lo que se presupuestó, no lo que se cobra.
              * @example 3000000
              */
             budgeted: number;
+            /**
+             * @description DX-472: el billable de GET /treatment-plans/:id/balance: ítems ACCEPTED|DONE; 0 si el plan está cancelado o rechazado.
+             * @example 3000000
+             */
+            billable: number;
             /** @description `false` si el plan está CANCELLED o REJECTED: no suma al saldo. */
             countsTowardsBalance: boolean;
             /**
-             * @description Abonos vivos en la moneda del plan
+             * @description DX-472: el paid de /balance: abonos vivos convertidos a la moneda del plan con la tasa de cada uno. Los «sin tasa» (paymentsWithoutRate) no suman.
              * @example 1200000
              */
             paid: number;
@@ -13046,10 +16900,20 @@ export interface components {
              * @example -200000
              */
             creditMovements: number;
-            /** @description Abonos vivos del plan hechos en otra moneda (sin convertir) */
+            /** @description Abonos vivos del plan hechos en otra moneda, en esa moneda y sin convertir: lo que el paciente entregó. Solo informa: si tenían tasa, ya cuentan en paid. */
             paidOtherCurrencies: components["schemas"]["AccountStatementOtherCurrencyDto"][];
-            /** @example 1800000 */
+            /**
+             * @description DX-472: el balance de /balance: billable - paid - creditMovements.
+             * @example 1800000
+             */
             balance: number;
+            /** @description DX-472: abonos del plan que no suman en paid por no tener tasa, como en /balance. */
+            paymentsWithoutRate: components["schemas"]["PaymentWithoutRateDto"][];
+            /**
+             * @description DX-472: el proveedor de tasas no respondió a tiempo: paid está incompleto y las cuotas de este plan no salen OVERDUE mientras tanto.
+             * @example false
+             */
+            rateProviderTimedOut: boolean;
         };
         AccountStatementPaymentMethodRefDto: {
             /** Format: uuid */
@@ -13102,6 +16966,11 @@ export interface components {
              */
             reference: string | null;
             /**
+             * @description DX-515: nº de la factura fiscal emitida fuera de Dentalix para el abono (texto libre), o `null` si no se anotó.
+             * @example 00-000123
+             */
+            externalInvoiceNumber: string | null;
+            /**
              * Format: uuid
              * @description DX-390: el cobro dividido del abono (el id de su línea 1); `null` en un abono de una sola forma de pago. Anular una línea anula el cobro entero.
              */
@@ -13111,6 +16980,13 @@ export interface components {
              * @example 2
              */
             splitLines: number | null;
+            /**
+             * @description DX-414: número del recibo de caja del abono (DX-136); todas las líneas de un cobro dividido llevan el de su recibo único. `null` en un abono anterior a la numeración.
+             * @example PRI-000123
+             */
+            receiptNumber: string | null;
+            /** @description DX-389: el abono tiene comprobante del cobro (la captura del pago móvil o de la transferencia). Se ve con `GET /payments/:id/proof/url` (solo ADMIN y recepción). */
+            hasProof: boolean;
             location: components["schemas"]["AccountStatementLocationRefDto"];
             /**
              * Format: uuid
@@ -13129,6 +17005,8 @@ export interface components {
             createdById: string | null;
             /** @description Si quien consulta puede anular este abono: ADMIN cualquiera activo; RECEPTION solo los suyos registrados el mismo día (calendario de la sede del abono). `false` si ya está anulado. Solo orienta a la interfaz: `DELETE /payments/:id` vuelve a aplicar la regla. */
             canVoid: boolean;
+            /** @description DX-432: por qué este abono no se anula aunque su rol pueda (es referencia de una devolución, que no se deshace), con el texto del 409 de `DELETE /payments/:id`. `null` si nada lo impide. La interfaz lo pinta como «Anular» deshabilitado con esta explicación. */
+            voidBlockedReason: string | null;
             /** @description Abono anulado: se lista pero no suma. */
             voided: boolean;
             /** Format: date-time */
@@ -13195,6 +17073,8 @@ export interface components {
             /** Format: date-time */
             issuedAt: string;
             clinic: components["schemas"]["AccountStatementClinicDto"];
+            /** @description DX-354: zona, locale y reloj de la sede en contexto (o la principal) para formatear el impreso. null si a la sede le falta algo: el documento se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             patient: components["schemas"]["AccountStatementPatientDto"];
             addressee: components["schemas"]["AccountStatementAddresseeDto"];
             range: components["schemas"]["AccountStatementRangeDto"];
@@ -13204,6 +17084,11 @@ export interface components {
             installments: components["schemas"]["AccountStatementInstallmentDto"][];
             /** @description DX-262: saldos migrados vivos, de la fecha de corte más antigua a la más reciente */
             openingBalances: components["schemas"]["AccountStatementOpeningBalanceDto"][];
+            /**
+             * @description DX-472: en algún plan, el proveedor de tasas no respondió a tiempo (el saldo espera como mucho 4 s): esas cifras están incompletas y volver a pedirlas las completa. Nunca es un 500.
+             * @example false
+             */
+            rateProviderTimedOut: boolean;
         };
         FamilyMemberPatientDto: {
             /** Format: uuid */
@@ -13220,8 +17105,14 @@ export interface components {
             openingBalance: number;
             /** @description DX-262 (QA D5): lo que queda pendiente del saldo migrado */
             openingPending: number;
+            /** @description Igual que `summary[].paid`: sin convertir */
             paid: number;
+            /** @description Igual que `summary[].balance`: sin convertir */
             balance: number;
+            /** @description DX-472: igual que `summary[].convertedPaid` */
+            convertedPaid: number;
+            /** @description DX-472: igual que `summary[].convertedBalance` */
+            convertedBalance: number;
             overdueAmount: number;
         };
         FamilyStatementMemberDto: {
@@ -13237,10 +17128,22 @@ export interface components {
             /** Format: date-time */
             issuedAt: string;
             clinic: components["schemas"]["AccountStatementClinicDto"];
+            /** @description DX-354: zona, locale y reloj de la sede en contexto (o la principal) para formatear el impreso. null si a la sede le falta algo: el documento se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             payer: components["schemas"]["FamilyMemberPatientDto"];
             members: components["schemas"]["FamilyStatementMemberDto"][];
             /** @description Suma de los subtotales por moneda, al céntimo. */
             totals: components["schemas"]["FamilyCurrencyAmountsDto"][];
+            /**
+             * @description DX-472: abonos de la familia que no suman por no tener tasa (paymentsWithoutRate de sus planes): las cifras están incompletas.
+             * @example 0
+             */
+            paymentsWithoutRateCount: number;
+            /**
+             * @description DX-472: en algún plan de la familia, el proveedor de tasas no respondió a tiempo: las cifras están incompletas.
+             * @example false
+             */
+            rateProviderTimedOut: boolean;
         };
         BillablePlanDto: {
             /** Format: uuid */
@@ -13263,19 +17166,23 @@ export interface components {
              */
             total: number;
             /**
-             * @description Abonos vivos en la moneda del plan
+             * @description Abonado en la moneda del plan, con los traspasos del saldo a favor. DX-472-bis: lo abonado en otra moneda cuenta convertido con su tasa, el mismo `paid` + `creditMovements` de GET /treatment-plans/:id/balance
              * @example 1200000
              */
             paid: number;
-            /** @description Abonos vivos del plan hechos en otra moneda (sin convertir) */
+            /** @description Abonos vivos del plan hechos en otra moneda, tal como se entregaron (ya convertidos en `paid`) */
             paidOtherCurrencies: components["schemas"]["AccountStatementOtherCurrencyDto"][];
             /**
-             * @description `total - paid`; negativo = a favor del paciente
+             * @description `total - paid`; negativo = a favor del paciente. El `balance` de GET /treatment-plans/:id/balance (DX-472-bis)
              * @example 1800000
              */
             balance: number;
             /** @description Si ya tiene un plan de cuotas activo (solo se admite uno por plan: crear otro responde 409). */
             hasActivePaymentPlan: boolean;
+            /** @description DX-472-bis: abonos en otra moneda que no suman en `paid` por falta de tasa (o porque el proveedor no respondió): los de GET /treatment-plans/:id/balance */
+            paymentsWithoutRate: components["schemas"]["PaymentWithoutRateDto"][];
+            /** @description DX-472-bis: el proveedor de tasas no respondió a tiempo; volver a pedir la lista lo completa */
+            rateProviderTimedOut: boolean;
         };
         AgingScopeLocationDto: {
             /** Format: uuid */
@@ -13318,6 +17225,10 @@ export interface components {
             scope: components["schemas"]["AgingScopeDto"];
             /** @description Por moneda, de TODAS las filas filtradas (no solo la página) */
             totals: components["schemas"]["AgingTotalDto"][];
+            /** @description DX-472-bis: Σ `paymentsWithoutRateCount` de TODAS las filas filtradas */
+            paymentsWithoutRateCount: number;
+            /** @description DX-472-bis: el proveedor de tasas no respondió a tiempo para alguna fila filtrada: cifras incompletas; volver a pedirla las completa */
+            rateProviderTimedOut: boolean;
         };
         AgingPatientDto: {
             /** Format: uuid */
@@ -13342,7 +17253,7 @@ export interface components {
             balance: number;
             /** @description Lo que se debe: Σ de los tramos */
             debt: number;
-            /** @description Saldo a favor (abonos de más o en otra moneda). Nunca se resta de los tramos */
+            /** @description Saldo a favor (abonos de más, convertidos a la moneda del plan como en el estado de cuenta, DX-472-bis). Nunca se resta de los tramos */
             credit: number;
             buckets: components["schemas"]["AgingBucketsDto"];
             /** @description Días de la deuda exigible más antigua; null si nada vence */
@@ -13350,6 +17261,10 @@ export interface components {
             /** @description Parte de la deuda envejece desde la fecha del plan (aceptación, presentación o creación), no desde un vencimiento: «fecha aproximada» */
             ageApproximate: boolean;
             nextInstallment: components["schemas"]["AgingNextInstallmentDto"] | null;
+            /** @description DX-472-ter: abonos en otra moneda sin contar en los planes de ESTA moneda (sin tasa o sin respuesta del proveedor); el `paymentsWithoutRateCount` de la fila, por moneda */
+            paymentsWithoutRateCount: number;
+            /** @description DX-472-ter: el proveedor de tasas no respondió a tiempo para algún plan de esta moneda */
+            rateProviderTimedOut: boolean;
         };
         AgingLastPaymentDto: {
             /**
@@ -13403,6 +17318,10 @@ export interface components {
             /** @description Máximo de `oldestAgeDays` de sus monedas */
             oldestAgeDays: number | null;
             ageApproximate: boolean;
+            /** @description DX-472-bis: abonos en otra moneda que no suman por falta de tasa (o porque el proveedor no respondió): el saldo de la fila está incompleto */
+            paymentsWithoutRateCount: number;
+            /** @description DX-472-bis: el proveedor de tasas no respondió a tiempo para algún abono de la fila; esa deuda no se da por vencida (va a `current`) hasta que responda */
+            rateProviderTimedOut: boolean;
             /** @description Una entrada por moneda con deuda o saldo a favor */
             currencies: components["schemas"]["AgingCurrencyDto"][];
             lastPayment: components["schemas"]["AgingLastPaymentDto"] | null;
@@ -13427,6 +17346,66 @@ export interface components {
             pageSize: number;
             /** @description Por moneda, de TODAS las filas filtradas (no solo la página) */
             totals: components["schemas"]["AgingTotalDto"][];
+            /** @description DX-472-bis: Σ `paymentsWithoutRateCount` de TODAS las filas filtradas */
+            paymentsWithoutRateCount: number;
+            /** @description DX-472-bis: el proveedor de tasas no respondió a tiempo para alguna fila filtrada: cifras incompletas; volver a pedirla las completa */
+            rateProviderTimedOut: boolean;
+        };
+        CreditBalanceLocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        CreditBalancesScopeDto: {
+            location: components["schemas"]["CreditBalanceLocationDto"] | null;
+        };
+        CreditBalancePatientDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+        };
+        CreditBalanceRowDto: {
+            patient: components["schemas"]["CreditBalancePatientDto"];
+            /** @description Sede donde está el dinero: la del plan que lo originó (aceptación, si no presentación) o, si el plan no tiene, la del abono que lo creó; no la de la última cita del paciente. null = sin sede */
+            location: components["schemas"]["CreditBalanceLocationDto"] | null;
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @description Saldo a favor en esa moneda: el del estado de cuenta, ya descontados traspasos y devoluciones */
+            amount: number;
+            /**
+             * @description Día civil, en la zona de la sede del abono, del abono que originó el saldo: el que dejó el plan por encima de lo facturable (en un plan cancelado o rechazado, el primero); con varios planes en la fila, el más antiguo. null si no hay abono fechable
+             * @example 2026-10-19
+             */
+            since: string | null;
+            /** @description Días de calendario desde `since` hasta hoy en la sede */
+            ageDays: number | null;
+        };
+        CreditBalanceTotalDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @description Pacientes con saldo a favor en esta moneda */
+            patients: number;
+            amount: number;
+        };
+        CreditBalancesPageDto: {
+            /**
+             * @description «Hoy» en la zona de la sede del alcance
+             * @example 2026-11-03
+             */
+            asOf: string;
+            scope: components["schemas"]["CreditBalancesScopeDto"];
+            /** @description Una fila por paciente, sede y moneda, ordenadas por moneda (código ISO) y luego por importe descendente; a igual importe, por paciente. La suma de las filas de un paciente en una moneda es su saldo a favor del estado de cuenta */
+            items: components["schemas"]["CreditBalanceRowDto"][];
+            /** @description Filas de la lista completa. La paginación es por desplazamiento (page/pageSize) sobre una lista que se recalcula en cada petición: si un saldo cambia entre dos páginas, una fila puede repetirse o saltarse */
+            total: number;
+            page: number;
+            pageSize: number;
+            /** @description Por moneda, de TODAS las filas (no solo la página) */
+            totals: components["schemas"]["CreditBalanceTotalDto"][];
+            /** @description DX-472-bis: abonos en otra moneda que no suman por falta de tasa: el saldo a favor puede ser mayor */
+            paymentsWithoutRateCount: number;
+            /** @description DX-472-bis: el proveedor de tasas no respondió a tiempo: cifras incompletas; volver a pedirla las completa */
+            rateProviderTimedOut: boolean;
         };
         TransferCreditDto: {
             /**
@@ -13533,7 +17512,7 @@ export interface components {
         CreditRefundDto: {
             /** Format: uuid */
             id: string;
-            /** @example DEV-BOG-000001 */
+            /** @example DEV-CCS-000001 */
             number: string;
             /** Format: uuid */
             patientId: string;
@@ -13553,8 +17532,10 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             snapshot: components["schemas"]["RefundReceiptSnapshotDto"];
+            /** @description DX-354: zona, locale y reloj de la sede del comprobante. null si le falta algo: el comprobante se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
         };
-        CreditTransferDto: {
+        CreditTransferMovementDto: {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -13572,13 +17553,15 @@ export interface components {
             createdById: string;
             /** Format: date-time */
             createdAt: string;
+            /** @description DX-432: nombre de quien traspasó; `null` si ya no es (ni fue) miembro de la clínica. */
+            createdByName: string | null;
         };
         PatientCreditMovementsDto: {
-            transfers: components["schemas"]["CreditTransferDto"][];
+            transfers: components["schemas"]["CreditTransferMovementDto"][];
             refunds: components["schemas"]["CreditRefundDto"][];
         };
         CreditPolicyDto: {
-            /** @description Tope de RECEPTION por traspaso o devolución, en la moneda del plan (0 = no puede). ADMIN no tiene tope. */
+            /** @description Tope de RECEPTION, una sola cifra por clínica que se compara en cada moneda: por operación en un traspaso y, en una devolución, también acumulado por día, sede y quien devuelve (DX-462). 0 = no puede. ADMIN no tiene tope. */
             receptionMaxAmount: number;
         };
         UpdateCreditPolicyDto: {
@@ -13860,6 +17843,566 @@ export interface components {
             page: number;
             pageSize: number;
         };
+        UnallocatedFiltersEchoDto: {
+            /** Format: uuid */
+            locationId: string | null;
+            locationName: string | null;
+        };
+        UnallocatedLocationOptionDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            isActive: boolean;
+        };
+        UnallocatedOptionsDto: {
+            /** @description Las sedes que ve quien consulta, para el filtro */
+            locations: components["schemas"]["UnallocatedLocationOptionDto"][];
+        };
+        UnallocatedPatientDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+        };
+        UnallocatedLocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        UnallocatedPaymentRowDto: {
+            /** Format: uuid */
+            paymentId: string;
+            patient: components["schemas"]["UnallocatedPatientDto"];
+            /** @description Sede del abono: el importe y la fecha se pintan con el formato de esa sede */
+            location: components["schemas"]["UnallocatedLocationDto"];
+            /**
+             * @description Día civil del abono en la zona de su sede
+             * @example 2026-10-20
+             */
+            paidOn: string;
+            /**
+             * @description En la moneda del abono
+             * @example 100
+             */
+            paymentAmount: number;
+            /** @description Código ISO 4217 de 3 letras. */
+            paymentCurrency: string;
+            /** Format: uuid */
+            planId: string;
+            /** @description Código ISO 4217 de 3 letras. Moneda del plan: `allocated` y `unallocated` van en ella */
+            planCurrency: string;
+            /**
+             * @description Lo imputado a ítems del plan, en la moneda del plan
+             * @example 70
+             */
+            allocated: number;
+            /**
+             * @description Lo que queda a cuenta: el abono en la moneda del plan menos lo imputado y menos lo que el plan ya devolvió o traspasó de su saldo a favor (DX-253; se descuenta de los abonos más recientes primero y solo de los registrados antes de la salida, nunca por debajo de 0); siempre > 0. Un abono que queda en 0 no sale. El saldo a favor recibido por traspaso no es un abono: está en Cartera › Saldo a favor
+             * @example 30
+             */
+            unallocated: number;
+        };
+        UnallocatedTotalDto: {
+            /** @description Código ISO 4217 de 3 letras (moneda del plan). */
+            currency: string;
+            /** @description Abonos con algo sin imputar en esta moneda */
+            count: number;
+            allocated: number;
+            unallocated: number;
+        };
+        UnallocatedPaymentsPageDto: {
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+            filters: components["schemas"]["UnallocatedFiltersEchoDto"];
+            options: components["schemas"]["UnallocatedOptionsDto"];
+            /** @description Del abono más reciente al más antiguo. Solo abonos vivos a un plan que se cobra (no cancelado ni rechazado), con base y con algo sin imputar, neto de lo ya devuelto o traspasado (ver `unallocated`) */
+            items: components["schemas"]["UnallocatedPaymentRowDto"][];
+            /** @description Filas de la lista completa. Paginación por desplazamiento sobre una lista que se recalcula en cada petición */
+            total: number;
+            page: number;
+            pageSize: number;
+            /** @description Por moneda del plan, sobre TODAS las filas del período y las sedes (no solo la página) */
+            totals: components["schemas"]["UnallocatedTotalDto"][];
+            /** @description Abonos del período en otra moneda que la del plan a los que todavía les falta la tasa de su día: no se pueden imputar y no están en las cifras (uno en la moneda del plan sin base espera al barrido y no se cuenta) */
+            paymentsWithoutRateCount: number;
+        };
+        RecoveredSlotsOffersDto: {
+            /** @description Ofertas de huecos del período (por el inicio del hueco ofrecido): aceptadas + rechazadas + sin respuesta */
+            sent: number;
+            accepted: number;
+            declined: number;
+            /** @description Pendientes, anotadas sin respuesta, caducadas o que otro paciente se quedó antes */
+            unanswered: number;
+        };
+        RecoveredValueDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /**
+             * @description Suma (precio − descuento) de los ítems del plan ligados a las citas recuperadas, en esa moneda. Nunca se suman monedas distintas ni se convierten.
+             * @example 120
+             */
+            amount: number;
+        };
+        RecoveredSlotsMetricsDto: {
+            /** @description Huecos liberados: citas canceladas o en inasistencia con la liberación ≥ 1 h antes del inicio */
+            freedSlots: number;
+            /** @description Minutos de esos huecos */
+            freedMinutes: number;
+            /** @description Huecos ocupados del todo por citas del mismo profesional y sede que llegaron después de liberarse */
+            filledSlots: number;
+            /** @description Huecos ocupados solo en parte */
+            partiallyFilledSlots: number;
+            /** @description Minutos recuperados (completos + parciales) */
+            recoveredMinutes: number;
+            /** @description De los recuperados (completos o parciales), los ocupados por una cita nacida de un pendiente de la lista o de una oferta aceptada */
+            filledByListSlots: number;
+            /** @description (completos + parciales) ÷ liberados, de 0 a 1; null sin huecos liberados */
+            fillRate: number | null;
+            /** @description Recuperados en ≤ 30 min desde la liberación ÷ liberados, de 0 a 1 */
+            filledWithin30MinRate: number | null;
+            /** @description Recuperados en ≤ 24 h desde la liberación ÷ liberados, de 0 a 1 */
+            filledWithin24hRate: number | null;
+            /** @description Minutos medios desde la liberación hasta la primera cita que ocupó el hueco (null sin recuperados) */
+            meanMinutesToFill: number | null;
+            /** @description Citas canceladas ÷ citas agendadas del período (todas, con cualquier aviso), de 0 a 1; null sin citas */
+            cancellationRate: number | null;
+            offers: components["schemas"]["RecoveredSlotsOffersDto"];
+            recoveredValue: components["schemas"]["RecoveredValueDto"][];
+            /** @description Huecos recuperados cuyas citas no tienen ítems del plan ligados («sin valorar») */
+            unvaluedRecoveredSlots: number;
+        };
+        ProviderRecoveredSlotsDto: {
+            /** @description Huecos liberados: citas canceladas o en inasistencia con la liberación ≥ 1 h antes del inicio */
+            freedSlots: number;
+            /** @description Minutos de esos huecos */
+            freedMinutes: number;
+            /** @description Huecos ocupados del todo por citas del mismo profesional y sede que llegaron después de liberarse */
+            filledSlots: number;
+            /** @description Huecos ocupados solo en parte */
+            partiallyFilledSlots: number;
+            /** @description Minutos recuperados (completos + parciales) */
+            recoveredMinutes: number;
+            /** @description De los recuperados (completos o parciales), los ocupados por una cita nacida de un pendiente de la lista o de una oferta aceptada */
+            filledByListSlots: number;
+            /** @description (completos + parciales) ÷ liberados, de 0 a 1; null sin huecos liberados */
+            fillRate: number | null;
+            /** @description Recuperados en ≤ 30 min desde la liberación ÷ liberados, de 0 a 1 */
+            filledWithin30MinRate: number | null;
+            /** @description Recuperados en ≤ 24 h desde la liberación ÷ liberados, de 0 a 1 */
+            filledWithin24hRate: number | null;
+            /** @description Minutos medios desde la liberación hasta la primera cita que ocupó el hueco (null sin recuperados) */
+            meanMinutesToFill: number | null;
+            /** @description Citas canceladas ÷ citas agendadas del período (todas, con cualquier aviso), de 0 a 1; null sin citas */
+            cancellationRate: number | null;
+            offers: components["schemas"]["RecoveredSlotsOffersDto"];
+            recoveredValue: components["schemas"]["RecoveredValueDto"][];
+            /** @description Huecos recuperados cuyas citas no tienen ítems del plan ligados («sin valorar») */
+            unvaluedRecoveredSlots: number;
+            /** Format: uuid */
+            providerId: string;
+            /** @example Dra. María Pérez */
+            providerName: string;
+        };
+        WeekRecoveredSlotsDto: {
+            /** @description Huecos liberados: citas canceladas o en inasistencia con la liberación ≥ 1 h antes del inicio */
+            freedSlots: number;
+            /** @description Minutos de esos huecos */
+            freedMinutes: number;
+            /** @description Huecos ocupados del todo por citas del mismo profesional y sede que llegaron después de liberarse */
+            filledSlots: number;
+            /** @description Huecos ocupados solo en parte */
+            partiallyFilledSlots: number;
+            /** @description Minutos recuperados (completos + parciales) */
+            recoveredMinutes: number;
+            /** @description De los recuperados (completos o parciales), los ocupados por una cita nacida de un pendiente de la lista o de una oferta aceptada */
+            filledByListSlots: number;
+            /** @description (completos + parciales) ÷ liberados, de 0 a 1; null sin huecos liberados */
+            fillRate: number | null;
+            /** @description Recuperados en ≤ 30 min desde la liberación ÷ liberados, de 0 a 1 */
+            filledWithin30MinRate: number | null;
+            /** @description Recuperados en ≤ 24 h desde la liberación ÷ liberados, de 0 a 1 */
+            filledWithin24hRate: number | null;
+            /** @description Minutos medios desde la liberación hasta la primera cita que ocupó el hueco (null sin recuperados) */
+            meanMinutesToFill: number | null;
+            /** @description Citas canceladas ÷ citas agendadas del período (todas, con cualquier aviso), de 0 a 1; null sin citas */
+            cancellationRate: number | null;
+            offers: components["schemas"]["RecoveredSlotsOffersDto"];
+            recoveredValue: components["schemas"]["RecoveredValueDto"][];
+            /** @description Huecos recuperados cuyas citas no tienen ítems del plan ligados («sin valorar») */
+            unvaluedRecoveredSlots: number;
+            /**
+             * @description Lunes de la semana ISO (AAAA-MM-DD). La primera puede empezar antes de `from`; cada hueco cuenta en la semana del día civil de su inicio en la zona de su sede.
+             * @example 2026-10-05
+             */
+            weekStart: string;
+        };
+        RecoveredSlotsReportDto: {
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+            /** Format: uuid */
+            locationId: string | null;
+            /** Format: uuid */
+            providerId: string | null;
+            /** @description El usuario solo ve algunas sedes (DX-089): los totales son solo de ellas */
+            restrictedToLocations: boolean;
+            totals: components["schemas"]["RecoveredSlotsMetricsDto"];
+            /** @description Un profesional por fila (con actividad en el período), por nombre */
+            byProvider: components["schemas"]["ProviderRecoveredSlotsDto"][];
+            /** @description Todas las semanas ISO que toca el período, en orden (con ceros) */
+            byWeek: components["schemas"]["WeekRecoveredSlotsDto"][];
+        };
+        ChairOccupancyRowDto: {
+            /**
+             * @description Minutos abiertos: horario semanal de la sede en el período − cierres de toda la sede − festivos. En el total de la sede, abiertos por sillón × sillones. null = la sede no tiene horario («Sin horario») o es la fila «Sin sillón».
+             * @example 1320
+             */
+            openMinutes: number | null;
+            /**
+             * @description Minutos de citas no canceladas (inasistencias incluidas), recortados al período y, con horario, a sus tramos abiertos. En un sillón, las citas que se pisan cuentan una vez; en «Sin sillón», cada una suma.
+             * @example 990
+             */
+            reservedMinutes: number;
+            /**
+             * @description Lo mismo, solo de las citas atendidas (COMPLETED)
+             * @example 840
+             */
+            attendedMinutes: number;
+            /**
+             * @description Lo mismo, solo de las inasistencias (NO_SHOW): reservadas y no atendidas
+             * @example 60
+             */
+            noShowMinutes: number;
+            /** @description Citas no canceladas que tocan el período */
+            reservedAppointments: number;
+            /** @description De ellas, atendidas (COMPLETED) */
+            attendedAppointments: number;
+            /** @description De ellas, inasistencias (NO_SHOW) */
+            noShowAppointments: number;
+            /**
+             * @description Ocupación = reservados ÷ abiertos, de 0 a 1 (tope 1); null sin abiertos
+             * @example 0.75
+             */
+            reservedRate: number | null;
+            /**
+             * @description Atendidos ÷ abiertos, de 0 a 1 (tope 1); null sin abiertos
+             * @example 0.6364
+             */
+            attendedRate: number | null;
+            /** Format: uuid */
+            chairId: string;
+            /** @example Sillón 1 */
+            chairName: string;
+            /** @description false = sillón desactivado: solo sale si tuvo citas no canceladas en el período */
+            active: boolean;
+        };
+        ChairOccupancyMetricsDto: {
+            /**
+             * @description Minutos abiertos: horario semanal de la sede en el período − cierres de toda la sede − festivos. En el total de la sede, abiertos por sillón × sillones. null = la sede no tiene horario («Sin horario») o es la fila «Sin sillón».
+             * @example 1320
+             */
+            openMinutes: number | null;
+            /**
+             * @description Minutos de citas no canceladas (inasistencias incluidas), recortados al período y, con horario, a sus tramos abiertos. En un sillón, las citas que se pisan cuentan una vez; en «Sin sillón», cada una suma.
+             * @example 990
+             */
+            reservedMinutes: number;
+            /**
+             * @description Lo mismo, solo de las citas atendidas (COMPLETED)
+             * @example 840
+             */
+            attendedMinutes: number;
+            /**
+             * @description Lo mismo, solo de las inasistencias (NO_SHOW): reservadas y no atendidas
+             * @example 60
+             */
+            noShowMinutes: number;
+            /** @description Citas no canceladas que tocan el período */
+            reservedAppointments: number;
+            /** @description De ellas, atendidas (COMPLETED) */
+            attendedAppointments: number;
+            /** @description De ellas, inasistencias (NO_SHOW) */
+            noShowAppointments: number;
+            /**
+             * @description Ocupación = reservados ÷ abiertos, de 0 a 1 (tope 1); null sin abiertos
+             * @example 0.75
+             */
+            reservedRate: number | null;
+            /**
+             * @description Atendidos ÷ abiertos, de 0 a 1 (tope 1); null sin abiertos
+             * @example 0.6364
+             */
+            attendedRate: number | null;
+        };
+        LocationChairOccupancyDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sede Chacao */
+            locationName: string;
+            /** @example America/Caracas */
+            timeZone: string;
+            /** @description La sede tiene horario semanal con tramos. Sin él (en la agenda, «sin restricción») no hay abiertos ni porcentajes. */
+            hasSchedule: boolean;
+            /** @description Minutos abiertos de UN sillón (los de la sede); null sin horario */
+            openMinutesPerChair: number | null;
+            /** @description Días del período cerrados por festivo */
+            holidayDays: number;
+            /** @description Sillones activos y los desactivados con citas, por orden de la agenda y nombre */
+            chairs: components["schemas"]["ChairOccupancyRowDto"][];
+            /** @description «Sin sillón»: citas de la sede sin sillón asignado (sin %). null si no hay. */
+            noChair: components["schemas"]["ChairOccupancyMetricsDto"] | null;
+            /** @description Total de la sede: suma de sus sillones (sin «Sin sillón»), sobre abiertos × sillones */
+            totals: components["schemas"]["ChairOccupancyMetricsDto"];
+        };
+        ChairOccupancyReportDto: {
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+            /** Format: uuid */
+            locationId: string | null;
+            /** @description El usuario solo ve algunas sedes (DX-089) */
+            restrictedToLocations: boolean;
+            /** @description Una entrada por sede visible (con zona horaria), por fecha de alta */
+            locations: components["schemas"]["LocationChairOccupancyDto"][];
+        };
+        /**
+         * @description ANAMNESIS = cuestionario de salud por enlace; CONSENT_SIGNATURE = firma a distancia de un consentimiento; BUDGET_SIGNATURE = aceptación a distancia de un presupuesto; APPOINTMENT_CONFIRMATION = confirmar, cancelar o «llámenme» de una cita; POST_OP_INSTRUCTIONS = indicaciones postoperatorias por email o WhatsApp (las impresas no cuentan).
+         * @enum {string}
+         */
+        PatientLinkType: "ANAMNESIS" | "CONSENT_SIGNATURE" | "BUDGET_SIGNATURE" | "APPOINTMENT_CONFIRMATION" | "POST_OP_INSTRUCTIONS";
+        PatientLinkMetricsDto: {
+            /** @description ANAMNESIS = cuestionario de salud por enlace; CONSENT_SIGNATURE = firma a distancia de un consentimiento; BUDGET_SIGNATURE = aceptación a distancia de un presupuesto; APPOINTMENT_CONFIRMATION = confirmar, cancelar o «llámenme» de una cita; POST_OP_INSTRUCTIONS = indicaciones postoperatorias por email o WhatsApp (las impresas no cuentan). */
+            linkType: components["schemas"]["PatientLinkType"];
+            /** @description El tipo registra la apertura. false (confirmación de cita): opened, expiredUnopened y sus tasas van en null. */
+            tracksOpened: boolean;
+            /** @description El tipo tiene un paso de completar. false (indicaciones postoperatorias: abrirlas es todo el uso): completed, su tasa y la mediana van en null. */
+            tracksCompleted: boolean;
+            /**
+             * @description Enlaces enviados en el período (por fecha de envío)
+             * @example 40
+             */
+            sent: number;
+            /**
+             * @description De los enviados, los abiertos alguna vez (completar cuenta como abrir). null si el tipo no registra la apertura.
+             * @example 28
+             */
+            opened: number | null;
+            /**
+             * @description De los enviados, los completados (anamnesis enviada, documento firmado, cita respondida). null si el tipo no tiene ese paso.
+             * @example 22
+             */
+            completed: number | null;
+            /**
+             * @description De los enviados, los que caducaron sin abrirse ni completarse. Un enlace anulado o reemplazado NO cuenta. null si el tipo no registra la apertura.
+             * @example 6
+             */
+            expiredUnopened: number | null;
+            /**
+             * @description Abiertos ÷ enviados en %, con 1 decimal (70 = 70 %). null sin envíos o sin señal.
+             * @example 70
+             */
+            openedRate: number | null;
+            /**
+             * @description Completados ÷ enviados en %, con 1 decimal. null sin envíos o sin señal.
+             * @example 55
+             */
+            completedRate: number | null;
+            /**
+             * @description Caducados sin abrir ÷ enviados en %, con 1 decimal. null sin envíos o sin señal.
+             * @example 15
+             */
+            expiredUnopenedRate: number | null;
+            /**
+             * @description Mediana de horas del envío al completado, con 1 decimal. null sin completados o sin ese paso.
+             * @example 5.5
+             */
+            medianHoursToComplete: number | null;
+        };
+        LocationPatientLinksDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sede Chacao */
+            locationName: string;
+            /** @example America/Caracas */
+            timeZone: string;
+            /** @description Un tipo por fila, siempre los cinco y en el mismo orden */
+            rows: components["schemas"]["PatientLinkMetricsDto"][];
+        };
+        PatientLinksReportDto: {
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+            /** Format: uuid */
+            locationId: string | null;
+            /** @description El usuario solo ve algunas sedes (DX-089): los totales son de ellas */
+            restrictedToLocations: boolean;
+            /**
+             * Format: date-time
+             * @description Instante con el que se decidió qué enlaces ya caducaron
+             */
+            asOf: string;
+            /** @description Todas las sedes visibles juntas (la mediana, de todos los enlaces), un tipo por fila */
+            totals: components["schemas"]["PatientLinkMetricsDto"][];
+            /** @description Una entrada por sede visible (con zona horaria), por fecha de alta */
+            locations: components["schemas"]["LocationPatientLinksDto"][];
+        };
+        ProfitabilityDefinitionDto: {
+            /** @enum {string} */
+            basis: "CASH" | "ACCRUAL";
+            /**
+             * @description Nombre de la base
+             * @example Caja
+             */
+            label: string;
+            /** @example Cobrado */
+            incomeLabel: string;
+            /** @example Gastos pagados */
+            expensesLabel: string;
+            /** @example Resultado = cobrado − gastos pagados, por fecha de pago. */
+            formula: string;
+            /** @description Las reglas de la base, una por línea («Cómo se calcula») */
+            howItIsCalculated: string[];
+        };
+        ProfitabilityCategoryDto: {
+            /**
+             * @description La categoría del gasto (foto del nombre al registrarlo)
+             * @example Laboratorio
+             */
+            category: string;
+            /** @example 120.5 */
+            amount: number;
+            /** @description Pagos de gastos (Caja) o gastos (Devengo) que la forman */
+            count: number;
+        };
+        ProfitabilityCurrencyDto: {
+            /** @description Código ISO 4217 de 3 letras */
+            currency: string;
+            /**
+             * @description Ingresos en esta moneda
+             * @example 1500
+             */
+            income: number;
+            /** @description Abonos (Caja) o procedimientos realizados (Devengo) que forman los ingresos */
+            incomeCount: number;
+            /**
+             * @description Gastos en esta moneda
+             * @example 600
+             */
+            expenses: number;
+            /** @description Pagos de gastos (Caja) o gastos (Devengo) */
+            expenseCount: number;
+            /**
+             * @description Ingresos − gastos; puede ser negativo
+             * @example 900
+             */
+            net: number;
+            /**
+             * @description Resultado ÷ ingresos en %, con 1 decimal; null sin ingresos (puede ser negativo)
+             * @example 60
+             */
+            margin: number | null;
+            /** @description Gastos por categoría, mayor primero */
+            categories: components["schemas"]["ProfitabilityCategoryDto"][];
+        };
+        ProfitabilityRowDto: {
+            /**
+             * Format: uuid
+             * @description null = el total del grupo
+             */
+            locationId: string | null;
+            /** @example Sede Chacao */
+            name: string;
+            /** @description false = sede desactivada */
+            isActive: boolean;
+            /**
+             * @description Zona de la sede; null en el total
+             * @example America/Caracas
+             */
+            timeZone: string | null;
+            /** @description Una entrada por moneda con movimientos (orden alfabético), nunca sumadas ni convertidas entre sí; vacía = sin movimientos en el período */
+            currencies: components["schemas"]["ProfitabilityCurrencyDto"][];
+        };
+        ProfitabilityReportDto: {
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+            /** @enum {string} */
+            basis: "CASH" | "ACCRUAL";
+            definition: components["schemas"]["ProfitabilityDefinitionDto"];
+            /** Format: uuid */
+            locationId: string | null;
+            /** @description El usuario solo ve algunas sedes (DX-089) */
+            restrictedToLocations: boolean;
+            /** @description Una fila por sede visible (o solo la pedida), en orden de creación, también sin movimientos */
+            locations: components["schemas"]["ProfitabilityRowDto"][];
+            /** @description «Total del grupo»: las sedes de `locations`, moneda a moneda */
+            total: components["schemas"]["ProfitabilityRowDto"];
+            /** @description ¿Algún ingreso o gasto en el período? */
+            hasActivity: boolean;
+        };
+        ProfitabilityLineDto: {
+            /**
+             * Format: uuid
+             * @description Id del abono, del ítem realizado, del pago del gasto (Caja) o del gasto (Devengo)
+             */
+            id: string;
+            /**
+             * @description Día civil: de pago (abono, en la zona de su sede; pago del gasto), de realización (procedimiento) o de factura (gasto)
+             * @example 2026-10-05
+             */
+            date: string;
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sede Chacao */
+            locationName: string;
+            /** @example 80 */
+            amount: number;
+            /**
+             * @description Abono: nº de recibo (o la referencia antigua REC-…). Procedimiento: código · nombre del catálogo. Gasto: proveedor o, sin él, descripción. Nunca el paciente.
+             * @example CCS-000123
+             */
+            concept: string | null;
+            /** @description Solo gastos: su categoría */
+            category: string | null;
+            /**
+             * @description Caja: el medio de pago
+             * @example Efectivo
+             */
+            method: string | null;
+            /**
+             * @description Solo gastos en Devengo: pagado, en parte o sin pagar (pagos vivos)
+             * @enum {string|null}
+             */
+            paymentStatus: "PAID" | "PARTIAL" | "UNPAID" | null;
+        };
+        ProfitabilityLinesDto: {
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+            /** @enum {string} */
+            basis: "CASH" | "ACCRUAL";
+            /** @enum {string} */
+            side: "INCOME" | "EXPENSE";
+            /** @description Código ISO 4217 de 3 letras */
+            currency: string;
+            /** Format: uuid */
+            locationId: string | null;
+            category: string | null;
+            /** @description Suma de TODAS las filas (no solo de la página): la cifra del informe */
+            total: number;
+            /** @description Filas en total */
+            count: number;
+            page: number;
+            pageSize: number;
+            /** @description De la más reciente a la más antigua */
+            lines: components["schemas"]["ProfitabilityLineDto"][];
+        };
         /**
          * @description Las secciones que ve el rol: ADMIN las tres, DENTIST EVOLUTION y TREATMENT, RECEPTION OUTCOME
          * @enum {string}
@@ -13941,6 +18484,43 @@ export interface components {
             /** @description Del más antiguo al más reciente; como mucho 200 */
             items: components["schemas"]["ClosingTreatmentDto"][];
         };
+        ClosingKeptOverbookDto: {
+            /** Format: uuid */
+            appointmentId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** @example Ana Pérez */
+            patientName: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            status: components["schemas"]["AppointmentStatus"];
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            /**
+             * @description Zona IANA de la sede: la hora se pinta en ella
+             * @example America/Caracas
+             */
+            timeZone: string;
+            /** Format: uuid */
+            professionalId: string;
+            professionalName: string | null;
+            /**
+             * Format: date-time
+             * @description Cuándo se decidió mantenerla en sobrecupo (la última vez)
+             */
+            keptAt: string;
+            /** @description Quién lo decidió */
+            keptByName: string | null;
+        };
+        ClosingKeptOverbookSectionDto: {
+            /** @description Cuántos hay (exacto) */
+            total: number;
+            /** @description Del más antiguo al más reciente; como mucho 200 */
+            items: components["schemas"]["ClosingKeptOverbookDto"][];
+        };
         ClosingLocationOptionDto: {
             /** Format: uuid */
             id: string;
@@ -13963,6 +18543,8 @@ export interface components {
             treatment: components["schemas"]["ClosingTreatmentSectionDto"] | null;
             /** @description Citas de días anteriores aún «en la clínica» (llegó, en sillón, listo para cobrar): las cierra DX-237, aquí solo se cuentan. null sin la sección 1. */
             staleInClinic: number | null;
+            /** @description DX-509-bis: urgencias del período que siguen en sobrecupo porque alguien decidió mantenerlas (`WALK_IN_OVERBOOK_KEPT` al deshacer la llegada o reactivarlas) y no están canceladas: compartieron la hora del profesional con otra cita. Informativo: no suma en `total` ni en el contador y no se descarta. Mismas sedes, período y profesional que las secciones (un DENTIST, las suyas). */
+            keptOverbooks: components["schemas"]["ClosingKeptOverbookSectionDto"];
             /** @description Suma de las secciones visibles */
             total: number;
             /** @description Sedes que puede filtrar el usuario */
@@ -14047,22 +18629,34 @@ export interface components {
             currency: string;
             amount: number;
         };
+        CashDifferenceDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @description SEC-043: null con `amountHidden`. */
+            amount: number | null;
+            /** @description SEC-043: la moneda tiene una anulación posterior que cuenta en otra caja abierta o pendiente (con lo contado, daría el esperado). */
+            amountHidden: boolean;
+        };
         CashExpectedLineDto: {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"];
             /** @description Fondo inicial (solo efectivo) */
             opening: number;
-            /** @description Abonos del turno que cuentan */
-            payments: number;
-            paymentsCount: number;
+            /** @description Abonos del turno que cuentan. SEC-043: null con `amountHidden`. */
+            payments: number | null;
+            paymentsCount: number | null;
+            /** @description DX-516: ajustes por medio de pago de esos abonos, con signo (impuestos y recargos +, descuentos −); 0 sin ajustes. */
+            paymentAdjustments: number | null;
             /** @description Ajustes que entraron en esta caja (con signo) */
-            adjustments: number;
+            adjustments: number | null;
             /** @description Salidas de caja menor del turno (DX-274), en positivo: se restan. Solo en efectivo. */
-            outflows: number;
-            outflowsCount: number;
-            /** @description opening + payments + adjustments − outflows (puede ser negativo) */
-            expected: number;
+            outflows: number | null;
+            outflowsCount: number | null;
+            /** @description opening + payments + paymentAdjustments + adjustments − outflows (puede ser negativo) */
+            expected: number | null;
+            /** @description SEC-043: con arqueo ciego y sin ser ADMIN, en una caja cerrada con una anulación posterior que cuenta en otra caja abierta o pendiente, las cifras del grupo (salvo el fondo) van a null. */
+            amountHidden: boolean;
         };
         CashSessionPaymentDto: {
             /** Format: uuid */
@@ -14085,6 +18679,8 @@ export interface components {
             receiptNumber: string | null;
             patient: components["schemas"]["CashPatientRefDto"];
             createdBy: components["schemas"]["CashStaffRefDto"] | null;
+            /** @description DX-516: lo cobrado = importe + impuestos + recargos − descuentos (sin ajustes, el importe). */
+            collectedAmount: number;
         };
         CashVoidedPaymentDto: {
             /** Format: uuid */
@@ -14096,7 +18692,6 @@ export interface components {
              * @example 2026-10-17
              */
             paidOn: string;
-            amount: number;
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"] | null;
@@ -14107,6 +18702,12 @@ export interface components {
             receiptNumber: string | null;
             patient: components["schemas"]["CashPatientRefDto"];
             createdBy: components["schemas"]["CashStaffRefDto"] | null;
+            /** @description SEC-043: null con `amountHidden`. */
+            amount: number | null;
+            /** @description SEC-043: null con `amountHidden`. */
+            collectedAmount: number | null;
+            /** @description SEC-043: con arqueo ciego y quien consulta sin ser ADMIN, cuenta en una caja aún abierta o pendiente: `amount` va a null. */
+            amountHidden: boolean;
             /** Format: date-time */
             voidedAt: string | null;
             voidedBy: components["schemas"]["CashStaffRefDto"] | null;
@@ -14143,12 +18744,15 @@ export interface components {
             /** @example Mensajería */
             category: string;
             supplier: string | null;
-            amount: number;
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             /** Format: date-time */
             createdAt: string;
             createdBy: components["schemas"]["CashStaffRefDto"];
+            /** @description SEC-043: null con `amountHidden`. */
+            amount: number | null;
+            /** @description SEC-043: con arqueo ciego y quien consulta sin ser ADMIN, cuenta en una caja aún abierta o pendiente: `amount` va a null. */
+            amountHidden: boolean;
             /** Format: date-time */
             voidedAt: string | null;
             voidedBy: components["schemas"]["CashStaffRefDto"] | null;
@@ -14159,7 +18763,7 @@ export interface components {
         CashCreditRefundDto: {
             /** Format: uuid */
             id: string;
-            /** @example DEV-BOG-000001 */
+            /** @example DEV-CCS-000001 */
             number: string;
             amount: number;
             /** @description Código ISO 4217 de 3 letras. */
@@ -14207,8 +18811,10 @@ export interface components {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"];
-            /** @description Con signo */
-            amount: number;
+            /** @description Con signo. SEC-043: null con `amountHidden`. */
+            amount: number | null;
+            /** @description SEC-043: con arqueo ciego y quien consulta sin ser ADMIN, cuenta en una caja aún abierta o pendiente: `amount` va a null. */
+            amountHidden: boolean;
             reason: string | null;
             /** Format: date-time */
             createdAt: string;
@@ -14218,21 +18824,32 @@ export interface components {
              * @description Caja donde cuenta; null = pendiente de la siguiente que se abra en la sede
              */
             sessionId: string | null;
+            /** @description SEC-043: estado de esa caja; null si está pendiente. */
+            sessionStatus: components["schemas"]["CashSessionStatus"] | null;
             payment: components["schemas"]["CashAdjustmentPaymentDto"] | null;
             /** @description OUTFLOW_VOID: la salida de caja anulada y su gasto */
             expensePayment: components["schemas"]["CashAdjustmentExpensePaymentDto"] | null;
             /** @description La caja cerrada de la que viene (enlace al original) */
             originalSession: components["schemas"]["CashSessionRefDto"] | null;
         };
+        CashReceiptViewsDto: {
+            /** @description Recibos distintos abiertos o impresos */
+            receipts: number;
+            /** @description Consultas en total (ver e imprimir) */
+            views: number;
+        };
         CashClosingLineDto: {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"];
             opening: number;
-            expected: number;
+            /** @description SEC-043: null con `amountHidden`. */
+            expected: number | null;
             counted: number;
-            /** @description counted − expected */
-            difference: number;
+            /** @description counted − expected. SEC-043: null con `amountHidden`. */
+            difference: number | null;
+            /** @description SEC-043: el grupo tiene una anulación posterior que cuenta en otra caja abierta o pendiente: sin esperado ni diferencia. `counted` se queda. */
+            amountHidden: boolean;
         };
         CashClosingDto: {
             /** Format: uuid */
@@ -14245,6 +18862,10 @@ export interface components {
             blind: boolean;
             hasDifference: boolean;
             differenceReason: string | null;
+            /** @description SEC-043: cierre a ciegas que no cuadró y llegó sin motivo. Se guardó igual y queda para revisión de administración. */
+            unjustifiedDifference: boolean;
+            /** @description SEC-043-bis: recibos de abonos de esta caja que quien la cerró abrió o imprimió entre la apertura (o la última reapertura) y este cierre (VIEW y PRINT de la auditoría; abonos de la caja y de todo ajuste que cuenta en ella). Solo para ADMIN y en un cierre a ciegas; null en los demás casos. */
+            receiptViews: components["schemas"]["CashReceiptViewsDto"] | null;
             notes: string | null;
             /**
              * @description Fecha de bloqueo contable sugerida para la sede (día civil del cierre, DX-091). No bloquea nada todavía.
@@ -14287,24 +18908,28 @@ export interface components {
             /** @description Fondo inicial por moneda */
             floats: components["schemas"]["CashMoneyDto"][];
             /** @description Diferencia por moneda del último cierre (vacía si está abierta) */
-            differences: components["schemas"]["CashMoneyDto"][];
+            differences: components["schemas"]["CashDifferenceDto"][];
+            /** @description SEC-043: el último cierre (si está cerrada) es una «diferencia sin justificar». */
+            unjustifiedDifference: boolean;
             notes: string | null;
             /** @example UTC */
             timeZone: string;
-            /** @description Arqueo ciego para quien consulta: `expected` y `payments` vienen a null hasta cerrar. */
+            /** @description DX-354: zona, locale y reloj de la sede de la caja para formatear el cierre impreso. null si le falta algo: la caja se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
+            /** @description Arqueo ciego para quien consulta: `expected`, `payments`, `voidedPayments` y `adjustments` vienen a null hasta cerrar, y los cierres anteriores (si se reabrió) sin líneas (SEC-043). */
             blindHidden: boolean;
             expected: components["schemas"]["CashExpectedLineDto"][] | null;
             payments: components["schemas"]["CashSessionPaymentDto"][] | null;
-            /** @description Anulados (DX-049): no cuentan en el esperado salvo si se anularon con la caja cerrada */
-            voidedPayments: components["schemas"]["CashVoidedPaymentDto"][];
+            /** @description Anulados (DX-049): no cuentan en el esperado salvo si se anularon con la caja cerrada. null con arqueo ciego. */
+            voidedPayments: components["schemas"]["CashVoidedPaymentDto"][] | null;
             /** @description Salidas de caja menor vivas del turno (DX-274). Se ven también con el arqueo ciego. */
             outflows: components["schemas"]["CashOutflowDto"][];
             /** @description Salidas anuladas: no restan salvo si se anularon con la caja cerrada */
             voidedOutflows: components["schemas"]["CashVoidedOutflowDto"][];
             /** @description DX-253: devoluciones de saldo a favor en efectivo del turno: restan en el esperado de CASH (dentro de «Salidas»). */
             creditRefunds: components["schemas"]["CashCreditRefundDto"][];
-            /** @description Ajustes que cuentan en esta caja */
-            adjustments: components["schemas"]["CashAdjustmentDto"][];
+            /** @description Ajustes que cuentan en esta caja. null con arqueo ciego. */
+            adjustments: components["schemas"]["CashAdjustmentDto"][] | null;
             /** @description Ajustes nacidos de esta caja ya cerrada, que cuentan en otra */
             laterAdjustments: components["schemas"]["CashAdjustmentDto"][];
             /** @description Cierre vigente */
@@ -14360,7 +18985,9 @@ export interface components {
             /** @description Fondo inicial por moneda */
             floats: components["schemas"]["CashMoneyDto"][];
             /** @description Diferencia por moneda del último cierre (vacía si está abierta) */
-            differences: components["schemas"]["CashMoneyDto"][];
+            differences: components["schemas"]["CashDifferenceDto"][];
+            /** @description SEC-043: el último cierre (si está cerrada) es una «diferencia sin justificar». */
+            unjustifiedDifference: boolean;
         };
         CashSessionPageDto: {
             items: components["schemas"]["CashSessionSummaryDto"][];
@@ -14430,7 +19057,7 @@ export interface components {
             maxBytes: number;
         };
         ExpenseSummaryCategoryDto: {
-            /** @example Arriendo */
+            /** @example Alquiler */
             category: string;
             /** @example 2500000 */
             amount: number;
@@ -14550,7 +19177,7 @@ export interface components {
              */
             locationId?: string;
             /**
-             * @description Una predefinida o una propia activa de la clínica.
+             * @description Una predefinida o una propia activa de la clínica, sin distinguir mayúsculas ni tildes. El nombre anterior de una predefinida cuenta como el actual.
              * @example Servicios públicos
              */
             category: string;
@@ -14728,7 +19355,7 @@ export interface components {
         };
         CreateCashOutflowDto: {
             /**
-             * @description Una predefinida o una propia activa de la clínica.
+             * @description Una predefinida o una propia activa de la clínica, sin distinguir mayúsculas ni tildes. El nombre anterior de una predefinida cuenta como el actual.
              * @example Servicios públicos
              */
             category: string;
@@ -14823,7 +19450,7 @@ export interface components {
         };
         ScopeConsentStatusDto: {
             scope: components["schemas"]["DataConsentScope"];
-            /** @description `null` = el titular aún no ha decidido sobre este scope. */
+            /** @description `null` = el paciente aún no ha decidido sobre este scope. */
             granted: boolean | null;
             latest: components["schemas"]["DataConsentRecordDto"] | null;
         };
@@ -15031,6 +19658,11 @@ export interface components {
         CancellationFeeViewDto: {
             /** Format: uuid */
             appointmentId: string;
+            /**
+             * Format: uuid
+             * @description Sede de la cita: el importe y las fechas se pintan con el formato de esa sede
+             */
+            locationId: string;
             /** Format: uuid */
             patientId: string;
             /** @description NO_SHOW o cancelación tardía. */
@@ -15101,6 +19733,12 @@ export interface components {
             workingWeekdays: number[];
             /** @description Festivos vivos: los recurrentes por (mes, día), luego los puntuales por fecha */
             holidays: components["schemas"]["LocationHolidayDto"][];
+        };
+        HolidayOnDayDto: {
+            /** @example 2026-12-25 */
+            date: string;
+            /** @description Nombre del festivo de la sede ese día; null si no lo es. */
+            name: string | null;
         };
         SetWorkingWeekdaysDto: {
             /**
@@ -15250,7 +19888,7 @@ export interface components {
             /** @example 1 */
             running: number;
             /**
-             * @description RUNNING con el arriendo vencido (worker caído o sin latido)
+             * @description RUNNING con la reserva vencida (worker caído o sin latido)
              * @example 0
              */
             runningExpired: number;
@@ -15358,22 +19996,8 @@ export interface components {
              * @description SEC-008: desde cuándo sirve para el acceso de soporte (alta + espera de seguridad, BREAK_GLASS_MFA_COOLDOWN_MINUTES). null sin MFA.
              */
             breakGlassAvailableAt: string | null;
-        };
-        PlatformMfaEnrollmentDto: {
-            /**
-             * @description Secreto TOTP en base32 para teclearlo en la app de autenticación. Solo se muestra en esta respuesta.
-             * @example JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP
-             */
-            secret: string;
-            /** @example otpauth://totp/Dentalix:soporte%40dentalix.app?secret=JBSWY3DPEHPK3PXP&issuer=Dentalix&algorithm=SHA1&digits=6&period=30 */
-            otpauthUri: string;
-        };
-        ConfirmPlatformMfaDto: {
-            /**
-             * @description Código de 6 dígitos de la app
-             * @example 123456
-             */
-            code: string;
+            /** @description DX-021-bis: códigos de recuperación sin usar. 0 si activó el MFA antes de existir: debe generarlos. */
+            recoveryCodesRemaining: number;
         };
         SupportAccessDto: {
             /** Format: uuid */
@@ -15422,7 +20046,9 @@ export interface components {
              */
             count: number;
             /** @description Breakdown of the ORIGINAL (unconverted) amounts grouped by each payment's own currency, keyed by its ISO 4217 code (3 letters). */
-            byCurrency: Record<string, never>;
+            byCurrency: {
+                [key: string]: number;
+            };
         };
         DashboardLowStockItemDto: {
             /** Format: uuid */
@@ -15456,6 +20082,11 @@ export interface components {
             end: string;
             /** @enum {string} */
             status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW" | "ARRIVED" | "IN_CHAIR" | "READY_FOR_CHECKOUT";
+            /**
+             * Format: uuid
+             * @description Sede de la cita (DX-354b): la web formatea su hora con el reloj de esa sede.
+             */
+            locationId: string;
         };
         DashboardDto: {
             period: components["schemas"]["DashboardPeriodDto"];
@@ -15689,6 +20320,8 @@ export interface components {
             /** @description data:image/png;base64,…; null en uno firmado a distancia hasta que firma el profesional */
             professionalSignature: string | null;
             clinic: components["schemas"]["ConsentClinicDto"];
+            /** @description DX-354: zona, locale y reloj de la sede del documento (la de la firma a distancia, o la sede en contexto). null si le falta algo: el documento se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             patient: components["schemas"]["ConsentPatientDto"];
             /** @description true si el hash guardado coincide con el recalculado al leer */
             integrityOk: boolean;
@@ -15822,6 +20455,11 @@ export interface components {
         };
         /** @enum {string} */
         PostOpDeliveryChannel: "PRINT" | "EMAIL" | "WHATSAPP_LINK";
+        /**
+         * @description DX-250: estado del email de una entrega EMAIL, leído del outbox. `QUEUED`: en cola; `SENT`: el proveedor lo aceptó; `NOT_SENT`: nunca se encoló o se agotaron los reintentos (la historia clínica debe decir «no enviado»). null: PRINT y WHATSAPP_LINK, y también una entrega EMAIL anterior a la retención del outbox (MAIL_OUTBOX_RETENTION_DAYS) sin fila: desconocido, no se afirma nada. Si se alarga la retención, las filas ya purgadas dentro de la nueva ventana se leen `NOT_SENT`.
+         * @enum {string}
+         */
+        PostOpEmailStatus: "QUEUED" | "SENT" | "NOT_SENT";
         PostOpDeliverySummaryDto: {
             /** Format: uuid */
             id: string;
@@ -15855,6 +20493,8 @@ export interface components {
              * @description Caducidad del enlace público; null en PRINT
              */
             linkExpiresAt: string | null;
+            /** @description DX-250: estado del email de una entrega EMAIL, leído del outbox. `QUEUED`: en cola; `SENT`: el proveedor lo aceptó; `NOT_SENT`: nunca se encoló o se agotaron los reintentos (la historia clínica debe decir «no enviado»). null: PRINT y WHATSAPP_LINK, y también una entrega EMAIL anterior a la retención del outbox (MAIL_OUTBOX_RETENTION_DAYS) sin fila: desconocido, no se afirma nada. Si se alarga la retención, las filas ya purgadas dentro de la nueva ventana se leen `NOT_SENT`. */
+            emailStatus: components["schemas"]["PostOpEmailStatus"] | null;
         };
         PostOpSuggestionsDto: {
             /** Format: uuid */
@@ -15935,11 +20575,15 @@ export interface components {
              * @description Caducidad del enlace público; null en PRINT
              */
             linkExpiresAt: string | null;
+            /** @description DX-250: estado del email de una entrega EMAIL, leído del outbox. `QUEUED`: en cola; `SENT`: el proveedor lo aceptó; `NOT_SENT`: nunca se encoló o se agotaron los reintentos (la historia clínica debe decir «no enviado»). null: PRINT y WHATSAPP_LINK, y también una entrega EMAIL anterior a la retención del outbox (MAIL_OUTBOX_RETENTION_DAYS) sin fila: desconocido, no se afirma nada. Si se alarga la retención, las filas ya purgadas dentro de la nueva ventana se leen `NOT_SENT`. */
+            emailStatus: components["schemas"]["PostOpEmailStatus"] | null;
             /** @description Texto tal como se entregó */
             renderedText: string;
             clinic: components["schemas"]["PostOpClinicBrandingDto"];
             locationName: string;
             locationPhone: string | null;
+            /** @description DX-354: zona, locale y reloj de la sede de la entrega. null si le falta algo: la entrega se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             patientName: string;
         };
         PublicPostOpDto: {
@@ -16248,6 +20892,8 @@ export interface components {
             patientFirstName: string | null;
             /** Format: date-time */
             expiresAt: string;
+            /** @description DX-354: zona, locale y reloj de la sede principal de la clínica (la activa más antigua), para pintar `expiresAt`. null si le falta algo: la página pinta «—» y pide llamar a la clínica. */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             questionnaire: components["schemas"]["AnamnesisQuestionnaireDto"];
             consent: components["schemas"]["PublicConsentDto"];
         };
@@ -16299,8 +20945,6 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
-        /** @enum {string} */
-        ConsentSignerType: "PATIENT" | "GUARDIAN";
         SignatureRecipientOptionDto: {
             allowed: boolean;
             /** @description Por qué no se puede enviar (en español) */
@@ -16575,12 +21219,15 @@ export interface components {
             subtotal: number;
             listPrice: number | null;
             agreementName: string | null;
+            /** @description DX-502: moneda ISO 4217 de `listPrice`: la del catálogo, congelada en la foto enviada (en un enlace anterior a DX-502, v2/v3, la congelada en los ítems del plan). Puede no ser la del plan: no se convierte. Null si no se sabe (sedes sin moneda común): no se muestra la cifra. */
+            listPriceCurrency: string | null;
         };
         PublicBudgetTotalDto: {
             currency: string;
             gross: number;
             discount: number;
             net: number;
+            /** @description Ahorro por convenio en `currency`. Desde DX-502 no suma los ítems cuyo precio de lista está en otra moneda (o en una desconocida). */
             agreementSaving: number;
         };
         PublicBudgetDto: {
@@ -16900,6 +21547,8 @@ export interface components {
             professionalSpecialty: string | null;
             professionalEmail: string | null;
             clinicName: string;
+            /** @description DX-019: datos fiscales congelados al emitir; null = la receta se imprime sin ellos (nunca con los de hoy). */
+            clinicFiscal: components["schemas"]["ClinicFiscalDto"] | null;
             locationName: string;
             locationAddress: string | null;
             notes: string | null;
@@ -16914,6 +21563,11 @@ export interface components {
             safetyOverrideReason: string | null;
             /** @description SHA-256 (hex) del contenido emitido */
             contentHash: string;
+            /**
+             * @description DX-467: código de verificación (12 símbolos de «23456789ABCDEFGHJKMNPQRSTUVWXYZ»). La impresión lo muestra agrupado de 4 en 4 con un QR hacia `/receta/<código>`; la página pública dice si la receta es válida o está anulada.
+             * @example K7M3QH9XRT2W
+             */
+            verificationCode: string;
             /** Format: date-time */
             voidedAt: string | null;
             /** Format: uuid */
@@ -17117,6 +21771,8 @@ export interface components {
             professionalSpecialty: string | null;
             professionalEmail: string | null;
             clinicName: string;
+            /** @description DX-019: datos fiscales congelados al emitir; null = la receta se imprime sin ellos (nunca con los de hoy). */
+            clinicFiscal: components["schemas"]["ClinicFiscalDto"] | null;
             locationName: string;
             locationAddress: string | null;
             notes: string | null;
@@ -17131,6 +21787,11 @@ export interface components {
             safetyOverrideReason: string | null;
             /** @description SHA-256 (hex) del contenido emitido */
             contentHash: string;
+            /**
+             * @description DX-467: código de verificación (12 símbolos de «23456789ABCDEFGHJKMNPQRSTUVWXYZ»). La impresión lo muestra agrupado de 4 en 4 con un QR hacia `/receta/<código>`; la página pública dice si la receta es válida o está anulada.
+             * @example K7M3QH9XRT2W
+             */
+            verificationCode: string;
             /** Format: date-time */
             voidedAt: string | null;
             /** Format: uuid */
@@ -17185,6 +21846,48 @@ export interface components {
             name?: string;
             notes?: string;
             items?: components["schemas"]["PrescriptionItemInputDto"][];
+        };
+        /**
+         * @description `VALID`: «Receta válida» con día de emisión, profesional, registro, clínica e iniciales. `VOIDED`: «Receta anulada el …», solo con el día. `UNVERIFIABLE`: el hash guardado no casa con el contenido («No se puede verificar; contacte con la clínica»), sin ningún otro dato. Código mal formado, inexistente o de otra clínica: 404.
+         * @enum {string}
+         */
+        PublicPrescriptionVerificationStatus: "VALID" | "VOIDED" | "UNVERIFIABLE";
+        PublicPrescriptionVerificationDto: {
+            /** @description `VALID`: «Receta válida» con día de emisión, profesional, registro, clínica e iniciales. `VOIDED`: «Receta anulada el …», solo con el día. `UNVERIFIABLE`: el hash guardado no casa con el contenido («No se puede verificar; contacte con la clínica»), sin ningún otro dato. Código mal formado, inexistente o de otra clínica: 404. */
+            status: components["schemas"]["PublicPrescriptionVerificationStatus"];
+            /**
+             * Format: date
+             * @description Solo `VALID`: día civil de la emisión en la zona de la sede (null si la sede no tiene zona válida).
+             * @example 2026-11-14
+             */
+            issuedOn: string | null;
+            /**
+             * Format: date
+             * @description Solo `VOIDED`: día civil de la anulación en la zona de la sede (null si la sede no tiene zona válida).
+             * @example 2026-11-19
+             */
+            voidedOn: string | null;
+            /** @example Dra. Andreína Salazar */
+            professionalName: string | null;
+            /**
+             * @description Registro profesional congelado en la receta
+             * @example MPPS 45678
+             */
+            professionalLicense: string | null;
+            /** @example Clínica Dental Los Palos Grandes */
+            clinicName: string | null;
+            /** @example M. J. P. R. */
+            patientInitials: string | null;
+            /**
+             * @description Locale de la sede, para escribir las fechas con su formato (null = sin formato: la web pinta «—»).
+             * @example es-VE
+             */
+            locale: string | null;
+            /**
+             * @description Reloj de la sede (lo pide el formateador regional de la web junto al locale).
+             * @example h12
+             */
+            hourCycle: components["schemas"]["PrescriptionHourCycle"] | null;
         };
         PatientImplantDto: {
             /** Format: uuid */
@@ -17308,6 +22011,8 @@ export interface components {
             /** Format: date */
             patientBirthDate: string | null;
             clinicName: string;
+            /** @description DX-354: zona, locale y reloj de la sede de la tarjeta (la de los implantes si es una; si junta varias, la activa). null si le falta algo: la tarjeta se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             locations: components["schemas"]["ImplantCardLocationDto"][];
             /** Format: date */
             placedOn: string;
@@ -17474,6 +22179,7 @@ export interface components {
             emergencyContactName?: string;
             emergencyContactPhone?: string;
             notes?: string;
+            preferredLanguage?: string;
         };
         ImportFieldDescriptorDto: {
             /** @example firstName */
@@ -17631,6 +22337,7 @@ export interface components {
             emergencyContactName?: string;
             emergencyContactPhone?: string;
             notes?: string;
+            preferredLanguage?: string;
         };
         ImportPreviewRowDto: {
             rowNumber: number;
@@ -17752,6 +22459,11 @@ export interface components {
              */
             leadHours: number[];
             /**
+             * @description DX-469: horas antes de la cita de la alarma del evento «Añadir a mi calendario» (0 = sin alarma). Por defecto 24.
+             * @example 24
+             */
+            calendarAlarmHours: number;
+            /**
              * Format: date-time
              * @description null = la sede nunca se configuró
              */
@@ -17768,6 +22480,11 @@ export interface components {
              *     ]
              */
             leadHours: number[];
+            /**
+             * @description DX-469: horas antes de la alarma de «Añadir a mi calendario» (0 la quita). Sin el campo, se conserva.
+             * @example 24
+             */
+            calendarAlarmHours?: number;
         };
         /**
          * @description DX-128: por qué el paciente no recibe el email automático (se dio de baja, o su canal es NONE o WHATSAPP). Con él no hay recordatorios pendientes.
@@ -17814,6 +22531,16 @@ export interface components {
             emailDelivery: components["schemas"]["ReminderEmailDelivery"] | null;
             /** @description DX-203: salió al email del responsable del paciente (un menor o un paciente sin email): «Recordatorio enviado al responsable». */
             sentToResponsible: boolean;
+            /**
+             * @description DX-497: idioma (BCP 47) en que salió el email, del registro de envíos. null si no salió o es anterior a DX-497.
+             * @example en
+             */
+            language: string | null;
+            /**
+             * @description DX-497: el idioma del paciente no tenía traducción y el email salió en `language` (el de la clínica): «sin traducción: ca → es». null si no hubo caída.
+             * @example ca
+             */
+            languageFallbackFrom: string | null;
             /** @description false = de una hora de inicio anterior (la cita se reprogramó) */
             current: boolean;
         };
@@ -17850,6 +22577,372 @@ export interface components {
             /** Format: date-time */
             optedOutAt: string | null;
             clinic: components["schemas"]["PublicReminderOptOutClinicDto"] | null;
+            /** @description DX-354: zona, locale y reloj de la sede principal de la clínica (la activa más antigua), para pintar `optedOutAt`. null si le falta algo: la página pinta «—» y pide llamar a la clínica. */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
+        };
+        RecallUnconfiguredItemDto: {
+            /** Format: uuid */
+            patientId: string;
+            /** @example María Rondón */
+            patientName: string;
+            /** @description `null` sin teléfono o con baja de avisos (DX-128) */
+            patientPhone: string | null;
+            /** @description E.164 sin `+` para `https://wa.me/…` (región de la sede de la última visita); `null` si no sirve o hay baja de avisos */
+            patientWhatsApp: string | null;
+            /** @description DX-128: el paciente pidió no recibir avisos. Sigue en la lista, sin contacto. */
+            reminderOptedOut: boolean;
+            /**
+             * Format: date
+             * @description Día civil de la última cita atendida, en la zona de su sede (en los últimos 24 meses)
+             * @example 2027-03-15
+             */
+            lastVisitAt: string;
+            /**
+             * Format: uuid
+             * @description Sede de la última cita atendida: la del paciente
+             */
+            lastVisitLocationId: string;
+        };
+        RecallUnconfiguredPageDto: {
+            items: components["schemas"]["RecallUnconfiguredItemDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        /** @enum {string} */
+        RecallKind: "HYGIENE" | "CHECKUP";
+        /** @enum {string} */
+        RecallDueSort: "MOST_OVERDUE" | "LEAST_OVERDUE";
+        /** @enum {string} */
+        RecallContactChannel: "CALL" | "WHATSAPP_LINK" | "EMAIL" | "IN_PERSON";
+        /** @enum {string} */
+        RecallContactOutcome: "NO_ANSWER" | "LEFT_MESSAGE" | "CALL_BACK" | "WILL_BOOK" | "DECLINED" | "WRONG_NUMBER" | "BOOKED";
+        RecallLastContactDto: {
+            channel: components["schemas"]["RecallContactChannel"];
+            outcome: components["schemas"]["RecallContactOutcome"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        RecallDueItemDto: {
+            /** Format: uuid */
+            recallId: string;
+            /** Format: uuid */
+            patientId: string;
+            patientName: string;
+            /** @description `null` sin teléfono o con baja de avisos (DX-128) */
+            patientPhone: string | null;
+            /** @description E.164 sin `+` para `https://wa.me/…` (región de la sede del paciente); `null` si no sirve o hay baja de avisos */
+            patientWhatsApp: string | null;
+            /** @description DX-128: el paciente pidió no recibir avisos. Sigue en la lista, sin contacto. */
+            reminderOptedOut: boolean;
+            /** @description DEPRECADO (DX-015-bis): la clave del tipo; null en los tipos sin clave. Usar `recallTypeId`. */
+            kind: components["schemas"]["RecallKind"] | null;
+            /** Format: uuid */
+            recallTypeId: string;
+            /** @description Nombre del tipo (p. ej. «Higiene») */
+            recallTypeName: string;
+            intervalMonths: number;
+            /**
+             * Format: date
+             * @description Base del vencimiento: lo fijado a mano o el último procedimiento disparador realizado
+             */
+            baseDate: string;
+            /** Format: date */
+            dueAt: string;
+            /** @description Días desde el vencimiento (0 = vence hoy; negativo = faltan) */
+            daysOverdue: number;
+            /**
+             * Format: uuid
+             * @description Sede del paciente: la de su última cita atendida o, sin ella, la del recall
+             */
+            locationId: string;
+            lastContact: components["schemas"]["RecallLastContactDto"] | null;
+        };
+        RecallDuePageDto: {
+            items: components["schemas"]["RecallDueItemDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        RecallDueCountDto: {
+            /** @description Pacientes por llamar con esos filtros (todas las páginas) */
+            total: number;
+        };
+        CreateRecallContactDto: {
+            /** @description Llamada, enlace de WhatsApp, email o en persona */
+            channel: components["schemas"]["RecallContactChannel"];
+            /** @description No contesta, dejó mensaje, llamar luego, agendará, rechaza, número erróneo o agendó (con la cita) */
+            outcome: components["schemas"]["RecallContactOutcome"];
+            /** @description Nota corta (sin datos clínicos). No se edita ni se borra: una corrección es otro contacto. */
+            note?: string | null;
+            /**
+             * Format: uuid
+             * @description La cita creada (obligatoria con BOOKED); del mismo paciente
+             */
+            appointmentId?: string | null;
+        };
+        RecallStaffRefDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string | null;
+        };
+        RecallContactDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            recallId: string;
+            /** @description DEPRECADO (DX-015-bis): usar `recallTypeId`. */
+            kind: components["schemas"]["RecallKind"] | null;
+            /** Format: uuid */
+            recallTypeId: string;
+            recallTypeName: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            locationId: string | null;
+            channel: components["schemas"]["RecallContactChannel"];
+            outcome: components["schemas"]["RecallContactOutcome"];
+            note: string | null;
+            /** Format: uuid */
+            appointmentId: string | null;
+            author: components["schemas"]["RecallStaffRefDto"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CreateDefaultRecallDto: {
+            /**
+             * Format: uuid
+             * @description Tipo de recall de la clínica (GET /recall-types), vivo y activo. Se usa su intervalo por defecto.
+             */
+            recallTypeId: string;
+            /**
+             * Format: uuid
+             * @description La cita que se despide (salida del paciente). Tiene que ser de este paciente, viva y en llegada, en sillón, lista para la salida o atendida (si no, 422). Con ella, la base es el día civil de esa cita en la zona de su sede, y la sede es la suya. Sin ella, la última cita atendida del paciente (o hoy): el caso de «Sin recall configurado».
+             */
+            appointmentId?: string;
+        };
+        /**
+         * @description MANUAL: fijado a mano · PROCEDURE: lo creó un procedimiento realizado · BACKFILL: lo creó el relleno del historial
+         * @enum {string}
+         */
+        RecallSource: "MANUAL" | "PROCEDURE" | "BACKFILL";
+        /**
+         * @description DUE: por llamar · UPCOMING: aún no vence · SCHEDULED: ya tiene cita · PAUSED: pausado hasta una fecha · INACTIVE: retirado
+         * @enum {string}
+         */
+        RecallStatus: "DUE" | "UPCOMING" | "SCHEDULED" | "PAUSED" | "INACTIVE";
+        PatientRecallDto: {
+            /** Format: uuid */
+            id: string;
+            /** @description DEPRECADO (DX-015-bis): la clave del tipo; null en los tipos sin clave. Usar `recallTypeId`. */
+            kind: components["schemas"]["RecallKind"] | null;
+            /** Format: uuid */
+            recallTypeId: string;
+            /** @description Nombre del tipo (p. ej. «Higiene») */
+            recallTypeName: string;
+            intervalMonths: number;
+            /**
+             * Format: date
+             * @description Base del vencimiento: el máximo entre lo fijado a mano y el último procedimiento disparador realizado
+             */
+            lastDoneAt: string;
+            /**
+             * Format: date
+             * @description Lo fijado a mano; null si el recall nació de un procedimiento
+             */
+            manualDoneAt: string | null;
+            /**
+             * Format: uuid
+             * @description Ítem del plan realizado que da la base (si la da un procedimiento y no lo fijado)
+             */
+            lastDoneItemId: string | null;
+            /** @description MANUAL: fijado a mano · PROCEDURE: lo creó un procedimiento realizado · BACKFILL: lo creó el relleno del historial */
+            source: components["schemas"]["RecallSource"];
+            /**
+             * Format: date
+             * @description Relleno del despliegue de DX-015-bis: si no es null, `manualDoneAt` NO lo tecleó nadie (es la última visita atendida, que entonces movía el reloj) y esto es lo que había fijado el clínico. Se vuelve null al fijarlo de nuevo.
+             */
+            preBackfillDoneAt: string | null;
+            active: boolean;
+            /** Format: date */
+            disabledUntil: string | null;
+            disabledReason: string | null;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: date */
+            baseDate: string;
+            /**
+             * Format: date
+             * @description Vencimiento guardado: base + intervalo
+             */
+            dueAt: string;
+            daysOverdue: number;
+            /** @description DUE: por llamar · UPCOMING: aún no vence · SCHEDULED: ya tiene cita · PAUSED: pausado hasta una fecha · INACTIVE: retirado */
+            status: components["schemas"]["RecallStatus"];
+            /** Format: date-time */
+            updatedAt: string;
+            updatedBy: components["schemas"]["RecallStaffRefDto"];
+        };
+        RecallReplacementTypeDto: {
+            /** Format: uuid */
+            recallTypeId: string;
+            /** @example Mantenimiento periodontal */
+            recallTypeName: string;
+        };
+        RecallExclusionUpdateDto: {
+            /** Format: uuid */
+            recallId: string;
+            /** Format: uuid */
+            recallTypeId: string;
+            /** @example Higiene */
+            recallTypeName: string;
+            /**
+             * Format: date
+             * @description Vencimiento (no cambia)
+             */
+            dueAt: string;
+            /** @description Siempre true (como en el PATCH del ítem) */
+            deactivated: boolean;
+            replacedBy: components["schemas"]["RecallReplacementTypeDto"];
+        };
+        SetPatientRecallResultDto: {
+            recalls: components["schemas"]["PatientRecallDto"][];
+            /** @description Historial de contactos, más recientes primero (hasta 50) */
+            contacts: components["schemas"]["RecallContactDto"][];
+            /** @description D9: recalls de tipos del mismo grupo de exclusión que este alta o reactivación desactivó («Recall de Higiene desactivado: lo sustituye Mantenimiento periodontal»); vacío si ninguno */
+            recallUpdates: components["schemas"]["RecallExclusionUpdateDto"][];
+        };
+        PatientRecallsDto: {
+            recalls: components["schemas"]["PatientRecallDto"][];
+            /** @description Historial de contactos, más recientes primero (hasta 50) */
+            contacts: components["schemas"]["RecallContactDto"][];
+        };
+        SetPatientRecallDto: {
+            /**
+             * @description Cada cuántos meses vuelve (p. ej. 6 = «control cada 6 meses»)
+             * @example 6
+             */
+            intervalMonths: number;
+            /**
+             * Format: date
+             * @description Día del último control o limpieza (AAAA-MM-DD, no futuro), fijado a mano. Por defecto: hoy en la sede al crear el recall; al editarlo, se conserva lo fijado (y la base que da un procedimiento).
+             * @example 2026-04-10
+             */
+            lastDoneAt?: string;
+            /**
+             * @description `false` retira el recall: deja de salir en la lista
+             * @default true
+             */
+            active: boolean;
+            /**
+             * Format: date
+             * @description Pausa hasta ese día (posterior a hoy), p. ej. «tratamiento en curso». `null` la quita.
+             */
+            disabledUntil?: string | null;
+            /** @description Motivo corto de la pausa (sin datos clínicos) */
+            disabledReason?: string | null;
+        };
+        RecallTypeTriggerDto: {
+            /** Format: uuid */
+            catalogItemId: string;
+            /** @example PREV-PROFILAXIS */
+            code: string;
+            /**
+             * @description Nombre del procedimiento en el catálogo de la clínica
+             * @example Profilaxis
+             */
+            name: string;
+        };
+        RecallTypeDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Higiene */
+            name: string;
+            /** @description Intervalo de los recalls que crea un procedimiento realizado */
+            defaultIntervalMonths: number;
+            active: boolean;
+            sortOrder: number;
+            /** @description Clave de compatibilidad (rutas `:kind`); null si no tiene */
+            systemKey: components["schemas"]["RecallKind"] | null;
+            /** @description Tipos excluyentes entre sí (p. ej. HYGIENE_PERIO) */
+            exclusionGroup: string | null;
+            /**
+             * Format: uuid
+             * @description Tipo de cita con el que se agenda un recall de este tipo (la web lo prellena en «Agendar»); null = ninguno. Es el guardado aunque ese tipo de cita se haya retirado o desactivado después: la web lo ignora si ya no está activo
+             */
+            appointmentTypeId: string | null;
+            /** @description Procedimientos del catálogo cuyo DONE mueve el reloj de este tipo */
+            triggerCatalogItemIds: string[];
+            /** @description Los mismos procedimientos, con su código y su nombre (en el orden de triggerCatalogItemIds) */
+            triggers: components["schemas"]["RecallTypeTriggerDto"][];
+        };
+        CreateRecallTypeDto: {
+            name: string;
+            /** @description Intervalo de los recalls que cree un procedimiento a partir de ahora (cambiarlo no mueve los que ya existen) */
+            defaultIntervalMonths: number;
+            /** @description Por defecto, true. false: deja de crear recalls por procedimiento; los que hay siguen en la lista */
+            active?: boolean;
+            /** @description Orden en las listas; por defecto, el último */
+            sortOrder?: number;
+            /**
+             * @description Grupo de exclusión (D9/D13): dos recalls de un paciente de tipos del mismo grupo no están activos a la vez. null = sin exclusión
+             * @example HYGIENE_PERIO
+             */
+            exclusionGroup?: string | null;
+            /**
+             * Format: uuid
+             * @description Tipo de cita al agendar (D20): uno vivo y activo de esta clínica (si no, 422). null = ninguno (lo quita); ausente, no cambia. Volver a mandar el que ya tenía vale aunque se haya retirado o desactivado después
+             */
+            appointmentTypeId?: string | null;
+        };
+        UpdateRecallTypeDto: {
+            name?: string;
+            /** @description Intervalo de los recalls que cree un procedimiento a partir de ahora (cambiarlo no mueve los que ya existen) */
+            defaultIntervalMonths?: number;
+            /** @description Por defecto, true. false: deja de crear recalls por procedimiento; los que hay siguen en la lista */
+            active?: boolean;
+            /** @description Orden en las listas; por defecto, el último */
+            sortOrder?: number;
+            /**
+             * @description Grupo de exclusión (D9/D13): dos recalls de un paciente de tipos del mismo grupo no están activos a la vez. null = sin exclusión
+             * @example HYGIENE_PERIO
+             */
+            exclusionGroup?: string | null;
+            /**
+             * Format: uuid
+             * @description Tipo de cita al agendar (D20): uno vivo y activo de esta clínica (si no, 422). null = ninguno (lo quita); ausente, no cambia. Volver a mandar el que ya tenía vale aunque se haya retirado o desactivado después
+             */
+            appointmentTypeId?: string | null;
+        };
+        SetRecallTypeTriggersDto: {
+            /** @description Reemplaza los disparadores: procedimientos vivos del catálogo de la clínica (o los que el tipo ya tenía). [] los quita todos */
+            catalogItemIds: string[];
+        };
+        /** @enum {string} */
+        WorkQueueKey: "CLOSING_QUEUE" | "ANAMNESIS_REVIEW" | "QUOTE_FOLLOW_UP" | "ACCEPTED_UNSCHEDULED" | "WAITLIST" | "RECALL" | "RECEIVABLES" | "LOW_STOCK";
+        WorkQueueOverdueDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @description Lo exigible ya vencido en esa moneda */
+            amount: number;
+        };
+        WorkQueueItemDto: {
+            key: components["schemas"]["WorkQueueKey"];
+            /**
+             * @description `ERROR`: esa lista no se pudo contar ahora (las demás sí); el cliente avisa y reintenta
+             * @enum {string}
+             */
+            status: "OK" | "ERROR";
+            /** @description El mismo número que el `/count` (o el `total`) de la lista; `null` si `ERROR`. En RECEIVABLES, pacientes con saldo (el mayor por moneda: no se suman monedas). */
+            count: number | null;
+            /** @description Solo RECEIVABLES: lo vencido por moneda, sin convertir */
+            overdue?: components["schemas"]["WorkQueueOverdueDto"][];
+        };
+        WorkQueuesSummaryDto: {
+            /** Format: date-time */
+            generatedAt: string;
+            /** @description Las listas del rol en la sede activa (sin cabecera, las sedes permitidas), en el orden de la bandeja */
+            items: components["schemas"]["WorkQueueItemDto"][];
         };
     };
     responses: never;
@@ -18069,12 +23162,13 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Sesión (`AuthTokensDto`) o, DX-021, el paso del segundo factor (`MfaChallengeDto`: `mfa`, `mfaToken`, `expiresAt`) que se completa en `POST /auth/login/mfa` (o en `/auth/login/mfa/enrollment*` si es un alta forzada). */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthTokensDto"];
+                    "application/json": components["schemas"]["AuthTokensDto"] | components["schemas"]["MfaChallengeDto"];
                 };
             };
             /** @description `mfaCode` no es de 6 dígitos o `breakGlassReason` no tiene 10–500 caracteres */
@@ -18237,19 +23331,23 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Enlace inexistente o reemplazado. */
+            /** @description Enlace inexistente, reemplazado por uno más reciente, invalidado por un cambio de contraseña o de otra clínica (`code` RESET_TOKEN_INVALID; mismo cuerpo en todos los casos). */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ResetTokenNotFoundErrorDto"];
+                };
             };
-            /** @description Enlace caducado o ya usado. */
+            /** @description Enlace caducado (`code` RESET_TOKEN_EXPIRED) o ya usado (`code` RESET_TOKEN_USED). */
             410: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ResetTokenGoneErrorDto"];
+                };
             };
             /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
             429: {
@@ -18280,6 +23378,311 @@ export interface operations {
                 };
             };
             /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LoginMfaController_verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyLoginMfaDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthTokensDto"];
+                };
+            };
+            /** @description Falta el código o vienen los dos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code: "MFA_INVALID_CODE"` (código erróneo o ya usado) o `code: "MFA_CHALLENGE_EXPIRED"` (token intermedio caducado, usado o de otra clínica: volver a iniciar sesión) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiados códigos fallidos de esta cuenta (5 → espera creciente, el mismo contador que el MFA del superadmin) o avalancha de peticiones. `Retry-After` con los segundos.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LoginMfaController_startEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartLoginMfaEnrollmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrollmentDto"];
+                };
+            };
+            /** @description Falta el código enviado al correo o no es correcto (mismo mensaje en los dos casos) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code: "MFA_CHALLENGE_EXPIRED"` (token caducado, usado, de otra clínica o con su código del correo agotado: volver a iniciar sesión) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La verificación ya está activa */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiados códigos fallidos de esta cuenta (5 → espera creciente, el mismo contador que el MFA del superadmin) o avalancha de peticiones. `Retry-After` con los segundos.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LoginMfaController_confirmEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmLoginMfaEnrollmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrolledSessionDto"];
+                };
+            };
+            /** @description Falta el código del correo o no es correcto, código de la app erróneo o sin alta pendiente */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code: "MFA_CHALLENGE_EXPIRED"` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiados códigos fallidos de esta cuenta (5 → espera creciente, el mismo contador que el MFA del superadmin) o avalancha de peticiones. `Retry-After` con los segundos.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SecurityPolicyController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityPolicyDto"];
+                };
+            };
+            /** @description Solo la administración ve y cambia la seguridad de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SecurityPolicyController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecurityPolicyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityPolicyDto"];
+                };
+            };
+            /** @description Solo la administración ve y cambia la seguridad de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Quien la enciende no tiene MFA activo */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    StaffMfaController_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffMfaStatusDto"];
+                };
+            };
+            /** @description No es miembro activo de esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    StaffMfaController_reset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetMemberMfaDto"];
+            };
+        };
+        responses: {
+            /** @description Restablecida */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Contraseña o código incorrectos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cuenta de soporte, o la sesión es un acceso de soporte */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es miembro activo de esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Es la propia, no está activa, quien la pide no tiene MFA o la cuenta da acceso a otra clínica */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiados códigos fallidos de quien lo pide. `Retry-After` con los segundos.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -18441,12 +23844,16 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Sesión (`AuthTokensDto`) o, DX-021, `{ loginRequired: true }`: aceptada, pero la cuenta necesita segundo factor y debe entrar por /login. */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthTokensDto"];
+                    "application/json": components["schemas"]["AuthTokensDto"] | {
+                        /** @enum {boolean} */
+                        loginRequired: true;
+                    };
                 };
             };
             /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
@@ -18597,6 +24004,284 @@ export interface operations {
             };
         };
     };
+    MyMfaController_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyMfaStatusDto"];
+                };
+            };
+        };
+    };
+    MyMfaController_trustedDevices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrustedDeviceDto"][];
+                };
+            };
+        };
+    };
+    MyMfaController_revokeAllTrustedDevices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revocados */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MyMfaController_revokeTrustedDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revocado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es un dispositivo tuyo */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MyMfaController_start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartMyMfaDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrollmentDto"];
+                };
+            };
+            /** @description Contraseña incorrecta */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya está activa */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MyMfaController_confirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmMyMfaDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyMfaEnabledDto"];
+                };
+            };
+            /** @description Código incorrecto o sin alta pendiente */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya está activa */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiados códigos fallidos (5 → espera creciente; el mismo contador que el login). `Retry-After` con los segundos.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MyMfaController_disable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReauthMfaDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthTokensDto"];
+                };
+            };
+            /** @description Contraseña o código incorrectos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Obligatoria para ti */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No está activa */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiados códigos fallidos (5 → espera creciente; el mismo contador que el login). `Retry-After` con los segundos.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MyMfaController_regenerate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReauthMfaDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecoveryCodesDto"];
+                };
+            };
+            /** @description Contraseña o código incorrectos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No está activa */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiados códigos fallidos (5 → espera creciente; el mismo contador que el login). `Retry-After` con los segundos.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     FilesController_getAvatar: {
         parameters: {
             query?: never;
@@ -18610,6 +24295,154 @@ export interface operations {
         responses: {
             /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    FilesController_getLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientMajorityReviewController_list: {
+        parameters: {
+            query: {
+                /** @description Primer día (AAAA-MM-DD), inclusive. */
+                from: string;
+                /** @description Último día (AAAA-MM-DD), inclusive; >= from y como mucho 366 días (400 si no). */
+                to: string;
+                /** @description Solo los pacientes de esta sede (la de su última cita atendida). 404 si no es una sede de la clínica; 403 LOCATION_NOT_ALLOWED si no está entre las permitidas al miembro. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComingOfAgeListDto"];
+                };
+            };
+            /** @description Período no válido o de más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso o sede no permitida (LOCATION_NOT_ALLOWED) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `locationId` no es una sede de la clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientMajorityReviewController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MajorityReviewViewDto"];
+                };
+            };
+            /** @description Paciente no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientMajorityReviewController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewMajorityDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MajorityReviewViewDto"];
+                };
+            };
+            /** @description Validación (mensaje en español) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El paciente todavía es menor de edad */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sin fecha de nacimiento, sin responsables o con responsables dados de alta ya adulto */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18708,6 +24541,71 @@ export interface operations {
             };
         };
     };
+    PatientsController_retentionSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetentionSettingsDto"];
+                };
+            };
+        };
+    };
+    PatientsController_updateRetention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRetentionSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetentionSettingsUpdateResultDto"];
+                };
+            };
+            /** @description No entero o fuera del rango del mínimo de plataforma al máximo */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar el plazo de conservación. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `RETENTION_REDUCTION_UNCONFIRMED`: reducir sin confirmar, sin guardar nada. `RETENTION_SETTINGS_BUSY`: otra operación con los pacientes de la clínica en curso, o la reducción tarda demasiado; no se guardó nada. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetentionReductionUnconfirmedErrorDto"] | components["schemas"]["RetentionSettingsBusyErrorDto"];
+                };
+            };
+        };
+    };
     PatientsController_settings: {
         parameters: {
             query?: never;
@@ -18764,6 +24662,62 @@ export interface operations {
             };
         };
     };
+    PatientsController_languages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientLanguagesDto"];
+                };
+            };
+        };
+    };
+    PatientsController_updateLanguages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePatientLanguagesDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientLanguagesDto"];
+                };
+            };
+            /** @description Etiqueta no válida o más de 20 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar la mayoría de edad. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PatientsController_documentTypeNames: {
         parameters: {
             query?: never;
@@ -18778,7 +24732,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DocumentTypeNamesDto"];
+                    "application/json": components["schemas"]["DocumentTypeNamesViewDto"];
                 };
             };
         };
@@ -18840,6 +24794,13 @@ export interface operations {
                     "application/json": components["schemas"]["PatientDetailDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     PatientsController_archive: {
@@ -18867,7 +24828,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description HC en retención legal (`CLINICAL_RECORD_RETENTION`) o citas abiertas (`PATIENT_HAS_PENDING_APPOINTMENTS`, sin `retentionUntil`) */
+            /** @description HC en retención (`CLINICAL_RECORD_RETENTION`) o citas abiertas (`PATIENT_HAS_PENDING_APPOINTMENTS`, sin `retentionUntil`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -18900,6 +24861,56 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PatientDto"];
                 };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientsController_imagingExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero de texto `paciente-<código>.txt` */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo el personal clínico puede exportar los datos para el software de imagen. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente inexistente en la clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -19407,6 +25418,351 @@ export interface operations {
             };
             /** @description Paciente de otra clínica o inexistente */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExchangeController_rates: {
+        parameters: {
+            query: {
+                /** @description Día de la tasa (AAAA-MM-DD, un día que exista) entre el 2000-01-01 y el 2100-12-31, y nunca posterior a hoy en la zona de las sedes de la clínica (la más adelantada): si no, 400 (`EXCHANGE_RATE_DATE_FUTURE` con `today` para un día futuro) sin leer tasas ni llamar al proveedor. Un día ya guardado se sirve siempre; uno sin guardar solo se pide al proveedor desde el alta de la clínica (o su primer abono, lo anterior): antes, 400 `EXCHANGE_RATE_DATE_OUT_OF_RANGE`. */
+                date: string;
+                /** @description DX-384. Códigos ISO 4217 separados por comas de las monedas con que se va a convertir ese día (la del abono y la de su plan). Con fuente MANUAL y plazo de la clínica > 0, si alguna no tiene tasa registrada ese día se devuelven las tasas de la última fecha anterior, dentro del plazo, que las tiene todas (`rateDate`). Sin este parámetro solo se devuelven las tasas del día exacto. */
+                currencies?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RatesResponseDto"];
+                };
+            };
+            /** @description Fecha que no existe o fuera de 2000-01-01..2100-12-31 (el mensaje de validación de `date`, o `EXCHANGE_RATE_DATE_INVALID`), un día posterior a hoy en las sedes de la clínica (`EXCHANGE_RATE_DATE_FUTURE`, con `today`) o un día sin tasa guardada anterior a la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes (límite `exchange-rates` por clínica + usuario) o `EXCHANGE_RATE_BUDGET_EXCEEDED`: la clínica (o la plataforma) agotó su presupuesto de días sin tasa guardada que se piden al proveedor. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `EXCHANGE_RATE_UNAVAILABLE`: el proveedor no dio las tasas del día (o falló hace poco y no se vuelve a pedir durante un rato). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExchangeController_convert: {
+        parameters: {
+            query: {
+                amount: number;
+                /** @description Código ISO 4217 de 3 letras. */
+                from: string;
+                /** @description Código ISO 4217 de 3 letras. */
+                to: string;
+                /** @description Día de la tasa (AAAA-MM-DD, un día que exista) entre el 2000-01-01 y el 2100-12-31, y nunca posterior a hoy en la zona de las sedes de la clínica (la más adelantada): si no, 400 (`EXCHANGE_RATE_DATE_FUTURE` con `today` para un día futuro) sin leer tasas ni llamar al proveedor. Un día ya guardado se sirve siempre; uno sin guardar solo se pide al proveedor desde el alta de la clínica (o su primer abono, lo anterior): antes, 400 `EXCHANGE_RATE_DATE_OUT_OF_RANGE`. */
+                date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConvertResponseDto"];
+                };
+            };
+            /** @description Fecha que no existe o fuera de 2000-01-01..2100-12-31 (el mensaje de validación de `date`, o `EXCHANGE_RATE_DATE_INVALID`), un día posterior a hoy en las sedes de la clínica (`EXCHANGE_RATE_DATE_FUTURE`, con `today`) o un día sin tasa guardada anterior a la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. También: moneda sin tasa ese día, «unsupported currency» con el proveedor; con tasa manual, código EXCHANGE_RATE_MISSING y el mensaje en español. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes (límite `exchange-rates` por clínica + usuario) o `EXCHANGE_RATE_BUDGET_EXCEEDED`: la clínica (o la plataforma) agotó su presupuesto de días sin tasa guardada que se piden al proveedor. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `EXCHANGE_RATE_UNAVAILABLE`: el proveedor no dio las tasas del día (o falló hace poco y no se vuelve a pedir durante un rato). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExchangeSettingsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExchangeRateSettingsDto"];
+                };
+            };
+            /** @description Solo un administrador puede ver y cambiar la tasa de cambio de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExchangeSettingsController_updateClinicSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateExchangeRateSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExchangeRateSettingsDto"];
+                };
+            };
+            /** @description Fuente que no es AUTOMATIC ni MANUAL, plazo que no es un entero de 0 a 30, o ninguno de los dos campos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar la tasa de cambio de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExchangeSettingsController_manualRates: {
+        parameters: {
+            query?: {
+                /** @description Cuántas de las últimas tasas traer. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualExchangeRateDto"][];
+                };
+            };
+            /** @description Solo un administrador puede ver y cambiar la tasa de cambio de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExchangeSettingsController_register: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterManualExchangeRateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualExchangeRateDto"];
+                };
+            };
+            /** @description Tasa que no es > 0 con hasta 8 decimales, moneda fuera de la lista o USD, o fecha inválida o futura en la zona de la sede */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un miembro de la clínica puede registrar una tasa de cambio. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya hay una tasa registrada para esa moneda en ese día. Si ningún abono la usó, corrígela en la lista. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExchangeSettingsController_correct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectManualExchangeRateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualExchangeRateDto"];
+                };
+            };
+            /** @description Tasa que no es > 0 con hasta 8 decimales */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar la tasa de cambio de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No encontramos esa tasa de cambio en la clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Esta tasa ya la usa al menos un abono y no se puede cambiar: el saldo de esos abonos se calculó con ella. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicCurrencyTextsController_texts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicCurrencyTextsDto"];
+                };
+            };
+            /** @description Solo administración configura cómo se escribe cada moneda. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicCurrencyTextsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClinicCurrencyTextsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicCurrencyTextsDto"];
+                };
+            };
+            /** @description Una moneda fuera del catálogo o repetida, un texto vacío, con saltos de línea o de más de 8 caracteres, o más de 30 monedas */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración configura cómo se escribe cada moneda. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20144,6 +26500,13 @@ export interface operations {
                     "application/json": components["schemas"]["DentalCatalogItemDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     LocationsController_list: {
@@ -20210,6 +26573,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LocationDto"];
                 };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -20452,6 +26822,50 @@ export interface operations {
             };
         };
     };
+    CallerLookupController_find: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CallerLookupDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CallerLookupResponseDto"];
+                };
+            };
+            /** @description Menos de 7 dígitos: `CALLER_PHONE_TOO_SHORT`, «Escribe el número completo». */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pacientes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     MedicalHistoryController_get: {
         parameters: {
             query?: never;
@@ -20677,7 +27091,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ClinicalEntryDto"];
+                    "application/json": components["schemas"]["CreatedClinicalEntryDto"];
                 };
             };
             /** @description Texto vacío, respuesta inválida, plantilla desactivada, cita de otro paciente, cita cancelada / no-show, cita de un día futuro o diagnósticos inválidos (DX-212: código CIE-10 inexistente, segundo principal, más de 3 relacionados, diente no FDI). */
@@ -20689,6 +27103,13 @@ export interface operations {
             };
             /** @description Paciente, cita o plantilla no encontrados en esta clínica (inexistentes o de otra clínica). */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description DX-015-bis (D18): el tipo de `recall` no existe en esta clínica o se retiró; no se guarda la evolución. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20828,6 +27249,95 @@ export interface operations {
             };
         };
     };
+    ClinicalEntrySettingsController_signing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalEntrySigningDto"];
+                };
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicalEntrySettingsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalEntrySettingsDto"];
+                };
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicalEntrySettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClinicalEntrySettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalEntrySettingsDto"];
+                };
+            };
+            /** @description Falta el sí/no o no es booleano */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar los ajustes de las evoluciones. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     ClinicalNoteTemplatesController_list: {
         parameters: {
             query?: {
@@ -20892,7 +27402,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Ya existe una plantilla con ese nombre */
+            /** @description Ya existe una plantilla con ese nombre, o DX-455: el atajo choca con el de otra plantilla (`code` NOTE_SHORTCUT_CONFLICT: «El atajo #resina ya lo usa la plantilla «Resina compuesta».» o «El atajo #re choca con #resina: uno no puede empezar por el otro.») */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -20971,7 +27481,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Ya existe una plantilla con ese nombre */
+            /** @description Ya existe una plantilla con ese nombre; `version` ya no es la actual (`code` NOTE_TEMPLATE_STALE: «La plantilla cambió, recárgala»); o DX-455: el atajo choca con el de otra plantilla (`code` NOTE_SHORTCUT_CONFLICT) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21999,7 +28509,10 @@ export interface operations {
     AppointmentsController_walkIn: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description DX-510: UUID estable por intento de «Atender sin cita» (doble clic, reintento de red). Repetir la MISMA petición con la misma clave devuelve la cita original (sin un segundo paciente ni una segunda cita, `patientCreated: false`); otros datos con la misma clave son 422 `IDEMPOTENCY_KEY_REUSED`. Por clínica; vive con la cita (sin caducidad, como en abonos y gastos). */
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -22009,7 +28522,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description DX-470 «Atender sin cita», en una transacción: el paciente (existente por `patientId`, o alta mínima `newPatient` con nombre, apellido y teléfono) y una cita de tipo urgente DESDE AHORA ya en «En clínica» (ARRIVED, `arrivedAt` = reloj del servidor, `walkIn`), con las señales y la nota de triaje. Va al primer hueco RESERVED libre de hoy del profesional que admite el tipo urgente (DX-446); con `overbookReason`, en sobrecupo ahora (`overbooked`, motivo en `appointment_reserved_overrides`). Sede: la de X-Location-Id (o la de escritura de la sesión), entre las permitidas al usuario; autor, el del token. Queda en auditoría (`WALK_IN_PATIENT`, `WALK_IN_ARRIVAL`, `WALK_IN_OVERBOOK`) sin el triaje ni el motivo. */
+            /** @description DX-470 «Atender sin cita», en una transacción: el paciente (existente por `patientId`, o alta mínima `newPatient` con nombre, apellido y teléfono) y una cita de tipo urgente DESDE AHORA ya en «En clínica» (ARRIVED, `arrivedAt` = reloj del servidor, `walkIn`), con las señales y la nota de triaje. Va al primer hueco RESERVED libre de hoy del profesional que admite el tipo urgente (DX-446); con `overbookReason`, en sobrecupo ahora (`overbooked`, motivo en `appointment_reserved_overrides`). DX-492: `chairId` opcional, un sillón activo de la sede. Sede: la de X-Location-Id (o la de escritura de la sesión), entre las permitidas al usuario; autor, el del token. Queda en auditoría (`WALK_IN_PATIENT`, `WALK_IN_ARRIVAL`, `WALK_IN_OVERBOOK`) sin el triaje ni el motivo. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -22018,7 +28531,7 @@ export interface operations {
                     "application/json": components["schemas"]["WalkInResultDto"];
                 };
             };
-            /** @description Datos inválidos: ni `patientId` ni `newPatient` (o los dos), señales fuera de las 6, nota de más de 200, motivo del sobrecupo fuera de 5–300, tipo no urgente o desactivado, o el profesional no atiende en la sede */
+            /** @description Datos inválidos: ni `patientId` ni `newPatient` (o los dos), señales fuera de las 6, nota de más de 200, motivo del sobrecupo fuera de 5–300, tipo no urgente o desactivado, el profesional no atiende en la sede, o el sillón es de otra sede o está desactivado */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -22032,15 +28545,22 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Paciente o profesional que no son de esta clínica */
+            /** @description Paciente, profesional o sillón que no son de esta clínica */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description `NO_RESERVED_SLOT` (`canOverbook`): no queda hueco reservado libre hoy, se puede reintentar con `overbookReason`; `PATIENT_DUPLICATE` (`existingPatientId` y `existingPatient` con `id`, `firstName`, `lastName`): el documento del alta mínima ya es de otro paciente (se comprueba antes que el hueco); sin tipo urgente activo; un bloqueo que no deja agendar; el paciente ya está en otra cita a esa hora; u otra persona ocupó el hueco a la vez */
+            /** @description `NO_RESERVED_SLOT` (`canOverbook`): no queda hueco reservado libre hoy, se puede reintentar con `overbookReason`; `PATIENT_DUPLICATE` (`existingPatientId` y `existingPatient` con `id`, `firstName`, `lastName`): el documento del alta mínima ya es de otro paciente (se comprueba antes que el hueco); sin tipo urgente activo; un bloqueo que no deja agendar; el paciente ya está en otra cita a esa hora; el sillón está ocupado (mensaje con su nombre y horas); u otra persona ocupó el hueco a la vez */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `IDEMPOTENCY_KEY_REUSED`: la Idempotency-Key ya creó una atención sin cita con otros datos (otro paciente, profesional, triaje, motivo o sede) */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22061,6 +28581,10 @@ export interface operations {
                 durationMinutes: number;
                 /** @description Paciente: sus otras citas también ocupan. */
                 patientId?: string;
+                /** @description DX-509-bis: la cita que se va a mover no ocupa (si no, su propia hora taparía los huecos de al lado). 404 si no es de esta clínica. */
+                excludeAppointmentId?: string;
+                /** @description DX-492: sillones activos de la sede. Solo salen los huecos en los que también está libre alguno de ellos, y cada hueco dice cuál (`chair`). Uno de otra sede o desactivado da 400; de otra clínica, 404. Hasta 12; se repite el parámetro: ?chairIds=a&chairIds=b. */
+                chairIds?: string[];
             };
             header?: never;
             path?: never;
@@ -22068,7 +28592,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description DX-122 «Buscar hueco»: huecos del profesional dentro del horario de la sede (su zona horaria), fuera de bloqueos y sin solape con sus citas (ni con las del paciente, si se indica). Nunca en el pasado. */
+            /** @description DX-122 «Buscar hueco»: huecos del profesional dentro del horario de la sede (su zona horaria), fuera de bloqueos y sin solape con sus citas (ni con las del paciente, si se indica). Nunca en el pasado. DX-492: con `chairIds`, solo los huecos con alguno de esos sillones libre, y cada hueco lleva el suyo en `chair`. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -22077,14 +28601,14 @@ export interface operations {
                     "application/json": components["schemas"]["OpeningsDto"];
                 };
             };
-            /** @description Fechas inválidas, al revés o más de 31 días; duración fuera de 5–480 */
+            /** @description Fechas inválidas, al revés o más de 31 días; duración fuera de 5–480; DX-492: sillón de otra sede o desactivado, o más de 12 */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Sede, profesional o paciente de otra clínica */
+            /** @description Sede, profesional, paciente, cita a excluir o sillón de otra clínica */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -22185,6 +28709,13 @@ export interface operations {
                     "application/json": components["schemas"]["AppointmentDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     AppointmentsController_update: {
@@ -22211,7 +28742,7 @@ export interface operations {
                     "application/json": components["schemas"]["AppointmentWriteDto"];
                 };
             };
-            /** @description Datos inválidos o al pasado, salida de COMPLETED sin `statusReason` válido (DX-273), o cancelar sin `cancelledByKind` o sin `cancelReasonCode` (DX-279), con el mensaje en español */
+            /** @description Id que no es UUID, datos inválidos o al pasado, salida de COMPLETED sin `statusReason` válido (DX-273), o cancelar sin `cancelledByKind` o sin `cancelReasonCode` (DX-279), con el mensaje en español */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -22232,15 +28763,58 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Solape con otra cita del profesional, del paciente o del sillón (DX-211, con su nombre y horas; también si otro movimiento ganó la carrera), el nuevo horario está bloqueado (DX-122) o reservado sin liberar (DX-446, `RESERVED_SLOT`), o un salto imposible del flujo en la clínica o la cita cambió mientras tanto (DX-200) */
+            /** @description Solape con otra cita del profesional, del paciente o del sillón (DX-211, con su nombre y horas; también si otro movimiento ganó la carrera): cuerpo con `code: APPOINTMENT_OVERLAP` y `scope` (`provider` | `patient` | `chair`) para que la web ofrezca el siguiente hueco (DX-509-bis, DX-492-bis). El nuevo horario está bloqueado (DX-122) o reservado sin liberar (DX-446, `RESERVED_SLOT`), o un salto imposible del flujo en la clínica o la cita cambió mientras tanto (DX-200). DX-509: `OVERBOOK_SLOT_TAKEN` (`canKeepOverbooked`) al reactivar una urgencia en sobrecupo cuya hora ya ocupa otra cita del profesional; se puede reintentar con `keepOverbooked: true`. DX-267-bis: reactivar (CANCELLED/NO_SHOW → SCHEDULED/CONFIRMED) aplica las reglas de mover a su misma hora y profesional (bloqueos, hueco reservado, horario del profesional en modo estricto, solapes); si la cita ya terminó, `code: APPOINTMENT_PAST` («La cita ya pasó: agenda una nueva») */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Fuera del horario de atención de la sede de la cita */
+            /** @description Fuera del horario de atención de la sede de la cita, al mover o al reactivar (DX-267-bis) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AppointmentsController_getCheckoutChecklist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description DX-202: lo que recepción comprueba al despedir al paciente. El saldo solo para los roles de cobro. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckoutChecklistDto"];
+                };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La cita es de una sede no permitida al usuario (DX-089) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cita no encontrada en esta clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22308,7 +28882,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UndoArrivalDto"];
+            };
+        };
         responses: {
             /** @description DX-200 «Deshacer llegada»: el paciente marcado «Llegó» por error vuelve al estado que tenía (SCHEDULED o CONFIRMED) y se borra `arrivedAt`. Solo desde ARRIVED (antes de pasar al sillón); queda en auditoría (`ARRIVAL_UNDONE`). */
             200: {
@@ -22333,7 +28911,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description La cita no está en espera (ya pasó al sillón, o nunca llegó), o cambió mientras tanto */
+            /** @description La cita no está en espera (ya pasó al sillón, o nunca llegó), o cambió mientras tanto. DX-509: `OVERBOOK_SLOT_TAKEN` (`canKeepOverbooked`): la urgencia es un sobrecupo y su hora ya la ocupa otra cita del profesional; se puede reintentar con `keepOverbooked: true` */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -22742,6 +29320,15 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
+                content: {
+                    "application/json": components["schemas"]["LocationScheduleDto"] | null;
+                };
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: la sede en contexto no tiene zona horaria válida (se configura en Ajustes → Sedes) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
                 content?: never;
             };
         };
@@ -22761,6 +29348,22 @@ export interface operations {
         responses: {
             /** @description Horario reemplazado; `timezone` en la respuesta es la zona de la sede */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationScheduleDto"];
+                };
+            };
+            /** @description Tramo fuera de rango, fin no posterior al inicio, tramos solapados en el mismo día, o `timezone` (obsoleto) distinta de la zona de la sede */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: la sede en contexto no tiene zona horaria válida (se configura en Ajustes → Sedes) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -23688,6 +30291,390 @@ export interface operations {
             };
         };
     };
+    EquipmentController_list: {
+        parameters: {
+            query?: {
+                /** @description Una sede. Sin ella: la de la cabecera X-Location-Id o todas las permitidas. */
+                locationId?: string;
+                status?: "ACTIVE" | "RETIRED" | "ALL";
+                /** @description Contenido en el nombre, la marca, el modelo o el nº de serie. */
+                query?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Equipos por nombre, paginados, con su próximo mantenimiento y si está vencido o próximo (≤30 días) en el día de su sede. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListEquipmentResponseDto"];
+                };
+            };
+            /** @description Filtro inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los equipos biomédicos. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    EquipmentController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEquipmentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipmentDto"];
+                };
+            };
+            /** @description Campo inválido (todos los errores en un mensaje), o el sillón es de otra sede o está desactivado */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los equipos biomédicos. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede o sillón no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    EquipmentController_listMaintenanceDue: {
+        parameters: {
+            query?: {
+                /** @description Cuántos avisos devolver (el total los cuenta todos). */
+                limit?: number;
+            };
+            header?: {
+                /** @description Sede activa; sin ella, las sedes permitidas al usuario (vista consolidada) */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipmentMaintenanceDueResponseDto"];
+                };
+            };
+            /** @description Límite inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los equipos biomédicos. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    EquipmentController_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Hoja de vida: el equipo y sus mantenimientos en orden cronológico. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipmentDetailDto"];
+                };
+            };
+            /** @description Solo administración gestiona los equipos biomédicos. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Equipo no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    EquipmentController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateEquipmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipmentDto"];
+                };
+            };
+            /** @description Campo inválido, o el sillón es de otra sede o está desactivado */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los equipos biomédicos. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Equipo, sede o sillón no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El equipo está dado de baja */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    EquipmentController_retire: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetireEquipmentDto"];
+            };
+        };
+        responses: {
+            /** @description Dado de baja (no se borra ni se reactiva): conserva su hoja de vida. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipmentDto"];
+                };
+            };
+            /** @description Motivo o fecha inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los equipos biomédicos. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Equipo no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya estaba dado de baja */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    EquipmentController_addMaintenance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordMaintenanceDto"];
+            };
+        };
+        responses: {
+            /** @description El mantenimiento registrado; un preventivo deja como próximo la fecha + la periodicidad del equipo (o el explícito). */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipmentMaintenanceDto"];
+                };
+            };
+            /** @description Campo inválido (fecha futura, costo sin moneda, moneda desconocida…) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los equipos biomédicos. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Equipo no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El equipo está dado de baja */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    EquipmentController_void: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                maintenanceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidMaintenanceDto"];
+            };
+        };
+        responses: {
+            /** @description Anulado con motivo (no se borra): sigue en la hoja de vida, marcado. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipmentMaintenanceDto"];
+                };
+            };
+            /** @description Motivo inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los equipos biomédicos. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Equipo o mantenimiento no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya estaba anulado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PaymentMethodsController_list: {
         parameters: {
             query?: {
@@ -23806,6 +30793,113 @@ export interface operations {
                 content?: never;
             };
             /** @description Ya existe un medio con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentMethodsController_addAdjustment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePaymentAdjustmentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodAdjustmentDto"];
+                };
+            };
+            /** @description Etiqueta vacía o larga, porcentaje fuera de (0, 100], importe fijo sin moneda o con más decimales que su moneda. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Medio no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Etiqueta repetida en el medio o tope de ajustes activos */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentMethodsController_changeAdjustment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                adjustmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePaymentAdjustmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodAdjustmentDto"];
+                };
+            };
+            /** @description Campo inválido (como en el alta). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Medio o ajuste no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Etiqueta repetida en el medio o tope de ajustes activos */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -24078,7 +31172,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Tope de ofertas del día («Ya se le ofrecieron 2 huecos hoy»), por WhatsApp a un paciente con baja, canal «Ninguno» o sin el permiso de WhatsApp (DX-128), o pendiente/cita que ya no está vigente. DX-435: por enlace con menos de 20 minutos para el hueco o sobre un hueco ya ocupado, o por email sin email o con baja. */
+            /** @description Tope de ofertas del día («Ya se le ofrecieron 2 huecos hoy»), por WhatsApp a un paciente con baja, canal «Ninguno» o sin el permiso de WhatsApp (DX-128), o pendiente/cita que ya no está vigente. DX-435: por enlace con menos vida para el enlace que la antelación mínima de la clínica (DX-448; 20 minutos de plataforma) o sobre un hueco ya ocupado, o por email sin email o con baja. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -24246,6 +31340,62 @@ export interface operations {
             };
         };
     };
+    SlotOfferSettingsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlotOfferSettingsDto"];
+                };
+            };
+        };
+    };
+    SlotOfferSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSlotOfferSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlotOfferSettingsDto"];
+                };
+            };
+            /** @description Falta un valor, o la caducidad no es un entero de 0 a 240 o la antelación mínima de 5 a 240 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar los ajustes de las ofertas de hueco. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     ConfirmationLinksController_create: {
         parameters: {
             query?: never;
@@ -24264,6 +31414,49 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ConfirmationLinkDto"];
                 };
+            };
+        };
+    };
+    PublicAppointmentConfirmationsController_calendarIcs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description text/calendar */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/calendar": string;
+                };
+            };
+            /** @description Token desconocido o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace caducó o la cita ya pasó. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -24347,6 +31540,59 @@ export interface operations {
                 content?: never;
             };
             /** @description El enlace caducó o la cita cambió desde que se envió. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicAppointmentConfirmationsController_wantsEarlier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublicWantsEarlierDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicAppointmentConfirmationDto"];
+                };
+            };
+            /** @description La cita ya no se puede adelantar (cancelada, atendida…), ya pasó o es hoy. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token desconocido o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace caducó o la cita cambió. */
             410: {
                 headers: {
                     [name: string]: unknown;
@@ -24613,15 +31859,22 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description status ACCEPTED: solo DENTIST y ADMIN (la asistente no acepta en nombre del doctor) */
+            /** @description status ACCEPTED: solo DENTIST y ADMIN (la asistente no acepta en nombre del doctor). DX-513: al cambiar la moneda, un ítem cuya rebaja frente al catálogo pasaría a contar como descuento supera el tope del rol de quien la cambia (mismo mensaje que el alta) */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED); plan aceptado con firma: no cambia de moneda ni vuelve atrás (DX-012); otra opción del grupo ya aceptada; la moneda no cambia si el plan tiene abonos vivos, un plan de cuotas activo o está cerrado (DX-109), ni si tiene asientos de saldo a favor (traspaso dado o recibido, o devolución), aunque no tenga abonos: code PLAN_CURRENCY_LOCKED_BY_CREDIT (DX-438). SEC-050: el plan que lleva un cargo vigente por inasistencia no se cancela ni cambia de moneda (completarlo sí). Aceptar pasa los ítems propuestos a aceptados, igual que la aceptación firmada, y cancela el plan de cuotas activo de las hermanas que rechaza; cancelar cancela también el plan de cuotas activo */
+            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED); DX-513-bis: la moneda no cambia si el plan tiene algún ítem vivo con precio de referencia (catálogo, lista o convenio): code PLAN_CURRENCY_LOCKED_BY_PRICED_ITEMS (los ítems libres no bloquean); DX-513: la moneda no cambia si con ella un ítem pasaría a contar como descuento sin firmar, o si una rebaja frente al catálogo que cuenta hoy dejaría de verse en el informe de descuentos (nada cambia: ni el plan ni sus ítems); plan aceptado con firma: no cambia de moneda ni vuelve atrás (DX-012); otra opción del grupo ya aceptada; la moneda no cambia si el plan tiene abonos vivos, un plan de cuotas activo o está cerrado (DX-109), ni si tiene asientos de saldo a favor (traspaso dado o recibido, o devolución), aunque no tenga abonos: code PLAN_CURRENCY_LOCKED_BY_CREDIT (DX-438). SEC-050: el plan que lleva un cargo vigente por inasistencia no se cancela ni cambia de moneda (completarlo sí). Aceptar pasa los ítems propuestos a aceptados, igual que la aceptación firmada, y cancela el plan de cuotas activo de las hermanas que rechaza; cancelar cancela también el plan de cuotas activo. DX-379 (C): status ACCEPTED con el presupuesto vencido (quoteExpired): code QUOTE_EXPIRED («El presupuesto venció el {fecha}: acéptalo con firma para elegir cómo.», con quoteValidUntil); la sede del plan sin zona válida: LOCATION_TIMEZONE_REQUIRED */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description DX-513: al cambiar la moneda, un ítem cuya rebaja frente al catálogo pasaría a contar como descuento supera el umbral del motivo y no lo tiene (mismo mensaje que el alta) */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -24643,7 +31896,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Plan PRESENTED, con presentedAt (servidor) y la sede */
+            /** @description Plan PRESENTED, con presentedAt (servidor) y la sede. DX-379: fija también la validez del presupuesto (quoteIssuedOn = hoy en la sede, quoteValidUntil = hoy + los días de GET /treatment-plan-settings), aunque un borrador impreso ya la tuviera */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -24673,7 +31926,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED): solo se presenta un borrador */
+            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED): solo se presenta un borrador. DX-379: code LOCATION_TIMEZONE_REQUIRED si la sede de la presentación no tiene una zona horaria válida (hace falta para fijar el día de emisión del presupuesto); el plan no cambia */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -24813,7 +32066,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo */
+            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo. DX-513-bis: `code` DISCOUNT_REFERENCE_RATE_MISSING si el precio de catálogo está en otra moneda y la clínica no tiene la tasa de hoy (el mensaje nombra la moneda y el día con el formato de la sede; a quien gestiona las tasas lo remite a Ajustes › Tasa de cambio y al resto le pide que avise a un administrador); no se guarda nada */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24870,7 +32123,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo */
+            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo. DX-513-bis: `code` DISCOUNT_REFERENCE_RATE_MISSING si el precio de catálogo está en otra moneda y la clínica no tiene la tasa de hoy (el mensaje nombra la moneda y el día con el formato de la sede; a quien gestiona las tasas lo remite a Ajustes › Tasa de cambio y al resto le pide que avise a un administrador); no se guarda nada */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24929,7 +32182,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TreatmentPlanItemDto"];
+                    "application/json": components["schemas"]["UpdatedTreatmentPlanItemDto"];
                 };
             };
             /** @description DX-050: pasar a DONE sin `performedById` quien no atiende (ASSISTANT); el profesional no atiende (ASSISTANT/RECEPTION) o no atiende en la sede; `completedAt` al pasar a DONE o futuro; `performedById`/`completedAt` en un ítem que no queda DONE. Mensaje en español */
@@ -24960,7 +32213,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo */
+            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo. DX-513-bis: `code` DISCOUNT_REFERENCE_RATE_MISSING si el precio de catálogo está en otra moneda y la clínica no tiene la tasa de hoy (el mensaje nombra la moneda y el día con el formato de la sede; a quien gestiona las tasas lo remite a Ajustes › Tasa de cambio y al resto le pide que avise a un administrador); no se guarda nada */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24970,6 +32223,38 @@ export interface operations {
         };
     };
     PlanQuoteController_quote: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede cuyos datos encabezan el presupuesto (y en la que se firma). Sin ella, la sede principal. Un plan ya aceptado muestra la sede en la que se firmó. */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                patientId: string;
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanQuoteDocumentDto"];
+                };
+            };
+            /** @description Paciente o plan no encontrados en esta clínica (o el plan es de otro paciente) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlanQuoteController_issue: {
         parameters: {
             query?: never;
             header?: {
@@ -25020,7 +32305,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Plan aceptado: ACCEPTED, sus ítems propuestos pasan a aceptados y quedan congelados; las demás opciones abiertas de su grupo pasan a REJECTED (otra opción aceptada) en la misma transacción */
+            /** @description Plan aceptado: ACCEPTED, sus ítems propuestos pasan a aceptados y quedan congelados; las demás opciones abiertas de su grupo pasan a REJECTED (otra opción aceptada) en la misma transacción. DX-417: con `partial`, el plan queda ACCEPTED solo con los elegidos (lo firmado es su presupuesto) y los demás pasan a un plan nuevo PRESENTED, fuera del grupo de opciones, enlazado (`splitFromPlanId`) y con la misma presentación, validez, moneda y profesional; `acceptance.pendingPlanId`, `pendingItemIds` y `pendingTotal` lo dicen */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -25029,7 +32314,7 @@ export interface operations {
                     "application/json": components["schemas"]["PlanQuoteDocumentDto"];
                 };
             };
-            /** @description Sin firma, firma no PNG o de más de 200 KB, sin nombre de quien firma, o plan sin ítems */
+            /** @description Sin firma, firma no PNG o de más de 200 KB, sin nombre de quien firma, o plan sin ítems. DX-379 (C): `expired` con un presupuesto no vencido; ORIGINAL_PRICES sin motivo, OTHER sin nota, nota de más de 200; REPRICE sin `repricePreviewHash` o con motivo. DX-417: `partial` sin elegir ninguno, eligiendo todos («Has elegido todos los procedimientos: acéptalo entero.»), más de 100, o dejando fuera uno ya aceptado o realizado */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -25043,14 +32328,124 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Paciente o plan no encontrados en esta clínica */
+            /** @description Paciente o plan no encontrados en esta clínica. DX-417: algún ítem de `partial` no es de este plan */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Ya estaba aceptado y firmado, el plan está rechazado, cancelado o completado, otra opción de su grupo ya está aceptada, o el presupuesto cambió desde que se mostró (contentHash) */
+            /** @description Ya estaba aceptado y firmado, el plan está rechazado, cancelado o completado, otra opción de su grupo ya está aceptada, o el presupuesto cambió desde que se mostró (contentHash). DX-379 (C): la sede de la presentación del plan sin zona válida → `LOCATION_TIMEZONE_REQUIRED` (también con un presupuesto no vencido si tiene validez guardada); `code: QUOTE_EXPIRED` («El presupuesto venció el {fecha}. Actualiza los precios o acepta con los precios originales indicando el motivo.», con `quoteValidUntil`) si está vencido y no llega `expired`; con REPRICE, `REPRICE_PREVIEW_STALE` (los precios vigentes cambiaron desde la vista previa), `REPRICE_INCOMPLETE` (algún propuesto sin precio vigente o sin tasa), `REPRICE_NOTHING_TO_APPLY` o el plan no se recotiza (abonos, plan de cuotas, saldo a favor); nada se escribe. DX-417 con `partial`: `PARTIAL_PLAN_NOT_PRESENTED` (solo un presupuesto presentado se acepta en parte), `PARTIAL_PLAN_ALREADY_ACCEPTED`, o el plan tiene abonos, plan de cuotas activo o saldo a favor */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlanQuoteController_acceptanceRepricePreview: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede cuyos datos encabezan el presupuesto (y en la que se firma). Sin ella, la sede principal. Un plan ya aceptado muestra la sede en la que se firmó. */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                patientId: string;
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptanceRepricePreviewDto"];
+                };
+            };
+            /** @description El plan no tiene ítems, o el presupuesto no está vencido («El presupuesto no está vencido: acéptalo sin elegir cómo.», como la firma) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo odontólogo y ADMIN aceptan (DX-040); SEC-041: el redondeo sube el % efectivo por encima del tope de quien firma */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o plan no encontrados en esta clínica (o el plan es de otro paciente) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya firmado, el plan no admite aceptarse o no se recotiza (aceptado, cerrado, con abonos, plan de cuotas o saldo a favor); `REPRICE_INCOMPLETE`: algún propuesto sin precio vigente o sin tasa de hoy (la validez no se renovaría); `REPRICE_NOTHING_TO_APPLY`; `LOCATION_TIMEZONE_REQUIRED` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlanQuoteController_partialAcceptancePreview: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede cuyos datos encabezan el presupuesto (y en la que se firma). Sin ella, la sede principal. Un plan ya aceptado muestra la sede en la que se firmó. */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                patientId: string;
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartialAcceptancePreviewRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartialAcceptancePreviewDto"];
+                };
+            };
+            /** @description Sin elegir ninguno, eligiendo todos («Has elegido todos los procedimientos: acéptalo entero.»), más de 100, ids que no son UUID, o dejando fuera uno ya aceptado o realizado («Los procedimientos ya aceptados o realizados forman parte de lo aceptado.»). `reprice: true` con un presupuesto no vencido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo odontólogo y ADMIN aceptan (DX-040): la asistente y recepción no */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o plan no encontrados en esta clínica (o el plan es de otro paciente), o algún ítem no es de este plan */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `PARTIAL_PLAN_NOT_PRESENTED` (solo un presupuesto presentado se acepta en parte), `PARTIAL_PLAN_ALREADY_ACCEPTED` (aceptado o firmado), o el plan tiene abonos, plan de cuotas activo o saldo a favor. Con `reprice: true`, los 409 de …/acceptance/reprice-preview (`REPRICE_INCOMPLETE`, `REPRICE_NOTHING_TO_APPLY`, `LOCATION_TIMEZONE_REQUIRED`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -25095,6 +32490,185 @@ export interface operations {
             };
             /** @description Paciente o procedimiento no encontrado en esta clínica (inexistente o de otra clínica). */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    QuoteSettingsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteSettingsDto"];
+                };
+            };
+        };
+    };
+    QuoteSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuoteSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteSettingsDto"];
+                };
+            };
+            /** @description Falta la validez, o no es un entero de 1 a 365 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar la validez de los presupuestos. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlanRepricingController_preview: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede de escritura: la de la lista de precios y la tasa de hoy (como al dar de alta un ítem) y la que firma un descuento. Sin ella, la principal. La validez se fecha con la sede del plan (la de su presentación o, sin presentar, esta). */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                patientId: string;
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepricePlanDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepricingPreviewDto"];
+                };
+            };
+            /** @description Recepción no recotiza (dato clínico). SEC-041: el redondeo del precio nuevo sube el % de descuento efectivo de un ítem por encima del tope del rol de quien recotiza (nada cambia). Si no lo sube, el descuento conserva su motivo y la firma de quien lo dio */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o plan no encontrados en esta clínica, el plan es de otro paciente, o algún ítem pedido no es de este plan */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El plan no se puede recotizar: aceptado (con o sin firma), cancelado, rechazado o completado; con abonos vivos, plan de cuotas activo o saldo a favor; un ítem pedido no está propuesto o es el cargo vigente por inasistencia (SEC-050); o `LOCATION_TIMEZONE_REQUIRED` (la sede del plan no tiene zona horaria válida) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description SEC-041: el redondeo sube el % efectivo por encima del umbral y el ítem no tiene motivo de descuento */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlanRepricingController_apply: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Sede de escritura: la de la lista de precios y la tasa de hoy (como al dar de alta un ítem) y la que firma un descuento. Sin ella, la principal. La validez se fecha con la sede del plan (la de su presentación o, sin presentar, esta). */
+                "X-Location-Id"?: string;
+                /** @description UUID por intento (uno por apertura de la vista previa). Repetir la MISMA petición con la misma clave devuelve la recotización ya aplicada (`replayed: true`) sin volver a escribir ni auditar; otra petición con la misma clave es 422 `IDEMPOTENCY_KEY_REUSED`. Por clínica; vive con la recotización. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                patientId: string;
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyRepricingDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppliedRepricingDto"];
+                };
+            };
+            /** @description Falta la cabecera Idempotency-Key o no es un UUID; `previewHash` no es una huella; ítems inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Recepción no recotiza (dato clínico). SEC-041: el redondeo del precio nuevo sube el % de descuento efectivo de un ítem por encima del tope del rol de quien recotiza (nada cambia). Si no lo sube, el descuento conserva su motivo y la firma de quien lo dio */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o plan no encontrados en esta clínica, el plan es de otro paciente, o algún ítem pedido no es de este plan */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El plan no se puede recotizar: aceptado (con o sin firma), cancelado, rechazado o completado; con abonos vivos, plan de cuotas activo o saldo a favor; un ítem pedido no está propuesto o es el cargo vigente por inasistencia (SEC-050); o `LOCATION_TIMEZONE_REQUIRED` (la sede del plan no tiene zona horaria válida); `REPRICE_PREVIEW_STALE` («Los precios vigentes cambiaron desde la vista previa: revísala de nuevo.»): la huella ya no coincide (cambió un precio, la tasa, un ítem o el día) y nada cambia; `REPRICE_NOTHING_TO_APPLY`: ningún ítem propuesto tiene precio vigente */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `IDEMPOTENCY_KEY_REUSED`: la clave ya se usó para otra petición (otro paciente en la ruta, otro plan, otra vista previa u otros ítems); o SEC-041: el redondeo sube el % efectivo por encima del umbral y el ítem no tiene motivo */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -25259,286 +32833,6 @@ export interface operations {
             };
         };
     };
-    ExchangeController_rates: {
-        parameters: {
-            query: {
-                /** @description Día de la tasa (AAAA-MM-DD, un día que exista) entre el 2000-01-01 y el 2100-12-31, y nunca posterior a hoy en la zona de las sedes de la clínica (la más adelantada): si no, 400 (`EXCHANGE_RATE_DATE_FUTURE` con `today` para un día futuro) sin leer tasas ni llamar al proveedor. Un día ya guardado se sirve siempre; uno sin guardar solo se pide al proveedor desde el alta de la clínica (o su primer abono, lo anterior): antes, 400 `EXCHANGE_RATE_DATE_OUT_OF_RANGE`. */
-                date: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RatesResponseDto"];
-                };
-            };
-            /** @description Fecha que no existe o fuera de 2000-01-01..2100-12-31 (el mensaje de validación de `date`, o `EXCHANGE_RATE_DATE_INVALID`), un día posterior a hoy en las sedes de la clínica (`EXCHANGE_RATE_DATE_FUTURE`, con `today`) o un día sin tasa guardada anterior a la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Demasiadas solicitudes (límite `exchange-rates` por clínica + usuario) o `EXCHANGE_RATE_BUDGET_EXCEEDED`: la clínica (o la plataforma) agotó su presupuesto de días sin tasa guardada que se piden al proveedor. La cabecera Retry-After indica los segundos de espera. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description `EXCHANGE_RATE_UNAVAILABLE`: el proveedor no dio las tasas del día (o falló hace poco y no se vuelve a pedir durante un rato). */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ExchangeController_convert: {
-        parameters: {
-            query: {
-                amount: number;
-                /** @description Código ISO 4217 de 3 letras. */
-                from: string;
-                /** @description Código ISO 4217 de 3 letras. */
-                to: string;
-                /** @description Día de la tasa (AAAA-MM-DD, un día que exista) entre el 2000-01-01 y el 2100-12-31, y nunca posterior a hoy en la zona de las sedes de la clínica (la más adelantada): si no, 400 (`EXCHANGE_RATE_DATE_FUTURE` con `today` para un día futuro) sin leer tasas ni llamar al proveedor. Un día ya guardado se sirve siempre; uno sin guardar solo se pide al proveedor desde el alta de la clínica (o su primer abono, lo anterior): antes, 400 `EXCHANGE_RATE_DATE_OUT_OF_RANGE`. */
-                date: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConvertResponseDto"];
-                };
-            };
-            /** @description Fecha que no existe o fuera de 2000-01-01..2100-12-31 (el mensaje de validación de `date`, o `EXCHANGE_RATE_DATE_INVALID`), un día posterior a hoy en las sedes de la clínica (`EXCHANGE_RATE_DATE_FUTURE`, con `today`) o un día sin tasa guardada anterior a la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. También: moneda sin tasa ese día, «unsupported currency» con el proveedor; con tasa manual, código EXCHANGE_RATE_MISSING y el mensaje en español. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Demasiadas solicitudes (límite `exchange-rates` por clínica + usuario) o `EXCHANGE_RATE_BUDGET_EXCEEDED`: la clínica (o la plataforma) agotó su presupuesto de días sin tasa guardada que se piden al proveedor. La cabecera Retry-After indica los segundos de espera. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description `EXCHANGE_RATE_UNAVAILABLE`: el proveedor no dio las tasas del día (o falló hace poco y no se vuelve a pedir durante un rato). */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ExchangeSettingsController_settings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExchangeRateSettingsDto"];
-                };
-            };
-            /** @description Solo un administrador puede ver y cambiar la tasa de cambio de la clínica. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ExchangeSettingsController_updateClinicSettings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateExchangeRateSettingsDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExchangeRateSettingsDto"];
-                };
-            };
-            /** @description Fuente que no es AUTOMATIC ni MANUAL */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Solo un administrador puede ver y cambiar la tasa de cambio de la clínica. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ExchangeSettingsController_manualRates: {
-        parameters: {
-            query?: {
-                /** @description Cuántas de las últimas tasas traer. */
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ManualExchangeRateDto"][];
-                };
-            };
-            /** @description Solo un administrador puede ver y cambiar la tasa de cambio de la clínica. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ExchangeSettingsController_register: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegisterManualExchangeRateDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ManualExchangeRateDto"];
-                };
-            };
-            /** @description Tasa que no es > 0 con hasta 8 decimales, moneda fuera de la lista o USD, o fecha inválida o futura en la zona de la sede */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Solo un miembro de la clínica puede registrar una tasa de cambio. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Ya hay una tasa registrada para esa moneda en ese día. Si ningún abono la usó, corrígela en la lista. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ExchangeSettingsController_correct: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CorrectManualExchangeRateDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ManualExchangeRateDto"];
-                };
-            };
-            /** @description Tasa que no es > 0 con hasta 8 decimales */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Solo un administrador puede ver y cambiar la tasa de cambio de la clínica. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description No encontramos esa tasa de cambio en la clínica. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Esta tasa ya la usa al menos un abono y no se puede cambiar: el saldo de esos abonos se calculó con ella. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     DomainsController_list: {
         parameters: {
             query?: never;
@@ -25690,6 +32984,181 @@ export interface operations {
             };
         };
     };
+    PublicBrandingByHostController_branding: {
+        parameters: {
+            query: {
+                /** @description Host de la página (subdominio de la plataforma o dominio propio verificado); el puerto se ignora. */
+                host: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandingDto"];
+                };
+            };
+            /** @description Ninguna clínica en ese host. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicSettingsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicSettingsDto"];
+                };
+            };
+            /** @description Solo administración edita los datos de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateClinicSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicSettingsDto"];
+                };
+            };
+            /** @description Un texto vacío donde es obligatorio, con saltos de línea o más largo que su tope, un email sin forma nombre@dominio, un color que no es #RRGGBB o una moneda del catálogo que no es una moneda admitida */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración edita los datos de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicSettingsController_uploadLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description PNG, JPG o WebP de hasta 1 MB
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicSettingsDto"];
+                };
+            };
+            /** @description El logo está vacío. / El logo supera el máximo de 1 MB. / El logo debe ser una imagen PNG, JPG o WebP. / El logo no es una imagen válida o está dañado. Expórtalo de nuevo y vuelve a subirlo. / El logo es demasiado grande: como mucho 4096 × 4096 píxeles. / El logo pesa más de 1 MB una vez procesado. Usa una imagen más sencilla (pocos colores) o más pequeña. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración edita los datos de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hay demasiadas subidas en curso. Inténtalo de nuevo en unos segundos. / El almacén de archivos no responde. Inténtalo de nuevo en unos minutos. (con Retry-After) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicSettingsController_deleteLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicSettingsDto"];
+                };
+            };
+            /** @description Solo administración edita los datos de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     ReferenceController_currencies: {
         parameters: {
             query?: never;
@@ -25801,6 +33270,87 @@ export interface operations {
             };
         };
     };
+    PaymentsController_proofUploadUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePaymentProofUploadDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentProofUploadDto"];
+                };
+            };
+            /** @description Tamaño (más de 10 MB), huella o tipo declarado no válidos, o archivo vacío */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN y recepción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentsController_proofUrl: {
+        parameters: {
+            query?: {
+                disposition?: "inline" | "attachment";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentProofUrlDto"];
+                };
+            };
+            /** @description Solo ADMIN y recepción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Abono no encontrado en esta clínica o sin comprobante */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PaymentsController_listCash: {
         parameters: {
             query: {
@@ -25812,6 +33362,8 @@ export interface operations {
                 method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
                 /** @description DX-395: solo abonos de este medio de pago de la clínica (`GET /payment-methods?includeInactive=true`), también los propios y los desactivados. Uno inicial cuenta además los abonos sin medio de su método (réplicas anteriores). De otra clínica o inexistente: 400. */
                 paymentMethodId?: string;
+                /** @description DX-515: WITH = solo abonos con nº de factura externa; WITHOUT = solo los que aún no lo tienen. Sin él, todos. */
+                externalInvoice?: "WITH" | "WITHOUT";
                 page?: number;
                 pageSize?: number;
             };
@@ -25859,6 +33411,8 @@ export interface operations {
                 method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
                 /** @description DX-395: solo abonos de este medio de pago de la clínica (`GET /payment-methods?includeInactive=true`), también los propios y los desactivados. Uno inicial cuenta además los abonos sin medio de su método (réplicas anteriores). De otra clínica o inexistente: 400. */
                 paymentMethodId?: string;
+                /** @description DX-515: WITH = solo abonos con nº de factura externa; WITHOUT = solo los que aún no lo tienen. Sin él, todos. */
+                externalInvoice?: "WITH" | "WITHOUT";
             };
             header?: {
                 /** @description Sede activa. Sin cabecera: todas las sedes de la clínica. */
@@ -25913,6 +33467,13 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentDto"][];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     PaymentsController_create: {
@@ -25939,7 +33500,7 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentDto"];
                 };
             };
-            /** @description DX-377: el medio pide referencia y no llegó, o el medio no es de la clínica o está desactivado. DX-054: `paidAt` a más de 24 h en el futuro («La fecha del abono no puede estar más de 24 horas en el futuro.»). */
+            /** @description Id que no es UUID. DX-377: el medio pide referencia y no llegó, o el medio no es de la clínica o está desactivado. DX-075: `paidAt` como día civil posterior a hoy en la sede («La fecha del abono no puede ser posterior a hoy en la sede.»). DX-054: `paidAt` como instante a más de 24 h en el futuro («La fecha del abono no puede estar más de 24 horas en el futuro.»). */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -25986,7 +33547,7 @@ export interface operations {
                     "application/json": components["schemas"]["SplitPaymentDto"];
                 };
             };
-            /** @description Menos de 2 o más de 5 líneas, una línea sin medio, un medio de otra clínica o desactivado, una referencia que falta, o dos líneas con el mismo medio y referencia. DX-054: `paidAt` a más de 24 h en el futuro. */
+            /** @description Menos de 2 o más de 5 líneas, una línea sin medio, un medio de otra clínica o desactivado, una referencia que falta, o dos líneas con el mismo medio y referencia. DX-075: `paidAt` como día civil posterior a hoy en la sede. DX-054: `paidAt` como instante a más de 24 h en el futuro. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -26000,7 +33561,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Plan rechazado o cancelado (DX-109). `code: PAYMENT_REFERENCE_DUPLICATE` con `line` (desde 0) si la referencia de una línea ya está en otro abono vivo de ±90 días: se confirma con su `duplicateReferenceReason`. `code: SPLIT_PAYMENT_EXCEEDS_BALANCE` (con `total`, `pending` —nunca bajo 0—, `excess` —lo que este cobro supera lo pendiente— y `currency`, la del plan) si el total supera lo pendiente: se confirma con `confirmCreditBalance`. `code: SPLIT_PAYMENT_BALANCE_CHANGED` si, sin esa confirmación, otro abono entró al plan mientras se registraba el cobro: no se registra nada y se repite la petición (misma clave). Sin caja abierta, si la clínica la exige para el efectivo (DX-027). */
+            /** @description Plan rechazado o cancelado (DX-109). `code: PAYMENT_REFERENCE_DUPLICATE` con `line` (desde 0) si la referencia de una línea ya está en otro abono vivo de ±90 días: se confirma con su `duplicateReferenceReason`. `code: SPLIT_PAYMENT_EXCEEDS_BALANCE` (con `total`, `pending` —nunca bajo 0—, `excess` —lo que este cobro supera lo pendiente— y `currency`, la del plan) si el total supera lo pendiente: se confirma con `confirmCreditBalance`. `code: SPLIT_PAYMENT_BALANCE_CHANGED` si, sin esa confirmación, otro movimiento del plan (un abono, un traspaso o una devolución de saldo a favor) entró mientras se registraba el cobro: no se registra nada y se repite la petición (misma clave). Sin caja abierta, si la clínica la exige para el efectivo (DX-027). */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -26009,6 +33570,13 @@ export interface operations {
             };
             /** @description La Idempotency-Key ya se usó con otro plan, otro cuerpo o un abono suelto: genera una clave nueva. */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code: SPLIT_PAYMENT_BALANCE_UNAVAILABLE` (DX-463): sin `confirmCreditBalance`, no se pudo leer lo pendiente del plan ANTES de la transacción (fallo de lectura o proveedor de tasas fuera de plazo), así que no se puede comprobar si el total lo supera. No se registra nada: se repite la petición (misma clave) en un momento. Un abono del plan «sin tasa» no lo provoca: el excedente se comprueba contra lo conocido. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -26039,7 +33607,7 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentDto"];
                 };
             };
-            /** @description Otra moneda que la del saldo, o el abono supera lo pendiente (mensaje en español). DX-054: `paidAt` a más de 24 h en el futuro. */
+            /** @description Otra moneda que la del saldo, o el abono supera lo pendiente (mensaje en español). DX-075: `paidAt` como día civil posterior a hoy en la sede. DX-054: `paidAt` como instante a más de 24 h en el futuro. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -26082,6 +33650,66 @@ export interface operations {
                     "application/json": components["schemas"]["PlanBalanceWithItemsDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentsController_updateExternalInvoiceNumber: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExternalInvoiceNumberDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalInvoiceNumberResultDto"];
+                };
+            };
+            /** @description No es texto, tiene saltos de línea o pasa de 64 caracteres */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pagos o abono de una sede no permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El abono no existe o es de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El abono está anulado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     PaymentsController_remove: {
@@ -26106,14 +33734,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Falta `reason` o no tiene 3–300 caracteres */
+            /** @description Id que no es UUID, o falta `reason` o no tiene 3–300 caracteres */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Rol sin acceso a pagos, o RECEPTION anulando un abono de otro usuario o de otro día */
+            /** @description Sede del abono no permitida (LOCATION_NOT_ALLOWED), rol sin acceso a pagos, o RECEPTION anulando un abono de otro usuario o de otro día */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -26240,6 +33868,161 @@ export interface operations {
                 content?: never;
             };
             /** @description Ni el paciente ni un responsable que recibe avisos tienen email */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Topes de envío de la clínica */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentReceiptSummaryController_view: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD), inclusive, en la zona horaria de la sede de cada recibo. */
+                from: string;
+                /** @description Último día del período (AAAA-MM-DD), inclusive. Debe ser >= from; el período no puede superar 366 días. Las dos fechas, entre 2000-01-01 y 2100-12-31 (400 si no). */
+                to: string;
+            };
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentReceiptSummaryDto"];
+                };
+            };
+            /** @description Fechas ausentes o inválidas, from > to o más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pagos (403 en español) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El paciente no existe o es de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentReceiptSummaryController_print: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD), inclusive, en la zona horaria de la sede de cada recibo. */
+                from: string;
+                /** @description Último día del período (AAAA-MM-DD), inclusive. Debe ser >= from; el período no puede superar 366 días. Las dos fechas, entre 2000-01-01 y 2100-12-31 (400 si no). */
+                to: string;
+            };
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentReceiptSummaryDto"];
+                };
+            };
+            /** @description Fechas ausentes o inválidas, from > to o más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pagos (403 en español) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El paciente no existe o es de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentReceiptSummaryController_email: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD), inclusive, en la zona horaria de la sede de cada recibo. */
+                from: string;
+                /** @description Último día del período (AAAA-MM-DD), inclusive. Debe ser >= from; el período no puede superar 366 días. Las dos fechas, entre 2000-01-01 y 2100-12-31 (400 si no). */
+                to: string;
+            };
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendPaymentReceiptResponseDto"];
+                };
+            };
+            /** @description Fechas ausentes o inválidas, from > to o más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pagos (403 en español) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El paciente no existe o es de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No hay abonos en el período, o ni el paciente ni un responsable que recibe avisos tienen email */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26414,6 +34197,115 @@ export interface operations {
             };
         };
     };
+    ReceiptSettingsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptSettingsViewDto"];
+                };
+            };
+            /** @description Solo administración configura el título y la leyenda del recibo. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReceiptSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReceiptSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptSettingsDto"];
+                };
+            };
+            /** @description Un texto que no es texto, con saltos de línea o demasiado largo */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración configura el título y la leyenda del recibo. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReceiptSettingsController_updateLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocationReceiptLegendDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationReceiptLegendViewDto"];
+                };
+            };
+            /** @description Leyenda con saltos de línea o demasiado larga, o id no UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración configura el título y la leyenda del recibo. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sede no existe o es de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PaymentPlansController_get: {
         parameters: {
             query?: never;
@@ -26432,6 +34324,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PaymentPlanDto"];
                 };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -26458,6 +34357,13 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentPlanDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description El plan ya tiene un plan de cuotas activo, o está rechazado o cancelado y no se financia (DX-109). */
             409: {
                 headers: {
@@ -26480,6 +34386,13 @@ export interface operations {
         responses: {
             /** @description Payment plan cancelled */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Id que no es UUID */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -26701,6 +34614,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReceivablesAgingPageDto"];
+                };
+            };
+            /** @description Filtro inválido o sede que no es de esta clínica */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no tiene acceso a la cartera: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReceivablesController_creditBalances: {
+        parameters: {
+            query?: {
+                /** @description Sede de la deuda. Sin él, la de la cabecera X-Location-Id; sin ninguna, toda la clínica. */
+                locationId?: string;
+                /** @description Solo esta moneda (ISO 4217), sin convertir */
+                currency?: string;
+                page?: number;
+                /** @description Tope: 100 (un valor mayor se recorta) */
+                pageSize?: number;
+            };
+            header?: {
+                /** @description Sede activa. El parámetro `locationId` manda sobre ella; sin ninguno, toda la clínica. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreditBalancesPageDto"];
                 };
             };
             /** @description Filtro inválido o sede que no es de esta clínica */
@@ -27216,6 +35173,452 @@ export interface operations {
                 content?: never;
             };
             /** @description Solo la administración y los odontólogos ven la producción por procedimiento. / Solo puedes ver tu propia producción. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    UnallocatedPaymentsController_list: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de la sede del abono). Como mucho 24 meses por calendario; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo los abonos de esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                page?: number;
+                /** @description Tope: 100 (un valor mayor se recorta) */
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnallocatedPaymentsPageDto"];
+                };
+            };
+            /** @description Período inválido o de más de 24 meses */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no tiene acceso a lo cobrado sin imputar: es para administración y recepción. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    UnallocatedPaymentsController_csv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de la sede del abono). Como mucho 24 meses por calendario; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo los abonos de esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Período inválido o de más de 24 meses */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no tiene acceso a lo cobrado sin imputar: es para administración y recepción. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecoveredSlotsController_get: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede; cuenta el día del INICIO del hueco). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo los huecos, citas y ofertas de este profesional (usuario). Uno de otra clínica da un informe vacío. */
+                providerId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecoveredSlotsReportDto"];
+                };
+            };
+            /** @description Período inválido o de más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve los reportes de la clínica. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecoveredSlotsController_csv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede; cuenta el día del INICIO del hueco). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo los huecos, citas y ofertas de este profesional (usuario). Uno de otra clínica da un informe vacío. */
+                providerId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Período inválido o de más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve los reportes de la clínica. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChairOccupancyController_get: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChairOccupancyReportDto"];
+                };
+            };
+            /** @description Período inválido o de más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve los reportes de la clínica. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con citas no tiene zona horaria válida */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChairOccupancyController_csv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Período inválido o de más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve los reportes de la clínica. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con citas no tiene zona horaria válida */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientLinksController_get: {
+        parameters: {
+            query: {
+                /** @description Primer día del período de ENVÍO (AAAA-MM-DD, en la zona de la sede de cada enlace). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientLinksReportDto"];
+                };
+            };
+            /** @description Período inválido o de más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve los reportes de la clínica. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con enlaces no tiene zona horaria válida */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProfitabilityController_get: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description `CASH` («Caja»): abonos vivos − pagos de gastos vivos, por fecha de pago. `ACCRUAL` («Devengo»): producción realizada − gastos no anulados por fecha de factura, pagados o no. */
+                basis: "CASH" | "ACCRUAL";
+                /** @description Solo esta sede (403 si no es de las del usuario, no es de la clínica o está retirada: la misma respuesta). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfitabilityReportDto"];
+                };
+            };
+            /** @description Período inválido o de más de 366 días; `basis`, `locationId`, `side`, `currency`, `category` o la página inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve la rentabilidad de las sedes. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProfitabilityController_csv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description `CASH` («Caja»): abonos vivos − pagos de gastos vivos, por fecha de pago. `ACCRUAL` («Devengo»): producción realizada − gastos no anulados por fecha de factura, pagados o no. */
+                basis: "CASH" | "ACCRUAL";
+                /** @description Solo esta sede (403 si no es de las del usuario, no es de la clínica o está retirada: la misma respuesta). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Período inválido o de más de 366 días; `basis`, `locationId`, `side`, `currency`, `category` o la página inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve la rentabilidad de las sedes. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProfitabilityController_lines: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description `CASH` («Caja»): abonos vivos − pagos de gastos vivos, por fecha de pago. `ACCRUAL` («Devengo»): producción realizada − gastos no anulados por fecha de factura, pagados o no. */
+                basis: "CASH" | "ACCRUAL";
+                /** @description Solo esta sede (403 si no es de las del usuario, no es de la clínica o está retirada: la misma respuesta). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description `INCOME`: lo que forma los ingresos; `EXPENSE`: los gastos */
+                side: "INCOME" | "EXPENSE";
+                /** @description La moneda de la cifra (ISO 4217) */
+                currency: string;
+                /** @description Solo con `side=EXPENSE`: la categoría de la cifra (el nombre tal como sale en el informe). Sin ella, todos los gastos. */
+                category?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfitabilityLinesDto"];
+                };
+            };
+            /** @description Período inválido o de más de 366 días; `basis`, `locationId`, `side`, `currency`, `category` o la página inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve la rentabilidad de las sedes. / sede fuera de las del usuario */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -27743,7 +36146,7 @@ export interface operations {
                     "application/json": components["schemas"]["CashSessionDetailDto"];
                 };
             };
-            /** @description El arqueo no cuadra: explica el motivo de la diferencia antes de cerrar. */
+            /** @description El arqueo no cuadra: explica el motivo de la diferencia antes de cerrar. (nunca en un cierre a ciegas de quien no es ADMIN) */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -27880,6 +36283,7 @@ export interface operations {
                 /** @description Fecha de factura, hasta. */
                 to?: string;
                 locationId?: string;
+                /** @description Sin distinguir mayúsculas ni tildes. El nombre anterior de una predefinida filtra por el actual. */
                 category?: string;
                 /** @description `OPEN` = pendiente + parcial. */
                 status?: "PENDING" | "PARTIAL" | "PAID" | "VOIDED" | "OPEN";
@@ -28095,6 +36499,7 @@ export interface operations {
                 /** @description Fecha de factura, hasta. */
                 to?: string;
                 locationId?: string;
+                /** @description Sin distinguir mayúsculas ni tildes. El nombre anterior de una predefinida filtra por el actual. */
                 category?: string;
                 /** @description `OPEN` = pendiente + parcial. */
                 status?: "PENDING" | "PARTIAL" | "PAID" | "VOIDED" | "OPEN";
@@ -28858,6 +37263,13 @@ export interface operations {
                     "application/json": components["schemas"]["InventoryItemDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     InventoryController_remove: {
@@ -28873,6 +37285,13 @@ export interface operations {
         responses: {
             /** @description Item soft-deleted (deletedAt set) */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Id que no es UUID */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -28903,6 +37322,13 @@ export interface operations {
                     "application/json": components["schemas"]["InventoryItemDto"];
                 };
             };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     InventoryController_listMovements: {
@@ -28923,6 +37349,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InventoryMovementDto"][];
                 };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -28948,6 +37381,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InventoryMovementDto"];
                 };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -29310,6 +37750,43 @@ export interface operations {
             };
             /** @description Solo un administrador de la clínica puede ver o cambiar el calendario de la sede. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede inexistente, de otra clínica o retirada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LocationCalendarController_holidayOnDay: {
+        parameters: {
+            query: {
+                date: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolidayOnDayDto"];
+                };
+            };
+            /** @description El identificador de la sede no es válido. */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -29827,33 +38304,7 @@ export interface operations {
             };
         };
     };
-    PlatformMfaController_start: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PlatformMfaEnrollmentDto"];
-                };
-            };
-            /** @description El MFA ya está activo */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PlatformMfaController_confirm: {
+    PlatformMfaController_regenerate: {
         parameters: {
             query?: never;
             header?: never;
@@ -29862,7 +38313,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ConfirmPlatformMfaDto"];
+                "application/json": components["schemas"]["ReauthMfaDto"];
             };
         };
         responses: {
@@ -29871,24 +38322,28 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PlatformMfaStatusDto"];
+                    "application/json": components["schemas"]["RecoveryCodesDto"];
                 };
             };
-            /** @description Código inválido o sin alta pendiente */
+            /** @description Contraseña o código incorrectos */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description El MFA ya está activo */
+            /** @description El MFA no está activo */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            /**
+             * @description Demasiados códigos fallidos. `Retry-After` con los segundos.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -30638,7 +39093,10 @@ export interface operations {
     AppointmentPostOpController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description DX-250: UUID generado una vez por clic y reutilizado en los reintentos. Repetir la petición con la misma clave en la misma cita devuelve la entrega ya registrada (sin `publicUrl` ni `whatsapp`: el token solo sale en la primera respuesta) en vez de crear otra, y no vuelve a encolar el email. La repetición responde igual 201 (no 200). Con otra plantilla u otro canal: 422 `IDEMPOTENCY_KEY_REUSED`. */
+                "Idempotency-Key"?: string;
+            };
             path: {
                 appointmentId: string;
             };
@@ -30658,7 +39116,7 @@ export interface operations {
                     "application/json": components["schemas"]["PostOpDeliveryCreatedDto"];
                 };
             };
-            /** @description La plantilla está inactiva, o el host de la petición no sirve para armar el enlace (EMAIL y WHATSAPP_LINK) */
+            /** @description La plantilla está inactiva, el host de la petición no sirve para armar el enlace (EMAIL y WHATSAPP_LINK), o la Idempotency-Key no es un UUID */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -30672,7 +39130,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Sin email ni responsable que reciba avisos, sin un teléfono que sirva para WhatsApp, o el paciente dio de baja los envíos */
+            /** @description Repetición (misma Idempotency-Key) de un EMAIL que aún se está registrando (`code: POSTOP_DELIVERY_IN_PROGRESS`): vuelve a consultar en unos segundos. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sin email ni responsable que reciba avisos, sin un teléfono que sirva para WhatsApp, o el paciente dio de baja los envíos; o la cita está cancelada, fue un no-show o es de un día que aún no llega (DX-250); o la Idempotency-Key ya se usó con otra plantilla u otro canal (`code: IDEMPOTENCY_KEY_REUSED`) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -31214,6 +39679,47 @@ export interface operations {
             };
         };
     };
+    PublicMedicalHistoryController_opened: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Primera apertura registrada (las siguientes no cambian nada). */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token malformado, desconocido o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Este enlace ya no es válido, contacte con su clínica. (caducado, anulado o ya enviado) */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PatientSignatureRequestsController_options: {
         parameters: {
             query?: never;
@@ -31314,7 +39820,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description La sede no tiene formato regional, o BUDGET de un plan que no está «Presentado» (o ya aceptado) */
+            /** @description La sede no tiene formato regional, o BUDGET de un plan que no está «Presentado» (o ya aceptado). DX-379 (C): BUDGET de un presupuesto vencido: code QUOTE_EXPIRED («El presupuesto venció el {fecha}: actualiza sus precios antes de enviarlo a firmar a distancia.», con quoteValidUntil) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -32321,6 +40827,41 @@ export interface operations {
             };
             /** @description Ya existe una plantilla con ese nombre */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicPrescriptionVerificationController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicPrescriptionVerificationDto"];
+                };
+            };
+            /** @description Código mal formado, inexistente o de otra clínica, o host sin clínica (el mismo 404 genérico). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -33780,6 +42321,570 @@ export interface operations {
             };
             /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecallController_unconfigured: {
+        parameters: {
+            query?: {
+                /** @description Solo los pacientes cuya última cita atendida es de esta sede (tiene que estar entre las permitidas: 403 si no). Sin ella, la sede activa (X-Location-Id) o las permitidas. */
+                locationId?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: {
+                /** @description Sede activa: los pacientes cuya sede (la de su última cita atendida o, sin ella, la del recall) es esta; sin ella, las sedes permitidas (vista consolidada) */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallUnconfiguredPageDto"];
+                };
+            };
+            /** @description page, pageSize o locationId inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no gestiona la lista de recall: es para administración y recepción. O 403 LOCATION_NOT_ALLOWED: locationId de una sede no permitida. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecallController_list: {
+        parameters: {
+            query?: {
+                /** @description Compatibilidad: solo el tipo con esa clave (higiene o control). Mejor `recallTypeId`. */
+                kind?: components["schemas"]["RecallKind"];
+                /** @description DX-015-bis: solo un tipo de recall de la clínica (GET /recall-types) */
+                recallTypeId?: string;
+                /** @description Incluir también los que vencen en los próximos N días (0 = solo los ya vencidos) */
+                withinDays?: number;
+                /** @description Por días de vencido: los más vencidos primero o al revés */
+                sort?: components["schemas"]["RecallDueSort"];
+                page?: number;
+                pageSize?: number;
+            };
+            header?: {
+                /** @description Sede activa: los pacientes cuya sede (la de su última cita atendida o, sin ella, la del recall) es esta; sin ella, las sedes permitidas (vista consolidada) */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallDuePageDto"];
+                };
+            };
+            /** @description Tu rol no gestiona la lista de recall: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecallController_count: {
+        parameters: {
+            query?: {
+                /** @description Compatibilidad: solo el tipo con esa clave (higiene o control). Mejor `recallTypeId`. */
+                kind?: components["schemas"]["RecallKind"];
+                /** @description DX-015-bis: solo un tipo de recall de la clínica (GET /recall-types) */
+                recallTypeId?: string;
+                /** @description Incluir también los que vencen en los próximos N días (0 = solo los ya vencidos) */
+                withinDays?: number;
+            };
+            header?: {
+                /** @description Sede activa: los pacientes cuya sede (la de su última cita atendida o, sin ella, la del recall) es esta; sin ella, las sedes permitidas (vista consolidada) */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallDueCountDto"];
+                };
+            };
+            /** @description Tu rol no gestiona la lista de recall: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecallController_contact: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description No decide nada: se autoriza y se sella con la sede del paciente (la de la lista), no con la activa. */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                recallId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRecallContactDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallContactDto"];
+                };
+            };
+            /** @description Canal o desenlace inválidos, nota de más de 280, BOOKED sin cita o cita de otro paciente */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no gestiona la lista de recall: es para administración y recepción. O 403 LOCATION_NOT_ALLOWED: el paciente es de una sede no permitida. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Recall de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientRecallsController_createDefaultRecall: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede activa: solo cuenta si el paciente no tiene ninguna cita atendida (sede y «hoy» del recall). */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDefaultRecallDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetPatientRecallResultDto"];
+                };
+            };
+            /** @description recallTypeId inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no programa recalls de pacientes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El paciente ya tiene un recall de ese tipo (también uno inactivo); o la sede de su última cita no tiene zona horaria (LOCATION_TIMEZONE_REQUIRED) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tipo de recall inexistente en esta clínica, retirado o desactivado; o `appointmentId` que no es una cita viva de este paciente en llegada, en sillón, lista para la salida o atendida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientRecallsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientRecallsDto"];
+                };
+            };
+            /** @description Paciente de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientRecallsController_set: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede activa: la del recall nuevo y la de «hoy». */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                id: string;
+                /** @description HYGIENE o CHECKUP (compatibilidad) o el id de un tipo de la clínica (GET /recall-types) */
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPatientRecallDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetPatientRecallResultDto"];
+                };
+            };
+            /** @description Intervalo, fechas o motivo inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo el personal clínico fija o pausa el recall de un paciente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente de otra clínica o inexistente; tipo de recall que no existe en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecallTypesController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallTypeDto"][];
+                };
+            };
+        };
+    };
+    RecallTypesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRecallTypeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallTypeDto"];
+                };
+            };
+            /** @description Nombre vacío o largo, intervalo, orden o grupo inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los tipos de recall de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe un tipo con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ese tipo de cita no existe en esta clínica, está retirado o desactivado: elige uno activo o «Ninguno». */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecallTypesController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retirado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los tipos de recall de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tipo no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Es un tipo del sistema (Higiene, Control): solo se desactiva */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecallTypesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRecallTypeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallTypeDto"];
+                };
+            };
+            /** @description Campo inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los tipos de recall de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tipo no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe un tipo con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ese tipo de cita no existe en esta clínica, está retirado o desactivado: elige uno activo o «Ninguno». */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecallTypesController_triggers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetRecallTypeTriggersDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallTypeDto"];
+                };
+            };
+            /** @description Lista inválida o de más de 50 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona los tipos de recall de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tipo no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Algún id no es un procedimiento vivo del catálogo de esta clínica */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    WorkQueuesController_get: {
+        parameters: {
+            query?: {
+                /** @description Solo estas listas (separadas por comas), p. ej. el contador del menú. Acota las del rol; una lista que el rol no tiene no sale nunca. */
+                keys?: components["schemas"]["WorkQueueKey"][];
+            };
+            header?: {
+                /** @description Sede activa; sin ella, las sedes permitidas al usuario (vista consolidada) */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkQueuesSummaryDto"];
+                };
+            };
+            /** @description Una clave de lista desconocida */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

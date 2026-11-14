@@ -6,6 +6,10 @@ import type { ClinicRole } from '@/lib/me/me-api';
  * rol (la lista de espera y los aceptados sin agendar los lee cualquiera en la
  * API, pero los agenda el mostrador). Nunca lo amplía: un bloque que la API
  * negaría ni se pide ni se pinta. La frontera sigue en el servidor.
+ *
+ * DX-503: las listas de «Pendientes» las reparte la API
+ * (`GET /work-queues/summary`, `WORK_QUEUE_ROLES`, misma matriz); aquí quedan
+ * como documentación y para los bloques que sí pide Inicio (caja, resultados…).
  */
 const ACCESS = {
   /** `GET /appointments` (APPOINTMENT_ROLES); el odontólogo, solo las suyas. */
@@ -20,6 +24,8 @@ const ACCESS = {
   unscheduled: ['ADMIN', 'RECEPTION'],
   /** `GET /waitlist` (APPOINTMENT_ROLES; lo agenda el mostrador). */
   waitlist: ['ADMIN', 'RECEPTION'],
+  /** `GET /recall/due/count` (RECALL_LIST_ROLES, DX-015). */
+  recall: ['ADMIN', 'RECEPTION'],
   /** `GET /cash-sessions/current` (CASH_SESSION_ROLES). */
   cash: ['ADMIN', 'RECEPTION'],
   /** `GET /receivables/aging/summary` (RECEIVABLES_ROLES). */
@@ -32,6 +38,8 @@ const ACCESS = {
   periodResults: ['ADMIN'],
   /** Cartera por antigüedad en detalle: la mirada de gestión. Recepción ve la fila de pendientes. */
   aging: ['ADMIN'],
+  /** `GET /equipment/maintenance-due` (EQUIPMENT_ROLES, DX-543): los equipos son solo de ADMIN. */
+  equipmentMaintenance: ['ADMIN'],
   /** `GET /reports/production-by-procedure` (PRODUCTION_REPORT_ROLES), acotada al propio. */
   myProduction: ['DENTIST'],
 } as const satisfies Record<string, readonly ClinicRole[]>;

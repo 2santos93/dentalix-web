@@ -22,6 +22,7 @@ import { parseMoneyInput } from '@/lib/format/money';
 import { saveCsv } from '@/lib/files/save-csv';
 import { notifyError } from '@/components/errors/notify';
 import { Button } from '@/components/ui/button';
+import { RateCountNotice } from '@/components/payments/rate-count-notice';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -34,7 +35,10 @@ import { Pagination } from '@/components/shared/pagination';
 import { ResultCount } from '@/components/shared/list-toolbar';
 import { useMediaQuery } from '@/lib/hooks/use-media-query';
 import { AgingSummary } from './aging-summary';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { ScopeMarker } from './scope-marker';
+import { carteraNavFor, carteraPanelProps, type CarteraViewTabs } from './cartera-tabs';
 import {
   AgeCell,
   AgeMeta,
@@ -53,7 +57,7 @@ import {
 export const receivablesCopy = {
   title: 'Cartera',
   description:
-    'Lo que deben los pacientes, por antigüedad: a quién llamar primero. Cada saldo es el de su estado de cuenta, por moneda y sin convertir.',
+    'Lo que deben los pacientes, por antigüedad: a quién llamar primero. Cada saldo es el de su estado de cuenta, en la moneda de cada plan: lo abonado en otra moneda se convierte con la tasa de su día.',
   ageLabel: 'Antigüedad',
   minBalanceLabel: 'Saldo mínimo',
   minBalancePlaceholder: 'Saldo mínimo',
@@ -93,6 +97,13 @@ export const receivablesCopy = {
   colCollection: 'Gestión',
   noteSaved: (name: string) => `Gestión registrada para ${name}.`,
   promiseSaved: (name: string) => `Compromiso de pago registrado para ${name}.`,
+  // DX-472-bis: abonos en otra moneda que la cartera no pudo contar.
+  providerDetail: (n: number) =>
+    n === 1
+      ? 'La cartera todavía no cuenta 1 abono en otra moneda. Esa deuda queda en «Por vencer» hasta completarla.'
+      : `La cartera todavía no cuenta ${n} abonos en otra moneda. Esa deuda queda en «Por vencer» hasta completarla.`,
+  withoutRateBody:
+    'La cartera todavía no los cuenta: falta la tasa de cambio de su día. El estado de cuenta de cada paciente dice cuáles son.',
 };
 
 type CollectionDialog = { kind: 'note' | 'promise'; row: AgingRow } | null;
@@ -115,7 +126,7 @@ function parseMinBalance(text: string, currency: string): number | undefined {
  * por tramo, conteo, `DataList` y páginas. Toda la fila abre el estado de
  * cuenta; gestión y compromiso van en el «⋯».
  */
-export function ReceivablesView({ token }: { token: string }) {
+export function ReceivablesView({ token, tabs }: { token: string; tabs?: CarteraViewTabs }) {
   const router = useRouter();
   const isPhone = useMediaQuery(DATA_LIST_PHONE_QUERY);
   const isAdmin = getTokenRole(token) === 'ADMIN';
@@ -126,6 +137,8 @@ export function ReceivablesView({ token }: { token: string }) {
   const [knownCurrencies, setKnownCurrencies] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<ReceivablesAgingPage | null>(null);
+  // DX-354b (E1): cada deuda con el formato de SU sede (`row.locationId`); sin ella, la de la pantalla.
+  const stamp = useSedeStamp(token, data?.items.map((row) => row.locationId));
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
@@ -298,12 +311,18 @@ export function ReceivablesView({ token }: { token: string }) {
       headerClassName: 'whitespace-nowrap',
       cell: (r) => (
         <>
-          <DebtCell currencies={r.currencies} />
+          <DebtCell currencies={r.currencies} stamp={stamp} locationId={r.locationId} />
+          {r.paymentsWithoutRateCount > 0 ? <IncompleteMark /> : null}
           {/* Con un solo tramo ya lo dice la antigüedad; con varios, el desglose. */}
-          {bucketLineCount(r) > 1 ? <BucketList currencies={r.currencies} className="mt-1" /> : null}
+          {bucketLineCount(r) > 1 ? <BucketList currencies={r.currencies} stamp={stamp} locationId={r.locationId} className="mt-1" /> : null}
         </>
       ),
-      mobileCell: (r) => <DebtCell currencies={r.currencies} compact />,
+      mobileCell: (r) => (
+        <>
+          <DebtCell currencies={r.currencies} stamp={stamp} locationId={r.locationId} compact />
+          {r.paymentsWithoutRateCount > 0 ? <IncompleteMark /> : null}
+        </>
+      ),
     },
     {
       id: 'last-payment',
@@ -311,7 +330,7 @@ export function ReceivablesView({ token }: { token: string }) {
       mobile: 'hidden',
       showFrom: 'xl',
       headerClassName: 'whitespace-nowrap',
-      cell: (r) => <LastPayment row={r} />,
+      cell: (r) => <LastPayment row={r} stamp={stamp} />,
     },
     {
       id: 'next',
@@ -319,15 +338,15 @@ export function ReceivablesView({ token }: { token: string }) {
       mobile: 'hidden',
       showFrom: 'xl',
       headerClassName: 'whitespace-nowrap',
-      cell: (r) => <NextInstallment row={r} />,
+      cell: (r) => <NextInstallment row={r} stamp={stamp} />,
     },
     {
       id: 'collection',
       header: receivablesCopy.colCollection,
       showFrom: 'lg',
       cellClassName: 'max-w-[14rem]',
-      cell: (r) => <CollectionCell row={r} />,
-      mobileCell: (r) => (r.lastNote || r.promise ? <CollectionCell row={r} compact /> : null),
+      cell: (r) => <CollectionCell row={r} stamp={stamp} />,
+      mobileCell: (r) => (r.lastNote || r.promise ? <CollectionCell row={r} stamp={stamp} compact /> : null),
     },
     {
       id: 'contact',
@@ -346,7 +365,10 @@ export function ReceivablesView({ token }: { token: string }) {
         meta={data ? <ScopeMarker location={location} /> : null}
       />
 
-      <div className="flex flex-col gap-3">
+      {/* Sin acceso (403) no hay otra vista que ofrecer: solo el aviso. */}
+      {!forbidden ? carteraNavFor(token, tabs) : null}
+
+      <div className="flex flex-col gap-3" {...carteraPanelProps(tabs)}>
         {/* Sin acceso (403) no hay filas que filtrar ni exportar: solo el aviso. */}
         {!forbidden ? (
           // Teléfono: los dos filtros a lo ancho (sus textos no caben en media
@@ -491,6 +513,9 @@ export function ReceivablesView({ token }: { token: string }) {
           />
         ) : (
           <>
+            <SedeStampNote stamp={stamp} />
+            {data && !loading ? <RateNotices page={data} onRetry={() => setReloadKey((k) => k + 1)} /> : null}
+
             <AsyncSection
               loading={loading}
               error={loadError}
@@ -500,7 +525,7 @@ export function ReceivablesView({ token }: { token: string }) {
               emptyDescription={receivablesCopy.emptyHint}
               skeleton={<TableSkeleton rows={5} />}
             >
-              {data ? <AgingSummary totals={data.totals} /> : null}
+              {data ? <AgingSummary totals={data.totals} stamp={stamp} /> : null}
 
               <ResultCount
                 total={data?.total ?? 0}
@@ -529,7 +554,7 @@ export function ReceivablesView({ token }: { token: string }) {
 
               {data ? (
                 <div className="flex flex-col gap-1 text-xs text-muted">
-                  <p className="tabular-nums">{receivablesCopy.asOf(data.asOf.split('-').reverse().join('/'))}</p>
+                  <p className="tabular-nums">{receivablesCopy.asOf(stamp.civilDate(data.asOf))}</p>
                   {anyApproximate ? <p>{debtorCopy.approximateNote}</p> : null}
                 </div>
               ) : null}
@@ -579,4 +604,27 @@ export function ReceivablesView({ token }: { token: string }) {
       ) : null}
     </>
   );
+}
+
+/**
+ * DX-472-bis: lo abonado en otra moneda que la cartera no pudo contar, en
+ * todas las filas filtradas. El proveedor que no responde pide reintentar (y
+ * su deuda no se da por vencida); «sin tasa» dice qué falta, sin acción aquí:
+ * se resuelve desde el estado de cuenta o los ajustes de la tasa.
+ */
+function RateNotices({ page, onRetry }: { page: ReceivablesAgingPage; onRetry: () => void }) {
+  return (
+    <RateCountNotice
+      paymentsCount={page.paymentsWithoutRateCount}
+      timedOut={page.rateProviderTimedOut}
+      onRetry={onRetry}
+      providerDetail={receivablesCopy.providerDetail(page.paymentsWithoutRateCount)}
+      withoutRateBody={receivablesCopy.withoutRateBody}
+    />
+  );
+}
+
+/** La fila cuyo saldo no cuenta algún abono en otra moneda. */
+function IncompleteMark() {
+  return <span className="block text-xs text-warning-text">{debtorCopy.incomplete}</span>;
 }

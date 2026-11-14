@@ -27,7 +27,9 @@ import {
   timeToMinutes,
   type BusinessHours,
 } from '@/lib/locations/schedule-api';
-import { sedeMinuteRanges, useSedeClock } from '@/lib/locations/sede-clock';
+import { screenLocation, sedeMinuteRanges, useSedeClock } from '@/lib/locations/sede-clock';
+import { useLocationsState } from '@/lib/locations/use-locations-state';
+import { HolidayNotice } from './holiday-notice';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { civilWeekday, isCivilDay } from '@/lib/time/civil-day';
@@ -55,6 +57,7 @@ import { InlineError } from '@/components/errors/inline-error';
 import { ApiError } from '@/lib/api/api-error';
 import { useProviderDay } from '@/components/appointments/use-provider-day';
 import { fitsRanges } from '@/lib/locations/provider-schedule';
+import { prefillAppointmentTypeId } from '@/lib/recall/recall-appointment-type';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { endSentence } from '@/lib/format/text';
 import { controlHeight, fieldClass } from '@/lib/ui/field-class';
@@ -74,6 +77,11 @@ const copy = {
   patientLabel: 'Paciente',
   patientSearchPlaceholder: 'Buscar por documento o nombre…',
   patientSearchHint: 'Escribe el documento o el nombre del paciente.',
+  // DX-118 (FE-035): la lista de resultados (distinta del campo «Paciente»,
+  // que ya lleva ese nombre) y cuántos hay, para el lector (role="status").
+  patientResultsLabel: 'Pacientes encontrados',
+  patientResults: (n: number) =>
+    n === 1 ? '1 paciente. Flechas para recorrer, Enter para elegir.' : `${n} pacientes. Flechas para recorrer, Enter para elegir.`,
   patientSearching: 'Buscando…',
   patientNoMatchTitle: 'No encontramos a nadie',
   patientNoMatch: 'Ningún paciente coincide con lo que escribiste.',
@@ -114,6 +122,7 @@ const copy = {
       : endSentence(`Fuera del horario de atención. Ese día se atiende: ${ranges}`),
   hoursHint: (ranges: string) => `Horario de ese día: ${ranges}`,
   hoursHintClosed: 'La sede no atiende ese día.',
+  hoursUnavailable: 'No pudimos leer el horario: la agenda lo comprobará al guardar.',
   // DX-233: aviso no bloqueante (la API decide: aviso o 409 en modo estricto).
   providerOffSchedule: (name: string, ranges: string) =>
     ranges === ''
@@ -175,6 +184,12 @@ interface AppointmentFormProps {
   defaultProviderId?: string;
   /** DX-211: pre-selecciona el sillón (p. ej. «Nueva cita» de su columna). */
   defaultChairId?: string;
+  /**
+   * DX-015-bis (D21): pre-selecciona el tipo de cita (p. ej. el del tipo de
+   * recall). Solo si está entre los activos que carga el formulario; tiene el
+   * mismo efecto que elegirlo a mano (duración y hora de fin).
+   */
+  defaultAppointmentTypeId?: string | null;
 }
 
 /**
@@ -192,6 +207,11 @@ interface AppointmentFormProps {
  * with a "Cambiar" button, and a "Crear paciente" dialog covers the
  * not-yet-registered case.
  */
+/** id de una opción del combobox de pacientes (aria-activedescendant). */
+function patientOptionId(patientId: string): string {
+  return `appointment-patient-option-${patientId}`;
+}
+
 export function AppointmentForm({
   token,
   onCreated,
@@ -200,6 +220,7 @@ export function AppointmentForm({
   defaultEndTime,
   defaultProviderId,
   defaultChairId,
+  defaultAppointmentTypeId,
   defaultPatient,
   defaultReason,
   planItemIds,
@@ -219,6 +240,9 @@ export function AppointmentForm({
   // the search box once someone is picked (manually, by exact-document
   // auto-select, or via inline-create).
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(defaultPatient ?? null);
+  // DX-118 (FE-035): la opción resaltada del combobox (aria-activedescendant);
+  // -1 = ninguna. Se acota a la lista actual al pintar.
+  const [activePatientIndex, setActivePatientIndex] = useState(-1);
 
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [staffLoading, setStaffLoading] = useState(true);
@@ -258,6 +282,7 @@ export function AppointmentForm({
   // Horario de atención de la sede activa: `null` = sin configurar => sin
   // restricción (misma semántica que el backend).
   const [hours, setHours] = useState<BusinessHours | null>(null);
+  const [hoursFailed, setHoursFailed] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const providerDay = useProviderDay(token, providerId, date, locationId);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -283,6 +308,13 @@ export function AppointmentForm({
   // DX-378: la fecha y las horas son las del reloj de la sede de la cita (la
   // indicada o la de la pantalla), nunca las del navegador.
   const sede = useSedeClock(token, locationId);
+  // DX-358: sin sede activa, la de la pantalla (la misma que da el reloj), no «ninguna».
+  const locationsState = useLocationsState(token);
+  const holidayLocationId =
+    locationId ??
+    (locationsState.status === 'ready'
+      ? screenLocation(locationsState.locations, locationsState.activeLocationId)?.id
+      : null);
   const clock = sede.status === 'ready' ? sede.clock : null;
   const today = clock ? sedeToday(clock.timeZone) : undefined;
 
@@ -332,13 +364,18 @@ export function AppointmentForm({
       setStaffLoading(true);
       try {
         const res = await listStaff(token);
-        // Best-effort: si el horario no se puede leer, no se bloquea el
-        // formulario — el backend sigue validando y es la autoridad.
+        // Si el horario no se puede leer, no se bloquea el formulario — el
+        // backend sigue validando y es la autoridad — pero se dice (DX-116).
         void (locationId ? getLocationSchedule(token,locationId) : getLocationSchedule(token))
           .then((h) => {
-            if (!cancelled) setHours(h);
+            if (!cancelled) {
+              setHours(h);
+              setHoursFailed(false);
+            }
           })
-          .catch(() => {});
+          .catch(() => {
+            if (!cancelled) setHoursFailed(true);
+          });
         if (cancelled) return;
         setStaff(res);
         setStaffError(false);
@@ -434,6 +471,14 @@ export function AppointmentForm({
     setAppointmentTypeId(id);
     const end = endFor(startTime, types.find((t) => t.id === id) ?? null);
     if (end) setEndTime(end);
+  }
+
+  // D21: el tipo por defecto se aplica una vez, al llegar los tipos activos.
+  const [typePrefilled, setTypePrefilled] = useState(false);
+  if (!typePrefilled && defaultAppointmentTypeId && types.length > 0) {
+    setTypePrefilled(true);
+    const prefill = prefillAppointmentTypeId(defaultAppointmentTypeId, types);
+    if (prefill) handleTypeChange(prefill);
   }
 
   function handleStartTimeChange(value: string) {
@@ -574,6 +619,11 @@ export function AppointmentForm({
   }
 
   const trimmedPatientQuery = patientQuery.trim();
+  // DX-118 (FE-035): la lista se muestra con resultados y sin paciente elegido.
+  const showPatientList =
+    !selectedPatient && !patientsError && trimmedPatientQuery !== '' && !patientsLoading && patients.length > 0;
+  const activeIndex = showPatientList ? Math.min(activePatientIndex, patients.length - 1) : -1;
+  const activePatient = activeIndex >= 0 ? patients[activeIndex] : null;
   // The "no match" empty state owns the create CTA, so we hide the header's
   // duplicate "Crear paciente" button while it's showing — one clear action.
   const showNoPatientMatch =
@@ -656,9 +706,36 @@ export function AppointmentForm({
               <input
                 id="appointment-patient-search"
                 type="text"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={showPatientList}
+                aria-controls="appointment-patient-listbox"
+                aria-activedescendant={activePatient ? patientOptionId(activePatient.id) : undefined}
+                autoComplete="off"
                 placeholder={copy.patientSearchPlaceholder}
                 value={patientQuery}
-                onChange={(e) => setPatientQuery(e.target.value)}
+                onChange={(e) => {
+                  setPatientQuery(e.target.value);
+                  setActivePatientIndex(-1);
+                }}
+                onKeyDown={(e) => {
+                  if (!showPatientList) return;
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setActivePatientIndex((i) => Math.min(i + 1, patients.length - 1));
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setActivePatientIndex((i) => Math.max(i - 1, 0));
+                  } else if (e.key === 'Enter' && activePatient) {
+                    e.preventDefault();
+                    handlePatientSelect(activePatient);
+                  } else if (e.key === 'Escape') {
+                    // Con la lista abierta, Escape la cierra sin cerrar el diálogo.
+                    e.preventDefault();
+                    setPatientQuery('');
+                    setActivePatientIndex(-1);
+                  }
+                }}
                 className={cn(fieldClass, controlHeight, 'pl-9 pr-9')}
               />
               {patientsLoading && (
@@ -701,26 +778,37 @@ export function AppointmentForm({
                 </Button>
               </div>
             ) : (
-              <ul
-                role="listbox"
-                aria-label={copy.patientLabel}
-                className="flex max-h-56 flex-col gap-0.5 overflow-y-auto rounded-lg border border-border bg-surface p-1"
-              >
-                {patients.map((p) => (
-                  <li key={p.id}>
-                    <button
-                      type="button"
+              <>
+                <p role="status" className="sr-only">
+                  {copy.patientResults(patients.length)}
+                </p>
+                <ul
+                  id="appointment-patient-listbox"
+                  role="listbox"
+                  aria-label={copy.patientResultsLabel}
+                  className="flex max-h-56 flex-col gap-0.5 overflow-y-auto rounded-lg border border-border bg-surface p-1"
+                >
+                  {patients.map((p, index) => (
+                    <li
+                      key={p.id}
+                      id={patientOptionId(p.id)}
                       role="option"
-                      aria-selected={false}
+                      aria-selected={index === activeIndex}
+                      // El foco se queda en el campo (aria-activedescendant): el
+                      // mousedown no debe robarlo antes de que llegue el clic.
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => handlePatientSelect(p)}
-                      className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
+                      className={cn(
+                        'flex cursor-pointer items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-surface-sunken',
+                        index === activeIndex && 'bg-surface-sunken ring-2 ring-inset ring-primary-text',
+                      )}
                     >
                       <span className="truncate text-sm text-ink">{fullPatientName(p)}</span>
                       <span className="shrink-0 text-xs text-muted">{patientDocLabel(p)}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </>
         )}
@@ -856,6 +944,12 @@ export function AppointmentForm({
                 : copy.hoursHint(describeDay(civilWeekday(date), hours, clock.fmt))}
             </p>
           )}
+          {hoursFailed && (
+            <p role="status" className="text-xs text-muted">
+              {copy.hoursUnavailable}
+            </p>
+          )}
+          <HolidayNotice token={token} locationId={holidayLocationId} date={date} />
         </div>
         <div className="flex flex-col gap-1">
           <label id={fieldLabelId('appointment-start-time')} htmlFor="appointment-start-time" className="text-sm font-medium text-ink">

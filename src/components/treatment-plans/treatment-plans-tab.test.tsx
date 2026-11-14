@@ -1,9 +1,12 @@
 import { moneyInputCopy } from '@/lib/format/money';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { regionalFormat } from '@/lib/format/regional-format';
 import { moneyWithCode } from '@/lib/format/sede-number';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TreatmentPlansTab } from './treatment-plans-tab';
+import { acceptPlan, getPlanQuote, previewPartialAcceptance } from '@/lib/treatment-plans/plan-quote-api';
+import { planQuoteFixture, SIGNED_ACCEPTANCE } from './plan-quote-fixture';
 import { ApiError } from '@/lib/api/client';
 import { Toaster } from '@/components/errors/toaster';
 import {
@@ -45,7 +48,11 @@ import { getPaymentAllocations, replacePaymentAllocations } from '@/lib/payments
 import { presentPlan } from '@/lib/treatment-plans/plan-options-api';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
+import { dateIn, dateTimeIn, STAMP_SEDES } from '@/lib/test/stamp';
 import { getPlanVisits } from '@/lib/treatment-plans/plan-visits-api';
+import { listNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
+import { createClinicalEntry } from '@/lib/patients/clinical-api';
+import { prophylaxisTemplate, resinTemplate } from '@/components/clinical-notes/fixtures';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -56,6 +63,16 @@ jest.mock('../../lib/treatment-plans/plan-visits-api', () => ({
   getPlanVisits: jest.fn().mockResolvedValue({planId:'plan-1',items:[],visitIntervals:{},visits:[]}),
   updatePlanVisits: jest.fn(),
 }));
+// DX-417 (ronda 1, M-8): la aceptación parcial desde la ficha; por defecto, lo de verdad.
+jest.mock('../../lib/treatment-plans/plan-quote-api', () => {
+  const actual = jest.requireActual('../../lib/treatment-plans/plan-quote-api');
+  return {
+    ...actual,
+    getPlanQuote: jest.fn(actual.getPlanQuote),
+    previewPartialAcceptance: jest.fn(actual.previewPartialAcceptance),
+    acceptPlan: jest.fn(actual.acceptPlan),
+  };
+});
 jest.mock('../../lib/treatment-plans/treatment-plans-api', () => ({
   createPlan: jest.fn(),
   listPlans: jest.fn(),
@@ -88,10 +105,10 @@ jest.mock('../../lib/payments/payments-api', () => ({
   voidPayment: jest.fn(),
 }));
 // DX-051: la imputación de un abono (modal «Imputar abono», solo ADMIN).
-// Una sede en Bogotá (fixture explícito): la fecha por defecto del abono es su «hoy».
+// Una sede en Caracas (fixture explícito): la fecha por defecto del abono es su «hoy».
 jest.mock('../../lib/locations/locations-api', () => ({
   ...jest.requireActual('../../lib/locations/locations-api'),
-  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/locations').clinicLocation()]),
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/locations').clinicLocation({ currency: 'VES' })]),
 }));
 jest.mock('../../lib/payments/payment-allocations-api', () => ({
   getPaymentAllocations: jest.fn(),
@@ -103,6 +120,24 @@ jest.mock('../../lib/treatment-plans/plan-options-api', () => ({
   presentPlan: jest.fn(),
 }));
 // DX-050: los profesionales que pueden figurar como quien realizó un ítem.
+// DX-379 B: «Actualizar precios».
+jest.mock('../../lib/treatment-plans/plan-repricing-api', () => ({
+  ...jest.requireActual('../../lib/treatment-plans/plan-repricing-api'),
+  previewRepricing: jest.fn(),
+  applyRepricing: jest.fn(),
+}));
+// DX-455: «Nueva evolución» (el real) tras marcar hecho un procedimiento con plantilla.
+jest.mock('../../lib/clinical-notes/note-templates-api', () => ({
+  ...jest.requireActual('../../lib/clinical-notes/note-templates-api'),
+  listNoteTemplates: jest.fn(() => Promise.resolve([])),
+}));
+jest.mock('../../lib/patients/clinical-api', () => ({
+  ...jest.requireActual('../../lib/patients/clinical-api'),
+  createClinicalEntry: jest.fn(),
+  getClinicalEntrySigning: jest.fn(() =>
+    Promise.resolve({ professionalLicense: 'RP-1', warnMissingProfessionalLicense: true, warnings: [] }),
+  ),
+}));
 jest.mock('../../lib/appointments/staff-api', () => ({
   listStaff: jest.fn(),
 }));
@@ -131,7 +166,7 @@ jest.mock('../../lib/exchange/exchange-settings-api', () => ({
   getExchangeRateSettings: jest.fn().mockResolvedValue({ source: 'MANUAL', manualSince: '2026-10-01', baseCurrency: 'USD' }),
 }));
 jest.mock('../../lib/exchange/exchange-api', () => ({
-  getExchangeRates: jest.fn().mockResolvedValue({ base: 'USD', source: 'MANUAL', rates: { COP: 4000 } }),
+  getExchangeRates: jest.fn().mockResolvedValue({ base: 'USD', source: 'MANUAL', rates: { VES: 4000 } }),
 }));
 // Recibo de caja (DX-136): el diálogo pide el recibo a la API.
 // DX-377: medios de pago activos de la clínica (el formulario de abono).
@@ -145,6 +180,7 @@ jest.mock('../../lib/payments/payment-methods-api', () => ({
       active: true,
       requiresReference: true,
       legacyMethod: null,
+      adjustments: [],
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
     },
@@ -303,12 +339,16 @@ const payment1: Payment = {
   paymentMethodName: null,
   reference: null,
   duplicateReferenceReason: null,
+  externalInvoiceNumber: null,
   notes: null,
   createdById: null,
   createdAt: '2026-01-05T00:00:00.000Z',
   updatedAt: '2026-01-05T00:00:00.000Z',
   receiptNumber: 'PRI-000001',
   ...PAYMENT_IN_PLAN_CURRENCY,
+  adjustments: [],
+  collectedAmount: 50000,
+  hasProof: false,
 };
 
 const balance1: PlanBalance = {
@@ -361,10 +401,10 @@ async function pickRowAction(
 
 /**
  * DX-386: la lista de abonos, «Cobrado»/«Pendiente» por ítem y la
- * previsualización del cobro van con el formato de la sede del fixture (es-CO)
+ * previsualización del cobro van con el formato de la sede del fixture (es-VE)
  * y el código ISO («USD 50.000,00»), nunca con el símbolo.
  */
-const SEDE_FMT = regionalFormat({ locale: 'es-CO', hourCycle: 'h12' });
+const SEDE_FMT = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
 function sedeCurrencyText(amount: number, currency = 'USD'): string {
   return moneyWithCode(amount, currency, SEDE_FMT).replace(/\u00A0/g, ' ');
 }
@@ -383,12 +423,21 @@ function quoteOf(catalogItemId: string, overrides: Partial<PriceQuote> = {}, cur
   const base = catalog.find((c) => c.id === catalogItemId)?.defaultPrice ?? null;
   return {
     basePrice: base,
+    // DX-502: el catálogo en la moneda del plan, salvo que el test diga otra.
+    catalogCurrency: currency,
     price: base,
     source: 'CATALOG',
     agreementId: null,
     agreementName: null,
     allowDiscount: true,
     currency,
+    // DX-513-bis: la referencia ya en la moneda del plan (a la par: la misma
+    // cifra que `price`), salvo que el test diga otra.
+    referenceCurrency: currency,
+    referencePriceInPlan: overrides.price !== undefined ? overrides.price : base,
+    rate: null,
+    rateMissing: false,
+    missingRateCurrency: null,
     ...overrides,
   };
 }
@@ -424,7 +473,7 @@ describe('TreatmentPlansTab', () => {
     mockedListCurrencies.mockReset();
     mockedListCurrencies.mockResolvedValue([
       { code: 'USD', name: 'Dólar estadounidense', symbol: '$' },
-      { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+      { code: 'VES', name: 'Bolívar venezolano', symbol: 'Bs.' },
     ]);
     mockedGetPaymentPlan.mockReset();
     // Default: no active payment plan — PaymentPlanSection renders its empty
@@ -461,9 +510,9 @@ describe('TreatmentPlansTab', () => {
     await user.click(screen.getByRole('button', { name: /nuevo plan/i }));
 
     // GLOBAL-G1 (R14): sin sede activa, la moneda común de la clínica (la del
-    // fixture de sede, COP), nunca USD por defecto.
+    // fixture de sede, VES), nunca USD por defecto.
     await waitFor(() =>
-      expect(mockedCreatePlan).toHaveBeenCalledWith(tok, 'pat-1', { currency: 'COP' }),
+      expect(mockedCreatePlan).toHaveBeenCalledWith(tok, 'pat-1', { currency: 'VES' }),
     );
     await waitFor(() => expect(mockedListPlans).toHaveBeenCalledTimes(2));
     // The new plan is auto-selected -> its (empty) detail is fetched.
@@ -602,6 +651,23 @@ describe('TreatmentPlansTab', () => {
     expect(within(table).getByText('cat-missing')).toBeInTheDocument();
   });
 
+  it('DX-502-ter: el selector de procedimiento muestra el precio con la moneda del catálogo; sin moneda no lo muestra', async () => {
+    mockedListPlans.mockResolvedValue([plan1]);
+    mockedGetPlan.mockResolvedValue(plan1Detail);
+    mockedListCatalogItems.mockResolvedValue([
+      { ...catalog[0], catalogCurrency: 'USD' },
+      ...catalog.slice(1).map((c) => ({ ...c, catalogCurrency: null })),
+    ]);
+
+    render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+    await screen.findByRole('table', { name: /ítems de la visita/i });
+
+    const resina = await screen.findByRole('radio', { name: /resina/i });
+    expect(resina.closest('label')).toHaveTextContent(/US\$|USD/);
+    // Los demás ítems llevan precio pero la API no sabe su moneda: nada de importes sin moneda.
+    expect(screen.getAllByTestId('catalog-picker-price')).toHaveLength(1);
+  });
+
   it("prefills the price with the selected procedure's catalog defaultPrice, staying editable", async () => {
     mockedListPlans.mockResolvedValue([plan1]);
     mockedGetPlan.mockResolvedValue(plan1Detail);
@@ -713,6 +779,39 @@ describe('TreatmentPlansTab', () => {
     expect(screen.getByRole('table', { name: /ítems de la visita/i })).toBe(table);
   });
 
+  it('DX-015-bis: sacar de realizado una profilaxis avisa del recall que recalcula, con el formato de la sede activa', async () => {
+    // Sacar de realizado: el ADMIN (o quien lo realizó).
+    const adminTok = `h.${btoa(JSON.stringify({ sub: 'u-admin', tenantId: 't1', role: 'ADMIN' }))}.s`;
+    window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+    const done = { ...item2, status: 'DONE' as const, performedById: 'u-laura', performedLocationId: 'loc-1' };
+    mockedListPlans.mockResolvedValue([plan1]);
+    mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [item1, done] });
+    mockedUpdateItem.mockResolvedValue({
+      ...item2,
+      status: 'ACCEPTED',
+      performedLocationId: null,
+      recallUpdates: [
+        { recallId: 'r1', recallTypeId: 't-hyg', recallTypeName: 'Higiene', dueAt: '2027-10-10', deactivated: false, replacedBy: null },
+      ],
+    });
+    const user = userEvent.setup();
+    render(
+      <>
+        <TreatmentPlansTab patientId="pat-1" token={adminTok} />
+        <Toaster />
+      </>,
+    );
+    const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+    const select = within(table).getByRole<HTMLSelectElement>('combobox', { name: /estado del ítem del diente 26/i });
+    await waitFor(() => expect(select.value).toBe('DONE'));
+    await user.selectOptions(select, 'ACCEPTED');
+    await waitFor(() =>
+      expect(mockedUpdateItem).toHaveBeenCalledWith(adminTok, 'plan-1', 'item-2', { status: 'ACCEPTED' }),
+    );
+    expect(await screen.findByText('Recall de Higiene: vence el 10/10/2027')).toBeInTheDocument();
+    window.localStorage.removeItem('dentalix.activeLocationId');
+  });
+
   it('removing an item calls removeItem then refreshes the plan in place — the removed item disappears and the total drops, table stays mounted', async () => {
     mockedListPlans.mockResolvedValue([plan1]);
     mockedRemoveItem.mockResolvedValue(undefined);
@@ -787,11 +886,14 @@ describe('TreatmentPlansTab', () => {
     mockedListPayments.mockResolvedValue([
       {
         ...payment1,
-        id: 'pay-cop',
+        id: 'pay-ves',
         amount: 200000,
-        currency: 'COP',
+        currency: 'VES',
         exchangeRateCurrency: 'USD',
         exchangeRateStatus: 'FROZEN',
+        adjustments: [],
+        collectedAmount: 200000,
+        hasProof: false,
         frozenRate: {
           currency: 'USD',
           fromPerBase: 4000,
@@ -807,6 +909,9 @@ describe('TreatmentPlansTab', () => {
         currency: 'VES',
         exchangeRateCurrency: 'USD',
         exchangeRateStatus: 'MISSING',
+        adjustments: [],
+        collectedAmount: 365,
+        hasProof: false,
       },
     ]);
 
@@ -815,8 +920,8 @@ describe('TreatmentPlansTab', () => {
     const paymentsTable = await openPaymentsTable(user);
 
     expect(
-      // DX-378: con el formato de la sede (es-CO del fixture) y el código ISO.
-      await within(paymentsTable).findByText(/Tasa congelada: 1 USD = COP\s4\.000,00 · manual · 05\/01\/2026/),
+      // DX-378: con el formato de la sede (es-VE del fixture) y el código ISO.
+      await within(paymentsTable).findByText(/Tasa congelada: 1 USD = VES\s4\.000,00 · manual · 05\/01\/2026/),
     ).toBeInTheDocument();
     expect(within(paymentsTable).getByText(paymentRateCopy.missing)).toBeInTheDocument();
   });
@@ -894,14 +999,16 @@ describe('TreatmentPlansTab', () => {
     expect(paymentsTable).not.toHaveTextContent('US$');
   });
 
-  // DX-489: plan en EUR y catálogo en COP (la moneda de las sedes del fixture).
-  describe('DX-489: plan en EUR con el catálogo en COP', () => {
+  // DX-489: plan en EUR y catálogo en VES (la moneda de las sedes del fixture).
+  describe('DX-489: plan en EUR con el catálogo en VES', () => {
     const eurItem = {
       ...item1,
       price: 100.55,
       discount: 0,
       catalogPrice: 100.55,
       basePrice: 80000,
+      // DX-502: la moneda del catálogo, congelada en el ítem por la API.
+      catalogCurrency: 'VES',
       priceSource: 'AGREEMENT_PRICE_LIST' as const,
       agreementId: 'ag-1',
       agreementName: 'Seguros Sol',
@@ -916,24 +1023,56 @@ describe('TreatmentPlansTab', () => {
       mockedListPayments.mockResolvedValue([{ ...payment1, amount: 100.55, currency: 'EUR' }]);
     });
 
-    it('el ítem pinta el precio de lista en COP, nunca en EUR', async () => {
+    it('el ítem pinta el precio de lista en VES, nunca en EUR', async () => {
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
       const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       expect(
-        within(table).getByText(/^Convenio Seguros Sol · precio de lista COP 80\.000,00$/),
+        within(table).getByText(/^Convenio Seguros Sol · precio de lista VES 80\.000,00$/),
       ).toBeInTheDocument();
       expect(table).not.toHaveTextContent(/80\.000,00\sEUR|EUR\s80\.000,00/);
     });
 
-    it('el formulario dice el precio de lista en COP', async () => {
+    it('DX-502: con la moneda congelada en el ítem, aunque las sedes que ve el usuario estén en otra', async () => {
+      // Un usuario restringido a una sede en USD: la moneda del catálogo es la
+      // que guardó la API (la común de TODAS las sedes), no la de su sede.
+      jest.mocked(listLocations).mockResolvedValue([{ ...clinicLocation(), currency: 'USD' }]);
+      try {
+        render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+        const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+        expect(
+          within(table).getByText(/^Convenio Seguros Sol · precio de lista VES 80\.000,00$/),
+        ).toBeInTheDocument();
+        expect(table).not.toHaveTextContent(/USD\s80\.000,00/);
+      } finally {
+        jest.mocked(listLocations).mockResolvedValue([clinicLocation()]);
+      }
+    });
+
+    it('DX-502: sin moneda del catálogo conocida, el ítem oculta la cifra y lo dice', async () => {
+      mockedGetPlan.mockResolvedValue({ ...eurPlan, items: [{ ...eurItem, catalogCurrency: null }], total: 100.55 });
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+      expect(
+        within(table).getByText(/^Convenio Seguros Sol · precio de lista oculto: moneda del catálogo desconocida$/),
+      ).toBeInTheDocument();
+      expect(table).not.toHaveTextContent(/80\.000,00/);
+    });
+
+    it('DX-502: el formulario con la moneda del catálogo desconocida tampoco pinta la cifra', async () => {
       mockedGetPriceQuote.mockResolvedValue({
         basePrice: 80000,
+        catalogCurrency: null,
         price: 100.55,
         source: 'AGREEMENT_PRICE_LIST',
         agreementId: 'ag-1',
         agreementName: 'Seguros Sol',
         allowDiscount: true,
         currency: 'EUR',
+        referenceCurrency: 'EUR',
+        referencePriceInPlan: 100.55,
+        rate: null,
+        rateMissing: false,
+        missingRateCurrency: null,
       });
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
@@ -941,19 +1080,53 @@ describe('TreatmentPlansTab', () => {
       await user.type(screen.getByLabelText(/código fdi/i), '16');
       await user.click(screen.getByRole('radio', { name: /resina/i }));
       expect(
-        await screen.findByText(/^Convenio \(lista de precios\) · Seguros Sol · precio de lista COP 80\.000,00$/),
+        await screen.findByText(
+          /^Convenio \(lista de precios\) · Seguros Sol · precio de lista oculto: moneda del catálogo desconocida$/,
+        ),
       ).toBeInTheDocument();
     });
 
-    it('sin lista en EUR, el aviso de precio por debajo del catálogo no pinta el catálogo en EUR', async () => {
+    it('el formulario dice el precio de lista en VES', async () => {
       mockedGetPriceQuote.mockResolvedValue({
         basePrice: 80000,
+        catalogCurrency: 'VES',
+        price: 100.55,
+        source: 'AGREEMENT_PRICE_LIST',
+        agreementId: 'ag-1',
+        agreementName: 'Seguros Sol',
+        allowDiscount: true,
+        currency: 'EUR',
+        referenceCurrency: 'EUR',
+        referencePriceInPlan: 100.55,
+        rate: null,
+        rateMissing: false,
+        missingRateCurrency: null,
+      });
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      await screen.findByRole('table', { name: /ítems de la visita/i });
+      await user.type(screen.getByLabelText(/código fdi/i), '16');
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      expect(
+        await screen.findByText(/^Convenio \(lista de precios\) · Seguros Sol · precio de lista VES 80\.000,00$/),
+      ).toBeInTheDocument();
+    });
+
+    it('DX-513-bis: sin lista en EUR, la rebaja se mide frente al catálogo convertido (160 €), no frente a 80.000 «EUR»', async () => {
+      mockedGetPriceQuote.mockResolvedValue({
+        basePrice: 80000,
+        catalogCurrency: 'VES',
         price: 80000,
         source: 'CATALOG',
         agreementId: null,
         agreementName: null,
         allowDiscount: true,
         currency: 'EUR',
+        referenceCurrency: 'VES',
+        referencePriceInPlan: 160,
+        rate: { fromPerBase: 400, toPerBase: 0.8, source: 'MANUAL', rateDate: '2026-11-07' },
+        rateMissing: false,
+        missingRateCurrency: null,
       });
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
@@ -963,9 +1136,53 @@ describe('TreatmentPlansTab', () => {
       const field = screen.getByLabelText('Precio', { exact: true });
       await user.clear(field);
       await user.type(field, '100,55');
-      const notice = await screen.findByText(/^Precio de catálogo: COP 80\.000,00, en otra moneda y sin convertir\./);
-      expect(notice).toBeInTheDocument();
-      expect(document.getElementById('tp-price-below-catalog')).not.toHaveTextContent(/EUR\s80\.000|Rebaja de/);
+      const notice = document.getElementById('tp-price-below-catalog');
+      await waitFor(() => expect(notice).toHaveTextContent(/Rebaja de EUR\s59,45 sobre EUR\s160,00/));
+      expect(notice).not.toHaveTextContent(/80\.000/);
+      expect(document.getElementById('tp-price-converted')).toHaveTextContent(/^Catálogo: VES 80\.000,00 ≈ EUR\s160,00 \(tasa 1 EUR = 500 VES del .+, manual\)\.$/);
+    });
+
+    it('DX-502: con el catálogo en una moneda que no se sabe, el aviso no inventa cifra ni moneda', async () => {
+      mockedGetPriceQuote.mockResolvedValue({
+        basePrice: 80000,
+        catalogCurrency: null,
+        price: 80000,
+        source: 'CATALOG',
+        agreementId: null,
+        agreementName: null,
+        allowDiscount: true,
+        currency: 'EUR',
+        referenceCurrency: null,
+        referencePriceInPlan: 80000,
+        rate: null,
+        rateMissing: false,
+        missingRateCurrency: null,
+      });
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      await screen.findByRole('table', { name: /ítems de la visita/i });
+      await user.type(screen.getByLabelText(/código fdi/i), '16');
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      const field = screen.getByLabelText('Precio', { exact: true });
+      await user.clear(field);
+      await user.type(field, '100,55');
+      expect(
+        await screen.findByText(/^Precio de catálogo en una moneda que no se sabe, sin convertir\./),
+      ).toBeInTheDocument();
+      expect(document.getElementById('tp-price-below-catalog')).not.toHaveTextContent(/80\.000|Rebaja de/);
+    });
+
+    it('B4: sin precio resuelto (falló), el aviso no pinta la rebaja ni la variante «en otra moneda»', async () => {
+      mockedGetPriceQuote.mockRejectedValue(new Error('red'));
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      await screen.findByRole('table', { name: /ítems de la visita/i });
+      await user.type(screen.getByLabelText(/código fdi/i), '16');
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      const field = screen.getByLabelText('Precio', { exact: true });
+      await user.clear(field);
+      await user.type(field, '1');
+      expect(document.getElementById('tp-price-below-catalog')).not.toHaveTextContent(/otra moneda|Rebaja de/);
     });
 
     it('el mismo importe sale con UN formato en el resumen, la tabla y la lista de abonos', async () => {
@@ -984,8 +1201,8 @@ describe('TreatmentPlansTab', () => {
     });
   });
 
-  it('DX-097: la fecha por defecto del abono es hoy en la sede, no en el navegador (20:30 en Bogotá = 01:30Z)', async () => {
-    jest.useFakeTimers({ now: new Date('2026-10-16T01:30:00.000Z'), advanceTimers: true });
+  it('DX-097: la fecha por defecto del abono es hoy en la sede, no en el navegador (20:30 en Caracas = 00:30Z)', async () => {
+    jest.useFakeTimers({ now: new Date('2026-10-16T00:30:00.000Z'), advanceTimers: true });
     try {
       mockedListPlans.mockResolvedValue([plan1]);
       mockedGetPlan.mockResolvedValue(plan1Detail);
@@ -998,7 +1215,7 @@ describe('TreatmentPlansTab', () => {
       expect(await screen.findByText('A pagar')).toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
 
-      // La sede del fixture está en Bogotá: el día es el 15, aunque en UTC ya
+      // La sede del fixture está en Caracas: el día es el 15, aunque en UTC ya
       // sea el 16.
       expect(paymentDateValue()).toBe('2026-10-15');
     } finally {
@@ -1030,8 +1247,8 @@ describe('TreatmentPlansTab', () => {
     // its (mocked `listCurrencies`) options to load in first. Scoped to this
     // select specifically: the "Nuevo plan" currency select above also
     // renders the same options once loaded.
-    await waitFor(() => expect(currencySelect.querySelector('option[value="COP"]')).not.toBeNull());
-    await user.selectOptions(currencySelect, 'COP');
+    await waitFor(() => expect(currencySelect.querySelector('option[value="VES"]')).not.toBeNull());
+    await user.selectOptions(currencySelect, 'VES');
 
     await user.type(screen.getByLabelText(/^monto$/i), '25000');
 
@@ -1039,11 +1256,11 @@ describe('TreatmentPlansTab', () => {
     const preview = await screen.findByTestId('rp-rate-preview');
     await waitFor(() => expect(preview.textContent?.replace(/\s/g, ' ')).toContain('Equivalente en USDUSD 6,25'));
     expect(preview.textContent?.replace(/\s/g, ' ')).toContain('Pendiente tras el abonoUSD 79.993,75');
-    expect(preview.textContent?.replace(/\s/g, ' ')).toMatch(/Tasa: 1 USD = COP 4\.000,00 · manual · \d{2}\/\d{2}\/\d{4}/);
+    expect(preview.textContent?.replace(/\s/g, ' ')).toMatch(/Tasa: 1 USD = VES 4\.000,00 · manual · \d{2}\/\d{2}\/\d{4}/);
     // DX-386: el mismo formato que la «Tasa congelada» de cada abono, sin «US$».
     expect(preview).not.toHaveTextContent('US$');
 
-    const newPayment = { ...payment1, id: 'pay-2', amount: 25000, currency: 'COP' };
+    const newPayment = { ...payment1, id: 'pay-2', amount: 25000, currency: 'VES' };
     const updatedBalance = { ...balance1, paid: balance1.paid + 25000, balance: balance1.balance - 25000 };
     mockedRecordPayment.mockResolvedValue(newPayment);
     mockedGetPlanBalance.mockResolvedValueOnce(updatedBalance);
@@ -1056,7 +1273,7 @@ describe('TreatmentPlansTab', () => {
     expect(tokenArg).toBe(tok);
     expect(planIdArg).toBe('plan-1');
     expect(input.amount).toBe(25000);
-    expect(input.currency).toBe('COP');
+    expect(input.currency).toBe('VES');
     // DX-097: el día civil, sin hora (la API lo guarda al mediodía de la sede).
     expect(input.paidAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(input.method).toBeUndefined();
@@ -1064,6 +1281,51 @@ describe('TreatmentPlansTab', () => {
     await waitFor(() => expect(mockedGetPlanBalance).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(mockedListPayments).toHaveBeenCalledTimes(2));
     expect(await screen.findByText(sedeCurrencyText(updatedBalance.paid))).toBeInTheDocument();
+  });
+
+  it('DX-075: un día posterior a hoy en la sede se rechaza junto al campo, con el foco y sin llamar a la API', async () => {
+    mockedListPlans.mockResolvedValue([plan1]);
+    mockedGetPlan.mockResolvedValue(plan1Detail);
+    mockedGetPlanBalance.mockResolvedValue(balance1);
+    mockedListPayments.mockResolvedValue([]);
+
+    const user = userEvent.setup();
+    render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+    await screen.findByRole('table', { name: /ítems de la visita/i });
+    await user.click(await screen.findByRole('button', { name: /^registrar abono$/i }));
+
+    await user.type(screen.getByLabelText(/^monto$/i), '25000');
+    const [day] = within(screen.getByRole('group', { name: /^fecha$/i })).getAllByRole('spinbutton');
+    await user.click(day);
+    await user.keyboard('01012099');
+    await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
+
+    expect(await screen.findByText('La fecha de pago no puede ser posterior a hoy.')).toBeInTheDocument();
+    expect(mockedRecordPayment).not.toHaveBeenCalled();
+    expect(document.activeElement).toHaveAttribute('role', 'spinbutton');
+    expect(document.activeElement?.closest('#tp-payment-date')).not.toBeNull();
+  });
+
+  it('DX-075: tras registrar el abono sale el aviso de éxito (toast) con el monto', async () => {
+    mockedListPlans.mockResolvedValue([plan1]);
+    mockedGetPlan.mockResolvedValue(plan1Detail);
+    mockedGetPlanBalance.mockResolvedValue(balance1);
+    mockedListPayments.mockResolvedValue([]);
+    mockedRecordPayment.mockResolvedValue({ ...payment1, id: 'pay-2', amount: 25000, currency: 'USD' });
+
+    const user = userEvent.setup();
+    render(
+      <>
+        <TreatmentPlansTab patientId="pat-1" token={tok} />
+        <Toaster />
+      </>,
+    );
+    await screen.findByRole('table', { name: /ítems de la visita/i });
+    await user.click(await screen.findByRole('button', { name: /^registrar abono$/i }));
+    await user.type(screen.getByLabelText(/^monto$/i), '25000');
+    await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
+
+    expect(await screen.findByText(/^Abono registrado: .*25\.000,00/)).toBeInTheDocument();
   });
 
   it('DX-377: el abono del plan usa los medios de la clínica, exige la referencia y confirma la repetida con motivo', async () => {
@@ -1169,6 +1431,313 @@ describe('TreatmentPlansTab', () => {
 
   // Error-states ladder (Task 8): each `text-danger-text` site classified by what
   // the user can still do — see task-8-report.md for the full table.
+  describe('DX-417: aceptación parcial en la cabecera del plan', () => {
+    const original = plan({
+      id: 'plan-1',
+      status: 'ACCEPTED',
+      acceptedAt: '2026-10-20T15:00:00.000Z',
+      partialPendingPlanId: 'plan-2',
+    });
+    const pending = plan({
+      id: 'plan-2',
+      status: 'PRESENTED',
+      createdAt: '2026-10-20T15:00:00.000Z',
+      splitFromPlanId: 'plan-1',
+    });
+    const day = SEDE_FMT.civilDate('2026-10-20');
+
+    beforeEach(() => {
+      mockedListPlans.mockResolvedValue([original, pending]);
+      mockedGetPlan.mockImplementation(async (_t, id) =>
+        id === 'plan-2' ? { ...pending, items: [item1], total: item1.price } : { ...original, items: [item2], total: item2.price },
+      );
+    });
+
+    it('el original: chip «Aceptado parcialmente» y el enlace al pendiente, que lo selecciona', async () => {
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      const line = await screen.findByTestId('tp-plan-status-line');
+      await waitFor(() => expect(within(line).getByText('Aceptado parcialmente')).toBeInTheDocument());
+      expect(within(line).getByText('Aceptado parcialmente').closest('[data-status]')).toHaveAttribute(
+        'data-status',
+        'PARTIAL',
+      );
+      const link = await screen.findByRole('button', { name: /Lo no aceptado está en el presupuesto pendiente del/ });
+      await waitFor(() => expect(link).toHaveTextContent(`Lo no aceptado está en el presupuesto pendiente del ${day}`));
+      await user.click(link);
+      await waitFor(() => expect(screen.getByLabelText('Plan')).toHaveValue('plan-2'));
+      const pendingLine = await screen.findByTestId('tp-plan-status-line');
+      await waitFor(() => expect(within(pendingLine).getByText('Pendiente de aceptación parcial')).toBeInTheDocument());
+      expect(mockedGetPlan).toHaveBeenLastCalledWith(tok, 'plan-2');
+    });
+
+    it('el pendiente: chip propio, «Resto del plan aceptado el …» al original y el sufijo «· pendiente» en el selector', async () => {
+      const user = userEvent.setup();
+      mockedListPlans.mockResolvedValue([pending, original]);
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      const select = await screen.findByLabelText('Plan');
+      const options = within(select).getAllByRole('option');
+      expect(options[0].textContent).toMatch(/· pendiente$/);
+      expect(options[1].textContent).not.toMatch(/pendiente/);
+      const line = await screen.findByTestId('tp-plan-status-line');
+      expect(within(line).getByText('Pendiente de aceptación parcial')).toBeInTheDocument();
+      const back = await screen.findByRole('button', { name: /Resto del plan aceptado el/ });
+      await waitFor(() => expect(back).toHaveTextContent(`Resto del plan aceptado el ${day}`));
+      await user.click(back);
+      await waitFor(() => expect(select).toHaveValue('plan-1'));
+    });
+
+    it('un plan sin partir no lleva chip ni enlace', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      await screen.findByTestId('tp-plan-status-line');
+      expect(screen.queryByText('Aceptado parcialmente')).not.toBeInTheDocument();
+      expect(screen.queryByText(/presupuesto pendiente del/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('DX-417 ronda 1: el pendiente ya respondido, la segunda partición y el éxito', () => {
+    const day = SEDE_FMT.civilDate('2026-10-20');
+    const original = plan({
+      id: 'plan-1',
+      status: 'ACCEPTED',
+      acceptedAt: '2026-10-20T15:00:00.000Z',
+      partialPendingPlanId: 'plan-2',
+    });
+
+    it('I-1: un pendiente ya aceptado lleva el chip normal, sin «pendiente», y conserva el enlace al original', async () => {
+      const accepted = plan({
+        id: 'plan-2',
+        status: 'ACCEPTED',
+        createdAt: '2026-10-20T15:00:00.000Z',
+        splitFromPlanId: 'plan-1',
+        acceptedAt: '2026-10-27T15:00:00.000Z',
+        acceptance: { signerName: 'Ana', acceptedAt: '2026-10-27T15:00:00.000Z', remote: null },
+      });
+      mockedListPlans.mockResolvedValue([accepted, original]);
+      mockedGetPlan.mockImplementation(async (_t, id) =>
+        id === 'plan-2' ? { ...accepted, items: [item2], total: item2.price } : { ...original, items: [item2], total: item2.price },
+      );
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      const select = await screen.findByLabelText('Plan');
+      expect(within(select).getAllByRole('option')[0].textContent).not.toMatch(/pendiente/);
+      const line = await screen.findByTestId('tp-plan-status-line');
+      expect(within(line).getByText('Aceptado')).toBeInTheDocument();
+      expect(within(line).queryByText('Pendiente de aceptación parcial')).not.toBeInTheDocument();
+      const back = await screen.findByRole('button', { name: /Resto del plan aceptado el/ });
+      await waitFor(() => expect(back).toHaveTextContent(`Resto del plan aceptado el ${day}`));
+    });
+
+    it('M-5: un pendiente aceptado otra vez en parte enlaza a su original y a su nuevo pendiente', async () => {
+      const middle = plan({
+        id: 'plan-2',
+        status: 'ACCEPTED',
+        createdAt: '2026-10-20T15:00:00.000Z',
+        splitFromPlanId: 'plan-1',
+        partialPendingPlanId: 'plan-3',
+        acceptedAt: '2026-10-27T15:00:00.000Z',
+      });
+      const last = plan({ id: 'plan-3', status: 'PRESENTED', createdAt: '2026-10-27T15:00:00.000Z', splitFromPlanId: 'plan-2' });
+      mockedListPlans.mockResolvedValue([middle, original, last]);
+      mockedGetPlan.mockImplementation(async (_t, id) => ({
+        ...[middle, original, last].find((p) => p.id === id)!,
+        items: [item2],
+        total: item2.price,
+      }));
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      const line = await screen.findByTestId('tp-plan-status-line');
+      expect(within(line).getByText('Aceptado parcialmente')).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: /Resto del plan aceptado el/ })).toBeInTheDocument();
+      const forward = screen.getByRole('button', { name: /Lo no aceptado está en el presupuesto pendiente del/ });
+      await waitFor(() =>
+        expect(forward).toHaveTextContent(`Lo no aceptado está en el presupuesto pendiente del ${SEDE_FMT.civilDate('2026-10-27')}`),
+      );
+      await user.click(forward);
+      await waitFor(() => expect(screen.getByLabelText('Plan')).toHaveValue('plan-3'));
+    });
+
+    describe('M-8: aceptar en parte desde la ficha', () => {
+      beforeAll(() => {
+        jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
+          () =>
+            ({
+              setTransform: jest.fn(),
+              clearRect: jest.fn(),
+              beginPath: jest.fn(),
+              moveTo: jest.fn(),
+              lineTo: jest.fn(),
+              stroke: jest.fn(),
+            }) as unknown as CanvasRenderingContext2D,
+        );
+        jest.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockImplementation(() => 'data:image/png;base64,FIRMA');
+      });
+      afterAll(() => jest.restoreAllMocks());
+      afterEach(() => {
+        const actual = jest.requireActual('../../lib/treatment-plans/plan-quote-api');
+        jest.mocked(getPlanQuote).mockImplementation(actual.getPlanQuote);
+        jest.mocked(previewPartialAcceptance).mockImplementation(actual.previewPartialAcceptance);
+        jest.mocked(acceptPlan).mockImplementation(actual.acceptPlan);
+      });
+
+      it('aviso de éxito con «Ver el pendiente», el original seleccionado y lista y detalle al día', async () => {
+        const user = userEvent.setup();
+        const presented = plan({ id: 'plan-1', status: 'PRESENTED', presentedAt: '2026-10-01T15:00:00.000Z' });
+        const proposed2 = { ...item2, status: 'PROPOSED' as const };
+        const pending = plan({ id: 'plan-2', status: 'PRESENTED', createdAt: '2026-10-20T15:00:00.000Z', splitFromPlanId: 'plan-1' });
+        mockedListPlans.mockResolvedValueOnce([presented]).mockResolvedValue([original, pending]);
+        mockedGetPlan.mockImplementation(async (_t, id) => {
+          const listed = await mockedListPlans.mock.results.at(-1)!.value;
+          const p = (listed as typeof original[]).find((x) => x.id === id) ?? presented;
+          return { ...p, items: p.id === 'plan-2' ? [proposed2] : [item1, proposed2], total: 0 };
+        });
+        const quote = planQuoteFixture({ planStatus: 'PRESENTED', currency: 'USD' });
+        jest.mocked(getPlanQuote).mockResolvedValue(quote);
+        jest.mocked(previewPartialAcceptance).mockResolvedValue({
+          accepted: planQuoteFixture({ currency: 'USD', items: [quote.items[0]], contentHash: 'h-i1' }),
+          pending: { items: [quote.items[1]], totals: [{ currency: 'USD', gross: 1, discount: 0, net: 1, agreementSaving: 0 }] },
+          original: { totals: [{ currency: 'USD', gross: 2, discount: 0, net: 2, agreementSaving: 0 }] },
+          repricing: null,
+        });
+        jest.mocked(acceptPlan).mockResolvedValue(
+          planQuoteFixture({
+            planStatus: 'ACCEPTED',
+            acceptance: { ...SIGNED_ACCEPTANCE, pendingPlanId: 'plan-2', pendingItemIds: ['item-2'], pendingTotal: 1 },
+          }),
+        );
+        render(
+          <>
+            <TreatmentPlansTab patientId="pat-1" token={discountDentistToken} />
+            <Toaster />
+          </>,
+        );
+        await user.click(await screen.findByRole('button', { name: 'Aceptar en parte' }));
+        const dialog = await screen.findByRole('dialog', { name: 'Aceptar en parte' });
+        await user.click(await within(dialog).findByLabelText('Aceptar Implante'));
+        await within(dialog).findByRole('region', { name: 'Totales de la aceptación parcial' });
+        await user.click(within(dialog).getByRole('button', { name: 'Continuar' }));
+        const canvas = await within(dialog).findByRole('img', { name: 'Firma del paciente' });
+        fireEvent.pointerDown(canvas, { clientX: 5, clientY: 5, pointerId: 1 });
+        fireEvent.pointerMove(canvas, { clientX: 50, clientY: 30, pointerId: 1 });
+        fireEvent.pointerUp(canvas, { pointerId: 1 });
+        const detailCalls = mockedGetPlan.mock.calls.length;
+        const listCalls = mockedListPlans.mock.calls.length;
+        await user.click(within(dialog).getByRole('button', { name: 'Aceptar en parte y firmar' }));
+
+        expect(await screen.findByText('Presupuesto aceptado en parte')).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByLabelText('Plan')).toHaveValue('plan-1'));
+        await waitFor(() => expect(within(screen.getByLabelText('Plan')).getAllByRole('option')).toHaveLength(2));
+        // Detalle y lista al día (el saldo, solo con un rol que cobra: el odontólogo no lo ve).
+        expect(mockedListPlans.mock.calls.length).toBeGreaterThan(listCalls);
+        expect(mockedGetPlan.mock.calls.length).toBeGreaterThan(detailCalls);
+        await user.click(screen.getByRole('button', { name: 'Ver el pendiente' }));
+        await waitFor(() => expect(screen.getByLabelText('Plan')).toHaveValue('plan-2'));
+      });
+    });
+  });
+
+  describe('DX-379: la validez del presupuesto en la cabecera del plan', () => {
+    // Un borrador impreso también tiene validez; el panel de opciones solo la
+    // repite en un plan presentado, así que aquí sale una sola vez.
+    const day = SEDE_FMT.civilDate('2026-11-06');
+    const dated = { ...plan1, quoteIssuedOn: '2026-10-07', quoteValidUntil: '2026-11-06' };
+
+    it('vencido: chip «Vencido · valía hasta el …» junto al estado', async () => {
+      mockedListPlans.mockResolvedValue([{ ...dated, quoteExpired: true }]);
+      mockedGetPlan.mockResolvedValue({ ...plan1Detail, ...dated, quoteExpired: true });
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      const chip = await screen.findByTestId('quote-expired');
+      await waitFor(() => expect(chip).toHaveTextContent(`Vencido · valía hasta el ${day}`));
+      expect(chip).toHaveAttribute('data-status', 'EXPIRED');
+    });
+
+    it('vigente: «Válido hasta el …» junto al estado', async () => {
+      mockedListPlans.mockResolvedValue([{ ...dated, quoteExpired: false }]);
+      mockedGetPlan.mockResolvedValue({ ...plan1Detail, ...dated, quoteExpired: false });
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      const line = await screen.findByTestId('quote-valid-until');
+      await waitFor(() => expect(line).toHaveTextContent(`Válido hasta el ${day}`));
+      expect(screen.queryByTestId('quote-expired')).not.toBeInTheDocument();
+    });
+
+    it.each(['ACCEPTED', 'REJECTED'] as const)(
+      '%s con una validez ya pasada: nada en la cabecera (I-1)',
+      async (status) => {
+        const past = { ...dated, quoteValidUntil: '2026-10-01', quoteExpired: false, status };
+        mockedListPlans.mockResolvedValue([past]);
+        mockedGetPlan.mockResolvedValue({ ...plan1Detail, ...past });
+        render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+        await screen.findByRole('table', { name: /ítems de la visita/i });
+        expect(screen.queryByTestId('quote-valid-until')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('quote-expired')).not.toBeInTheDocument();
+      },
+    );
+
+    describe('DX-379 (C): el selector de estado de un presupuesto vencido', () => {
+      const presented = { ...dated, status: 'PRESENTED' as const, presentedAt: '2026-10-07T12:00:00.000Z' };
+
+      it('vencido: no ofrece «Aceptado» y explica que se acepta con firma', async () => {
+        mockedListPlans.mockResolvedValue([{ ...presented, quoteExpired: true }]);
+        mockedGetPlan.mockResolvedValue({ ...plan1Detail, ...presented, quoteExpired: true });
+        render(<TreatmentPlansTab patientId="pat-1" token={discountDentistToken} />);
+        const select = await screen.findByLabelText<HTMLSelectElement>(/^estado del plan$/i);
+        const options = within(select).getAllByRole('option').map((o) => o.getAttribute('value'));
+        expect(options).not.toContain('ACCEPTED');
+        expect(options).toContain('CANCELLED');
+        expect(screen.getByText('Vencido: acéptalo con firma para elegir cómo.')).toHaveAttribute(
+          'id',
+          select.getAttribute('aria-describedby'),
+        );
+      });
+
+      it('vigente: «Aceptado» sigue en el selector, sin el aviso', async () => {
+        mockedListPlans.mockResolvedValue([{ ...presented, quoteExpired: false }]);
+        mockedGetPlan.mockResolvedValue({ ...plan1Detail, ...presented, quoteExpired: false });
+        render(<TreatmentPlansTab patientId="pat-1" token={discountDentistToken} />);
+        const select = await screen.findByLabelText<HTMLSelectElement>(/^estado del plan$/i);
+        expect(within(select).getAllByRole('option').map((o) => o.getAttribute('value'))).toContain('ACCEPTED');
+        expect(screen.queryByText('Vencido: acéptalo con firma para elegir cómo.')).not.toBeInTheDocument();
+      });
+
+      it('409 QUOTE_EXPIRED (venció con la pantalla abierta): dice el mensaje y recarga el plan, ya sin «Aceptado»', async () => {
+        const user = userEvent.setup();
+        mockedListPlans.mockResolvedValue([{ ...presented, quoteExpired: false }]);
+        mockedGetPlan
+          .mockResolvedValueOnce({ ...plan1Detail, ...presented, quoteExpired: false })
+          .mockResolvedValue({ ...plan1Detail, ...presented, quoteExpired: true });
+        mockedUpdatePlan.mockRejectedValueOnce(
+          new ApiError(409, 'El presupuesto venció el 06/11/2026: acéptalo con firma para elegir cómo.', {
+            code: 'QUOTE_EXPIRED',
+          }),
+        );
+        render(<TreatmentPlansTab patientId="pat-1" token={discountDentistToken} />);
+        const select = await screen.findByLabelText<HTMLSelectElement>(/^estado del plan$/i);
+        await user.selectOptions(select, 'ACCEPTED');
+        expect(
+          await screen.findByText('El presupuesto venció el 06/11/2026: acéptalo con firma para elegir cómo.'),
+        ).toBeInTheDocument();
+        await waitFor(() => expect(mockedGetPlan).toHaveBeenCalledTimes(2));
+        await waitFor(() =>
+          expect(
+            within(screen.getByLabelText<HTMLSelectElement>(/^estado del plan$/i))
+              .getAllByRole('option')
+              .map((o) => o.getAttribute('value')),
+          ).not.toContain('ACCEPTED'),
+        );
+      });
+    });
+
+    it('sin fechas (plan anterior): nada', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      await screen.findByRole('table', { name: /ítems de la visita/i });
+      expect(screen.queryByTestId('quote-expired')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('quote-valid-until')).not.toBeInTheDocument();
+    });
+  });
+
   describe('DX-109: planes no cobrables o cerrados', () => {
     it('un plan rechazado deshabilita «Registrar abono» con el motivo, no ofrece plan de cuotas y congela los ítems', async () => {
       const rejected = { ...plan1Detail, status: 'REJECTED' as const };
@@ -1478,19 +2047,41 @@ describe('TreatmentPlansTab', () => {
       performedByName: 'Dra. Laura Gómez',
       performedLocationId: 'loc-norte',
       performedLocationName: 'Sede Norte',
-      completedAt: new Date(2026, 9, 20, 10, 0).toISOString(),
+      // 02:30Z: el 19 en Caracas (la pantalla) y el 20 en Berlín (la sede donde se realizó).
+      completedAt: '2026-10-20T02:30:00.000Z',
     };
     const legacyDone: TreatmentPlanItem = { ...item1, id: 'item-9', toothNumber: '47', status: 'DONE' };
+
+    afterEach(() => {
+      // La sede de la prueba de la fecha por fila no se hereda en las siguientes.
+      jest.mocked(listLocations).mockResolvedValue([clinicLocation({ currency: 'VES' })]);
+    });
 
     it('la ficha dice quién, cuándo y en qué sede, o «Sin atribuir»', async () => {
       mockedListPlans.mockResolvedValue([plan1]);
       mockedGetPlan.mockResolvedValue({ ...plan1, items: [doneByLaura, legacyDone], total: 0 });
+      // La pantalla es Caracas (12 h); «Sede Norte» es Berlín: la fecha sale con el reloj de la sede donde se realizó (DX-354b, E1).
+      jest.mocked(listLocations).mockResolvedValue([
+        clinicLocation({ currency: 'VES' }),
+        { ...STAMP_SEDES.berlin, id: 'loc-norte', name: 'Sede Norte' },
+      ]);
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
       const table = await screen.findByRole('table', { name: /ítems de la visita/i });
-      expect(within(table).getByText('Realizado por Dra. Laura Gómez · 20/10/2026 · Sede Norte')).toBeInTheDocument();
+      const line = `Realizado por Dra. Laura Gómez · ${dateIn('berlin', doneByLaura.completedAt!)} · Sede Norte`;
+      expect(dateIn('berlin', doneByLaura.completedAt!)).not.toBe(dateIn('caracas', doneByLaura.completedAt!));
+      expect(await within(table).findByText(line)).toBeInTheDocument();
       expect(within(table).getByText('Sin atribuir')).toBeInTheDocument();
       // La lista móvil dice lo mismo.
-      expect(screen.getAllByText('Realizado por Dra. Laura Gómez · 20/10/2026 · Sede Norte')).toHaveLength(2);
+      expect(screen.getAllByText(line)).toHaveLength(2);
+    });
+
+    it('si la sede donde se realizó no se conoce, la fecha es «—» con el aviso (no la de la pantalla)', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue({ ...plan1, items: [doneByLaura], total: 0 });
+      render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+      expect(await within(table).findByText('Realizado por Dra. Laura Gómez · — · Sede Norte')).toBeInTheDocument();
+      expect(await screen.findAllByText(/No se pudo saber el formato regional o el reloj de la sede/)).toHaveLength(1);
     });
 
     it('otra dentista no puede sacarlo de «Realizado» ni corregirlo', async () => {
@@ -1516,7 +2107,7 @@ describe('TreatmentPlansTab', () => {
       const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       const select = within(table).getByRole('combobox', { name: /estado del ítem del diente 26/i });
       expect(within(select).getByRole('option', { name: 'Aceptado' })).toBeEnabled();
-      await user.click(within(table).getByRole('button', { name: 'Corregir quién realizó el ítem del diente 26' }));
+      await user.click(within(table).getByRole('button', { name: /^Corregir quién realizó el ítem del diente 26 · / }));
       const dialog = await screen.findByRole('dialog', { name: 'Corregir quién lo realizó' });
       const performer = within(dialog).getByRole('combobox', { name: 'Profesional que lo realizó' });
       await waitFor(() => expect(performer).toHaveValue('u-laura'));
@@ -1540,7 +2131,7 @@ describe('TreatmentPlansTab', () => {
       const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       expect(within(table).queryByRole('button', { name: /corregir quién/i })).not.toBeInTheDocument();
       await user.click(
-        within(table).getByRole('button', { name: 'Atribuir quién, cuándo y dónde se realizó el ítem del diente 47' }),
+        within(table).getByRole('button', { name: /^Atribuir quién, cuándo y dónde se realizó el ítem del diente 47 · / }),
       );
       const dialog = await screen.findByRole('dialog', { name: 'Atribuir el procedimiento' });
       expect(within(dialog).getByRole('combobox', { name: 'Sede donde se realizó' })).toBeInTheDocument();
@@ -1935,12 +2526,12 @@ describe('TreatmentPlansTab', () => {
       render(<TreatmentPlansTab patientId="pat-1" token={dentistToken} />);
 
       expect(
-        await screen.findByText('Aceptado y firmado por Ana García el 16/10/2026 15:30'),
+        await screen.findByText(`Aceptado y firmado por Ana García el ${dateTimeIn('caracas', '2026-10-16T15:30:00.000Z')}`),
       ).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Aceptar con firma' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /^quitar$/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('form', { name: /agregar ítem/i })).not.toBeInTheDocument();
-      const [statusSelect] = screen.getAllByLabelText('Estado del ítem del diente 11');
+      const [statusSelect] = screen.getAllByLabelText(/^Estado del ítem del diente 11 · /);
       expect(within(statusSelect).getByRole('option', { name: 'Propuesto' })).toBeDisabled();
       expect(within(statusSelect).getByRole('option', { name: 'Realizado' })).toBeEnabled();
       // Máquina de estados (DX-040): un plan aceptado solo pasa a completado o
@@ -1967,6 +2558,7 @@ describe('TreatmentPlansTab', () => {
       ]);
       expect(screen.getByRole('button', { name: 'Presentar al paciente' })).toBeInTheDocument();
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
       render(<TreatmentPlansTab patientId="pat-1" token={assistantToken} />);
       const forAssistant = await screen.findByLabelText(/^estado del plan$/i);
@@ -2190,8 +2782,8 @@ describe('TreatmentPlansTab', () => {
 
       const bulk = screen.getByRole('button', { name: 'Descuento %' });
       expect(bulk).toBeDisabled();
-      await user.click(within(table).getByRole('checkbox', { name: 'Seleccionar el ítem del diente 11' }));
-      await user.click(within(table).getByRole('checkbox', { name: 'Seleccionar el ítem del diente 26' }));
+      await user.click(within(table).getByRole('checkbox', { name: /^Seleccionar el ítem del diente 11 · / }));
+      await user.click(within(table).getByRole('checkbox', { name: /^Seleccionar el ítem del diente 26 · / }));
       expect(screen.getByText('2 ítems seleccionados')).toBeInTheDocument();
       await user.click(bulk);
 
@@ -2226,7 +2818,7 @@ describe('TreatmentPlansTab', () => {
       );
       const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       await waitFor(() => expect(mockedGetDiscountPolicy).toHaveBeenCalled());
-      await user.click(within(table).getByRole('checkbox', { name: 'Seleccionar el ítem del diente 11' }));
+      await user.click(within(table).getByRole('checkbox', { name: /^Seleccionar el ítem del diente 11 · / }));
       await user.click(screen.getByRole('button', { name: 'Descuento %' }));
       const dialog = await screen.findByRole('dialog');
       await user.type(within(dialog).getByLabelText('Porcentaje de descuento'), '5');
@@ -2264,14 +2856,15 @@ describe('TreatmentPlansTab', () => {
 
     // SEC-041: un precio por debajo del de catálogo cuenta como descuento.
     describe('precio por debajo del de catálogo (SEC-041)', () => {
-      // El catálogo en la moneda del plan (sedes en USD): la rebaja se puede
-      // restar. Con el catálogo en otra moneda, ver DX-489.
+      // El catálogo en la moneda del plan (el precio resuelto lo da en USD,
+      // DX-502): la rebaja se puede restar. Con el catálogo en otra moneda,
+      // ver DX-489.
       const { clinicLocation } = jest.requireActual('../../lib/test/locations');
       beforeEach(() => {
         jest.mocked(listLocations).mockResolvedValue([{ ...clinicLocation(), currency: 'USD' }]);
       });
       afterEach(() => {
-        jest.mocked(listLocations).mockResolvedValue([clinicLocation()]);
+        jest.mocked(listLocations).mockResolvedValue([clinicLocation({ currency: 'VES' })]);
       });
 
       async function openForm(token: string) {
@@ -2372,6 +2965,210 @@ describe('TreatmentPlansTab', () => {
         ).toBeInTheDocument();
       });
 
+      // DX-513-bis: la referencia en otra moneda CONOCIDA llega convertida a
+      // la del plan con la tasa de hoy (price-quote) y bajar de ella cuenta
+      // como descuento, igual que en la misma moneda. El plan de estos tests
+      // está en USD; el catálogo, en VES (3.600,00 a 880 Bs./USD = 4,09 USD).
+      describe('DX-513-bis: catálogo en otra moneda, convertido', () => {
+        const assistantToken = `h.${btoa(JSON.stringify({ sub: 'u3', tenantId: 't1', role: 'ASSISTANT' }))}.s`;
+        const RATE = { fromPerBase: 880, toPerBase: 1, source: 'MANUAL' as const, rateDate: '2026-11-07' };
+        const vesQuote = (overrides: Partial<PriceQuote> = {}) =>
+          quoteOf(
+            'cat-1',
+            {
+              basePrice: 3600,
+              price: 3600,
+              catalogCurrency: 'VES',
+              referenceCurrency: 'VES',
+              referencePriceInPlan: 4.09,
+              rate: RATE,
+              ...overrides,
+            },
+            'USD',
+          );
+
+        it('precarga la referencia convertida (4,09) y dice el catálogo en VES con la tasa', async () => {
+          mockedGetPriceQuote.mockResolvedValue(vesQuote());
+          await openForm(assistantToken);
+          const price = screen.getByLabelText<HTMLInputElement>('Precio', { exact: true });
+          await waitFor(() => expect(price.value).toBe('4.09'));
+          const note = document.getElementById('tp-price-converted');
+          expect(note).toHaveTextContent(/^Catálogo: VES 3\.600,00 ≈ USD 4,09 \(tasa 1 USD = 880 VES del .+, manual\)\.$/);
+          expect(price.getAttribute('aria-describedby')?.split(' ')).toContain('tp-price-converted');
+          expect(document.getElementById('tp-price-below-catalog')).toBeEmptyDOMElement();
+        });
+
+        it('sin tocar el precio, la asistente lo agrega sin motivo ni precio manual', async () => {
+          mockedGetPriceQuote.mockResolvedValue(vesQuote());
+          mockedAddItem.mockResolvedValue({ ...item1, id: 'item-3' });
+          const user = await openForm(assistantToken);
+          await waitFor(() =>
+            expect(screen.getByLabelText<HTMLInputElement>('Precio', { exact: true }).value).toBe('4.09'),
+          );
+          await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
+          await waitFor(() =>
+            expect(mockedAddItem).toHaveBeenCalledWith(assistantToken, 'plan-1', {
+              toothNumber: '16',
+              catalogItemId: 'cat-1',
+            }),
+          );
+        });
+
+        it('a 4,00 USD es una rebaja: aviso con la referencia en USD y 403 previo de la asistente (0 %)', async () => {
+          mockedGetPriceQuote.mockResolvedValue(vesQuote());
+          const user = await openForm(assistantToken);
+          await typePrice(user, '4');
+          const notice = document.getElementById('tp-price-below-catalog');
+          expect(notice).toHaveTextContent('Precio por debajo del de catálogo: cuenta como descuento.');
+          expect(notice).toHaveTextContent(/Rebaja de USD 0,09 sobre USD 4,09/);
+          await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
+          expect(
+            await screen.findByText(
+              'Precio por debajo del de catálogo: cuenta como descuento. Tu rol permite hasta un 0 % de descuento por ítem.',
+            ),
+          ).toBeInTheDocument();
+          expect(mockedAddItem).not.toHaveBeenCalled();
+        });
+
+        it('el ADMIN a 3,60 (12 %): pide el motivo', async () => {
+          mockedGetPriceQuote.mockResolvedValue(vesQuote());
+          const user = await openForm(discountAdminToken);
+          await typePrice(user, '3.6');
+          expect(screen.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeInTheDocument();
+        });
+
+        it('convenio por % sobre el catálogo en VES: la referencia convertida (3,68) también cuenta', async () => {
+          mockedGetPriceQuote.mockResolvedValue(
+            vesQuote({
+              price: 3240,
+              referencePriceInPlan: 3.68,
+              source: 'AGREEMENT_PERCENT',
+              agreementId: 'ag-1',
+              agreementName: 'Seguros Sol',
+            }),
+          );
+          const user = await openForm(discountAdminToken);
+          await typePrice(user, '3');
+          expect(screen.getByText('Precio por debajo del de catálogo: cuenta como descuento.')).toBeInTheDocument();
+          expect(screen.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeInTheDocument();
+        });
+
+        it('sin tasa de hoy: no propone precio, lo dice (Ajustes o una lista en USD) y no deja agregar', async () => {
+          mockedGetPriceQuote.mockResolvedValue(
+            vesQuote({ referencePriceInPlan: null, rate: null, rateMissing: true, missingRateCurrency: 'VES' }),
+          );
+          const user = await openForm(discountAdminToken);
+          expect(
+            await screen.findByText(
+              'No hay tasa de VES para hoy: regístrala en Ajustes › Tasa de cambio o usa una lista de precios en USD.',
+            ),
+          ).toBeInTheDocument();
+          expect(screen.getByLabelText<HTMLInputElement>('Precio', { exact: true }).value).toBe('');
+          const submitButton = screen.getByRole('button', { name: /^agregar ítem$/i });
+          expect(submitButton).toBeDisabled();
+          await typePrice(user, '4');
+          expect(mockedAddItem).not.toHaveBeenCalled();
+        });
+
+        it('L7: sin tasa, la asistente lee que se lo pida a un administrador', async () => {
+          mockedGetPriceQuote.mockResolvedValue(
+            vesQuote({ referencePriceInPlan: null, rate: null, rateMissing: true, missingRateCurrency: 'VES' }),
+          );
+          await openForm(assistantToken);
+          expect(
+            await screen.findByText(
+              'No hay tasa de VES para hoy: pide a un administrador que registre la tasa del día o una lista de precios en USD.',
+            ),
+          ).toBeInTheDocument();
+          expect(screen.queryByText(/regístrala en Ajustes/)).not.toBeInTheDocument();
+        });
+
+        it('lista de la sede en USD con el catálogo en VES: sin tasa, la rebaja frente a la lista cuenta', async () => {
+          mockedGetPriceQuote.mockResolvedValue(
+            vesQuote({ price: 100, referenceCurrency: 'USD', referencePriceInPlan: 100, rate: null, source: 'PRICE_LIST' }),
+          );
+          const user = await openForm(discountAdminToken);
+          await typePrice(user, '80');
+          expect(document.getElementById('tp-price-converted')).toBeNull();
+          expect(screen.getByText('Precio por debajo del de catálogo: cuenta como descuento.')).toBeInTheDocument();
+          expect(screen.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeInTheDocument();
+        });
+
+        it('catalogCurrency NULL: cuenta como hoy (aviso, motivo y tope), sin inventar cifra ni moneda', async () => {
+          mockedGetPriceQuote.mockResolvedValue(
+            vesQuote({ catalogCurrency: null, referenceCurrency: null, referencePriceInPlan: 3600, rate: null }),
+          );
+          const user = await openForm(discountAdminToken);
+          await typePrice(user, '80');
+          expect(screen.getByText('Precio por debajo del de catálogo: cuenta como descuento.')).toBeInTheDocument();
+          expect(screen.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeInTheDocument();
+          const note = document.getElementById('tp-price-below-catalog');
+          expect(note).toHaveTextContent(
+            'Precio de catálogo en una moneda que no se sabe, sin convertir. Se compara con el tope de tu rol y sale en el informe de descuentos.',
+          );
+          expect(note).not.toHaveTextContent(/3\.600/);
+        });
+
+        it('frontera: a la referencia convertida (4,09), ni aviso ni rebaja', async () => {
+          mockedGetPriceQuote.mockResolvedValue(vesQuote());
+          const user = await openForm(assistantToken);
+          await typePrice(user, '4.09');
+          expect(document.getElementById('tp-price-below-catalog')).toBeEmptyDOMElement();
+        });
+
+        it('en la tabla, un ítem con foto pinta la rebaja en USD y el catálogo en VES con su tasa', async () => {
+          const converted = {
+            ...item1,
+            price: 4,
+            catalogPrice: 3600,
+            basePrice: 3600,
+            catalogCurrency: 'VES',
+            priceSource: 'CATALOG' as const,
+            referenceCurrency: 'VES',
+            referencePriceInPlan: 4.09,
+            basePriceInPlan: 4.09,
+            referenceRate: RATE,
+          };
+          mockedListPlans.mockResolvedValue([plan1]);
+          mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [converted, item2] });
+          render(<TreatmentPlansTab patientId="pat-1" token={discountAdminToken} />);
+          const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+          expect(within(table).getByText(/Rebaja −USD 0,09 \(catálogo USD 4,09\)/)).toBeInTheDocument();
+          expect(within(table).getByText(/^Catálogo VES 3\.600,00, tasa 1 USD = 880 VES del .+, manual$/)).toBeInTheDocument();
+        });
+
+        it('en la tabla, un ítem anterior (sin foto) en USD con el catálogo en VES no pinta «Rebaja» (DX-513)', async () => {
+          const legacy = {
+            ...item1,
+            price: 80,
+            catalogPrice: 3600,
+            basePrice: 3600,
+            catalogCurrency: 'VES',
+            priceSource: 'CATALOG' as const,
+          };
+          mockedListPlans.mockResolvedValue([plan1]);
+          mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [legacy, item2] });
+          render(<TreatmentPlansTab patientId="pat-1" token={discountAdminToken} />);
+          const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+          expect(table).not.toHaveTextContent(/Rebaja −/);
+        });
+
+        it('en la tabla, con la moneda del catálogo desconocida la «Rebaja» se pinta como hoy', async () => {
+          const unknown = {
+            ...item1,
+            price: 50000,
+            catalogPrice: 60000,
+            catalogCurrency: null,
+            priceSource: 'CATALOG' as const,
+          };
+          mockedListPlans.mockResolvedValue([plan1]);
+          mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [unknown, item2] });
+          render(<TreatmentPlansTab patientId="pat-1" token={discountAdminToken} />);
+          const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+          expect(within(table).getByText(/Rebaja −USD 10\.000,00/)).toBeInTheDocument();
+        });
+      });
+
       it('el ítem con el precio rebajado muestra el de catálogo y la rebaja', async () => {
         const reduced = { ...item1, catalogPrice: 60000, discountReason: 'LOYALTY' as const };
         mockedListPlans.mockResolvedValue([plan1]);
@@ -2406,6 +3203,8 @@ describe('TreatmentPlansTab', () => {
         {
           price: 40000,
           basePrice: 50000,
+          // El catálogo en VES (DX-502: lo dice la API); el plan, en USD.
+          catalogCurrency: 'VES',
           source: 'AGREEMENT_PERCENT',
           agreementId: 'ag-1',
           agreementName: 'Seguros Sol',
@@ -2439,7 +3238,7 @@ describe('TreatmentPlansTab', () => {
       );
       const price = screen.getByLabelText<HTMLInputElement>(/^precio$/i);
       await waitFor(() => expect(price.value).toBe('40000'));
-      expect(await screen.findByText(/Convenio · Seguros Sol · precio de lista COP 50\.000,00$/)).toBeInTheDocument();
+      expect(await screen.findByText(/Convenio · Seguros Sol · precio de lista VES 50\.000,00$/)).toBeInTheDocument();
     });
 
     it('la línea de origen queda atada al campo de precio (aria-describedby)', async () => {
@@ -2542,6 +3341,22 @@ describe('TreatmentPlansTab', () => {
       );
     });
 
+    it('L5 (DX-513-bis): si falla el precio y el catálogo está en otra moneda, no precarga la cifra cruda ni la toma como referencia', async () => {
+      mockedListCatalogItems.mockResolvedValue(catalog.map((c) => ({ ...c, catalogCurrency: 'VES' })));
+      mockedGetPriceQuote.mockRejectedValueOnce(new Error('boom'));
+      const user = await openForm();
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+
+      expect(await screen.findByText('No pudimos traer el precio')).toBeInTheDocument();
+      const price = screen.getByLabelText<HTMLInputElement>(/^precio$/i);
+      expect(price).toBeEnabled();
+      expect(price.value).toBe('');
+      // Sin referencia en la moneda del plan, 40.000 no se compara con los
+      // 50.000 VES: no hay aviso inventado.
+      await user.type(price, '40000');
+      expect(document.getElementById('tp-price-below-catalog')).toBeEmptyDOMElement();
+    });
+
     it('«Reintentar» vuelve a pedir el precio y lo precarga', async () => {
       mockedGetPriceQuote.mockRejectedValueOnce(new Error('boom')).mockResolvedValue(agreementQuote());
       const user = await openForm();
@@ -2553,7 +3368,9 @@ describe('TreatmentPlansTab', () => {
     });
 
     it('una prestación sin descuentos bloquea el campo de descuento y rechaza un precio por debajo', async () => {
-      mockedGetPriceQuote.mockResolvedValue(agreementQuote({ allowDiscount: false }));
+      // DX-513: el catálogo en la moneda del plan; en otra, bajar de él no es
+      // un descuento (como en la API).
+      mockedGetPriceQuote.mockResolvedValue(agreementQuote({ allowDiscount: false, catalogCurrency: 'USD' }));
       const user = await openForm();
       await user.click(screen.getByRole('radio', { name: /resina/i }));
       const price = screen.getByLabelText<HTMLInputElement>(/^precio$/i);
@@ -2593,6 +3410,7 @@ describe('TreatmentPlansTab', () => {
         ...item1,
         catalogPrice: 40000,
         basePrice: 50000,
+        catalogCurrency: 'VES',
         priceSource: 'AGREEMENT_PERCENT' as const,
         agreementId: 'ag-1',
         agreementName: 'Seguros Sol',
@@ -2601,7 +3419,7 @@ describe('TreatmentPlansTab', () => {
       mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [withAgreement, item2] });
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
       const table = await screen.findByRole('table', { name: /ítems de la visita/i });
-      expect(within(table).getByText(/Convenio Seguros Sol · precio de lista COP 50\.000,00$/)).toBeInTheDocument();
+      expect(within(table).getByText(/Convenio Seguros Sol · precio de lista VES 50\.000,00$/)).toBeInTheDocument();
     });
 
     it('un ítem con convenio y descuento muestra la línea del convenio Y la del descuento', async () => {
@@ -2609,6 +3427,7 @@ describe('TreatmentPlansTab', () => {
         ...item1,
         catalogPrice: 40000,
         basePrice: 50000,
+        catalogCurrency: 'VES',
         discount: 2000,
         priceSource: 'AGREEMENT_PERCENT' as const,
         agreementId: 'ag-1',
@@ -2618,7 +3437,7 @@ describe('TreatmentPlansTab', () => {
       mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [both, item2] });
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
       const table = await screen.findByRole('table', { name: /ítems de la visita/i });
-      expect(within(table).getByText(/Convenio Seguros Sol · precio de lista COP 50\.000,00$/)).toBeInTheDocument();
+      expect(within(table).getByText(/Convenio Seguros Sol · precio de lista VES 50\.000,00$/)).toBeInTheDocument();
       expect(within(table).getByText(/Descuento −USD 2\.000,00/)).toBeInTheDocument();
     });
 
@@ -2646,7 +3465,7 @@ describe('TreatmentPlansTab', () => {
       render(<TreatmentPlansTab patientId="pat-1" token={discountDentistToken} />);
       const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       await waitFor(() => expect(mockedGetDiscountPolicy).toHaveBeenCalled());
-      await user.click(within(table).getByRole('checkbox', { name: 'Seleccionar el ítem del diente 11' }));
+      await user.click(within(table).getByRole('checkbox', { name: /^Seleccionar el ítem del diente 11 · / }));
       await user.click(screen.getByRole('button', { name: 'Descuento %' }));
       const dialog = await screen.findByRole('dialog');
       await user.type(within(dialog).getByLabelText('Porcentaje de descuento'), '5');
@@ -2732,6 +3551,7 @@ describe('TreatmentPlansTab', () => {
       await within(await itemsTable()).findAllByText('Cobrado');
       expect(within(moneySummary()).queryByText('Sin imputar')).not.toBeInTheDocument();
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
       mockedGetPlanBalance.mockResolvedValue({ ...balanceWithItems, unallocated: 12500 });
       render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
@@ -2760,7 +3580,7 @@ describe('TreatmentPlansTab', () => {
           {
             paymentId: 'p9',
             amount: 150000,
-            currency: 'COP',
+            currency: 'VES',
             paidOn: '2026-10-30',
           },
         ],
@@ -2786,6 +3606,7 @@ describe('TreatmentPlansTab', () => {
         await screen.findByText('1 abono todavía sin convertir a la moneda del plan: no se imputa a ítems.'),
       ).toBeInTheDocument();
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
       mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
       render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
@@ -2884,7 +3705,7 @@ describe('TreatmentPlansTab', () => {
         await waitFor(() => expect(mockedGetDiscountPolicy).toHaveBeenCalled());
         const before = mockedGetPlanBalance.mock.calls.length;
 
-        await user.click(within(table).getByRole('checkbox', { name: 'Seleccionar el ítem del diente 26' }));
+        await user.click(within(table).getByRole('checkbox', { name: /^Seleccionar el ítem del diente 26 · / }));
         await user.click(screen.getByRole('button', { name: 'Descuento %' }));
         const dialog = await screen.findByRole('dialog');
         await user.type(within(dialog).getByLabelText('Porcentaje de descuento'), '5');
@@ -2920,6 +3741,7 @@ describe('TreatmentPlansTab', () => {
       expect(await screen.findByRole('menuitem', { name: 'Imputación' })).toBeInTheDocument();
       await user.keyboard('{Escape}');
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
       const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u-r', tenantId: 't1', role: 'RECEPTION' }))}.s`;
       render(<TreatmentPlansTab patientId="pat-1" token={receptionToken} />);
@@ -2942,11 +3764,70 @@ describe('TreatmentPlansTab', () => {
       expect(screen.queryByRole('menuitem', { name: 'Imputación' })).not.toBeInTheDocument();
     });
 
+    it('«Ver imputación» abre el detalle de solo lectura: ADMIN lo tiene, también con el plan cancelado', async () => {
+      mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
+      jest.mocked(getPaymentAllocations).mockResolvedValue({
+        paymentId: 'pay-1',
+        receiptNumber: 'PRI-000001',
+        locationId: 'loc-1',
+        treatmentPlanId: 'plan-1',
+        paymentAmount: 50000,
+        paymentCurrency: 'USD',
+        paidOn: '2026-01-05',
+        planCurrency: 'USD',
+        planStatus: 'ACCEPTED',
+        planAmount: 50000,
+        manual: false,
+        allocated: 30000,
+        unallocated: 20000,
+        creditOut: 0,
+        onAccount: 20000,
+        version: 'a'.repeat(64),
+        allocations: [{ treatmentPlanItemId: item2.id, amount: 30000, source: 'AUTO' }],
+        items: [
+          {
+            itemId: item2.id,
+            toothNumber: '26',
+            procedureName: 'Limpieza',
+            status: 'ACCEPTED',
+            billable: 80000,
+            paidByOthers: 0,
+            free: 80000,
+          },
+        ],
+      });
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      const payments = await openPaymentsTable(user);
+      const row = within(payments).getByText('PRI-000001').closest('tr') as HTMLTableRowElement;
+      await pickRowAction(user, row, 'Ver imputación');
+
+      const dialog = await screen.findByRole('dialog', { name: 'Imputación del abono' });
+      expect(jest.mocked(getPaymentAllocations)).toHaveBeenCalledWith(adminToken, 'pay-1');
+      expect(await within(dialog).findByText('Automática (más antiguo primero)')).toBeInTheDocument();
+      expect(within(dialog).getByRole('row', { name: /Limpieza/ })).toBeInTheDocument();
+      expect(within(dialog).getByRole('row', { name: /A cuenta/ })).toBeInTheDocument();
+      // ADMIN puede pasar de ahí a cambiarla.
+      expect(within(dialog).getByRole('button', { name: 'Cambiar imputación' })).toBeInTheDocument();
+    });
+
+    it('«Ver imputación» no sale para un rol que no lee abonos', async () => {
+      mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
+      const user = userEvent.setup();
+      const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u-r', tenantId: 't1', role: 'RECEPTION' }))}.s`;
+      render(<TreatmentPlansTab patientId="pat-1" token={receptionToken} />);
+      const payments = await openPaymentsTable(user);
+      await user.click(within(payments).getAllByRole('button', { name: /^Acciones de abono/ })[0]);
+      expect(await screen.findByRole('menuitem', { name: 'Recibo' })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: 'Ver imputación' })).not.toBeInTheDocument();
+    });
+
     it('saving the allocation closes the modal and refreshes balance and payments', async () => {
       mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
       const allocations = {
         paymentId: 'pay-1',
         receiptNumber: 'PRI-000001',
+        locationId: 'loc-1',
         treatmentPlanId: 'plan-1',
         paymentAmount: 50000,
         paymentCurrency: 'USD',
@@ -2957,6 +3838,8 @@ describe('TreatmentPlansTab', () => {
         manual: false,
         allocated: 50000,
         unallocated: 0,
+        creditOut: 0,
+        onAccount: 0,
         version: 'a'.repeat(64),
         allocations: [{ treatmentPlanItemId: item2.id, amount: 50000, source: 'AUTO' as const }],
         items: [
@@ -3024,7 +3907,7 @@ describe('TreatmentPlansTab', () => {
   });
   describe('moneda del plan (GLOBAL-G1, R14)', () => {
     const mockedLocations = jest.mocked(listLocations);
-    const tokyo = clinicLocation({ id: 'loc-jp', name: 'Tokio', country: 'CO', currency: 'JPY', timeZone: 'Asia/Tokyo' });
+    const tokyo = clinicLocation({ id: 'loc-jp', name: 'Tokio', country: 'VE', currency: 'JPY', timeZone: 'Asia/Tokyo' });
     const madrid = clinicLocation({ id: 'loc-es', name: 'Madrid', country: 'ES', currency: 'EUR', timeZone: 'Europe/Madrid' });
 
     beforeEach(() => {
@@ -3037,7 +3920,7 @@ describe('TreatmentPlansTab', () => {
     });
     afterEach(() => {
       window.localStorage.clear();
-      mockedLocations.mockResolvedValue([clinicLocation()]);
+      mockedLocations.mockResolvedValue([clinicLocation({ currency: 'VES' })]);
     });
 
     it('new plan at a JPY location is created in JPY', async () => {
@@ -3073,9 +3956,9 @@ describe('TreatmentPlansTab', () => {
       await waitFor(() => expect(mockedCreatePlan).toHaveBeenCalledWith(tok, 'pat-1', { currency: 'EUR' }));
     });
 
-    it('location without currency leaves the plan currency empty, never COP or USD', async () => {
+    it('location without currency leaves the plan currency empty, never VES or USD', async () => {
       window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
-      mockedLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', country: 'CO', currency: null })]);
+      mockedLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', country: 'VE', currency: null })]);
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
       await screen.findByText(/todavía no tiene un plan de tratamiento/i);
@@ -3155,6 +4038,82 @@ describe('TreatmentPlansTab · una primaria por estado del plan (D2)', () => {
     expect(primaries()).toEqual([accept]);
   });
 
+  it('DX-379 B: PRESENTED vencido (odontólogo): «Actualizar precios» es la única; «Aceptar con firma» en secundario', async () => {
+    const p = plan({ id: 'plan-1', status: 'PRESENTED', quoteExpired: true, quoteValidUntil: '2026-10-31' });
+    mockedListPlans.mockResolvedValue([p]);
+    mockedGetPlan.mockResolvedValue({ ...p, items: [item1, item2], total: 0 });
+    render(<TreatmentPlansTab patientId="pat-1" token={dentist} />);
+    const reprice = await screen.findByRole('button', { name: 'Actualizar precios' });
+    const accept = await screen.findByRole('button', { name: /aceptar con firma/i });
+    expect(isPrimary(accept)).toBe(false);
+    expect(primaries()).toEqual([reprice]);
+  });
+
+  it('DX-379 B: tras actualizar los precios se recargan el plan, la lista de planes y el saldo', async () => {
+    const { previewRepricing, applyRepricing } = jest.requireMock('../../lib/treatment-plans/plan-repricing-api') as {
+      previewRepricing: jest.Mock;
+      applyRepricing: jest.Mock;
+    };
+    const price = (total: number) => ({
+      price: total,
+      discount: 0,
+      total,
+      listPrice: total,
+      priceSource: 'CATALOG',
+      agreementId: null,
+      agreementName: null,
+    });
+    const preview = {
+      planId: 'plan-1',
+      currency: 'USD',
+      previewHash: 'a'.repeat(64),
+      lines: [
+        {
+          itemId: item1.id,
+          catalogItemId: item1.catalogItemId,
+          toothNumber: item1.toothNumber,
+          before: price(100),
+          after: price(120),
+          difference: 20,
+          changed: true,
+        },
+      ],
+      skipped: [],
+      rate: null,
+      previousValidity: null,
+      validityRenewed: true,
+      validityNote: null,
+      validity: { issuedOn: '2026-11-09', validUntil: '2026-12-09' },
+      totals: { before: 100, after: 120, difference: 20 },
+    };
+    previewRepricing.mockResolvedValue(preview);
+    applyRepricing.mockResolvedValue({ ...preview, repricingId: 'r1', appliedAt: '2026-11-09T15:00:00.000Z', replayed: false });
+    show('PRESENTED', [item1]);
+    // ADMIN: el que ve el saldo del plan (y lo recarga).
+    const user = userEvent.setup();
+    render(<TreatmentPlansTab patientId="pat-1" token={admin} />);
+    await user.click(await screen.findByRole('button', { name: 'Actualizar precios' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Actualizar precios' });
+    await user.click(await within(dialog).findByRole('button', { name: 'Continuar' }));
+    const confirm = within(dialog).getByRole('button', { name: 'Actualizar precios' });
+    await waitFor(() => expect(confirm).toBeEnabled());
+    const plansBefore = mockedListPlans.mock.calls.length;
+    const detailBefore = mockedGetPlan.mock.calls.length;
+    const balanceBefore = mockedGetPlanBalance.mock.calls.length;
+    await user.click(confirm);
+    await waitFor(() => expect(mockedGetPlan.mock.calls.length).toBeGreaterThan(detailBefore));
+    await waitFor(() => expect(mockedListPlans.mock.calls.length).toBeGreaterThan(plansBefore));
+    await waitFor(() => expect(mockedGetPlanBalance.mock.calls.length).toBeGreaterThan(balanceBefore));
+    expect(applyRepricing).toHaveBeenCalledTimes(1);
+  });
+
+  it('DX-379 B: PRESENTED vigente: «Actualizar precios» en secundario', async () => {
+    show('PRESENTED');
+    render(<TreatmentPlansTab patientId="pat-1" token={dentist} />);
+    const reprice = await screen.findByRole('button', { name: 'Actualizar precios' });
+    expect(isPrimary(reprice)).toBe(false);
+  });
+
   it('PRESENTED (asistente, que no decide): «Agregar ítem» es la única', async () => {
     show('PRESENTED');
     render(<TreatmentPlansTab patientId="pat-1" token={assistant} />);
@@ -3178,6 +4137,7 @@ describe('TreatmentPlansTab · una primaria por estado del plan (D2)', () => {
           minimumDate: '2026-01-10T00:00:00.000Z',
           minimumDay: '2026-01-10',
           planItemIds: accepted.map((i) => i.id),
+          planItems: [],
         },
       ],
     });
@@ -3202,5 +4162,119 @@ describe('TreatmentPlansTab · una primaria por estado del plan (D2)', () => {
     render(<TreatmentPlansTab patientId="pat-1" token={dentist} />);
     await screen.findByRole('table', { name: /ítems de la visita/i });
     expect(primaries()).toEqual([]);
+  });
+});
+
+describe('TreatmentPlansTab · evolución sugerida al marcar hecho (DX-455)', () => {
+  const dentistToken = `h.${btoa(JSON.stringify({ sub: 'u-laura', tenantId: 't1', role: 'DENTIST' }))}.s`;
+  const withTemplate = catalog.map((c) =>
+    c.id === 'cat-2'
+      ? { ...c, clinicalNoteTemplateId: 'tpl-resina', suggestedClinicalNoteTemplateId: 'tpl-resina' }
+      : { ...c, clinicalNoteTemplateId: null, suggestedClinicalNoteTemplateId: null },
+  );
+
+  beforeEach(() => {
+    mockedListPlans.mockReset().mockResolvedValue([plan1]);
+    mockedGetPlan.mockReset().mockResolvedValue(plan1Detail);
+    mockedUpdateItem.mockReset().mockResolvedValue({ ...item2, status: 'DONE', performedById: 'u-laura' });
+    mockedListCatalogItems.mockReset().mockResolvedValue(withTemplate);
+    mockedListCurrencies.mockResolvedValue([{ code: 'USD', name: 'Dólar estadounidense', symbol: '$' }]);
+    jest.mocked(getPlanVisits).mockResolvedValue({ planId: 'plan-1', items: [], visitIntervals: {}, visits: [] });
+    mockedGetPaymentPlan.mockResolvedValue(null);
+    mockedGetPriceQuote.mockImplementation(async (_t, _p, { catalogItemId, currency }) =>
+      quoteOf(catalogItemId, {}, currency),
+    );
+    mockedGetPlanBalance.mockReset().mockResolvedValue(emptyBalance());
+    mockedListPayments.mockReset().mockResolvedValue([]);
+    mockedGetDiscountPolicy.mockReset().mockRejectedValue(new Error('sin política en este test'));
+    jest.mocked(listStaff).mockReset().mockResolvedValue([
+      { userId: 'u-laura', fullName: 'Dra. Laura Gómez', role: 'DENTIST', locationIds: null },
+    ]);
+    jest.mocked(listNoteTemplates).mockReset().mockResolvedValue([resinTemplate, prophylaxisTemplate]);
+    jest.mocked(createClinicalEntry).mockReset();
+  });
+
+  async function markItem2Done(token: string) {
+    const user = userEvent.setup();
+    render(
+      <>
+        <TreatmentPlansTab patientId="pat-1" token={token} />
+        <Toaster />
+      </>,
+    );
+    const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+    await user.selectOptions(within(table).getByRole('combobox', { name: /estado del ítem del diente 26/i }), 'DONE');
+    const dialog = await screen.findByRole('dialog', { name: 'Marcar como realizado' });
+    await waitFor(() =>
+      expect(within(dialog).getByRole('combobox', { name: 'Profesional que lo realizó' })).toHaveValue('u-laura'),
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Marcar realizado' }));
+    await waitFor(() => expect(mockedUpdateItem).toHaveBeenCalledTimes(1));
+    return user;
+  }
+
+  it('con plantilla en el procedimiento abre «Nueva evolución» con ella elegida, y guarda', async () => {
+    jest.mocked(createClinicalEntry).mockResolvedValue({
+      id: 'ce-1',
+      tenantId: 't1',
+      patientId: 'pat-1',
+      entryDate: '2026-10-17T00:00:00.000Z',
+      reason: null,
+      notes: 'x',
+      performedById: 'u-laura',
+      createdAt: '2026-10-17T15:00:00.000Z',
+      addenda: [],
+    } as never);
+    const user = await markItem2Done(dentistToken);
+    const evolution = await screen.findByRole('dialog', { name: 'Nueva evolución' });
+    expect(
+      await within(evolution).findByRole('button', { name: 'Cambiar la plantilla «Resina»' }),
+    ).toBeInTheDocument();
+    expect(within(evolution).getByText(/sugerida por el procedimiento «Limpieza»/i)).toBeInTheDocument();
+    await user.click(within(evolution).getByRole('radio', { name: 'O' }));
+    await user.click(within(evolution).getByRole('button', { name: /guardar evolución/i }));
+    await waitFor(() =>
+      expect(createClinicalEntry).toHaveBeenCalledWith(dentistToken, 'pat-1', {
+        notes: 'Resina en superficie O con Resina A2. Observaciones: [sin respuesta].',
+        templateId: 'tpl-resina',
+      }),
+    );
+    expect(await screen.findByText('Evolución guardada en la historia clínica.')).toBeInTheDocument();
+  });
+
+  it('antes de guardar se puede quitar la plantilla', async () => {
+    const user = await markItem2Done(dentistToken);
+    const evolution = await screen.findByRole('dialog', { name: 'Nueva evolución' });
+    await user.click(await within(evolution).findByRole('button', { name: 'Quitar plantilla' }));
+    expect(within(evolution).getByRole('radio', { name: /sin plantilla/i })).toBeChecked();
+    expect(within(evolution).getByLabelText(/texto de la evolución/i)).toHaveValue('');
+  });
+
+  it('sin plantilla en el procedimiento todo sigue como antes: no se abre nada', async () => {
+    mockedListCatalogItems.mockResolvedValue(
+      withTemplate.map((c) => ({ ...c, clinicalNoteTemplateId: null, suggestedClinicalNoteTemplateId: null })),
+    );
+    await markItem2Done(dentistToken);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Marcar como realizado' })).not.toBeInTheDocument());
+    expect(screen.queryByRole('dialog', { name: 'Nueva evolución' })).not.toBeInTheDocument();
+    expect(listNoteTemplates).not.toHaveBeenCalled();
+  });
+
+  it('una plantilla desactivada (sugerida null aunque siga ligada) no se sugiere', async () => {
+    mockedListCatalogItems.mockResolvedValue(
+      withTemplate.map((c) => ({ ...c, suggestedClinicalNoteTemplateId: null })),
+    );
+    await markItem2Done(dentistToken);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Marcar como realizado' })).not.toBeInTheDocument());
+    expect(screen.queryByRole('dialog', { name: 'Nueva evolución' })).not.toBeInTheDocument();
+  });
+
+  it('recepción (no escribe historia clínica) no ve la evolución', async () => {
+    jest.mocked(listStaff).mockResolvedValue([
+      { userId: 'u-laura', fullName: 'Dra. Laura Gómez', role: 'DENTIST', locationIds: null },
+    ]);
+    await markItem2Done(tok);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Marcar como realizado' })).not.toBeInTheDocument());
+    expect(screen.queryByRole('dialog', { name: 'Nueva evolución' })).not.toBeInTheDocument();
   });
 });

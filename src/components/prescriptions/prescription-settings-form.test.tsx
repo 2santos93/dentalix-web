@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PrescriptionSettingsForm } from './prescription-settings-form';
+import { SettingsSection } from '@/components/settings/settings-page';
 import {
   getPrescriptionSettings,
   savePrescriptionSettings,
@@ -111,7 +112,7 @@ describe('PrescriptionSettingsForm (DX-324)', () => {
     expect(validity()).toHaveValue('10');
   });
 
-  it('after a save, focus goes to the saved notice, not to <body> (the bar is gone)', async () => {
+  it('after a save, focus goes to the saved notice (SaveBar savedFocusTo, FE-110), not to <body> (the bar is gone)', async () => {
     const user = await renderLoaded();
     mockedSave.mockImplementation(async (_t, s) => s);
     await user.click(screen.getByRole('checkbox', { name: 'Cantidad en letras' }));
@@ -234,5 +235,20 @@ describe('PrescriptionSettingsForm (DX-324)', () => {
     expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Descartar', 'Guardar']);
     expect(save()).toHaveAttribute('type', 'submit');
     expect(save()).toHaveAttribute('form', save().closest('form')!.id);
+  });
+
+  it('DX-546 · FE-110: tras «Descartar», el foco vuelve al título de su sección (como en Ajustes › Recetas)', async () => {
+    mockedGet.mockResolvedValue(API_SETTINGS);
+    const user = userEvent.setup();
+    render(
+      <SettingsSection title="Ajustes de la receta">
+        <PrescriptionSettingsForm token="tok" />
+      </SettingsSection>,
+    );
+    await screen.findByRole('checkbox', { name: 'Cantidad en letras' });
+    await user.click(screen.getByRole('checkbox', { name: 'Cantidad en letras' }));
+    await user.click(screen.getByRole('button', { name: 'Descartar' }));
+    expect(screen.getByRole('heading', { name: 'Ajustes de la receta' })).toHaveFocus();
+    noSaveBar();
   });
 });

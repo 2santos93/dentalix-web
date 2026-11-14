@@ -2,7 +2,6 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { RegionalReviewNotice } from './regional-review-notice';
 import { LocationsList } from './locations-list';
 import { listLocations, updateLocationSettings } from '@/lib/locations/locations-api';
-import { SessionLocationsProvider } from '@/lib/locations/session-locations';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import { clinicLocation } from '@/lib/test/locations';
 import { tokenFor } from '@/lib/test/prescriptions';
@@ -23,9 +22,9 @@ const RECEPTION = tokenFor('RECEPTION', 'u-recep');
 const norte = clinicLocation({
   id: 'norte',
   name: 'Sede Norte',
-  currency: 'COP',
-  timeZone: 'America/Bogota',
-  locale: 'es-CO',
+  currency: 'VES',
+  timeZone: 'America/Caracas',
+  locale: 'es-VE',
   regionalSettingsReviewedAt: null,
 });
 const reviewed = clinicLocation({
@@ -41,7 +40,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   window.localStorage.clear();
   jest.mocked(listCurrencies).mockResolvedValue([
-    { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+    { code: 'VES', name: 'Bolívar venezolano', symbol: 'VES' },
     { code: 'EUR', name: 'Euro', symbol: '€' },
   ]);
 });
@@ -53,7 +52,7 @@ describe('RegionalReviewNotice (aviso D5, spec §7)', () => {
     const notice = await screen.findByRole('region', { name: 'Sedes por revisar' });
     expect(notice).toHaveTextContent('Revisa la moneda, la zona horaria, el formato y el reloj de 1 sede.');
     expect(notice).toHaveTextContent(
-      'Al actualizar Dentalix se asignaron automáticamente (Sede Norte: COP · America/Bogota · es-CO · 12 h). Confírmalos o cámbialos.',
+      'Al actualizar Dentalix se asignaron automáticamente (Sede Norte: VES · America/Caracas · es-VE · 12 h). Confírmalos o cámbialos.',
     );
     expect(notice).not.toHaveTextContent('Sede Centro');
     expect(within(notice).getByRole('link', { name: 'Revisar sedes' })).toHaveAttribute('href', '/settings/sedes');
@@ -116,7 +115,7 @@ describe('RegionalReviewNotice (aviso D5, spec §7)', () => {
     const notice = await screen.findByRole('region', { name: 'Sedes por revisar' });
     expect(notice).toHaveTextContent('el formato y el reloj de 2 sedes.');
     expect(notice).toHaveTextContent(
-      '(Sede Norte: COP · America/Bogota · es-CO · 12 h; Sede Sur: EUR · Europe/Madrid · es-ES · 12 h)',
+      '(Sede Norte: VES · America/Caracas · es-VE · 12 h; Sede Sur: EUR · Europe/Madrid · es-ES · 12 h)',
     );
   });
 
@@ -135,10 +134,10 @@ describe('RegionalReviewNotice (aviso D5, spec §7)', () => {
     jest.mocked(updateLocationSettings).mockResolvedValue(confirmed);
     const user = setupUser();
     render(
-      <SessionLocationsProvider token={ADMIN}>
+      <>
         <RegionalReviewNotice token={ADMIN} showReviewLink={false} />
         <LocationsList token={ADMIN} canEdit />
-      </SessionLocationsProvider>,
+      </>,
     );
     const notice = await screen.findByRole('region', { name: 'Sedes por revisar' });
     expect(within(notice).queryByRole('link')).not.toBeInTheDocument();
@@ -151,14 +150,14 @@ describe('RegionalReviewNotice (aviso D5, spec §7)', () => {
 
     // Guardar sin cambiar nada confirma la sede.
     const dialog = await screen.findByRole('dialog', { name: 'Editar sede' });
-    await within(dialog).findByRole('option', { name: 'Peso colombiano ($)' });
+    await within(dialog).findByRole('option', { name: 'Bolívar venezolano (VES)' });
     await user.click(within(dialog).getByRole('button', { name: 'Guardar sede' }));
 
     await waitFor(() => expect(updateLocationSettings).toHaveBeenCalledTimes(1));
     expect(jest.mocked(updateLocationSettings).mock.calls[0][2]).toMatchObject({
-      currency: 'COP',
-      timeZone: 'America/Bogota',
-      locale: 'es-CO',
+      currency: 'VES',
+      timeZone: 'America/Caracas',
+      locale: 'es-VE',
       confirmRegionalSettings: true,
     });
     await waitFor(() =>
@@ -185,17 +184,17 @@ describe('RegionalReviewNotice (aviso D5, spec §7)', () => {
     jest.mocked(updateLocationSettings).mockResolvedValue(confirmed);
     const user = setupUser();
     render(
-      <SessionLocationsProvider token={ADMIN}>
+      <>
         <RegionalReviewNotice token={ADMIN} showReviewLink={false} />
         <LocationsList token={ADMIN} canEdit />
-      </SessionLocationsProvider>,
+      </>,
     );
     const notice = await screen.findByRole('region', { name: 'Sedes por revisar' });
     expect(notice).toHaveTextContent('el formato y el reloj de 2 sedes.');
 
     await user.click(await screen.findByRole('button', { name: 'Revisar Sede Norte' }));
     const dialog = await screen.findByRole('dialog', { name: 'Editar sede' });
-    await within(dialog).findByRole('option', { name: 'Peso colombiano ($)' });
+    await within(dialog).findByRole('option', { name: 'Bolívar venezolano (VES)' });
     await user.click(within(dialog).getByRole('button', { name: 'Guardar sede' }));
 
     await waitFor(() => expect(notice).toHaveTextContent('el formato y el reloj de 1 sede.'));

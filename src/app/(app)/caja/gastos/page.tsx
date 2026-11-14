@@ -16,10 +16,6 @@ import {
 // /caja) con el mismo guard de sesión; un rol sin acceso que llegue por URL ve
 // el aviso de la propia vista (la API responde 403 en español). La pestaña
 // («Gastos» o «Resumen») viaja en `?tab=resumen`, como la Caja.
-const copy = {
-  checkingSession: 'Verificando sesión…',
-};
-
 /** `useSearchParams` exige un límite de Suspense (como la Caja). */
 export default function GastosPage() {
   return (
@@ -35,7 +31,6 @@ function GastosRoute() {
   const searchParams = useSearchParams();
   const tab = resolveExpensesTab(searchParams.get('tab'));
   const accessToken = useAuthStore((s) => s.accessToken);
-  const hasHydrated = useAuthStore((s) => s._hasHydrated);
   const pendingFocus = useRef<{ tab: ExpensesTabKey; trigger: Element } | null>(null);
 
   useEffect(() => {
@@ -49,21 +44,6 @@ function GastosRoute() {
       document.getElementById(expensesTabId(tab))?.focus();
     }
   }, [tab]);
-
-  useEffect(() => {
-    if (!hasHydrated) return;
-    if (!accessToken) {
-      router.replace('/login');
-    }
-  }, [accessToken, router, hasHydrated]);
-
-  if (!hasHydrated) {
-    return (
-      <p role="status" className="text-sm text-muted">
-        {copy.checkingSession}
-      </p>
-    );
-  }
 
   if (!accessToken) {
     return null;

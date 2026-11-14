@@ -1,6 +1,4 @@
 'use client';
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageChairs } from '@/lib/chairs/chairs-api';
@@ -14,29 +12,14 @@ const copy = {
   title: 'Sillones',
   description:
     'Los sillones (gabinetes) de cada sede: su nombre, el orden de las columnas en la agenda y el profesional que se propone al elegirlos en una cita.',
-  checkingSession: 'Verificando sesión…',
   locationsError: 'No pudimos cargar las sedes.',
   loading: 'Cargando sedes…',
 };
 
 /** Sillones por sede (DX-211). Solo ADMIN los gestiona. */
 export default function ChairsSettingsPage() {
-  const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
-  const hasHydrated = useAuthStore((s) => s._hasHydrated);
 
-  useEffect(() => {
-    if (!hasHydrated) return;
-    if (!accessToken) router.replace('/login');
-  }, [accessToken, router, hasHydrated]);
-
-  if (!hasHydrated) {
-    return (
-      <p role="status" className="text-sm text-muted">
-        {copy.checkingSession}
-      </p>
-    );
-  }
   if (!accessToken) return null;
 
   return (

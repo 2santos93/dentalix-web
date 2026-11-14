@@ -125,7 +125,7 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
     expect(link, 'el test anterior no dejó el enlace').not.toBe('');
     const context = await browser.newContext({
       locale: E2E_BROWSER_LOCALE,
-      timezoneId: 'America/Bogota',
+      timezoneId: 'America/Caracas',
       viewport: { width: 390, height: 844 },
       hasTouch: true,
     });
@@ -159,15 +159,18 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
       await page.getByRole('button', { name: 'Ver el documento' }).click();
       const document = page.getByRole('article', { name: 'Texto del documento' });
       await expect(document.getByRole('heading', { name: TEMPLATE_TITLE })).toBeVisible();
+      // DX-441: el foco llega al título del paso.
+      await expect(document.getByRole('heading', { name: TEMPLATE_TITLE })).toBeFocused();
       await expect(document).toContainText('Laura Castro Jiménez');
       await expectNoHorizontalScroll(page);
 
       await page.getByRole('button', { name: 'Firmar' }).click();
       await expect(page.getByText('Confirma que leíste el documento completo.')).toBeVisible();
+      await expect(page.getByRole('checkbox', { name: /he leído el documento completo/i })).toBeFocused();
       await page.getByRole('checkbox', { name: /he leído el documento completo/i }).check();
       await drawSignature(page, page.getByRole('img', { name: 'Tu firma' }));
       await page.getByRole('button', { name: 'Firmar' }).click();
-      await expect(page.getByRole('heading', { name: 'Documento firmado' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Documento firmado' })).toBeFocused();
       // La copia que puede imprimir lleva su firma.
       await expect(page.getByRole('img', { name: 'Firma de Laura Castro Jiménez' })).toBeVisible();
       await expect(page.getByRole('button', { name: /imprimir o guardar en pdf/i })).toBeVisible();
@@ -257,7 +260,7 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
     copyToken = await linkFromMail(PATIENT_EMAIL, /\/copia\/([A-Za-z0-9_-]{43})/, { since: copySince });
     const context = await browser.newContext({
       locale: E2E_BROWSER_LOCALE,
-      timezoneId: 'America/Bogota',
+      timezoneId: 'America/Caracas',
       viewport: { width: 390, height: 844 },
       hasTouch: true,
     });
@@ -280,6 +283,14 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
       ]);
       expect(download.suggestedFilename()).toMatch(/^Consentimiento firmado - .+\.pdf$/);
       await expect(page.getByRole('heading', { name: 'Descarga iniciada' })).toBeVisible();
+
+      // DX-487: si no se guardó, la misma URL firmada durante un minuto, sin gastar otra vez.
+      const [again] = await Promise.all([
+        page.waitForEvent('download'),
+        page.getByRole('button', { name: 'Volver a descargar' }).click(),
+      ]);
+      expect(again.suggestedFilename()).toMatch(/^Consentimiento firmado - .+\.pdf$/);
+      await expectNoHorizontalScroll(page);
 
       // Una sola vez: después, «enlace usado».
       await page.goto(`${origin}/copia/${copyToken}`);

@@ -3,7 +3,7 @@ import * as React from 'react';
 import type { Patient } from '@/lib/patients/patients-api';
 import { displayPhone } from '@/lib/phone/display-phone';
 import { ageFrom } from '@/lib/patients/age';
-import { formatCivilDate } from '@/lib/format/date';
+import type { SedePainters } from '@/lib/locations/sede-stamp';
 import { docTypeOptionLabel, type ClinicDocumentTypeNames } from '@/lib/patients/doc-type';
 import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
 import { SectionHeader } from '@/components/ui/section-header';
@@ -89,6 +89,8 @@ interface PatientDataPanelProps {
   patient: Patient;
   /** Nombres locales de la clínica (los pide la página); `{}` = genéricos. */
   docTypeNames?: ClinicDocumentTypeNames;
+  /** El pintor de la sede de la pantalla (DX-354b): la fecha de nacimiento y la del consentimiento. */
+  stamp: SedePainters;
 }
 
 /**
@@ -101,13 +103,13 @@ interface PatientDataPanelProps {
  * Ahora es la acción primaria de la cabecera (`PatientRecordHeader`), donde
  * está a la vista desde cualquier pestaña.
  */
-export function PatientDataPanel({ patient, docTypeNames = {} }: PatientDataPanelProps) {
+export function PatientDataPanel({ patient, docTypeNames = {}, stamp }: PatientDataPanelProps) {
   const age = ageFrom(patient.birthDate);
   const birth = patient.birthDate
-    ? `${formatCivilDate(patient.birthDate)}${age === null ? '' : ` · ${copy.years(age)}`}`
+    ? `${stamp.civilDate(patient.birthDate)}${age === null ? '' : ` · ${copy.years(age)}`}`
     : null;
   const consent = patient.dataConsentAccepted
-    ? [copy.consentAccepted, formatCivilDate(patient.dataConsentAt ?? null)]
+    ? [copy.consentAccepted, stamp.date(patient.dataConsentAt)]
         .concat(patient.dataConsentPolicyVersion ? [copy.consentVersion(patient.dataConsentPolicyVersion)] : [])
         .join(' · ')
     : patient.importBatchId

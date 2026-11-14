@@ -35,6 +35,8 @@ export const noteTemplatesManagerCopy = {
   colPrompts: 'Preguntas',
   colStatus: 'Estado',
   colFolder: 'Carpeta',
+  colShortcut: 'Atajo',
+  noShortcut: '—',
   promptsCount: (n: number) => (n === 1 ? '1 pregunta' : `${n} preguntas`),
   moreActions: 'Más acciones de plantillas',
   noFolder: 'Sin carpeta',
@@ -133,7 +135,10 @@ export function NoteTemplatesManager({ token, allowed }: NoteTemplatesManagerPro
 
   async function toggleActive(template: NoteTemplate) {
     try {
-      upsert(await updateNoteTemplate(token, template.id, { active: !template.active }));
+      upsert(await updateNoteTemplate(token, template.id, {
+          active: !template.active,
+          version: template.version,
+        }));
     } catch {
       // Escalón 3: la lista sigue siendo correcta (no cambió nada).
       notifyError(copy.toggleError(template.name), {
@@ -178,6 +183,19 @@ export function NoteTemplatesManager({ token, allowed }: NoteTemplatesManagerPro
       header: copy.colFolder,
       cell: (t) => t.category ?? <span className="text-muted">{copy.noFolder}</span>,
       mobileCell: (t) => t.category ?? copy.noFolder,
+    },
+    {
+      // DX-455: el atajo que la inserta al escribir una evolución.
+      id: 'shortcut',
+      header: copy.colShortcut,
+      cell: (t) =>
+        t.shortcut ? (
+          <span className="font-mono text-[13px]">{t.shortcut}</span>
+        ) : (
+          <span className="text-muted">{copy.noShortcut}</span>
+        ),
+      // En la tarjeta del móvil solo si tiene.
+      mobileCell: (t) => (t.shortcut ? <span className="font-mono text-[13px]">{t.shortcut}</span> : null),
     },
     {
       id: 'prompts',
@@ -259,6 +277,7 @@ export function NoteTemplatesManager({ token, allowed }: NoteTemplatesManagerPro
         template={editing}
         categories={categories}
         onSaved={upsert}
+        onReloaded={upsert}
       />
     </div>
   );

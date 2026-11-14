@@ -14,7 +14,7 @@ import { regionalFormat } from '../src/lib/format/regional-format';
  * e2e DX-122: bloqueos de agenda y «Pendientes por agendar».
  *
  * Una clínica nueva por corrida con un odontólogo («Luis Segundo») y
- * recepción («Rita Recepción»), horario lun–vie 9–13 y 15–19 (Bogotá) y dos
+ * recepción («Rita Recepción»), horario lun–vie 9–13 y 15–19 (zona de la sede) y dos
  * pacientes. Los tests van en serie:
  * 1. recepción bloquea las vacaciones de Luis → la agenda las pinta y una
  *    cita encima se rechaza con el 409 en español;
@@ -143,7 +143,7 @@ test('recepción bloquea las vacaciones de Luis: se ven en la agenda y una cita 
   await form.getByRole('button', { name: 'Agendar cita' }).click();
   await expect(
     // Un día completo se nombra por el día elegido, no por el fin exclusivo.
-    // Con el formateador de la sede, como la API: «2/11» en es-CO (CLDR), no
+    // Con el formateador de la sede, como la API: «2/11» en es-VE (CLDR), no
     // un dd/MM fijo que solo coincide del 10 al 31.
     form.getByText(
       `La agenda del profesional está bloqueada (Vacaciones) el ${regionalFormat(E2E_REGION).dayMonth(atSede(VACATION_DAY, '12:00'), SEDE_TZ)}. Elige otro horario.`,

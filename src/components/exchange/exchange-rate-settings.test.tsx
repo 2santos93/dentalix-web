@@ -1,5 +1,13 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
-import { ExchangeRateSettingsView, correctRateCopy, exchangeRateCopy, rateFormCopy } from './exchange-rate-settings';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import {
+  BACKUP_PREVIEW_DEBOUNCE_MS,
+  ExchangeRateSettingsView,
+  correctRateCopy,
+  exchangeRateCopy,
+  isQueryableBacklogDay,
+  rateFormCopy,
+} from './exchange-rate-settings';
 import {
   getExchangeRateSettings,
   listManualExchangeRates,
@@ -7,6 +15,7 @@ import {
   RATE_INPUT_COPY,
   registerManualExchangeRate,
   saveExchangeRateSettings,
+  saveManualRateMaxAgeDays,
   type ManualExchangeRate,
 } from '@/lib/exchange/exchange-settings-api';
 import { listCurrencies } from '@/lib/reference/currencies-api';
@@ -22,6 +31,7 @@ jest.mock('../../lib/exchange/exchange-settings-api', () => ({
   ...jest.requireActual('../../lib/exchange/exchange-settings-api'),
   getExchangeRateSettings: jest.fn(),
   saveExchangeRateSettings: jest.fn(),
+  saveManualRateMaxAgeDays: jest.fn(),
   listManualExchangeRates: jest.fn(),
   registerManualExchangeRate: jest.fn(),
   correctManualExchangeRate: jest.fn(),
@@ -51,6 +61,7 @@ jest.mock('../../lib/locations/use-sede-format', () => ({
 
 const mockedGet = jest.mocked(getExchangeRateSettings);
 const mockedSave = jest.mocked(saveExchangeRateSettings);
+const mockedSaveMaxAge = jest.mocked(saveManualRateMaxAgeDays);
 const mockedList = jest.mocked(listManualExchangeRates);
 const mockedRegister = jest.mocked(registerManualExchangeRate);
 const mockedCorrect = jest.mocked(correctManualExchangeRate);
@@ -60,8 +71,18 @@ const mockedRates = jest.mocked(getExchangeRates);
 const mockedLocations = jest.mocked(listLocations);
 const copy = exchangeRateCopy;
 const fmt = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
-const AUTO = { source: 'AUTOMATIC', manualSince: null, baseCurrency: 'USD' } as const;
-const MANUAL = { source: 'MANUAL', manualSince: '2026-10-30', baseCurrency: 'USD' } as const;
+const AUTO = {
+  source: 'AUTOMATIC',
+  manualSince: null,
+  manualRateMaxAgeDays: 3,
+  baseCurrency: 'USD',
+} as const;
+const MANUAL = {
+  source: 'MANUAL',
+  manualSince: '2026-10-30',
+  manualRateMaxAgeDays: 3,
+  baseCurrency: 'USD',
+} as const;
 const rateLabel = rateFormCopy.rate('USD');
 
 const ves: ManualExchangeRate = {
@@ -84,7 +105,14 @@ function sede(currency: string | null) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockedLocations.mockResolvedValue([sede('VES')]);
-  mockedRates.mockResolvedValue({ base: 'USD', source: 'AUTOMATIC', rates: { VES: 36.5, EUR: 0.92 } });
+  mockedRates.mockImplementation((_token, date) =>
+    Promise.resolve({
+      base: 'USD',
+      source: 'AUTOMATIC',
+      rates: { VES: 36.5, EUR: 0.92 },
+      rateDate: date,
+    }),
+  );
   mockedCurrencies.mockResolvedValue([
     { code: 'USD', name: 'Dólar', symbol: '$' },
     { code: 'VES', name: 'Bolívar', symbol: 'Bs.' },
@@ -176,7 +204,12 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     mockedList.mockResolvedValue([]);
     mockedRates
       .mockRejectedValueOnce(new ApiError(503, 'x', { code: 'EXCHANGE_RATE_UNAVAILABLE' }))
-      .mockResolvedValueOnce({ base: 'USD', source: 'AUTOMATIC', rates: { VES: 36.5 } });
+      .mockResolvedValueOnce({
+        base: 'USD',
+        source: 'AUTOMATIC',
+        rates: { VES: 36.5 },
+        rateDate: '2026-10-30',
+      });
     const user = setupUser();
     renderView();
     expect(await screen.findByText(todayRatesCopy.unavailableTitle)).toBeInTheDocument();
@@ -187,7 +220,14 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
   it('con la fuente manual y sin tasa de hoy de una moneda, lo dice', async () => {
     mockedGet.mockResolvedValue(MANUAL);
     mockedList.mockResolvedValue([ves]);
-    mockedRates.mockResolvedValue({ base: 'USD', source: 'MANUAL', rates: {} });
+    mockedRates.mockImplementation((_token, date) =>
+      Promise.resolve({
+        base: 'USD',
+        source: 'MANUAL',
+        rates: {},
+        rateDate: date,
+      }),
+    );
     renderView();
     expect(await screen.findByTestId('exchange-rate-today')).toHaveTextContent(todayRatesCopy.missing);
     expect(screen.getByText(todayRatesCopy.missingManual)).toBeInTheDocument();
@@ -236,6 +276,124 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     expect(screen.getByText(copy.sourceSaved)).toBeInTheDocument();
   });
 
+  // DX-384: hasta cuántos días puede tener la última tasa registrada.
+  describe('plazo de la última tasa registrada (DX-384)', () => {
+    const maxAge = copy.maxAge;
+    const openModal = async (user: ReturnType<typeof setupUser>) => {
+      await user.click(await screen.findByRole('button', { name: maxAge.changeLabel }));
+      return screen.findByRole('dialog', { name: maxAge.dialogTitle });
+    };
+
+    it('enseña el plazo vigente y 3 días por defecto', async () => {
+      mockedGet.mockResolvedValue(MANUAL);
+      mockedList.mockResolvedValue([]);
+      renderView();
+      expect(await screen.findByTestId('exchange-rate-max-age')).toHaveTextContent(maxAge.value(3));
+      expect(maxAge.value(3)).toBe('Usar la última tasa registrada hasta 3 días');
+      expect(maxAge.value(1)).toBe('Usar la última tasa registrada hasta 1 día');
+      expect(maxAge.value(0)).toBe('Usar solo la tasa del mismo día');
+    });
+
+    it('el campo se llama «hasta N días» y explica que 0 es solo la tasa del mismo día', async () => {
+      mockedGet.mockResolvedValue(MANUAL);
+      mockedList.mockResolvedValue([]);
+      const user = setupUser();
+      renderView();
+      const dialog = await openModal(user);
+      const field = within(dialog).getByLabelText(maxAge.field);
+      expect(field).toHaveValue('3');
+      expect(within(dialog).getByText('0 = solo la tasa del mismo día')).toBeInTheDocument();
+      expect(field).toHaveAccessibleDescription('0 = solo la tasa del mismo día');
+    });
+
+    it('guarda el nuevo plazo, lo enseña y avisa; solo manda el plazo, no la fuente', async () => {
+      mockedGet.mockResolvedValue(MANUAL);
+      mockedList.mockResolvedValue([]);
+      mockedSaveMaxAge.mockResolvedValue({
+        ...MANUAL,
+        manualRateMaxAgeDays: 0,
+      });
+      const user = setupUser();
+      renderView();
+      const dialog = await openModal(user);
+      const field = within(dialog).getByLabelText(maxAge.field);
+      await user.clear(field);
+      await user.type(field, '0');
+      await user.click(within(dialog).getByRole('button', { name: copy.save }));
+      await waitFor(() => expect(mockedSaveMaxAge).toHaveBeenCalledWith('tok', 0));
+      expect(mockedSave).not.toHaveBeenCalled();
+      expect(await screen.findByTestId('exchange-rate-max-age')).toHaveTextContent(maxAge.value(0));
+      expect(screen.getByText(maxAge.saved)).toBeInTheDocument();
+    });
+
+    it.each(['31', '-1', '1,5', 'tres', ''])(
+      'un plazo %p da el error en español junto al campo y no llama a la API',
+      async (bad) => {
+        mockedGet.mockResolvedValue(MANUAL);
+        mockedList.mockResolvedValue([]);
+        const user = setupUser();
+        renderView();
+        const dialog = await openModal(user);
+        const field = within(dialog).getByLabelText(maxAge.field);
+        await user.clear(field);
+        if (bad) await user.type(field, bad);
+        await user.click(within(dialog).getByRole('button', { name: copy.save }));
+        const error = await within(dialog).findByText(/Escribe/);
+        expect(error.textContent).toMatch(/entero de días entre 0 y 30|cuántos días/);
+        expect(field).toHaveAttribute('aria-invalid', 'true');
+        expect(field).toHaveAccessibleDescription(error.textContent ?? '');
+        expect(mockedSaveMaxAge).not.toHaveBeenCalled();
+      },
+    );
+
+    it('el 400 de la API va junto al campo, no arriba', async () => {
+      mockedGet.mockResolvedValue(MANUAL);
+      mockedList.mockResolvedValue([]);
+      mockedSaveMaxAge.mockRejectedValue(new ApiError(400, 'El plazo tiene que estar entre 0 y 30 días.'));
+      const user = setupUser();
+      renderView();
+      const dialog = await openModal(user);
+      const field = within(dialog).getByLabelText(maxAge.field);
+      await user.clear(field);
+      await user.type(field, '7');
+      await user.click(within(dialog).getByRole('button', { name: copy.save }));
+      expect(await within(dialog).findByText('El plazo tiene que estar entre 0 y 30 días.')).toBeInTheDocument();
+      expect(field).toHaveAttribute('aria-invalid', 'true');
+    });
+
+    it('otro fallo se dice arriba del modal sin tocar el campo', async () => {
+      mockedGet.mockResolvedValue(MANUAL);
+      mockedList.mockResolvedValue([]);
+      mockedSaveMaxAge.mockRejectedValue(new ApiError(500, 'boom'));
+      const user = setupUser();
+      renderView();
+      const dialog = await openModal(user);
+      const field = within(dialog).getByLabelText(maxAge.field);
+      await user.clear(field);
+      await user.type(field, '7');
+      await user.click(within(dialog).getByRole('button', { name: copy.save }));
+      expect(await within(dialog).findByText(maxAge.saveError)).toBeInTheDocument();
+      expect(field).not.toHaveAttribute('aria-invalid');
+    });
+
+    it('sin cambiar el valor, cierra sin llamar a la API', async () => {
+      mockedGet.mockResolvedValue(MANUAL);
+      mockedList.mockResolvedValue([]);
+      const user = setupUser();
+      renderView();
+      const dialog = await openModal(user);
+      await user.click(within(dialog).getByRole('button', { name: copy.save }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(mockedSaveMaxAge).not.toHaveBeenCalled();
+    });
+
+    it('sin permiso no hay plazo que cambiar ni llamada a la API', () => {
+      renderView(false);
+      expect(screen.queryByTestId('exchange-rate-max-age')).not.toBeInTheDocument();
+      expect(mockedGet).not.toHaveBeenCalled();
+    });
+  });
+
   it('registra la tasa del día: hoy de la sede por defecto y como máximo, coma decimal y sin la moneda base', async () => {
     mockedGet.mockResolvedValue(MANUAL);
     mockedList.mockResolvedValue([]);
@@ -249,6 +407,13 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     await typeDate(user, dialog, '31102026');
     await user.click(within(dialog).getByRole('button', { name: rateFormCopy.submit }));
     expect(await within(dialog).findByText(rateFormCopy.dateFuture)).toBeInTheDocument();
+    // DX-381: marcado como inválido y descrito por el error, sin burbuja nativa (el form es noValidate) y sin llamar a la API.
+    const group = dateGroup(dialog);
+    expect(group).toHaveAttribute('data-invalid', 'true');
+    expect(group.getAttribute('aria-describedby')).toContain('manual-rate-form-date-error');
+    expect(document.getElementById('manual-rate-form-date-error')).toHaveTextContent(rateFormCopy.dateFuture);
+    expect(dialog.querySelector('form')).toHaveAttribute('novalidate');
+    expect(mockedRegister).not.toHaveBeenCalled();
     await typeDate(user, dialog, '30102026');
     const select = within(dialog).getByLabelText(rateFormCopy.currency);
     await waitFor(() => expect(within(select).getByRole('option', { name: /Bolívar/ })).toBeInTheDocument());
@@ -434,12 +599,12 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
         backup.applies(3, 'VES'),
         backup.none('VES'),
         backup.otherMissing(1, ['EUR']),
-        backup.otherMissing(2, ['EUR', 'COP']),
+        backup.otherMissing(2, ['EUR', 'GBP']),
         backup.onlyOther(1, 'VES', ['EUR']),
         backup.onlyOther(2, 'VES', ['EUR']),
       ],
     });
-    expect(texts).not.toMatch(/venezuela|colombia|españa|méxico|banco central|bcv|estadounidense/i);
+    expect(texts).not.toMatch(/venezuela|colom[b]ia|españa|méxico|banco central|bcv|estadounidense/i);
   });
 });
 
@@ -491,6 +656,47 @@ describe('Registrar una tasa de un día anterior a «manual desde» (DX-402)', (
     expect(mockedDay).toHaveBeenLastCalledWith('tok', '2026-10-28', 'VES');
   });
 
+  // DX-442 (FE-095): la fecha se teclea por segmentos. La consulta espera
+  // 300 ms tras el último cambio (una por fecha completa, no una por tecla) y
+  // no se hace con un año anterior a 1900.
+  it('consulta una sola vez, 300 ms después del último cambio de fecha', async () => {
+    jest.useFakeTimers();
+    try {
+      mockedDay.mockResolvedValue({ date: '2026-10-28', currency: 'VES', count: 1, providerRateSaved: false, otherRatesMissing: NO_OTHER });
+      mockedGet.mockResolvedValue(MANUAL);
+      mockedList.mockResolvedValue([]);
+      const user = userEvent.setup({ pointerEventsCheck: 0, advanceTimers: jest.advanceTimersByTime });
+      renderView();
+      await user.click(await screen.findByRole('button', { name: copy.register }));
+      const dialog = await screen.findByRole('dialog', { name: rateFormCopy.title });
+      const select = within(dialog).getByLabelText(rateFormCopy.currency);
+      await waitFor(() => expect(within(select).getByRole('option', { name: /Bolívar/ })).toBeInTheDocument());
+      await user.selectOptions(select, 'VES');
+      await typeDate(user, dialog, '28102026');
+      // Aún no: el último cambio acaba de ocurrir.
+      expect(mockedDay).not.toHaveBeenCalled();
+      await act(async () => {
+        jest.advanceTimersByTime(BACKUP_PREVIEW_DEBOUNCE_MS - 1);
+      });
+      expect(mockedDay).not.toHaveBeenCalled();
+      await act(async () => {
+        jest.advanceTimersByTime(1);
+      });
+      expect(mockedDay).toHaveBeenCalledTimes(1);
+      expect(mockedDay).toHaveBeenLastCalledWith('tok', '2026-10-28', 'VES');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('un año anterior a 1900 ni se consulta', () => {
+    expect(isQueryableBacklogDay('1899-12-31')).toBe(false);
+    expect(isQueryableBacklogDay('0019-10-28')).toBe(false);
+    expect(isQueryableBacklogDay('2026-10-2')).toBe(false);
+    expect(isQueryableBacklogDay('1900-01-01')).toBe(true);
+    expect(isQueryableBacklogDay('2026-10-28')).toBe(true);
+  });
+
   it('sin abonos pendientes ese día, avisa de que la tasa no se usará', async () => {
     mockedDay.mockResolvedValue({ date: '2026-10-28', currency: 'VES', count: 0, providerRateSaved: false, otherRatesMissing: NO_OTHER });
     const { user, dialog, select } = await openForm();
@@ -507,14 +713,14 @@ describe('Registrar una tasa de un día anterior a «manual desde» (DX-402)', (
       currency: 'VES',
       count: 1,
       providerRateSaved: false,
-      otherRatesMissing: { count: 2, currencies: ['COP', 'EUR'] },
+      otherRatesMissing: { count: 2, currencies: ['GBP', 'EUR'] },
     });
     const { user, dialog, select } = await openForm();
     await typeDate(user, dialog, '28102026');
     await user.selectOptions(select, 'VES');
     const notice = within(dialog).getByTestId('manual-rate-backup-notice');
     await waitFor(() => expect(notice).toHaveTextContent(backup.applies(1, 'VES')));
-    expect(notice).toHaveTextContent(backup.otherMissing(2, ['COP', 'EUR']));
+    expect(notice).toHaveTextContent(backup.otherMissing(2, ['GBP', 'EUR']));
   });
 
   it('si todos sus abonos necesitan además otra tasa, avisa de que no se usará hasta registrarla', async () => {

@@ -1,3 +1,5 @@
+import type { components } from './schema';
+
 /**
  * Error de una respuesta no-2xx de la API.
  *
@@ -13,6 +15,9 @@ export interface ExistingPatientRef {
   firstName: string;
   lastName: string;
 }
+
+/** Las citas que nombra un 409 `SCHEDULE_AFFECTS_APPOINTMENTS` (DX-267). */
+export type AffectedAppointmentsRef = components['schemas']['ScheduleAffectedAppointmentsDto'];
 
 export class ApiError extends Error {
   /**
@@ -64,6 +69,8 @@ export class ApiError extends Error {
    * (quien llama puede verlo): el mostrador ve a quién va a atender.
    */
   public readonly existingPatient: ExistingPatientRef | null;
+  /** DX-267: el 409 de un horario que deja citas fuera: cuántas y una muestra. */
+  public readonly affectedAppointments: AffectedAppointmentsRef | null;
 
   constructor(
     public readonly status: number,
@@ -79,6 +86,7 @@ export class ApiError extends Error {
       canOverride?: boolean | null;
       existingPatientId?: string | null;
       existingPatient?: ExistingPatientRef | null;
+      affectedAppointments?: AffectedAppointmentsRef | null;
     } = {},
   ) {
     super(message);
@@ -93,6 +101,7 @@ export class ApiError extends Error {
     this.canOverride = details.canOverride ?? null;
     this.existingPatientId = details.existingPatientId ?? null;
     this.existingPatient = details.existingPatient ?? null;
+    this.affectedAppointments = details.affectedAppointments ?? null;
   }
 }
 
@@ -107,4 +116,13 @@ export class NetworkError extends Error {
     super('Network request failed');
     this.name = 'NetworkError';
   }
+}
+
+/**
+ * DX-538-bis: la API rechazó la petición (4xx: solape, permiso, estado que ya
+ * cambió…). Repetirla daría el mismo rechazo: no se ofrece «Reintentar».
+ * Un 5xx o un fallo de red, sí.
+ */
+export function isRejection(err: unknown): boolean {
+  return err instanceof ApiError && err.status >= 400 && err.status < 500;
 }

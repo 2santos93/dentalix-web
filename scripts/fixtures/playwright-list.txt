@@ -1,0 +1,9 @@
+Listing tests:
+  [chromium] › account-statement.spec.ts:108:5 › estado de cuenta: ficha → pestaña → imprimir muestra un documento limpio
+  [chromium] › account-statement.spec.ts:108:5 › estado de cuenta: ficha → pestaña → imprimir muestra un documento limpio
+  [chromium] › cartera-converted.spec.ts:173:7 › Inicio: «sin tasa» con el texto del estado de cuenta (escritorio)
+  [chromium] › cartera-converted.spec.ts:173:7 › Inicio: «sin tasa» con el texto del estado de cuenta (móvil)
+  [chromium] › cartera-converted.spec.ts:232:5 › cobro: el selector de plan da el saldo convertido del estado de cuenta
+  [touch] › touch-targets.spec.ts:143:7 › teléfono con pantalla táctil (390 px, pointer: coarse) › agenda: Mes, Semana y Día miden 44 px
+  [touch] › touch-targets.spec.ts:155:7 › teléfono con pantalla táctil (390 px, pointer: coarse) › ficha: «Cambiar» y «Quitar» del convenio miden 44 px
+Total: 7 tests in 3 files

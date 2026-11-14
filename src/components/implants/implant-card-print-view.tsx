@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, FileX, Printer } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
@@ -10,8 +10,9 @@ import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Button } from '@/components/ui/button';
 import { ImplantCardDocument } from './implant-card-document';
-import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
-import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { documentFormat } from '@/lib/format/document-format';
+import { DocumentFormatNote } from '@/components/documents/document-format-note';
+import { usePrintDocumentTitle } from '@/lib/print/use-print-document-title';
 
 const copy = {
   toolbar: 'Acciones de la tarjeta de implante',
@@ -45,8 +46,8 @@ export function ImplantCardPrintView({ token, patientId, date }: ImplantCardPrin
   const [reloadKey, setReloadKey] = useState(0);
   const [printing, setPrinting] = useState(false);
   const pendingPrint = useRef(false);
-  // G1-B: la sede de la pantalla hasta G1-C (la tarjeta aún no trae la suya).
-  const sedeFormat = useSedeFormat(token);
+  // DX-354: el formato de la sede de la tarjeta (no la activa), fechas, horas y medidas con el mismo.
+  const format = useMemo(() => (card ? documentFormat(card.regional) : null), [card]);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,7 +79,7 @@ export function ImplantCardPrintView({ token, patientId, date }: ImplantCardPrin
   }, [card]);
 
   // I1: sin el formato de la sede, las medidas saldrían «—» en una tarjeta que se entrega al paciente.
-  const formatReady = sedeFormat.status === 'ready';
+  const formatReady = format !== null;
 
   async function handlePrint() {
     if (!formatReady) return;
@@ -98,9 +99,10 @@ export function ImplantCardPrintView({ token, patientId, date }: ImplantCardPrin
 
   const backHref = `/patients/${encodeURIComponent(patientId)}?tab=implants`;
 
+  // DX-118 (FE-033): título neutro en la pestaña; el del documento solo al imprimir.
+  usePrintDocumentTitle('Tarjeta de implante', card ? copy.documentTitle(card.patientName) : null);
   return (
     <div className="implant-card-print-page flex min-h-full flex-1 flex-col bg-surface-sunken print:min-h-0 print:bg-white">
-      {card ? <title>{copy.documentTitle(card.patientName)}</title> : null}
       <div
         role="toolbar"
         aria-label={copy.toolbar}
@@ -121,18 +123,14 @@ export function ImplantCardPrintView({ token, patientId, date }: ImplantCardPrin
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {card ? (
           <div className="mx-auto flex w-full max-w-[180mm] flex-col gap-3 print:max-w-none">
-            {sedeFormat.status === 'error' ? (
-              <SedeConfigError
-                kind="locale"
-                variant="note"
-                onRetry={sedeFormat.retry}
-                description={sedeFormat.message}
-                locationId={sedeFormat.locationId}
-                className="mx-4 sm:mx-0 print:hidden"
-              />
-            ) : null}
+            <DocumentFormatNote
+              locationId={card.locations.length === 1 ? card.locations[0].id : undefined}
+              onRetry={() => setReloadKey((k) => k + 1)}
+              className="mx-4 sm:mx-0"
+              active={format === null}
+            />
             <div className="shadow-sm print:shadow-none">
-              <ImplantCardDocument card={card} fmt={readyFormat(sedeFormat)} />
+              <ImplantCardDocument card={card} format={format} />
             </div>
           </div>
         ) : notFound ? (

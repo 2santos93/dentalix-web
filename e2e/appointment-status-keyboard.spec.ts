@@ -72,6 +72,25 @@ test.beforeAll(async ({ request }) => {
     start: atSede(DAY, '10:00').toISOString(),
     end: atSede(DAY, '10:30').toISOString(),
   });
+  // DX-299: una cita completada, para el diálogo de salida de «Completada».
+  const done = await apiPost<{ id: string }>(request, session, '/patients', {
+    firstName: 'Tere',
+    lastName: patientLast,
+    docType: 'NATIONAL_ID',
+    docNumber: `ESD${suffix}`.slice(0, 20),
+    sex: 'F',
+  });
+  const completed = await apiPost<{ id: string }>(request, session, '/appointments', {
+    patientId: done.id,
+    providerId: luisId,
+    start: atSede(DAY, '11:00').toISOString(),
+    end: atSede(DAY, '11:30').toISOString(),
+  });
+  const patched = await request.patch(`${API_URL}/appointments/${completed.id}`, {
+    headers: session.headers,
+    data: { status: 'COMPLETED' },
+  });
+  expect(patched.ok(), await patched.text()).toBe(true);
 });
 
 /** Cuenta los PATCH a `/appointments/:id` que salen de la página. */
@@ -114,6 +133,30 @@ async function walkOptions(page: Page, steps: Array<[string, string]>) {
   }
 }
 
+test('DX-299: Esc en el diálogo de salida de «Completada» devuelve el foco al selector, sin PATCH', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await loginAs(page, origin, admin.email, password);
+  const patches = countAppointmentPatches(page);
+  await openDayList(page);
+
+  const row = page.locator('table tr', { hasText: `Tere ${patientLast}` });
+  const status = row.getByRole('combobox', { name: new RegExp(`de Tere ${patientLast}`) });
+  await expect(status).toHaveText('Completada', { timeout: 15_000 });
+  await status.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('listbox')).toBeVisible();
+  await waitForListSettled(page);
+  await page.getByRole('option', { name: 'Agendada', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog', { name: /completada/i });
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(status).toBeFocused();
+  await expect(status).toHaveText('Completada');
+  expect(patches.count).toBe(0);
+});
+
 test('1440 px: en la fila, ↑/↓ no envían nada y Enter aplica el estado', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await loginAs(page, origin, reception.email, password);
@@ -124,7 +167,7 @@ test('1440 px: en la fila, ↑/↓ no envían nada y Enter aplica el estado', as
   const status = row.getByRole('combobox', { name: /^Estado de la cita de 10:00–10:30/ });
   await expect(status).toHaveText('Agendada', { timeout: 15_000 });
   // El lector de pantalla oye el estado actual en el nombre del control.
-  await expect(status).toHaveAccessibleName('Estado de la cita de 10:00–10:30: Agendada');
+  await expect(status).toHaveAccessibleName(`Estado de la cita de 10:00–10:30 de Sara ${patientLast}: Agendada`);
 
   await status.focus();
   await page.keyboard.press('ArrowDown');

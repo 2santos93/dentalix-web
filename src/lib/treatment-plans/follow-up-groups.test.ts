@@ -1,5 +1,4 @@
-import { formatCurrency } from '@/lib/format/currency';
-import { followUpAmount, groupFollowUp } from './follow-up-groups';
+import { followUpAmount, followUpValidity, groupFollowUp } from './follow-up-groups';
 import type { PendingFollowUpItem } from './plan-options-api';
 
 function item(over: Partial<PendingFollowUpItem> = {}): PendingFollowUpItem {
@@ -13,8 +12,10 @@ function item(over: Partial<PendingFollowUpItem> = {}): PendingFollowUpItem {
     optionLabel: 'Opción A',
     presentedAt: '2026-10-10T00:00:00.000Z',
     presentedLocationId: 'l1',
+    quoteValidUntil: null,
+    quoteExpired: false,
     daysSincePresented: 10,
-    currency: 'COP',
+    currency: 'VES',
     total: 100,
     itemCount: 1,
     ...over,
@@ -38,14 +39,41 @@ describe('groupFollowUp (D2)', () => {
 });
 
 describe('followUpAmount (D2)', () => {
+  const money = (amount: number, currency: string) => `${currency} ${amount}`;
   it('una opción: su monto; varias: el rango; monedas distintas: cada una aparte', () => {
-    expect(followUpAmount([item()])).toBe(formatCurrency(100, 'COP'));
-    expect(followUpAmount([item({ total: 300 }), item({ total: 100 })])).toBe(
-      `${formatCurrency(100, 'COP')} – ${formatCurrency(300, 'COP')}`,
+    expect(followUpAmount([item()], money)).toBe(money(100, 'VES'));
+    expect(followUpAmount([item({ total: 300 }), item({ total: 100 })], money)).toBe(
+      `${money(100, 'VES')} – ${money(300, 'VES')}`,
     );
-    expect(followUpAmount([item({ total: 100 }), item({ total: 100 })])).toBe(formatCurrency(100, 'COP'));
-    expect(followUpAmount([item(), item({ currency: 'USD', total: 50 })])).toBe(
-      `${formatCurrency(100, 'COP')} · ${formatCurrency(50, 'USD')}`,
+    expect(followUpAmount([item({ total: 100 }), item({ total: 100 })], money)).toBe(money(100, 'VES'));
+    expect(followUpAmount([item(), item({ currency: 'USD', total: 50 })], money)).toBe(
+      `${money(100, 'VES')} · ${money(50, 'USD')}`,
     );
   });
 });
+
+describe('followUpValidity (DX-379)', () => {
+  it('sin fechas en ninguna opción (planes anteriores), nada', () => {
+    expect(followUpValidity([item(), item({ planId: 'b' })])).toBeNull();
+  });
+
+  it('vigentes: la que vence antes, con su sede', () => {
+    expect(
+      followUpValidity([
+        item({ quoteValidUntil: '2026-12-09' }),
+        item({ planId: 'b', quoteValidUntil: '2026-11-30', presentedLocationId: 'l2' }),
+        item({ planId: 'c' }),
+      ]),
+    ).toEqual({ validUntil: '2026-11-30', expired: false, locationId: 'l2' });
+  });
+
+  it('si alguna venció, manda la vencida aunque otra venza antes en el calendario', () => {
+    expect(
+      followUpValidity([
+        item({ quoteValidUntil: '2026-11-01' }),
+        item({ planId: 'b', quoteValidUntil: '2026-11-03', quoteExpired: true }),
+      ]),
+    ).toEqual({ validUntil: '2026-11-03', expired: true, locationId: 'l1' });
+  });
+});
+

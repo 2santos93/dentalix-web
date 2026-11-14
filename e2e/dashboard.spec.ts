@@ -1,9 +1,14 @@
 import { test, expect } from './support/test';
 import { randomUUID } from 'node:crypto';
-import { accessTokenOf, registerAndLogin } from './support/auth';
+import { mkdirSync } from 'node:fs';
+import { accessTokenOf, loginAs, registerAndLogin } from './support/auth';
+import { apiPost, createLocationViaApi, registerClinicViaApi, type ApiSession } from './support/api';
+import { expectNoHorizontalScroll } from './support/layout';
+import { regionalFormat } from '../src/lib/format/regional-format';
 import { disableBusinessHours } from './support/business-hours';
 import { API_URL } from './support/urls';
-import { sedeTime } from './support/clock';
+import { SEDE_TODAY_TZ, sedeTime } from './support/clock';
+import { E2E_TODAY_REGION, type RegionalSettings } from './support/regional';
 
 /**
  * e2e: register clinic + login (the registering user is ADMIN — the only role
@@ -18,7 +23,7 @@ import { sedeTime } from './support/clock';
  *   - a treatment plan for the patient (`POST /patients/:id/treatment-
  *     plans`), one billable item (`POST /treatment-plans/:id/items`, priced,
  *     status flipped to DONE via `PATCH .../items/:itemId`), and an abono
- *     recorded against the plan in COP, `paidAt` today (`POST
+ *     recorded against the plan in USD, `paidAt` today (`POST
  *     /treatment-plans/:id/payments`) — this is what the dashboard's
  *     "Ingresos del período" card now sums (PAY-T4: sales/`/sales` removed,
  *     incomes are sourced from payments, see `get-payments-totals.use-
@@ -29,11 +34,11 @@ import { sedeTime } from './support/clock';
  *   - «Hoy»: the appointment's sede-formatted time, «Agendada», the patient
  *     link and «Por confirmar» = 1;
  *   - «Pendientes»: «Bajo stock» = 1 linking to /inventory, presupuestos «Al día»;
- *   - «Resultados del período» → «Cobrado, en COP»: the abono and «1 abono»;
+ *   - «Resultados del período» → «Cobrado, en USD»: the abono and «1 abono»;
  *   - «Cartera por antigüedad»: the plan is fully paid → «Nadie debe.».
  *
- * OFFLINE by design: the abono's currency (COP) equals the dashboard's
- * default query currency (COP), so `GetPaymentsTotalsUseCase` ->
+ * OFFLINE by design: the abono's currency (USD) equals the dashboard's
+ * default query currency (USD), so `GetPaymentsTotalsUseCase` ->
  * `ConvertAmountUseCase` takes the `from === to` passthrough
  * (`convert-amount.use-case.ts`) and returns `{ result: amount, rateUsed: 1 }`
  * WITHOUT calling `GetRatesForDateUseCase` (i.e. never hits Open Exchange
@@ -84,18 +89,34 @@ const paymentAmount = 250;
 
 // The income amount is asserted against a value formatted INSIDE the browser
 // (see `page.evaluate` below) with the same options as the app's
-// `formatCurrency` (`src/lib/format/currency.ts`): es locale and two FIXED
-// fraction digits (DX-098). Relying on ICU's default for COP breaks on recent
-// builds, which give COP 0 decimals ("250 COP" vs the app's "250,00 COP").
+// `moneyWithCode` (DX-354b): the sede's locale, the ISO code and two FIXED
+// fraction digits (DX-098). Relying on ICU's default for USD breaks on recent
+// builds, which give USD 0 decimals.
+
+/**
+ * La sede y el navegador van en `SEDE_TODAY_TZ` (support/clock.ts): la cita de
+ * «Hoy» se agenda con el reloj real a 3 minutos vista, y en la zona de la
+ * suite, desde las 23:57 de la sede caía en mañana y no salía en «Hoy». Esa
+ * zona deja siempre al menos 3 h hasta la medianoche.
+ */
+const ZONE = SEDE_TODAY_TZ;
+test.use({ timezoneId: ZONE });
 
 // Same formatter as `dashboard-view.tsx`'s `formatTime`, in the browser's
 // (the sede's) timezone — not Node's (see support/clock.ts).
-const formatTime = sedeTime;
+const formatTime = (at: Date) => sedeTime(at, ZONE);
 
 test('Inicio (ADMIN): hoy, pendientes, resultados del período y cartera con los datos sembrados', async ({
   page,
 }) => {
-  const origin = await registerAndLogin(page, { subdomain, clinicName, fullName, email, password });
+  const origin = await registerAndLogin(page, {
+    subdomain,
+    clinicName,
+    fullName,
+    email,
+    password,
+    location: E2E_TODAY_REGION,
+  });
   await disableBusinessHours(page, origin);
 
   const accessToken = await accessTokenOf(page);
@@ -196,9 +217,9 @@ test('Inicio (ADMIN): hoy, pendientes, resultados del período y cartera con los
       headers: seedHeaders,
       data: {
         amount: paymentAmount,
-        // COP so it equals the dashboard's default query currency — keeps the
+        // USD so it equals the dashboard's default query currency — keeps the
         // conversion a `from === to` passthrough (offline, no exchange call).
-        currency: 'COP',
+        currency: 'USD',
         // Ahora mismo: desde DX-097 la API corta los días en la zona de la
         // sede, así que un abono de cualquier hora de hoy cae en «hoy».
         paidAt: new Date().toISOString(),
@@ -217,8 +238,8 @@ test('Inicio (ADMIN): hoy, pendientes, resultados del período y cartera con los
   expect(owner, 'Expected the registered owner to appear in GET /staff').toBeTruthy();
 
   // --- Seed an appointment for TODAY, a few minutes ahead (I1: «Hoy» lists
-  // the sede's civil day). Runs right before midnight in the sede would push
-  // it to tomorrow: the spec is not meant to run at 23:55. ---
+  // the sede's civil day). The sede's zone (`ZONE`) is never within 3 h of
+  // its midnight, so «a few minutes ahead» is still today at any hour. ---
   const appointmentStart = new Date(Date.now() + 3 * 60 * 1000);
   const appointmentEnd = new Date(appointmentStart.getTime() + 30 * 60 * 1000);
   const appointmentResponse = await page.request.post(`${API_URL}/appointments`, {
@@ -237,7 +258,7 @@ test('Inicio (ADMIN): hoy, pendientes, resultados del período y cartera con los
   ).toBeTruthy();
 
   // --- Load Inicio (default period = current month..today inclusive,
-  // default currency COP -> covers today's abono; COP->COP passthrough) ---
+  // default currency USD -> covers today's abono; USD->USD passthrough) ---
   await page.goto(`${origin}/dashboard`);
   await expect(page.getByRole('heading', { name: 'Inicio', level: 1 })).toBeVisible();
   await expect(page.getByTestId('dashboard-scope')).toContainText(/Días en hora de \S/);
@@ -253,27 +274,31 @@ test('Inicio (ADMIN): hoy, pendientes, resultados del período y cartera con los
   await expect(today.getByTestId('today-toConfirm')).toHaveText('1');
 
   // --- «Pendientes»: the low-stock item counts, rows link where you act ---
-  const pending = page.getByRole('region', { name: 'Pendientes' });
+  const pending = page.getByRole('region', { name: 'Pendientes', exact: true });
   await expect(pending.getByTestId('pending-low-stock-value')).toHaveText('1');
   await expect(pending.getByRole('link', { name: 'Bajo stock' })).toHaveAttribute('href', '/inventory');
   await expect(pending.getByTestId('pending-follow-up-value')).toHaveText('Al día');
 
-  // --- «Resultados del período» → «Cobrado, en COP»: total + count ---
-  // Format the expected amount with the browser's own Intl and the app's
-  // options (two fixed decimals, as `formatCurrency` since DX-098).
+  // --- «Resultados del período» → «Cobrado, en USD»: total + count ---
+  // DX-354b: el importe sale con el formato de la sede y el código ISO
+  // (`moneyWithCode`): se calcula con el Intl del navegador, el locale de la
+  // sede de la suite, dos decimales fijos y dígitos latinos.
   const expectedIncome = await page.evaluate(
-    (amount) =>
-      new Intl.NumberFormat('es', {
+    ([amount, locale]) =>
+      new Intl.NumberFormat(locale, {
         style: 'currency',
-        currency: 'COP',
+        currency: 'USD',
         currencyDisplay: 'code',
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
-      }).format(amount),
-    paymentAmount,
+        numberingSystem: 'latn',
+      })
+        .format(amount)
+        .replace(/[\u200e\u200f\u061c]/g, ''),
+    [paymentAmount, E2E_TODAY_REGION.locale] as const,
   );
   const incomes = page.getByTestId('dashboard-incomes');
-  await expect(incomes.getByText('Cobrado, en COP', { exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(incomes.getByText('Cobrado, en USD', { exact: true })).toBeVisible({ timeout: 10_000 });
   await expect(incomes.getByText(expectedIncome, { exact: true }).first()).toBeVisible();
   await expect(incomes.getByText('1 abono', { exact: true })).toBeVisible();
   await expect(page.getByTestId('dashboard-kpi-production')).toContainText('Producción');
@@ -281,4 +306,168 @@ test('Inicio (ADMIN): hoy, pendientes, resultados del período y cartera con los
   // --- «Cartera por antigüedad»: the plan is fully paid, nobody owes ---
   const aging = page.getByRole('region', { name: 'Cartera por antigüedad' });
   await expect(aging.getByText('Nadie debe.')).toBeVisible();
+});
+
+/**
+ * DX-354b (W3), criterio 4: «Hoy» en «Todas las sedes» pinta la hora de cada
+ * cita con el reloj de SU sede, y no con el de la pantalla ni con el del
+ * navegador. La suite de arriba no lo distingue (el navegador y la sede están
+ * en la misma zona); aquí el navegador está en otra zona (`BROWSER_TZ`, con otro desfase) y la clínica tiene
+ * dos sedes:
+ * - la principal (la de la pantalla en «Todas las sedes»): la zona de la suite
+ *   (`SEDE_TODAY_TZ`, con al menos 3 h hasta su medianoche), `es-VE`, 12 h;
+ * - «Sede DE»: `Europe/Berlin`, `de-DE`, 24 h.
+ * Una cita de hoy en cada una (a 3 y a 45 minutos vista, para que ambas caigan
+ * en el día de la principal a cualquier hora); la hora esperada sale de
+ * `regionalFormat` con la zona y el reloj de cada sede, sobre el instante que
+ * devolvió la API. Capturas a 390 y 1440 px (claro y oscuro) en `E2E_QA_DIR`.
+ */
+/** Desfase de una zona respecto de UTC, en minutos, en este instante. */
+function offsetMinutes(zone: string, at = new Date()): number {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' }).formatToParts(at);
+  const name = parts.find((p) => p.type === 'timeZoneName')?.value ?? 'GMT';
+  const m = /GMT([+-])(\d{2}):?(\d{2})?/.exec(name);
+  return m ? (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3] ?? 0)) : 0;
+}
+
+/**
+ * El navegador va en una zona con OTRO desfase que la sede principal y que
+ * Berlín: de madrugada en Caracas la zona de hoy de la suite puede ser UTC+9
+ * (support/clock.ts), y con el navegador en Tokio las dos horas coinciden y la
+ * prueba no distingue el reloj de la sede del del navegador.
+ */
+const BROWSER_TZ = ['Asia/Tokyo', 'Pacific/Honolulu', 'Asia/Kolkata'].find(
+  (zone) => offsetMinutes(zone) !== offsetMinutes(SEDE_TODAY_TZ) && offsetMinutes(zone) !== offsetMinutes('Europe/Berlin'),
+)!;
+
+test.describe('Inicio: «Todas las sedes» con el navegador en otra zona (DX-354b)', () => {
+  test.use({ timezoneId: BROWSER_TZ });
+
+  const MAIN: RegionalSettings = { ...E2E_TODAY_REGION, hourCycle: 'h12' };
+  const DE: { name: string } & RegionalSettings = {
+    name: 'Sede DE',
+    country: 'DE',
+    currency: 'EUR',
+    timeZone: 'Europe/Berlin',
+    locale: 'de-DE',
+    hourCycle: 'h23',
+  };
+  const QA_DIR = process.env.E2E_QA_DIR;
+  const multiSuffix = `${suffix}m`.slice(0, 12);
+
+  test('cada cita de Hoy dice la hora de su sede (12 h en la principal, 24 h en Berlín)', async ({ page }) => {
+    test.setTimeout(240_000);
+    const request = page.request;
+    const multiEmail = `test.user.dashboard.multi.${multiSuffix}@example.com`;
+    const session: ApiSession = await registerClinicViaApi(request, {
+      subdomain: `test-clinic-dash-multi-${multiSuffix}`,
+      clinicName: `Test Clinic Dashboard Multi ${multiSuffix}`,
+      fullName,
+      email: multiEmail,
+      password,
+      location: MAIN,
+    });
+    const deId = await createLocationViaApi(request, session, DE);
+    const at = (locationId: string): ApiSession => ({
+      ...session,
+      headers: { ...session.headers, 'X-Location-Id': locationId },
+    });
+
+    // Una sede nueva nace con horario de atención: sin restricción en las dos, para que las citas a
+    // «ahora + N min» no dependan de la hora ni del día de la corrida (`disableBusinessHours`).
+    const locations = (await (await request.get(`${API_URL}/locations`, { headers: session.headers })).json()) as {
+      id: string;
+      name: string;
+    }[];
+    for (const location of locations) {
+      const res = await request.put(`${API_URL}/locations/schedule`, {
+        headers: { ...session.headers, 'X-Location-Id': location.id },
+        data: { ranges: [] },
+      });
+      expect(res.ok(), `Desactivar el horario de ${location.name} falló: ${await res.text()}`).toBeTruthy();
+    }
+    const mainId = locations.find((l) => l.id !== deId)!.id;
+
+    const staffResponse = await request.get(`${API_URL}/staff`, { headers: session.headers });
+    expect(staffResponse.ok(), `Listing staff failed: ${await staffResponse.text()}`).toBeTruthy();
+    const staff = (await staffResponse.json()) as { userId: string; role: string }[];
+    const owner = staff.find((member) => member.role === 'OWNER') ?? staff[0];
+
+    const sedes = [
+      { key: 'main', id: mainId, region: MAIN, minutes: 3, firstName: 'Carolina' },
+      { key: 'de', id: deId, region: DE, minutes: 45, firstName: 'Jonas' },
+    ] as const;
+    const booked: { lastName: string; start: string; region: RegionalSettings }[] = [];
+    for (const sede of sedes) {
+      const lastName = `Multi${sede.key}${multiSuffix}`.slice(0, 30);
+      const patient = await apiPost<{ id: string }>(request, at(sede.id), '/patients', {
+        firstName: sede.firstName,
+        lastName,
+        docType: 'PASSPORT',
+        docNumber: `DM${sede.key}${multiSuffix}`.slice(0, 20),
+        sex: 'F',
+      });
+      const start = new Date(Date.now() + sede.minutes * 60 * 1000);
+      const appointment = await apiPost<{ id: string; start: string; locationId?: string }>(
+        request,
+        at(sede.id),
+        '/appointments',
+        {
+          patientId: patient.id,
+          providerId: owner.userId,
+          start: start.toISOString(),
+          end: new Date(start.getTime() + 30 * 60 * 1000).toISOString(),
+          reason: `Control ${sede.key} ${multiSuffix}`,
+        },
+      );
+      booked.push({ lastName, start: appointment.start, region: sede.region });
+    }
+
+    await loginAs(page, session.origin, multiEmail, password);
+    // Sin sede activa: la pantalla es la principal y cada fila trae la suya.
+    await page.evaluate(() => window.localStorage.removeItem('dentalix.activeLocationId'));
+    await page.goto(`${session.origin}/dashboard`);
+    await expect(page.getByRole('heading', { name: 'Inicio', level: 1 })).toBeVisible();
+    await expect(page.getByTestId('dashboard-scope')).toContainText('Todas las sedes');
+
+    const today = page.getByRole('region', { name: 'Hoy' });
+    await expect(today.getByRole('list', { name: 'Citas de hoy' })).toBeVisible({ timeout: 15_000 });
+    const times: string[] = [];
+    for (const appointment of booked) {
+      const expected = regionalFormat({ locale: appointment.region.locale, hourCycle: appointment.region.hourCycle }).time(
+        new Date(appointment.start),
+        appointment.region.timeZone,
+      );
+      times.push(expected);
+      const row = today.getByRole('listitem').filter({ hasText: appointment.lastName });
+      await expect(row.locator('time')).toHaveText(expected, { timeout: 15_000 });
+    }
+    // Cada reloj es el de su sede: 12 h con «a. m./p. m.» en la principal, 24 h «HH:MM» en Berlín.
+    expect(times[0]).toMatch(/^\d{1,2}:\d{2} [ap]\. m\.$/);
+    expect(times[1]).toMatch(/^\d{2}:\d{2}$/);
+    // Ni el reloj del navegador (otra zona, otro desfase) ni el aviso de formato.
+    const browserTime = regionalFormat({ locale: MAIN.locale, hourCycle: MAIN.hourCycle }).time(
+      new Date(booked[0].start),
+      BROWSER_TZ,
+    );
+    expect(browserTime).not.toBe(times[0]);
+    await expect(today.getByText(browserTime, { exact: true })).toHaveCount(0);
+    await expect(page.getByText(/No se pudo saber el formato regional/)).toHaveCount(0);
+
+    for (const viewport of [
+      { width: 1440, height: 900 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await expectNoHorizontalScroll(page);
+      if (!QA_DIR) continue;
+      mkdirSync(QA_DIR, { recursive: true });
+      await page.mouse.move(0, 0);
+      for (const scheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme: scheme });
+        await page.screenshot({ path: `${QA_DIR}/inicio-hoy-todas-las-sedes-${viewport.width}-${scheme}.png` });
+      }
+      await page.emulateMedia({ colorScheme: 'light' });
+    }
+  });
 });

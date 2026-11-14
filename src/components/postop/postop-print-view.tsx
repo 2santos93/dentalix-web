@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, FileX, Lock, Printer } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
@@ -7,10 +7,13 @@ import {
   getPatientPostOpDelivery,
   type PostOpDeliveryDocument,
 } from '@/lib/postop/postop-api';
+import { documentFormat } from '@/lib/format/document-format';
+import { DocumentFormatNote } from '@/components/documents/document-format-note';
 import { PostOpDocument } from './postop-document';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Button } from '@/components/ui/button';
+import { usePrintDocumentTitle } from '@/lib/print/use-print-document-title';
 
 const copy = {
   toolbar: 'Acciones del documento',
@@ -52,6 +55,8 @@ export function PostOpPrintView({
   const [reloadKey, setReloadKey] = useState(0);
   const printed = useRef(false);
   const forbidden = !allowed || deniedByApi;
+  // DX-354: el formato de la sede del documento, no el del navegador.
+  const format = useMemo(() => (data ? documentFormat(data.regional) : null), [data]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -81,17 +86,18 @@ export function PostOpPrintView({
   }, [token, patientId, deliveryId, reloadKey, allowed]);
 
   useEffect(() => {
-    if (data && !printed.current) {
+    if (data && format !== null && !printed.current) {
       printed.current = true;
       window.print();
     }
-  }, [data]);
+  }, [data, format]);
 
   const backHref = `/patients/${encodeURIComponent(patientId)}?tab=clinical-history`;
 
+  // DX-118 (FE-033): título neutro en la pestaña; el del documento solo al imprimir.
+  usePrintDocumentTitle('Indicaciones', data ? copy.documentTitle(data.templateTitle, data.patientName) : null);
   return (
     <div className="postop-print-page flex min-h-full flex-1 flex-col bg-surface-sunken print:min-h-0 print:bg-white">
-      {data ? <title>{copy.documentTitle(data.templateTitle, data.patientName)}</title> : null}
       <div
         role="toolbar"
         aria-label={copy.toolbar}
@@ -103,7 +109,7 @@ export function PostOpPrintView({
             {copy.back}
           </Link>
         </Button>
-        <Button type="button" onClick={() => window.print()} disabled={!data}>
+        <Button type="button" onClick={() => window.print()} disabled={!data || format === null}>
           <Printer aria-hidden />
           {copy.print}
         </Button>
@@ -111,9 +117,16 @@ export function PostOpPrintView({
 
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {data ? (
-          <div className="mx-auto max-w-[210mm] shadow-sm print:shadow-none">
-            <PostOpDocument delivery={data} />
-          </div>
+          <>
+            <DocumentFormatNote
+              onRetry={() => setReloadKey((k) => k + 1)}
+              className="mx-auto max-w-[210mm] px-4 pb-4 sm:px-0"
+              active={format === null}
+            />
+            <div className="mx-auto max-w-[210mm] shadow-sm print:shadow-none">
+              <PostOpDocument delivery={data} format={format} />
+            </div>
+          </>
         ) : forbidden ? (
           <div className="mx-auto max-w-xl px-4 py-8">
             <EmptyState

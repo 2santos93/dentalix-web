@@ -212,4 +212,41 @@ describe('DataList', () => {
     );
     expect(screen.getByText('Nada')).toBeInTheDocument();
   });
+  describe('«—» de una sede sin formato (DX-354b, E7.1)', () => {
+    const when = [{ id: 'a', at: '—', note: 'Hasta el —' }, { id: 'b', at: '05/11/2026', note: 'x' }];
+    const whenColumns: DataListColumn<(typeof when)[number]>[] = [
+      { id: 'at', header: 'Fecha', mobile: 'primary', cell: (r) => r.at, mobileCell: (r) => (r.at === '—' ? null : r.at) },
+      { id: 'note', header: 'Nota', cell: (r) => r.note },
+    ];
+
+    it('una celda que es exactamente «—» dice «Sin dato» a lectores de pantalla y oculta el guion', () => {
+      render(<DataList label="Fechas" rows={when} columns={whenColumns} getRowKey={(r) => r.id} />);
+      const sr = screen.getByText('Sin dato');
+      expect(sr).toHaveClass('sr-only');
+      expect(sr.previousElementSibling).toHaveAttribute('aria-hidden', 'true');
+      expect(sr.previousElementSibling).toHaveTextContent('—');
+    });
+
+    it('un texto distinto de «—» no se envuelve, ni una frase que contiene «—»', () => {
+      render(<DataList label="Fechas" rows={when} columns={whenColumns} getRowKey={(r) => r.id} />);
+      expect(screen.getAllByText('Sin dato')).toHaveLength(1);
+      expect(screen.getByText('05/11/2026')).not.toHaveAttribute('aria-hidden');
+      expect(screen.getByText('Hasta el —')).toBeInTheDocument();
+    });
+
+    it('en el teléfono, un mobileCell null no pinta nada (ni «—» ni «Sin dato»)', () => {
+      const restore = mockPhone(true);
+      render(<DataList label="Fechas" rows={[when[0]]} columns={[{ ...whenColumns[0], mobile: 'meta' }, { id: 'n', header: 'N', mobile: 'primary', cell: () => 'Fila' }]} getRowKey={(r) => r.id} />);
+      expect(screen.queryByText('Sin dato')).not.toBeInTheDocument();
+      expect(screen.queryByText('—')).not.toBeInTheDocument();
+      restore();
+    });
+
+    it('en el teléfono, un «—» como celda móvil también lleva «Sin dato»', () => {
+      const restore = mockPhone(true);
+      render(<DataList label="Fechas" rows={when} columns={[{ id: 'at', header: 'Fecha', mobile: 'primary', cell: (r) => r.at }]} getRowKey={(r) => r.id} />);
+      expect(screen.getByText('Sin dato')).toBeInTheDocument();
+      restore();
+    });
+  });
 });

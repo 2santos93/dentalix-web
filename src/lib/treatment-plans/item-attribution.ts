@@ -1,6 +1,7 @@
 import type { ClinicRole } from '@/lib/appointments/staff-api';
 import type { TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
-import { formatDate, zonedDayStart } from '@/lib/format/date';
+import { zonedDayStart } from '@/lib/format/date';
+import type { SedePainters } from '@/lib/locations/sede-stamp';
 
 /**
  * DX-050: quién puede figurar como quien realizó un procedimiento. Mismo
@@ -24,13 +25,18 @@ export function attendsAt(locationIds: string[] | null, activeLocationId: string
  * ítem no está realizado.
  */
 export function attributionText(
-  item: Pick<TreatmentPlanItem, 'status' | 'performedByName' | 'completedAt' | 'performedLocationName'>,
+  item: Pick<
+    TreatmentPlanItem,
+    'status' | 'performedByName' | 'completedAt' | 'performedLocationName' | 'performedLocationId'
+  >,
+  stamp: Pick<SedePainters, 'date'>,
 ): string | null {
   if (item.status !== 'DONE') return null;
   if (!item.performedByName) return 'Sin atribuir';
   return [
     `Realizado por ${item.performedByName}`,
-    item.completedAt ? formatDate(item.completedAt) : null,
+    // La fecha, con el reloj de la sede donde se realizó (E1); sin formato, «—».
+    item.completedAt ? stamp.date(item.completedAt, item.performedLocationId ?? undefined) : null,
     item.performedLocationName,
   ]
     .filter((part): part is string => Boolean(part))

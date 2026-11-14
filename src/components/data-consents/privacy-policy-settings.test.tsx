@@ -15,6 +15,9 @@ jest.mock('../../lib/data-consents/data-consents-api', () => ({
   publishPrivacyPolicy: jest.fn(),
 }));
 
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]),
+}));
 const mockedGet = getPrivacyPolicies as jest.MockedFunction<typeof getPrivacyPolicies>;
 const mockedPublish = publishPrivacyPolicy as jest.MockedFunction<typeof publishPrivacyPolicy>;
 

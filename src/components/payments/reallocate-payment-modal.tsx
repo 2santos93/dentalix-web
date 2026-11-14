@@ -12,14 +12,16 @@ import { Button } from '@/components/ui/button';
 import { RadioCard, RadioGroup } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate } from '@/lib/format/date';
 import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
 import { allocationCopy } from '@/lib/payments/allocation-copy';
 import type { PaymentAllocations, ReplacePaymentAllocationsInput } from '@/lib/payments/payment-allocations-api';
 import { PLAN_STATUS_LABELS, isPlanBillable } from '@/lib/treatment-plans/plan-status';
 import { cn } from '@/lib/utils';
+import { ByTransferMark } from './by-transfer-mark';
 import { usePaymentAllocations } from './use-payment-allocations';
+import { useSedeStamp, type SedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
+import { amountCents, centsToAmount } from '@/lib/money/round';
 
 // Copy como constantes (i18n-ready), igual que el resto de vistas.
 const copy = {
@@ -56,8 +58,12 @@ const copy = {
 type Mode = ReplacePaymentAllocationsInput['mode'];
 
 /** Recibo · importe · fecha civil; sin serie (abonos anteriores a DX-136), solo importe y fecha. */
-function allocationSubject(data: PaymentAllocations): string {
-  return [data.receiptNumber, formatCurrency(data.paymentAmount, data.paymentCurrency), formatCivilDate(data.paidOn)]
+function allocationSubject(data: PaymentAllocations, stamp: SedeStamp): string {
+  return [
+    data.receiptNumber,
+    stamp.money(data.paymentAmount, data.paymentCurrency, data.locationId),
+    stamp.civilDate(data.paidOn, data.locationId),
+  ]
     .filter(Boolean)
     .join(' · ');
 }
@@ -66,8 +72,6 @@ function allocationSubject(data: PaymentAllocations): string {
 function amountsOf(data: PaymentAllocations): Record<string, string> {
   return Object.fromEntries(data.allocations.map((line) => [line.treatmentPlanItemId, moneyInputText(line.amount)]));
 }
-
-const toCents = (amount: number) => Math.round(amount * 100);
 
 interface ReallocatePaymentModalProps {
   open: boolean;
@@ -96,6 +100,10 @@ export function ReallocatePaymentModal({
   onCloseAutoFocus,
 }: ReallocatePaymentModalProps) {
   const { data, loading, error, reload, save, saving, saveError } = usePaymentAllocations(token, paymentId);
+  // El abono y su plan se pintan con el formato de la sede del abono (DX-354c), no con el de la pantalla.
+  const stamp = useSedeStamp(token, [data?.locationId]);
+  const sedeId = data?.locationId;
+  const money = (amount: number, currency: string) => stamp.money(amount, currency, sedeId);
   const baseId = useId();
   const bodyRef = useRef<HTMLDivElement>(null);
   // «Volver a cargar» y «Reintentar» sustituyen el contenido por el esqueleto:
@@ -150,10 +158,10 @@ export function ReallocatePaymentModal({
       })
     : [];
   const allocatedCents = parsed.reduce(
-    (sum, { result }) => (result?.ok && result.value > 0 ? sum + toCents(result.value) : sum),
+    (sum, { result }) => (result?.ok && result.value > 0 ? sum + amountCents(result.value) : sum),
     0,
   );
-  const planCents = data?.planAmount != null ? toCents(data.planAmount) : 0;
+  const planCents = data?.planAmount != null ? amountCents(data.planAmount) : 0;
   const over = allocatedCents > planCents;
 
   function setAmount(itemId: string, text: string) {
@@ -204,7 +212,7 @@ export function ReallocatePaymentModal({
       open={open}
       onOpenChange={onOpenChange}
       title={copy.title}
-      description={data ? allocationSubject(data) : undefined}
+      description={data ? allocationSubject(data, stamp) : undefined}
       onSubmit={handleSubmit}
       submitLabel={saving ? copy.submitting : copy.submit}
       submitting={saving}
@@ -220,6 +228,7 @@ export function ReallocatePaymentModal({
           </Button>
         </div>
       ) : null}
+      <SedeStampNote stamp={stamp} />
       <div ref={bodyRef} className="contents">
         <AsyncSection
           loading={loading}
@@ -242,13 +251,13 @@ export function ReallocatePaymentModal({
               <div className="flex flex-col gap-4">
                 <div className="flex flex-col gap-0.5">
                   <p className="font-medium text-ink tabular-nums">
-                    {copy.available(formatCurrency(data.planAmount, data.planCurrency))}
+                    {copy.available(money(data.planAmount, data.planCurrency))}
                   </p>
                   {data.paymentCurrency !== data.planCurrency ? (
                     <p className="text-sm text-muted tabular-nums">
                       {copy.converted(
-                        formatCurrency(data.paymentAmount, data.paymentCurrency),
-                        formatCivilDate(data.paidOn),
+                        money(data.paymentAmount, data.paymentCurrency),
+                        stamp.civilDate(data.paidOn, sedeId),
                       )}
                     </p>
                   ) : null}
@@ -307,7 +316,7 @@ export function ReallocatePaymentModal({
                             // Cortesía, como el pie: la línea por encima de lo libre es la
                             // que el servidor rechazaría con «Un ítem admite como máximo…».
                             const overItem =
-                              !fieldError && result?.ok === true && toCents(result.value) > toCents(item.free);
+                              !fieldError && result?.ok === true && amountCents(result.value) > amountCents(item.free);
                             const overItemId = `${fieldId}-over`;
                             return (
                               <TableRow key={item.itemId} className="hover:bg-transparent">
@@ -321,13 +330,19 @@ export function ReallocatePaymentModal({
                                   <StatusBadge kind="treatmentPlanItem" status={item.status} />
                                 </TableCell>
                                 <TableCell className="text-right tabular-nums" data-label={copy.colFree}>
-                                  {formatCurrency(item.free, data.planCurrency)}
+                                  {money(item.free, data.planCurrency)}
+                                  {(item.paidByTransfersIn ?? 0) > 0 ? (
+                                    <span className="mt-1 flex justify-end">
+                                      <ByTransferMark amount={money(item.paidByTransfersIn ?? 0, data.planCurrency)} />
+                                    </span>
+                                  ) : null}
                                 </TableCell>
                                 <TableCell className="sm:w-56" data-label={copy.colAmount}>
                                   <label htmlFor={fieldId} className="sr-only">
                                     {copy.amountLabel(item.procedureName, item.toothNumber)}
                                   </label>
                                   <MoneyInput
+                                    money={money}
                                     id={fieldId}
                                     value={text}
                                     onValueChange={(next) => setAmount(item.itemId, next)}
@@ -344,7 +359,7 @@ export function ReallocatePaymentModal({
                                     </InlineError>
                                   ) : overItem ? (
                                     <p id={overItemId} className="t-caption text-danger-text tabular-nums">
-                                      {copy.overItem(formatCurrency(item.free, data.planCurrency))}
+                                      {copy.overItem(money(item.free, data.planCurrency))}
                                     </p>
                                   ) : null}
                                 </TableCell>
@@ -354,6 +369,11 @@ export function ReallocatePaymentModal({
                         </TableBody>
                       </Table>
                     </div>
+                    {/* DX-399-quater-bis: lo libre no resta lo recibido por traspaso
+                        (los abonos van primero): imputar ahí lo desplaza. */}
+                    {parsed.some(({ item }) => (item.paidByTransfersIn ?? 0) > 0) ? (
+                      <p className="text-sm text-muted">{allocationCopy.byTransferNote}</p>
+                    ) : null}
 
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div
@@ -361,15 +381,15 @@ export function ReallocatePaymentModal({
                       >
                         <p className="font-medium">
                           {copy.footer(
-                            formatCurrency(allocatedCents / 100, data.planCurrency),
+                            money(centsToAmount(allocatedCents), data.planCurrency),
                             // Nunca negativo: cuánto se pasa lo dice el aviso de abajo.
-                            formatCurrency(Math.max(0, planCents - allocatedCents) / 100, data.planCurrency),
+                            money(centsToAmount(Math.max(0, planCents - allocatedCents)), data.planCurrency),
                           )}
                         </p>
                         {/* Solo el aviso es alerta: el Σ cambia con cada tecla y no debe leerse cada vez. */}
                         {over ? (
                           <p role="alert">
-                            {copy.over(formatCurrency((allocatedCents - planCents) / 100, data.planCurrency))}
+                            {copy.over(money(centsToAmount(allocatedCents - planCents), data.planCurrency))}
                           </p>
                         ) : null}
                       </div>

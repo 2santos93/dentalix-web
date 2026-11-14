@@ -96,4 +96,11 @@ describe('patient-flow (DX-200)', () => {
     expect(timeInZone('2026-10-19T14:05:00.000Z', 'America/New_York', h12)).toBe('10:05 a. m.');
     expect(timeInZone('2026-10-19T14:05:00.000Z', 'Asia/Tokyo', h23)).toBe('23:05');
   });
+
+  it('DX-237: el odontólogo no da pasos de sillón en la cita de otro; la asistente sí', () => {
+    expect(flowActions('ARRIVED', 'DENTIST', true, false)).toEqual([]);
+    expect(flowActions('IN_CHAIR', 'DENTIST', true, false)).toEqual([]);
+    expect(flowActions('ARRIVED', 'DENTIST', true, true)).toEqual(['SEAT']);
+    expect(flowActions('ARRIVED', 'ASSISTANT', true, false)).toContain('SEAT');
+  });
 });

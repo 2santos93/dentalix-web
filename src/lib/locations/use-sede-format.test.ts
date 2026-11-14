@@ -1,9 +1,12 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { pickSedeFormat, SEDE_LOCALE_ERROR, useSedeFormat } from './use-sede-format';
 import { NO_ACTIVE_LOCATION_ERROR } from './use-sede-time-zone';
 import { listLocations, type ClinicLocation } from './locations-api';
 import { setActiveLocationId } from './location-store';
 import { clinicLocation } from '@/lib/test/locations';
+
+import { invalidateLocations } from '@/lib/session/session-store';
 
 jest.mock('./locations-api', () => ({ listLocations: jest.fn() }));
 const listLocationsMock = listLocations as jest.MockedFunction<typeof listLocations>;
@@ -66,6 +69,7 @@ describe('useSedeFormat', () => {
       expect(result.current).toMatchObject({ status: 'error', message: SEDE_LOCALE_ERROR });
       expect(result.current).not.toHaveProperty('fmt');
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
     }
   });
 
@@ -77,6 +81,7 @@ describe('useSedeFormat', () => {
     await waitFor(() => expect(active.result.current.status).toBe('error'));
     expect(active.result.current).toMatchObject({ locationId: 'sin-reloj' });
     active.unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     // «Todas las sedes»: la principal (la activa más antigua) es la que falla.
     act(() => setActiveLocationId(null));
@@ -85,9 +90,12 @@ describe('useSedeFormat', () => {
     await waitFor(() => expect(all.result.current.status).toBe('error'));
     expect(all.result.current).toMatchObject({ locationId: 'sin-reloj' });
     all.unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     // Sin lista no se sabe cuál: sin id (la lista de sedes).
     listLocationsMock.mockRejectedValue(new Error('500'));
+    // La lista ya está en la caché de la sesión (FE-031): se fuerza otra lectura.
+    act(() => invalidateLocations());
     const failed = renderHook(() => useSedeFormat('tok'));
     await waitFor(() => expect(failed.result.current.status).toBe('error'));
     expect(failed.result.current).toMatchObject({ locationId: null });

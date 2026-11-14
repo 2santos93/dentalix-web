@@ -5,7 +5,7 @@ import { Info } from 'lucide-react';
 import { getTokenRole } from '@/lib/auth/token-role';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { HOUR_CYCLE_LABELS, isHourCycle } from '@/lib/locations/regional-settings';
-import { useSessionLocations } from '@/lib/locations/session-locations';
+import { useSessionLocations } from '@/lib/session/session-store';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 

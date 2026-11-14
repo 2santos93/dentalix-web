@@ -130,7 +130,7 @@ test('1440: con «Todas las sedes» pide la sede, filtra profesionales y la urge
 
   await dialog.getByLabel('Nombre', { exact: true }).fill('Nuria');
   await dialog.getByLabel('Apellido', { exact: true }).fill(lastName);
-  await dialog.getByLabel('Teléfono', { exact: true }).fill('+57 300 555 0110');
+  await dialog.getByLabel('Teléfono', { exact: true }).fill('+58 412 555 0110');
   await provider.selectOption({ label: dentistNorth.fullName });
   await dialog.getByRole('checkbox', { name: 'Dolor' }).check();
   await dialog.getByRole('button', { name: 'Atender', exact: true }).click();

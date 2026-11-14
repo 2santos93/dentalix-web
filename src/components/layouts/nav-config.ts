@@ -106,9 +106,15 @@ const DISCOUNTS: NavItem = {
   icon: BadgePercent,
   roles: ['ADMIN'],
 };
-// Reportes (DX-014): «Comparar sedes» (REPORT_ROLES) y «Producción por
-// procedimiento» (PRODUCTION_REPORT_ROLES, DX-423: el odontólogo ve la suya).
-const REPORTS: NavItem = { href: '/reportes', label: 'Reportes', icon: ChartColumn, roles: ['ADMIN', 'DENTIST'] };
+// Reportes (DX-014): «Comparar sedes» (REPORT_ROLES), «Producción por
+// procedimiento» (PRODUCTION_REPORT_ROLES, DX-423: el odontólogo ve la suya) y
+// «Cobrado sin imputar» (UNALLOCATED_PAYMENTS_ROLES, DX-399: recepción solo ve esa).
+const REPORTS: NavItem = {
+  href: '/reportes',
+  label: 'Reportes',
+  icon: ChartColumn,
+  roles: ['ADMIN', 'DENTIST', 'RECEPTION'],
+};
 // CATALOG_READ_ROLES: recepción no registra clínico.
 const CATALOG: NavItem = {
   href: '/catalog',

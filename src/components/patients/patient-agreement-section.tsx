@@ -12,8 +12,10 @@ import {
 import {
   agreementStatusBadge,
   agreementValidityLabel,
+  effectiveValidity,
 } from '@/lib/patients/agreement-presentation';
-import { formatCivilDate, formatDate } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { AGREEMENT_KIND_LABELS } from '@/components/agreements/agreement-labels';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -72,6 +74,7 @@ export function PatientAgreementSection({
   role,
 }: PatientAgreementSectionProps) {
   const ids = useId();
+  const stamp = useSedeStamp(token);
   const [data, setData] = useState<PatientAgreementResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -85,6 +88,9 @@ export function PatientAgreementSection({
   const assignButtonRef = useRef<HTMLButtonElement>(null);
   const removedRef = useRef(false);
   const pendingFocusRef = useRef(false);
+  // DX-105-bis: tras asignar desde vacío, «Asignar convenio» (el disparador del
+  // modal) desaparece: el foco pasa a «Cambiar» cuando la relectura trae el convenio.
+  const assignedFromEmptyRef = useRef(false);
 
   // Se vacía antes de anunciar: el mismo texto dos veces seguidas no cambia el
   // contenido de la región y no se volvería a leer.
@@ -115,6 +121,13 @@ export function PatientAgreementSection({
       .catch((err: unknown) => {
         if (cancelled) return;
         clearNotice();
+        // DX-105-bis: la relectura falló: las banderas de foco se limpian para
+        // que una recarga posterior (Reintentar) no mueva el foco por sorpresa.
+        // También la de «acabo de quitar»: el cierre del diálogo puede llegar
+        // después de este fallo y volvería a armar la bandera.
+        removedRef.current = false;
+        pendingFocusRef.current = false;
+        assignedFromEmptyRef.current = false;
         setLoadError(apiErrorMessage(err, { fallback: copy.loadError }));
       });
     return () => {
@@ -131,6 +144,12 @@ export function PatientAgreementSection({
     }
   }, []);
   useEffect(() => focusAssignIfReady(data), [data, focusAssignIfReady]);
+  useEffect(() => {
+    if (assignedFromEmptyRef.current && data?.current) {
+      assignedFromEmptyRef.current = false;
+      assignButtonRef.current?.focus();
+    }
+  }, [data]);
 
   const reload = () => setReloadKey((k) => k + 1);
   const current = data?.current ?? null;
@@ -169,7 +188,7 @@ export function PatientAgreementSection({
           </span>
           <span className="break-words text-sm text-ink">{a.agreement.payer.name}</span>
           <span className="text-sm text-muted">{AGREEMENT_KIND_LABELS[a.agreement.kind]}</span>
-          <span className="text-sm text-muted tabular-nums">{agreementValidityLabel(a)}</span>
+          <span className="text-sm text-muted tabular-nums">{agreementValidityLabel(a, stamp)}</span>
           {a.notes ? <span className="break-words text-sm text-muted">{a.notes}</span> : null}
         </div>
         <div className="flex shrink-0 gap-2">
@@ -253,14 +272,20 @@ export function PatientAgreementSection({
                   <span className="break-words font-medium text-ink">
                     {h.agreement.name} · {h.agreement.payer.name}
                   </span>
-                  <span className="text-muted tabular-nums">
-                    {h.validFrom ? formatCivilDate(h.validFrom) : 'Sin inicio'}
-                    {' – '}
-                    {h.validTo ? formatCivilDate(h.validTo) : 'Sin fin'}
-                  </span>
+                  {/* DX-105-bis: la vigencia efectiva (asignación ∩ convenio), como la del vigente. */}
+                  {(() => {
+                    const v = effectiveValidity(h);
+                    return (
+                      <span className="text-muted tabular-nums">
+                        {v.validFrom ? stamp.civilDate(v.validFrom) : 'Sin inicio'}
+                        {' – '}
+                        {v.validTo ? stamp.civilDate(v.validTo) : 'Sin fin'}
+                      </span>
+                    );
+                  })()}
                   {h.retiredAt ? (
                     <span className="text-muted tabular-nums">
-                      {copy.retiredOn(formatDate(h.retiredAt))}
+                      {copy.retiredOn(stamp.date(h.retiredAt))}
                     </span>
                   ) : null}
                 </li>
@@ -303,6 +328,7 @@ export function PatientAgreementSection({
       <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>
+      <SedeStampNote stamp={stamp} />
       {content()}
 
       {dialogOpen ? (
@@ -316,6 +342,7 @@ export function PatientAgreementSection({
           current={current}
           role={role}
           onSaved={() => {
+            if (!current) assignedFromEmptyRef.current = true;
             announce(copy.saved);
             reload();
             onChanged?.();

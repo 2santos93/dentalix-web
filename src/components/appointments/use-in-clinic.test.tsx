@@ -1,11 +1,11 @@
 import { act, render, screen } from '@testing-library/react';
 import { InClinicProvider, useInClinic } from './use-in-clinic';
-import { SessionLocationsProvider, useSessionLocations } from '@/lib/locations/session-locations';
+import { useSessionLocations } from '@/lib/session/session-store';
 import { setActiveLocationId } from '@/lib/locations/location-store';
 import { useEffect } from 'react';
 import { notifyInClinicChanged } from '@/lib/appointments/patient-flow';
 
-const empty = { date:'2026-10-22', locationId:'loc-1', timeZone:'America/Bogota', now:'2026-10-22T14:00:00Z', scope:'MINE', waiting:[], inChair:[], readyForCheckout:[] };
+const empty = { date:'2026-10-22', locationId:'loc-1', timeZone:'America/Caracas', now:'2026-10-22T14:00:00Z', scope:'MINE', waiting:[], inChair:[], readyForCheckout:[] };
 const response = (data: unknown) => ({ ok:true, status:200, json:async () => data }) as Response;
 function Consumer({ token, id }: { token:string|null; id:string }) {
   const state = useInClinic(token);
@@ -17,10 +17,10 @@ function Locations({token}: {token:string}) {
   return null;
 }
 function Harness({token = 'T'}: {token?:string|null}) {
-  return <SessionLocationsProvider token={token}><InClinicProvider token={token}>
+  return <><InClinicProvider token={token}>
     {token && <><Locations token={token}/><Locations token={token}/></>}
     <Consumer token={token} id="shell"/><Consumer token={token} id="agenda"/><Consumer token={token} id="sheet"/>
-  </InClinicProvider></SessionLocationsProvider>;
+  </InClinicProvider></>;
 }
 let fetchMock: jest.Mock;
 beforeEach(() => {
@@ -63,12 +63,17 @@ it('DX-242: sesión/sede invalidan datos y descartan respuestas tardías', async
   expect(screen.getByTestId('agenda')).toHaveTextContent('empty');
   rerender(<Harness token="new"/>); await flush();
   expect(screen.getByTestId('agenda')).toHaveTextContent(empty.now);
-  let oldLocation!: (value:Response) => void;
-  fetchMock.mockImplementationOnce(() => new Promise<Response>(resolve => { oldLocation=resolve; }));
+  let oldLocation: ((value:Response) => void) | undefined;
+  // FE-031: cambiar de sede también relee `GET /locations` (caché de sesión
+  // invalidada); la respuesta que se retiene es la del panel, no la de sedes.
+  const base = fetchMock.getMockImplementation()!;
+  fetchMock.mockImplementation((url: string) => url.includes('/appointments/in-clinic') && !oldLocation
+    ? new Promise<Response>(resolve => { oldLocation=resolve; })
+    : base(url));
   await act(async () => { setActiveLocationId('old'); });
   expect(screen.getByTestId('agenda')).toHaveTextContent('empty');
   await act(async () => { setActiveLocationId('new-location'); });
-  await act(async () => { oldLocation(response({...empty, now:'sede-anterior'})); });
+  await act(async () => { oldLocation!(response({...empty, now:'sede-anterior'})); });
   expect(screen.getByTestId('agenda')).toHaveTextContent(empty.now);
 });
 

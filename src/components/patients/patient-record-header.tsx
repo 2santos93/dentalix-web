@@ -1,8 +1,10 @@
 'use client';
 import Link from 'next/link';
 import * as React from 'react';
-import { Building2, ChevronLeft, MoreHorizontal, Pencil, ShieldCheck } from 'lucide-react';
+import { Building2, Check, ChevronLeft, Copy, MoreHorizontal, Pencil, ShieldCheck } from 'lucide-react';
+import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import type { Patient } from '@/lib/patients/patients-api';
+import type { RegionalFormat } from '@/lib/format/regional-format';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { ageFrom } from '@/lib/patients/age';
 import { displayPhone } from '@/lib/phone/display-phone';
@@ -18,7 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { RowAction } from '@/components/shared/row-actions';
 import { cn } from '@/lib/utils';
-import { OverdueChip } from '@/components/collections/overdue-chip';
+import { IncompleteBalanceChip, OverdueChip } from '@/components/collections/overdue-chip';
 import { CoverageChip } from '@/components/patients/coverage-chip';
 import { AgreementChip } from '@/components/patients/agreement-chip';
 import { agreementChipText } from '@/lib/patients/agreement-presentation';
@@ -67,6 +69,12 @@ const copy = {
   alertsFailed: 'Alertas sin comprobar',
   attendanceLoading: 'Comprobando inasistencias…',
   attendanceFailed: 'Asistencia sin comprobar',
+  // DX-484: el código estable del paciente (el ID del software de imagen).
+  codeLabel: 'Código',
+  copyCode: 'Copiar',
+  copyCodeAria: (code: string) => `Copiar el código del paciente ${code}`,
+  codeCopied: 'Código copiado',
+  codeCopyFailed: 'No se pudo copiar: selecciona el código y cópialo a mano.',
 };
 
 function fullName(patient: Patient): string {
@@ -98,7 +106,7 @@ function identityItems(patient: Patient): IdentityItem[] {
   return items;
 }
 
-/** Chip neutro de retención legal (con la frase completa al pasar o enfocar). */
+/** Chip neutro de retención (con la frase completa al pasar o enfocar). */
 export interface RetentionChip {
   text: string;
   hint: string | null;
@@ -115,7 +123,7 @@ interface PatientRecordHeaderProps {
    * el rol; sin ninguna, no hay menú.
    */
   menuActions?: RowAction[];
-  /** DX-039: retención legal como chip neutro; `null` = sin retención que contar. */
+  /** DX-039: retención como chip neutro; `null` = sin retención que contar. */
   retention?: RetentionChip | null;
   /**
    * DX-247: banderas médicas del paciente. La cabecera encabeza todas las
@@ -140,6 +148,8 @@ interface PatientRecordHeaderProps {
    * secundaria: una primaria por vista.
    */
   editPrimary?: boolean;
+  /** El formato de la sede de la pantalla para el importe del saldo vencido (DX-354); `null` → el chip sin importe. */
+  fmt: RegionalFormat | null;
 }
 
 /**
@@ -153,7 +163,7 @@ interface PatientRecordHeaderProps {
  * que la agenda, con su panel, y cada alerta como chip de peligro para leerla
  * sin abrir nada), el estado de la anamnesis («Sin anamnesis» una sola vez),
  * inasistencias, saldo vencido, cobertura, convenio y, al final y en neutro,
- * la retención legal. Todo lo demás que antes vivía encima de las pestañas
+ * la retención. Todo lo demás que antes vivía encima de las pestañas
  * (tarjeta de anamnesis, dos frases repetidas, el panel de retención con tres
  * botones) se fue a las pestañas o al menú: las pestañas quedan en el primer
  * viewport también en el móvil.
@@ -175,6 +185,7 @@ export function PatientRecordHeader({
   attendanceFailed = false,
   onRetryAttendance,
   editPrimary = true,
+  fmt,
 }: PatientRecordHeaderProps) {
   const items = patient ? identityItems(patient) : [];
   const alertSeverity = patient ? medicalAlertSeverity(medicalAlerts) : null;
@@ -197,6 +208,7 @@ export function PatientRecordHeader({
   const hasChips =
     !!patient &&
     (!!patient.balance?.hasOverdue ||
+      !!patient.balance?.incomplete ||
       !!coverageChipText(patient.coverage) ||
       !!agreementChipText(patient.agreement) ||
       !!alertSeverity ||
@@ -266,6 +278,7 @@ export function PatientRecordHeader({
               </ul>
             </div>
           ) : null}
+          {patient?.patientCode ? <PatientCodeItem code={patient.patientCode} /> : null}
           {/* Siempre visible, también mientras carga: es una propiedad de la
               ficha, no del paciente que se esté cargando. Mismo término que el
               selector de sede. Ninguna lectura de esta página filtra por sede
@@ -321,7 +334,9 @@ export function PatientRecordHeader({
           ) : null}
           <AttendanceBadge counts={attendance?.totals} />
           {/* DX-150: «Saldo vencido · N días» (importe solo ADMIN y RECEPTION). */}
-          {patient.balance?.hasOverdue ? <OverdueChip balance={patient.balance} /> : null}
+          {patient.balance?.hasOverdue ? <OverdueChip balance={patient.balance} fmt={fmt} /> : null}
+          {/* DX-472-bis: «Saldo con cifras incompletas» si no hay vencido que avise. */}
+          <IncompleteBalanceChip balance={patient.balance} />
           {/* DX-153: «Cobertura vencida». DX-105: «Convenio: X». */}
           <CoverageChip coverage={patient.coverage} />
           <AgreementChip agreement={patient.agreement} />
@@ -333,7 +348,53 @@ export function PatientRecordHeader({
 }
 
 /**
- * Retención legal (DX-039): un estado normal y esperado, así que va al final y
+ * DX-484: «Código 1042» con «Copiar». Copia SOLO el código (lo que se pega en
+ * el campo de ID del software de imagen), lo anuncia con educación y marca ✓
+ * unos 2 s. Si el navegador no deja copiar, lo dice y el código queda
+ * seleccionable a mano (`select-all`: un toque lo selecciona entero). Lo ven
+ * los cuatro roles: recepción también da de alta en el software de imagen.
+ */
+function PatientCodeItem({ code }: { code: string }) {
+  const { state, copy: copyText } = useCopyToClipboard();
+  const statusId = React.useId();
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-1.5 text-sm text-muted">
+        <span>{copy.codeLabel}</span>
+        <span data-testid="patient-code" className="t-id select-all text-ink">
+          {code}
+        </span>
+        <Tooltip content={copy.copyCode}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={copy.copyCodeAria(code)}
+            aria-describedby={state === 'failed' ? statusId : undefined}
+            onClick={() => void copyText(code)}
+            className="max-sm:min-h-11 max-sm:min-w-11"
+          >
+            {state === 'copied' ? <Check aria-hidden className="text-success-text" /> : <Copy aria-hidden />}
+          </Button>
+        </Tooltip>
+      </div>
+      {/* Siempre montada (vacía en reposo) para que el lector la anuncie al
+          llenarse. `aria-live` sin `role="status"`: la cabecera ya tiene sus
+          regiones de estado (alertas, inasistencias) y esta no es una carga. */}
+      <p
+        id={statusId}
+        data-testid="patient-code-status"
+        aria-live="polite"
+        className={cn('text-xs', state === 'failed' ? 'text-danger-text' : 'sr-only')}
+      >
+        {state === 'copied' ? copy.codeCopied : state === 'failed' ? copy.codeCopyFailed : ''}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Retención (DX-039): un estado normal y esperado, así que va al final y
  * en neutro. La frase con el plazo sale al pasar el ratón o al enfocarlo (el
  * chip es enfocable para que el teclado también la vea); la versión completa
  * está en la pestaña «Datos».
@@ -353,7 +414,7 @@ function RetentionBadge({ chip }: { chip: RetentionChip }) {
   return chip.hint ? <Tooltip content={chip.hint}>{badge}</Tooltip> : badge;
 }
 
-/** Menú «⋯» de la cabecera: las acciones raras o legales, fuera de la vista. */
+/** Menú «⋯» de la cabecera: las acciones raras o delicadas, fuera de la vista. */
 function HeaderMenu({ actions }: { actions: RowAction[] }) {
   return (
     <DropdownMenu>

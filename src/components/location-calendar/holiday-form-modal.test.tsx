@@ -19,6 +19,7 @@ const mayo: LocationHoliday = { id: 'hol-1', date: '2027-05-03', name: 'Fiesta l
 function renderModal(holiday?: LocationHoliday) {
   const onSaved = jest.fn();
   const onOpenChange = jest.fn();
+  const onShowExisting = jest.fn();
   render(
     <HolidayFormModal
       open
@@ -27,9 +28,10 @@ function renderModal(holiday?: LocationHoliday) {
       locationId="norte"
       holiday={holiday}
       onSaved={onSaved}
+      onShowExisting={onShowExisting}
     />,
   );
-  return { onSaved, onOpenChange };
+  return { onSaved, onOpenChange, onShowExisting };
 }
 
 /** La fecha es un `DatePicker` por segmentos: el primero (el día, en `es`) lleva foco e invalidez. */
@@ -79,7 +81,7 @@ describe('HolidayFormModal (DX-316, spec §7.2)', () => {
       }),
     );
     const user = setupUser();
-    const { onSaved, onOpenChange } = renderModal();
+    const { onSaved, onOpenChange, onShowExisting } = renderModal();
     await typeDate(user, copy.date, '2027-05-03');
     await user.type(nameInput(), 'Fiesta');
     await user.click(screen.getByRole('button', { name: copy.create }));
@@ -90,6 +92,20 @@ describe('HolidayFormModal (DX-316, spec §7.2)', () => {
     // Lo escrito se queda para corregirlo.
     expect(readDate(copy.date)).toBe('2027-05-03');
     expect(nameInput().value).toBe('Fiesta');
+    // DX-316-bis: el 409 trae holidayId: se ofrece ir al festivo que ocupa el día.
+    await user.click(screen.getByRole('button', { name: 'Ver el festivo existente' }));
+    expect(onShowExisting).toHaveBeenCalledWith('hol-7');
+  });
+
+  it('DX-316-bis: un 409 sin holidayId (tope de festivos) no ofrece «Ver el festivo existente»', async () => {
+    mockedCreate.mockRejectedValue(new ApiError(409, 'La sede tendría más de 1000 festivos.', { code: 'LOCATION_HOLIDAY_LIMIT' }));
+    const user = setupUser();
+    renderModal();
+    await typeDate(user, copy.date, '2027-05-03');
+    await user.type(nameInput(), 'Fiesta');
+    await user.click(screen.getByRole('button', { name: copy.create }));
+    expect(await screen.findByText('La sede tendría más de 1000 festivos.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ver el festivo existente' })).not.toBeInTheDocument();
   });
 
   it('a 400 with the class-validator array goes to the top of the modal', async () => {

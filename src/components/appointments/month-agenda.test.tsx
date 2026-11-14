@@ -68,6 +68,15 @@ it('en el teléfono (compact) cada cita es un punto: sin texto ni iconos en la c
   expect(within(day).getByRole('button', { name: /22 de octubre · 4 citas/ })).toBeInTheDocument();
 });
 
+it('DX-492: el chip lleva el sillón cuando lo tiene (y el título lo repite)', () => {
+  const withChair = { ...appointments[0], chair: { id: 'c1', name: 'Sillón 1', active: true } } as Appointment;
+  const { container } = render(<MonthAgenda clock={CLOCK} appointments={[withChair, appointments[3]]} monthDate="2026-10-22" selectedDate="2026-10-21" today="2026-10-21" onSelectDay={jest.fn()} loading={false} />);
+  const chairs = within(container as HTMLElement).getAllByTestId('month-appointment-chair');
+  expect(chairs).toHaveLength(1);
+  expect(chairs[0]).toHaveTextContent('Sillón 1');
+  expect(chairs[0].closest('[data-testid="month-appointment"]')).toHaveAttribute('title', expect.stringContaining('Sillón 1'));
+});
+
 it('la leyenda nombra cada tono con las etiquetas del mapa único', () => {
   render(<AgendaStatusLegend showAlert />);
   const legend = screen.getByRole('list', { name: 'Leyenda de estados' });

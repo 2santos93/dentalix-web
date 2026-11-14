@@ -1,6 +1,7 @@
 'use client';
 import { OverdueChip } from '@/components/collections/overdue-chip';
 import { AttendanceBadge } from '@/components/appointments/attendance-badge';
+import { attendanceBadgeText } from '@/lib/cancellations/cancellation';
 import { overdueChipText } from '@/lib/collections/presentation';
 import { CoverageMarker } from '@/components/patients/coverage-chip';
 import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
@@ -27,8 +28,9 @@ import {
   moveTarget,
   offsetFromMinute,
   type MinuteRange,
-  type MoveTarget,
+  type MovePatch,
 } from '@/lib/appointments/day-grid';
+import { canDragByChair, NO_CHAIR_COLUMN } from '@/lib/chairs/chair-columns';
 import { layoutLanes } from '@/lib/appointments/week-grid-layout';
 import {
   blockBandForDay,
@@ -39,7 +41,8 @@ import {
 } from '@/lib/appointments/schedule-blocks';
 import { appointmentTypeTextColor, isAppointmentTypeColor } from '@/lib/color/contrast';
 import { freeGaps } from '@/lib/appointments/opening-candidates';
-import { WANTS_EARLIER_LABEL, WantsEarlierChip } from '@/components/appointments/wants-earlier-chip';
+import { WantsEarlierChip, wantsEarlierText } from '@/components/appointments/wants-earlier-chip';
+import { OVERBOOKED_LABEL, OverbookedChip, showsOverbooked } from '@/components/appointments/overbooked-chip';
 import {
   STATUS_LABELS,
   patientLabel,
@@ -49,7 +52,11 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { cn } from '@/lib/utils';
+import { wallDay } from '@/lib/time/wall-clock';
 import { statusTone, TONE_CLASSES } from '@/lib/status/tones';
+
+/** DX-133-ter: por debajo de esto (64 px) la tarjeta no cabe en tres filas: tipo y estado van en la del nombre. */
+const COMPACT_CARD_MINUTES = 40;
 
 // Copy as constants (i18n-ready, es-first).
 const copy = {
@@ -60,13 +67,12 @@ const copy = {
   loading: 'Cargando agenda…',
   loadError: 'No pudimos cargar la agenda.',
   retry: 'Reintentar',
-  emptyColumn: 'Sin citas hoy',
+  emptyColumn: (isToday: boolean) => (isToday ? 'Sin citas hoy' : 'Sin citas este día'),
   newAppointment: 'Nueva cita',
   newAppointmentFor: (name: string) => `Nueva cita con ${name}`,
   moveTo: 'Mover a…',
   moveToFor: (patient: string) => `Mover a… la cita de ${patient}`,
-  detailFor: (range: string, patient: string, provider: string) =>
-    `Detalle de la cita de ${range} · ${patient} · ${provider}`,
+  detailFor: (provider: string) => `Detalle de la cita · ${provider}`,
   closedHours: 'Fuera del horario de la sede',
   providerOffHours: 'Fuera del horario del profesional en esta sede',
   providerNotHere: 'No atiende en esta sede este día',
@@ -77,8 +83,9 @@ const copy = {
   blockLegend: 'Horario bloqueado (vacaciones, reunión, almuerzo…)',
   blockRemove: (label: string) => `Quitar bloqueo: ${label}`,
   freeGap: 'Hueco libre',
+  // Empieza por el texto visible del botón («Hueco libre · rango»): label-in-name.
   freeGapFor: (range: string, provider: string) =>
-    `Ocupar el hueco libre de ${range} · ${provider}`,
+    `Hueco libre · ${range} · Ocupar con ${provider}`,
   fillCancelledFor: (range: string, patient: string) =>
     `Ocupar el hueco de la cita cancelada de ${range} · ${patient}`,
   fillCancelled: 'Ocupar este hueco',
@@ -110,10 +117,17 @@ interface DayColumnsProps {
   onSelectAppointment: (appointment: Appointment) => void;
   /** «Mover a…» (teclado / táctil): abre el modal de fecha, hora y profesional. */
   onMoveRequest: (appointment: Appointment) => void;
-  /** Arrastre soltado en un hueco distinto: el padre hace el PATCH (y el rollback). */
-  onDrop: (appointment: Appointment, target: MoveTarget) => void;
+  /**
+   * Arrastre soltado en un hueco distinto: el padre hace el PATCH (y el
+   * rollback). Por profesional llega el hueco entero; por sillón (DX-479),
+   * solo lo que cambia: `{ chairId }` si solo cambió de columna, el hueco con
+   * el MISMO profesional si cambió de hora, y ambos si las dos cosas.
+   */
+  onDrop: (appointment: Appointment, target: MovePatch) => void;
   /** «Nueva cita» de una columna, o clic en un hueco libre (con su hora). */
   onNewAppointment: (providerId: string, startTime?: string) => void;
+  /** DX-237: el siguiente paso del flujo en la tarjeta; lo decide el rol. */
+  renderFlowAction?: (appointment: Appointment) => React.ReactNode;
   /** Cita con un movimiento en curso (se marca `aria-busy`). */
   pendingId?: string | null;
   /** DX-122: bloqueos de agenda del día (de profesional o de toda la sede). */
@@ -146,9 +160,10 @@ interface DayColumnsProps {
   providerRanges?: Record<string, MinuteRangeDto[] | null>;
   /**
    * DX-211: columnas por SILLÓN en vez de por profesional (`providers` queda
-   * solo para nombrar al profesional de cada cita). Sin arrastre ni huecos
-   * libres por profesional; «Nueva cita» y el clic en un hueco pasan el id de
-   * la columna (el sillón, o la de «Sin sillón»).
+   * solo para nombrar al profesional de cada cita). Sin huecos libres por
+   * profesional; «Nueva cita» y el clic en un hueco pasan el id de la columna
+   * (el sillón, o la de «Sin sillón»). DX-479: se arrastra entre sillones y
+   * horas (solo lo agendado o confirmado); el profesional no cambia al soltar.
    */
   chairColumns?: { columns: { id: string; label: string }[]; columnOf: (a: Appointment) => string };
 }
@@ -161,7 +176,10 @@ interface DragState {
   /** Distancia del puntero al borde superior de la tarjeta al agarrarla. */
   grabOffsetY: number;
   started: boolean;
-  target: { providerId: string; minute: number } | null;
+  /** La columna (profesional o sillón) de la que salió la tarjeta. */
+  originColumnId: string;
+  /** La columna (profesional o sillón) y el minuto bajo el puntero. */
+  target: { columnId: string; minute: number } | null;
 }
 
 /** Fondo y texto de la tarjeta: el color del tipo (validado) o neutro. */
@@ -181,6 +199,26 @@ function cardColors(appointment: Appointment): React.CSSProperties | undefined {
  * escritorio, hasta 6 columnas sin scroll y de 7 a 12 con scroll interno (la
  * página nunca se desplaza en horizontal).
  */
+const ACTIVE_COLUMN_KEY = 'dentalix:agenda:active-column';
+
+/** El almacenamiento puede fallar (modo privado): entonces, la primera columna. */
+function readActiveColumn(): string | null {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage.getItem(ACTIVE_COLUMN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function saveActiveColumn(id: string | null): void {
+  try {
+    if (id) window.localStorage.setItem(ACTIVE_COLUMN_KEY, id);
+    else window.localStorage.removeItem(ACTIVE_COLUMN_KEY);
+  } catch {
+    // Solo es una comodidad: sin guardar, sigue funcionando.
+  }
+}
+
 export function DayColumns({
   date,
   clock,
@@ -188,6 +226,7 @@ export function DayColumns({
   appointments,
   hours,
   loading,
+  renderFlowAction,
   error,
   onRetry,
   canMove,
@@ -211,11 +250,17 @@ export function DayColumns({
     ? chairColumns.columns
     : providers.map((p) => ({ id: p.userId, label: p.fullName }));
   const columnOf = byChair ? chairColumns.columnOf : (a: Appointment) => a.providerId;
-  // DX-211: en la vista por sillón no se arrastra (porción siguiente); «Mover a…» sigue.
-  const canDrag = canMove && !byChair;
+  const canDrag = canMove;
+  /** DX-479: por sillón, solo lo agendado o confirmado; por profesional, como siempre. */
+  const canDragCard = (a: Appointment) => canDrag && (!byChair || canDragByChair(a.status));
   const [mountedAt] = useState(() => new Date());
   const now = nowProp ?? mountedAt;
-  const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
+  // DX-133: la columna elegida en el teléfono se recuerda al volver a la agenda.
+  const [activeProviderId, setActiveProviderId] = useState<string | null>(readActiveColumn);
+  const chooseColumn = (id: string | null) => {
+    setActiveProviderId(id);
+    saveActiveColumn(id);
+  };
   const [drag, setDrag] = useState<DragState | null>(null);
   const columnRefs = useRef(new Map<string, HTMLDivElement>());
   // Un arrastre que termina dispara también un `click` en la tarjeta: este
@@ -246,11 +291,11 @@ export function DayColumns({
     const visible = { start: spanStart, end: spanEnd };
 
     function locate(clientX: number, clientY: number) {
-      for (const [providerId, el] of columnRefs.current) {
+      for (const [columnId, el] of columnRefs.current) {
         const rect = el.getBoundingClientRect();
         if (clientX >= rect.left && clientX < rect.right) {
           const minute = minuteFromOffset(clientY - rect.top - current.grabOffsetY, visible);
-          return { providerId, minute };
+          return { columnId, minute };
         }
       }
       return null;
@@ -277,10 +322,19 @@ export function DayColumns({
       const target = current.target;
       if (!target) return;
       const a = current.appointment;
-      const unchanged =
-        target.providerId === a.providerId && target.minute === minuteOfDay(a.start, timeZone);
-      if (unchanged) return;
-      onDrop(a, moveTarget(a, date, target.minute, target.providerId, timeZone));
+      const sameColumn = target.columnId === current.originColumnId;
+      const sameMinute = target.minute === minuteOfDay(a.start, timeZone);
+      if (sameColumn && sameMinute) return;
+      if (!byChair) {
+        onDrop(a, moveTarget(a, date, target.minute, target.columnId, timeZone));
+        return;
+      }
+      // DX-479: por sillón, el profesional se queda; se manda solo lo que cambia.
+      const chairId = target.columnId === NO_CHAIR_COLUMN ? null : target.columnId;
+      onDrop(a, {
+        ...(sameMinute ? {} : moveTarget(a, date, target.minute, a.providerId, timeZone)),
+        ...(sameColumn ? {} : { chairId }),
+      });
     }
 
     function handleKey(e: KeyboardEvent) {
@@ -298,12 +352,12 @@ export function DayColumns({
       globalThis.removeEventListener('pointerup', handleUp);
       globalThis.removeEventListener('keydown', handleKey);
     };
-  }, [drag, date, onDrop, spanStart, spanEnd, timeZone]);
+  }, [drag, date, onDrop, spanStart, spanEnd, timeZone, byChair]);
 
   function startDrag(e: React.PointerEvent<HTMLDivElement>, appointment: Appointment) {
     // Solo ratón: en táctil el gesto es desplazar la página, y para eso está
     // «Mover a…». Solo botón principal.
-    if (!canDrag || e.pointerType !== 'mouse' || e.button !== 0) return;
+    if (!canDragCard(appointment) || e.pointerType !== 'mouse' || e.button !== 0) return;
     if ((e.target as HTMLElement).closest('[data-no-drag]')) return;
     const rect = e.currentTarget.getBoundingClientRect();
     setDrag({
@@ -313,6 +367,7 @@ export function DayColumns({
       originY: e.clientY,
       grabOffsetY: e.clientY - rect.top,
       started: false,
+      originColumnId: columnOf(appointment),
       target: null,
     });
   }
@@ -366,7 +421,7 @@ export function DayColumns({
         className="sm:hidden"
         aria-label={byChair ? copy.chairPicker : copy.providerPicker}
         value={active ?? ''}
-        onValueChange={setActiveProviderId}
+        onValueChange={chooseColumn}
         options={columns.map((c) => ({ value: c.id, label: c.label }))}
       />
 
@@ -439,7 +494,7 @@ export function DayColumns({
                 end: minuteOfDay(a.start, timeZone) + Math.max(durationMinutes(a), 5),
               })),
             );
-            const dragTarget = drag?.started && drag.target?.providerId === p.id ? drag.target : null;
+            const dragTarget = drag?.started && drag.target?.columnId === p.id ? drag.target : null;
             // Por sillón, solo los bloqueos de toda la sede (los de un
             // profesional no son de ningún sillón).
             const columnBlocks = blocks.filter((block) =>
@@ -589,16 +644,18 @@ export function DayColumns({
                 {columnAppointments.length === 0 && (
                   <div
                     className={cn(
-                      'absolute inset-x-2 flex flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-surface/90 px-3 py-4 text-center',
+                      // DX-133: no tapa los huecos: solo su botón recibe toques.
+                      'pointer-events-none absolute inset-x-2 flex flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-surface/90 px-3 py-4 text-center',
                       // Debajo de la etiqueta de un bloqueo, que va arriba a la izquierda.
                       columnBlocks.length > 0 ? 'top-9' : 'top-2',
                     )}
                   >
-                    <p className="text-sm text-muted">{copy.emptyColumn}</p>
+                    <p className="text-sm text-muted">{copy.emptyColumn(date === wallDay(now, timeZone))}</p>
                     <Button
                       type="button"
                       size="sm"
                       variant="secondary"
+                      className="pointer-events-auto"
                       aria-label={byChair ? copy.newAppointmentIn(p.label) : copy.newAppointmentFor(p.label)}
                       onClick={() => onNewAppointment(p.id)}
                     >
@@ -608,14 +665,35 @@ export function DayColumns({
                 )}
 
                 {laid.map(({ appointment: a, start, end, lane, laneCount }) => {
-                  const colors = cardColors(a);
                   const patient = patientLabel(a);
                   const range = sedeTimeRange(a.start, a.end, clock.of(a.locationId));
                   const dragging = drag?.started && drag.appointment.id === a.id;
                   const inactive = a.status === 'CANCELLED' || a.status === 'NO_SHOW';
+                  // Cancelada o no asistió: se apaga con relleno hundido y borde
+                  // discontinuo, nunca con opacidad (DESIGN.md): la opacidad bajaba
+                  // el texto y las insignias de dentro por debajo de AA.
+                  const colors = inactive ? undefined : cardColors(a);
                   const wantsEarlier = a.wantsEarlier && !inactive;
                   // DX-247: también en las citas de 15 min (24 px de alto).
                   const hasMedicalAlert = medicalAlertSeverity(a.medicalAlerts) !== null;
+                  const flowAction = end - start >= 25 ? renderFlowAction?.(a) : null;
+                  // DX-133-ter: hora + nombre + tipo piden 64 px (40 min a
+                  // PX_PER_MINUTE); en una cita más corta (la de 30 min mide
+                  // 48 px) la fila del tipo quedaba recortada. Ahí el punto de
+                  // estado y el tipo suben a la fila del nombre.
+                  const compact = end - start < COMPACT_CARD_MINUTES;
+                  const compactLabel = a.appointmentType?.name ?? STATUS_LABELS[a.status];
+                  const typeAndStatus = [a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ');
+                  const statusDot = (
+                    <span
+                      aria-hidden
+                      data-testid="day-column-status-dot"
+                      className={cn(
+                        'size-2 shrink-0 rounded-full ring-1 ring-surface',
+                        TONE_CLASSES[statusTone('appointment', a.status)].dot,
+                      )}
+                    />
+                  );
                   return (
                     <div
                       key={a.id}
@@ -624,14 +702,15 @@ export function DayColumns({
                       aria-busy={pendingId === a.id || undefined}
                       onPointerDown={(e) => startDrag(e, a)}
                       className={cn(
+                        '@container',
                         // Sin overflow-hidden aquí: lo lleva el contenido de
                         // dentro. Así la zona táctil de 44 px del icono de
                         // alerta (DX-247) no se recorta en las citas de 15 min.
                         'group absolute rounded-md border text-left',
                         !colors && 'border-border bg-surface-sunken text-ink',
-                        canDrag && 'cursor-grab active:cursor-grabbing',
+                        inactive && 'border-dashed',
+                        canDragCard(a) && 'cursor-grab active:cursor-grabbing',
                         (dragging || pendingId === a.id) && 'opacity-50',
-                        inactive && 'opacity-60',
                       )}
                       style={{
                         ...colors,
@@ -645,20 +724,28 @@ export function DayColumns({
                         <button
                           type="button"
                           aria-label={[
-                            copy.detailFor(range, patient, byChair ? providerName(a.providerId) : p.label),
-                            STATUS_LABELS[a.status],
+                            // Visible card words first; append supporting context after them.
+                            range,
+                            showsOverbooked(a) ? OVERBOOKED_LABEL : null,
+                            wantsEarlier ? wantsEarlierText(a) : null,
+                            patient,
                             a.appointmentType?.name,
-                            overdueChipText(a.balance),
+                            STATUS_LABELS[a.status],
+                            overdueChipText(a.balance, fmt),
+                            attendanceBadgeText(a.attendance),
+                            copy.detailFor(byChair ? providerName(a.providerId) : p.label),
                             coverageChipText(a.coverage),
                             medicalAlertSummary(a.medicalAlerts),
-                            wantsEarlier ? WANTS_EARLIER_LABEL : null,
                           ]
                             .filter(Boolean)
                             .join(' · ')}
                           onClick={() => handleCardClick(a)}
                           className={cn(
-                            'flex h-full w-full flex-col items-start gap-0.5 px-2 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
+                            // DX-180: el anillo es de la tinta de la tarjeta: `ring-primary` desaparecía
+                            // cuando el tipo tiene el color de la clínica.
+                            'flex h-full w-full flex-col items-start gap-0.5 px-2 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-current',
                             hasMedicalAlert ? 'pr-[4.5rem]' : 'pr-8',
+                            flowAction && (hasMedicalAlert ? '@[14rem]:pr-[6.25rem]' : '@[11rem]:pr-16 max-sm:pr-[5.5rem]'),
                           )}
                         >
                           {/* La hora y el nombre no se encogen: en una cita corta
@@ -667,31 +754,54 @@ export function DayColumns({
                               vencida (DX-153) van en la fila de la hora para
                               seguir viéndose en las citas de 30 min. */}
                           <span className="flex w-full min-w-0 shrink-0 items-center gap-1.5">
-                            <span className="shrink-0 text-xs font-medium tabular-nums">{range}</span>
-                            <WantsEarlierChip wantsEarlier={wantsEarlier} className="min-w-0 py-0" />
+                            <span className="shrink-0 text-xs font-medium tabular-nums">{range}</span>{' '}
+                            {/* DX-509: solo mientras es sobrecupo. */}
+                            <OverbookedChip overbooked={a.overbooked} status={a.status} className="min-w-0 py-0" />{' '}
+                            <WantsEarlierChip
+                              wantsEarlier={wantsEarlier}
+                              earlierWindow={a.earlierWindow}
+                              earlierRequestedAt={a.earlierRequestedAt}
+                              className="min-w-0 py-0"
+                            />
                             <CoverageMarker coverage={a.coverage} />
-                          </span>
-                          <span
-                            className={cn('w-full shrink-0 truncate text-sm font-semibold', inactive && 'line-through')}
-                          >
-                            {patient}
-                          </span>
+                          </span>{' '}
+                          {compact ? (
+                            // DX-133-ter: en la compacta, tipo (o estado) detrás
+                            // del nombre en su fila, la más ancha; el nombre no
+                            // cede sitio, el tipo trunca. Orden visible = orden
+                            // del nombre accesible (hora · paciente · tipo).
+                            <span className="flex w-full min-w-0 shrink-0 items-center gap-1.5">
+                              <span
+                                className={cn(
+                                  'max-w-full shrink-0 truncate text-sm font-semibold',
+                                  inactive && 'line-through',
+                                )}
+                              >
+                                {patient}
+                              </span>{' '}
+                              {statusDot}
+                              <span data-testid="day-column-type" title={compactLabel} className="min-w-0 truncate text-xs">
+                                {compactLabel}
+                              </span>
+                            </span>
+                          ) : (
+                            <span
+                              className={cn('w-full shrink-0 truncate text-sm font-semibold', inactive && 'line-through')}
+                            >
+                              {patient}
+                            </span>
+                          )}{' '}
                           {/* El fondo es el color del tipo; el estado, su punto de
                               tono (nunca el acento) + la etiqueta. */}
-                          <span className="flex w-full min-w-0 items-center gap-1.5 text-xs">
-                            <span
-                              aria-hidden
-                              data-testid="day-column-status-dot"
-                              className={cn(
-                                'size-2 shrink-0 rounded-full ring-1 ring-surface',
-                                TONE_CLASSES[statusTone('appointment', a.status)].dot,
-                              )}
-                            />
-                            <span className="min-w-0 truncate">
-                              {[a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ')}
+                          {compact ? null : (
+                            <span className="flex w-full min-w-0 items-center gap-1.5 text-xs">
+                              {statusDot}
+                              <span data-testid="day-column-type" title={typeAndStatus} className="min-w-0 truncate">
+                                {typeAndStatus}
+                              </span>
                             </span>
-                          </span>
-                          <OverdueChip balance={a.balance} compact />
+                          )}{' '}
+                          <OverdueChip balance={a.balance} compact fmt={fmt} />{' '}
                           {/* DX-279: inasistencias y cancelaciones tardías (12 meses). */}
                           <AttendanceBadge counts={a.attendance} compact />
                         </button>
@@ -705,8 +815,25 @@ export function DayColumns({
                         <MedicalAlertIndicator
                           flags={a.medicalAlerts}
                           patientName={patient}
-                          className="absolute right-11 top-0.5 z-10"
+                          className={cn('absolute right-11 top-0.5 z-10', flowAction && '@[14rem]:right-[4.75rem]')}
                         />
+                      ) : null}
+                      {flowAction ? (
+                        // DX-237: sin arrastre desde aquí; ni desde su diálogo de
+                        // salida, que por React también burbujea a la tarjeta. En una
+                        // tarjeta estrecha o de menos de 25 min, solo en el detalle. Con
+                        // alerta médica (también «Sin anamnesis») pide 224 px: su zona táctil llega a
+                        // 109 px del borde derecho y, más estrecha, taparía el centro de la tarjeta.
+                        <div
+                          data-no-drag
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className={cn(
+                            'absolute right-8 top-1 z-10 hidden max-sm:right-[3.25rem]',
+                            hasMedicalAlert ? '@[14rem]:block' : '@[11rem]:block',
+                          )}
+                        >
+                          {flowAction}
+                        </div>
                       ) : null}
                       {fills && a.status === 'CANCELLED' && new Date(a.end) > now ? (
                         <button
@@ -721,7 +848,7 @@ export function DayColumns({
                             // la rodea tiene su propio botón.
                             onFillOpening?.(p.id, { start: a.start, end: a.end }, a.locationId)
                           }
-                          className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-md bg-surface text-primary-text shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
+                          className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-md bg-surface text-primary-text shadow-sm max-sm:after:absolute max-sm:after:-inset-2 max-sm:after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                         >
                           <UserPlus className="size-4" aria-hidden />
                         </button>
@@ -732,7 +859,7 @@ export function DayColumns({
                           aria-label={copy.moveToFor(patient)}
                           title={copy.moveTo}
                           onClick={() => onMoveRequest(a)}
-                          className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-md bg-surface/90 text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
+                          className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-md bg-surface/90 text-ink max-sm:after:absolute max-sm:after:-inset-2 max-sm:after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-current"
                         >
                           <MoveRight className="size-4" aria-hidden />
                         </button>
@@ -751,7 +878,11 @@ export function DayColumns({
                       height: Math.max(durationMinutes(drag.appointment) * PX_PER_MINUTE, 24),
                     }}
                   >
-                    {copy.dragPreview(sedeMinute(dragTarget.minute, fmt), providerName(dragTarget.providerId))}
+                    {/* DX-479: por sillón, la columna destino es el sillón (o «Sin sillón»). */}
+                    {copy.dragPreview(
+                      sedeMinute(dragTarget.minute, fmt),
+                      byChair ? p.label : providerName(dragTarget.columnId),
+                    )}
                   </div>
                 )}
               </div>

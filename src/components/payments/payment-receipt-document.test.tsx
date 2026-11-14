@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { PaymentReceiptDocument } from './payment-receipt-document';
 import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
 import type { PaymentReceipt } from '@/lib/payments/payment-receipts-api';
+import { setClinicCurrencyTexts } from '@/lib/format/clinic-currency-texts';
 
 function text(node: HTMLElement): string {
   return (node.textContent ?? '').replace(/\s/g, ' ');
@@ -14,14 +15,14 @@ it('lleva el número, la clínica y la sede, el paciente enmascarado, el abono, 
   const doc = screen.getByTestId('receipt-document');
   expect(doc).toHaveTextContent('N.º NOR-000123');
   expect(doc).toHaveTextContent('Clínica Sonrisas');
-  expect(doc).toHaveTextContent('Sede Norte · Calle 100 # 15-20');
+  expect(doc).toHaveTextContent('Sede Norte · Av. Libertador 100');
   expect(doc).toHaveTextContent('Carolina Duque');
   expect(doc).toHaveTextContent('ID local ******5678');
-  expect(text(doc)).toContain('150.000,00 COP');
+  expect(text(doc)).toContain('150.000,00 USD');
   expect(doc).toHaveTextContent('Efectivo');
   expect(doc).toHaveTextContent('17/10/2026');
   expect(doc).toHaveTextContent('Opción A: implante');
-  expect(text(doc)).toContain('450.000,00 COP');
+  expect(text(doc)).toContain('450.000,00 USD');
   expect(doc).toHaveTextContent('Rita Recepción');
   expect(doc).toHaveTextContent('Este documento no es factura');
   expect(screen.queryByText(/anulado/i)).not.toBeInTheDocument();
@@ -44,19 +45,37 @@ it('con datos fiscales muestra razón social, identificación fiscal y direcció
           fiscalDataPending: false,
           clinic: {
             name: 'Clínica Sonrisas',
-            legalName: 'Sonrisas S.A.S.',
-            taxId: '900123456-7',
-            address: 'Cra 7 # 72-10, Bogotá',
+            legalName: 'Sonrisas C.A.',
+            taxId: 'J-12345678-9',
+            address: 'Av. Urdaneta 72, Caracas',
           },
         },
       }}
     />,
   );
   const doc = screen.getByTestId('receipt-document');
-  expect(doc).toHaveTextContent('Sonrisas S.A.S.');
-  expect(doc).toHaveTextContent('Id. fiscal 900123456-7');
-  expect(doc).toHaveTextContent('Cra 7 # 72-10, Bogotá');
+  expect(doc).toHaveTextContent('Sonrisas C.A.');
+  expect(doc).toHaveTextContent('Id. fiscal J-12345678-9');
+  expect(doc).toHaveTextContent('Av. Urdaneta 72, Caracas');
   expect(screen.queryByText('Datos fiscales pendientes')).not.toBeInTheDocument();
+});
+
+it('DX-019: el identificador sale con el nombre que le dio la clínica, congelado en la foto', () => {
+  const receipt = paymentReceiptFixture();
+  render(
+    <PaymentReceiptDocument
+      receipt={{
+        ...receipt,
+        snapshot: {
+          ...receipt.snapshot,
+          fiscalDataPending: false,
+          clinic: { name: 'Clínica Sonrisas', legalName: 'Sonrisas S.A.', taxId: 'J-1', taxIdLabel: 'ID fiscal', address: null },
+        },
+      }}
+    />,
+  );
+  expect(screen.getByTestId('receipt-document')).toHaveTextContent('Sonrisas S.A. · ID fiscal J-1');
+  expect(screen.getByTestId('receipt-document')).not.toHaveTextContent('Id. fiscal');
 });
 
 it('un abono anulado conserva su número y sale marcado ANULADO con motivo y fecha', () => {
@@ -184,7 +203,13 @@ describe('DX-376: abono en otra moneda', () => {
   };
   const FROZEN: PaymentReceipt['exchangeRate'] = {
     status: 'FROZEN',
-    rate: { currency: 'USD', fromPerBase: 36.5, toPerBase: 1, source: 'MANUAL', date: '2026-10-29' },
+    rate: {
+      currency: 'USD',
+      fromPerBase: 36.5,
+      toPerBase: 1,
+      source: 'MANUAL',
+      date: '2026-10-17',
+    },
     equivalentAmount: 50,
   };
 
@@ -194,19 +219,37 @@ describe('DX-376: abono en otra moneda', () => {
     expect(doc).toContain('1825,00 VES');
     expect(doc).toContain('Equivalente en USD');
     expect(doc).toContain('50,00 USD');
-    expect(doc).toContain('Tasa aplicada: 1 USD = 36,50 VES (manual, 29/10/2026)');
+    expect(doc).toContain('Tasa aplicada: 1 USD = 36,50 VES (manual, 17/10/2026)');
   });
 
   it('la tasa sale de la congelada del abono: con otra tasa congelada imprime otra (reimprimir no la recalcula)', () => {
     const other: PaymentReceipt['exchangeRate'] = {
       status: 'FROZEN',
-      rate: { currency: 'USD', fromPerBase: 40, toPerBase: 1, source: 'AUTOMATIC', date: '2026-10-30' },
+      rate: {
+        currency: 'USD',
+        fromPerBase: 40,
+        toPerBase: 1,
+        source: 'AUTOMATIC',
+        date: '2026-10-17',
+      },
       equivalentAmount: 45.63,
     };
     render(<PaymentReceiptDocument receipt={inVes(other)} />);
     const doc = text(screen.getByTestId('receipt-document'));
-    expect(doc).toContain('Tasa aplicada: 1 USD = 40,00 VES (automática, 30/10/2026)');
+    expect(doc).toContain('Tasa aplicada: 1 USD = 40,00 VES (automática, 17/10/2026)');
     expect(doc).toContain('45,63 USD');
+  });
+
+  // DX-384: la clínica no registró la tasa del día del abono y se usó la última, de un día anterior.
+  it('si la tasa es de un día anterior al del abono dice «tasa del …» en el formato de la sede', () => {
+    const earlier: PaymentReceipt['exchangeRate'] = {
+      ...FROZEN,
+      rate: { ...FROZEN.rate!, date: '2026-10-16' },
+    };
+    render(<PaymentReceiptDocument receipt={inVes(earlier)} />);
+    const doc = text(screen.getByTestId('receipt-document'));
+    expect(doc).toContain('Tasa aplicada: 1 USD = 36,50 VES (manual, tasa del 16/10/2026)');
+    expect(doc).toContain('Fecha del abono17/10/2026');
   });
 
   it('un abono «sin tasa» lo dice en lugar de la tasa y el equivalente', () => {
@@ -272,19 +315,19 @@ describe('DX-390: cobro dividido', () => {
       <PaymentReceiptDocument
         receipt={paymentReceiptFixture({
           split: {
-            lines: [line(1, 50, 'USD', 200000), line(2, 100000, 'COP', 100000)],
-            total: { currency: 'COP', amount: 300000 },
+            lines: [line(1, 50, 'USD', 200000), line(2, 100000, 'VES', 100000)],
+            total: { currency: 'VES', amount: 300000 },
           },
         })}
       />,
     );
     const doc = screen.getByTestId('receipt-document');
-    expect(text(doc)).toContain('Total en COP');
-    expect(text(doc)).toContain('300.000,00 COP');
+    expect(text(doc)).toContain('Total en VES');
+    expect(text(doc)).toContain('300.000,00 VES');
     const lines = screen.getByTestId('receipt-split-lines');
     expect(lines.querySelectorAll('li')).toHaveLength(2);
     expect(text(lines)).toContain('Efectivo');
-    expect(text(lines)).toContain('equivale a 200.000,00 COP');
+    expect(text(lines)).toContain('equivale a 200.000,00 VES');
     expect(text(lines)).toContain('Pago móvil · Referencia PM-77');
     // El «Valor» de un abono suelto no sale.
     expect(screen.queryByText('Valor')).not.toBeInTheDocument();
@@ -295,8 +338,8 @@ describe('DX-390: cobro dividido', () => {
       <PaymentReceiptDocument
         receipt={paymentReceiptFixture({
           split: {
-            lines: [line(1, 50, 'USD', null), line(2, 100000, 'COP', 100000)],
-            total: { currency: 'COP', amount: null },
+            lines: [line(1, 50, 'USD', null), line(2, 100000, 'VES', 100000)],
+            total: { currency: 'VES', amount: null },
           },
         })}
       />,
@@ -331,4 +374,141 @@ it.each([
   const doc = text(screen.getByTestId('receipt-document'));
   for (const figure of shown) expect(doc).toMatch(figure);
   expect(/\d,\d\d\b/.test(doc)).toBe(cents);
+});
+
+describe('DX-516: ajustes por medio de pago', () => {
+  const tax = {
+    type: 'TAX' as const,
+    label: 'Impuesto 3 %',
+    calculation: 'PERCENT' as const,
+    percent: 3,
+    fixedAmount: null,
+    base: 150000,
+    amount: 4500,
+    currency: 'USD',
+  };
+  const discount = {
+    type: 'DISCOUNT' as const,
+    label: 'Descuento efectivo',
+    calculation: 'FIXED' as const,
+    percent: null,
+    fixedAmount: 1000,
+    base: 150000,
+    amount: 1000,
+    currency: 'USD',
+  };
+
+  it('sin ajustes no pinta la sección (el recibo de siempre)', () => {
+    render(<PaymentReceiptDocument receipt={paymentReceiptFixture()} />);
+    expect(screen.queryByTestId('receipt-adjustments')).not.toBeInTheDocument();
+    expect(screen.queryByText('Total cobrado')).not.toBeInTheDocument();
+  });
+
+  it.each(['a4', '80mm'] as const)('%s: cada ajuste con su tipo, base e importe, y el total cobrado', (format) => {
+    const base = paymentReceiptFixture();
+    render(
+      <PaymentReceiptDocument
+        format={format}
+        receipt={{
+          ...base,
+          snapshot: {
+            ...base.snapshot,
+            payment: { ...base.snapshot.payment, amount: 150000, currency: 'USD', adjustments: [tax, discount] },
+          },
+        }}
+      />,
+    );
+    const block = screen.getByTestId('receipt-adjustments');
+    expect(text(block)).toContain('Impuesto 3 % · Impuesto · 3 % de 150.000,00 USD');
+    expect(text(block)).toContain('+4500,00 USD');
+    expect(text(block)).toContain('Descuento efectivo · Descuento · Importe fijo');
+    expect(text(block)).toContain('−1000,00 USD');
+    expect(text(block)).toContain('Total cobrado153.500,00 USD');
+  });
+
+  it('cobro dividido: cada forma de pago lleva los ajustes de su medio', () => {
+    render(
+      <PaymentReceiptDocument
+        receipt={paymentReceiptFixture({
+          split: {
+            lines: [
+              {
+                paymentId: 'pay-1',
+                line: 1,
+                amount: 150000,
+                currency: 'USD',
+                method: 'CASH',
+                paymentMethodName: 'Efectivo',
+                reference: null,
+                equivalentAmount: 150000,
+                exchangeRate: null,
+                adjustments: [tax],
+              },
+              {
+                paymentId: 'pay-2',
+                line: 2,
+                amount: 50000,
+                currency: 'USD',
+                method: 'CARD',
+                paymentMethodName: 'Tarjeta',
+                reference: null,
+                equivalentAmount: 50000,
+                exchangeRate: null,
+              },
+            ],
+            total: { currency: 'USD', amount: 200000 },
+          },
+        })}
+      />,
+    );
+    const lines = screen.getByTestId('receipt-split-lines');
+    expect(text(lines)).toContain('Impuesto 3 %');
+    expect(text(lines)).toContain('154.500,00 USD');
+    expect(screen.getAllByText('Total cobrado')).toHaveLength(1);
+  });
+
+  it('los importes del ajuste usan el texto de moneda congelado en la foto (DX-517)', () => {
+    const base = paymentReceiptFixture();
+    render(
+      <PaymentReceiptDocument
+        receipt={{
+          ...base,
+          snapshot: {
+            ...base.snapshot,
+            currencyTexts: { USD: 'Dól.' },
+            payment: { ...base.snapshot.payment, amount: 150000, currency: 'USD', adjustments: [tax] },
+          },
+        }}
+      />,
+    );
+    const block = text(screen.getByTestId('receipt-adjustments'));
+    expect(block).toContain('+4500,00 Dól.');
+    expect(block).toContain('154.500,00 Dól.');
+    expect(block).not.toContain('USD');
+  });
+});
+
+describe('texto propio de cada moneda (DX-517)', () => {
+  afterEach(() => setClinicCurrencyTexts({}));
+
+  it('los importes usan el texto congelado en la foto del recibo', () => {
+    const receipt = paymentReceiptFixture();
+    render(
+      <PaymentReceiptDocument
+        receipt={{ ...receipt, snapshot: { ...receipt.snapshot, currencyTexts: { USD: 'Dól.' } } }}
+      />,
+    );
+    const doc = screen.getByTestId('receipt-document');
+    expect(text(doc)).toContain('150.000,00 Dól.');
+    expect(text(doc)).toContain('450.000,00 Dól.');
+    expect(text(doc)).not.toContain('USD');
+  });
+
+  it('un recibo emitido sin textos se reimprime igual aunque la clínica los configure después', () => {
+    setClinicCurrencyTexts({ USD: 'Dól.' });
+    render(<PaymentReceiptDocument receipt={paymentReceiptFixture()} />);
+    const doc = screen.getByTestId('receipt-document');
+    expect(text(doc)).toContain('150.000,00 USD');
+    expect(text(doc)).not.toContain('Dól.');
+  });
 });

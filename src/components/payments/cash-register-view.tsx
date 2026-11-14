@@ -27,8 +27,9 @@ import {
 import {
   PAYMENT_METHOD_LABELS,
 } from '@/lib/payments/payment-method';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate, formatDate } from '@/lib/format/date';
+import { useSedeStamp, type SedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
+import { PAYMENT_ADJUSTMENT_TYPE_LABELS, signedAdjustmentAmount } from '@/lib/payments/payment-adjustments';
 import { readyTimeZone, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -37,15 +38,23 @@ import { DateRangePicker } from '@/components/ui/date-picker';
 import { NativeSelect } from '@/components/ui/native-select';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
+import { Callout } from '@/components/ui/callout';
 import { Pagination } from '@/components/shared/pagination';
 import { PageHeader } from '@/components/shared/page-header';
 import { ResultCount } from '@/components/shared/list-toolbar';
 import { InlineError } from '@/components/errors/inline-error';
+import { SplitPaymentBadge, splitPaymentLabel } from './split-payment-badge';
 import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
+import { paymentProofViewerCopy, usePaymentProofViewer } from '@/components/payments/payment-proof-viewer';
 import { useVoidPayment, voidPaymentSubject } from '@/components/payments/use-void-payment';
+import {
+  ExternalInvoiceModal,
+  externalInvoiceCopy,
+  type ExternalInvoiceTarget,
+} from '@/components/payments/external-invoice-modal';
 import { getTokenAllowedLocationIds, getTokenRole } from '@/lib/auth/token-role';
 import { cn } from '@/lib/utils';
 
@@ -74,6 +83,17 @@ const copy = {
   mediumInactive: (name: string) => `${name} (inactivo)`,
   mediumsError: 'No cargaron los medios',
   methodNone: 'Sin método',
+  // DX-516: ajustes por medio de pago.
+  collectedRow: (amount: string) => `Cobrado ${amount}`,
+  adjustmentsTitle: 'Ajustes por medio de pago',
+  adjustmentsCount: (n: number) => (n === 1 ? '1 ajuste' : `${n} ajustes`),
+  collectedTitle: 'Cobrado (abonos ± ajustes)',
+  collectedHint: 'lo que entró',
+  // DX-515: abonos con o sin el nº de la factura fiscal emitida fuera.
+  invoiceLabel: 'Factura externa',
+  invoiceAll: 'Con y sin factura externa',
+  invoiceWith: 'Con nº de factura externa',
+  invoiceWithout: 'Sin nº de factura externa',
   // DX-395: la caja del período en CSV, con medio y referencia.
   export: 'Exportar CSV',
   exportError: 'No pudimos exportar la caja.',
@@ -100,7 +120,7 @@ const copy = {
   receiptAction: 'Recibo',
   // El «⋯» de cada fila: «Acciones de abono de Ana Gómez».
   rowLabel: (patient: string) => `abono de ${patient}`,
-  planLabel: (createdAt: string) => `Plan del ${formatDate(createdAt)}`,
+  planLabel: (createdAt: string) => `Plan del ${createdAt}`,
   // DX-262: abono contra el saldo migrado (sin plan).
   openingLabel: (concept: string) => (concept ? `Saldo migrado · ${concept}` : 'Saldo migrado'),
   // Sin "Intenta de nuevo." — alimenta AsyncSection -> SectionError, que trae su propio botón.
@@ -120,9 +140,19 @@ const copy = {
   periodNote: (days: string) => `${days} · días según la hora de la sede`,
   periodDays: (from: string, to: string) => (from === to ? from : `del ${from} al ${to}`),
   registeredOn: (date: string) => `Registrado el ${date}`,
+  // SEC-043: con arqueo ciego, recepción no ve los abonos de cajas abiertas.
+  blindTitle: 'Arqueo ciego: los abonos de las cajas abiertas van sin importe',
+  blindHint:
+    'Salen en la lista para que puedas ver su recibo o anularlos desde «⋯», pero sin importe, y el resumen y el CSV no los suman: así nadie sabe lo esperado antes de contar. Las cifras vuelven al cerrar la caja.',
+  // SEC-043: el importe de una fila de una caja abierta con arqueo ciego.
+  amountHidden: 'Oculto durante el arqueo',
   empty: 'No hay abonos en este período.',
   emptyHint: 'Prueba con otro rango de fechas o con otro medio de pago.',
+  invoiceSubject: (patient: string, amount: string) => `${patient} · ${amount}`,
 };
+
+/** DX-515: filtro por nº de factura externa (`ALL` = no viaja). */
+type InvoiceFilter = 'ALL' | 'WITH' | 'WITHOUT';
 
 type PeriodChoice = CashPreset | 'custom';
 /** `ALL` o el id de un medio de pago de la clínica (DX-395). */
@@ -171,6 +201,8 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
   // atajos muestran `SedeConfigError` (el rango personalizado no la necesita).
   const zone = useSedeTimeZone(token);
   const timeZone = readyTimeZone(zone);
+  // DX-354b (DX-517-bis): cada abono con la fecha, la hora y el importe de SU sede (`payment.location.id`),
+  // también con «Todas las sedes»; el resumen y el rango, con la sede de la pantalla. Cargando, «—».
   const [period, setPeriod] = useState<PeriodChoice>('today');
   // El rango que se CONSULTA. Con un atajo sale del día de la sede (y se
   // recalcula si cambia la sede); en personalizado se copia de los campos solo
@@ -187,6 +219,8 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
     to: '',
   });
   const [medium, setMedium] = useState<MediumFilter>(ALL_MEDIUMS);
+  const [invoice, setInvoice] = useState<InvoiceFilter>('ALL');
+  const [invoiceTarget, setInvoiceTarget] = useState<ExternalInvoiceTarget | null>(null);
   // DX-395: todos los medios de la clínica, también los desactivados (sus
   // abonos anteriores siguen en la caja).
   const mediums = usePaymentMethods(token, true, { includeInactive: true });
@@ -195,6 +229,11 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
   const [page, setPage] = useState(1);
   const [data, setData] = useState<CashPaymentsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  // DX-354b (DX-517-bis): cada abono con la fecha y el importe de SU sede (`payment.location.id`), también con
+  // «Todas las sedes»; el resumen y el rango, con la sede de la pantalla. Cargando, «—».
+  const stamp = useSedeStamp(token, data?.items.map((payment) => payment.location.id));
+  const fmt = stamp.fmt;
+  const money = (amount: number, code: string) => stamp.money(amount, code);
   const [loadError, setLoadError] = useState<string | null>(null);
   // Un 403 no es un fallo que se arregle reintentando: va aparte del error de
   // carga, como aviso sin botón.
@@ -204,9 +243,11 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
   // Anular (DX-057): «Anular» solo sale en las filas con `canVoid` (lo calcula
   // la API para quien consulta); tras anular se recarga la caja, que solo
   // lista abonos activos, y con ella el resumen.
-  const voiding = useVoidPayment(token, () => setReloadKey((k) => k + 1));
+  const voiding = useVoidPayment(token, () => setReloadKey((k) => k + 1), fmt);
   // Recibo de caja (DX-136): ver, reimprimir o enviar el de cualquier fila.
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
+  // DX-389: «Ver comprobante» del abono (la caja es de ADMIN y recepción).
+  const proofViewer = usePaymentProofViewer(token);
 
   const rangeFrom = range?.from;
   const rangeTo = range?.to;
@@ -222,6 +263,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
           from,
           to,
           ...(medium !== ALL_MEDIUMS ? { paymentMethodId: medium } : {}),
+          ...(invoice !== 'ALL' ? { externalInvoice: invoice } : {}),
           page,
         };
         const res = await listCashPayments(token, params);
@@ -251,7 +293,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [token, rangeFrom, rangeTo, medium, page, reloadKey]);
+  }, [token, rangeFrom, rangeTo, medium, invoice, page, reloadKey]);
 
   // Cada cambio de filtro vuelve a la página 1 en el MISMO render que el
   // filtro (React agrupa los dos `set`), así que sale una sola petición.
@@ -281,10 +323,15 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
     setPage(1);
   }
 
+  function changeInvoice(next: InvoiceFilter) {
+    setInvoice(next);
+    setPage(1);
+  }
+
   // DX-395: la caja del período en CSV, con los mismos filtros que la tabla.
   // El reintento cierra sobre el período y el medio que se exportaban: es la
   // operación que se repite, no estado de la pantalla.
-  async function exportCsv(from: string, to: string, mediumId: MediumFilter) {
+  async function exportCsv(from: string, to: string, mediumId: MediumFilter, invoiceFilter: InvoiceFilter) {
     setExporting(true);
     setExportNotice('');
     try {
@@ -292,12 +339,13 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
         from,
         to,
         ...(mediumId !== ALL_MEDIUMS ? { paymentMethodId: mediumId } : {}),
+        ...(invoiceFilter !== 'ALL' ? { externalInvoice: invoiceFilter } : {}),
       });
       saveCsv(text, copy.csvFileName(from, to), { bom: true });
       setExportNotice(copy.exported);
     } catch (err) {
       notifyError(apiErrorMessage(err, { fallback: copy.exportError }), {
-        onRetry: () => void exportCsv(from, to, mediumId),
+        onRetry: () => void exportCsv(from, to, mediumId, invoiceFilter),
       });
     } finally {
       setExporting(false);
@@ -320,11 +368,11 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
       header: copy.colDate,
       cell: (payment) => (
         <span className="tabular-nums">
-          {formatCivilDate(payment.paidOn)}
-          <RegisteredNote payment={payment} />
+          {stamp.civilDate(payment.paidOn, payment.location.id)}
+          <RegisteredNote payment={payment} stamp={stamp} />
         </span>
       ),
-      mobileCell: (payment) => formatCivilDate(payment.paidOn),
+      mobileCell: (payment) => stamp.maybe.civilDate(payment.paidOn, payment.location.id),
     },
     {
       id: 'patient',
@@ -342,8 +390,8 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
     {
       id: 'target',
       header: copy.colPlan,
-      cell: (payment) => <span className="text-muted">{targetLabel(payment)}</span>,
-      mobileCell: targetLabel,
+      cell: (payment) => <span className="text-muted">{targetLabel(payment, stamp)}</span>,
+      mobileCell: (payment) => targetLabel(payment, stamp),
     },
     {
       id: 'method',
@@ -360,6 +408,13 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
           {payment.reference ? (
             <span className="t-caption mt-1 block font-mono text-muted">{copy.referenceLabel(payment.reference)}</span>
           ) : null}
+          {/* DX-414: las líneas de un cobro dividido, juntas por su recibo único. */}
+          <SplitPaymentBadge splitLines={payment.splitLines} receiptNumber={payment.receiptNumber} />
+          {payment.externalInvoiceNumber ? (
+            <span className="t-caption mt-1 block break-all font-mono text-muted">
+              {externalInvoiceCopy.inline(payment.externalInvoiceNumber)}
+            </span>
+          ) : null}
         </>
       ),
       // En el teléfono, el medio y su referencia (la que se busca al cuadrar).
@@ -367,6 +422,8 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
         [
           payment.method ? (payment.paymentMethod?.name ?? PAYMENT_METHOD_LABELS[payment.method]) : null,
           payment.reference ? copy.referenceLabel(payment.reference) : null,
+          payment.externalInvoiceNumber ? externalInvoiceCopy.inline(payment.externalInvoiceNumber) : null,
+          splitPaymentLabel(payment),
         ]
           .filter(Boolean)
           .join(' · ') || null,
@@ -385,14 +442,28 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
       header: copy.colAmount,
       numeric: true,
       mobile: 'trailing',
-      cell: (payment) => (
-        <span className="font-medium text-ink">{formatCurrency(payment.amount, payment.currency)}</span>
-      ),
+      cell: (payment) =>
+        payment.amountHidden || payment.amount === null || payment.currency === null ? (
+          <span className="text-sm text-muted" data-testid="amount-hidden">
+            {copy.amountHidden}
+          </span>
+        ) : (
+        <span className="flex flex-col items-end">
+          <span className="font-medium text-ink">{stamp.money(payment.amount, payment.currency, payment.location.id)}</span>
+          {/* DX-516: con ajustes por medio de pago, lo que entró de verdad. */}
+          {payment.adjustments.length > 0 ? (
+            <span className="t-caption text-muted tabular-nums">
+              {copy.collectedRow(stamp.money(payment.collectedAmount ?? payment.amount, payment.currency, payment.location.id))}
+            </span>
+          ) : null}
+        </span>
+        ),
     },
   ];
 
   return (
     <>
+      <SedeStampNote stamp={stamp} />
       <PageHeader
         title={copy.title}
         description={copy.description}
@@ -467,11 +538,23 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
             </NativeSelect>
           )}
 
+          <NativeSelect
+            aria-label={copy.invoiceLabel}
+            value={invoice}
+            onChange={(e) => changeInvoice(e.target.value as InvoiceFilter)}
+            className="sm:w-60"
+            selectClassName="max-sm:h-11"
+          >
+            <option value="ALL">{copy.invoiceAll}</option>
+            <option value="WITH">{copy.invoiceWith}</option>
+            <option value="WITHOUT">{copy.invoiceWithout}</option>
+          </NativeSelect>
+
           {/* La acción del listado cierra la barra, a la derecha (DESIGN.md). */}
           <Button
             type="button"
             variant="secondary"
-            onClick={() => range && void exportCsv(range.from, range.to, medium)}
+            onClick={() => range && void exportCsv(range.from, range.to, medium, invoice)}
             disabled={!range || customError !== null || forbidden}
             loading={exporting}
             className="max-sm:min-h-11 max-sm:w-full sm:ml-auto"
@@ -484,7 +567,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
 
         {range && timeZone && customError === null ? (
           <p className="text-sm text-muted tabular-nums" data-testid="cash-period-note" title={timeZone}>
-            {copy.periodNote(copy.periodDays(formatCivilDate(range.from), formatCivilDate(range.to)))}
+            {copy.periodNote(copy.periodDays(stamp.civilDate(range.from), stamp.civilDate(range.to)))}
           </p>
         ) : null}
 
@@ -511,6 +594,12 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
           <SedeConfigError kind="timeZone" description={zone.message} onRetry={zone.retry} />
         ) : showResults ? (
           <>
+            {!loading && !loadError && data?.blindHidden ? (
+              <Callout tone="info" title={copy.blindTitle} data-testid="cash-blind-hidden">
+                {copy.blindHint}
+              </Callout>
+            ) : null}
+
             {!loading && !loadError && data ? (
               <ResultCount
                 total={data.total}
@@ -528,7 +617,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
               emptyDescription={copy.emptyHint}
               skeleton={<TableSkeleton rows={4} />}
             >
-              {data ? <CashSummary summary={data.summary} /> : null}
+              {data ? <CashSummary summary={data.summary} money={money} /> : null}
 
               {/* Tabla desde \`sm\`; en el teléfono, tarjeta de dos líneas
                   (paciente + monto / fecha · método · destino · sede). Recibo
@@ -542,6 +631,23 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                 getRowLabel={(payment) => copy.rowLabel(payment.patient.fullName)}
                 rowActions={(payment) => [
                   { label: copy.receiptAction, onSelect: () => setReceiptPaymentId(payment.id) },
+                  ...(payment.hasProof
+                    ? [{ label: paymentProofViewerCopy.action, onSelect: () => proofViewer.open(payment.id) }]
+                    : []),
+                  {
+                    label: externalInvoiceCopy.action,
+                    onSelect: () =>
+                      setInvoiceTarget({
+                        paymentId: payment.id,
+                        subject: copy.invoiceSubject(
+                          payment.patient.fullName,
+                          payment.amount !== null && payment.currency !== null
+                            ? stamp.money(payment.amount, payment.currency, payment.location.id)
+                            : stamp.civilDate(payment.paidOn, payment.location.id),
+                        ),
+                        externalInvoiceNumber: payment.externalInvoiceNumber,
+                      }),
+                  },
                   ...(payment.canVoid
                     ? [
                         {
@@ -556,6 +662,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                               paidOn: payment.paidOn,
                               patientName: payment.patient.fullName,
                               splitLines: payment.splitLines,
+                              fmt: stamp.fmtOf(payment.location.id),
                             }),
                         },
                       ]
@@ -577,12 +684,26 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
         ) : null}
       </div>
 
+      {proofViewer.dialog}
+
       <PaymentReceiptDialog
         token={token}
         paymentId={receiptPaymentId}
+        hasProof={data?.items.find((p) => p.id === receiptPaymentId)?.hasProof ?? false}
         onOpenChange={(open) => {
           if (!open) setReceiptPaymentId(null);
         }}
+      />
+
+      {/* DX-515: `key` por abono; al guardar se recarga (el filtro puede sacarlo). */}
+      <ExternalInvoiceModal
+        key={invoiceTarget?.paymentId ?? 'no-invoice-target'}
+        token={token}
+        target={invoiceTarget}
+        onOpenChange={(open) => {
+          if (!open) setInvoiceTarget(null);
+        }}
+        onSaved={() => setReloadKey((k) => k + 1)}
       />
 
       {/* `key` por abono: cada anulación empieza con el motivo en blanco. */}
@@ -597,7 +718,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
         error={voiding.error}
         // Pinta el aviso de la ventana de recepción; la regla la aplica la API.
         restrictedToOwnToday={getTokenRole(token) !== 'ADMIN'}
-        subject={voiding.target ? voidPaymentSubject(voiding.target) : undefined}
+        subject={voiding.target ? voidPaymentSubject(voiding.target, fmt) : undefined}
         splitLines={voiding.target?.splitLines ?? undefined}
       />
     </>
@@ -605,9 +726,9 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
 }
 
 /** A qué fue el abono: un plan o un saldo migrado (QA D2). */
-function targetLabel(payment: CashPayment): string {
+function targetLabel(payment: CashPayment, stamp: SedeStamp): string {
   return payment.treatmentPlan
-    ? copy.planLabel(payment.treatmentPlan.createdAt)
+    ? copy.planLabel(stamp.date(payment.treatmentPlan.createdAt, payment.location.id))
     : copy.openingLabel(payment.openingBalance?.concept ?? '');
 }
 
@@ -622,13 +743,13 @@ function mediumOptionLabel(medium: ClinicPaymentMethod): string {
  * abono con fecha de pago antigua: la regla mira el día de registro en la sede,
  * y ese día (`registeredOn`, `registeredToday`) lo calcula la API.
  */
-function RegisteredNote({ payment }: { payment: CashPayment }) {
+function RegisteredNote({ payment, stamp }: { payment: CashPayment; stamp: SedeStamp }) {
   if (payment.registeredOn === payment.paidOn) return null;
   return (
     <span className="t-caption block font-normal text-muted">
       {payment.registeredToday
         ? copy.registeredToday
-        : copy.registeredOn(formatCivilDate(`${payment.registeredOn}T00:00:00.000Z`))}
+        : copy.registeredOn(stamp.civilDate(payment.registeredOn, payment.location.id))}
     </span>
   );
 }
@@ -662,7 +783,13 @@ function ScopeMarker({
  * patrón "número grande / etiqueta pequeña" como estructura. En móvil las dos
  * columnas se apilan.
  */
-function CashSummary({ summary }: { summary: CashPaymentsResponse['summary'] }) {
+function CashSummary({
+  summary,
+  money,
+}: {
+  summary: CashPaymentsResponse['summary'];
+  money: (amount: number, code: string) => string;
+}) {
   const headingId = React.useId();
   return (
     <section aria-labelledby={headingId} className="rounded-xl border border-border bg-surface">
@@ -678,7 +805,7 @@ function CashSummary({ summary }: { summary: CashPaymentsResponse['summary'] }) 
               key={row.currency}
               label={row.currency}
               meta={copy.paymentsCount(row.count)}
-              value={formatCurrency(row.total, row.currency)}
+              value={money(row.total, row.currency)}
             />
           ))}
         </SummaryList>
@@ -689,11 +816,36 @@ function CashSummary({ summary }: { summary: CashPaymentsResponse['summary'] }) 
               key={`${row.paymentMethodId ?? 'none'}-${row.currency}`}
               label={row.name ?? copy.methodNone}
               meta={`${row.currency} · ${copy.paymentsCount(row.count)}`}
-              value={formatCurrency(row.total, row.currency)}
+              value={money(row.total, row.currency)}
             />
           ))}
         </SummaryList>
       </div>
+      {/* DX-516: solo si el período tiene ajustes por medio de pago. */}
+      {summary.adjustments.length > 0 ? (
+        <div className="grid gap-0 border-t border-border-subtle sm:grid-cols-2 sm:divide-x sm:divide-border-subtle">
+          <SummaryList label={copy.adjustmentsTitle}>
+            {summary.adjustments.map((row) => (
+              <SummaryRow
+                key={`${row.currency}-${row.type}`}
+                label={PAYMENT_ADJUSTMENT_TYPE_LABELS[row.type]}
+                meta={`${row.currency} · ${copy.adjustmentsCount(row.count)}`}
+                value={signedAdjustmentAmount({ type: row.type, amount: row.total, currency: row.currency }, money)}
+              />
+            ))}
+          </SummaryList>
+          <SummaryList label={copy.collectedTitle} className="max-sm:border-t max-sm:border-border-subtle">
+            {summary.collected.map((row) => (
+              <SummaryRow
+                key={row.currency}
+                label={row.currency}
+                meta={copy.collectedHint}
+                value={money(row.total, row.currency)}
+              />
+            ))}
+          </SummaryList>
+        </div>
+      ) : null}
     </section>
   );
 }

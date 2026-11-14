@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ChevronRight, Plus } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
-import { useSessionLocations } from '@/lib/locations/session-locations';
+import { useSessionLocations } from '@/lib/session/session-store';
 import { countryName } from '@/lib/locations/countries';
 import { locationCurrency, locationTimeZone } from '@/lib/locations/location-settings';
 import { canonicalLocale, HOUR_CYCLE_LABELS, isHourCycle } from '@/lib/locations/regional-settings';
@@ -225,7 +225,7 @@ export function LocationsList({
                     size="sm"
                     onClick={() => openModal(location)}
                     aria-label={needsRegionalReview(location) ? copy.reviewFor(location.name) : copy.editFor(location.name)}
-                    className="max-sm:min-h-11"
+                    className="border-border-input max-sm:min-h-11"
                   >
                     {needsRegionalReview(location) ? copy.review : copy.edit}
                   </Button>

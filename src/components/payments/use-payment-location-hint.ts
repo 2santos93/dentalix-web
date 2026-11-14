@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { loadLocations } from '@/lib/session/session-store';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { paymentLocationHint } from '@/lib/payments/payment-location';
 import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
@@ -20,7 +21,7 @@ export function usePaymentLocationHint(token: string, active: boolean): string |
     // La sede activa vive en localStorage, que solo existe en el cliente: se
     // lee junto con la lista, dentro del `.then` (mismo criterio que el plan
     // de tratamiento).
-    listLocations(token)
+    loadLocations(token)
       .then((data) => {
         if (cancelled) return;
         setLocations(data ?? []);

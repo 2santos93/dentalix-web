@@ -1,3 +1,5 @@
+import { getCheckoutChecklist } from '@/lib/appointments/checkout-checklist';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
@@ -14,6 +16,10 @@ import type { ClinicRole } from '@/lib/me/me-api';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
 
+jest.mock('../../lib/appointments/checkout-checklist', () => ({
+  ...jest.requireActual('../../lib/appointments/checkout-checklist'),
+  getCheckoutChecklist: jest.fn(),
+}));
 jest.mock('../../lib/appointments/patient-flow', () => ({
   ...jest.requireActual('../../lib/appointments/patient-flow'),
   getInClinic: jest.fn(),
@@ -42,10 +48,12 @@ function item(overrides: Partial<InClinicItem> & { appointmentId: string }): InC
     patientLastName: 'Ríos',
     providerId: 'dent-1',
     providerName: 'Dra. Lina',
-    start: '2026-10-19T14:00:00.000Z',
-    end: '2026-10-19T14:30:00.000Z',
+    chairId: null,
+    chair: null,
+    start: '2026-10-19T13:00:00.000Z',
+    end: '2026-10-19T13:30:00.000Z',
     status: 'ARRIVED',
-    arrivedAt: '2026-10-19T13:50:00.000Z',
+    arrivedAt: '2026-10-19T12:50:00.000Z',
     seatedAt: null,
     readyForCheckoutAt: null,
     minutesInStatus: 12,
@@ -72,10 +80,10 @@ function view(overrides: Partial<InClinicView> = {}): InClinicView {
   return {
     date: '2026-10-19',
     locationId: 'loc-1',
-    timeZone: 'America/Bogota',
+    timeZone: 'America/Caracas',
     locale: 'de-DE',
     hourCycle: 'h23',
-    now: '2026-10-19T14:02:00.000Z',
+    now: '2026-10-19T13:02:00.000Z',
     scope: 'LOCATION',
     waiting: [],
     inChair: [],
@@ -88,13 +96,76 @@ function view(overrides: Partial<InClinicView> = {}): InClinicView {
 function Harness({ role }: { role: ClinicRole }) {
   const state = useInClinic('T');
   const runner = usePatientFlow('T', state.reload);
-  return <InClinicPanel state={state} role={role} runner={runner} />;
+  return (
+    <>
+      <InClinicPanel state={state} role={role} runner={runner} />
+      {runner.overbookDialog}
+    </>
+  );
 }
 
 function staticState(overrides: Partial<InClinicState>): InClinicState {
   return { view: null, loading: false, error: null, localeMissing: null, noLocation: false, reload: jest.fn(), ...overrides };
 }
 const noRunner = { pendingId: null, run: jest.fn() };
+
+describe('InClinicPanel: sillón y «Mover a…» (DX-492)', () => {
+  const chair = { id: 'ch-1', name: 'Sillón 1', active: true };
+  const seated = item({ appointmentId: 'a1', chairId: 'ch-1', chair });
+
+  it('muestra el sillón de quien lo tiene y nada de quien no', () => {
+    render(
+      <InClinicPanel
+        state={staticState({ view: view({ waiting: [seated, item({ appointmentId: 'a2' })] }) })}
+        role="RECEPTION"
+        runner={noRunner}
+      />,
+    );
+    const chairs = screen.getAllByTestId('in-clinic-chair');
+    expect(chairs).toHaveLength(1);
+    expect(chairs[0]).toHaveTextContent('Sillón 1');
+  });
+
+  it('un sillón desactivado se dice', () => {
+    render(
+      <InClinicPanel
+        state={staticState({
+          view: view({ waiting: [{ ...seated, chair: { ...chair, active: false } }] }),
+        })}
+        role="RECEPTION"
+        runner={noRunner}
+      />,
+    );
+    expect(screen.getByTestId('in-clinic-chair')).toHaveTextContent('Sillón 1 (inactivo)');
+  });
+
+  it('DX-538-bis: el fallo de un paso se pinta junto a esa cita, dentro de la hoja', () => {
+    const failing = {
+      pendingId: null,
+      run: jest.fn(),
+      error: { appointmentId: 'a2', message: 'La cita ya cambió de estado.', retry: null },
+    };
+    render(
+      <InClinicPanel
+        state={staticState({ view: view({ waiting: [seated, item({ appointmentId: 'a2' })] }) })}
+        role="RECEPTION"
+        runner={failing}
+      />,
+    );
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByRole('alert')).toHaveTextContent('La cita ya cambió de estado.');
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
+  });
+
+  it('«Mover a…» solo con sesión', () => {
+    const state = staticState({ view: view({ waiting: [seated] }) });
+    const name = /Mover a… la cita de Ana Ríos/;
+    const { rerender } = render(<InClinicPanel state={state} role="RECEPTION" runner={noRunner} />);
+    expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    rerender(<InClinicPanel state={state} role="RECEPTION" runner={noRunner} token="T" />);
+    expect(screen.getByRole('button', { name })).toBeInTheDocument();
+  });
+});
 
 describe('InClinicPanel (DX-200)', () => {
   beforeEach(() => {
@@ -112,7 +183,7 @@ describe('InClinicPanel (DX-200)', () => {
             patientFirstName: 'Berta',
             punctuality: 'LATE',
             minutesInStatus: 4,
-            arrivedAt: '2026-10-19T14:03:00.000Z',
+            arrivedAt: '2026-10-19T13:03:00.000Z',
           }),
         ],
         inChair: [item({ appointmentId: 'a3', status: 'IN_CHAIR', punctuality: 'VERY_LATE', minutesInStatus: 2 })],
@@ -151,9 +222,9 @@ describe('InClinicPanel (DX-200)', () => {
                 walkIn: true,
                 punctuality: 'LATE',
                 minutesInStatus: 3,
-                arrivedAt: '2026-10-19T14:03:00.000Z',
+                arrivedAt: '2026-10-19T13:03:00.000Z',
               }),
-              item({ appointmentId: 'n1', patientFirstName: 'Berta', punctuality: 'LATE', arrivedAt: '2026-10-19T14:03:00.000Z' }),
+              item({ appointmentId: 'n1', patientFirstName: 'Berta', punctuality: 'LATE', arrivedAt: '2026-10-19T13:03:00.000Z' }),
             ],
           }),
         })}
@@ -217,6 +288,7 @@ describe('InClinicPanel (DX-200)', () => {
     expect(screen.getByText('Cita 3:00 p. m. · Dra. Lina')).toBeInTheDocument();
     expect(screen.getByText('Llegó 2:55 p. m. · a tiempo')).toBeInTheDocument();
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
     render(
       <InClinicPanel
         state={staticState({ view: view({ timeZone: 'Asia/Tokyo', locale: 'ja-JP', hourCycle: 'h23', waiting }) })}
@@ -465,8 +537,20 @@ describe('InClinicPanel (DX-200)', () => {
   it('DX-242: completar la última cita lleva foco al encabezado de su grupo', async () => {
     mockedGet.mockResolvedValueOnce(view({ readyForCheckout: [item({ appointmentId:'last', status:'READY_FOR_CHECKOUT' })] })).mockResolvedValueOnce(view());
     mockedUpdate.mockResolvedValue({} as never);
+    jest.mocked(getCheckoutChecklist).mockResolvedValue({
+      appointmentId: 'last',
+      patientId: 'p1',
+      nextAppointmentStart: null,
+      recallDueOn: '2027-01-01',
+      hasPhone: true,
+      hasEmail: true,
+      remindersOptedOut: false,
+      recallTypes: [],
+      balance: { hasOverdue: false, overdueDays: null },
+    });
     render(<Harness role="RECEPTION"/>);
     await userEvent.click(await screen.findByRole('button', {name:'Completar'}));
+    await userEvent.click(await screen.findByRole('button', {name:'Completar la cita'}));
     await waitFor(() => expect(within(screen.getByTestId('in-clinic-group-readyForCheckout')).getByRole('heading')).toHaveFocus());
     expect(document.body).not.toHaveFocus();
   });
@@ -478,7 +562,7 @@ describe('InClinicPanel (DX-200)', () => {
     expect(screen.getByRole('link', {name:'Abrir a pantalla completa'})).toHaveAttribute('href','/agenda/en-clinica');
   });
 
-  it('«Deshacer llegada» usa su ruta; un 409 avisa con Reintentar y relee', async () => {
+  it('«Deshacer llegada» usa su ruta; un 409 avisa sin Reintentar (DX-538-bis: daría lo mismo) y relee', async () => {
     mockedGet.mockResolvedValue(view({ waiting: [item({ appointmentId: 'a1' })] }));
     mockedUndo.mockRejectedValue(
       new ApiError(409, 'Solo se deshace la llegada de un paciente en espera.', undefined),
@@ -488,9 +572,77 @@ describe('InClinicPanel (DX-200)', () => {
     expect(mockedUndo).toHaveBeenCalledWith('T', 'a1');
     expect(toast.error).toHaveBeenCalledWith(
       'Solo se deshace la llegada de un paciente en espera.',
-      expect.objectContaining({ action: expect.objectContaining({ label: 'Reintentar' }) }),
+      expect.objectContaining({ action: undefined }),
     );
     await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
+  });
+
+  describe('«Deshacer llegada» de una urgencia en sobrecupo (DX-509)', () => {
+    const SLOT_TAKEN = () =>
+      apiErrorFromBody(
+        409,
+        {
+          statusCode: 409,
+          code: 'OVERBOOK_SLOT_TAKEN',
+          canKeepOverbooked: true,
+          message:
+            'Esta urgencia se atendió en sobrecupo y su hora ya la ocupa otra cita del profesional. Muévela a otra hora o mantenla como sobrecupo.',
+        },
+        null,
+      );
+
+    it('su hora ocupada: pregunta; «Mantener en sobrecupo» reintenta con keepOverbooked y relee', async () => {
+      mockedGet.mockResolvedValue(
+        view({ waiting: [item({ appointmentId: 'a1', walkIn: true, urgent: true, overbooked: true })] }),
+      );
+      mockedUndo.mockRejectedValueOnce(SLOT_TAKEN()).mockResolvedValueOnce({} as never);
+      render(<Harness role="RECEPTION" />);
+      await userEvent.click(await screen.findByRole('button', { name: 'Deshacer llegada' }));
+
+      const dialog = await screen.findByRole('dialog', { name: 'Su hora ya está ocupada' });
+      expect(dialog).toHaveTextContent('su hora ya la ocupa otra cita del profesional');
+      // No es un fallo en segundo plano: sin toast de error.
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(mockedUndo).toHaveBeenCalledTimes(1);
+      // El intento rechazado ya releyó el panel (como cualquier paso).
+      await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
+
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Mantener en sobrecupo' }));
+      await waitFor(() => expect(mockedUndo).toHaveBeenLastCalledWith('T', 'a1', { keepOverbooked: true }));
+      await waitFor(() =>
+        expect(screen.queryByRole('dialog', { name: 'Su hora ya está ocupada' })).not.toBeInTheDocument(),
+      );
+      expect(toast.success).toHaveBeenCalledWith('Se deshizo la llegada de Ana Ríos. Sigue en sobrecupo.');
+      await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(3));
+    });
+
+    it('«Volver» no cambia nada', async () => {
+      mockedGet.mockResolvedValue(
+        view({ waiting: [item({ appointmentId: 'a1', walkIn: true, urgent: true, overbooked: true })] }),
+      );
+      mockedUndo.mockRejectedValueOnce(SLOT_TAKEN());
+      render(<Harness role="RECEPTION" />);
+      await userEvent.click(await screen.findByRole('button', { name: 'Deshacer llegada' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Su hora ya está ocupada' });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Volver' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(mockedUndo).toHaveBeenCalledTimes(1);
+    });
+
+    it('si mantenerla también falla, el diálogo lo dice y sigue abierto', async () => {
+      mockedGet.mockResolvedValue(
+        view({ waiting: [item({ appointmentId: 'a1', walkIn: true, urgent: true, overbooked: true })] }),
+      );
+      mockedUndo
+        .mockRejectedValueOnce(SLOT_TAKEN())
+        .mockRejectedValueOnce(new ApiError(409, 'La cita cambió mientras tanto.', {}));
+      render(<Harness role="RECEPTION" />);
+      await userEvent.click(await screen.findByRole('button', { name: 'Deshacer llegada' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Su hora ya está ocupada' });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Mantener en sobrecupo' }));
+      expect(await within(dialog).findByText('La cita cambió mientras tanto.')).toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Su hora ya está ocupada' })).toBeInTheDocument();
+    });
   });
 
   it('un refresco que falla con datos en pantalla los conserva (aviso en segundo plano)', () => {
@@ -551,6 +703,7 @@ describe('InClinicPanel (DX-200)', () => {
         expect.anything(),
       );
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
       await act(async () => {
         jest.advanceTimersByTime(5 * 45_000);
       });

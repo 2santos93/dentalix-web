@@ -141,20 +141,18 @@ export function validStatusReason(reason: string): boolean {
   return n >= STATUS_REASON_MIN && n <= STATUS_REASON_MAX;
 }
 
-/** `YYYY-MM-DD` → `dd/mm/aaaa`. */
-function civilLabel(day: string): string {
-  const [y, m, d] = day.split('-');
-  return `${d}/${m}/${y}`;
-}
-
 /**
  * Qué pasó con el mínimo de la visita siguiente al sacar la cita de
  * «Completada»: una frase por visita afectada (vacío si no hay ninguna).
  */
-export function completedExitSummary(exit: Pick<CompletedExit, 'visitMinimums'>): string[] {
+export function completedExitSummary(
+  exit: Pick<CompletedExit, 'visitMinimums'>,
+  /** El pintor de un día civil con el formato de la sede de la cita (DX-354b): «—» sin formato. */
+  civilDate: (day: string) => string,
+): string[] {
   return exit.visitMinimums.map((v) => {
     const after = v.minimumDayAfter
-      ? `desde el ${civilLabel(v.minimumDayAfter)} (última cita que sigue completada)`
+      ? `desde el ${civilDate(v.minimumDayAfter)} (última cita que sigue completada)`
       : 'desde hoy: ya no queda ninguna cita completada de la visita anterior';
     return `Visita ${v.visit}: ahora se puede agendar ${after}.`;
   });

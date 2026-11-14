@@ -9,6 +9,7 @@ import {
   updateLocationHealthRegistration,
   type ClinicLocation,
 } from '@/lib/locations/locations-api';
+import { invalidateLocations } from '@/lib/session/session-store';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -110,6 +111,8 @@ export function LocationRegistrationForm({
         showHealthRegistrationNumber: draft.show,
       });
       const next = { ...location, ...updated };
+      // FE-031: las demás vistas leen las sedes de la caché de la sesión.
+      invalidateLocations();
       onSaved(next);
       commit(savedDraft(next));
       toast.success(copy.saved(location.name));

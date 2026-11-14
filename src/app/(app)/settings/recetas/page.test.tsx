@@ -65,10 +65,11 @@ describe('Ajustes › Recetas (DX-324)', () => {
     },
   );
 
-  it('without a session goes to /login', () => {
+  // DX-117 (FE-020): mandar a /login es cosa de `RequireSession` (layout).
+  it('without a session renders nothing and leaves the redirect to RequireSession', () => {
     useAuthStore.setState({ accessToken: null, _hasHydrated: true });
     render(<PrescriptionSettingsPage />);
-    expect(replace).toHaveBeenCalledWith('/login');
+    expect(replace).not.toHaveBeenCalled();
     expect(formRendered).not.toHaveBeenCalled();
   });
 });

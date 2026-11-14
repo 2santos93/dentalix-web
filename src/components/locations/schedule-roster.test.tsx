@@ -31,8 +31,8 @@ const roster: Roster = {
   to: '2026-10-25',
   locationId: null,
   locations: [
-    { id: A, name: 'Sede A', timeZone: 'America/Bogota' },
-    { id: B, name: 'Sede B', timeZone: 'America/Bogota' },
+    { id: A, name: 'Sede A', timeZone: 'America/Caracas' },
+    { id: B, name: 'Sede B', timeZone: 'America/Caracas' },
   ],
   providers: [
     {
@@ -87,5 +87,34 @@ describe('ScheduleRoster', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar el cuadrante.');
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(await screen.findByRole('region', { name: 'Dra. Ximena' })).toBeInTheDocument();
+  });
+
+  describe('«hoy» (DX-546 · FE-114)', () => {
+    it('el día de hoy se dice con texto y con aria-current="date", no solo con color', async () => {
+      const { container } = render(<ScheduleRoster token="tok" today="2026-10-22" />);
+      const ximena = await screen.findByRole('region', { name: 'Dra. Ximena' });
+      const jueves = within(ximena).getByRole('group', { name: /jueves/i });
+      expect(jueves).toHaveAttribute('aria-current', 'date');
+      expect(jueves).toHaveAccessibleName(/hoy/i);
+      // En el teléfono, la etiqueta del día de la fila lo dice; desde lg, la cabecera.
+      expect(within(jueves).getByText(/hoy/i)).toBeInTheDocument();
+      const lunes = within(ximena).getByRole('group', { name: /lunes/i });
+      expect(lunes).not.toHaveAttribute('aria-current');
+      expect(lunes).not.toHaveAccessibleName(/hoy/i);
+      const header = container.querySelector<HTMLElement>('[data-roster-today]');
+      expect(header).not.toBeNull();
+      expect(header).toHaveTextContent(/hoy/i);
+    });
+
+    it('el texto de «hoy» va en primary-text (contraste AA), nunca en text-primary', async () => {
+      const { container } = render(<ScheduleRoster token="tok" today="2026-10-22" />);
+      await screen.findByRole('region', { name: 'Dra. Ximena' });
+      const header = container.querySelector<HTMLElement>('[data-roster-today]')!;
+      const classes = header.className.split(/\s+/);
+      expect(classes).toContain('text-primary-text');
+      expect(classes).toContain('font-semibold');
+      expect(classes).not.toContain('text-primary');
+      expect(container.innerHTML).not.toMatch(/(?:^|[\s"])text-primary(?=[\s"])/);
+    });
   });
 });

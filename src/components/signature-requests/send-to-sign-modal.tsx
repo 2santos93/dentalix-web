@@ -11,7 +11,6 @@ import {
 } from '@/lib/signature-requests/signature-requests-api';
 import { PLAN_STATUS_LABELS } from '@/lib/treatment-plans/plan-status';
 import { actorRoleLabel } from '@/lib/audit/audit-labels';
-import { formatCivilDate } from '@/lib/format/date';
 import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 import type { SedeClock } from '@/lib/locations/sede-clock';
 import {
@@ -55,8 +54,15 @@ const copy = {
   planHint: 'Los procedimientos del plan aparecen en el apartado de tratamiento del documento.',
   noPlans: 'Este paciente no tiene planes de tratamiento.',
   noPlanWarning: 'Sin plan, el documento dirá «No especificado» en el tratamiento.',
-  planOption: (plan: SignatureRequestOptions['plans'][number]) =>
-    [plan.optionLabel, PLAN_STATUS_LABELS[plan.status], formatCivilDate(plan.createdAt)].filter(Boolean).join(' · '),
+  // DX-354b: el día de creación (un instante) en la zona y el formato de la sede de la pantalla; sin ella, «—».
+  planOption: (plan: SignatureRequestOptions['plans'][number], clock: SedeClock | null) =>
+    [
+      plan.optionLabel,
+      PLAN_STATUS_LABELS[plan.status],
+      clock ? clock.fmt.date(new Date(plan.createdAt), clock.timeZone) : NO_SEDE_FORMAT,
+    ]
+      .filter(Boolean)
+      .join(' · '),
   recipientHeading: 'Destinatario',
   channel: 'Por correo electrónico',
   toPatient: (to: string, name: string) => `${to} · firma ${name} (paciente)`,
@@ -277,7 +283,7 @@ export function SendToSignModal({ open, onOpenChange, token, patientId, userId, 
                 <option value="">{copy.planNone}</option>
                 {options.plans.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {copy.planOption(p)}
+                    {copy.planOption(p, clock)}
                   </option>
                 ))}
               </NativeSelect>

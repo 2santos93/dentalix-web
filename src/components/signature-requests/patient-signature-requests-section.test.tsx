@@ -108,6 +108,14 @@ describe('PatientSignatureRequestsSection (DX-243)', () => {
     mockedRevoke.mockReset();
   });
 
+  it('DX-441: un presupuesto enviado a aceptar no sale aquí ni cuenta para el vacío', async () => {
+    mockedList.mockResolvedValue([request({ id: 'sr-b', type: 'BUDGET', title: 'Presupuesto de corona' })]);
+    render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-recep" />);
+    await waitFor(() => expect(mockedList).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('Presupuesto de corona')).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /anular/i })).not.toBeInTheDocument();
+  });
+
   it('carga con esqueleto, y vacía enseña qué hacer (icono y pista de acción)', async () => {
     mockedList.mockResolvedValue([]);
     render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);

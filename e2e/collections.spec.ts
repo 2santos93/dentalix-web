@@ -69,7 +69,7 @@ test.beforeAll(async ({ request }) => {
 });
 
 /**
- * Un paciente con un plan de 400.000 COP en dos cuotas mensuales desde hace
+ * Un paciente con un plan de 400.000 USD en dos cuotas mensuales desde hace
  * 400 días: saldo vencido de más de 90 días.
  */
 async function seedDebtor(
@@ -82,8 +82,8 @@ async function seedDebtor(
     docType: 'NATIONAL_ID',
     docNumber: p.doc.slice(0, 20),
     sex: 'F',
-    phone: '300 555 0177',
-    countryCode: 'CO',
+    phone: '412 555 0177',
+    countryCode: 'VE',
   });
   const catalog = await apiPost<{ id: string }>(request, session, '/catalog/items', {
     code: `cobro-${p.tag}-${suffix}`.slice(0, 30),
@@ -93,7 +93,7 @@ async function seedDebtor(
     defaultPrice: 400000,
   });
   const plan = await apiPost<{ id: string }>(request, session, `/patients/${id}/treatment-plans`, {
-    currency: 'COP',
+    currency: 'USD',
   });
   const item = await apiPost<{ id: string }>(request, session, `/treatment-plans/${plan.id}/items`, {
     toothNumber: '11',

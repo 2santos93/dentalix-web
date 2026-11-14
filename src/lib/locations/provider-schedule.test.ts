@@ -41,7 +41,7 @@ describe('toScheduleDraft', () => {
           {
             locationId: A,
             locationName: 'Sede A',
-            timeZone: 'America/Bogota',
+            timeZone: 'America/Caracas',
             ranges: [
               { weekday: 1, startMinute: 15 * 60, endMinute: 18 * 60 },
               { weekday: 1, startMinute: 8 * 60, endMinute: 13 * 60 },

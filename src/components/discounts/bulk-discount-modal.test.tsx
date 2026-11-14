@@ -8,7 +8,7 @@ import { ITEM_WITHOUT_DISCOUNT } from '@/components/treatment-plans/plan-fixture
 import { regionalFormat } from '@/lib/format/regional-format';
 
 /** DX-489: el formato de la sede, el de los demás importes del plan. */
-const FMT = regionalFormat({ locale: 'es-CO', hourCycle: 'h12' });
+const FMT = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
 
 jest.mock('../../lib/discounts/discounts-api', () => ({ applyBulkDiscount: jest.fn() }));
 const mockedApply = applyBulkDiscount as jest.MockedFunction<typeof applyBulkDiscount>;
@@ -40,11 +40,11 @@ function item(id: string, tooth: string, price: number): TreatmentPlanItem {
 const ITEMS = [item('i1', '11', 85000), item('i2', '21', 123457), item('i3', '36', 1005)];
 
 // DX-340: los dígitos de redondeo los manda la API (`currencyDigits`).
-const DIGITS: Record<string, 0 | 2> = { COP: 0, EUR: 2, RSD: 0, JPY: 0 };
+const DIGITS: Record<string, 0 | 2> = { USD: 0, EUR: 2, RSD: 0, JPY: 0 };
 
 function renderModal(
   role: 'DENTIST' | 'ADMIN',
-  currency = 'COP',
+  currency = 'USD',
   items = ITEMS,
   roundingDigits: 0 | 2 | null = DIGITS[currency],
 ) {
@@ -75,14 +75,14 @@ const previews = () => screen.getAllByTestId('bulk-discount-preview').map((el) =
 describe('BulkDiscountModal (DX-204)', () => {
   beforeEach(() => mockedApply.mockReset());
 
-  it('la vista previa redondea COP sin decimales y respeta el tope ítem a ítem', async () => {
+  it('la vista previa redondea USD sin decimales y respeta el tope ítem a ítem', async () => {
     renderModal('DENTIST');
     await userEvent.type(percentInput(), '10');
     const texts = previews();
     // 8.500; 12.345,7 → 12.346 superaría el 10 %: 12.345; 100,5 → 100.
-    expect(texts[0]).toMatch(/^COP\s85\.000,00 → −COP\s8\.500,00$/);
-    expect(texts[1]).toMatch(/−COP\s12\.345,00/);
-    expect(texts[2]).toMatch(/−COP\s100,00/);
+    expect(texts[0]).toMatch(/^USD\s85\.000,00 → −USD\s8\.500,00$/);
+    expect(texts[1]).toMatch(/−USD\s12\.345,00/);
+    expect(texts[2]).toMatch(/−USD\s100,00/);
   });
 
   it('en EUR redondea a céntimos', async () => {
@@ -102,7 +102,7 @@ describe('BulkDiscountModal (DX-204)', () => {
 
   it('DX-340: sin dígitos en el contrato no adivina el redondeo: lo calcula la API al aplicar', async () => {
     mockedApply.mockResolvedValue({ items: ITEMS, skippedNoDiscount: 0 });
-    renderModal('ADMIN', 'COP', [item('i1', '11', 85000)], null);
+    renderModal('ADMIN', 'USD', [item('i1', '11', 85000)], null);
     await userEvent.type(percentInput(), '5');
     expect(previews()[0]).toContain(bulkDiscountCopy.previewPending);
     await userEvent.click(screen.getByRole('button', { name: 'Aplicar descuento' }));
@@ -113,7 +113,7 @@ describe('BulkDiscountModal (DX-204)', () => {
     // 10 % de 999: a céntimos es 99,90 (justo el 10 %, sin motivo), pero
     // redondeado a la unidad es 100 (10,01 %, con motivo). Sin saber la
     // moneda, se pide el motivo.
-    renderModal('ADMIN', 'COP', [item('i1', '11', 999)], null);
+    renderModal('ADMIN', 'USD', [item('i1', '11', 999)], null);
     await userEvent.type(percentInput(), '10');
     expect(screen.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeInTheDocument();
   });

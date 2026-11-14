@@ -2,9 +2,19 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NewEvolutionModal } from './new-evolution-modal';
 import { listNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
-import { createClinicalEntry } from '@/lib/patients/clinical-api';
-import { prophylaxisTemplate, resinTemplate } from './fixtures';
+import { createClinicalEntry, getClinicalEntrySigning } from '@/lib/patients/clinical-api';
+import { toast } from 'sonner';
+import { controlTemplate, prophylaxisTemplate, resinTemplate } from './fixtures';
 import { searchIcd10 } from '@/lib/reference/icd10-api';
+import { announceRecallChanged, getPatientRecalls, listRecallTypes, type RecallType } from '@/lib/recall/recall-api';
+import { evolutionRecallCopy } from './evolution-recall-fields';
+
+jest.mock('../../lib/recall/recall-api', () => ({
+  ...jest.requireActual('../../lib/recall/recall-api'),
+  getPatientRecalls: jest.fn(),
+  listRecallTypes: jest.fn(),
+  announceRecallChanged: jest.fn(),
+}));
 
 // DX-378: el día de la cita sale con la zona y el formato de la sede (Caracas, es-VE).
 jest.mock('../../lib/locations/locations-api', () => ({
@@ -17,13 +27,28 @@ jest.mock('../../lib/clinical-notes/note-templates-api', () => ({
 jest.mock('../../lib/patients/clinical-api', () => ({
   ...jest.requireActual('../../lib/patients/clinical-api'),
   createClinicalEntry: jest.fn(),
+  getClinicalEntrySigning: jest.fn(),
 }));
+jest.mock('sonner', () => ({ toast: { warning: jest.fn(), success: jest.fn(), error: jest.fn() } }));
+const mockedWarning = toast.warning as jest.Mock;
 
 jest.mock('../../lib/reference/icd10-api', () => ({ searchIcd10: jest.fn() }));
 const mockedIcd10 = searchIcd10 as jest.MockedFunction<typeof searchIcd10>;
 
 const mockedList = listNoteTemplates as jest.MockedFunction<typeof listNoteTemplates>;
 const mockedCreate = createClinicalEntry as jest.MockedFunction<typeof createClinicalEntry>;
+const mockedSigning = getClinicalEntrySigning as jest.MockedFunction<typeof getClinicalEntrySigning>;
+const SIGNED_OK = { professionalLicense: 'RP-1', warnMissingProfessionalLicense: true, warnings: [] };
+const MISSING = {
+  code: 'PROFESSIONAL_LICENSE_MISSING' as const,
+  message: 'La evolución se guardó sin tu número de registro profesional.',
+};
+
+function tokenForRole(role: string): string {
+  const part = (value: string) =>
+    btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${part('{"alg":"HS256"}')}.${part(JSON.stringify({ sub: 'u-me', tenantId: 't1', role }))}.sig`;
+}
 
 const created = {
   id: 'ce-1',
@@ -63,6 +88,8 @@ describe('NewEvolutionModal (DX-170)', () => {
     mockedCreate.mockReset();
     mockedList.mockResolvedValue([resinTemplate, prophylaxisTemplate]);
     mockedCreate.mockResolvedValue(created);
+    mockedSigning.mockReset();
+    mockedSigning.mockResolvedValue(SIGNED_OK);
   });
 
   it('busca plantillas por nombre o carpeta, sin tildes', async () => {
@@ -113,6 +140,55 @@ describe('NewEvolutionModal (DX-170)', () => {
     });
     expect(onCreated).toHaveBeenCalled();
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  describe('DX-354b (E9): «hoy» es el de la sede, no el del navegador', () => {
+    // 02:30Z del 5 de noviembre: en Caracas (UTC-4) aún es el 4; el navegador (UTC) y Tokio ya están en el 5.
+    beforeEach(() => {
+      jest.useFakeTimers({
+        now: new Date('2026-11-05T02:30:00Z'),
+        doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate', 'nextTick', 'queueMicrotask', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'],
+      });
+    });
+    afterEach(() => jest.useRealTimers());
+
+    async function typeEntryDate(user: ReturnType<typeof userEvent.setup>, ddmmyyyy: string) {
+      const group = await screen.findByRole('group', { name: /fecha de atención/i });
+      await user.click(within(group).getAllByRole('spinbutton')[0]);
+      await user.keyboard(ddmmyyyy);
+    }
+
+    it('rechaza el 5 de noviembre, que en la sede todavía es futuro', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      await pickResin(user);
+      await typeEntryDate(user, '05112026');
+      await user.click(screen.getByRole('button', { name: /guardar evolución/i }));
+      expect(await screen.findByText('La fecha de atención no puede ser futura.')).toBeInTheDocument();
+      expect(mockedCreate).not.toHaveBeenCalled();
+    });
+
+    it('acepta el 4 de noviembre, el día de la sede', async () => {
+      const user = userEvent.setup();
+      mockedCreate.mockResolvedValue(created);
+      renderModal();
+      await pickResin(user);
+      await typeEntryDate(user, '04112026');
+      await user.click(screen.getByRole('button', { name: /guardar evolución/i }));
+      await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1));
+      expect(mockedCreate.mock.calls[0][2]).toMatchObject({ entryDate: '2026-11-04T00:00:00.000Z' });
+    });
+
+    it('sin la zona de la sede el campo de fecha se sustituye por su error y no se puede guardar', async () => {
+      const { listLocations } = jest.requireMock('../../lib/locations/locations-api') as { listLocations: jest.Mock };
+      listLocations.mockImplementationOnce(() => Promise.reject(new Error('boom')));
+      listLocations.mockImplementationOnce(() => Promise.reject(new Error('boom')));
+      listLocations.mockImplementationOnce(() => Promise.reject(new Error('boom')));
+      renderModal();
+      expect(await screen.findByText('Sin formato de sede')).toBeInTheDocument();
+      expect(screen.queryByRole('group', { name: /fecha de atención/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /guardar evolución/i })).toBeDisabled();
+    });
   });
 
   it('«Omitir» deja el hueco «[sin respuesta]» aunque haya valor por defecto', async () => {
@@ -299,3 +375,338 @@ describe('NewEvolutionModal · diagnósticos CIE-10 (DX-212)', () => {
   });
 });
 
+
+describe('NewEvolutionModal · registro profesional (DX-540)', () => {
+  beforeEach(() => {
+    mockedList.mockReset();
+    mockedCreate.mockReset();
+    mockedSigning.mockReset();
+    mockedWarning.mockClear();
+    mockedList.mockResolvedValue([resinTemplate]);
+  });
+
+  async function writeAndSave(user: ReturnType<typeof userEvent.setup>) {
+    await screen.findByRole('radio', { name: /resina/i });
+    await user.type(screen.getByLabelText(/texto de la evolución/i), 'Control');
+    await user.click(screen.getByRole('button', { name: /guardar evolución/i }));
+  }
+
+  it('sin registro y con el aviso activo: lo dice antes de guardar, y guarda igual', async () => {
+    const user = userEvent.setup();
+    mockedSigning.mockResolvedValue({
+      professionalLicense: null,
+      warnMissingProfessionalLicense: true,
+      warnings: [MISSING],
+    });
+    mockedCreate.mockResolvedValue({ ...created, authorProfessionalLicense: null, warnings: [MISSING] });
+    const { onCreated } = renderModal({ token: tokenForRole('DENTIST') });
+
+    const notice = await screen.findByText(/vas a firmar sin registro profesional/i);
+    expect(notice.closest('[role="status"]')).toHaveTextContent(/pide a un administrador/i);
+    expect(mockedSigning).toHaveBeenCalledWith(tokenForRole('DENTIST'));
+    // El botón de guardar sigue activo: el aviso no bloquea.
+    expect(screen.getByRole('button', { name: /guardar evolución/i })).toBeEnabled();
+
+    await writeAndSave(user);
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    expect(mockedWarning).toHaveBeenCalledWith('Evolución guardada sin registro profesional', {
+      description: MISSING.message,
+      duration: 10000,
+    });
+  });
+
+  it('ADMIN sin registro: el aviso enlaza a su ficha de Personal', async () => {
+    mockedSigning.mockResolvedValue({
+      professionalLicense: null,
+      warnMissingProfessionalLicense: true,
+      warnings: [MISSING],
+    });
+    renderModal({ token: tokenForRole('ADMIN') });
+    const link = await screen.findByRole('link', { name: /cargar mi registro en personal/i });
+    expect(link).toHaveAttribute('href', '/staff/u-me');
+  });
+
+  it('con registro (o con el aviso desactivado): ni aviso previo ni toast', async () => {
+    const user = userEvent.setup();
+    mockedSigning.mockResolvedValue(SIGNED_OK);
+    mockedCreate.mockResolvedValue({ ...created, authorProfessionalLicense: 'RP-1', warnings: [] });
+    const { onCreated } = renderModal({ token: tokenForRole('DENTIST') });
+    await writeAndSave(user);
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    expect(screen.queryByText(/vas a firmar sin registro profesional/i)).toBeNull();
+    expect(mockedWarning).not.toHaveBeenCalled();
+  });
+
+  it('si no se puede consultar la firma, el flujo sigue igual y el aviso llega tras guardar', async () => {
+    const user = userEvent.setup();
+    mockedSigning.mockRejectedValue(new Error('red'));
+    mockedCreate.mockResolvedValue({ ...created, warnings: [MISSING] });
+    const { onCreated } = renderModal({ token: tokenForRole('DENTIST') });
+    await writeAndSave(user);
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    expect(screen.queryByText(/vas a firmar sin registro profesional/i)).toBeNull();
+    expect(mockedWarning).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('NewEvolutionModal · atajos de plantilla (DX-455)', () => {
+  const resinWithShortcut = { ...resinTemplate, shortcut: '#resina' };
+
+  beforeEach(() => {
+    mockedList.mockReset();
+    mockedCreate.mockReset();
+    mockedList.mockResolvedValue([resinWithShortcut, controlTemplate, prophylaxisTemplate]);
+    mockedCreate.mockResolvedValue(created);
+    mockedSigning.mockReset();
+    mockedSigning.mockResolvedValue(SIGNED_OK);
+  });
+
+  async function notesField() {
+    await screen.findByRole('radio', { name: /resina/i });
+    return screen.getByLabelText(/texto de la evolución/i) as HTMLTextAreaElement;
+  }
+
+  it('«#control » se sustituye por el texto de la plantilla, sin distinguir mayúsculas, y se anuncia', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    const notes = await notesField();
+    await user.type(notes, 'Paciente acude. #CONTROL ');
+    expect(notes).toHaveValue('Paciente acude. Control sin dolor ni sangrado. Cicatrización normal.');
+    expect(notes.selectionStart).toBe(notes.value.length);
+    expect(notes).toHaveFocus();
+    expect(screen.getByText('Plantilla «Control postoperatorio» insertada.')).toBeInTheDocument();
+    // La inserción es texto: no cambia la plantilla elegida (sigue «Sin plantilla»).
+    expect(screen.getByRole('radio', { name: /sin plantilla/i })).toBeChecked();
+  });
+
+  it('el cursor queda al final de lo insertado aunque haya texto detrás', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    const notes = await notesField();
+    await user.type(notes, 'Antes . Después');
+    await user.type(notes, '#control ', { initialSelectionStart: 6, initialSelectionEnd: 6 });
+    const body = controlTemplate.body;
+    expect(notes).toHaveValue(`Antes ${body}. Después`);
+    expect(notes.selectionStart).toBe(6 + body.length);
+    expect(notes.selectionEnd).toBe(6 + body.length);
+  });
+
+  it('un atajo desconocido se queda como texto', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    const notes = await notesField();
+    await user.type(notes, '#otro y #control.');
+    expect(notes).toHaveValue('#otro y #control.');
+  });
+
+  it('una plantilla desactivada nunca se inserta por atajo', async () => {
+    mockedList.mockResolvedValue([resinWithShortcut, { ...controlTemplate, active: false }]);
+    const user = userEvent.setup();
+    renderModal();
+    const notes = await notesField();
+    await user.type(notes, '#control ');
+    expect(notes).toHaveValue('#control ');
+  });
+
+  it('con preguntas abre las mismas preguntas de la plantilla e inserta el texto compuesto', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    const notes = await notesField();
+    await user.type(notes, 'Pieza 16: #resina ');
+    const panel = screen.getByRole('group', { name: 'Preguntas de «Resina»' });
+    expect(panel).toHaveFocus();
+    // Mientras se contesta, el atajo sigue escrito y no se puede guardar.
+    expect(notes).toHaveValue('Pieza 16: #resina ');
+    expect(screen.getByRole('button', { name: /guardar evolución/i })).toBeDisabled();
+    await user.click(within(panel).getByRole('radio', { name: 'O' }));
+    await user.type(within(panel).getByRole('textbox', { name: 'Observaciones' }), 'Sin sensibilidad');
+    await user.click(within(panel).getByRole('button', { name: 'Insertar en el texto' }));
+
+    const text = 'Pieza 16: Resina en superficie O con Resina A2. Observaciones: Sin sensibilidad.';
+    expect(notes).toHaveValue(text);
+    expect(notes).toHaveFocus();
+    expect(notes.selectionStart).toBe(text.length);
+    expect(screen.queryByRole('group', { name: 'Preguntas de «Resina»' })).not.toBeInTheDocument();
+    expect(screen.getByText('Plantilla «Resina» insertada.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /guardar evolución/i }));
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalledWith('tok', 'p1', { notes: text }));
+  });
+
+  it('«Cancelar» en las preguntas deja el atajo como texto', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    const notes = await notesField();
+    await user.type(notes, '#Resina ');
+    const panel = screen.getByRole('group', { name: 'Preguntas de «Resina»' });
+    await user.click(within(panel).getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByRole('group', { name: 'Preguntas de «Resina»' })).not.toBeInTheDocument();
+    expect(notes).toHaveValue('#Resina ');
+    expect(notes).toHaveFocus();
+  });
+
+  it('un {{marcador}} sin rellenar desactiva «Guardar» y dice cuál falta', async () => {
+    mockedList.mockResolvedValue([{ ...controlTemplate, body: 'Control del diente {{Diente}}.' }]);
+    const user = userEvent.setup();
+    renderModal();
+    await screen.findByRole('radio', { name: /control/i });
+    const notes = screen.getByLabelText(/texto de la evolución/i);
+    await user.type(notes, '#control ');
+    expect(notes).toHaveValue('Control del diente {{Diente}}.');
+    const save = screen.getByRole('button', { name: /guardar evolución/i });
+    expect(save).toBeDisabled();
+    expect(notes).toHaveAccessibleDescription('Falta rellenar {{Diente}}.');
+    expect(notes).toHaveAttribute('aria-invalid', 'true');
+
+    await user.clear(notes);
+    await user.type(notes, 'Control del diente 16.');
+    expect(save).toBeEnabled();
+    expect(screen.queryByText(/falta rellenar/i)).not.toBeInTheDocument();
+  });
+
+  it('varios marcadores sin rellenar se nombran todos', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    const notes = await notesField();
+    await user.type(notes, '{{{{Diente}} y {{{{Cara}}');
+    expect(notes).toHaveAccessibleDescription('Faltan por rellenar {{Diente}} y {{Cara}}.');
+  });
+
+  describe('plantilla sugerida por el procedimiento', () => {
+    it('viene elegida con sus preguntas y lo dice; se puede cambiar', async () => {
+      const user = userEvent.setup();
+      renderModal({ suggestedTemplateId: 'tpl-resina', suggestedBy: 'Resina compuesta' });
+      expect(await screen.findByRole('button', { name: 'Cambiar la plantilla «Resina»' })).toBeInTheDocument();
+      expect(screen.getByText(/sugerida por el procedimiento «Resina compuesta»/i)).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: /preguntas de la plantilla/i })).toBeInTheDocument();
+      expect(screen.getByLabelText(/texto de la evolución/i)).toHaveValue(
+        'Resina en superficie [sin respuesta] con Resina A2. Observaciones: [sin respuesta].',
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Cambiar la plantilla «Resina»' }));
+      await user.click(screen.getByRole('radio', { name: /profilaxis/i }));
+      expect(screen.getByLabelText(/texto de la evolución/i)).toHaveValue('Profilaxis con Ultrasonido.');
+      expect(screen.queryByText(/sugerida por el procedimiento/i)).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /guardar evolución/i }));
+      await waitFor(() =>
+        expect(mockedCreate).toHaveBeenCalledWith('tok', 'p1', {
+          notes: 'Profilaxis con Ultrasonido.',
+          templateId: 'tpl-profilaxis',
+        }),
+      );
+    });
+
+    it('«Quitar plantilla» la quita junto con su texto antes de guardar', async () => {
+      const user = userEvent.setup();
+      renderModal({ suggestedTemplateId: 'tpl-resina', suggestedBy: 'Resina compuesta' });
+      await user.click(await screen.findByRole('button', { name: 'Quitar plantilla' }));
+      expect(screen.getByRole('radio', { name: /sin plantilla/i })).toBeChecked();
+      expect(screen.getByLabelText(/texto de la evolución/i)).toHaveValue('');
+      expect(screen.queryByRole('region', { name: /preguntas de la plantilla/i })).not.toBeInTheDocument();
+      await user.type(screen.getByLabelText(/texto de la evolución/i), 'Hecho sin incidencias.');
+      await user.click(screen.getByRole('button', { name: /guardar evolución/i }));
+      await waitFor(() =>
+        expect(mockedCreate).toHaveBeenCalledWith('tok', 'p1', { notes: 'Hecho sin incidencias.' }),
+      );
+    });
+
+    it('una sugerida que no está entre las activas no se elige', async () => {
+      renderModal({ suggestedTemplateId: 'tpl-desactivada', suggestedBy: 'Resina compuesta' });
+      expect(await screen.findByRole('radio', { name: /sin plantilla/i })).toBeChecked();
+      expect(screen.queryByText(/sugerida por el procedimiento/i)).not.toBeInTheDocument();
+    });
+  });
+});
+
+describe('NewEvolutionModal · recall (DX-015-bis D18)', () => {
+  const TYPES = [
+    { id: 't-hyg', name: 'Higiene', systemKey: 'HYGIENE', sortOrder: 10, defaultIntervalMonths: 6, active: true },
+    { id: 't-ctl', name: 'Control', systemKey: 'CHECKUP', sortOrder: 20, defaultIntervalMonths: 12, active: true },
+    { id: 't-off', name: 'Ortodoncia', systemKey: null, sortOrder: 30, defaultIntervalMonths: 12, active: false },
+  ].map((t) => ({ ...t, exclusionGroup: null, triggerCatalogItemIds: [], triggers: [] })) as unknown as RecallType[];
+
+  beforeEach(() => {
+    mockedList.mockReset();
+    mockedList.mockResolvedValue([resinTemplate, prophylaxisTemplate]);
+    mockedCreate.mockReset();
+    mockedCreate.mockResolvedValue({ ...created, recallUpdates: [] });
+    mockedSigning.mockResolvedValue(SIGNED_OK);
+    jest.mocked(listRecallTypes).mockReset().mockResolvedValue(TYPES);
+    jest.mocked(getPatientRecalls)
+      .mockReset()
+      .mockResolvedValue({
+        recalls: [{ recallTypeId: 't-ctl', intervalMonths: 4, active: true } as never],
+        contacts: [],
+      });
+    jest.mocked(announceRecallChanged).mockReset();
+    (toast.success as jest.Mock).mockReset();
+  });
+
+  async function writeNote(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(await screen.findByLabelText(/texto de la evolución/i), 'Profilaxis sin novedad');
+  }
+
+  it('cerrada y «Sin cambios» por defecto: no manda `recall` ni pide los tipos', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await writeNote(user);
+    const toggle = screen.getByRole('button', { name: /Recall\s*Sin cambios/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await user.click(screen.getByRole('button', { name: 'Guardar evolución' }));
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalled());
+    expect(mockedCreate.mock.calls[0][2]).not.toHaveProperty('recall');
+    expect(listRecallTypes).not.toHaveBeenCalled();
+    expect(announceRecallChanged).not.toHaveBeenCalled();
+  });
+
+  it('prellena con el intervalo del recall que ya tiene; sin él, con el del tipo; manda tipo y meses', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await writeNote(user);
+    await user.click(screen.getByRole('button', { name: /Recall/ }));
+    const type = await screen.findByLabelText(evolutionRecallCopy.type);
+    // Solo los activos.
+    expect(within(type).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      evolutionRecallCopy.unchanged,
+      'Higiene',
+      'Control',
+    ]);
+    await user.selectOptions(type, 't-ctl');
+    expect(screen.getByLabelText(evolutionRecallCopy.months)).toHaveValue('4');
+    await user.selectOptions(type, 't-hyg');
+    expect(screen.getByLabelText(evolutionRecallCopy.months)).toHaveValue('6');
+    await user.selectOptions(screen.getByLabelText(evolutionRecallCopy.months), '3');
+    await user.click(screen.getByRole('button', { name: 'Guardar evolución' }));
+    await waitFor(() =>
+      expect(mockedCreate.mock.calls[0][2]).toMatchObject({ recall: { recallTypeId: 't-hyg', intervalMonths: 3 } }),
+    );
+    expect(announceRecallChanged).toHaveBeenCalledWith('p1');
+  });
+
+  it('tras guardar avisa de los recalls que movió (y de la exclusión)', async () => {
+    mockedCreate.mockResolvedValue({
+      ...created,
+      recallUpdates: [
+        { recallId: 'r1', recallTypeId: 't-hyg', recallTypeName: 'Higiene', dueAt: '2027-01-17', deactivated: false, replacedBy: null },
+        {
+          recallId: 'r2',
+          recallTypeId: 't-ctl',
+          recallTypeName: 'Control',
+          dueAt: '2027-03-01',
+          deactivated: true,
+          replacedBy: { recallTypeId: 't-hyg', recallTypeName: 'Higiene' },
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderModal();
+    await writeNote(user);
+    await user.click(screen.getByRole('button', { name: /Recall/ }));
+    await user.selectOptions(await screen.findByLabelText(evolutionRecallCopy.type), 't-hyg');
+    await user.click(screen.getByRole('button', { name: 'Guardar evolución' }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    const notice = (toast.success as jest.Mock).mock.calls[0][0] as string;
+    expect(notice).toMatch(/^Recall de Higiene: vence el 17\/01\/2027 · /);
+    expect(notice).toContain('Recall de Control desactivado: lo sustituye Higiene');
+  });
+});

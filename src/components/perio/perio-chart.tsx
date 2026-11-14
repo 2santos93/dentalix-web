@@ -224,7 +224,7 @@ export function PerioChart({
                 onBlur={() => setPending((p) => (p?.id === id ? null : p))}
                 className={cn(
                   'h-7 w-6 rounded-sm bg-transparent text-center text-xs tabular-nums text-ink',
-                  'focus:bg-primary-subtle focus:outline-none focus:ring-2 focus:ring-primary',
+                  'focus:bg-primary-subtle focus:outline-none focus:ring-2 focus:ring-primary-text',
                   'aria-disabled:cursor-not-allowed aria-disabled:text-muted',
                   danger && 'font-semibold text-danger-text',
                 )}

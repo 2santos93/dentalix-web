@@ -45,7 +45,7 @@ function appointment(overrides: Partial<Appointment> = {}): Appointment {
   };
 }
 
-function link(whatsappPhone: string | null = '573105550101') {
+function link(whatsappPhone: string | null = '584145550101') {
   return {
     url: 'http://demo.localhost:3001/confirmar/tok_123',
     expiresAt: FUTURE.toISOString(),
@@ -85,7 +85,7 @@ describe('ConfirmationLinkPanel', () => {
 
     const wa = screen.getByRole('link', { name: /abrir whatsapp/i });
     const href = wa.getAttribute('href') ?? '';
-    expect(href.startsWith('https://wa.me/573105550101?text=')).toBe(true);
+    expect(href.startsWith('https://wa.me/584145550101?text=')).toBe(true);
     const text = decodeURIComponent(href.split('?text=')[1]);
     expect(text).toContain('Hola Ana');
     expect(text).toContain('martes, 20 de octubre a las 14:00');

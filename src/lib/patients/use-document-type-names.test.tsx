@@ -1,5 +1,6 @@
 /** DX-327 (pre-flight M15): la ficha y los formularios piden los nombres de la clínica. */
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { setActiveLocationId } from '@/lib/locations/location-store';
 import { getDocumentTypeNames } from './document-type-names-api';
 import { useDocumentTypeNames } from './use-document-type-names';
 
@@ -66,6 +67,17 @@ describe('useDocumentTypeNames', () => {
     expect(result.current).toEqual({});
     expect(consoleError).not.toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+
+  it('DX-524: switching the active location asks again and shows the new location names', async () => {
+    mockedGet.mockResolvedValueOnce({ ...NAMES, NATIONAL_ID: 'CPF' });
+    const { result } = renderHook(() => useDocumentTypeNames('tok'));
+    await waitFor(() => expect(result.current.NATIONAL_ID).toBe('CPF'));
+    mockedGet.mockResolvedValueOnce({ ...NAMES, NATIONAL_ID: 'Cédula' });
+    act(() => setActiveLocationId('loc-b'));
+    await waitFor(() => expect(result.current.NATIONAL_ID).toBe('Cédula'));
+    expect(mockedGet).toHaveBeenCalledTimes(2);
+    act(() => setActiveLocationId(null));
   });
 
   it('without a session it asks nothing', () => {

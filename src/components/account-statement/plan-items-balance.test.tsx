@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { PlanItemsBalance } from './plan-items-balance';
 import { getPlanBalance, type PlanBalance } from '@/lib/payments/payments-api';
@@ -13,7 +14,7 @@ jest.mock('../../lib/payments/payments-api', () => ({
   getPlanBalance: jest.fn(),
 }));
 // DX-378: el aviso «sin tasa» pinta importe y día con el formato de la sede
-// (fixture explícito es-CO).
+// (fixture explícito es-VE).
 jest.mock('../../lib/locations/locations-api', () => ({
   ...jest.requireActual('../../lib/locations/locations-api'),
   listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/locations').clinicLocation()]),
@@ -28,10 +29,10 @@ jest.mock('../../lib/exchange/exchange-settings-api', () => ({
 const mockedBalance = getPlanBalance as jest.MockedFunction<typeof getPlanBalance>;
 const mockedSettings = jest.mocked(getExchangeRateSettings);
 
-/** DX-386: el formato de la sede del fixture (es-CO) y el código ISO, con el espacio normalizado. */
-const ES_CO = regionalFormat({ locale: 'es-CO', hourCycle: 'h12' });
+/** DX-386: el formato de la sede del fixture (es-VE) y el código ISO, con el espacio normalizado. */
+const ES_VE = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
 function money(amount: number, currency: string): string {
-  return moneyWithCode(amount, currency, ES_CO).replace(/\u00A0/g, ' ');
+  return moneyWithCode(amount, currency, ES_VE).replace(/\u00A0/g, ' ');
 }
 
 function balanceFixture(overrides: Partial<PlanBalance> = {}): PlanBalance {
@@ -84,7 +85,12 @@ function balanceFixture(overrides: Partial<PlanBalance> = {}): PlanBalance {
 beforeEach(() => {
   mockedBalance.mockReset();
   mockedSettings.mockReset();
-  mockedSettings.mockResolvedValue({ source: 'MANUAL', manualSince: '2026-10-01', baseCurrency: 'USD' });
+  mockedSettings.mockResolvedValue({
+    source: 'MANUAL',
+    manualSince: '2026-10-01',
+    manualRateMaxAgeDays: 3,
+    baseCurrency: 'USD',
+  });
 });
 
 it('loads on open and shows procedure, tooth, status, A pagar, Cobrado, Pendiente', async () => {
@@ -123,6 +129,54 @@ it('loads on open and shows procedure, tooth, status, A pagar, Cobrado, Pendient
   expect(screen.queryByText(/todavía sin convertir/)).not.toBeInTheDocument();
 });
 
+// DX-399-quater-bis: el ejemplo de DX-399-quater. Un ítem de 60 USD con 30 de
+// un abono propio y 30 del saldo recibido por traspaso de otro plan; otros 30
+// recibidos siguen a cuenta del plan.
+it('lo cubierto por traspaso: la línea bajo Cobrado y la fila del saldo recibido a cuenta', async () => {
+  mockedBalance.mockResolvedValue(
+    balanceFixture({
+      planCurrency: 'USD',
+      billable: 60,
+      paid: 30,
+      allocated: 30,
+      transfersInOnAccount: 30,
+      items: [
+        {
+          itemId: 'item-1',
+          toothNumber: '16',
+          procedureName: 'Corona',
+          status: 'ACCEPTED',
+          billable: 60,
+          paid: 60,
+          balance: 0,
+          paidByTransfersIn: 30,
+        },
+      ],
+    }),
+  );
+  render(<PlanItemsBalance token="tok" planId="plan-1" />);
+  const table = await screen.findByRole('table', { name: /por ítem/i });
+  const row = within(table).getAllByRole('row')[1];
+  const paid = within(row).getAllByRole('cell')[4];
+  await waitFor(() =>
+    expect((paid.textContent ?? '').replace(/\u00A0/g, ' ')).toBe(
+      `${money(60, 'USD')}De ello, ${money(30, 'USD')} por traspaso de otro plan`,
+    ),
+  );
+  expect(within(row).getAllByRole('cell')[5]).toHaveTextContent('Cubierto');
+  const onAccount = screen.getByText('Saldo recibido por traspaso, a cuenta').closest('div');
+  expect((onAccount?.textContent ?? '').replace(/\u00A0/g, ' ')).toContain(money(30, 'USD'));
+  expect(screen.getByText('Llegó de otro plan del paciente y todavía no cubre ningún ítem.')).toBeInTheDocument();
+});
+
+it('sin traspasos (la API omite los dos campos), nada de «por traspaso»', async () => {
+  mockedBalance.mockResolvedValue(balanceFixture({ unallocated: 7.5 }));
+  render(<PlanItemsBalance token="tok" planId="plan-1" />);
+  await screen.findByRole('table', { name: /por ítem/i });
+  expect(await screen.findByText('Sin imputar')).toBeInTheDocument();
+  expect(screen.queryByText(/por traspaso/)).not.toBeInTheDocument();
+});
+
 it('formats with the currency of the balance itself', async () => {
   mockedBalance.mockResolvedValue({ ...balanceFixture(), planCurrency: 'MXN', unallocated: 7.5 });
   render(<PlanItemsBalance token="tok" planId="plan-1" />);
@@ -140,6 +194,7 @@ it('unconverted notice explains abonos without a rate, in singular or plural', a
     await screen.findByText('2 abonos todavía sin convertir a la moneda del plan: no se imputan a ítems.'),
   ).toBeInTheDocument();
   unmount();
+  clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
   mockedBalance.mockResolvedValue(balanceFixture({ unconvertedPaymentsCount: 1 }));
   render(<PlanItemsBalance token="tok" planId="plan-1" />);
@@ -148,10 +203,12 @@ it('unconverted notice explains abonos without a rate, in singular or plural', a
   ).toBeInTheDocument();
 });
 
-// DX-375: los abonos «sin tasa» no cuentan en el saldo; el aviso lo dice,
-// con la lista y el camino a Ajustes › Tasa de cambio según el rol, y sustituye
-// a la nota de «sin convertir» (son los mismos abonos).
-it('abonos sin tasa: aviso con la lista y, para recepción, a quién pedir la tasa', async () => {
+// DX-472-bis: el aviso «sin tasa» va UNA vez, arriba del estado de cuenta
+// (con la lista y el camino a Ajustes según el rol, ver without-rate-notice y
+// account-statement-view). El detalle por ítem solo explica por qué lo cobrado
+// no llega a lo abonado, sin repetir el aviso, y sustituye a la nota de «sin
+// convertir» (son los mismos abonos).
+it('abonos sin tasa: una línea que remite al aviso de arriba, sin repetirlo', async () => {
   mockedBalance.mockResolvedValue(
     balanceFixture({
       unconvertedPaymentsCount: 1,
@@ -159,36 +216,32 @@ it('abonos sin tasa: aviso con la lista y, para recepción, a quién pedir la ta
     }),
   );
   render(<PlanItemsBalance token={tokenForRole('RECEPTION')} planId="plan-1" />);
-  const notice = (await screen.findByText(withoutRateCopy.title(1))).closest('[role="status"]');
-  expect(await within(notice as HTMLElement).findByText('USD 50,00 del 30/10/2026')).toBeInTheDocument();
-  expect(notice).toHaveTextContent(withoutRateCopy.otherRoles);
+  expect(
+    await screen.findByText('1 abono sin tasa todavía no cuenta aquí: el aviso de arriba dice cuál es y qué hacer.'),
+  ).toBeInTheDocument();
+  expect(screen.queryByText(withoutRateCopy.title(1))).not.toBeInTheDocument();
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  expect(screen.queryByRole('link')).not.toBeInTheDocument();
   expect(screen.queryByText(/todavía sin convertir/)).not.toBeInTheDocument();
 });
 
-it('abonos sin tasa con fuente manual: al ADMIN le enlaza a Ajustes › Tasa de cambio', async () => {
+it('proveedor sin responder: la línea no habla de «sin tasa»', async () => {
   mockedBalance.mockResolvedValue(
     balanceFixture({
-      paymentsWithoutRate: [{ paymentId: 'p9', amount: 50, currency: 'USD', paidOn: '2026-10-30' }],
+      rateProviderTimedOut: true,
+      paymentsWithoutRate: [
+        { paymentId: 'p9', amount: 50, currency: 'USD', paidOn: '2026-10-30' },
+        { paymentId: 'p10', amount: 20, currency: 'USD', paidOn: '2026-10-31' },
+      ],
     }),
   );
   render(<PlanItemsBalance token={tokenForRole('ADMIN')} planId="plan-1" />);
-  expect(await screen.findByRole('link', { name: withoutRateCopy.adminLink })).toHaveAttribute(
-    'href',
-    '/settings/tasa-de-cambio',
-  );
-});
-
-it('abonos sin tasa con fuente automática: al ADMIN no le pide registrar una tasa, le explica pasar a manual (DX-386)', async () => {
-  mockedSettings.mockResolvedValue({ source: 'AUTOMATIC', manualSince: null, baseCurrency: 'USD' });
-  mockedBalance.mockResolvedValue(
-    balanceFixture({
-      paymentsWithoutRate: [{ paymentId: 'p9', amount: 50, currency: 'USD', paidOn: '2026-10-30' }],
-    }),
-  );
-  render(<PlanItemsBalance token={tokenForRole('ADMIN')} planId="plan-1" />);
-  expect(await screen.findByText(withoutRateCopy.automatic)).toBeInTheDocument();
-  expect(screen.getByRole('link', { name: withoutRateCopy.switchToManualLink })).toBeInTheDocument();
-  expect(screen.queryByRole('link', { name: withoutRateCopy.adminLink })).not.toBeInTheDocument();
+  expect(
+    await screen.findByText(
+      '2 abonos en otra moneda todavía no cuentan aquí: el proveedor de tasas no respondió (aviso de arriba).',
+    ),
+  ).toBeInTheDocument();
+  expect(screen.queryByText(/sin tasa/)).not.toBeInTheDocument();
 });
 
 it('cancelled plan shows no amounts to charge and the unallocated figure', async () => {

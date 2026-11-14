@@ -78,10 +78,13 @@ branding (color + logo). Diferenciadores del producto:
   landing de marketing y `/admin` es el área de plataforma.
 - Uso multi-dispositivo simultáneo dentro de una misma clínica; sesiones cortas y frecuentes
   (agendar una cita, registrar una evolución) y sesiones de lectura (dashboard, historia).
-- Navegación por secciones: Dashboard, Pacientes (lista + detalle con **cuatro** tabs: Datos ·
-  Historia clínica · Odontograma · Plan de tratamiento), Agenda, Personal, Inventario, Catálogo,
-  Ajustes (Mi perfil · Horarios por sede). Los pagos viven dentro del tab de plan de tratamiento
-  (`payment-plan-section`), no en un tab propio. El recibo de caja numerado por sede (DX-136,
+- Navegación por secciones: Dashboard, Pacientes (lista + detalle con hasta **doce** pestañas
+  según el rol, `patient-detail-tabs.tsx`: Datos · Historia clínica · Odontograma ·
+  Periodontograma · Plan de tratamiento · Estado de cuenta · Consentimientos · Recetas ·
+  Implantes · Documentos · Autorizaciones · Accesos; recepción no ve las clínicas y «Accesos»
+  es solo de ADMIN), Agenda, Personal, Inventario, Catálogo, Ajustes (Mi perfil · Horarios por
+  sede). Los pagos viven dentro de la pestaña de plan de tratamiento (`payment-plan-section`) y
+  en «Estado de cuenta», no en una pestaña propia. El recibo de caja numerado por sede (DX-136,
   `payments/payment-receipt-dialog`; vista imprimible `/print/payments/[id]/receipt` en A4 o
   tirilla de 80 mm) se abre desde el plan, el estado de cuenta y la caja.
 - Datos sensibles de salud: la historia clínica es documento médico-legal; hay auditoría de

@@ -93,6 +93,7 @@ describe('PatientForm', () => {
           resolve({
             id: '1',
             tenantId: 't1',
+            patientCode: '1096',
             firstName: 'Ana',
             lastName: 'García',
             docType: 'NATIONAL_ID',

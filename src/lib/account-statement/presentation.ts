@@ -1,4 +1,4 @@
-import { formatCivilDate, formatDate } from '@/lib/format/date';
+import { documentTexts, type DocumentFormat } from '@/lib/format/document-format';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
 import type { PaymentMethod } from '@/lib/payments/payments-api';
 import type {
@@ -14,7 +14,9 @@ import type {
  * exactamente lo mismo.
  */
 export const statementCopy = {
-  planLabel: (createdAt: string) => `Plan del ${formatDate(createdAt)}`,
+  // La fecha del plan, con la zona y el formato de la sede del documento o de la pantalla (DX-354); sin ellos, «—».
+  planLabel: (createdAt: string, format: DocumentFormat | null) =>
+    `Plan del ${documentTexts(format).date(createdAt)}`,
   unknownPlan: 'Plan',
   downPayment: 'Inicial',
   installment: (sequence: number | null) => `Cuota ${sequence ?? ''}`.trim(),
@@ -25,6 +27,14 @@ export const statementCopy = {
   voidedBy: (name: string) => `Anulado por ${name}`,
   voidedByUnknownMember: 'un usuario ajeno a la clínica',
   notCounted: 'No suma al saldo',
+  // DX-472: lo entregado en otra moneda; «Abonado» ya lo lleva convertido.
+  handedOver: (amount: string) => `Entregado: ${amount}`,
+  // DX-472: un abono «sin tasa» no suma: el impreso no puede parecer definitivo.
+  withoutRateIncomplete: (n: number) =>
+    n === 1
+      ? 'Cifras incompletas: 1 abono sin tasa de cambio no cuenta en el saldo.'
+      : `Cifras incompletas: ${n} abonos sin tasa de cambio no cuentan en el saldo.`,
+  withoutRateItem: (amount: string, date: string) => `${amount} del ${date}`,
   inFavor: 'a favor',
   noOverdue: 'Sin cuotas vencidas',
   overdueCount: (n: number) => (n === 1 ? '1 cuota vencida' : `${n} cuotas vencidas`),
@@ -57,17 +67,21 @@ export function openingNoteFor(openings: Pick<AccountStatementOpeningBalance, 'a
     : statementCopy.openingNote;
 }
 
-/** «15/03/2026» o «23/10/2026 (aprox.)» si la fecha es la de la importación. */
+/** «15/03/2026» o «23/10/2026 (aprox.)» (con el orden de la sede) si la fecha es la de la importación. */
 export function openingAsOfLabel(
   opening: Pick<AccountStatementOpeningBalance, 'asOfDate' | 'asOfDateApproximate'>,
+  format: DocumentFormat | null,
 ): string {
-  const day = formatCivilDate(opening.asOfDate);
+  const day = documentTexts(format).civilDate(opening.asOfDate);
   return opening.asOfDateApproximate ? `${day} (${statementCopy.approx})` : day;
 }
 
 /** Nombre de un plan por su id (el plan no tiene título: se nombra por su fecha). */
-export function planNamer(plans: AccountStatementPlan[]): (id: string | null) => string {
-  const byId = new Map(plans.map((p) => [p.id, statementCopy.planLabel(p.createdAt)]));
+export function planNamer(
+  plans: AccountStatementPlan[],
+  format: DocumentFormat | null,
+): (id: string | null) => string {
+  const byId = new Map(plans.map((p) => [p.id, statementCopy.planLabel(p.createdAt, format)]));
   return (id) => (id ? byId.get(id) : undefined) ?? statementCopy.unknownPlan;
 }
 
@@ -109,11 +123,19 @@ export function movementReferenceLabel(movement: Pick<AccountStatementMovement, 
  * referencia del pago, para el estado de cuenta que se entrega al paciente.
  */
 export function movementMethodLabel(
-  movement: Pick<AccountStatementMovement, 'method' | 'paymentMethod' | 'reference'>,
+  movement: Pick<AccountStatementMovement, 'method' | 'paymentMethod' | 'reference'> &
+    Partial<Pick<AccountStatementMovement, 'externalInvoiceNumber'>>,
 ): string {
-  const reference = movementReferenceLabel(movement);
-  const name = movementMediumName(movement);
-  return reference ? `${name} · ${reference}` : name;
+  return [movementMediumName(movement), movementReferenceLabel(movement), movementInvoiceLabel(movement)]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** DX-515: «Fact. 00-0123», el nº de la factura fiscal emitida fuera, o `null`. */
+export function movementInvoiceLabel(
+  movement: Partial<Pick<AccountStatementMovement, 'externalInvoiceNumber'>>,
+): string | null {
+  return movement.externalInvoiceNumber ? `Fact. ${movement.externalInvoiceNumber}` : null;
 }
 
 /**
@@ -139,6 +161,32 @@ export function installmentLabel(installment: AccountStatementInstallment): stri
 }
 
 /** Un paciente sin nada que mostrar: ni saldo, ni planes, ni abonos. */
+/**
+ * DX-472: el resumen que se enseña, con las cifras que cuadran con los planes.
+ * Una fila solo con lo entregado en otra moneda ya está convertida en su plan
+ * (y detallada en él): repetirla parecería un saldo a favor que no existe.
+ */
+export function shownSummaryRows<
+  T extends {
+    budgeted: number;
+    openingBalance: number;
+    convertedPaid: number;
+    convertedBalance: number;
+    overdueAmount: number;
+    nextInstallment?: unknown;
+  },
+>(rows: T[]): T[] {
+  return rows.filter(
+    (r) =>
+      r.budgeted !== 0 ||
+      r.openingBalance !== 0 ||
+      r.convertedPaid !== 0 ||
+      r.convertedBalance !== 0 ||
+      r.overdueAmount !== 0 ||
+      Boolean(r.nextInstallment),
+  );
+}
+
 export function isEmptyStatement(statement: {
   summary: unknown[];
   plans: unknown[];

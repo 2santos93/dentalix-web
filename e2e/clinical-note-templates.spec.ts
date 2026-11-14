@@ -3,7 +3,9 @@ import { fillDate } from './support/dates';
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { disableBusinessHours } from './support/business-hours';
-import { LATE_BROWSER_TIME, atSede, lastSlotToday, sedeDayFromToday } from './support/clock';
+import { LATE_BROWSER_TIME, SEDE_TODAY_TZ, atSede, lastSlotToday, sedeDayFromToday } from './support/clock';
+import { E2E_REGION, E2E_TODAY_REGION } from './support/regional';
+import { regionalFormat } from '../src/lib/format/regional-format';
 import { expectNoHorizontalScroll } from './support/layout';
 import { API_URL } from './support/urls';
 
@@ -19,10 +21,10 @@ import { API_URL } from './support/urls';
  *      «Resina», contesta y guarda; la evolución queda ligada a la cita. (La
  *      API no deja agendar en el pasado ni ligar una evolución a una cita de un
  *      día futuro: la cita va HOY a las 23:55–23:59 de la sede, con el reloj
- *      del navegador fijo a las 23:30 de Bogotá; DX-252, TST-030: sin
+ *      del navegador fijo a las 23:30 de la sede; DX-252, TST-030: sin
  *      `test.skip` cerca de medianoche, ver `lastSlotToday`.)
  *   3. Ficha → Historia clínica: la evolución lleva el texto con las
- *      respuestas y «Cita del dd/mm · <profesional>»; desde «Nueva evolución»
+ *      respuestas y «Cita del <día/mes de la sede> · <profesional>»; desde «Nueva evolución»
  *      usa la plantilla con una pregunta omitida («[sin respuesta]»).
  *   4. «Cargar plantillas de ejemplo» añade las de ejemplo.
  * Sin scroll horizontal a 390 con el formulario de preguntas abierto.
@@ -51,10 +53,14 @@ async function api(page: Page, origin: string) {
   };
 }
 
+// DX-460: la sede y el navegador en la zona segura de la suite: la franja de hoy vale a cualquier hora.
+const ZONE = SEDE_TODAY_TZ;
+test.use({ timezoneId: ZONE });
+
 for (const viewport of VIEWPORTS) {
   test(`plantilla «Resina» desde Ajustes, la cita y la ficha (${viewport.name})`, async ({ page }) => {
     test.setTimeout(150_000);
-    await page.clock.install({ time: atSede(sedeDayFromToday(0), LATE_BROWSER_TIME) });
+    await page.clock.install({ time: atSede(sedeDayFromToday(0, ZONE), LATE_BROWSER_TIME, ZONE) });
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const tag = `${suffix}${viewport.width}`;
     const origin = await registerAndLogin(page, {
@@ -63,6 +69,7 @@ for (const viewport of VIEWPORTS) {
       fullName: ownerName,
       email: `test.user.notes.${tag}@example.com`,
       password,
+      location: E2E_TODAY_REGION,
     });
     await disableBusinessHours(page, origin);
     const call = await api(page, origin);
@@ -107,7 +114,7 @@ for (const viewport of VIEWPORTS) {
       sex: 'F',
     });
     const me = await call<{ id: string }>('get', '/me');
-    const slot = lastSlotToday();
+    const slot = lastSlotToday('23:55', '23:59', ZONE);
     await call<{ id: string }>('post', '/appointments', {
       patientId: patient.id,
       providerId: me.id,
@@ -128,7 +135,10 @@ for (const viewport of VIEWPORTS) {
     await page.getByRole('button', { name: 'Registrar evolución' }).click();
 
     const evolution = page.getByRole('dialog', { name: 'Registrar evolución' });
-    await expect(evolution.getByText(new RegExp(`^Cita del \\d{2}/\\d{2} · ${ownerName}$`))).toBeVisible();
+    // DX-520: el día/mes exacto con la regla de la sede (patrón corto del
+    // locale: «1/11» en es-*), calculado con el mismo helper que la UI.
+    const visitLine = `Cita del ${regionalFormat(E2E_REGION).dayMonth(slot.start, ZONE)} · ${ownerName}`;
+    await expect(evolution.getByText(visitLine, { exact: true })).toBeVisible();
     await evolution.getByRole('radio', { name: /Resina/ }).click();
     await evolution.getByRole('radio', { name: 'O', exact: true }).check();
     await evolution.getByRole('checkbox', { name: 'Adhesivo universal' }).check();
@@ -145,7 +155,7 @@ for (const viewport of VIEWPORTS) {
     await page.goto(`${origin}/patients/${patient.id}?tab=clinical-history`);
     await expect(page.getByText(expected).locator('visible=true')).toBeVisible({ timeout: 15_000 });
     await expect(
-      page.getByText(new RegExp(`^Cita del \\d{2}/\\d{2} · ${ownerName}$`)).locator('visible=true'),
+      page.getByText(visitLine, { exact: true }).locator('visible=true'),
     ).toBeVisible();
 
     await page.getByRole('button', { name: 'Nueva evolución' }).click();
@@ -169,5 +179,54 @@ for (const viewport of VIEWPORTS) {
     // «Resina» ya existía: se cargan las otras 5 de ejemplo.
     await expect(page.getByText('6 plantillas')).toBeVisible({ timeout: 10_000 });
     await expectNoHorizontalScroll(page);
+  });
+}
+
+// DX-231: otro ADMIN guarda la plantilla mientras esta se edita -> 409 con
+// «Recargar», que trae la versión guardada.
+for (const viewport of VIEWPORTS) {
+  test(`editor de plantillas: el 409 se explica con «Recargar» (${viewport.name})`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    const tag = `${suffix}s${viewport.width}`;
+    const origin = await registerAndLogin(page, {
+      subdomain: `test-clinic-stale-${tag}`,
+      clinicName: `Clinica Version ${tag}`,
+      fullName: ownerName,
+      email: `test.user.stale.${tag}@example.com`,
+      password,
+      location: E2E_TODAY_REGION,
+    });
+    const call = await api(page, origin);
+    const created = await call<{ id: string; version: number }>('post', '/clinical-note-templates', {
+      name: 'Endodoncia',
+      body: 'Conducto {{Conducto}}.',
+      prompts: [{ label: 'Conducto', type: 'TEXT' }],
+    });
+
+    await page.goto(`${origin}/settings/plantillas-de-evolucion`);
+    // Por el «⋯» de la fila: el botón de la fila y «Acciones de Endodoncia» comparten subcadena.
+    await page.getByRole('button', { name: 'Acciones de Endodoncia' }).click();
+    await page.getByRole('menuitem', { name: 'Editar' }).click();
+    const form = page.getByRole('dialog', { name: 'Editar plantilla de evolución' });
+    await form.getByLabel('Nombre').fill('Mi edición');
+
+    // Otro ADMIN la guarda antes.
+    await call('patch', `/clinical-note-templates/${created.id}`, {
+      version: created.version,
+      name: 'Endodoncia (otro admin)',
+    });
+
+    await form.getByRole('button', { name: 'Guardar cambios' }).click();
+    await expect(form.getByRole('alert')).toContainText('La plantilla cambió mientras la editabas');
+    const reload = form.getByRole('button', { name: 'Recargar' });
+    await expect(reload).toBeVisible();
+    await expectNoHorizontalScroll(page);
+
+    await reload.click();
+    await expect(form.getByLabel('Nombre')).toHaveValue('Endodoncia (otro admin)');
+    await expect(form.getByRole('alert')).toBeHidden();
+    await form.getByRole('button', { name: 'Guardar cambios' }).click();
+    await expect(form).toBeHidden({ timeout: 10_000 });
   });
 }

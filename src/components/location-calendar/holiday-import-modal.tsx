@@ -145,6 +145,21 @@ export function HolidayImportModal({
     if (done) noteRef.current?.focus();
   }, [done]);
 
+  // TST-060: mientras se lee, «Elegir archivo» está cargando (deshabilitado) y
+  // el navegador soltaría el foco en <body>: va al «Leyendo el archivo…». Al
+  // terminar (ese texto se va), vuelve a «Elegir otro archivo».
+  const chooseRef = useRef<HTMLButtonElement>(null);
+  const readingRef = useRef<HTMLParagraphElement>(null);
+  const reading = state.phase === 'reading';
+  const wasReading = useRef(false);
+  useEffect(() => {
+    const active = document.activeElement;
+    const lost = active === null || active === document.body || !active.isConnected;
+    if (reading && (lost || active === chooseRef.current)) readingRef.current?.focus();
+    else if (!reading && wasReading.current && (lost || active === readingRef.current)) chooseRef.current?.focus();
+    wasReading.current = reading;
+  }, [reading]);
+
   function changeOpen(next: boolean) {
     if (!next && importingRef.current) return;
     if (!next) seq.current += 1;
@@ -259,6 +274,7 @@ export function HolidayImportModal({
         />
         {done ? null : (
           <Button
+            ref={chooseRef}
             type="button"
             variant="secondary"
             loading={state.phase === 'reading'}
@@ -298,7 +314,15 @@ export function HolidayImportModal({
 
       {/* Siempre montado: el lector de pantalla anuncia la lectura y el resumen. */}
       <div role="status" className="flex flex-col gap-2">
-        {state.phase === 'reading' ? <p className="text-sm text-muted">{copy.reading}</p> : null}
+        {state.phase === 'reading' ? (
+          <p
+            ref={readingRef}
+            tabIndex={-1}
+            className="rounded-sm text-sm text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
+          >
+            {copy.reading}
+          </p>
+        ) : null}
         {result ? (
           <p data-testid="holiday-import-summary" className="text-sm font-medium text-ink tabular-nums">
             {importCountsText(result.counts, num)}

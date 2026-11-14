@@ -1,20 +1,22 @@
+import { wallInstant } from '../../src/lib/time/wall-clock';
+
 /**
  * Fechas y horas de la SEDE en los specs (DX-070, TST-008).
  *
- * El navegador corre en `America/Bogota` (playwright.config.ts), pero Node —
+ * El navegador corre en `America/Caracas` (playwright.config.ts), pero Node —
  * donde el spec calcula lo que espera ver — corre en la zona de la máquina
  * (UTC en GitHub). Todo lo que el spec compara con la UI se calcula aquí, en la
  * zona de la sede, nunca con `getHours()`/`setHours()` del proceso.
  */
-export const SEDE_TZ = 'America/Bogota';
+export const SEDE_TZ = 'America/Caracas';
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * DX-449 (TST-053): zona de las sedes de los specs que necesitan citas de HOY
  * ya empezadas o por empezar. La API decide «hoy» con su reloj real y la zona
- * de la sede: a las 00:05 de Bogotá no cabe una cita «de hace 10 min» y a las
+ * de la sede: a las 00:05 de la sede no cabe una cita «de hace 10 min» y a las
  * 23:54 no queda franja de hoy por agendar, y la CI de los merges nocturnos
- * (04:40–06:00 UTC) salía en rojo. Bogotá mientras queden al menos
+ * (03:40–05:00 UTC) salía en rojo. La zona de la suite mientras queden al menos
  * `SEDE_TODAY_MARGIN_MINUTES` desde y hasta su medianoche; si no, una zona sin
  * horario de verano en la que ahora es cerca del mediodía.
  */
@@ -28,8 +30,8 @@ export const NOON_ZONE_CANDIDATES: readonly string[] = [
   'Pacific/Pitcairn',
   'America/Phoenix',
   'America/Regina',
+  'America/Lima',
   SEDE_TZ,
-  'America/La_Paz',
   'America/Sao_Paulo',
   'America/Noronha',
   'Atlantic/Cape_Verde',
@@ -65,7 +67,7 @@ function minutesFromMidnight(at: Date, zone: string): number {
   return Math.min(minutes, 24 * 60 - minutes);
 }
 
-/** Bogotá si su medianoche queda a más del margen; si no, la candidata más cerca del mediodía. */
+/** La zona de la suite si su medianoche queda a más del margen; si no, la candidata más cerca del mediodía. */
 export function sedeTodayZone(now = new Date()): string {
   if (minutesFromMidnight(now, SEDE_TZ) >= SEDE_TODAY_MARGIN_MINUTES) return SEDE_TZ;
   let best = SEDE_TZ;
@@ -82,15 +84,6 @@ export function sedeTodayZone(now = new Date()): string {
  */
 export const SEDE_TODAY_TZ = process.env.E2E_SEDE_TODAY_TZ ?? sedeTodayZone();
 
-/** Desfase `±HH:MM` (o `Z`) de `zone` el día `day`. */
-function zoneOffset(day: string, zone: string): string {
-  const name = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' })
-    .formatToParts(new Date(`${day}T12:00:00Z`))
-    .find((p) => p.type === 'timeZoneName')?.value;
-  if (!name || name === 'GMT') return 'Z';
-  return name.slice(3);
-}
-
 /** `YYYY-MM-DD` de un instante, en la zona de la sede. */
 export function sedeDate(at: Date, zone = SEDE_TZ): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(at);
@@ -99,6 +92,20 @@ export function sedeDate(at: Date, zone = SEDE_TZ): string {
 /** El día de la sede que cae `days` días después de hoy (`YYYY-MM-DD`). */
 export function sedeDayFromToday(days: number, zone = SEDE_TZ): string {
   return sedeDate(new Date(Date.now() + days * DAY_MS), zone);
+}
+
+/**
+ * El primer día de lunes a viernes a `days` días o más de hoy. Para lo que
+ * dependa del horario de alta de una sede sin horario, que no abre el domingo y
+ * el sábado solo por la mañana: `sedeDayFromToday` caerá ahí algún día de la
+ * semana, y más cuando la suite corre en otra zona (`SEDE_TODAY_TZ`).
+ */
+export function sedeWeekdayFromToday(days: number, zone = SEDE_TZ): string {
+  for (let n = days; ; n += 1) {
+    const day = sedeDayFromToday(n, zone);
+    const weekday = new Date(`${day}T12:00:00Z`).getUTCDay();
+    if (weekday >= 1 && weekday <= 5) return day;
+  }
 }
 
 /** El día civil `days` días después de `day` (`YYYY-MM-DD`; calendario puro, sin zona). */
@@ -123,9 +130,19 @@ export function birthDateTurnedLastMonth(years: number, today: string): string {
   return `${birthYear}-${String(birthMonth).padStart(2, '0')}-15`;
 }
 
-/** El instante de `day` (`YYYY-MM-DD`) a la hora `hhmm` (`HH:MM`) de la sede. */
+/**
+ * El instante de `day` (`YYYY-MM-DD`) a la hora `hhmm` (`HH:MM`) de la sede.
+ *
+ * DX-520: con `wallInstant` del producto, el desfase es el de ESA hora y no el
+ * del mediodía UTC del día: el día de un cambio de horario (Nueva York el
+ * 1-nov-2026 o el 14-mar-2027, Berlín el 25-oct-2026) las horas de antes del
+ * cambio salían corridas una hora. Hora repetida → la primera; hora que no
+ * existe → corrida hacia delante, como la agenda.
+ */
 export function atSede(day: string, hhmm: string, zone = SEDE_TZ): Date {
-  return new Date(`${day}T${hhmm}:00${zoneOffset(day, zone)}`);
+  const match = /^(\d{2}):(\d{2})$/.exec(hhmm);
+  if (!match) throw new RangeError(`Hora no válida: ${hhmm}`);
+  return wallInstant(day, Number(match[1]) * 60 + Number(match[2]), zone);
 }
 
 /** `HH:MM` como lo pinta la app (`toLocaleTimeString('es', …)`), en la sede. */

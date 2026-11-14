@@ -12,7 +12,7 @@ import {
 import { saveBlob } from '@/lib/files/save-blob';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { locationRegionalFormat, locationTimeZone } from '@/lib/locations/location-settings';
-import { useSessionLocations } from '@/lib/locations/session-locations';
+import { useSessionLocations } from '@/lib/session/session-store';
 import { Button } from '@/components/ui/button';
 import { NativeSelect } from '@/components/ui/native-select';
 import {
@@ -226,7 +226,7 @@ export function ContingencyAgendaDialog({ open, onOpenChange, token, defaultLoca
             </Button>
             {now.kind === 'error' ? <InlineError>{now.message}</InlineError> : null}
             {now.kind === 'done' ? (
-              <p role="status" className="text-sm text-success">
+              <p role="status" className="text-sm text-success-text">
                 {copy.downloaded(now.fileName)}
               </p>
             ) : null}
@@ -252,7 +252,7 @@ export function ContingencyAgendaDialog({ open, onOpenChange, token, defaultLoca
                       ? copy.nightlyReady(fmt.dateTime(new Date(nightlyInfo.generatedAt), timeZone), nightlyInfo.appointmentCount ?? 0)
                       : copy.nightlyReadyNoFormat(nightlyInfo.appointmentCount ?? 0)}
                   </p>
-                  {!nightlyInfo.current ? <p className="text-sm text-warning">{copy.nightlyStale}</p> : null}
+                  {!nightlyInfo.current ? <p className="text-sm text-warning-text">{copy.nightlyStale}</p> : null}
                   <Button
                     type="button"
                     variant="secondary"
@@ -266,7 +266,7 @@ export function ContingencyAgendaDialog({ open, onOpenChange, token, defaultLoca
                   </Button>
                   {lastNight.kind === 'error' ? <InlineError>{lastNight.message}</InlineError> : null}
                   {lastNight.kind === 'done' ? (
-                    <p role="status" className="text-sm text-success">
+                    <p role="status" className="text-sm text-success-text">
                       {copy.downloaded(lastNight.fileName)}
                     </p>
                   ) : null}

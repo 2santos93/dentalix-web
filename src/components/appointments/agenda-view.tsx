@@ -1,7 +1,7 @@
 'use client';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
-import { useSessionLocations } from '@/lib/locations/session-locations';
+import { useSessionLocations } from '@/lib/session/session-store';
 import { useEffect, useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -31,7 +31,7 @@ import {
   blockShownInColumn,
   type ScheduleBlockLike,
 } from '@/lib/appointments/schedule-blocks';
-import type { MoveTarget } from '@/lib/appointments/day-grid';
+import type { MovePatch, MoveTarget } from '@/lib/appointments/day-grid';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import { monthGridRange, addMonths, monthLabel } from '@/lib/appointments/calendar-grid';
 import { DayAgenda } from '@/components/appointments/day-agenda';
@@ -43,12 +43,15 @@ import {
   chairColumnOf,
   chairColumns as buildChairColumns,
   chairDisplayName,
+  offeredProvider,
   readColumnsBy,
   writeColumnsBy,
   type ColumnsBy,
 } from '@/lib/chairs/chair-columns';
 import { announceAppointmentWarnings } from '@/components/appointments/appointment-warnings';
 import { MoveAppointmentDialog } from '@/components/appointments/move-appointment-dialog';
+import { ChairProviderOfferDialog } from '@/components/appointments/chair-provider-offer-dialog';
+import { canOfferNextOpening } from '@/lib/appointments/next-opening';
 import { CompletedExitModal } from '@/components/appointments/completed-exit-modal';
 import { AppointmentStatusSelect } from '@/components/appointments/appointment-status-select';
 import { CancelAppointmentDialog } from '@/components/appointments/cancel-appointment-dialog';
@@ -68,7 +71,7 @@ import { CancellationFeePanel } from '@/components/appointments/cancellation-fee
 import { AppointmentRemindersPanel } from '@/components/reminders/appointment-reminders-panel';
 import { AppointmentPostOpPanel } from '@/components/postop/appointment-postop-panel';
 import { AnamnesisLinkPanel } from '@/components/anamnesis/anamnesis-link-panel';
-import { canDeliverPostOp } from '@/lib/postop/postop-api';
+import { canDeliverPostOp, postOpPanelMode } from '@/lib/postop/postop-api';
 import { NewEvolutionModal } from '@/components/clinical-notes/new-evolution-modal';
 import { canRegisterEvolution } from '@/lib/clinical-notes/evolution-access';
 import { ScheduleBlockDialog } from '@/components/appointments/schedule-block-dialog';
@@ -79,7 +82,11 @@ import {
 } from '@/components/appointments/waitlist-panel';
 import { useWaitlist } from '@/components/appointments/use-waitlist';
 import { FillOpeningPanel } from '@/components/appointments/fill-opening-panel';
-import { WANTS_EARLIER_LABEL } from '@/components/appointments/wants-earlier-chip';
+import {
+  EARLIER_WINDOW_LABELS,
+  REQUESTED_BY_PATIENT_LABEL,
+  WANTS_EARLIER_LABEL,
+} from '@/components/appointments/wants-earlier-chip';
 import { canChangeWantsEarlier } from '@/lib/appointments/wants-earlier';
 import {
   canOfferOpenings,
@@ -95,7 +102,9 @@ import {
 import { Plus, ChevronLeft, ChevronRight, CalendarOff, ListTodo, NotebookPen, Armchair, FileDown, Siren } from 'lucide-react';
 import { ContingencyAgendaDialog, contingencyCopy } from '@/components/appointments/contingency-agenda-dialog';
 import { WalkInDialog, walkInCopy } from '@/components/appointments/walk-in-dialog';
-import { canWalkIn, type WalkInResult } from '@/lib/appointments/walk-in';
+import { OVERBOOK_SLOT_TAKEN, canWalkIn, type WalkInResult } from '@/lib/appointments/walk-in';
+import { KeepOverbookedDialog, type KeepOverbookedPrompt } from '@/components/appointments/keep-overbooked-dialog';
+import { OverbookedChip } from '@/components/appointments/overbooked-chip';
 import { canDownloadContingencyAgenda } from '@/lib/appointments/contingency-agenda-api';
 import { InClinicPanel, inClinicCopy } from '@/components/appointments/in-clinic-panel';
 import { focusLocationSwitcher } from '@/components/locations/location-switcher';
@@ -123,9 +132,11 @@ import {
 } from '@/components/ui/dialog';
 import { FormField } from '@/components/shared/form-field';
 import { FieldError } from '@/components/errors/field-error';
+import { InlineError } from '@/components/errors/inline-error';
 import { SectionError } from '@/components/errors/section-error';
 import { notifyError } from '@/components/errors/notify';
 import { toast } from 'sonner';
+import { ApiError, isRejection } from '@/lib/api/api-error';
 import {
   Sheet,
   SheetContent,
@@ -138,6 +149,7 @@ import {
 import { cn } from '@/lib/utils';
 import { civilDateLabel } from '@/lib/format/date';
 import { sedeTimeRange, useSedeClock, type AgendaClock } from '@/lib/locations/sede-clock';
+import { stampPainters } from '@/lib/locations/sede-stamp';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
@@ -148,6 +160,7 @@ import { addCivilDays, civilWeekStart, wallDay, wallDayRange, wallWeekRange } fr
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
+  detailRetry: 'Reintentar',
   // DX-170: evolución ligada a la cita, desde su tarjeta.
   registerEvolution: 'Registrar evolución',
   evolutionSaved: (patient: string) => `Evolución registrada en la ficha de ${patient}.`,
@@ -184,6 +197,8 @@ const copy = {
   // Escalón 3 (segundo plano): sin "Intenta de nuevo." — el toast trae acción.
   genericRefreshError: 'No pudimos actualizar la agenda.',
   genericStatusChangeError: 'No pudimos cambiar el estado de la cita.',
+  /** DX-509: reactivada a sabiendas en sobrecupo. */
+  reactivatedOverbooked: 'Cita reactivada. Sigue en sobrecupo.',
   /** Selected-day appointment count, shown above the day panel in the month view. */
   dayCount: (n: number) => (n === 0 ? 'Sin citas' : n === 1 ? '1 cita' : `${n} citas`),
   noProviders: 'No hay profesionales activos en esta clínica.',
@@ -198,6 +213,9 @@ const copy = {
   chairsError: 'No pudimos cargar los sillones de la sede: la agenda se ve por profesional.',
   genericMoveError: 'No pudimos mover la cita.',
   moved: 'Cita movida.',
+  // DX-479: por sillón se anuncia a dónde fue (el lector de pantalla no ve la columna).
+  movedTo: (where: string, range: string | null) => (range ? `Cita movida a ${where}, ${range}.` : `Cita movida a ${where}.`),
+  noChair: 'Sin sillón',
   // DX-210: «Ocupar este hueco» tras cancelar.
   cancelled: 'Cita cancelada.',
   cancelledBy: 'Canceló:',
@@ -224,7 +242,7 @@ const copy = {
   removeBlockError: 'No pudimos quitar el bloqueo. Intenta de nuevo.',
   blockRemoved: 'Bloqueo quitado.',
   waitlistButton: 'Pendientes',
-  waitlistButtonCount: (n: number) => `Pendientes por agendar: ${n}`,
+  waitlistButtonCount: (n: number) => `Pendientes ${n} · por agendar`,
   waitlistSheetDescription: 'Pacientes que cancelaron o no vinieron, para volver a darles cita.',
   // DX-200: panel «En clínica».
   inClinicButton: 'En clínica',
@@ -432,7 +450,18 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   const [roster, setRoster] = useState<Roster | null>(null);
   const [showAllProviders, setShowAllProviders] = useState(false);
   const [movingAppointment, setMovingAppointment] = useState<Appointment | null>(null);
+  // DX-509-bis: el arrastre de un sobrecupo que chocó abre «Mover a…» con el destino y el siguiente hueco.
+  const [moveCollision, setMoveCollision] = useState<{ target: MoveTarget; error: unknown; message: string } | null>(
+    null,
+  );
   const [movePendingId, setMovePendingId] = useState<string | null>(null);
+  // DX-479: soltar en un sillón con otro profesional por defecto pregunta antes del PATCH.
+  const [chairProviderOffer, setChairProviderOffer] = useState<{
+    appointment: Appointment;
+    patch: MovePatch;
+    chair: Chair;
+    offeredProviderId: string;
+  } | null>(null);
   const role = getTokenRole(token);
   const canMove = canMoveAppointments(role);
   // DX-122: bloqueos de agenda (Día y Semana) y «Pendientes por agendar».
@@ -517,7 +546,13 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   const [cancelling, setCancelling] = useState<Appointment | null>(null);
   // El selector de estado desde el que se abrió: al cerrar el diálogo el foco
   // vuelve ahí (Radix lo devolvería a la opción de la lista, que ya no existe).
-  const cancelReturnFocus = useRef<HTMLElement | null>(null);
+  const statusReturnFocus = useRef<HTMLElement | null>(null);
+  // DX-538: el fallo de una acción del detalle, dentro del detalle.
+  // DX-538-bis: `retry` nulo cuando la API lo rechazó (4xx): repetirlo daría lo mismo.
+  const [detailError, setDetailError] = useState<{
+    message: string;
+    retry: (() => Promise<void>) | null;
+  } | null>(null);
 
   // Fetch active staff once (retriable) — feeds the provider selector.
   useEffect(() => {
@@ -836,13 +871,21 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
 
   // DX-200: un paso del flujo (desde la tarjeta, el detalle o el panel)
   // refresca la agenda y el panel; por la ref, con los filtros vigentes.
+  // DX-509: «Mantener en sobrecupo» al reactivar (el de «Deshacer llegada»
+  // lo lleva el runner del flujo).
+  const [keepOverbooked, setKeepOverbooked] = useState<KeepOverbookedPrompt | null>(null);
   const flow = usePatientFlow(token, () => {
     setInClinicReloadKey((k) => k + 1);
     void refreshAppointmentsInPlaceRef.current();
   });
 
+  /** DX-492: «Mover a…» desde «En clínica»: la agenda de al lado también cambia. */
+  function handleInClinicMoved() {
+    void refreshAppointmentsInPlaceRef.current();
+  }
+
   /** Botones rápidos del flujo de una cita de la agenda (DX-200). */
-  function renderFlowActions(appointment: Appointment, className = 'mt-2') {
+  function renderFlowActions(appointment: Appointment, className = 'mt-2', compact = false) {
     return (
       <PatientFlowActions
         appointmentId={appointment.id}
@@ -852,6 +895,8 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
         patientName={patientLabel(appointment)}
         runner={flow}
         className={className}
+        ownAppointment={appointment.providerId === userId}
+        compact={compact}
       />
     );
   }
@@ -889,7 +934,13 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
     setShowForm(true);
   }
 
-  /** DX-211: «Nueva cita» de la columna de un sillón (sin profesional: lo propone el sillón). */
+  /**
+   * DX-211: «Nueva cita» de la columna de un sillón, o clic en uno de sus
+   * huecos (DX-480). Solo se pasa el sillón: el formulario, con el profesional
+   * vacío, propone el del sillón por defecto (`proposeProvider`); los dos
+   * quedan editables y cambiar el sillón a mano nunca pisa al profesional ya
+   * elegido.
+   */
   function handleNewFromChair(columnId: string, startTime?: string) {
     setSlotPrefill({
       date: selectedDate,
@@ -915,27 +966,82 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
    * fuera de horario...), la cita vuelve a su sitio y el mensaje sale en un
    * aviso con Reintentar: nunca queda a medias.
    */
-  async function handleDrop(appointment: Appointment, target: MoveTarget) {
+  async function handleDrop(appointment: Appointment, patch: MovePatch) {
     if (!token) return;
+    // DX-479: a un sillón con OTRO profesional por defecto: se pregunta antes
+    // de mover (el profesional nunca cambia solo); «Mantener» es lo de siempre.
+    const targetChair = typeof patch.chairId === 'string' ? chairs.find((c) => c.id === patch.chairId) : undefined;
+    const offered = targetChair
+      ? offeredProvider(patch.providerId ?? appointment.providerId, targetChair, staff.map((s) => s.userId))
+      : null;
+    if (targetChair && offered !== null) {
+      setChairProviderOffer({ appointment, patch, chair: targetChair, offeredProviderId: offered });
+      return;
+    }
+    await performDrop(appointment, patch);
+  }
+
+  /** El PATCH del arrastre, ya decidido el profesional. */
+  async function performDrop(appointment: Appointment, patch: MovePatch) {
+    if (!token) return;
+    // La tarjeta pasa YA a su destino; el sillón, con su nombre para la columna.
+    const chairPatch =
+      patch.chairId === undefined
+        ? {}
+        : { chairId: patch.chairId, chair: chairs.find((c) => c.id === patch.chairId) ?? null };
     setAppointments((prev) =>
-      prev.map((a) => (a.id === appointment.id ? { ...a, ...target } : a)),
+      prev.map((a) => (a.id === appointment.id ? { ...a, ...patch, ...chairPatch } : a)),
     );
     setMovePendingId(appointment.id);
     try {
-      const updated = await updateAppointment(token, appointment.id, target);
-      toast.success(copy.moved);
+      const updated = await updateAppointment(token, appointment.id, patch);
+      toast.success(
+        patch.chairId === undefined
+          ? copy.moved
+          : copy.movedTo(
+              patch.chairId === null ? copy.noChair : `«${chairPatch.chair?.name ?? ''}»`,
+              patch.start && patch.end ? sedeTimeRange(patch.start, patch.end, clock.of(appointment.locationId)) : null,
+            ),
+      );
       announceAppointmentWarnings(updated);
       await refreshAppointmentsInPlace();
     } catch (err) {
       setAppointments((prev) =>
         prev.map((a) => (a.id === appointment.id ? appointment : a)),
       );
-      notifyError(apiErrorMessage(err, copy.genericMoveError), {
-        onRetry: () => handleDrop(appointment, target),
-      });
+      // DX-509-bis: un sobrecupo que no cabe ahí: «Mover a…» con el siguiente hueco libre.
+      if (canOfferNextOpening(appointment, err) && clock.of(appointment.locationId)) {
+        const target: MoveTarget = {
+          start: patch.start ?? appointment.start,
+          end: patch.end ?? appointment.end,
+          providerId: patch.providerId ?? appointment.providerId,
+          ...(patch.chairId === undefined ? {} : { chairId: patch.chairId }),
+        };
+        setMoveCollision({ target, error: err, message: apiErrorMessage(err, copy.genericMoveError) });
+        setMovingAppointment(appointment);
+        return;
+      }
+      // DX-133: un 4xx (solape, fuera de horario) repetiría el mismo rechazo: sin «Reintentar».
+      notifyError(
+        apiErrorMessage(err, copy.genericMoveError),
+        isRejection(err) ? undefined : { onRetry: () => performDrop(appointment, patch) },
+      );
     } finally {
       setMovePendingId(null);
     }
+  }
+
+  /** DX-479: «Asignar a X» pasa la cita al profesional del sillón: eso ya es reagendar (hueco entero). */
+  function assignOfferedProvider() {
+    if (!chairProviderOffer) return;
+    const { appointment, patch, offeredProviderId } = chairProviderOffer;
+    setChairProviderOffer(null);
+    void performDrop(appointment, {
+      ...patch,
+      start: patch.start ?? appointment.start,
+      end: patch.end ?? appointment.end,
+      providerId: offeredProviderId,
+    });
   }
 
   /** «Mover a…»: sin el reloj de la sede de la cita no se puede elegir su hora. */
@@ -944,12 +1050,14 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
       notifyError(SEDE_LOCALE_ERROR);
       return;
     }
+    setMoveCollision(null);
     setMovingAppointment(appointment);
   }
 
   /** «Mover a…» confirmado por el servidor: cierra el modal, lo anuncia y refresca. */
   function handleMoved(updated: Appointment) {
     setMovingAppointment(null);
+    setMoveCollision(null);
     toast.success(copy.moved);
     announceAppointmentWarnings(updated);
     void refreshAppointmentsInPlace();
@@ -1024,33 +1132,62 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
    * otherwise the select would briefly re-enable showing the stale
    * pre-change status (review fix).
    */
+  /** DX-299: los diálogos que abre el selector de estado le devuelven el foco al cerrarse. */
+  function restoreStatusFocus(event: Event) {
+    const trigger = statusReturnFocus.current;
+    statusReturnFocus.current = null;
+    if (!trigger?.isConnected) return;
+    event.preventDefault();
+    trigger.focus();
+  }
+
   async function handleStatusChange(
     id: string,
     status: AppointmentStatus,
     trigger?: HTMLElement | null,
   ) {
     if (!token) return;
+    setDetailError(null);
     const before = appointments.find((a) => a.id === id);
     // DX-279: cancelar va por el modal de origen y motivo (también desde
     // «Completada», que pide además el motivo de esa salida).
     if (status === 'CANCELLED' && before && before.status !== 'CANCELLED') {
-      cancelReturnFocus.current = trigger ?? null;
+      statusReturnFocus.current = trigger ?? null;
       setCancelling(before);
       return;
     }
     // DX-273: la salida de «Completada» va por el modal del motivo.
     if (before?.status === 'COMPLETED' && status !== 'COMPLETED') {
+      statusReturnFocus.current = trigger ?? null;
       setCompletedExit({ id, to: status });
       return;
     }
     setUpdatingId(id);
     try {
-      await updateAppointment(token, id, { status });
+      // DX-267-bis: reactivar pasa por las reglas de mover; sus avisos (fuera
+      // del horario del profesional, bloqueo que deja agendar) se enseñan.
+      announceAppointmentWarnings(await updateAppointment(token, id, { status }));
       await afterStatusChange();
     } catch (err) {
-      notifyError(apiErrorMessage(err, copy.genericStatusChangeError), {
-        onRetry: () => handleStatusChange(id, status),
-      });
+      // DX-509: reactivar una urgencia en sobrecupo cuya hora ya ocupa otra
+      // cita: la decisión de mantenerla en sobrecupo es explícita.
+      if (err instanceof ApiError && err.code === OVERBOOK_SLOT_TAKEN) {
+        setKeepOverbooked({
+          message: apiErrorMessage(err, copy.genericStatusChangeError),
+          confirm: async () => {
+            const kept = await updateAppointment(token, id, { status, keepOverbooked: true });
+            toast.success(copy.reactivatedOverbooked);
+            announceAppointmentWarnings(kept);
+            await afterStatusChange();
+          },
+        });
+        return;
+      }
+      const message = apiErrorMessage(err, copy.genericStatusChangeError);
+      const retry = isRejection(err) ? null : () => handleStatusChange(id, status, trigger);
+      // DX-538: con el detalle abierto, el aviso con botón no se podría pulsar.
+      if (detailAppointment?.id === id) setDetailError({ message, retry });
+      else notifyError(message, retry ? { onRetry: retry } : undefined);
     } finally {
       setUpdatingId(null);
     }
@@ -1097,7 +1234,8 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   /** DX-273: la cita salió de «Completada»: aviso con el mínimo recalculado. */
   async function handleCompletedExitDone(result: AppointmentWriteDetail) {
     setCompletedExit(null);
-    const summary = result.completedExit ? completedExitSummary(result.completedExit) : [];
+    const summary = result.completedExit ? completedExitSummary(result.completedExit, (day) => stampPainters(clock).civilDate(day, result.locationId))
+      : [];
     toast.success(copy.completedExitDone(STATUS_LABELS[result.status]), {
       description: summary.length ? summary.join(' ') : undefined,
     });
@@ -1110,14 +1248,16 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   /** DX-210: marcar o desmarcar «Adelantar si hay hueco» desde el detalle. */
   async function handleWantsEarlierChange(id: string, wantsEarlier: boolean) {
     if (!token) return;
+    setDetailError(null);
     setUpdatingId(id);
     try {
       await updateAppointment(token, id, { wantsEarlier });
       await refreshAppointmentsInPlace();
     } catch (err) {
-      notifyError(apiErrorMessage(err, copy.wantsEarlierError), {
-        onRetry: () => handleWantsEarlierChange(id, wantsEarlier),
-      });
+      const message = apiErrorMessage(err, copy.wantsEarlierError);
+      const retry = isRejection(err) ? null : () => handleWantsEarlierChange(id, wantsEarlier);
+      if (detailAppointment?.id === id) setDetailError({ message, retry });
+      else notifyError(message, retry ? { onRetry: retry } : undefined);
     } finally {
       setUpdatingId(null);
     }
@@ -1167,10 +1307,14 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Barra de la agenda. Fila 1: vista · ‹ › Hoy · fecha · periodo, y a la
-          derecha las dos acciones. Fila 2: el filtro de profesional (con su
-          etiqueta visible), la presentación del Día y, sin panel lateral,
-          «En clínica» y «Pendientes». Se parte en filas limpias a 900 y 390. */}
+      {/* Barra de la agenda. Fila 1: vista · ‹ › Hoy · fecha · periodo (en el
+          teléfono, también «Nueva cita»). Fila 2, la barra de filtros: el filtro
+          de profesional (con su etiqueta visible) y la presentación del Día a la
+          izquierda; a la derecha, sin panel lateral, «En clínica» y «Pendientes»,
+          y en escritorio las acciones, que cierra «Nueva cita» (DESIGN.md: la
+          acción principal va en la barra de filtros, a la derecha, en su misma
+          fila). Si no cabe, el grupo de la derecha baja entero, alineado a la
+          derecha: nunca queda una fila de acciones suelta. */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
           <SegmentedControl
@@ -1210,29 +1354,16 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
           <h2 className="t-title min-w-0 text-ink first-letter:uppercase" data-testid="agenda-period">
             {nav.label}
           </h2>
-          <div className="ml-auto flex shrink-0 gap-2">
-            {/* En el teléfono «Bloquear horario» baja, como icono con su
-                nombre, a la fila de «En clínica» y «Pendientes»: así «Nueva
-                cita» cabe junto al periodo. */}
-            {canDownloadContingencyAgenda(role) && !phone ? (
-              <Button type="button" variant="secondary" onClick={() => setShowContingency(true)}>
-                <FileDown aria-hidden /> {contingencyCopy.button}
+          {/* En el teléfono «Nueva cita» va junto al periodo; las demás acciones
+              bajan, como iconos con su nombre, a la fila de «En clínica» y
+              «Pendientes». */}
+          {phone ? (
+            <div className="ml-auto flex shrink-0 gap-2">
+              <Button type="button" onClick={openNewAppointment}>
+                <Plus /> {copy.newAppointment}
               </Button>
-            ) : null}
-            {canWriteBlocks && !phone ? (
-              <Button type="button" variant="secondary" onClick={() => setShowBlockDialog(true)}>
-                <CalendarOff aria-hidden /> {copy.blockSchedule}
-              </Button>
-            ) : null}
-            {canWalkIn(role) && !phone ? (
-              <Button type="button" variant="secondary" onClick={() => setShowWalkIn(true)}>
-                <Siren aria-hidden /> {walkInCopy.button}
-              </Button>
-            ) : null}
-            <Button type="button" onClick={openNewAppointment}>
-              <Plus /> {copy.newAppointment}
-            </Button>
-          </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
@@ -1301,8 +1432,10 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
               />
             </div>
           ) : null}
-          {!wide ? (
-            <div className="flex w-full gap-2 sm:ml-auto sm:w-auto [&>button]:flex-1 sm:[&>button]:flex-none">
+          {!wide || !phone ? (
+            <div className="flex w-full gap-2 sm:ml-auto sm:w-auto sm:flex-wrap sm:justify-end [&>button]:flex-1 sm:[&>button]:flex-none">
+              {!wide ? (
+                <>
               {/* DX-200: «En clínica», en un cajón sin panel lateral. */}
               <Button
                 type="button"
@@ -1317,7 +1450,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                   setInClinicOpen(true);
                 }}
               >
-                <Armchair aria-hidden /> {copy.inClinicButton}
+                <Armchair aria-hidden /> {copy.inClinicButton}{' '}
                 {inClinicTotal ? <span className={counterClass}>{inClinicTotal}</span> : null}
               </Button>
               {/* DX-122: en pantallas sin panel lateral, los pendientes van en un cajón. */}
@@ -1327,9 +1460,33 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 aria-label={waitlistCount === null ? copy.waitlistButton : copy.waitlistButtonCount(waitlistCount)}
                 onClick={() => setWaitlistOpen(true)}
               >
-                <ListTodo aria-hidden /> {copy.waitlistButton}
+                <ListTodo aria-hidden /> {copy.waitlistButton}{' '}
                 {waitlistCount ? <span className={counterClass}>{waitlistCount}</span> : null}
               </Button>
+                </>
+              ) : null}
+              {!phone ? (
+                <>
+                  {canDownloadContingencyAgenda(role) ? (
+                    <Button type="button" variant="secondary" onClick={() => setShowContingency(true)}>
+                      <FileDown aria-hidden /> {contingencyCopy.button}
+                    </Button>
+                  ) : null}
+                  {canWriteBlocks ? (
+                    <Button type="button" variant="secondary" onClick={() => setShowBlockDialog(true)}>
+                      <CalendarOff aria-hidden /> {copy.blockSchedule}
+                    </Button>
+                  ) : null}
+                  {canWalkIn(role) ? (
+                    <Button type="button" variant="secondary" onClick={() => setShowWalkIn(true)}>
+                      <Siren aria-hidden /> {walkInCopy.button}
+                    </Button>
+                  ) : null}
+                  <Button type="button" onClick={openNewAppointment}>
+                    <Plus /> {copy.newAppointment}
+                  </Button>
+                </>
+              ) : null}
               {canWalkIn(role) && phone ? (
                 <Button
                   type="button"
@@ -1504,6 +1661,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 canMove={canMove}
                 onSelectAppointment={openAppointmentDetail}
                 onMoveRequest={requestMove}
+                renderFlowAction={(a) => renderFlowActions(a, '', true)}
                 onDrop={(a, target) => void handleDrop(a, target)}
                 onNewAppointment={handleNewFromChair}
                 pendingId={movePendingId}
@@ -1532,6 +1690,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 canMove={canMove}
                 onSelectAppointment={openAppointmentDetail}
                 onMoveRequest={requestMove}
+                renderFlowAction={(a) => renderFlowActions(a, '', true)}
                 onDrop={(a, target) => void handleDrop(a, target)}
                 onNewAppointment={handleNewFromColumn}
                 pendingId={movePendingId}
@@ -1564,6 +1723,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
             token={token}
             appointmentId={completedExit.id}
             to={completedExit.to}
+            onCloseAutoFocus={restoreStatusFocus}
             onDone={(result) => void handleCompletedExitDone(result)}
           />
         ) : null}
@@ -1578,13 +1738,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
             appointmentId={cancelling.id}
             patientName={patientLabel(cancelling)}
             fromStatus={cancelling.status}
-            onCloseAutoFocus={(event) => {
-              const trigger = cancelReturnFocus.current;
-              cancelReturnFocus.current = null;
-              if (!trigger?.isConnected) return;
-              event.preventDefault();
-              trigger.focus();
-            }}
+            onCloseAutoFocus={restoreStatusFocus}
             onDone={() => void handleCancelled(cancelling)}
           />
         ) : null}
@@ -1594,17 +1748,37 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
             key={movingAppointment.id}
             open
             onOpenChange={(open) => {
-              if (!open) setMovingAppointment(null);
+              if (!open) {
+                setMovingAppointment(null);
+                setMoveCollision(null);
+              }
             }}
             token={token}
             appointment={movingAppointment}
             clock={movingClock}
+            collision={moveCollision}
             providers={staff}
             hours={hours}
             onMoved={handleMoved}
             chairs={chairs.filter((c) => c.locationId === movingAppointment.locationId)}
           />
         )}
+
+        {chairProviderOffer ? (
+          <ChairProviderOfferDialog
+            open
+            chairName={chairProviderOffer.chair.name}
+            currentProviderName={staffName(chairProviderOffer.appointment.providerId) ?? ''}
+            offeredProviderName={staffName(chairProviderOffer.offeredProviderId) ?? ''}
+            onKeep={() => {
+              const { appointment, patch } = chairProviderOffer;
+              setChairProviderOffer(null);
+              void performDrop(appointment, patch);
+            }}
+            onAssign={assignOfferedProvider}
+            onCancel={() => setChairProviderOffer(null)}
+          />
+        ) : null}
 
         {/* Create-appointment form (centered dialog — protected focus for a
             multi-field task). */}
@@ -1697,6 +1871,12 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 <AppointmentMedicalAlerts flags={liveDetailAppointment.medicalAlerts} />
                 {/* DX-279: inasistencias y cancelaciones tardías del paciente (12 meses). */}
                 <AttendanceBadge counts={liveDetailAppointment.attendance} className="self-start" />
+                {/* DX-509: la urgencia sigue sin ocupar la hora del profesional. */}
+                <OverbookedChip
+                  overbooked={liveDetailAppointment.overbooked}
+                  status={liveDetailAppointment.status}
+                  className="self-start"
+                />
                 {liveDetailAppointment.status === 'CANCELLED' &&
                 cancellationSummary(liveDetailAppointment) ? (
                   <p className="text-sm text-muted" data-testid="cancellation-summary">
@@ -1723,7 +1903,10 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                     <DescriptionItem label={copy.detailReason}>{liveDetailAppointment.reason}</DescriptionItem>
                   ) : null}
                 </DescriptionList>
-                <CoverageDetailLine coverage={liveDetailAppointment.coverage} />
+                <CoverageDetailLine
+                  coverage={liveDetailAppointment.coverage}
+                  stamp={{ civilDate: (day) => stampPainters(clock).civilDate(day, liveDetailAppointment.locationId) }}
+                />
                 <FormField htmlFor="detail-status" label={copy.statusLabel}>
                   {/* DX-295: las flechas no cambian la cita; solo Enter o un clic. */}
                   <AppointmentStatusSelect
@@ -1737,6 +1920,21 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                     }}
                   />
                 </FormField>
+                {detailError ? (
+                  <div className="flex flex-col items-start gap-2">
+                    <InlineError variant="summary">{detailError.message}</InlineError>
+                    {detailError.retry ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => void detailError.retry?.()}
+                      >
+                        {copy.detailRetry}
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
                 {renderFlowActions(liveDetailAppointment, '')}
                 {canChangeWantsEarlier(role) &&
                 (liveDetailAppointment.status === 'SCHEDULED' ||
@@ -1749,7 +1947,22 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                       void handleWantsEarlierChange(liveDetailAppointment.id, e.target.checked)
                     }
                     label={WANTS_EARLIER_LABEL}
-                    description={copy.wantsEarlierHint}
+                    description={
+                      // DX-437: lo pidió el paciente desde el enlace, con su franja.
+                      liveDetailAppointment.earlierRequestedAt
+                        ? [
+                            copy.wantsEarlierHint,
+                            [
+                              REQUESTED_BY_PATIENT_LABEL,
+                              liveDetailAppointment.earlierWindow
+                                ? EARLIER_WINDOW_LABELS[liveDetailAppointment.earlierWindow]
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ') + '.',
+                          ].join(' ')
+                        : copy.wantsEarlierHint
+                    }
                   />
                 ) : null}
                 {liveDetailAppointment.status === 'CANCELLED' &&
@@ -1824,15 +2037,24 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 {/* DX-222: indicaciones postoperatorias de la cita (propuesta y entrega).
                     La `key` lleva prefijo: es hermano del panel de confirmación,
                     que ya usa el id de la cita, y dos hermanos con la misma key
-                    se duplican al re-renderizar. */}
-                {canDeliverPostOp(role) ? (
-                  <AppointmentPostOpPanel
-                    key={`postop-${liveDetailAppointment.id}`}
-                    token={token}
-                    appointmentId={liveDetailAppointment.id}
-                    clock={clock.of(liveDetailAppointment.locationId)}
-                  />
-                ) : null}
+                    se duplican al re-renderizar.
+                    DX-250: en una cita cancelada o no-show, solo las entregas
+                    anteriores (sin acciones); en una de un día que aún no llega,
+                    nada (ni se pide su lista). */}
+                {(() => {
+                  const mode = canDeliverPostOp(role)
+                    ? postOpPanelMode(liveDetailAppointment, clock.of(liveDetailAppointment.locationId))
+                    : 'none';
+                  return mode === 'none' ? null : (
+                    <AppointmentPostOpPanel
+                      key={`postop-${liveDetailAppointment.id}`}
+                      token={token}
+                      appointmentId={liveDetailAppointment.id}
+                      clock={clock.of(liveDetailAppointment.locationId)}
+                      readOnly={mode === 'readonly'}
+                    />
+                  );
+                })()}
                 {/* DX-026: se relee al reprogramar o cambiar el estado (la API
                     recalcula los pendientes con la hora y el estado vigentes). */}
                 <AppointmentRemindersPanel
@@ -1853,7 +2075,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
           aria-label={`${inClinicCopy.title} · ${waitlistCopy.title}`}
           className="sticky top-4 flex max-h-[calc(100dvh-6rem)] flex-col gap-6 divide-y divide-border-subtle overflow-y-auto overscroll-contain [&>*+*]:pt-6"
         >
-          <InClinicPanel state={inClinic} role={role} runner={flow} />
+          <InClinicPanel state={inClinic} role={role} runner={flow} token={token} onMoved={handleInClinicMoved} />
           <WaitlistPanel
             token={token}
             staff={staff}
@@ -1906,6 +2128,8 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 state={inClinic}
                 role={role}
                 runner={flow}
+                token={token}
+                onMoved={handleInClinicMoved}
                 onChooseLocation={() => {
                   chooseLocationOnClose.current = true;
                   setInClinicOpen(false);
@@ -1963,6 +2187,9 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
           defaultLocationId={activeLocationId}
         />
       ) : null}
+
+      {flow.overbookDialog}
+      <KeepOverbookedDialog prompt={keepOverbooked} onClose={() => setKeepOverbooked(null)} />
 
       {showWalkIn ? (
         <WalkInDialog

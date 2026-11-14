@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Loader2, MailCheck } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -9,7 +9,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
-import { AUTH_FORM_CLASS, AUTH_LINK_CLASS, AUTH_SUBMIT_CLASS } from './auth-layout';
+import {
+  AUTH_FORM_CLASS,
+  AUTH_LINK_CLASS,
+  AUTH_SUBMIT_CLASS,
+  FOCUSABLE_TITLE_CLASS,
+} from './auth-layout';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -40,6 +45,19 @@ export function ForgotPasswordForm() {
   const [submitting, setSubmitting] = useState(false);
   const [sentMessage, setSentMessage] = useState<string | null>(null);
 
+  // DX-114 (FE-040): cada cambio de pantalla desmonta el control con el foco.
+  // Al enviar, el foco va al título «Revisa tu correo»; con «Enviar otro
+  // enlace», de vuelta al campo de correo. Solo tras una acción (no al montar).
+  const sentTitleRef = useRef<HTMLHeadingElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const pendingFocus = useRef<'title' | 'email' | null>(null);
+  useEffect(() => {
+    const target = pendingFocus.current;
+    pendingFocus.current = null;
+    if (target === 'title') sentTitleRef.current?.focus();
+    else if (target === 'email') emailRef.current?.focus();
+  }, [sentMessage]);
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const trimmed = email.trim();
@@ -51,6 +69,7 @@ export function ForgotPasswordForm() {
     setSubmitting(true);
     try {
       const res = await requestPasswordReset(trimmed);
+      pendingFocus.current = 'title';
       setSentMessage(res.message || copy.sentFallback);
     } catch (err) {
       setError(apiErrorMessage(err, { fallback: copy.genericError }));
@@ -64,7 +83,9 @@ export function ForgotPasswordForm() {
       <div role="status" className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <MailCheck className="size-5 shrink-0 text-success-text" aria-hidden />
-          <h2 className="t-title text-ink">{copy.sentTitle}</h2>
+          <h2 ref={sentTitleRef} tabIndex={-1} className={FOCUSABLE_TITLE_CLASS}>
+            {copy.sentTitle}
+          </h2>
         </div>
         <p className="text-sm text-muted">{sentMessage}</p>
         <p className="text-sm text-muted">{copy.sentHint}</p>
@@ -72,7 +93,10 @@ export function ForgotPasswordForm() {
           <Link href="/login" className={AUTH_LINK_CLASS}>
             {copy.backToLogin}
           </Link>
-          <Button type="button" variant="secondary" onClick={() => setSentMessage(null)}>
+          <Button type="button" variant="secondary" onClick={() => {
+              pendingFocus.current = 'email';
+              setSentMessage(null);
+            }}>
             {copy.sendAgain}
           </Button>
         </div>
@@ -85,6 +109,7 @@ export function ForgotPasswordForm() {
       <p className="text-sm text-muted">{copy.intro}</p>
       <FormField htmlFor="forgot-password-email" label={copy.emailLabel}>
         <Input
+          ref={emailRef}
           id="forgot-password-email"
           name="email"
           type="email"

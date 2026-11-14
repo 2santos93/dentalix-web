@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { SendToSignModal } from './send-to-sign-modal';
 import { ApiError } from '@/lib/api/api-error';
 import {
@@ -86,6 +86,21 @@ describe('SendToSignModal (DX-243)', () => {
   beforeEach(() => {
     mockedOptions.mockReset();
     mockedCreate.mockReset();
+  });
+
+  it('DX-354b: el día del plan sale con la zona y el formato de la sede de la pantalla; sin sede, «—»', async () => {
+    mockedOptions.mockResolvedValue(options());
+    const berlin = testAgendaClock([
+      caracasSede({ id: 'sede-berlin', timeZone: 'Europe/Berlin', locale: 'de-DE', hourCycle: 'h23' }),
+    ]);
+    const day = berlin.fmt.date(new Date('2026-09-01T15:00:00.000Z'), berlin.timeZone);
+    renderModal({ clock: berlin });
+    const plan = await screen.findByLabelText(/plan de tratamiento/i);
+    expect(await within(plan).findByRole('option', { name: new RegExp(`Presentado · ${day.replace(/\./g, '\\.')}$`) })).toBeInTheDocument();
+    cleanup();
+    renderModal({ clock: null });
+    const none = await screen.findByLabelText(/plan de tratamiento/i);
+    expect(await within(none).findByRole('option', { name: /Presentado · —$/ })).toBeInTheDocument();
   });
 
   it('recepción elige plantilla, profesional y plan; envía CONSENT por email al destino enmascarado', async () => {

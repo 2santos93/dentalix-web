@@ -1,6 +1,7 @@
 import { statusLabels } from '@/lib/status/tones';
 import type { ClinicRole } from '@/lib/me/me-api';
-import { formatCurrency } from '@/lib/format/currency';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeMoney } from '@/lib/format/sede-number';
 import type {
   CollectionChannel,
   CollectionOutcome,
@@ -48,21 +49,34 @@ const days = (n: number) => (n === 1 ? '1 día' : `${n} días`);
 /**
  * Texto del chip «Saldo vencido». Con importe (ADMIN/RECEPTION) lo añade; sin
  * él (DENTIST/ASSISTANT), solo la marca y los días. `null` si no hay saldo vencido.
+ * DX-354: el importe con el formato de la sede de la pantalla y el código ISO
+ * (`fmt`); sin formato (cargando o sede sin él) el chip no lleva importe: ni parpadea
+ * «—» mientras cargan las sedes ni inventa otro formato.
  */
-export function overdueChipText(balance: OverdueBalance | null | undefined): string | null {
+export function overdueChipText(
+  balance: OverdueBalance | null | undefined,
+  fmt: RegionalFormat | null,
+): string | null {
   if (!balance?.hasOverdue) return null;
   const base =
     balance.overdueDays !== null && balance.overdueDays !== undefined
       ? `Saldo vencido · ${days(balance.overdueDays)}`
       : 'Saldo vencido';
-  const amounts = (balance.amounts ?? []).map((a) => formatCurrency(a.amount, a.currency));
-  return amounts.length > 0 ? `${base} · ${amounts.join(' + ')}` : base;
+  const amounts = (fmt ? (balance.amounts ?? []) : []).map((a) => sedeMoney(a.amount, a.currency, fmt));
+  const text = amounts.length > 0 ? `${base} · ${amounts.join(' + ')}` : base;
+  // DX-472-bis: algún abono en otra moneda no cuenta todavía.
+  return balance.incomplete ? `${text} · ${INCOMPLETE_BALANCE_TEXT}` : text;
 }
 
-/** Hoy (YYYY-MM-DD) en la hora local del navegador: mínimo del selector de fecha. */
-export function todayLocal(now: Date = new Date()): string {
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+/** DX-472-bis: el saldo no cuenta algún abono en otra moneda (sin tasa todavía). */
+export const INCOMPLETE_BALANCE_TEXT = 'cifras incompletas';
+
+/**
+ * Sin saldo vencido pero con cifras incompletas (DX-472-bis): solo en la
+ * ficha, para que nadie lea «al día» lo que aún no se pudo contar. `null` si
+ * no aplica.
+ */
+export function incompleteBalanceChipText(balance: OverdueBalance | null | undefined): string | null {
+  if (!balance?.incomplete || balance.hasOverdue) return null;
+  return 'Saldo con cifras incompletas';
 }

@@ -5,7 +5,9 @@ import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useMediaQuery } from '@/lib/hooks/use-media-query';
 import { Card } from '@/components/ui/card';
+import { MissingValue } from '@/components/ui/missing-value';
 import { Skeleton } from '@/components/ui/skeleton';
+import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { RowActions, type RowAction } from '@/components/shared/row-actions';
 
@@ -88,6 +90,15 @@ const showFromClass = { md: 'hidden md:table-cell', lg: 'hidden lg:table-cell', 
 
 function isBlank(node: React.ReactNode): boolean {
   return node === null || node === undefined || node === false || node === '';
+}
+
+/**
+ * Una celda cuyo resultado es exactamente «—» (el dato existe pero la sede no
+ * tiene formato) lleva «Sin dato» para lectores de pantalla (DX-354b, E7.1).
+ * Una frase compuesta que contiene «—» se queda como está.
+ */
+function withMissing(node: React.ReactNode): React.ReactNode {
+  return node === NO_SEDE_FORMAT ? <MissingValue /> : node;
 }
 
 /**
@@ -219,7 +230,7 @@ function DataTable<T>({
               className={cn('group', opens && 'relative cursor-pointer')}
             >
               {columns.map((col, i) => {
-                const content = col.cell(row);
+                const content = withMissing(col.cell(row));
                 const isPrimary = i === primary;
                 return (
                   <TableCell
@@ -342,10 +353,10 @@ function PhoneList<T>({
                     («Consentimiento informado para…») o nombres de archivo largos
                     se distinguen por el final. */}
                 <span data-slot="primary" className="line-clamp-2 min-w-0 break-words text-[15px] font-semibold leading-snug text-ink">
-                  {(primaryCol.mobileCell ?? primaryCol.cell)(row)}
+                  {withMissing((primaryCol.mobileCell ?? primaryCol.cell)(row))}
                 </span>
                 {!isBlank(trailingNode) ? (
-                  <span className="shrink-0 text-sm text-ink tabular-nums">{trailingNode}</span>
+                  <span className="shrink-0 text-sm text-ink tabular-nums">{withMissing(trailingNode)}</span>
                 ) : null}
               </span>
               {metaValues.length > 0 ? (
@@ -355,7 +366,7 @@ function PhoneList<T>({
                   {metaValues.map((m, i) => (
                     <React.Fragment key={m.id}>
                       {i > 0 ? <span aria-hidden> · </span> : null}
-                      {m.node}
+                      {withMissing(m.node)}
                     </React.Fragment>
                   ))}
                 </span>

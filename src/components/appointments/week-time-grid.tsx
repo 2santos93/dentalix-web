@@ -1,6 +1,7 @@
 'use client';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { AttendanceBadge } from '@/components/appointments/attendance-badge';
+import { OverbookedChip } from '@/components/appointments/overbooked-chip';
 import type { Appointment } from '@/lib/appointments/appointments-api';
 import {
   ROW_HEIGHT_PX,
@@ -17,10 +18,6 @@ import {
   STATUS_BADGE_CLASSES,
   patientLabel,
 } from './appointment-display';
-import { overdueChipText } from '@/lib/collections/presentation';
-import { coverageChipText } from '@/lib/patients/coverage-presentation';
-import { confirmationIndicator } from '@/lib/appointments/confirmation-message';
-import { CONFIRMATION_INDICATOR_LABELS } from './appointment-display';
 import { weekDayHeader } from '@/lib/appointments/calendar-grid';
 import { formatMinute } from '@/lib/appointments/day-grid';
 import { sedeMinute, sedeTimeRange, type AgendaClock } from '@/lib/locations/sede-clock';
@@ -34,10 +31,13 @@ import { OverdueChip } from '@/components/collections/overdue-chip';
 import { CoverageMarker } from '@/components/patients/coverage-chip';
 import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
 import { medicalAlertSeverity } from '@/lib/clinical/medical-alerts';
+import { chairDisplayName } from '@/lib/chairs/chair-columns';
+import { cn } from '@/lib/utils';
 
 const copy = {
   heading: 'Agenda de la semana',
-  createSlotLabel: (date: string, time: string) => `Crear cita ${date} ${time}`,
+  createSlotLabel: (date: string, time: string, blocked: string | null) =>
+    `Crear cita el ${date} a las ${time}${blocked ? ` · bloqueado: ${blocked}` : ''}`,
   blockAria: (label: string) => `Bloqueo: ${label}`,
 };
 
@@ -80,6 +80,31 @@ interface WeekTimeGridProps {
   selectedProviderId?: string | null;
 }
 
+/**
+ * DX-492: el sillón junto al paciente. DX-492-bis (medido en Semana a media
+ * columna, chip de 160 px): los nombres cortos (≈12 caracteres, «Sillón
+ * Ávila») caben enteros; los largos se recortan y ocupan como mucho el 45 % del
+ * chip. El paciente (`PATIENT_CLASS`) cede antes, hasta 4 caracteres; solo
+ * entonces encoge el sillón, así que la fila compacta nunca desborda. El
+ * paciente sigue entero en el `title` y en el detalle.
+ */
+function WeekChairLabel({ chair }: { chair: string | null }) {
+  if (!chair) return null;
+  return (
+    <span data-testid="week-appointment-chair" className="min-w-0 max-w-[45%] truncate glyph-room font-normal">
+      {chair}
+    </span>
+  );
+}
+
+/**
+ * El paciente parte de 0 y crece hasta su nombre con el hueco que dejan los
+ * demás (`flex-1 max-w-max`), con un mínimo de 4 caracteres. Así el sillón no
+ * encoge mientras quepa; un peso de encogimiento no basta: le quitaría una
+ * fracción de píxel y saldría «Silló…».
+ */
+const PATIENT_CLASS = 'min-w-[4ch] max-w-max flex-1 truncate glyph-room font-semibold';
+
 const WHOLE_DAY = { start: 0, end: DAY_MINUTES };
 
 export function WeekTimeGrid({
@@ -102,28 +127,96 @@ export function WeekTimeGrid({
     );
   const dates = weekDates(weekStart);
   const timeZone = clock.timeZone;
+  const dayLayouts = dates.map((date) =>
+    layoutLanes(
+      appointments
+        .filter((appointment) => wallDay(appointment.start, timeZone) === date)
+        .map((appointment) => ({
+          appointment,
+          start: new Date(appointment.start).getTime(),
+          end: new Date(appointment.end).getTime(),
+        })),
+    ),
+  );
+  const laneCount = Math.max(1, ...dayLayouts.flatMap((day) => day.map((item) => item.laneCount)));
+  const gutter = clock.fmt.hourCycle === 'h12' ? '5.5rem' : '4rem';
   const scrollRef = useRef<HTMLDivElement>(null);
+  const firstStartMin = appointments.length
+    ? Math.min(...appointments.map((a) => wallMinuteOfDay(a.start, timeZone)))
+    : 7 * 60;
 
   // Auto-scroll: a la primera cita de la semana, o a las 07:00 si no hay.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const firstStartMin = appointments.length
-      ? Math.min(
-          ...appointments.map((a) => wallMinuteOfDay(a.start, timeZone)),
-        )
-      : 7 * 60;
     el.scrollTop = (firstStartMin / SLOT_MINUTES) * ROW_HEIGHT_PX;
-  }, [appointments, weekStart, timeZone]);
+  }, [firstStartMin, weekStart]);
+
+  // DX-180: el marco solo es una parada de tabulador y lleva sombras si desborda.
+  const [overflowsX, setOverflowsX] = useState(false);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const measure = () => setOverflowsX(el.scrollWidth > el.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // DX-180: la rejilla de huecos es UNA parada de tabulador (antes, 336 botones):
+  // las flechas se mueven entre horas y días; Inicio y Fin, al principio y al final del día.
+  const [cursor, setCursor] = useState<{ day: number; slot: number } | null>(null);
+  const activeCell = cursor ?? { day: 0, slot: Math.floor(firstStartMin / SLOT_MINUTES) };
+
+  function moveCursor(event: KeyboardEvent<HTMLButtonElement>, day: number, slot: number) {
+    const next = {
+      ArrowUp: { day, slot: Math.max(0, slot - 1) },
+      ArrowDown: { day, slot: Math.min(SLOTS_PER_DAY - 1, slot + 1) },
+      ArrowLeft: { day: Math.max(0, day - 1), slot },
+      ArrowRight: { day: Math.min(dates.length - 1, day + 1), slot },
+      Home: { day, slot: 0 },
+      End: { day, slot: SLOTS_PER_DAY - 1 },
+    }[event.key];
+    if (!next) return;
+    event.preventDefault();
+    setCursor(next);
+    scrollRef.current
+      ?.querySelector<HTMLButtonElement>(`[data-testid="week-grid-slot-${dates[next.day]}-${slotTime(next.slot)}"]`)
+      ?.focus();
+  }
+
+  /** El bloqueo sin citas que cubre el hueco, si lo hay, para anunciarlo. */
+  function blockedLabel(date: string, slot: number): string | null {
+    const minute = slot * SLOT_MINUTES;
+    const block = blocks.find((b) => {
+      if (b.allowsBooking || (b.providerId !== null && b.providerId !== selectedProviderId)) return false;
+      const band = blockBandForDay(b, date, WHOLE_DAY, timeZone);
+      return band !== null && minute >= band.start && minute < band.end;
+    });
+    return block ? labelOf(block) : null;
+  }
 
   return (
     <div
+      role="region"
       aria-label={copy.heading}
-      className="max-h-[70vh] overflow-auto rounded-lg border border-border bg-surface"
+      tabIndex={overflowsX ? 0 : undefined}
+      className={cn(
+        'max-h-[70vh] overflow-auto rounded-lg border border-border bg-surface',
+        overflowsX &&
+          'scroll-x-shadows focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text',
+      )}
       ref={scrollRef}
     >
-      {/* min-width fuerza scroll horizontal en pantallas chicas */}
-      <div className="grid min-w-[720px]" style={{ gridTemplateColumns: `${clock.fmt.hourCycle === 'h12' ? '5.5rem' : '4rem'} repeat(7, 1fr)` }}>
+      {/* Cada carril mantiene espacio para paciente y estado; el scroll pertenece a la rejilla. */}
+      <div
+        className="grid"
+        style={{
+          minWidth: `calc(${gutter} + ${7 * laneCount * 12}rem)`,
+          gridTemplateColumns: `${gutter} repeat(7, 1fr)`,
+        }}
+      >
         {/* Fila de encabezados (sticky-top) */}
         <div className="sticky top-0 z-20 bg-surface" />
         {dates.map((date) => (
@@ -168,7 +261,7 @@ export function WeekTimeGrid({
         </div>
 
         {/* Columnas de día */}
-        {dates.map((date) => (
+        {dates.map((date, dayIndex) => (
           <div
             key={date}
             data-testid="week-grid-day-column"
@@ -181,10 +274,17 @@ export function WeekTimeGrid({
                 key={i}
                 type="button"
                 data-testid={`week-grid-slot-${date}-${slotTime(i)}`}
+                tabIndex={activeCell.day === dayIndex && activeCell.slot === i ? 0 : -1}
                 onClick={() => onSelectSlot(date, slotTime(i))}
-                className="block w-full border-b border-border/40 hover:bg-primary-subtle"
+                onKeyDown={(event) => moveCursor(event, dayIndex, i)}
+                onFocus={() => setCursor({ day: dayIndex, slot: i })}
+                className="block w-full scroll-mt-16 scroll-ml-20 border-b border-border/40 hover:bg-primary-subtle focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary-text"
                 style={{ height: ROW_HEIGHT_PX }}
-                aria-label={copy.createSlotLabel(date, sedeMinute(i * SLOT_MINUTES, clock.fmt))}
+                aria-label={copy.createSlotLabel(
+                  clock.fmt.civilLongDate(date, { year: false }).replace(/,/g, ''),
+                  sedeMinute(i * SLOT_MINUTES, clock.fmt),
+                  blockedLabel(date, i),
+                )}
               />
             ))}
             {blocks
@@ -206,19 +306,12 @@ export function WeekTimeGrid({
                   />
                 );
               })}
-            {layoutLanes(
-              appointments
-                .filter((a) => wallDay(a.start, timeZone) === date)
-                .map((a) => ({
-                  appointment: a,
-                  start: new Date(a.start).getTime(),
-                  end: new Date(a.end).getTime(),
-                })),
-            ).map(({ appointment: a, lane, laneCount }) => {
+            {dayLayouts[dayIndex].map(({ appointment: a, lane, laneCount }) => {
               const { topPx, heightPx } = blockGeometry(a.start, a.end, timeZone);
               const range = sedeTimeRange(a.start, a.end, clock.of(a.locationId));
               const widthPct = 100 / laneCount;
               const patient = patientLabel(a, patientNames);
+              const chair = a.chair ? chairDisplayName(a.chair) : null;
               // DX-247: el icono va junto a la tarjeta, no dentro (no se anidan
               // botones); también en las de 15 min (20 px de alto).
               const hasMedicalAlert = medicalAlertSeverity(a.medicalAlerts) !== null;
@@ -237,23 +330,42 @@ export function WeekTimeGrid({
                     type="button"
                     data-testid="week-grid-appointment"
                     data-id={a.id}
-                    aria-label={[range, patient, STATUS_LABELS[a.status], a.appointmentType?.name, overdueChipText(a.balance), coverageChipText(a.coverage), confirmationIndicator(a) ? CONFIRMATION_INDICATOR_LABELS[confirmationIndicator(a)!] : null].filter(Boolean).join(' · ')}
+                    title={[patient, STATUS_LABELS[a.status], range, a.appointmentType?.name, chair].filter(Boolean).join(' · ')}
                     onClick={() => onSelectAppointment(a)}
                     className={`h-full w-full overflow-hidden rounded-md border px-1 py-0.5 text-left text-xs ${hasMedicalAlert ? 'pr-6' : ''} ${STATUS_BADGE_CLASSES[a.status]}`}
                   >
-                    {/* El paciente primero (lo que se busca en una columna de
-                        ~100 px); debajo, estado (icono + etiqueta del tono) y hora. */}
-                    <span className="block truncate font-semibold">{patient}</span>
-                    <span className="flex min-w-0 items-center gap-1">
-                      <AppointmentStatusLabel status={a.status} compact={heightPx < 60} />
-                      <span className="truncate tabular-nums">{range}</span>
-                      <ConfirmationBadge appointment={a} compact />
-                      <CoverageMarker coverage={a.coverage} srText />
-                    </span>
+                    {/* En 20 px paciente y estado comparten una fila; en las demás el paciente mantiene prioridad. */}
+                    {heightPx < 40 ? (
+                      <span className="flex min-w-0 items-center gap-1 font-medium leading-none">
+                        <span className={PATIENT_CLASS}>{patient}</span>{' '}
+                        <WeekChairLabel chair={chair} />{' '}
+                        <AppointmentStatusLabel status={a.status} compact />{' '}
+                        <ConfirmationBadge appointment={a} compact />{' '}
+                        <CoverageMarker coverage={a.coverage} srText />{' '}
+                        <span className="sr-only">{range}</span>
+                      </span>
+                    ) : (
+                      <>
+                        <span className="flex min-w-0 items-center gap-1">
+                          <span className={PATIENT_CLASS}>{patient}</span>{' '}
+                          <WeekChairLabel chair={chair} />
+                        </span>{' '}
+                        <span className="flex min-w-0 items-center gap-1">
+                          <AppointmentStatusLabel status={a.status} compact={heightPx < 60} />{' '}
+                          <span className="truncate tabular-nums">{range}</span>{' '}
+                          <ConfirmationBadge appointment={a} compact />{' '}
+                          <CoverageMarker coverage={a.coverage} srText />
+                        </span>
+                      </>
+                    )}{' '}
                     {/* DX-150: «Saldo vencido» (el importe, solo ADMIN/RECEPTION). */}
-                    <OverdueChip balance={a.balance} compact className="mt-0.5 px-1" />
+                    <OverdueChip balance={a.balance} compact className="mt-0.5 px-1" fmt={clock.fmt} />{' '}
                     {/* DX-279: inasistencias y cancelaciones tardías (12 meses). */}
-                    <AttendanceBadge counts={a.attendance} compact className="mt-0.5 px-1" />
+                    <AttendanceBadge counts={a.attendance} compact className="mt-0.5 px-1" />{' '}
+                    {/* DX-509: solo mientras es sobrecupo. */}
+                    <OverbookedChip overbooked={a.overbooked} status={a.status} className="mt-0.5 px-1 py-0" />{' '}
+                    {heightPx < 60 && <span className="sr-only">{STATUS_LABELS[a.status]}</span>}
+                    {a.appointmentType?.name && <span className="sr-only">{a.appointmentType.name}</span>}
                   </button>
                   {hasMedicalAlert ? (
                     <MedicalAlertIndicator

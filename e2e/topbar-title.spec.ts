@@ -100,7 +100,7 @@ test('escritorio (1440 px): las barras del teléfono no se ven y el sidebar mide
     const width = await sidebar.evaluate((el) => el.getBoundingClientRect().width);
     expect(width, `${path}: ancho del sidebar`).toBe(240);
     // La etiqueta visible es corta; el nombre accesible, el completo.
-    await expect(sidebar.getByRole('link', { name: /^Anamnesis por revisar/ })).toBeVisible();
+    await expect(sidebar.getByRole('link', { name: /^Anamnesis (?:\d+ · )?por revisar/ })).toBeVisible();
     await expectNoHorizontalScroll(page);
   }
 });

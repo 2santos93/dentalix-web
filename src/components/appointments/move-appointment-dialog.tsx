@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { updateAppointment, type Appointment } from '@/lib/appointments/appointments-api';
 import type { StaffMember } from '@/lib/appointments/staff-api';
@@ -10,7 +10,10 @@ import {
   timeToMinutes,
   type BusinessHours,
 } from '@/lib/locations/schedule-api';
-import { formatMinute, minuteOfDay, moveTarget } from '@/lib/appointments/day-grid';
+import { formatMinute, minuteOfDay, moveTarget, type MoveTarget } from '@/lib/appointments/day-grid';
+import { canOfferNextOpening, findNextOpening, NEXT_OPENING_DAYS } from '@/lib/appointments/next-opening';
+import { Callout } from '@/components/ui/callout';
+import { Button } from '@/components/ui/button';
 import { sedeMinute, type SedeClock } from '@/lib/locations/sede-clock';
 import { civilWeekday } from '@/lib/time/civil-day';
 import { wallDay } from '@/lib/time/wall-clock';
@@ -22,19 +25,28 @@ import { TimeField } from '@/components/ui/date-field';
 import { NativeSelect } from '@/components/ui/native-select';
 import { isCivilDay } from '@/lib/time/civil-day';
 import type { Chair } from '@/lib/chairs/chairs-api';
-import { chairDisplayName } from '@/lib/chairs/chair-columns';
+import { chairDisplayName, offeredProvider } from '@/lib/chairs/chair-columns';
 import { endSentence } from '@/lib/format/text';
+import { defaultHoursNote } from '@/lib/locations/default-business-hours';
+import { HolidayNotice } from './holiday-notice';
 
 const copy = {
   title: 'Mover a…',
   description: (patient: string) =>
     `Elige la fecha, la hora y el profesional para la cita de ${patient}. Se conserva la duración.`,
+  // DX-492: con sillones, el modal también lo cambia.
+  descriptionWithChair: (patient: string) =>
+    `Elige la fecha, la hora, el profesional y el sillón para la cita de ${patient}. Se conserva la duración.`,
   date: 'Fecha',
   time: 'Hora de inicio',
   provider: 'Profesional',
   // DX-211: cambiar o quitar el sillón al mover (o solo eso).
   chair: 'Sillón',
   chairNone: 'Sin sillón',
+  // DX-479: otro sillón con otro profesional por defecto: se ofrece, no se cambia solo.
+  chairProviderOffer: (chair: string, offered: string, current: string) =>
+    `«${chair}» tiene a ${offered} como profesional por defecto. La cita sigue con ${current} salvo que la asignes.`,
+  assignProvider: (offered: string) => `Asignar a ${offered}`,
   submit: 'Mover cita',
   duration: (minutes: number, end: string) => endSentence(`Dura ${minutes} min: terminaría a las ${end}`),
   missing: 'Completa la fecha, la hora y el profesional.',
@@ -44,7 +56,31 @@ const copy = {
       ? 'La sede no atiende ese día.'
       : endSentence(`Fuera del horario de atención. Ese día se atiende: ${ranges}`),
   genericError: 'No pudimos mover la cita. Intenta de nuevo.',
+  // DX-509-bis: un sobrecupo que no cabe donde se pidió.
+  nextOpeningSearching: 'Buscando el siguiente hueco libre…',
+  nextOpeningTitle: 'Siguiente hueco libre',
+  // DX-492-bis: con sillón, la sugerencia lo deja libre y lo dice.
+  nextOpening: (when: string, provider: string, chair: string | null) =>
+    endSentence(chair ? `${when} con ${provider}, en «${chair}»` : `${when} con ${provider}`),
+  useNextOpening: 'Usar este hueco',
+  noNextOpening: (chair: string | null) =>
+    chair
+      ? `No hay huecos libres de ese profesional con «${chair}» en los próximos ${NEXT_OPENING_DAYS} días. Prueba con otro profesional u otro sillón, o mantenla donde está.`
+      : `No hay huecos libres de ese profesional en los próximos ${NEXT_OPENING_DAYS} días. Prueba con otro profesional o mantenla donde está.`,
+  nextOpeningError: 'No pudimos buscar el siguiente hueco libre. Elige otra hora a mano.',
 };
+
+/** El reloj se lee al enviar (en el manejador), nunca al pintar. */
+function isPast(iso: string): boolean {
+  return new Date(iso).getTime() < Date.now();
+}
+
+/** `chair`: el nombre del sillón con el que se buscó (DX-492-bis); sin él, null. */
+type NextOpening =
+  | { status: 'searching' }
+  | { status: 'found'; target: MoveTarget; chair: string | null; defaultHours: boolean }
+  | { status: 'none'; chair: string | null; defaultHours: boolean }
+  | { status: 'error' };
 
 interface MoveAppointmentDialogProps {
   open: boolean;
@@ -63,6 +99,11 @@ interface MoveAppointmentDialogProps {
    */
   chairs?: Chair[];
   onMoved: (updated: Appointment) => void;
+  /**
+   * DX-509-bis: el arrastre de un sobrecupo a una hora ocupada. El modal se
+   * abre con ese destino, el mensaje del servidor y el siguiente hueco libre.
+   */
+  collision?: { target: MoveTarget; error: unknown; message: string } | null;
 }
 
 /**
@@ -81,16 +122,93 @@ export function MoveAppointmentDialog({
   hours,
   onMoved,
   chairs = [],
+  collision = null,
 }: MoveAppointmentDialogProps) {
   const { timeZone, fmt } = clock;
-  const [date, setDate] = useState(() => wallDay(appointment.start, timeZone));
-  const [time, setTime] = useState(() => formatMinute(minuteOfDay(appointment.start, timeZone)));
-  const [providerId, setProviderId] = useState(appointment.providerId);
-  const [chairId, setChairId] = useState(appointment.chairId ?? '');
+  const initial = collision?.target ?? appointment;
+  const [date, setDate] = useState(() => wallDay(initial.start, timeZone));
+  const [time, setTime] = useState(() => formatMinute(minuteOfDay(initial.start, timeZone)));
+  const [providerId, setProviderId] = useState(initial.providerId);
+  const [nextOpening, setNextOpening] = useState<NextOpening | null>(() =>
+    collision && canOfferNextOpening(appointment, collision.error) ? { status: 'searching' } : null,
+  );
+  // Solo cuenta la última búsqueda (cambiar de hora y reenviar la deja vieja).
+  const search = useRef(0);
+  // DX-479: si el arrastre que chocó llevaba sillón, el modal parte de ese sillón.
+  const [chairId, setChairId] = useState(
+    collision?.target.chairId !== undefined ? (collision.target.chairId ?? '') : (appointment.chairId ?? ''),
+  );
   const chairOptions = chairs.filter((c) => c.active || c.id === appointment.chairId);
   const showChair = chairOptions.length > 0 || !!appointment.chair;
-  const [error, setError] = useState<string | null>(null);
+  // DX-479: al elegir OTRO sillón con otro profesional por defecto se ofrece
+  // asignarlo; el selector de profesional no cambia solo («Mantener» es no tocarlo).
+  const offeredProviderId =
+    chairId !== (appointment.chairId ?? '')
+      ? offeredProvider(
+          providerId,
+          chairOptions.find((c) => c.id === chairId) ?? null,
+          providers.map((p) => p.userId),
+        )
+      : null;
+  const [error, setError] = useState<string | null>(collision?.message ?? null);
   const [submitting, setSubmitting] = useState(false);
+
+  /** Activo según la lista de la sede; sin ella, según la cita. */
+  function isActiveChair(id: string): boolean {
+    const known = chairs.find((c) => c.id === id) ?? (appointment.chair?.id === id ? appointment.chair : null);
+    return known?.active !== false;
+  }
+
+  /** Nombre del sillón con el que se busca el hueco (DX-492-bis); sin sillón, null. */
+  function chairName(id: string): string | null {
+    if (!id) return null;
+    return chairOptions.find((c) => c.id === id)?.name ?? (appointment.chair?.id === id ? appointment.chair.name : null);
+  }
+
+  /** Busca el siguiente hueco; solo cuenta la última búsqueda. */
+  function searchNextOpening(target: MoveTarget) {
+    const id = ++search.current;
+    // Un sillón desactivado (el de la cita) no se puede pedir a «Buscar hueco»
+    // (400): se busca sin él y la sugerencia no lo nombra.
+    const searchChairId = chairId && isActiveChair(chairId) ? chairId : null;
+    const chair = chairName(searchChairId ?? '');
+    findNextOpening(token, appointment, target, timeZone, searchChairId).then(
+      ({ target: found, defaultHours }) => {
+        if (search.current === id) {
+          setNextOpening(
+            found ? { status: 'found', target: found, chair, defaultHours } : { status: 'none', chair, defaultHours },
+          );
+        }
+      },
+      () => {
+        if (search.current === id) setNextOpening({ status: 'error' });
+      },
+    );
+  }
+
+  function offerNextOpening(err: unknown, target: MoveTarget) {
+    if (!canOfferNextOpening(appointment, err)) return;
+    setNextOpening({ status: 'searching' });
+    searchNextOpening(target);
+  }
+
+  useEffect(() => {
+    // Abierto por el choque de un arrastre: el estado ya nace «buscando».
+    if (collision && canOfferNextOpening(appointment, collision.error)) searchNextOpening(collision.target);
+    // Solo al abrir.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function applyOpening(target: MoveTarget) {
+    setDate(wallDay(target.start, timeZone));
+    setTime(formatMinute(minuteOfDay(target.start, timeZone)));
+    setProviderId(target.providerId);
+    setError(null);
+    setNextOpening(null);
+    search.current++;
+  }
+
+  const providerName = (id: string) => providers.find((p) => p.userId === id)?.fullName ?? '';
 
   const duration = Math.round(
     (new Date(appointment.end).getTime() - new Date(appointment.start).getTime()) / 60000,
@@ -105,6 +223,9 @@ export function MoveAppointmentDialog({
       onMoved(updated);
     } catch (err) {
       setError(apiErrorMessage(err, copy.genericError));
+      if ('start' in patch && patch.start && patch.end && patch.providerId) {
+        offerNextOpening(err, { start: patch.start, end: patch.end, providerId: patch.providerId });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -113,6 +234,8 @@ export function MoveAppointmentDialog({
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    setNextOpening(null);
+    search.current++;
     if (!isCivilDay(date) || startMinute === null || !providerId) {
       setError(copy.missing);
       return;
@@ -131,7 +254,7 @@ export function MoveAppointmentDialog({
       return;
     }
     const target = { ...slot, ...chairChange };
-    if (new Date(target.start).getTime() < Date.now()) {
+    if (isPast(target.start)) {
       setError(copy.past);
       return;
     }
@@ -147,12 +270,45 @@ export function MoveAppointmentDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={copy.title}
-      description={copy.description(patientLabel(appointment))}
+      description={(showChair ? copy.descriptionWithChair : copy.description)(patientLabel(appointment))}
       onSubmit={handleSubmit}
       submitLabel={copy.submit}
       submitting={submitting}
       error={error}
     >
+      {nextOpening ? (
+        <Callout
+          tone={nextOpening.status === 'found' ? 'info' : 'neutral'}
+          title={nextOpening.status === 'found' ? copy.nextOpeningTitle : undefined}
+          role="status"
+          data-testid="move-next-opening"
+          action={
+            nextOpening.status === 'found' ? (
+              <Button type="button" size="sm" variant="outline" onClick={() => applyOpening(nextOpening.target)}>
+                {copy.useNextOpening}
+              </Button>
+            ) : undefined
+          }
+        >
+          {nextOpening.status === 'searching'
+            ? copy.nextOpeningSearching
+            : nextOpening.status === 'found'
+              ? copy.nextOpening(
+                  fmt.dateTime(new Date(nextOpening.target.start), timeZone),
+                  providerName(nextOpening.target.providerId),
+                  nextOpening.chair,
+                )
+              : nextOpening.status === 'none'
+                ? copy.noNextOpening(nextOpening.chair)
+                : copy.nextOpeningError}
+          {/* DX-533: en una sede sin horario solo se proponen huecos del de alta. */}
+          {(nextOpening.status === 'found' || nextOpening.status === 'none') && nextOpening.defaultHours ? (
+            <span data-testid="move-default-hours" className="mt-1 block text-xs">
+              {defaultHoursNote(fmt)}
+            </span>
+          ) : null}
+        </Callout>
+      ) : null}
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField htmlFor="move-date" label={copy.date}>
           <DatePicker
@@ -161,6 +317,7 @@ export function MoveAppointmentDialog({
             value={date || null}
             onChange={(next) => setDate(next ?? '')}
           />
+          <HolidayNotice token={token} locationId={appointment.locationId} date={date} />
         </FormField>
         <FormField
           htmlFor="move-time"
@@ -203,6 +360,24 @@ export function MoveAppointmentDialog({
             ) : null}
           </NativeSelect>
         </FormField>
+      ) : null}
+      {offeredProviderId !== null ? (
+        <Callout
+          tone="info"
+          role="status"
+          data-testid="move-chair-provider-offer"
+          action={
+            <Button type="button" size="sm" variant="outline" onClick={() => setProviderId(offeredProviderId)}>
+              {copy.assignProvider(providerName(offeredProviderId))}
+            </Button>
+          }
+        >
+          {copy.chairProviderOffer(
+            chairOptions.find((c) => c.id === chairId)?.name ?? '',
+            providerName(offeredProviderId),
+            providerName(providerId),
+          )}
+        </Callout>
       ) : null}
     </FormModal>
   );

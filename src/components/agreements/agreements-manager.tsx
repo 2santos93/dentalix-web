@@ -13,7 +13,8 @@ import { listPayers, type Payer } from '@/lib/payers/payers-api';
 import { isExternalPayer } from '@/lib/payers/payer-type';
 import { listPriceLists, type PriceList } from '@/lib/price-lists/price-lists-api';
 import { listCatalogItems } from '@/lib/odontogram/catalog-api';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { loadLocations } from '@/lib/session/session-store';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
@@ -152,7 +153,7 @@ export function AgreementsManager({ token, allowed }: AgreementsManagerProps) {
           listPayers(token),
           listPriceLists(token),
           listCatalogItems(token, { kind: 'PROCEDURE' }),
-          listLocations(token),
+          loadLocations(token),
         ]);
         if (cancelled) return;
         setAgreements(data);

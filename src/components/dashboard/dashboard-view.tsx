@@ -12,7 +12,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { RegionalReviewNotice } from '@/components/locations/regional-review-notice';
 import { RateBacklogNotice } from '@/components/payments/rate-backlog-notice';
+import { ClinicFiscalNotice } from '@/components/clinic-settings/clinic-fiscal-notice';
 import { AgingSection } from './aging-section';
+import { EquipmentMaintenanceSection } from './equipment-maintenance-section';
 import { LowStockSection } from './dashboard-sections';
 import { canSeeBlock, INICIO_DESCRIPTION, INICIO_DESCRIPTION_FALLBACK } from './inicio-roles';
 import { MyProductionSection } from './my-production-section';
@@ -135,6 +137,8 @@ export function DashboardView({ token }: DashboardViewProps) {
         {/* Avisos D5 (G1 §7) y DX-380: se pintan solos y solo para ADMIN. */}
         <RegionalReviewNotice token={token} />
         <RateBacklogNotice token={token} />
+        {/* DX-019: datos fiscales pendientes (solo ADMIN). */}
+        <ClinicFiscalNotice token={token} />
 
         {/* Hoy (8) + Pendientes (4) desde xl; una columna debajo, Hoy primero. */}
         <div className="grid items-start gap-10 xl:grid-cols-12 xl:gap-6">
@@ -151,7 +155,7 @@ export function DashboardView({ token }: DashboardViewProps) {
               staffNames={staffNames}
             />
           </div>
-          <div className="min-w-0 xl:col-span-4">
+          <div className="flex min-w-0 flex-col gap-10 xl:col-span-4">
             <PendingSection
               token={token}
               role={role}
@@ -159,6 +163,10 @@ export function DashboardView({ token }: DashboardViewProps) {
               timeZone={timeZone}
               fmt={fmt}
             />
+            {/* DX-543: avisos de mantenimiento de equipos (solo ADMIN, con su propia carga). */}
+            {canSeeBlock('equipmentMaintenance', role) ? (
+              <EquipmentMaintenanceSection token={token} scopeKey={scopeKey} />
+            ) : null}
           </div>
         </div>
 

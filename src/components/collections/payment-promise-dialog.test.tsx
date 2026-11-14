@@ -1,12 +1,15 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { PaymentPromiseDialog } from './payment-promise-dialog';
+import { PaymentPromiseDialog, promiseDialogCopy } from './payment-promise-dialog';
 import { createPaymentPromise } from '@/lib/collections/collections-api';
-import { todayLocal } from '@/lib/collections/presentation';
+import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { ApiError } from '@/lib/api/client';
 
 jest.mock('../../lib/collections/collections-api', () => ({
   createPaymentPromise: jest.fn(),
+}));
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/locations').clinicLocation()]),
 }));
 const mockedCreate = createPaymentPromise as jest.MockedFunction<typeof createPaymentPromise>;
 
@@ -21,17 +24,18 @@ function setup() {
       onOpenChange={onOpenChange}
       token="tok"
       patient={patient}
-      currencies={['COP', 'USD']}
+      currencies={['VES', 'USD']}
       onSaved={onSaved}
     />,
   );
   return { onSaved, onOpenChange };
 }
 
+// DX-354b: el «hoy» del compromiso es el de la sede (Caracas en el fixture), no el del navegador.
+const SEDE_ZONE = 'America/Caracas';
 function inDays(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + n);
-  return todayLocal(d);
+  const d = new Date(Date.parse(`${sedeToday(SEDE_ZONE)}T12:00:00Z`) + n * 86_400_000);
+  return d.toISOString().slice(0, 10);
 }
 
 /** «Pagará hasta el» es un `DatePicker` (segmentos dd/mm/aaaa, sin locale de sede → «es»). */
@@ -54,6 +58,31 @@ describe('PaymentPromiseDialog (DX-150)', () => {
     expect(mockedCreate).not.toHaveBeenCalled();
   });
 
+  it('DX-354b (E9): con el navegador ya en el día 5, el 4 es «hoy» en la sede (Caracas) y vale; el 3 es pasado', async () => {
+    jest.useFakeTimers({
+      now: new Date('2026-11-05T02:30:00Z'),
+      doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate', 'nextTick', 'queueMicrotask', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'],
+    });
+    try {
+      mockedCreate.mockResolvedValue({ id: 'pp1' } as never);
+      setup();
+      await userEvent.type(screen.getByLabelText('Importe'), '100');
+      await userEvent.selectOptions(screen.getByLabelText('Moneda'), 'USD');
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar compromiso' })).toBeEnabled());
+      await typeDate('2026-11-03');
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
+      expect(await screen.findByText(promiseDialogCopy.dueDatePast)).toBeInTheDocument();
+      expect(mockedCreate).not.toHaveBeenCalled();
+      await typeDate('2026-11-04');
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
+      await waitFor(() =>
+        expect(mockedCreate).toHaveBeenCalledWith('tok', 'pat-1', { amount: 100, currency: 'USD', dueDate: '2026-11-04' }),
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('DX-241: «150.50» en USD se guarda como 150,5 (no 15 050)', async () => {
     mockedCreate.mockResolvedValue({ id: 'pp1' } as never);
     setup();
@@ -61,7 +90,7 @@ describe('PaymentPromiseDialog (DX-150)', () => {
     await userEvent.type(screen.getByLabelText('Importe'), '150.50');
     await userEvent.selectOptions(screen.getByLabelText('Moneda'), 'USD');
     await typeDate(due);
-    expect(await screen.findByText(/^Se guardará: 150,50\sUSD$/)).toBeInTheDocument();
+    expect(await screen.findByText(/^Se guardará: USD\s150,50$/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
     await waitFor(() =>
       expect(mockedCreate).toHaveBeenCalledWith('tok', 'pat-1', { amount: 150.5, currency: 'USD', dueDate: due }),
@@ -81,14 +110,14 @@ describe('PaymentPromiseDialog (DX-150)', () => {
     expect(mockedCreate).not.toHaveBeenCalled();
   });
 
-  it('DX-241: COP admite céntimos como la API («150.000,50» → 150000,5)', async () => {
+  it('DX-241: VES admite céntimos como la API («150.000,50» → 150000,5)', async () => {
     mockedCreate.mockResolvedValue({ id: 'pp1' } as never);
     setup();
     await userEvent.type(screen.getByLabelText('Importe'), '150.000,50');
     await typeDate(inDays(1));
     await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
     await waitFor(() =>
-      expect(mockedCreate).toHaveBeenCalledWith('tok', 'pat-1', expect.objectContaining({ amount: 150000.5, currency: 'COP' })),
+      expect(mockedCreate).toHaveBeenCalledWith('tok', 'pat-1', expect.objectContaining({ amount: 150000.5, currency: 'VES' })),
     );
   });
 
@@ -105,13 +134,13 @@ describe('PaymentPromiseDialog (DX-150)', () => {
     const { onSaved, onOpenChange } = setup();
     const due = inDays(7);
     await userEvent.type(screen.getByLabelText('Importe'), '200.000');
-    await userEvent.selectOptions(screen.getByLabelText('Moneda'), 'COP');
+    await userEvent.selectOptions(screen.getByLabelText('Moneda'), 'VES');
     await typeDate(due);
     await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
     await waitFor(() =>
       expect(mockedCreate).toHaveBeenCalledWith('tok', 'pat-1', {
         amount: 200000,
-        currency: 'COP',
+        currency: 'VES',
         dueDate: due,
       }),
     );

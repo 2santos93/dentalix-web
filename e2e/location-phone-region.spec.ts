@@ -284,6 +284,12 @@ test('an ambiguous number asks to write it with +', async ({ page, request }) =>
   const clinic = clinics.ambiguo;
   const [main] = await locationsOf(request, clinic);
   expect(main.defaultPhoneRegion).toBe(E2E_REGION.country);
+  // VE solo tiene el prefijo 00; en TH, «005» también es internacional.
+  const region = await request.patch(`${API_URL}/locations/${main.id}`, {
+    headers: clinic.session.headers,
+    data: { defaultPhoneRegion: 'TH' },
+  });
+  expect(region.ok(), await region.text()).toBeTruthy();
   const patientId = await createPatient(request, clinic, 'amb');
   await loginAs(page, clinic.origin, clinic.email, password);
 

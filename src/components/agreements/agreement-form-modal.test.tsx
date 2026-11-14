@@ -29,7 +29,7 @@ const payers = [payer('payer-1', 'Sanavida'), payer('payer-2', 'Surco Salud')];
 const priceList: PriceList = {
   id: 'pl-1',
   name: 'Lista Surco 2026',
-  currency: 'COP',
+  currency: 'USD',
   locationId: null,
   active: true,
   itemCount: 4,
@@ -40,9 +40,9 @@ const location: ClinicLocation = clinicLocation({
   id: 'loc-1',
   name: 'Sede Norte',
   address: null,
-  country: 'CO',
+  country: 'VE',
   isActive: true,
-  timeZone: 'America/Bogota',
+  timeZone: 'America/Caracas',
   createdAt: '2026-01-01T00:00:00Z',
 });
 const categories = ['Endodoncia', 'Preventiva', 'Restauradora'];
@@ -197,6 +197,12 @@ describe('AgreementFormModal (DX-105)', () => {
 
     await user.click(within(dialog).getByRole('button', { name: 'Crear convenio' }));
     expect(await within(dialog).findByText('Preventiva: Indica el porcentaje del convenio.')).toBeInTheDocument();
+    // DX-105-bis: el error del bloque describe a los campos de cada fila.
+    for (const label of ['Categoría 1', 'Porcentaje 1']) {
+      const field = within(dialog).getByLabelText(label);
+      expect(field).toHaveAttribute('aria-invalid', 'true');
+      expect(field).toHaveAccessibleDescription('Preventiva: Indica el porcentaje del convenio.');
+    }
 
     await user.type(within(dialog).getByLabelText('Porcentaje 1'), '120');
     await user.click(within(dialog).getByRole('button', { name: 'Crear convenio' }));
@@ -289,7 +295,7 @@ describe('AgreementFormModal (DX-105)', () => {
       kind: 'PRICE_LIST',
       percent: null,
       percentByCategory: null,
-      priceList: { id: 'pl-9', name: 'Lista antigua', currency: 'COP' },
+      priceList: { id: 'pl-9', name: 'Lista antigua', currency: 'USD' },
     };
     const { dialog } = setup(withList, { payers: [payers[1]], priceLists: [] });
     expect(within(dialog).getByLabelText('Pagador')).toHaveValue('payer-1');

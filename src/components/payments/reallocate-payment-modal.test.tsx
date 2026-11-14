@@ -1,8 +1,11 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '@/lib/api/client';
 import { Toaster } from '@/components/errors/toaster';
-import { formatCurrency } from '@/lib/format/currency';
+import { moneyWithCode } from '@/lib/format/sede-number';
+import { listLocations } from '@/lib/locations/locations-api';
+import { STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
 import {
   getPaymentAllocations,
   replacePaymentAllocations,
@@ -15,12 +18,23 @@ jest.mock('../../lib/payments/payment-allocations-api', () => ({
   replacePaymentAllocations: jest.fn(),
 }));
 
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+
+const mockedLocations = jest.mocked(listLocations);
 const mockedGet = jest.mocked(getPaymentAllocations);
 const mockedPut = jest.mocked(replacePaymentAllocations);
 
-/** Lo que pinta `formatCurrency`, con el espacio duro de Intl como espacio normal (así compara Testing Library). */
+/** La sede de la pantalla: Caracas (es-VE) por defecto; Berlín (de-DE) en la prueba de dos sedes (DX-354b). */
+let sede: 'caracas' | 'berlin' = 'caracas';
+
+/** Lo que pinta el modal: `moneyWithCode` con el formato de la sede, con el espacio duro de Intl como espacio normal. */
 function money(amount: number, currency: string): string {
-  return formatCurrency(amount, currency).replace(/ /g, ' ');
+  return moneyWithCode(amount, currency, STAMP_FORMATS[sede]).replace(/\u00a0/g, ' ');
+}
+
+/** El día 2026-10-20 con el formato de la sede. */
+function day(): string {
+  return STAMP_FORMATS[sede].civilDate('2026-10-20');
 }
 
 const VERSION = 'b'.repeat(64);
@@ -29,6 +43,7 @@ const VERSION = 'b'.repeat(64);
 const DATA: PaymentAllocations = {
   paymentId: 'pay-1',
   receiptNumber: 'NOR-000123',
+  locationId: STAMP_SEDES.caracas.id,
   treatmentPlanId: 'plan-1',
   paymentAmount: 120,
   paymentCurrency: 'USD',
@@ -39,6 +54,8 @@ const DATA: PaymentAllocations = {
   manual: true,
   allocated: 60,
   unallocated: 48.5,
+  creditOut: 0,
+  onAccount: 48.5,
   version: VERSION,
   allocations: [{ treatmentPlanItemId: 'item-2', amount: 60, source: 'MANUAL' }],
   items: [
@@ -93,6 +110,8 @@ async function loaded() {
 describe('ReallocatePaymentModal (DX-051)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    sede = 'caracas';
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin]);
     mockedGet.mockResolvedValue(DATA);
   });
 
@@ -100,7 +119,42 @@ describe('ReallocatePaymentModal (DX-051)', () => {
     renderModal();
     const modal = await dialog();
     await loaded();
-    expect(within(modal).getByText(`NOR-000123 · ${money(120, 'USD')} · 20/10/2026`)).toBeInTheDocument();
+    expect(within(modal).getByText(`NOR-000123 · ${money(120, 'USD')} · ${day()}`)).toBeInTheDocument();
+  });
+
+  it('con la sede de Berlín (de-DE) el mismo abono sale con su formato, no con el de Caracas (DX-354b)', async () => {
+    sede = 'berlin';
+    mockedLocations.mockResolvedValue([STAMP_SEDES.berlin, STAMP_SEDES.caracas]);
+    mockedGet.mockResolvedValue({ ...DATA, locationId: STAMP_SEDES.berlin.id });
+    renderModal();
+    const modal = await dialog();
+    await loaded();
+    expect(within(modal).getByText(`NOR-000123 · ${money(120, 'USD')} · ${day()}`)).toBeInTheDocument();
+    expect(money(120, 'USD')).toBe('120,00 USD');
+    expect(day()).toBe('20.10.2026');
+    expect(screen.getByText(`Disponible para imputar: ${money(108.5, 'EUR')}`)).toBeInTheDocument();
+  });
+
+  it('la pantalla es de Caracas pero el abono es de Miami (en-US): importe y fecha salen con el formato de Miami (DX-354c)', async () => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.miami]);
+    mockedGet.mockResolvedValue({ ...DATA, locationId: STAMP_SEDES.miami.id, planCurrency: 'USD', planAmount: 120 });
+    renderModal();
+    const modal = await dialog();
+    await loaded();
+    const miami = moneyWithCode(120, 'USD', STAMP_FORMATS.miami).replace(/\u00a0/g, ' ');
+    const miamiDay = STAMP_FORMATS.miami.civilDate('2026-10-20');
+    expect(miami).toBe('USD 120.00');
+    expect(miamiDay).not.toBe(STAMP_FORMATS.caracas.civilDate('2026-10-20'));
+    expect(within(modal).getByText(`NOR-000123 · ${miami} · ${miamiDay}`)).toBeInTheDocument();
+    expect(screen.getByText(`Disponible para imputar: ${miami}`)).toBeInTheDocument();
+  });
+
+  it('sin formato de la sede: «—» en lugar de los importes y un solo aviso con Reintentar', async () => {
+    mockedLocations.mockResolvedValue([{ ...STAMP_SEDES.caracas, locale: null, hourCycle: null }]);
+    renderModal();
+    await loaded();
+    expect(await screen.findAllByRole('button', { name: 'Reintentar' })).toHaveLength(1);
+    expect(screen.getByText('Disponible para imputar: —')).toBeInTheDocument();
   });
 
   it('subtitle without receipt series shows only amount and date', async () => {
@@ -108,7 +162,7 @@ describe('ReallocatePaymentModal (DX-051)', () => {
     renderModal();
     const modal = await dialog();
     await loaded();
-    expect(within(modal).getByText(`${money(120, 'USD')} · 20/10/2026`)).toBeInTheDocument();
+    expect(within(modal).getByText(`${money(120, 'USD')} · ${day()}`)).toBeInTheDocument();
   });
 
   it('shows Disponible para imputar and the conversion line for another currency', async () => {
@@ -116,7 +170,7 @@ describe('ReallocatePaymentModal (DX-051)', () => {
     await loaded();
     expect(screen.getByText(`Disponible para imputar: ${money(108.5, 'EUR')}`)).toBeInTheDocument();
     expect(
-      screen.getByText(`Convertido de ${money(120, 'USD')} con la tasa del 20/10/2026.`),
+      screen.getByText(`Convertido de ${money(120, 'USD')} con la tasa del ${day()}.`),
     ).toBeInTheDocument();
   });
 
@@ -134,6 +188,7 @@ describe('ReallocatePaymentModal (DX-051)', () => {
     );
     expect(await loaded()).toBeChecked();
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     mockedGet.mockResolvedValue({ ...DATA, manual: false });
     renderModal();
@@ -449,5 +504,41 @@ describe('ReallocatePaymentModal (DX-051)', () => {
     expect(await screen.findByText('Imputación guardada.')).toBeInTheDocument();
     expect(props.onSaved).toHaveBeenCalledTimes(1);
     expect(props.onOpenChange).toHaveBeenCalledWith(false);
+  });
+});
+
+// DX-399-quater-bis: «Libre para este abono» no resta lo que cubre el saldo
+// recibido por traspaso (los abonos van primero): el ítem lo marca y una nota
+// dice que imputar ahí desplaza ese saldo.
+describe('ReallocatePaymentModal: lo cubierto por traspaso (DX-399-quater-bis)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    sede = 'caracas';
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin]);
+  });
+
+  it('marca el ítem con «… por traspaso» junto a lo libre y añade la nota', async () => {
+    mockedGet.mockResolvedValue({
+      ...DATA,
+      items: [{ ...DATA.items[0], paidByTransfersIn: 30 }, DATA.items[1]],
+    });
+    renderModal();
+    await loaded();
+    const table = screen.getByRole('table', { name: 'Ítems imputables del plan' });
+    const resina = within(table).getByText('Resina').closest('tr') as HTMLTableRowElement;
+    expect(within(resina).getByText(`${money(30, 'EUR')} por traspaso`)).toBeInTheDocument();
+    const limpieza = within(table).getByText('Limpieza').closest('tr') as HTMLTableRowElement;
+    expect(within(limpieza).queryByText(/por traspaso/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Si imputas este abono aquí, ese saldo vuelve a quedar a cuenta del plan.'),
+    ).toBeInTheDocument();
+  });
+
+  it('sin traspasos no hay marca ni nota', async () => {
+    mockedGet.mockResolvedValue(DATA);
+    renderModal();
+    await loaded();
+    expect(screen.queryByText(/por traspaso/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/vuelve a quedar a cuenta/)).not.toBeInTheDocument();
   });
 });

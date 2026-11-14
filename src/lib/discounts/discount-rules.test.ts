@@ -11,6 +11,8 @@ import {
   PRICE_BELOW_CATALOG_NOTICE,
   effectiveDiscount,
   priceBelowCatalogCapMessage,
+  discountReference,
+  referenceInOtherCurrency,
   type DiscountRules,
 } from './discount-rules';
 import * as discountRules from './discount-rules';
@@ -47,16 +49,16 @@ describe('reglas de descuento (DX-204)', () => {
     expect(needsReason(RULES, 1000, 0)).toBe(false);
   });
 
-  it('redondeo por moneda: COP sin decimales, EUR a céntimos, tope ítem a ítem', () => {
-    expect(digitsOf('COP')).toBe(0);
+  it('redondeo por moneda: RSD sin decimales, EUR a céntimos, tope ítem a ítem', () => {
+    expect(digitsOf('RSD')).toBe(0);
     expect(digitsOf('EUR')).toBe(2);
-    expect([85000, 123457, 99999].map((p) => discountForPercent(p, 7.5, digitsOf('COP'), 10))).toEqual([
+    expect([85000, 123457, 99999].map((p) => discountForPercent(p, 7.5, digitsOf('RSD'), 10))).toEqual([
       6375, 9259, 7500,
     ]);
     expect([85.55, 123.45, 0.99].map((p) => discountForPercent(p, 7.5, digitsOf('EUR'), 10))).toEqual([
       6.42, 9.26, 0.07,
     ]);
-    expect(discountForPercent(1005, 10, digitsOf('COP'), 10)).toBe(100);
+    expect(discountForPercent(1005, 10, digitsOf('RSD'), 10)).toBe(100);
     expect(discountForPercent(10.05, 10, digitsOf('EUR'), 10)).toBe(1);
   });
 
@@ -135,12 +137,12 @@ describe('decimales por moneda sin lista en la web (GLOBAL-G1 R7, DX-340)', () =
     expect('currencyDecimals' in discountRules).toBe(false);
   });
 
-  it('el redondeo vigente se conserva en las monedas de la paridad: RSD, COP y JPY a 0; EUR a 2', () => {
-    // La lista fija anterior (CLDR 47 ∪ COP, CLP, JPY, KRW, PYG) es ahora
+  it('el redondeo vigente se conserva en las monedas de la paridad: RSD, ALL y JPY a 0; EUR a 2', () => {
+    // La lista fija anterior (CLDR 47 ∪ CLP, JPY, KRW, PYG y otras con redondeo a la unidad) es ahora
     // `currencies.rounding_digits = 0` en la API; los vectores lo fijan para
     // las monedas de la paridad.
     expect(digitsOf('RSD')).toBe(0);
-    expect(digitsOf('COP')).toBe(0);
+    expect(digitsOf('ALL')).toBe(0);
     expect(digitsOf('JPY')).toBe(0);
     expect(digitsOf('EUR')).toBe(2);
     expect(discountForPercent(123.45, 7.5, digitsOf('RSD'), 100)).toBe(9);
@@ -157,5 +159,60 @@ describe('decimales por moneda sin lista en la web (GLOBAL-G1 R7, DX-340)', () =
       'SYP', 'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF', 'YER',
     ]);
     expect(cldrFormatDigits.cldrDigitsZero).toHaveLength(28);
+  });
+
+  it('RSD retains reviewed whole-dinar rounding and cap truncation, distinct from cents', () => {
+    const rsd = digitsOf('RSD');
+    const eur = digitsOf('EUR');
+    // 123.45 * 7.5% = 9.25875: policy rounds to 9 RSD, versus 9.26 in cents.
+    expect(discountForPercent(123.45, 7.5, rsd, 10)).toBe(9);
+    expect(discountForPercent(123.45, 7.5, eur, 10)).toBe(9.26);
+    // At the 7.5% role cap, cent rounding would exceed the cap and truncates.
+    expect(discountForPercent(123.45, 7.5, rsd, 7.5)).toBe(9);
+    expect(discountForPercent(123.45, 7.5, eur, 7.5)).toBe(9.25);
+    // At 7%, the maximum 8.6415 truncates to 8 RSD (8.64 in cents).
+    expect(discountForPercent(123.45, 7.5, rsd, 7)).toBe(8);
+    expect(discountForPercent(123.45, 7.5, eur, 7)).toBe(8.64);
+  });
+});
+
+// DX-513: la rebaja no se mide frente a una referencia en otra moneda CONOCIDA
+// (espejo de `referenceInOtherCurrency` de la API); con la moneda desconocida
+// cuenta como hoy. Plan en USD o VES; catálogo en VES.
+describe('discountReference (DX-513)', () => {
+  const catalogItem = (catalogCurrency: string | null) => ({
+    catalogPrice: 3600,
+    catalogCurrency,
+    priceSource: 'CATALOG',
+  });
+
+  it('plan en VES con el catálogo en VES: la referencia de siempre', () => {
+    expect(discountReference(catalogItem('VES'), 'VES')).toBe(3600);
+  });
+
+  it('plan en USD con el catálogo en VES: sin referencia; catalogCurrency NULL: la de siempre', () => {
+    expect(discountReference(catalogItem('VES'), 'USD')).toBeNull();
+    expect(discountReference(catalogItem(null), 'USD')).toBe(3600);
+    expect(effectiveDiscount(discountReference(catalogItem('VES'), 'USD'), 80, 0).total).toBe(0);
+  });
+
+  it('una lista (de la sede o del convenio) está en la moneda del plan aunque el catálogo no', () => {
+    for (const source of ['PRICE_LIST', 'AGREEMENT_PRICE_LIST']) {
+      expect(referenceInOtherCurrency(source, 'VES', 'USD')).toBe(false);
+      expect(referenceInOtherCurrency(source, null, 'USD')).toBe(false);
+    }
+    expect(referenceInOtherCurrency('AGREEMENT_PERCENT', 'VES', 'USD')).toBe(true);
+    expect(referenceInOtherCurrency(null, 'VES', 'VES')).toBe(false);
+    expect(referenceInOtherCurrency(undefined, undefined, 'VES')).toBe(false);
+  });
+
+  it('frontera: al precio de catálogo no hay rebaja; un céntimo por debajo, en la misma moneda, sí', () => {
+    const ref = discountReference(catalogItem('VES'), 'VES');
+    expect(effectiveDiscount(ref, 3600, 0).total).toBe(0);
+    expect(effectiveDiscount(ref, 3599.99, 0).priceReduction).toBe(0.01);
+  });
+
+  it('un ítem libre no tiene referencia', () => {
+    expect(discountReference({ catalogPrice: null, catalogCurrency: 'VES', priceSource: null }, 'VES')).toBeNull();
   });
 });

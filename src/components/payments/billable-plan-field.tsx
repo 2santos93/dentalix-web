@@ -1,6 +1,6 @@
 'use client';
 import { billablePlanLabel, type BillablePlan, type MoneyFormatter } from '@/lib/payments/billable-plans-api';
-import { formatCurrency } from '@/lib/format/currency';
+import type { DocumentFormat } from '@/lib/format/document-format';
 import { FormField } from '@/components/shared/form-field';
 import { FieldError } from '@/components/errors/field-error';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -20,7 +20,17 @@ export const billablePlanFieldCopy = {
   figures: (balance: string, total: string, paid: string) =>
     `Saldo ${balance} · Total ${total} · Abonado ${paid}`,
   inFavor: 'a favor',
-  otherCurrencies: (list: string) => `También abonado en otra moneda: ${list}`,
+  // DX-472-bis: lo entregado en otra moneda ya cuenta en «Abonado», con su tasa
+  // (salvo lo que se avisa sin contar).
+  otherCurrencies: (list: string) => `Entregado en otra moneda: ${list}`,
+  withoutRate: (n: number) =>
+    n === 1
+      ? 'Sin contar 1 abono en otra moneda: falta la tasa de su día.'
+      : `Sin contar ${n} abonos en otra moneda: falta la tasa de su día.`,
+  providerTimedOut: (n: number) =>
+    n === 1
+      ? 'Sin contar 1 abono en otra moneda: el proveedor de tasas no respondió.'
+      : `Sin contar ${n} abonos en otra moneda: el proveedor de tasas no respondió.`,
 };
 
 interface BillablePlanFieldProps {
@@ -31,8 +41,10 @@ interface BillablePlanFieldProps {
   /** Motivo por el que un plan no se puede elegir aquí, o `null` si se puede. */
   unavailableReason?: (plan: BillablePlan) => string | null;
   disabled?: boolean;
-  /** Cómo se pintan los importes (DX-386: el formato de la sede, si la pantalla lo tiene). */
-  money?: MoneyFormatter;
+  /** Cómo se pintan los importes: el formato de la sede de la pantalla (`stamp.money`, DX-354b). */
+  money: MoneyFormatter;
+  /** Zona y formato de la sede con que se escribe la fecha del plan («Plan del …», DX-354); sin ellos, «—». */
+  planDates: DocumentFormat | null;
 }
 
 /**
@@ -49,7 +61,8 @@ export function BillablePlanField({
   onChange,
   unavailableReason,
   disabled,
-  money = formatCurrency,
+  money,
+  planDates,
 }: BillablePlanFieldProps) {
   const selected = state.plans?.find((p) => p.id === value) ?? null;
   const hintId = `${id}-hint`;
@@ -77,7 +90,9 @@ export function BillablePlanField({
               const reason = unavailableReason?.(plan) ?? null;
               return (
                 <option key={plan.id} value={plan.id} disabled={reason !== null}>
-                  {reason ? `${billablePlanLabel(plan, money)} (${reason})` : billablePlanLabel(plan, money)}
+                  {reason
+                    ? `${billablePlanLabel(plan, planDates, money)} (${reason})`
+                    : billablePlanLabel(plan, planDates, money)}
                 </option>
               );
             })}
@@ -93,6 +108,8 @@ function PlanFigures({ id, plan, money }: { id: string; plan: BillablePlan; mone
   const others = plan.paidOtherCurrencies
     .map((o) => money(o.amount, o.currency))
     .join(', ');
+  // Una API anterior a DX-472-bis no manda el campo: nada que avisar.
+  const notCounted = (plan.paymentsWithoutRate as BillablePlan['paymentsWithoutRate'] | undefined)?.length ?? 0;
   return (
     <p id={id} className="t-caption text-muted tabular-nums">
       {billablePlanFieldCopy.figures(
@@ -104,6 +121,13 @@ function PlanFigures({ id, plan, money }: { id: string; plan: BillablePlan; mone
       )}
       {others ? (
         <span className="block">{billablePlanFieldCopy.otherCurrencies(others)}</span>
+      ) : null}
+      {notCounted > 0 ? (
+        <span className="block text-warning-text">
+          {plan.rateProviderTimedOut
+            ? billablePlanFieldCopy.providerTimedOut(notCounted)
+            : billablePlanFieldCopy.withoutRate(notCounted)}
+        </span>
       ) : null}
     </p>
   );

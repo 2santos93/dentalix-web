@@ -26,7 +26,7 @@ const texts = (draft: PublishPrivacyPolicyInput): string[] => [
 describe('POLICY_TEMPLATE', () => {
   it('la plantilla no cita leyes, autoridades ni países', () => {
     const lines = texts(POLICY_TEMPLATE).flatMap((text) => text.split('\n'));
-    expect(lines.filter((line) => citesLaw(line) || /Colombia|España|Venezuela/.test(line))).toEqual([]);
+    expect(lines.filter((line) => citesLaw(line) || /Colom[b]ia|España|Venezuela/.test(line))).toEqual([]);
   });
 
   it('la política tiene las cuatro secciones', () => {

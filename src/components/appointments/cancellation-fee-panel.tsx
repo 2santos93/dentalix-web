@@ -12,7 +12,7 @@ import {
   waiveCancellationFee,
   type CancellationFeeView,
 } from '@/lib/cancellations/cancellation-fee-api';
-import { formatCurrency } from '@/lib/format/currency';
+import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
@@ -26,6 +26,8 @@ import {
   feeReasonCopy,
   voidFeeCopy,
 } from './fee-reason-modal';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 
 export const cancellationFeeCopy = {
   heading: 'Cargo por inasistencia o cancelación tardía',
@@ -70,10 +72,6 @@ export const cancellationFeeCopy = {
 
 const copy = cancellationFeeCopy;
 
-function money(amount: number | null | undefined, currency: string | null | undefined): string | null {
-  return amount !== null && amount !== undefined && currency ? formatCurrency(amount, currency) : null;
-}
-
 /**
  * DX-291: en el detalle de una cita NO_SHOW o cancelada tarde, el estado del
  * cargo y las acciones «Generar cargo» y «Condonar» (y, ya generado, «Anular
@@ -93,6 +91,11 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
   const [failed, setFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [dialog, setDialog] = useState<'charge' | 'waive' | 'void' | null>(null);
+  // El cargo es de la sede de la cita (DX-354c): se pinta con su formato, no con el de la pantalla.
+  const sedeId = view?.locationId;
+  const stamp = useSedeStamp(token, [sedeId]);
+  const money = (amount: number | null | undefined, currency: string | null | undefined): string | null =>
+    amount !== null && amount !== undefined && currency ? stamp.money(amount, currency, sedeId) : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -138,6 +141,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
         <ChargeFeeModal
           token={token}
           appointmentId={appointmentId}
+          locationId={view.locationId}
           suggested={view.communicated.suggestedFee}
           currency={view.communicated.currency}
           onClose={() => setDialog(null)}
@@ -221,6 +225,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
       className="flex flex-col gap-2 border-t border-border-subtle pt-4 text-sm"
     >
       {heading}
+      <SedeStampNote stamp={stamp} />
       {view.status === 'VOIDED' && fee ? (
         <div className="flex flex-col gap-1">
           <p className="tabular-nums text-ink">{copy.voided(money(fee.amount, fee.currency) ?? '')}</p>
@@ -312,6 +317,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
 function ChargeFeeModal({
   token,
   appointmentId,
+  locationId,
   suggested,
   currency,
   onClose,
@@ -321,6 +327,8 @@ function ChargeFeeModal({
 }: {
   token: string;
   appointmentId: string;
+  /** La sede de la cita: con su formato se dicen el tope y el importe. */
+  locationId: string;
   suggested: number;
   currency: string;
   onClose: () => void;
@@ -329,9 +337,11 @@ function ChargeFeeModal({
   onStale: () => void;
   onCloseAutoFocus?: (event: Event) => void;
 }) {
+  const stamp = useSedeStamp(token, [locationId]);
+  const money = (amount: number, curr: string) => stamp.money(amount, curr, locationId);
   const id = useId();
   const amountId = `${id}-amount`;
-  const max = formatCurrency(suggested, currency);
+  const max = money(suggested, currency);
   const [amountText, setAmountText] = useState(moneyInputText(suggested));
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -362,7 +372,7 @@ function ChargeFeeModal({
         appointmentId,
         parsed.value === suggested ? undefined : parsed.value,
       );
-      toast.success(copy.chargeDone(formatCurrency(parsed.value, currency)));
+      toast.success(copy.chargeDone(money(parsed.value, currency)));
       onDone(next);
     } catch (err) {
       setError(apiErrorMessage(err, copy.chargeError));
@@ -386,6 +396,8 @@ function ChargeFeeModal({
       onSubmit={handleSubmit}
       submitLabel={copy.chargeSubmit}
       submitting={submitting}
+      // Sin el formato de la sede el tope no se puede decir: no se genera el cargo a ciegas.
+      submitDisabled={max === NO_SEDE_FORMAT}
       error={error}
       hideSubmit={stale}
       onCloseAutoFocus={onCloseAutoFocus}
@@ -399,6 +411,7 @@ function ChargeFeeModal({
         hintId={`${amountId}-hint`}
       >
         <MoneyInput
+          money={money}
           id={amountId}
           value={amountText}
           onValueChange={(v) => {

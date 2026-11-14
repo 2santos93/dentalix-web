@@ -88,7 +88,7 @@ function PromptField({
           aria-label={copy.skipFor(prompt.label)}
           onClick={() => onChange({ ...answer, skipped: !skipped })}
           className={cn(
-            'shrink-0 rounded-md px-2 py-1 text-xs font-medium text-muted hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+            'shrink-0 rounded-md px-2 py-1 text-xs font-medium text-muted hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text',
             skipped && 'bg-surface-sunken text-ink',
           )}
         >

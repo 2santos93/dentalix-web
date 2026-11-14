@@ -1,7 +1,8 @@
 'use client';
 import { Textarea } from '@/components/ui/textarea';
+import { InlineError } from '@/components/errors/inline-error';
 import * as React from 'react';
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { CalendarSearch, Phone } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -27,6 +28,7 @@ import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { SectionError } from '@/components/errors/section-error';
 import { cn } from '@/lib/utils';
+import { telHref } from '@/lib/receivables/presentation';
 
 // Copy as constants (i18n-ready, es-first).
 export const waitlistCopy = {
@@ -51,6 +53,9 @@ export const waitlistCopy = {
   reasonMissing: 'Escribe el motivo para descartarlo.',
   dismissError: 'No pudimos descartarlo. Intenta de nuevo.',
   dismissed: (name: string) => `${name} salió de pendientes.`,
+  loadMore: 'Cargar más',
+  loadingMore: 'Cargando…',
+  added: (n: number) => (n === 1 ? 'Se añadió 1 paciente a la lista.' : `Se añadieron ${n} pacientes a la lista.`),
   more: (shown: number, total: number) => `Se muestran ${shown} de ${total}.`,
   call: (phone: string) => `Llamar al ${phone}`,
 };
@@ -85,7 +90,15 @@ export function WaitlistPanel({
   onScheduled,
   className,
 }: WaitlistPanelProps) {
-  const { entries, total, loading, error, reload, remove } = waitlist;
+  const { entries, total, loading, error, reload, remove, hasMore, loadMore, loadingMore, moreError, lastBatch, pagedBeyondFirst } =
+    waitlist;
+  const listRef = useRef<HTMLUListElement>(null);
+  const announcement = lastBatch ? waitlistCopy.added(lastBatch.count) : '';
+  // DX-181: tras «Cargar más», el foco va al primer pendiente nuevo y se anuncia cuántos llegaron.
+  useEffect(() => {
+    if (!lastBatch) return;
+    listRef.current?.querySelector<HTMLElement>(`[data-entry-id="${lastBatch.firstId}"]`)?.focus();
+  }, [lastBatch]);
   const titleId = useId();
   const titleRef = useRef<HTMLHeadingElement>(null);
   const [searching, setSearching] = useState<WaitlistEntry | null>(null);
@@ -181,11 +194,15 @@ export function WaitlistPanel({
         </p>
       ) : (
         <>
-          <ul className="flex flex-col divide-y divide-border-subtle rounded-xl border border-border bg-surface">
+          <ul ref={listRef} className="flex flex-col divide-y divide-border-subtle rounded-xl border border-border bg-surface">
             {entries.map((entry) => {
               const name = waitlistPatientName(entry);
               return (
-                <li key={entry.id} data-testid="waitlist-entry" className="flex flex-col gap-2 px-4 py-3">
+                <li key={entry.id} data-testid="waitlist-entry"
+                  data-entry-id={entry.id}
+                  tabIndex={-1}
+                  className="flex flex-col gap-2 px-4 py-3 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary-text"
+                >
                   <div className="flex items-start justify-between gap-2">
                     <p className="min-w-0 truncate text-sm font-semibold text-ink">{name}</p>
                     {entry.priority === 'URGENT' ? (
@@ -203,9 +220,9 @@ export function WaitlistPanel({
                     {entry.note ? <p className="text-ink">{entry.note}</p> : null}
                     {entry.patientPhone ? (
                       <a
-                        href={`tel:${entry.patientPhone}`}
+                        href={telHref(entry.patientPhone)}
                         aria-label={waitlistCopy.call(entry.patientPhone)}
-                        className="inline-flex items-center gap-1 self-start rounded text-primary-text underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
+                        className="inline-flex min-h-6 items-center gap-1 self-start rounded text-primary-text max-sm:min-h-11 underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
                       >
                         <Phone className="size-3.5" aria-hidden />
                         <span className="tabular-nums">{entry.patientPhone}</span>
@@ -240,9 +257,29 @@ export function WaitlistPanel({
               );
             })}
           </ul>
-          {total > entries.length ? (
-            <p className="text-xs text-muted">{waitlistCopy.more(entries.length, total)}</p>
+          {hasMore || pagedBeyondFirst ? (
+            <p className="text-xs tabular-nums text-muted">{waitlistCopy.more(entries.length, total)}</p>
           ) : null}
+          {hasMore ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              aria-disabled={loadingMore}
+              className="self-start aria-disabled:pointer-events-none aria-disabled:opacity-60"
+              onClick={() => {
+                if (!loadingMore) loadMore();
+              }}
+            >
+              {loadingMore ? waitlistCopy.loadingMore : waitlistCopy.loadMore}
+            </Button>
+          ) : null}
+          {moreError ? (
+            <InlineError className="text-xs">{moreError}</InlineError>
+          ) : null}
+          <p role="status" aria-live="polite" className="sr-only">
+            {announcement}
+          </p>
         </>
       )}
 

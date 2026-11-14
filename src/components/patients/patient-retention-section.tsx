@@ -21,52 +21,59 @@ import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { NativeSelect } from '@/components/ui/native-select';
 import { SectionHeader } from '@/components/ui/section-header';
 import { DATA_SECTION_CLASS } from './data-section';
-
-/** `YYYY-MM-DD` (o ISO) → `DD/MM/AAAA`, sin pasar por la zona del navegador. */
-export function formatCivilDate(value: string): string {
-  const [y, m, d] = value.slice(0, 10).split('-');
-  return `${d}/${m}/${y}`;
-}
+import type { SedePainters } from '@/lib/locations/sede-stamp';
 
 // El 409 de retención lleva la fecha y la salida (supresión parcial): es más
 // largo que el tope por defecto de `apiErrorMessage`.
 const RETENTION_MESSAGE_MAX = 400;
 
 const copy = {
-  sectionLabel: 'Retención legal de la historia clínica',
-  sectionTitle: 'Retención legal',
+  sectionLabel: 'Retención de la historia clínica',
+  sectionTitle: 'Retención',
   // Chip corto de la cabecera; la frase completa está en «Datos».
   chip: {
     until: (date: string) => `Retención hasta ${date}`,
     permanent: 'Retención permanente',
     expired: (date: string) => `Retención vencida el ${date}`,
   },
-  until: (date: string) => `Historia en retención legal hasta ${date}`,
-  permanent: 'Historia en retención legal permanente',
-  expired: (date: string) => `Retención legal vencida el ${date}`,
-  none: 'Sin atenciones clínicas: sin retención legal',
-  double: 'Plazo doble (30 años)',
-  // La base legal sigue al plazo vigente: con DOUBLE o PERMANENT, «15 años»
+  until: (date: string) => `Historia en retención hasta ${date}`,
+  permanent: 'Historia en retención permanente',
+  expired: (date: string) => `Retención vencida el ${date}`,
+  none: 'Sin atenciones clínicas: sin retención',
+  // DX-330: el plazo es de la clínica (`clinicRetentionYears`), nunca un
+  // número fijo. Sin él (una API anterior) no se pinta ninguna cifra.
+  double: (years: number | undefined) =>
+    years === undefined ? 'Plazo doble' : `Plazo doble (${2 * years} años)`,
+  // La ayuda sigue al plazo vigente: con DOUBLE o PERMANENT, el plazo simple
   // contradiría la fecha del aviso.
   hint: {
-    NONE: 'Se conserva 15 años desde la última atención. Mientras dure, el paciente no se puede archivar.',
-    DOUBLE:
-      'Plazo doble: se conserva 30 años desde la última atención. Mientras dure, el paciente no se puede archivar.',
-    PERMANENT: 'Se conserva sin fecha de fin: el paciente no se puede archivar.',
-  } satisfies Record<RetentionExtension, string>,
+    NONE: (years: number | undefined) =>
+      `Se conserva ${years === undefined ? 'el plazo de la clínica' : `${years} años`} desde la última atención. Mientras dure, el paciente no se puede archivar.`,
+    DOUBLE: (years: number | undefined) =>
+      `Plazo doble: se conserva ${years === undefined ? 'el doble del plazo de la clínica' : `${2 * years} años`} desde la última atención. Mientras dure, el paciente no se puede archivar.`,
+    PERMANENT: () => 'Se conserva sin fecha de fin: el paciente no se puede archivar.',
+  } satisfies Record<RetentionExtension, (years: number | undefined) => string>,
+  // La clínica redujo el plazo y esta historia ya estaba en retención: manda
+  // la fecha que tenía.
+  previousTermHint: (date: string) =>
+    `Se conserva hasta el ${date} por el plazo anterior de la clínica. Mientras dure, el paciente no se puede archivar.`,
   suppressed: (date: string) => `Datos de contacto suprimidos el ${date}`,
   changeRetention: 'Cambiar retención',
   suppress: 'Supresión parcial',
   archive: 'Archivar paciente',
-  retentionTitle: 'Retención legal extendida',
+  retentionTitle: 'Retención extendida',
   retentionDescription:
     'Amplía el plazo de conservación de la historia clínica. Queda registrado quién lo cambió, cuándo y por qué.',
   retentionLabel: 'Plazo',
   options: {
-    NONE: '15 años desde la última atención (general)',
-    DOUBLE: '30 años (plazo doble)',
-    PERMANENT: 'Permanente (p. ej. víctimas de violaciones de DD. HH./DIH)',
-  } satisfies Record<RetentionExtension, string>,
+    NONE: (years: number | undefined) =>
+      years === undefined
+        ? 'Plazo de la clínica desde la última atención'
+        : `${years} años desde la última atención (plazo de la clínica)`,
+    DOUBLE: (years: number | undefined) =>
+      years === undefined ? 'Plazo doble' : `${2 * years} años (plazo doble)`,
+    PERMANENT: () => 'Permanente (nunca se libera)',
+  } satisfies Record<RetentionExtension, (years: number | undefined) => string>,
   reasonLabel: 'Motivo',
   reasonHint: `Mínimo ${RETENTION_REASON_MIN} caracteres. Queda en el registro.`,
   reasonTooShort: `El motivo debe tener al menos ${RETENTION_REASON_MIN} caracteres.`,
@@ -90,11 +97,27 @@ type Status =
   | { kind: 'expired'; date: string }
   | { kind: 'none' };
 
-function statusOf(patient: Patient): Status {
+function statusOf(patient: Patient, stamp: SedePainters): Status {
   if (patient.retentionExtended === 'PERMANENT') return { kind: 'permanent' };
   if (!patient.retentionUntil) return { kind: 'none' };
-  const date = formatCivilDate(patient.retentionUntil);
+  const date = stamp.civilDate(patient.retentionUntil);
   return patient.underRetention ? { kind: 'until', date } : { kind: 'expired', date };
+}
+
+/**
+ * La ayuda de la retención, una sola para la sección y el chip de la cabecera
+ * (DX-330): el plazo de la clínica, o el anterior si manda un suelo.
+ */
+export function retentionHint(patient: Patient, stamp: SedePainters): string {
+  const extension = patient.retentionExtended ?? 'NONE';
+  if (
+    extension !== 'PERMANENT' &&
+    patient.retentionFromPreviousTerm &&
+    patient.retentionUntil
+  ) {
+    return copy.previousTermHint(stamp.civilDate(patient.retentionUntil));
+  }
+  return copy.hint[extension](patient.clinicRetentionYears);
 }
 
 function statusText(status: Status): string {
@@ -153,9 +176,9 @@ export const retentionActionLabels = {
  * riesgo — tono neutro, nunca ámbar junto a «Sin anamnesis» (critique-core §7).
  * `null` sin atenciones clínicas: no hay nada que decir en la cabecera.
  */
-export function retentionChip(patient: Patient): { text: string; hint: string | null } | null {
-  const status = statusOf(patient);
-  const hint = patient.underRetention ? copy.hint[patient.retentionExtended ?? 'NONE'] : null;
+export function retentionChip(patient: Patient, stamp: SedePainters): { text: string; hint: string | null } | null {
+  const status = statusOf(patient, stamp);
+  const hint = patient.underRetention ? retentionHint(patient, stamp) : null;
   switch (status.kind) {
     case 'until':
       return { text: copy.chip.until(status.date), hint };
@@ -169,13 +192,13 @@ export function retentionChip(patient: Patient): { text: string; hint: string | 
 }
 
 /**
- * Retención legal de la HC en la pestaña «Datos» (DX-039): el aviso con la
+ * Retención de la HC en la pestaña «Datos» (DX-039): el aviso con la
  * fecha hasta la que se conserva, el plazo y la supresión parcial si la hubo.
  * Lo ven todos. Los controles (ADMIN) están en el menú «⋯» de la cabecera:
- * son acciones raras y legalmente delicadas, no van a la vista en cada pestaña.
+ * son acciones raras y delicadas, no van a la vista en cada pestaña.
  */
-export function PatientRetentionSection({ patient }: { patient: Patient }) {
-  const status = statusOf(patient);
+export function PatientRetentionSection({ patient, stamp }: { patient: Patient; stamp: SedePainters }) {
+  const status = statusOf(patient, stamp);
   return (
     <section aria-label={copy.sectionLabel} className={DATA_SECTION_CLASS}>
       <SectionHeader as="h2" title={copy.sectionTitle} />
@@ -184,15 +207,15 @@ export function PatientRetentionSection({ patient }: { patient: Patient }) {
           <ShieldCheck aria-hidden className="size-4 shrink-0 text-muted" />
           <span className="tnum">{statusText(status)}</span>
           {patient.retentionExtended === 'DOUBLE' ? (
-            <Badge variant="neutral">{copy.double}</Badge>
+            <Badge variant="neutral">{copy.double(patient.clinicRetentionYears)}</Badge>
           ) : null}
         </p>
         {patient.underRetention ? (
-          <p className="text-sm text-muted">{copy.hint[patient.retentionExtended ?? 'NONE']}</p>
+          <p className="text-sm text-muted">{retentionHint(patient, stamp)}</p>
         ) : null}
         {patient.partiallySuppressedAt ? (
           <p className="text-sm text-muted tnum">
-            {copy.suppressed(formatCivilDate(patient.partiallySuppressedAt))}
+            {copy.suppressed(stamp.date(patient.partiallySuppressedAt))}
           </p>
         ) : null}
       </div>
@@ -308,7 +331,7 @@ export function PatientRetentionDialogs({
             >
               {(Object.keys(copy.options) as RetentionExtension[]).map((value) => (
                 <option key={value} value={value}>
-                  {copy.options[value]}
+                  {copy.options[value](patient.clinicRetentionYears)}
                 </option>
               ))}
             </NativeSelect>

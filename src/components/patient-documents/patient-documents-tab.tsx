@@ -5,7 +5,7 @@ import { Ban, Download, Eye, FileText, Upload } from 'lucide-react';
 import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
-import { formatCivilDate, formatDateTime } from '@/lib/format/date';
+import { NO_SEDE_FORMAT, sedeCivilDate } from '@/lib/format/sede-number';
 import { isFdiToothNumber } from '@/lib/odontogram/fdi';
 import { startDownload } from '@/lib/patient-documents/download';
 import { createLimiter } from '@/lib/patient-documents/limit';
@@ -42,7 +42,8 @@ import { cn } from '@/lib/utils';
 import { DocumentViewerDialog } from './document-viewer-dialog';
 import { ToothChipsInput } from './tooth-chips-input';
 import { VoidDocumentModal } from './void-document-modal';
-import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { readyClock, useSedeClock } from '@/lib/locations/sede-clock';
+import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 
 const copy = {
@@ -172,13 +173,6 @@ const FDI_OPTIONS: string[] = [
   ...[5, 6, 7, 8].flatMap((q) => [1, 2, 3, 4, 5].map((t) => `${q}${t}`)),
 ];
 
-/** Hoy (YYYY-MM-DD) en la zona del navegador: tope de la fecha clínica. */
-function todayLocal(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
 function TabSkeleton() {
   return (
     <div role="status" aria-label={copy.loading} className="flex flex-col gap-3">
@@ -234,9 +228,15 @@ export function PatientDocumentsTab({
   const [downloading, setDownloading] = useState<ReadonlySet<string>>(new Set());
   const [announcement, setAnnouncement] = useState('');
   const [runLimited] = useState(() => createLimiter(MAX_PARALLEL_UPLOADS));
-  // G1-B: los tamaños con el formato de la sede de la pantalla; sin él, «—» y el aviso.
-  const sedeFormat = useSedeFormat(token);
-  const fmt = readyFormat(sedeFormat);
+  // G1-B: los tamaños con el formato de la sede de la pantalla; DX-354: también
+  // la fecha y la hora de subida y de anulación, con su zona y su reloj. Sin
+  // ellos, «—» y el aviso.
+  const sedeClock = useSedeClock(token);
+  const clock = readyClock(sedeClock);
+  const fmt = clock?.fmt ?? null;
+  // DX-354b (E9): el tope de la fecha clínica («hoy») es el de la sede de la pantalla, no el del navegador.
+  const today = clock ? sedeToday(clock.timeZone) : null;
+  const stamp = (iso: string) => (clock ? clock.fmt.dateTime(new Date(iso), clock.timeZone) : NO_SEDE_FORMAT);
   /** El `AbortController` de cada subida en curso, para «Cancelar» (QA D2). */
   const uploadControllers = useRef(new Map<string, AbortController>());
 
@@ -456,9 +456,9 @@ export function PatientDocumentsTab({
             <FormField htmlFor={field('date')} label={copy.clinicalDate} className="min-w-0">
               <DateField
                 id={field('date')}
-                max={todayLocal()}
+                max={today ?? undefined}
                 value={item.clinicalDate || null}
-                disabled={locked}
+                disabled={locked || today === null}
                 onChange={(value) => updateItem(item.key, { clinicalDate: value ?? '' })}
               />
             </FormField>
@@ -602,11 +602,11 @@ export function PatientDocumentsTab({
       header: copy.colDate,
       cell: (doc) =>
         doc.clinicalDate ? (
-          <span className="tnum">{formatCivilDate(doc.clinicalDate)}</span>
+          <span className="tnum">{sedeCivilDate(doc.clinicalDate, fmt)}</span>
         ) : (
           <span className="text-muted">{copy.noDate}</span>
         ),
-      mobileCell: (doc) => (doc.clinicalDate ? formatCivilDate(doc.clinicalDate) : null),
+      mobileCell: (doc) => (doc.clinicalDate ? sedeCivilDate(doc.clinicalDate, fmt) : null),
     },
     {
       id: 'teeth',
@@ -628,7 +628,7 @@ export function PatientDocumentsTab({
           {doc.notes ? <span className="[overflow-wrap:anywhere]">{doc.notes}</span> : null}
           {doc.voidedAt !== null ? (
             <span className="text-ink [overflow-wrap:anywhere]">
-              {copy.voidedDetail(formatDateTime(doc.voidedAt), doc.voidedByName ?? copy.unknownUser, doc.voidReason ?? '')}
+              {copy.voidedDetail(stamp(doc.voidedAt), doc.voidedByName ?? copy.unknownUser, doc.voidReason ?? '')}
             </span>
           ) : null}
         </span>
@@ -638,7 +638,7 @@ export function PatientDocumentsTab({
           formatFileSize(doc.sizeBytes, fmt),
           doc.notes,
           doc.voidedAt !== null
-            ? copy.voidedDetail(formatDateTime(doc.voidedAt), doc.voidedByName ?? copy.unknownUser, doc.voidReason ?? '')
+            ? copy.voidedDetail(stamp(doc.voidedAt), doc.voidedByName ?? copy.unknownUser, doc.voidReason ?? '')
             : null,
         ]
           .filter(Boolean)
@@ -650,7 +650,7 @@ export function PatientDocumentsTab({
       showFrom: 'lg',
       cell: (doc) => (
         <span className="text-sm">
-          {copy.uploadedBy(doc.uploadedByName ?? copy.unknownUser, formatDateTime(doc.uploadedAt))}
+          {copy.uploadedBy(doc.uploadedByName ?? copy.unknownUser, stamp(doc.uploadedAt))}
         </span>
       ),
       mobile: 'hidden',
@@ -834,8 +834,8 @@ export function PatientDocumentsTab({
           </div>
         ) : null}
 
-        {sedeFormat.status === 'error' ? (
-          <SedeConfigError kind="locale" variant="note" onRetry={sedeFormat.retry} description={sedeFormat.message} locationId={sedeFormat.locationId} />
+        {sedeClock.status === 'error' ? (
+          <SedeConfigError kind={sedeClock.kind} variant="note" onRetry={sedeClock.retry} description={sedeClock.message} locationId={sedeClock.locationId} />
         ) : null}
 
         <AsyncSection

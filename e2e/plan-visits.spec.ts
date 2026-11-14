@@ -30,6 +30,8 @@ const password = "DemoDentalix2026!";
  * que se reutiliza entre ejecuciones y se desactiva en `afterAll`, y cada test
  * retira en `afterEach` lo que creó (citas, plan, paciente y tratamiento del
  * catálogo): así la lista «Aceptado sin agendar» de esa sede empieza vacía.
+ *
+ * Supone una BD e2e recién sembrada (DX-335): una demo reutilizada conserva lo que dejaron otras ejecuciones.
  */
 const QA_LOCATION = "QA visitas e2e";
 let locationId: string;
@@ -146,8 +148,8 @@ async function seed(request: APIRequestContext, tag: string) {
     docType: "NATIONAL_ID",
     docNumber: tag,
     sex: "F",
-    phone: "3001234567",
-    countryCode: "CO",
+    phone: "0416 555 0452",
+    countryCode: "VE",
   });
   created.patientId = patient.id;
   const catalog = await post<{ id: string }>("/catalog/items", {
@@ -155,12 +157,12 @@ async function seed(request: APIRequestContext, tag: string) {
     kind: "PROCEDURE",
     labelEs: `Corona ${tag}`,
     color: "#3366CC",
-    defaultPrice: 100000,
+    defaultPrice: 100,
   });
   created.catalogId = catalog.id;
   const plan = await post<{ id: string }>(
     `/patients/${patient.id}/treatment-plans`,
-    { currency: "COP" },
+    { currency: "USD" },
   );
   created.planId = plan.id;
   const itemIds: string[] = [];
@@ -374,6 +376,10 @@ for (const width of [390, 1440])
           .getByRole("group", { name: "Tratamientos de la visita" })
           .getByRole("checkbox"),
       ).toHaveCount(2);
+      // DX-283: cada tratamiento dice su diente y su procedimiento.
+      await expect(
+        dialog.getByRole("group", { name: "Tratamientos de la visita" }).getByText(/^\d+ · Corona /),
+      ).toHaveCount(2);
       for (const check of await dialog
         .getByRole("group", { name: "Tratamientos de la visita" })
         .getByRole("checkbox")
@@ -501,8 +507,9 @@ for (const width of [390, 1440])
       await expect(
         page.getByRole("region", { name: "Plan por visitas" }),
       ).toHaveCount(0);
-      await page.goto(origin + "/presupuestos");
-      await page.getByRole("tab", { name: "Aceptado sin agendar" }).click();
+      // DX-283: la pestaña se puede enlazar.
+      await page.goto(origin + "/presupuestos?tab=aceptado");
+      await expect(page.getByRole("tab", { name: "Aceptado sin agendar" })).toHaveAttribute("aria-selected", "true");
       const list = page.getByRole("region", {
         name: "Tratamiento aceptado sin agendar",
       });
@@ -515,13 +522,13 @@ for (const width of [390, 1440])
       await expect(card).toContainText(
         "Visita 2 · Corona · 2 tratamientos pendientes",
       );
-      await expect(card).toContainText("COP");
-      await expect(card).toContainText("200.000");
+      await expect(card).toContainText("USD");
+      await expect(card).toContainText("200,00");
       const whatsapp = card.getByRole("link", {
         name: `WhatsApp a ${data.name}`,
       });
       const url = new URL((await whatsapp.getAttribute("href"))!);
-      expect(url.pathname).toBe("/573001234567");
+      expect(url.pathname).toBe("/584165550452");
       expect(url.searchParams.get("text")).not.toMatch(
         /Corona|Cirugía|Visita|tratamiento/i,
       );
@@ -616,9 +623,15 @@ for (const width of [390, 1440])
       await page.getByRole("button", { name: "Día", exact: true }).click();
       await page.getByRole("button", { name: "Lista", exact: true }).click();
       await fillDate(page, "Fecha", day);
-      const status = page.getByRole("combobox", {
-        name: /^Estado de la cita de 10:15–10:45/,
-      });
+      // La sede de pruebas y el profesional son los mismos en todas las
+      // variantes y el día sale de un sorteo: la cita CANCELADA de 10:15 de
+      // otra variante (o de una ejecución anterior) puede caer el mismo día.
+      // Se acota a la fila (escritorio) o tarjeta (móvil) del paciente de este
+      // test, cuyo apellido es el `tag` único.
+      const status = page
+        .locator("tr, li")
+        .filter({ hasText: tag })
+        .getByRole("combobox", { name: /^Estado de la cita de 10:15–10:45/ });
       await expect(status).toHaveText("Agendada");
       await chooseAppointmentStatus(status, "Cancelada");
       await confirmCancellation(page);
@@ -631,7 +644,7 @@ for (const width of [390, 1440])
       await expect(card).toContainText(
         "Visita 2 · Corona · 2 tratamientos pendientes",
       );
-      await expect(card).toContainText("200.000");
+      await expect(card).toContainText("200,00");
       await page.screenshot({
         path: `../.planning/backlog-wave-2026-10-21/qa/DX-256/cancelled-${width}-${theme}.png`,
         fullPage: true,

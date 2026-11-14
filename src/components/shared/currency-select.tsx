@@ -100,6 +100,7 @@ export function CurrencySelect({
 
   return (
     <NativeSelect
+      selectClassName={className}
       id={id}
       value={value}
       disabled={disabled}

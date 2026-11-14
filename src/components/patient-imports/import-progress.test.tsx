@@ -55,3 +55,32 @@ describe('ImportProgress con el formato de la sede (G1-B)', () => {
     expect(screen.queryByText(/1[.,]234/)).not.toBeInTheDocument();
   });
 });
+
+describe('ImportProgress: saldos importados con el formato de la sede (DX-354b)', () => {
+  const norm = (text: string | null) => (text ?? '').replace(/\s/g, ' ');
+  const imported = batchFixture({
+    status: 'COMPLETED',
+    balances: balancesFixture({
+      preparedCount: 3,
+      progress: { processed: 3, created: 3, skipped: 0, ambiguous: 0, existing: 0 },
+      imported: [
+        { currency: 'VES', count: 2, amount: 45000 },
+        { currency: 'USD', count: 1, amount: 1234.5 },
+      ],
+    }),
+  });
+
+  it.each([
+    ['es-VE', 'h12', 'VES 45.000,00 · USD 1.234,50'],
+    ['en-US', 'h12', 'VES 45,000.00 · USD 1,234.50'],
+    ['de-DE', 'h23', '45.000,00 VES · 1.234,50 USD'],
+  ] as const)('con la sede %s los totales en VES y USD salen «%s»', (locale, hourCycle, expected) => {
+    render(<ImportProgress batch={imported} headingId="h" onReport={jest.fn()} fmt={regionalFormat({ locale, hourCycle })} />);
+    expect(norm(screen.getByText(/Importado por moneda/).textContent)).toContain(expected);
+  });
+
+  it('sin formato de sede los totales salen «—»', () => {
+    render(<ImportProgress batch={imported} headingId="h" onReport={jest.fn()} fmt={null} />);
+    expect(norm(screen.getByText(/Importado por moneda/).textContent)).toContain('— · —');
+  });
+});

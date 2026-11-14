@@ -13,12 +13,13 @@ import {
   nextOptionLabel,
   REJECTION_REASON_LABELS,
 } from '@/lib/treatment-plans/plan-options';
-import { formatDate } from '@/lib/format/date';
+import type { SedePainters } from '@/lib/locations/sede-stamp';
 import { Button } from '@/components/ui/button';
 import { InlineError } from '@/components/errors/inline-error';
 import { RejectPlanModal } from './reject-plan-modal';
 import { CreateAlternativeModal } from './create-alternative-modal';
 import { PlanOptionsComparison } from './plan-options-comparison';
+import { QuoteValidity } from './quote-validity';
 
 const copy = {
   present: 'Presentar al paciente',
@@ -41,6 +42,8 @@ interface PlanOptionsPanelProps {
   /** Tras presentar, rechazar o crear una alternativa: el padre recarga. */
   onChanged: () => Promise<void>;
   onSelectPlan: (planId: string) => void;
+  /** El pintor de la pantalla (su dueño pinta el aviso de la sede, una vez). */
+  stamp: SedePainters;
 }
 
 /**
@@ -56,6 +59,7 @@ export function PlanOptionsPanel({
   role,
   onChanged,
   onSelectPlan,
+  stamp,
 }: PlanOptionsPanelProps) {
   const [presenting, setPresenting] = useState(false);
   const [presentError, setPresentError] = useState<string | null>(null);
@@ -86,12 +90,22 @@ export function PlanOptionsPanel({
   return (
     <div className="flex flex-col gap-4">
       {plan.status === 'PRESENTED' && plan.presentedAt ? (
-        <p className="text-sm text-muted tabular-nums">{copy.presentedOn(formatDate(plan.presentedAt))}</p>
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted tabular-nums">
+          <span>{copy.presentedOn(stamp.date(plan.presentedAt, plan.presentedLocationId))}</span>
+          {/* DX-379: la validez que fijó la presentación. */}
+          <QuoteValidity
+            status={plan.status}
+            validUntil={plan.quoteValidUntil}
+            expired={plan.quoteExpired}
+            locationId={plan.presentedLocationId}
+            stamp={stamp}
+          />
+        </p>
       ) : null}
       {plan.status === 'REJECTED' && plan.rejectedAt && reason ? (
         <div className="text-sm">
           <p className="font-medium text-ink tabular-nums">
-            {copy.rejectedOn(formatDate(plan.rejectedAt), reason)}
+            {copy.rejectedOn(stamp.date(plan.rejectedAt), reason)}
           </p>
           {plan.rejectionNote ? <p className="text-muted">{plan.rejectionNote}</p> : null}
         </div>

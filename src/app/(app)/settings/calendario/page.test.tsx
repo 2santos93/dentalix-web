@@ -39,10 +39,11 @@ describe('Ajustes → Calendario de la sede (DX-316)', () => {
     expect(screen.getByRole('region', { name: 'Calendario' })).toHaveAttribute('data-allowed', 'false');
   });
 
-  it('without a session goes to /login', () => {
+  // DX-117 (FE-020): mandar a /login es cosa de `RequireSession` (layout).
+  it('without a session renders nothing and leaves the redirect to RequireSession', () => {
     useAuthStore.setState({ accessToken: null, _hasHydrated: true });
     render(<LocationCalendarPage />);
-    expect(replace).toHaveBeenCalledWith('/login');
+    expect(replace).not.toHaveBeenCalled();
     expect(screen.queryByRole('region', { name: 'Calendario' })).not.toBeInTheDocument();
   });
 });

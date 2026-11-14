@@ -19,7 +19,7 @@ const copy = {
 export function ClosingQueueLink({ token }: { token: string }) {
   const role = getTokenRole(token);
   const visible = canSeeClosingQueue(role);
-  // El mismo contador que el menú (ClosingQueueCountProvider del AppShell).
+  // El mismo contador que el menú y «Mi día» (WorkQueuesProvider del AppShell).
   const count = useClosingQueueCount();
   if (!visible) return null;
   return (

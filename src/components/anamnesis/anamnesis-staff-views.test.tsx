@@ -4,6 +4,8 @@ import { AnamnesisReviewView } from './anamnesis-review-view';
 import { PatientAnamnesisSection } from './patient-anamnesis-section';
 import { AnamnesisSendDialog } from './anamnesis-send-dialog';
 import { NetworkError } from '@/lib/api/api-error';
+import { listLocations } from '@/lib/locations/locations-api';
+import { caracasSede } from '@/lib/test/sede-clock';
 import {
   acceptAnamnesis,
   createAnamnesisRequest,
@@ -25,6 +27,9 @@ jest.mock('../../lib/anamnesis/anamnesis-api', () => ({
   createAnamnesisRequest: jest.fn(),
   revokeAnamnesisRequest: jest.fn(),
 }));
+
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 
 const inbox = listAnamnesisInbox as jest.MockedFunction<typeof listAnamnesisInbox>;
 const review = getAnamnesisReview as jest.MockedFunction<typeof getAnamnesisReview>;
@@ -84,7 +89,11 @@ function reviewFixture(): AnamnesisReview {
   };
 }
 
-beforeEach(() => jest.resetAllMocks());
+beforeEach(() => {
+  jest.resetAllMocks();
+  // Las solicitudes de estas pruebas son de la sede `l1` (Caracas, 12 h).
+  mockedLocations.mockResolvedValue([caracasSede({ id: 'l1' })]);
+});
 
 describe('Bandeja «Anamnesis por revisar» (DX-099)', () => {
   it('vacía: «No hay anamnesis por revisar»', async () => {
@@ -218,7 +227,7 @@ describe('Bloque de la ficha (DX-099)', () => {
       appointmentId: null,
       url: 'http://demo.localhost:3001/anamnesis/abc',
       expiresAt: '2026-10-30T15:00:00.000Z',
-      whatsapp: { phone: '573001234567', text: 'Hola' },
+      whatsapp: { phone: '584121234567', text: 'Hola' },
       whatsappUnavailableReason: null,
       consentRequired: false,
     });
@@ -230,7 +239,7 @@ describe('Bloque de la ficha (DX-099)', () => {
     expect(await screen.findByDisplayValue('http://demo.localhost:3001/anamnesis/abc')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Abrir WhatsApp/ })).toHaveAttribute(
       'href',
-      'https://wa.me/573001234567?text=Hola',
+      'https://wa.me/584121234567?text=Hola',
     );
     expect(onCreated).toHaveBeenCalled();
   });

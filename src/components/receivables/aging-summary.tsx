@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { formatCurrency } from '@/lib/format/currency';
+import type { SedePainters } from '@/lib/locations/sede-stamp';
 import { BUCKET_LABELS, BUCKET_ORDER } from '@/lib/receivables/presentation';
 import type { AgingTotal } from '@/lib/receivables/receivables-api';
 import { cn } from '@/lib/utils';
@@ -20,10 +20,14 @@ const copy = {
  * grande / etiqueta pequeña» como estructura. Son de TODAS las filas
  * filtradas, no de la página visible.
  *
+ * DX-181 (FE-044): los importes nunca se recortan: la rejilla reparte los
+ * tramos en las columnas que caben y una cifra larga (millones, sin decimales)
+ * salta de línea en vez de cortarse con «…».
+ *
  * Una moneda sin nada por cobrar (solo saldo a favor) no pinta cinco tramos a
  * cero; en el teléfono, los tramos a cero tampoco salen (crítica ops §5).
  */
-export function AgingSummary({ totals }: { totals: AgingTotal[] }) {
+export function AgingSummary({ totals, stamp }: { totals: AgingTotal[]; stamp: SedePainters }) {
   const headingId = React.useId();
   if (totals.length === 0) return null;
   return (
@@ -33,14 +37,14 @@ export function AgingSummary({ totals }: { totals: AgingTotal[] }) {
       </h2>
       <div className="divide-y divide-border-subtle">
         {totals.map((total) => (
-          <CurrencyTotals key={total.currency} total={total} />
+          <CurrencyTotals key={total.currency} total={total} stamp={stamp} />
         ))}
       </div>
     </section>
   );
 }
 
-function CurrencyTotals({ total }: { total: AgingTotal }) {
+function CurrencyTotals({ total, stamp }: { total: AgingTotal; stamp: SedePainters }) {
   const labelId = React.useId();
   const hasBuckets = BUCKET_ORDER.some((bucket) => total.buckets[bucket] > 0);
   return (
@@ -52,29 +56,29 @@ function CurrencyTotals({ total }: { total: AgingTotal }) {
         </p>
         <p className="text-sm text-muted">
           {copy.debt}{' '}
-          <span className="font-medium tabular-nums text-ink">{formatCurrency(total.debt, total.currency)}</span>
+          <span className="font-medium tabular-nums text-ink">{stamp.money(total.debt, total.currency)}</span>
         </p>
       </div>
       {hasBuckets ? (
         <dl
           aria-labelledby={labelId}
-          className="mt-2 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 sm:grid-cols-5 sm:gap-0 sm:divide-x sm:divide-border-subtle"
+          className="mt-2 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 sm:grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] sm:gap-x-6 sm:gap-y-3"
         >
           {BUCKET_ORDER.map((bucket) => {
             const amount = total.buckets[bucket];
             return (
               <div
                 key={bucket}
-                className={cn('contents min-w-0 sm:block sm:px-3 sm:first:pl-0', amount === 0 && 'max-sm:hidden')}
+                className={cn('contents min-w-0 sm:block', amount === 0 && 'max-sm:hidden')}
               >
                 <dt className="t-label text-muted">{BUCKET_LABELS[bucket]}</dt>
                 <dd
                   className={cn(
-                    'text-right font-medium tabular-nums sm:truncate sm:text-left',
+                    'text-right font-medium tabular-nums [overflow-wrap:anywhere] sm:text-left',
                     bucket === 'over90' && amount > 0 ? 'text-danger-text' : 'text-ink',
                   )}
                 >
-                  {formatCurrency(amount, total.currency)}
+                  {stamp.money(amount, total.currency)}
                 </dd>
               </div>
             );
@@ -85,7 +89,7 @@ function CurrencyTotals({ total }: { total: AgingTotal }) {
         <p className="mt-2 text-xs text-muted">
           {copy.credit}{' '}
           <span className="font-medium tabular-nums text-success-text">
-            {formatCurrency(total.credit, total.currency)}
+            {stamp.money(total.credit, total.currency)}
           </span>
           {' · '}
           {copy.creditHint}

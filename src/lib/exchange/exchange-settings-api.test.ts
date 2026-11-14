@@ -11,6 +11,9 @@ import {
   correctManualExchangeRate,
   registerManualExchangeRate,
   saveExchangeRateSettings,
+  saveManualRateMaxAgeDays,
+  parseMaxAgeInput,
+  MAX_AGE_INPUT_COPY,
 } from './exchange-settings-api';
 
 describe('exchange-settings-api', () => {
@@ -47,6 +50,33 @@ describe('exchange-settings-api', () => {
     expect(String(url)).toMatch(/\/exchange\/settings$/);
     expect(init.method).toBe('PUT');
     expect(JSON.parse(init.body as string)).toEqual({ source: 'MANUAL' });
+  });
+
+  it('saveManualRateMaxAgeDays: PUT /exchange/settings solo con el plazo (DX-384)', async () => {
+    const spy = mockFetch({ source: 'MANUAL', manualRateMaxAgeDays: 7 });
+    await saveManualRateMaxAgeDays('tok', 7);
+    const [url, init] = spy.mock.calls[0];
+    expect(String(url)).toMatch(/\/exchange\/settings$/);
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(init.body as string)).toEqual({
+      manualRateMaxAgeDays: 7,
+    });
+  });
+
+  it('parseMaxAgeInput: un entero de 0 a 30 (DX-384)', () => {
+    for (const ok of ['0', '3', ' 30 ', '07']) {
+      expect(parseMaxAgeInput(ok)).toEqual({ ok: true, value: Number(ok) });
+    }
+    expect(parseMaxAgeInput('')).toEqual({
+      ok: false,
+      error: MAX_AGE_INPUT_COPY.missing,
+    });
+    for (const bad of ['31', '-1', '1,5', '1.5', 'tres', '100', '1e1']) {
+      expect(parseMaxAgeInput(bad)).toEqual({
+        ok: false,
+        error: MAX_AGE_INPUT_COPY.invalid,
+      });
+    }
   });
 
   it('listManualExchangeRates: GET /exchange/manual-rates con el límite', async () => {

@@ -32,10 +32,10 @@ describe('receivables-api', () => {
   it('manda los filtros presentes y la sede activa como cabecera', async () => {
     window.localStorage.setItem('dentalix.activeLocationId', 'loc-norte');
     const spy = mockFetch();
-    await getReceivablesAging('tok', { minAgeDays: 91, minBalance: 0, currency: 'COP', page: 2 });
+    await getReceivablesAging('tok', { minAgeDays: 91, minBalance: 0, currency: 'USD', page: 2 });
     const [url, init] = spy.mock.calls[0];
     expect(Object.fromEntries(new URL(String(url), 'http://x').searchParams)).toEqual({
-      currency: 'COP',
+      currency: 'USD',
       minBalance: '0',
       minAgeDays: '91',
       page: '2',

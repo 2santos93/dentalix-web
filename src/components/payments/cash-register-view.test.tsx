@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { CashRegisterView } from './cash-register-view';
 import { ApiError, NetworkError } from '@/lib/api/client';
@@ -17,6 +18,8 @@ import { listLocations } from '@/lib/locations/locations-api';
 import { getPaymentReceipt } from '@/lib/payments/payment-receipts-api';
 import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
 import { clinicLocation } from '@/lib/test/locations';
+import { moneyWithCode } from '@/lib/format/sede-number';
+import { STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
 
 
 /** UX v2: Recibo y Anular viven en el «⋯» de cada fila («Acciones de abono de …»). */
@@ -48,7 +51,7 @@ jest.mock('../../lib/locations/locations-api', () => ({
   listLocations: jest.fn(),
 }));
 const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
-const SEDE_ZONE = 'America/Bogota';
+const SEDE_ZONE = 'America/Caracas';
 const presetRange = (preset: Parameters<typeof presetRangeIn>[0]) => presetRangeIn(preset, SEDE_ZONE);
 
 jest.mock('../../lib/payments/payments-api', () => ({
@@ -78,7 +81,9 @@ function clinicMethod(overrides: Partial<ClinicPaymentMethod>): ClinicPaymentMet
     kind: 'OTHER',
     active: true,
     requiresReference: false,
+    proofPolicy: 'NONE' as const,
     legacyMethod: null,
+    adjustments: [],
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
@@ -93,16 +98,18 @@ const CLINIC_METHODS: ClinicPaymentMethod[] = [
 const anaCash: CashPayment = {
   id: 'pay-1',
   createdById: 'u-recep',
+  amountHidden: false,
   canVoid: true,
   paidAt: '2026-10-15T17:00:00.000Z',
   paidOn: '2026-10-15',
   registeredOn: '2026-10-15',
   registeredToday: true,
   amount: 150000.5,
-  currency: 'COP',
+  currency: 'VES',
   method: 'CASH',
   paymentMethod: null,
   reference: null,
+  externalInvoiceNumber: null,
   notes: null,
   location: { id: 'loc-1', name: 'Sede principal' },
   patient: { id: 'pat-1', fullName: 'Ana Gómez' },
@@ -114,6 +121,10 @@ const anaCash: CashPayment = {
   openingBalance: null,
   splitId: null,
   splitLines: null,
+  receiptNumber: null,
+  adjustments: [],
+  collectedAmount: 150000.5,
+  hasProof: false,
 };
 const betoCard: CashPayment = {
   ...anaCash,
@@ -142,19 +153,25 @@ function response(overrides: Partial<CashPaymentsResponse> = {}): CashPaymentsRe
     from: '2026-10-15',
     to: '2026-10-15',
     scope: { location: null },
+    blindHidden: false,
     summary: {
       count: 2,
+      adjustments: [],
+      collected: [
+        { currency: 'VES', total: 150000.5 },
+        { currency: 'USD', total: 50.25 },
+      ],
       byCurrency: [
-        { currency: 'COP', total: 150000.5, count: 1 },
+        { currency: 'VES', total: 150000.5, count: 1 },
         { currency: 'USD', total: 50.25, count: 1 },
       ],
       // DX-377: el resumen se pinta por medio de pago de la clínica.
       byPaymentMethod: [
-        { paymentMethodId: 'pm-cash', name: 'Efectivo', currency: 'COP', total: 150000.5, count: 1 },
+        { paymentMethodId: 'pm-cash', name: 'Efectivo', currency: 'VES', total: 150000.5, count: 1 },
         { paymentMethodId: 'pm-card', name: 'Tarjeta', currency: 'USD', total: 50.25, count: 1 },
       ],
       byMethod: [
-        { method: 'CASH', currency: 'COP', total: 150000.5, count: 1 },
+        { method: 'CASH', currency: 'VES', total: 150000.5, count: 1 },
         { method: 'CARD', currency: 'USD', total: 50.25, count: 1 },
       ],
     },
@@ -162,7 +179,7 @@ function response(overrides: Partial<CashPaymentsResponse> = {}): CashPaymentsRe
   };
 }
 
-// Normaliza los espacios duros de Intl (es: "150.000,50 COP" lleva U+00A0).
+// Normaliza los espacios duros de Intl (es: "150.000,50 VES" lleva U+00A0).
 function money(text: string | null | undefined): string {
   return (text ?? '').replace(/\s/g, ' ');
 }
@@ -181,11 +198,13 @@ beforeEach(() => {
       id: 'loc-1',
       name: 'Sede principal',
       address: null,
-      country: 'CO',
+      country: 'VE',
       isActive: true,
       timeZone: SEDE_ZONE,
       createdAt: '2026-01-01T00:00:00.000Z',
     }),
+    // La sede de Beto: sin ella, su fila saldría «—» (cada fila usa la suya, DX-354b).
+    clinicLocation({ id: 'loc-2', name: 'Sede Norte', timeZone: SEDE_ZONE, createdAt: '2026-02-01T00:00:00.000Z' }),
   ]);
 });
 
@@ -212,6 +231,43 @@ it('pide el día de hoy al entrar y pinta cada abono con paciente, plan, método
   expect(amount.closest('td')).toHaveClass('text-right', 'tabular-nums');
 });
 
+it('arqueo ciego (SEC-043): la fila de una caja abierta sale sin importe, con su «⋯» para ver el recibo o anular; el aviso lo explica', async () => {
+  const hidden: CashPayment = {
+    ...anaCash,
+    amount: null,
+    currency: null,
+    collectedAmount: null,
+    hasProof: false,
+    notes: null,
+    adjustments: [],
+    amountHidden: true,
+  };
+  mockedList.mockResolvedValue(response({ blindHidden: true, items: [hidden, betoCard] }));
+  const { unmount } = render(<CashRegisterView token="tok" />);
+  const callout = await screen.findByTestId('cash-blind-hidden');
+  expect(callout).toHaveTextContent('los abonos de las cajas abiertas van sin importe');
+  expect(callout).toHaveTextContent(/ver su recibo o anularlos desde «⋯»/);
+  expect(callout).not.toHaveTextContent(/ficha|plan del paciente/);
+  // SEC-043 (B1): lo del recibo se explica solo en Ajustes → Caja (ADMIN).
+  expect(callout).not.toHaveTextContent(/recibo sí lleva su importe/);
+  const table = screen.getByRole('table', { name: /abonos/i });
+  const row = within(table).getByRole('row', { name: /ana gómez/i });
+  const cell = within(row).getByTestId('amount-hidden');
+  expect(cell).toHaveTextContent('Oculto durante el arqueo');
+  // En la columna numérica: alineado a la derecha como los importes.
+  expect(cell.closest('td')).toHaveClass('text-right');
+  expect(within(row).queryByText(/150\.000/)).not.toBeInTheDocument();
+  // La otra fila conserva su importe.
+  expect(within(within(table).getByRole('row', { name: /beto ruiz/i })).getByText(/50,25/)).toBeInTheDocument();
+  unmount();
+  clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
+
+  mockedList.mockResolvedValue(response());
+  render(<CashRegisterView token="tok" />);
+  await screen.findByRole('table', { name: /abonos/i });
+  expect(screen.queryByTestId('cash-blind-hidden')).not.toBeInTheDocument();
+});
+
 it('resume el período por moneda y por método en un registro, no en tarjetas', async () => {
   mockedList.mockResolvedValue(response());
   render(<CashRegisterView token="tok" />);
@@ -220,14 +276,64 @@ it('resume el período por moneda y por método en un registro, no en tarjetas',
     name: /resumen del período/i,
   });
   const byCurrency = within(summary).getByRole('list', { name: /por moneda/i });
-  const cop = within(byCurrency).getByText('COP').closest('li');
-  expect(money(cop?.textContent)).toMatch(/150\.000,50/);
-  expect(money(cop?.textContent)).toMatch(/1 abono(?!s)/);
+  const ves = within(byCurrency).getByText('VES').closest('li');
+  expect(money(ves?.textContent)).toMatch(/150\.000,50/);
+  expect(money(ves?.textContent)).toMatch(/1 abono(?!s)/);
 
   const byMethod = within(summary).getByRole('list', { name: /por método/i });
   const card = within(byMethod).getByText('Tarjeta').closest('li');
   expect(money(card?.textContent)).toMatch(/50,25/);
   expect(money(card?.textContent)).toMatch(/USD/);
+});
+
+it('DX-516: sin ajustes no hay bloque nuevo; con ellos, lo cobrado por fila y en el resumen', async () => {
+  mockedList.mockResolvedValue(response());
+  const { unmount } = render(<CashRegisterView token="tok" />);
+  const plain = await screen.findByRole('region', { name: /resumen del período/i });
+  expect(within(plain).queryByRole('list', { name: 'Ajustes por medio de pago' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/^Cobrado /)).not.toBeInTheDocument();
+  unmount();
+  clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
+
+  const taxed = {
+    ...betoCard,
+    amount: 100,
+    collectedAmount: 103,
+    hasProof: false,
+    adjustments: [
+      {
+        type: 'TAX' as const,
+        label: 'Impuesto 3 %',
+        calculation: 'PERCENT' as const,
+        percent: 3,
+        fixedAmount: null,
+        base: 100,
+        amount: 3,
+        currency: 'USD',
+      },
+    ],
+  };
+  const base = response({ items: [anaCash, taxed] });
+  mockedList.mockResolvedValue({
+    ...base,
+    summary: {
+      ...base.summary,
+      adjustments: [{ currency: 'USD', type: 'TAX', total: 3, count: 1 }],
+      collected: [
+        { currency: 'VES', total: 150000.5 },
+        { currency: 'USD', total: 103 },
+      ],
+    },
+  });
+  render(<CashRegisterView token="tok" />);
+  const table = await screen.findByRole('table', { name: /abonos/i });
+  const row = within(table).getByRole('row', { name: new RegExp(betoCard.patient.fullName, 'i') });
+  expect(money(row.textContent)).toMatch(/Cobrado USD 103,00/);
+  const summary = screen.getByRole('region', { name: /resumen del período/i });
+  const adjustments = within(summary).getByRole('list', { name: 'Ajustes por medio de pago' });
+  expect(money(adjustments.textContent)).toMatch(/Impuesto.*\+USD 3,00/);
+  const collected = within(summary).getByRole('list', { name: /Cobrado/ });
+  expect(money(collected.textContent)).toMatch(/USD 103,00/);
 });
 
 it('DX-377: cada abono muestra su medio de pago y su referencia', async () => {
@@ -246,6 +352,7 @@ it('marca el alcance de sede: "Todas las sedes" sin sede activa, el nombre con u
   const { unmount } = render(<CashRegisterView token="tok" />);
   expect(await screen.findByText('Todas las sedes')).toBeInTheDocument();
   unmount();
+  clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
   mockedList.mockResolvedValueOnce(
     response({ scope: { location: { id: 'loc-2', name: 'Sede Norte' } } }),
@@ -274,7 +381,7 @@ it('muestra el estado vacío cuando el período no tiene abonos', async () => {
     response({
       items: [],
       total: 0,
-      summary: { count: 0, byCurrency: [], byMethod: [], byPaymentMethod: [] },
+      summary: { count: 0, byCurrency: [], byMethod: [], byPaymentMethod: [], adjustments: [], collected: [] },
     }),
   );
   render(<CashRegisterView token="tok" />);
@@ -591,9 +698,27 @@ describe('anular desde la caja (DX-057)', () => {
     const table = await screen.findByRole('table', { name: /abonos/i });
 
     const ana = within(table).getByRole('row', { name: /ana gómez/i });
-    expect(await rowMenuItems(user, ana)).toEqual(['Recibo', 'Anular']);
+    // DX-515: «Factura externa» en todas las filas (ADMIN y recepción).
+    expect(await rowMenuItems(user, ana)).toEqual(['Recibo', 'Factura externa', 'Anular']);
     const beto = within(table).getByRole('row', { name: /beto ruiz/i });
-    expect(await rowMenuItems(user, beto)).toEqual(['Recibo']);
+    expect(await rowMenuItems(user, beto)).toEqual(['Recibo', 'Factura externa']);
+  });
+
+  it('DX-414: las líneas de un cobro dividido llevan el distintivo con el recibo único', async () => {
+    mockedList.mockResolvedValue(
+      response({
+        items: [
+          { ...anaCash, id: 'pay-1', splitId: 'pay-1', splitLines: 3, receiptNumber: 'PRI-000007' },
+          { ...anaCash, id: 'pay-x', splitId: null, splitLines: null, receiptNumber: 'PRI-000008' },
+          { ...anaCash, id: 'pay-2', splitId: 'pay-1', splitLines: 3, receiptNumber: 'PRI-000007' },
+        ],
+        total: 3,
+      }),
+    );
+    render(<CashRegisterView token="tok" />);
+    const table = await screen.findByRole('table', { name: /abonos/i });
+    expect(within(table).getAllByText('Cobro dividido · 3 formas · PRI-000007')).toHaveLength(2);
+    expect(within(table).queryByText(/PRI-000008/)).not.toBeInTheDocument();
   });
 
   it('revisión DX-390: una forma de pago de un cobro dividido avisa que se anula el cobro entero', async () => {
@@ -633,7 +758,7 @@ describe('anular desde la caja (DX-057)', () => {
       name: /anular este abono/i,
     });
     // Dice QUÉ abono se anula: monto, fecha y paciente.
-    expect(money(dialog.textContent)).toMatch(/150\.000,50 COP · 15\/10\/2026 · Ana Gómez/);
+    expect(money(dialog.textContent)).toMatch(/VES 150\.000,50 · 15\/10\/2026 · Ana Gómez/);
 
     await user.click(within(dialog).getByLabelText(/motivo/i));
     await user.paste(REASON);
@@ -647,6 +772,53 @@ describe('anular desde la caja (DX-057)', () => {
     await waitFor(() =>
       expect(within(table).queryByRole('row', { name: /ana gómez/i })).not.toBeInTheDocument(),
     );
+  });
+
+  it('SEC-043: una fila sin importe (caja abierta, arqueo ciego) se anula igual; el modal y el aviso la nombran sin cifra', async () => {
+    const user = userEvent.setup();
+    const hidden: CashPayment = {
+      ...anaCash,
+      amount: null,
+      currency: null,
+      collectedAmount: null,
+      hasProof: false,
+      notes: null,
+      adjustments: [],
+      amountHidden: true,
+    };
+    mockedList
+      .mockResolvedValueOnce(response({ blindHidden: true, items: [hidden, betoCard] }))
+      .mockResolvedValueOnce(response({ blindHidden: true, items: [betoCard], total: 1 }));
+    mockedVoid.mockResolvedValue(undefined);
+    render(<CashRegisterView token="tok" />);
+
+    await pickRowAction(user, /ana gómez/, 'Anular');
+    const dialog = await screen.findByRole('dialog', { name: /anular este abono/i });
+    expect(dialog).toHaveTextContent('15/10/2026 · Ana Gómez');
+    expect(money(dialog.textContent)).not.toMatch(/VES|150\.000/);
+
+    await user.click(within(dialog).getByLabelText(/motivo/i));
+    await user.paste(REASON);
+    await user.click(within(dialog).getByRole('button', { name: /anular abono/i }));
+    await waitFor(() => expect(mockedVoid).toHaveBeenCalledWith('tok', 'pay-1', REASON));
+    expect(await screen.findByText('Abono anulado: 15/10/2026 · Ana Gómez.')).toBeInTheDocument();
+  });
+
+  it('SEC-043: «Recibo» de una fila sin importe abre el recibo del abono', async () => {
+    const user = userEvent.setup();
+    mockedList.mockResolvedValue(
+      response({
+        blindHidden: true,
+        items: [{ ...anaCash, amount: null, currency: null, collectedAmount: null, amountHidden: true }],
+        total: 1,
+      }),
+    );
+    const mockedReceipt = getPaymentReceipt as jest.MockedFunction<typeof getPaymentReceipt>;
+    mockedReceipt.mockResolvedValue(paymentReceiptFixture({ paymentId: 'pay-1', reference: 'PRI-000009' }));
+    render(<CashRegisterView token="tok" />);
+    await pickRowAction(user, /ana gómez/, 'Recibo');
+    await screen.findByRole('dialog', { name: /recibo de caja/i });
+    expect(mockedReceipt).toHaveBeenCalledWith('tok', 'pay-1');
   });
 
   it('un 403 o un 404 se explican en español dentro del modal, nunca en inglés', async () => {
@@ -746,7 +918,7 @@ describe('tras anular, la caja no se queda en una página vacía (DX-067)', () =
       response({
         items: [],
         total: 0,
-        summary: { count: 0, byCurrency: [], byMethod: [], byPaymentMethod: [] },
+        summary: { count: 0, byCurrency: [], byMethod: [], byPaymentMethod: [], adjustments: [], collected: [] },
       }),
     );
     render(<CashRegisterView token="tok" />);
@@ -792,9 +964,9 @@ describe('días de la sede (DX-097)', () => {
     jest.useRealTimers();
   });
 
-  it('«Hoy» es el día de la sede, no el del navegador: a las 22:30 de Bogotá (03:30Z del día siguiente) pide ese día', async () => {
+  it('«Hoy» es el día de la sede, no el del navegador: a las 22:30 de Caracas (02:30Z del día siguiente) pide ese día', async () => {
     jest.useFakeTimers({
-      now: new Date('2026-10-16T03:30:00.000Z'),
+      now: new Date('2026-10-16T02:30:00.000Z'),
       advanceTimers: true,
     });
     mockedList.mockResolvedValue(response());
@@ -863,15 +1035,17 @@ describe('días de la sede (DX-097)', () => {
     mockedList.mockResolvedValue(response());
     render(<CashRegisterView token="tok" />);
 
+    // FE-031: todos los consumidores de la pantalla leen la MISMA lista de
+    // sedes (la caché de sesión), así que el aviso puede salir en más de uno.
     expect(
-      await screen.findByText('No se pudo saber la zona horaria de la sede. Vuelve a intentarlo.'),
-    ).toBeInTheDocument();
-    // Nunca se consulta «hoy» con otra zona (ni Bogotá ni la del navegador).
+      (await screen.findAllByText('No se pudo saber la zona horaria de la sede. Vuelve a intentarlo.')).length,
+    ).toBeGreaterThan(0);
+    // Nunca se consulta «hoy» con otra zona (ni la del fixture ni la del navegador).
     expect(mockedList).not.toHaveBeenCalled();
 
     // Reintentar relee las sedes; ya configurada, la caja carga.
     mockedLocations.mockResolvedValueOnce([clinicLocation()]);
-    await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+    await userEvent.click(screen.getAllByRole('button', { name: 'Reintentar' })[0]);
     await waitFor(() => expect(mockedList).toHaveBeenCalledWith('tok', { ...presetRange('today'), page: 1 }));
   });
 
@@ -881,7 +1055,7 @@ describe('días de la sede (DX-097)', () => {
         items: [
           {
             ...anaCash,
-            paidAt: '2026-10-16T01:00:00.000Z',
+            paidAt: '2026-10-16T00:00:00.000Z',
             paidOn: '2026-10-15',
           },
         ],
@@ -914,4 +1088,180 @@ it('DX-262: un abono contra el saldo migrado dice «Saldo migrado» y su concept
   // QA D2: la columna nombra el destino (un plan o un saldo migrado).
   expect(within(table).getByRole('columnheader', { name: 'Destino' })).toBeInTheDocument();
   expect(within(table).queryByRole('columnheader', { name: 'Plan' })).not.toBeInTheDocument();
+});
+
+describe('factura fiscal externa en la caja (DX-515)', () => {
+  it('pinta el nº bajo el medio y filtra la tabla y el CSV con o sin él', async () => {
+    mockedList.mockResolvedValue(response({ items: [{ ...anaCash, externalInvoiceNumber: 'F-0001' }, betoCard] }));
+    mockedCsv.mockResolvedValue('Fecha,Sede\r\n');
+    const user = userEvent.setup();
+    render(<CashRegisterView token="tok" />);
+    const table = await screen.findByRole('table', { name: /abonos/i });
+    const ana = within(table).getByRole('row', { name: /ana gómez/i });
+    expect(within(ana).getByText('Fact. F-0001')).toBeInTheDocument();
+    const beto = within(table).getByRole('row', { name: /beto ruiz/i });
+    expect(within(beto).queryByText(/Fact\./)).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Factura externa' }), 'Sin nº de factura externa');
+    const today = presetRange('today');
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenLastCalledWith('tok', { ...today, externalInvoice: 'WITHOUT', page: 1 }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Exportar CSV' }));
+    await waitFor(() => expect(mockedCsv).toHaveBeenCalledWith('tok', { ...today, externalInvoice: 'WITHOUT' }));
+  });
+});
+
+
+describe('cada abono con el formato de su sede, también en «Todas las sedes» (DX-354b, DX-517-bis)', () => {
+  // Tres sedes distintas: la de la pantalla (Caracas, es-VE 12 h), Berlín (de-DE, EUR) y Miami (en-US, USD).
+  const berlinPayment: CashPayment = {
+    ...betoCard,
+    id: 'pay-berlin',
+    amount: 1234.5,
+    currency: 'EUR',
+    collectedAmount: 1234.5,
+    hasProof: false,
+    paidOn: '2026-10-20',
+    registeredOn: '2026-10-12',
+    registeredToday: false,
+    location: { id: 'sede-berlin', name: 'Berlín' },
+    patient: { id: 'pat-b', fullName: 'Greta Weber' },
+  };
+  const miamiPayment: CashPayment = {
+    ...betoCard,
+    id: 'pay-miami',
+    amount: 1234.5,
+    currency: 'USD',
+    collectedAmount: 1234.5,
+    hasProof: false,
+    paidOn: '2026-10-20',
+    registeredOn: '2026-10-12',
+    registeredToday: false,
+    location: { id: 'sede-miami', name: 'Miami' },
+    patient: { id: 'pat-m', fullName: 'Mia Torres' },
+  };
+  const caracasPayment: CashPayment = {
+    ...anaCash,
+    id: 'pay-caracas',
+    amount: 1234.5,
+    currency: 'VES',
+    collectedAmount: 1234.5,
+    hasProof: false,
+    paidOn: '2026-10-20',
+    registeredOn: '2026-10-12',
+    registeredToday: false,
+    location: { id: 'sede-caracas', name: 'Caracas' },
+    patient: { id: 'pat-c', fullName: 'Carla Pérez' },
+  };
+
+  function rowText(row: HTMLElement): string {
+    return (row.textContent ?? '').replace(/\s/g, ' ');
+  }
+
+  it('importe, fecha de pago, de registro y del plan salen con el formato de la sede de cada fila', async () => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin, STAMP_SEDES.miami]);
+    mockedList.mockResolvedValue(
+      response({ items: [caracasPayment, berlinPayment, miamiPayment], scope: { ...response().scope, location: null } }),
+    );
+    render(<CashRegisterView token="tok" />);
+    const table = await screen.findByRole('table', { name: /abonos/i });
+    const norm = (text: string) => text.replace(/\s/g, ' ');
+    for (const [name, key, payment, code] of [
+      ['carla pérez', 'caracas', caracasPayment, 'VES'],
+      ['greta weber', 'berlin', berlinPayment, 'EUR'],
+      ['mia torres', 'miami', miamiPayment, 'USD'],
+    ] as const) {
+      const row = within(table).getByRole('row', { name: new RegExp(name, 'i') });
+      const text = rowText(row);
+      const fmt = STAMP_FORMATS[key];
+      expect(text).toContain(norm(moneyWithCode(1234.5, code, fmt)));
+      expect(text).toContain(norm(fmt.civilDate(payment.paidOn)));
+      expect(text).toContain(`Registrado el ${norm(fmt.civilDate('2026-10-12'))}`);
+      expect(text).toContain(`Plan del ${norm(fmt.date(new Date(payment.treatmentPlan!.createdAt), STAMP_SEDES[key].timeZone!))}`);
+    }
+    // Literales de los tres formatos: Caracas «VES 1.234,50», Berlín «1.234,50 EUR», Miami «USD 1,234.50».
+    expect(rowText(within(table).getByRole('row', { name: /greta weber/i }))).toContain('1.234,50 EUR');
+    expect(rowText(within(table).getByRole('row', { name: /greta weber/i }))).toContain('20.10.2026');
+    expect(rowText(within(table).getByRole('row', { name: /mia torres/i }))).toContain('USD 1,234.50');
+    expect(rowText(within(table).getByRole('row', { name: /mia torres/i }))).toContain('10/20/2026');
+    expect(rowText(within(table).getByRole('row', { name: /carla pérez/i }))).toContain('VES 1.234,50');
+  });
+
+  it('un abono de una sede que no está en la lista sale «—» (no con el formato de la pantalla) y un solo aviso', async () => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas]);
+    mockedList.mockResolvedValue(response({ items: [berlinPayment] }));
+    render(<CashRegisterView token="tok" />);
+    const table = await screen.findByRole('table', { name: /abonos/i });
+    const row = within(table).getByRole('row', { name: /greta weber/i });
+    expect(rowText(row)).not.toContain('1.234,50');
+    expect(rowText(row)).toContain('—');
+    expect(await screen.findAllByRole('button', { name: 'Reintentar' })).toHaveLength(1);
+  });
+
+  it('con la lista de sedes cargando el abono sale «—» y sin aviso', async () => {
+    mockedLocations.mockReturnValue(new Promise(() => undefined));
+    mockedList.mockResolvedValue(response({ items: [berlinPayment] }));
+    render(<CashRegisterView token="tok" />);
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
+  });
+});
+
+describe('anular un abono de otra sede en «Todas las sedes» (DX-354b, E1)', () => {
+  const berlin: CashPayment = {
+    ...anaCash,
+    id: 'pay-berlin-void',
+    amount: 120,
+    currency: 'EUR',
+    collectedAmount: 120,
+    hasProof: false,
+    paidOn: '2026-10-20',
+    registeredOn: '2026-10-20',
+    location: { id: 'sede-berlin', name: 'Berlín' },
+    patient: { id: 'pat-b', fullName: 'Greta Weber' },
+  };
+
+  it('el diálogo y el aviso usan el formato de la sede del abono (Berlín), no el de la pantalla (Caracas)', async () => {
+    const user = userEvent.setup();
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin]);
+    mockedList.mockResolvedValue(response({ items: [berlin], total: 1 }));
+    mockedVoid.mockResolvedValue(undefined);
+    render(<CashRegisterView token="tok" />);
+    await screen.findByRole('table', { name: /abonos/i });
+    await pickRowAction(user, /greta weber/, 'Anular');
+    const dialog = await screen.findByRole('dialog', { name: /anular este abono/i });
+    const text = (dialog.textContent ?? '').replace(/\s/g, ' ');
+    expect(text).toContain('120,00 EUR');
+    expect(text).toContain('20.10.2026');
+    expect(text).not.toContain('EUR 120,00');
+    await user.click(within(dialog).getByLabelText(/motivo/i));
+    await user.paste('Cobro registrado dos veces');
+    await user.click(within(dialog).getByRole('button', { name: /anular abono/i }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const notice = await screen.findByText(/Abono anulado/i);
+    expect((notice.textContent ?? '').replace(/\s/g, ' ')).toContain('120,00 EUR · 20.10.2026');
+  });
+
+  it('un abono de una sede que no está en la lista se nombra con «—», no con el formato de la pantalla', async () => {
+    const user = userEvent.setup();
+    mockedLocations.mockResolvedValue([STAMP_SEDES.caracas]);
+    mockedList.mockResolvedValue(response({ items: [berlin], total: 1 }));
+    render(<CashRegisterView token="tok" />);
+    await screen.findByRole('table', { name: /abonos/i });
+    await pickRowAction(user, /greta weber/, 'Anular');
+    const dialog = await screen.findByRole('dialog', { name: /anular este abono/i });
+    expect(dialog.textContent).not.toMatch(/120/);
+  });
+});
+
+it('DX-389: «Ver comprobante» solo en el abono que lo tiene', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue(response({ items: [{ ...anaCash, hasProof: true }, betoCard] }));
+  render(<CashRegisterView token="tok" />);
+  const table = await screen.findByRole('table', { name: /abonos/i });
+  expect(await rowMenuItems(user, within(table).getByRole('row', { name: /ana gómez/i }))).toContain('Ver comprobante');
+  await user.keyboard('{Escape}');
+  expect(await rowMenuItems(user, within(table).getByRole('row', { name: /beto ruiz/i }))).not.toContain(
+    'Ver comprobante',
+  );
 });

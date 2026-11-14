@@ -1,15 +1,14 @@
 'use client';
-import { Suspense, useEffect } from 'react';
+import { Suspense } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { SettingsPage } from '@/components/settings/settings-page';
-import { AuditLogView } from '@/components/audit/audit-log-view';
+import { AuditLogView, auditFiltersFromSearch } from '@/components/audit/audit-log-view';
 
 const copy = {
   title: 'Auditoría',
   description:
     'Quién vio o cambió datos clínicos y financieros de la clínica, cuándo y desde dónde. El registro no se puede editar ni borrar.',
-  checkingSession: 'Verificando sesión…',
 };
 
 /**
@@ -32,30 +31,22 @@ function AuditSettingsView() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const accessToken = useAuthStore((s) => s.accessToken);
-  const hasHydrated = useAuthStore((s) => s._hasHydrated);
   const patientId = searchParams.get('patientId') ?? undefined;
+  // SEC-043-bis: el enlace «recibos consultados» del cierre de caja abre la
+  // auditoría ya filtrada (quién, recibos y días).
+  const initialFilters = auditFiltersFromSearch(searchParams);
+  const filtersKey = searchParams.toString();
 
-  useEffect(() => {
-    if (!hasHydrated) return;
-    if (!accessToken) router.replace('/login');
-  }, [accessToken, router, hasHydrated]);
-
-  if (!hasHydrated) {
-    return (
-      <p role="status" className="text-sm text-muted">
-        {copy.checkingSession}
-      </p>
-    );
-  }
   if (!accessToken) return null;
 
   return (
     <SettingsPage title={copy.title} description={copy.description} scope="clinic" width="wide">
       <AuditLogView
         // Otra ficha, otra lista: el estado de filtros y páginas no se arrastra.
-        key={patientId ?? 'clinic'}
+        key={patientId ?? `clinic:${filtersKey}`}
         token={accessToken}
         patientId={patientId}
+        initialFilters={initialFilters}
         onClearPatient={patientId ? () => router.replace(pathname) : undefined}
       />
     </SettingsPage>

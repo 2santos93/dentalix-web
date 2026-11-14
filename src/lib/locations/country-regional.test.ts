@@ -49,7 +49,7 @@ describe('country-regional data', () => {
   it('offers other currencies in use only where the data says so (V1: VES in Venezuela)', () => {
     expect(countryCurrencyAlternatives('VE')).toEqual(['VES']);
     // El resto de países, como los dejó R1: sin alternativa.
-    for (const country of ['PA', 'EC', 'CO', 'MX', 'ES', 'US']) expect(countryCurrencyAlternatives(country)).toEqual([]);
+    for (const country of ['PA', 'EC', 'PE', 'MX', 'ES', 'US']) expect(countryCurrencyAlternatives(country)).toEqual([]);
     expect(countryCurrencyAlternatives('ZZ')).toEqual([]);
     for (const [country, alternatives] of Object.entries(data.currencyAlternatives)) {
       expect(Object.keys(data.currencies)).toContain(country);
@@ -134,7 +134,7 @@ describe('regional options', () => {
 
   it('labels zones by offset, city and country', () => {
     expect(timeZoneLabel('America/Caracas', at)).toBe('(UTC−4) Caracas — Venezuela');
-    expect(timeZoneLabel('America/Bogota', at)).toBe('(UTC−5) Bogotá — Colombia');
+    expect(timeZoneLabel('America/Lima', at)).toBe('(UTC−5) Lima — Perú');
     expect(timeZoneLabel('America/Panama', at)).toBe('(UTC−5) Panamá');
     expect(timeZoneLabel('UTC', at)).toBe('UTC');
   });
@@ -162,7 +162,7 @@ describe('regional options', () => {
     expect(searchRegionalOptions(zones, 'caracas')[0].code).toBe('America/Caracas');
     expect(searchRegionalOptions(zones, 'venezuela')[0].code).toBe('America/Caracas');
     expect(searchRegionalOptions(zones, 'America/Caracas')[0].code).toBe('America/Caracas');
-    expect(searchRegionalOptions(zones, 'bogota')[0].code).toBe('America/Bogota');
+    expect(searchRegionalOptions(zones, 'lima')[0].code).toBe('America/Lima');
     expect(searchRegionalOptions(zones, 'UTC−4').map((o) => o.code)).toContain('America/Caracas');
     const locales = localeChoices('', [], [], at);
     expect(searchRegionalOptions(locales, 'es-VE')[0].code).toBe('es-VE');

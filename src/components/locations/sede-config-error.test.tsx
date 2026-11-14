@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { SedeConfigError } from './sede-config-error';
 import { locationCurrency } from '@/lib/locations/location-settings';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
@@ -15,14 +16,14 @@ function Amount({ location, onRetry }: { location: ClinicLocation; onRetry: () =
 }
 
 describe('SedeConfigError', () => {
-  it('location with null currency shows SedeConfigError, never COP', async () => {
+  it('location with null currency shows SedeConfigError, never USD', async () => {
     const onRetry = jest.fn();
-    render(<Amount location={clinicLocation({ country: 'CO', currency: null })} onRetry={onRetry} />);
+    render(<Amount location={clinicLocation({ country: 'VE', currency: null })} onRetry={onRetry} />);
 
     expect(screen.getByRole('alert')).toHaveTextContent(
       'No se pudo saber la moneda de la sede. Vuelve a intentarlo o revisa la sede en Ajustes → Sedes.',
     );
-    expect(document.body).not.toHaveTextContent(/COP|\$/);
+    expect(document.body).not.toHaveTextContent(/USD|\$/);
     await setupUser().click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
@@ -57,6 +58,7 @@ describe('SedeConfigError', () => {
     const { unmount } = render(<SedeConfigError kind="currency" onRetry={jest.fn()} locationId="loc 1" />);
     expect(screen.getByRole('link', { name: 'Configurar sede' })).toHaveAttribute('href', '/settings/sedes?sede=loc%201');
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     useAuthStore.setState({ accessToken: tokenFor('RECEPTIONIST') });
     render(<SedeConfigError kind="currency" onRetry={jest.fn()} />);
@@ -70,6 +72,7 @@ describe('SedeConfigError', () => {
     );
     expect(screen.getByRole('alert')).toHaveTextContent('La clínica no tiene ninguna sede activa.');
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     const onRetry = jest.fn();
     render(<SedeConfigError kind="currency" variant="note" onRetry={onRetry} />);
@@ -86,6 +89,7 @@ describe('SedeConfigError', () => {
     );
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     render(<SedeConfigError kind="locale" variant="field" onRetry={jest.fn()} />);
     expect(screen.getByRole('status')).toHaveTextContent('Sin formato de sede');
@@ -96,5 +100,11 @@ describe('SedeConfigError', () => {
     render(<SedeConfigError kind="locale" onRetry={jest.fn()} locationId="loc-1" />);
     expect(screen.getByRole('link', { name: 'Configurar sede' })).toHaveAttribute('href', '/settings/sedes?sede=loc-1');
     useAuthStore.setState({ accessToken: null });
+  });
+
+  it('note with live={false} does not repeat the status role (it lives inside a persistent region)', () => {
+    render(<SedeConfigError kind="locale" variant="note" live={false} onRetry={jest.fn()} />);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
   });
 });

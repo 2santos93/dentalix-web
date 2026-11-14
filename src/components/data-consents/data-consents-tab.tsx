@@ -16,7 +16,8 @@ import {
   type PrivacyPolicyVersion,
   type ScopeConsentStatus,
 } from '@/lib/data-consents/data-consents-api';
-import { formatDate, formatDateTime } from '@/lib/format/date';
+import { useSedeStamp, type SedePainters } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { FormModal } from '@/components/shared/form-modal';
@@ -104,6 +105,7 @@ export function DataConsentsTab({ token, patientId }: DataConsentsTabProps) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const headingId = React.useId();
+  const stamp = useSedeStamp(token);
 
   useEffect(() => {
     let cancelled = false;
@@ -189,6 +191,8 @@ export function DataConsentsTab({ token, patientId }: DataConsentsTabProps) {
         }
       />
 
+      <SedeStampNote stamp={stamp} />
+
       <AsyncSection
         loading={loading}
         error={error}
@@ -208,6 +212,7 @@ export function DataConsentsTab({ token, patientId }: DataConsentsTabProps) {
                   <CurrentRow
                     key={status.scope}
                     status={status}
+                    stamp={stamp}
                     onRevoke={
                       status.scope === 'MARKETING' && marketingGranted && policy
                         ? () => {
@@ -223,7 +228,7 @@ export function DataConsentsTab({ token, patientId }: DataConsentsTabProps) {
 
             <div className="flex flex-col gap-3">
               <SectionHeader as="h3" title={copy.historyHeading} />
-              <HistoryTable rows={data.consents.history} />
+              <HistoryTable rows={data.consents.history} stamp={stamp} />
             </div>
           </div>
         ) : null}
@@ -242,6 +247,7 @@ export function DataConsentsTab({ token, patientId }: DataConsentsTabProps) {
           size="lg"
         >
           <ConsentScopeFields
+            token={token}
             idPrefix="dct-consent"
             policy={policy}
             value={selection}
@@ -279,9 +285,11 @@ function versionLabel(row: DataConsentRecord): string {
 
 function CurrentRow({
   status,
+  stamp,
   onRevoke,
 }: {
   status: ScopeConsentStatus;
+  stamp: SedePainters;
   onRevoke?: () => void;
 }) {
   const latest = status.latest;
@@ -294,7 +302,7 @@ function CurrentRow({
         <span className="text-sm font-medium text-ink">{SCOPE_LABELS[status.scope]}</span>
         {latest ? (
           <span className="text-xs text-muted tabular-nums">
-            {copy.since(formatDate(latest.recordedAt))} · {versionLabel(latest)}
+            {copy.since(stamp.date(latest.recordedAt))} · {versionLabel(latest)}
             {latest.channel === 'LEGACY' ? ` · ${copy.legacyNote}` : ''}
           </span>
         ) : null}
@@ -324,36 +332,39 @@ function channelLabel(row: DataConsentRecord): string {
       : copy.channelInPerson;
 }
 
-const historyColumns: DataListColumn<DataConsentRecord>[] = [
-  {
-    id: 'date',
-    header: copy.colDate,
-    cell: (row) => <span className="tnum">{formatDateTime(row.recordedAt)}</span>,
-    mobileCell: (row) => formatDateTime(row.recordedAt),
-  },
-  { id: 'scope', header: copy.colScope, cell: (row) => SCOPE_LABELS[row.scope], mobile: 'primary' },
-  {
-    id: 'decision',
-    header: copy.colDecision,
-    mobile: 'trailing',
-    cell: (row) => (
-      <StatusBadge kind="dataConsent" status={row.granted ? 'GRANTED' : 'DENIED'}>
-        {row.granted ? copy.decisionGranted : copy.decisionDenied}
-      </StatusBadge>
-    ),
-  },
-  { id: 'version', header: copy.colVersion, cell: (row) => <span className="tnum">{versionLabel(row)}</span>, mobileCell: versionLabel },
-  { id: 'by', header: copy.colBy, cell: (row) => row.recordedBy?.fullName ?? copy.unknownUser },
-  {
-    id: 'channel',
-    header: copy.colChannel,
-    cell: (row) => <span className="text-muted">{channelLabel(row)}</span>,
-    mobileCell: channelLabel,
-  },
-];
+function historyColumns(stamp: SedePainters): DataListColumn<DataConsentRecord>[] {
+  return [
+    {
+      id: 'date',
+      header: copy.colDate,
+      cellClassName: 'tnum',
+      cell: (row) => stamp.dateTime(row.recordedAt),
+      mobileCell: (row) => stamp.maybe.dateTime(row.recordedAt),
+    },
+    { id: 'scope', header: copy.colScope, cell: (row) => SCOPE_LABELS[row.scope], mobile: 'primary' },
+    {
+      id: 'decision',
+      header: copy.colDecision,
+      mobile: 'trailing',
+      cell: (row) => (
+        <StatusBadge kind="dataConsent" status={row.granted ? 'GRANTED' : 'DENIED'}>
+          {row.granted ? copy.decisionGranted : copy.decisionDenied}
+        </StatusBadge>
+      ),
+    },
+    { id: 'version', header: copy.colVersion, cell: (row) => <span className="tnum">{versionLabel(row)}</span>, mobileCell: versionLabel },
+    { id: 'by', header: copy.colBy, cell: (row) => row.recordedBy?.fullName ?? copy.unknownUser },
+    {
+      id: 'channel',
+      header: copy.colChannel,
+      cell: (row) => <span className="text-muted">{channelLabel(row)}</span>,
+      mobileCell: channelLabel,
+    },
+  ];
+}
 
-function HistoryTable({ rows }: { rows: DataConsentRecord[] }) {
+function HistoryTable({ rows, stamp }: { rows: DataConsentRecord[]; stamp: SedePainters }) {
   return (
-    <DataList label={copy.historyTable} rows={rows} columns={historyColumns} getRowKey={(row) => row.id} />
+    <DataList label={copy.historyTable} rows={rows} columns={historyColumns(stamp)} getRowKey={(row) => row.id} />
   );
 }

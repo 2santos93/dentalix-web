@@ -1,4 +1,10 @@
 import { apiFetch } from '@/lib/api/client';
+import type { ClinicRole } from '@/lib/me/me-api';
+
+/** Crear, editar y desactivar ítems: solo ADMIN (`CATALOG_WRITE_ROLES` en la API). */
+export function canWriteCatalog(role: ClinicRole | null): boolean {
+  return role === 'ADMIN';
+}
 
 /**
  * `GET /catalog/items` returns a plain TS interface on the backend
@@ -28,6 +34,22 @@ export interface DentalCatalogItem {
   defaultPrice: number | null;
   /** DX-105: false = la prestación no admite descuentos (ni de convenio ni discrecionales). */
   allowDiscount?: boolean;
+  /**
+   * DX-502-ter: moneda de `defaultPrice` (la del catálogo de la clínica), `null` si no se
+   * sabe. La traen las lecturas de `GET /catalog/items`; no las altas ni las ediciones.
+   */
+  catalogCurrency?: string | null;
+  /**
+   * DX-455: plantilla de evolución ligada al procedimiento, aunque esté
+   * desactivada (es lo que edita el catálogo). La API la manda siempre; es
+   * opcional aquí para no obligar a cada fixture a llevarla.
+   */
+  clinicalNoteTemplateId?: string | null;
+  /**
+   * DX-455: la misma, pero solo si está ACTIVA (si no, `null`): la que se
+   * sugiere al marcar hecho un ítem del plan con este procedimiento.
+   */
+  suggestedClinicalNoteTemplateId?: string | null;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -63,6 +85,11 @@ export interface CatalogDirectoryPage {
   page: number;
   /** El que aplicó el servidor, que acota lo pedido — léelo de aquí, no lo asumas. */
   pageSize: number;
+  /**
+   * DX-502-ter: moneda del catálogo de la clínica (la fijada en Ajustes o, sin ella, la común
+   * de las sedes activas); `null` si no se sabe. Llega aunque la página venga vacía.
+   */
+  catalogCurrency?: string | null;
 }
 
 /**
@@ -112,6 +139,8 @@ export interface CreateCatalogItemInput {
   /** DX-105: por defecto true. */
   allowDiscount?: boolean;
   active?: boolean;
+  /** DX-455: `null` la desliga; ausente, no cambia. Solo procedimientos. */
+  clinicalNoteTemplateId?: string | null;
 }
 
 export async function createCatalogItem(
@@ -144,6 +173,7 @@ export interface UpdateCatalogItemInput {
   defaultPrice?: number;
   allowDiscount?: boolean;
   active?: boolean;
+  clinicalNoteTemplateId?: string | null;
 }
 
 export async function updateCatalogItem(

@@ -120,7 +120,17 @@ export interface MoveTarget {
   start: string;
   end: string;
   providerId: string;
+  /** DX-479: el sillón nuevo (`null` = sin sillón). Sin la clave, no cambia. */
+  chairId?: string | null;
 }
+
+/**
+ * DX-479: lo que manda un movimiento. Solo las claves que cambian: por sillón,
+ * cambiar SOLO de columna manda `{ chairId }` (no es reagendar: no revoca la
+ * confirmación ni mira el horario, como «Mover a…»); cambiar de hora manda el
+ * hueco entero con el profesional (que no cambia solo).
+ */
+export type MovePatch = Partial<MoveTarget>;
 
 /**
  * Destino de un movimiento: el día civil, la hora de inicio en el reloj de la

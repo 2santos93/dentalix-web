@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type * as React from "react";
 import { ScheduleVisitDialog } from "./schedule-visit-dialog";
 import { getPatient, type Patient } from "@/lib/patients/patients-api";
 import { listStaff } from "@/lib/appointments/staff-api";
@@ -74,10 +75,15 @@ beforeEach(() => {
       openings: [
         { start: "2027-04-01T09:00:00Z", end: "2027-04-01T09:30:00Z" },
       ],
-      truncated: false,
+      truncated: false, defaultHours: false,
     } as Awaited<ReturnType<typeof findOpenings>>);
 });
-function mount() {
+function mount(sessionCache = false) {
+  const Wrapper = sessionCache
+    ? ({ children }: { children: React.ReactNode }) => (
+        <>{children}</>
+      )
+    : undefined;
   render(
     <ScheduleVisitDialog
       token="tok"
@@ -89,11 +95,16 @@ function mount() {
         minimumDate: "2027-04-01T05:00:00Z",
         minimumDay: "2027-04-01",
         minDaysAfterPrevious: 90,
-        planItemIds: ["x"],
+        planItemIds: ["x", "y"],
+        planItems: [
+          { id: "x", toothNumber: "36", surfaces: [], procedureName: "Endodoncia molar" },
+          { id: "y", toothNumber: "", surfaces: [], procedureName: "Control" },
+        ],
       }}
       onClose={jest.fn()}
       onCreated={jest.fn()}
     />,
+    { wrapper: Wrapper },
   );
 }
 it("solo ofrece profesionales que atienden en la sede y elige el primero válido", async () => {
@@ -145,4 +156,42 @@ it("DX-378: los huecos y la hora propuesta van en el reloj de la sede, no en el 
   const slot = await screen.findByRole("button", { name: "jue, 1 abr · 5:00 a. m. – 5:30 a. m." });
   await user.click(slot);
   expect(screen.getByTestId("appointment-slot")).toHaveTextContent("doctor 05:00");
+});
+
+it("DX-283: cada tratamiento se nombra con su diente y procedimiento", async () => {
+  mount();
+  expect(await screen.findByRole("checkbox", { name: "36 · Endodoncia molar" })).toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "Control" })).toBeChecked();
+  expect(screen.queryByText(/Tratamiento 1 de la visita/)).not.toBeInTheDocument();
+});
+
+it("DX-283: los huecos se buscan con la duración elegida y cambiarla descarta los anteriores", async () => {
+  const user = userEvent.setup();
+  mount();
+  const duration = await screen.findByLabelText("Duración del hueco");
+  await user.click(screen.getByRole("button", { name: "Buscar hueco" }));
+  await waitFor(() =>
+    expect(findOpenings).toHaveBeenLastCalledWith(
+      "tok",
+      expect.objectContaining({ durationMinutes: 30 }),
+    ),
+  );
+  expect(await screen.findByRole("region", { name: "Huecos disponibles" })).toBeInTheDocument();
+  await user.selectOptions(duration, "90");
+  expect(screen.queryByRole("region", { name: "Huecos disponibles" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Buscar hueco" }));
+  await waitFor(() =>
+    expect(findOpenings).toHaveBeenLastCalledWith(
+      "tok",
+      expect.objectContaining({ durationMinutes: 90 }),
+    ),
+  );
+});
+
+it("DX-283: abrir el diálogo pide una vez paciente, personal y sedes, aunque se fije la sede", async () => {
+  mount(true);
+  await screen.findByRole("checkbox", { name: "36 · Endodoncia molar" });
+  expect(getPatient).toHaveBeenCalledTimes(1);
+  expect(listStaff).toHaveBeenCalledTimes(1);
+  expect(listLocations).toHaveBeenCalledTimes(1);
 });

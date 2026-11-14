@@ -53,17 +53,6 @@ interface LocationRow {
   regionalSettingsReviewedAt: string | null;
 }
 
-/** Igual que `formatCurrency` de la web con un importe entero en una moneda sin decimales. */
-function zeroDecimal(amount: number, currency: string): string {
-  return new Intl.NumberFormat('es', {
-    style: 'currency',
-    currency,
-    currencyDisplay: 'code',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
 async function shoot(page: Page, name: string, width: number): Promise<void> {
   if (!QA_DIR) return;
   mkdirSync(QA_DIR, { recursive: true });
@@ -176,7 +165,7 @@ for (const viewport of VIEWPORTS) {
       await open.getByLabel('Importe del fondo 1').fill('5000');
       await open.getByRole('button', { name: 'Abrir caja' }).click();
       await expect(open).toBeHidden({ timeout: 10_000 });
-      await expect(page.getByRole('main')).toContainText(zeroDecimal(5000, 'JPY'), { timeout: 10_000 });
+      await expect(page.getByRole('main')).toContainText('JPY 5,000', { timeout: 10_000 });
       if (viewport.width === 390) await expectNoHorizontalScroll(page);
       await shoot(page, 'e2e-caja-jpy', viewport.width);
     });

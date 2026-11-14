@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Armchair, CircleCheck, DoorOpen, Undo2, Wallet } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -22,10 +22,17 @@ import {
   type PlanItemReservedElsewhere,
 } from '@/lib/appointments/plan-item-reservations';
 import { notifyError } from '@/components/errors/notify';
+import { ApiError, isRejection } from '@/lib/api/api-error';
+import { InlineError } from '@/components/errors/inline-error';
+import { OVERBOOK_SLOT_TAKEN } from '@/lib/appointments/walk-in';
+import { KeepOverbookedDialog, type KeepOverbookedPrompt } from '@/components/appointments/keep-overbooked-dialog';
+import { CheckoutDialog } from '@/components/appointments/checkout-dialog';
+import type { CheckoutItem } from '@/lib/appointments/checkout-checklist';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 export const patientFlowCopy = {
+  retry: 'Reintentar',
   done: {
     ARRIVE: (name: string) => `${name} llegó.`,
     SEAT: (name: string) => `${name} pasó al sillón.`,
@@ -33,6 +40,8 @@ export const patientFlowCopy = {
     CHECKOUT: (name: string) => `Cita de ${name} completada.`,
     UNDO_ARRIVAL: (name: string) => `Se deshizo la llegada de ${name}.`,
   } satisfies Record<FlowAction, (name: string) => string>,
+  /** DX-509: deshecha la llegada de una urgencia que sigue en sobrecupo. */
+  undoneOverbooked: (name: string) => `Se deshizo la llegada de ${name}. Sigue en sobrecupo.`,
   error: 'No pudimos cambiar el estado de la cita.',
   actionsFor: (name: string) => `Estado de ${name} en la clínica`,
 };
@@ -45,11 +54,28 @@ const ICONS: Record<FlowAction, typeof DoorOpen> = {
   UNDO_ARRIVAL: Undo2,
 };
 
+/** DX-538-bis: el fallo de un paso dado con un modal abierto, para pintarlo dentro. */
+export interface FlowError {
+  appointmentId: string;
+  message: string;
+  /** `null`: la API lo rechazó y repetirlo daría lo mismo. */
+  retry: (() => void) | null;
+}
+
 export interface PatientFlowRunner {
+  /** DX-538-bis: el último paso que falló con un modal abierto. */
+  error?: FlowError | null;
   /** Cita cuyo cambio está en curso (sus botones quedan deshabilitados). */
   pendingId: string | null;
   /** false: la API rechazó el paso; el aviso y el refresco ya se gestionaron. */
-  run: (appointmentId: string, action: FlowAction, patientName: string) => Promise<boolean>;
+  run: (
+    appointmentId: string,
+    action: FlowAction,
+    patientName: string,
+    checkoutPending?: CheckoutItem[],
+  ) => Promise<boolean>;
+  /** DX-202: la sesión para leer la lista de la salida; sin ella, se completa directo. */
+  token?: string;
   /** DX-273: `${appointmentId}:${planItemId}` que se está trayendo, si hay. */
   claimingKey?: string | null;
   /**
@@ -57,6 +83,11 @@ export interface PatientFlowRunner {
    * reservaba otra. false si la API lo rechazó (ya avisado con Reintentar).
    */
   claim?: (appointmentId: string, item: PlanItemReservedElsewhere) => Promise<boolean>;
+  /**
+   * DX-509: el diálogo «Mantener en sobrecupo» de «Deshacer llegada». Quien
+   * usa el runner lo pinta una vez (cerrado no pinta nada).
+   */
+  overbookDialog?: ReactNode;
 }
 
 /** Id del toast «reservado en otra cita» de un tratamiento de la cita. */
@@ -117,6 +148,8 @@ export function claimKey(appointmentId: string, planItemId: string): string {
 export function usePatientFlow(token: string, onChanged: () => void): PatientFlowRunner {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [claimingKey, setClaimingKey] = useState<string | null>(null);
+  const [overbookPrompt, setOverbookPrompt] = useState<KeepOverbookedPrompt | null>(null);
+  const [flowError, setFlowError] = useState<FlowError | null>(null);
 
   async function claim(appointmentId: string, item: PlanItemReservedElsewhere) {
     setClaimingKey(claimKey(appointmentId, item.planItemId));
@@ -141,8 +174,14 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
     }
   }
 
-  async function run(appointmentId: string, action: FlowAction, patientName: string) {
+  async function run(
+    appointmentId: string,
+    action: FlowAction,
+    patientName: string,
+    checkoutPending?: CheckoutItem[],
+  ) {
     setPendingId(appointmentId);
+    setFlowError(null);
     try {
       let reserved: PlanItemReservedElsewhere[] = [];
       if (action === 'UNDO_ARRIVAL') {
@@ -150,6 +189,7 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
       } else {
         const result = await updateAppointment(token, appointmentId, {
           status: FLOW_ACTION_STATUS[action],
+          ...(checkoutPending?.length ? { checkoutPending } : {}),
         });
         reserved = result.planItemsReservedElsewhere ?? [];
       }
@@ -202,11 +242,30 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
       }
       return true;
     } catch (err) {
+      // DX-509: la urgencia es un sobrecupo y su hora ya la ocupa otra cita:
+      // deshacer la llegada exige decidir si sigue en sobrecupo.
+      if (action === 'UNDO_ARRIVAL' && err instanceof ApiError && err.code === OVERBOOK_SLOT_TAKEN) {
+        setOverbookPrompt({
+          message: apiErrorMessage(err, patientFlowCopy.error),
+          confirm: async () => {
+            await undoArrival(token, appointmentId, { keepOverbooked: true });
+            toast.success(patientFlowCopy.undoneOverbooked(patientName));
+            onChanged();
+            notifyInClinicChanged();
+          },
+        });
+        return false;
+      }
       // El reintento cierra sobre la propia operación (cita y paso): no hay
-      // estado ambiente que pueda quedar viejo.
-      notifyError(apiErrorMessage(err, patientFlowCopy.error), {
-        onRetry: () => void run(appointmentId, action, patientName),
-      });
+      // estado ambiente que pueda quedar viejo. DX-538-bis: un rechazo (4xx)
+      // no se reintenta; con un modal abierto (detalle, «En clínica») el aviso
+      // flotante quedaría inerte y oculto al lector: el error va junto al paso.
+      const message = apiErrorMessage(err, patientFlowCopy.error);
+      const retry = isRejection(err)
+        ? null
+        : () => void run(appointmentId, action, patientName, checkoutPending);
+      if (modalOpen()) setFlowError({ appointmentId, message, retry });
+      else notifyError(message, retry ? { onRetry: retry } : undefined);
       return false;
     } finally {
       setPendingId(null);
@@ -215,7 +274,15 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
     }
   }
 
-  return { pendingId, run, claimingKey, claim };
+  return {
+    pendingId,
+    error: flowError,
+    run,
+    token,
+    claimingKey,
+    claim,
+    overbookDialog: <KeepOverbookedDialog prompt={overbookPrompt} onClose={() => setOverbookPrompt(null)} />,
+  };
 }
 
 interface PatientFlowActionsProps {
@@ -227,6 +294,10 @@ interface PatientFlowActionsProps {
   patientName: string;
   runner: PatientFlowRunner;
   className?: string;
+  /** DX-237: es del profesional que la mira; el odontólogo solo actúa en las suyas. */
+  ownAppointment?: boolean;
+  /** DX-237: solo el siguiente paso y como icono, para las tarjetas de columnas. */
+  compact?: boolean;
 }
 
 /**
@@ -242,12 +313,16 @@ export function PatientFlowActions({
   patientName,
   runner,
   className,
+  ownAppointment = true,
+  compact = false,
 }: PatientFlowActionsProps) {
-  const actions = flowActions(status, role, isToday);
+  const allActions = flowActions(status, role, isToday, ownAppointment);
+  const actions = compact ? allActions.slice(0, 1) : allActions;
   const groupRef = useRef<HTMLDivElement>(null);
   // Se pulsó un paso aquí: al cambiar los botones (el pulsado desaparece) el
   // foco iría al <body>; se lleva al primer botón del grupo (WCAG 2.4.3).
   const clicked = useRef(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
   const actionsKey = actions.join(',');
   useEffect(() => {
     if (!clicked.current) return;
@@ -273,21 +348,53 @@ export function PatientFlowActions({
           <Button
             key={action}
             type="button"
-            size="sm"
+            size={compact ? 'icon-sm' : 'sm'}
             variant={action === 'UNDO_ARRIVAL' ? 'ghost' : 'secondary'}
+            aria-label={compact ? `${FLOW_ACTION_LABELS[action]}: ${patientName}` : undefined}
+            title={compact ? FLOW_ACTION_LABELS[action] : undefined}
             loading={pending}
             onClick={() => {
               clicked.current = true;
-              void runner.run(appointmentId, action, patientName);
+              // DX-202: completar pasa por la salida del paciente.
+              if (action === 'CHECKOUT' && runner.token) setCheckoutOpen(true);
+              else void runner.run(appointmentId, action, patientName);
             }}
             data-flow-action={action}
-            className="h-11 sm:h-9"
+            // DX-546 · FE-109: el icono se queda en 28 px y el `::after` lleva
+            // el área de toque a 44 px con puntero táctil a cualquier ancho
+            // (las columnas son la vista de las tabletas) y en una ventana
+            // estrecha (`max-sm`).
+            className={
+              compact
+                ? "relative size-7 bg-surface text-primary-text shadow-sm pointer-coarse:size-7 max-sm:after:absolute max-sm:after:-inset-2 max-sm:after:content-[''] pointer-coarse:after:absolute pointer-coarse:after:-inset-2 pointer-coarse:after:content-['']"
+                : 'h-11 sm:h-9'
+            }
           >
             <Icon aria-hidden />
-            {FLOW_ACTION_LABELS[action]}
+            {compact ? null : FLOW_ACTION_LABELS[action]}
           </Button>
         );
       })}
+      {/* DX-538-bis: el fallo, aquí mismo y anunciado (role="alert"). */}
+      {!compact && runner.error?.appointmentId === appointmentId ? (
+        <div className="flex basis-full flex-col items-start gap-2">
+          <InlineError variant="summary">{runner.error.message}</InlineError>
+          {runner.error.retry ? (
+            <Button type="button" variant="secondary" size="sm" onClick={runner.error.retry}>
+              {patientFlowCopy.retry}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {checkoutOpen && runner.token ? (
+        <CheckoutDialog
+          token={runner.token}
+          appointmentId={appointmentId}
+          patientName={patientName}
+          onOpenChange={setCheckoutOpen}
+          onComplete={(checkoutPending) => runner.run(appointmentId, 'CHECKOUT', patientName, checkoutPending)}
+        />
+      ) : null}
     </div>
   );
 }

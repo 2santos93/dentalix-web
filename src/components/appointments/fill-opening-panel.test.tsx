@@ -56,8 +56,8 @@ function candidate(over: Partial<OpeningCandidate> & { patientId: string }): Ope
     kind: 'WAITLIST',
     patientFirstName: 'Ana',
     patientLastName: 'Ríos',
-    phone: '3101234567',
-    whatsappPhone: '573101234567',
+    phone: '4141234567',
+    whatsappPhone: '584141234567',
     whatsappBlocked: false,
     whatsappBlockedReason: null,
     waitlistEntryId: `wl-${over.patientId}`,
@@ -90,6 +90,7 @@ function view(items: OpeningCandidate[]): OpeningCandidates {
     offerCap: 2,
     linkOffers: { pending: 0, total: 0, acceptedBy: null, expired: false },
     linkOfferOpen: true,
+    linkOfferClosedMessage: null,
     items,
     truncated: false,
   };
@@ -188,7 +189,7 @@ describe('«Ocupar este hueco» (DX-210)', () => {
     expect(hrefWhenRecorded).toBe('');
     expect(win.opener).toBeNull();
     const href = win.location.href;
-    expect(href.startsWith('https://wa.me/573101234567?text=')).toBe(true);
+    expect(href.startsWith('https://wa.me/584141234567?text=')).toBe(true);
     const text = decodeURIComponent(href.split('text=')[1]);
     expect(text).toContain('Hola Ana');
     expect(text).toContain('martes, 4 de marzo a las 10:00');
@@ -253,7 +254,7 @@ describe('«Ocupar este hueco» (DX-210)', () => {
     await screen.findByText('Ana Ríos');
     expect(screen.queryByRole('button', { name: /WhatsApp/ })).not.toBeInTheDocument();
     expect(screen.getByText('Sin permiso de WhatsApp: llámalo')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Llamar a Ana Ríos al 3101234567' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Llamar a Ana Ríos al 4141234567' })).toBeInTheDocument();
   });
 
   it('con baja de WhatsApp (DX-128) no hay botón de WhatsApp: se ofrece «Llamar»', async () => {
@@ -261,9 +262,9 @@ describe('«Ocupar este hueco» (DX-210)', () => {
     renderPanel();
     await screen.findByText('Berta Gil');
     expect(screen.queryByRole('button', { name: /WhatsApp/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Llamar a Berta Gil al 3101234567' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Llamar a Berta Gil al 4141234567' })).toHaveAttribute(
       'href',
-      'tel:3101234567',
+      'tel:4141234567',
     );
     expect(screen.getByText('No recibe WhatsApp: llámalo')).toBeInTheDocument();
   });
@@ -381,8 +382,8 @@ describe('«Ocupar este hueco» (DX-210)', () => {
       const carla = candidate({ patientId: 'p-carla', patientFirstName: 'Carla', patientLastName: 'Paz' });
       mockedList.mockResolvedValue(view([ana, carla]));
       mockedLinkOffer
-        .mockResolvedValueOnce(offerResult('p-ana', 'https://demo.dentalix.app/hueco/aaa', '573101234567'))
-        .mockResolvedValueOnce(offerResult('p-carla', 'https://demo.dentalix.app/hueco/ccc', '573101234567'));
+        .mockResolvedValueOnce(offerResult('p-ana', 'https://demo.dentalix.app/hueco/aaa', '584141234567'))
+        .mockResolvedValueOnce(offerResult('p-carla', 'https://demo.dentalix.app/hueco/ccc', '584141234567'));
       renderPanel();
       const send = await screen.findByRole('button', { name: 'Enviar oferta con enlace' });
       expect(send).toBeDisabled();
@@ -393,7 +394,7 @@ describe('«Ocupar este hueco» (DX-210)', () => {
       const dialog = await screen.findByRole('dialog', { name: 'Enviar oferta con enlace' });
       await userEvent.click(within(dialog).getByRole('radio', { name: /WhatsApp/ }));
       await userEvent.click(within(dialog).getByRole('button', { name: 'Enviar oferta' }));
-      const open = await within(dialog).findByRole('link', { name: 'Abrir WhatsApp con la oferta para Ana Ríos' });
+      const open = await within(dialog).findByRole('link', { name: /^Abrir WhatsApp con la oferta para Ana Ríos/ });
       expect(decodeURIComponent(open.getAttribute('href') ?? '')).toContain('https://demo.dentalix.app/hueco/aaa');
       expect(decodeURIComponent(open.getAttribute('href') ?? '')).not.toMatch(/Endodoncia|Ríos/);
       expect(mockedLinkOffer).toHaveBeenCalledTimes(2);
@@ -478,6 +479,20 @@ describe('«Ocupar este hueco» (DX-210)', () => {
       expect(await screen.findByTestId('slot-link-offers')).toHaveTextContent('Caducado');
       expect(screen.getByText(/Faltan menos de 20 minutos/)).toBeInTheDocument();
       expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+
+    it('DX-448: con los minutos de la clínica, dice el texto de la API', async () => {
+      const message =
+        'El enlace caduca 60 minutos antes del hueco y le quedarían menos de 30 minutos de vida: ya no da tiempo a ofrecerlo por enlace. Llama al paciente.';
+      mockedList.mockResolvedValueOnce({
+        ...view([ana]),
+        linkOfferOpen: false,
+        linkOfferClosedMessage: message,
+      });
+      renderPanel();
+      expect(await screen.findByText(message)).toBeInTheDocument();
+      expect(screen.queryByText(/Faltan menos de 20 minutos/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Enviar oferta con enlace' })).not.toBeInTheDocument();
     });
 
     it('«Aceptado por …» sigue a la vista aunque ya no quede ningún candidato', async () => {

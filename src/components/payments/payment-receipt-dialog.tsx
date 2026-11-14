@@ -1,7 +1,6 @@
 'use client';
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { Lock, Mail, Printer, ReceiptText } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Eye, Lock, Mail, Printer, ReceiptText } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -11,7 +10,10 @@ import {
   sendPaymentReceipt,
   type PaymentReceipt,
 } from '@/lib/payments/payment-receipts-api';
+import { documentFormat } from '@/lib/format/document-format';
+import { DocumentFormatNote } from '@/components/documents/document-format-note';
 import { PaymentReceiptDocument } from './payment-receipt-document';
+import { paymentProofViewerCopy, usePaymentProofViewer } from './payment-proof-viewer';
 import {
   Dialog,
   DialogContent,
@@ -24,6 +26,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
 import { notifyError } from '@/components/errors/notify';
+import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
   title: 'Recibo de caja',
@@ -35,7 +38,6 @@ const copy = {
   close: 'Cerrar',
   printA4: 'Imprimir A4',
   printRoll: 'Tirilla 80 mm',
-  newTab: '(se abre en otra pestaña)',
   send: 'Enviar por email',
   sending: 'Enviando…',
   sent: (to: string) => `Recibo enviado a ${to}.`,
@@ -48,6 +50,8 @@ interface PaymentReceiptDialogProps {
   token: string;
   /** El abono del recibo, o `null` para tener el diálogo cerrado. */
   paymentId: string | null;
+  /** DX-389: el abono tiene comprobante del cobro: el recibo ofrece «Ver comprobante». */
+  hasProof?: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
@@ -58,16 +62,26 @@ interface PaymentReceiptDialogProps {
  * tirilla de 80 mm (vista imprimible en otra pestaña) o enviarlo por email al
  * paciente. `paymentId` hace a la vez de bandera de apertura y de qué abono.
  */
-export function PaymentReceiptDialog({ token, paymentId, onOpenChange }: PaymentReceiptDialogProps) {
+export function PaymentReceiptDialog({ token, paymentId, hasProof = false, onOpenChange }: PaymentReceiptDialogProps) {
+  // DX-515-bis: el encabezado dice el título CONGELADO en el recibo (el que
+  // tenía la clínica al emitirlo); mientras carga, o sin título, el de siempre.
+  const [frozenTitle, setFrozenTitle] = useState<{ paymentId: string; title: string } | null>(null);
+  const title = frozenTitle && frozenTitle.paymentId === paymentId ? frozenTitle.title : copy.title;
   return (
     <Dialog open={paymentId !== null} onOpenChange={onOpenChange}>
       {paymentId !== null ? (
         <DialogContent className="max-w-3xl gap-3 p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>{copy.title}</DialogTitle>
+            <DialogTitle>{title}</DialogTitle>
             <DialogDescription>{copy.description}</DialogDescription>
           </DialogHeader>
-          <ReceiptBody token={token} paymentId={paymentId} onClose={() => onOpenChange(false)} />
+          <ReceiptBody
+            token={token}
+            paymentId={paymentId}
+            hasProof={hasProof}
+            onClose={() => onOpenChange(false)}
+            onTitle={(t) => setFrozenTitle(t ? { paymentId, title: t } : null)}
+          />
         </DialogContent>
       ) : null}
     </Dialog>
@@ -77,17 +91,29 @@ export function PaymentReceiptDialog({ token, paymentId, onOpenChange }: Payment
 function ReceiptBody({
   token,
   paymentId,
+  hasProof,
   onClose,
+  onTitle,
 }: {
   token: string;
   paymentId: string;
+  hasProof: boolean;
   onClose: () => void;
+  /** El título congelado del recibo cargado (`null` = sin título propio). */
+  onTitle: (title: string | null) => void;
 }) {
   const [receipt, setReceipt] = useState<PaymentReceipt | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [sending, setSending] = useState(false);
+  // DX-389: el comprobante del cobro, si el abono lo tiene.
+  const proofViewer = usePaymentProofViewer(token);
+  // El último `onTitle` sin volver a cargar el recibo cuando el padre lo recrea.
+  const onTitleRef = useRef(onTitle);
+  useEffect(() => {
+    onTitleRef.current = onTitle;
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +122,7 @@ function ReceiptBody({
         if (cancelled) return;
         setReceipt(res);
         setError(null);
+        onTitleRef.current(res.snapshot.title ?? null);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -155,32 +182,42 @@ function ReceiptBody({
 
   return (
     <>
+      <DocumentFormatNote
+        locationId={receipt.snapshot.location.id}
+        onRetry={() => setReloadKey((k) => k + 1)}
+        active={documentFormat(receipt.regional) === null}
+      />
       <div className="overflow-hidden rounded-lg border border-border">
         <PaymentReceiptDocument receipt={receipt} />
       </div>
-      <DialogFooter className="print:hidden">
+      <DialogFooter className="print:hidden max-sm:[&>*]:min-h-11">
         <Button type="button" variant="ghost" onClick={onClose}>
           {copy.close}
         </Button>
+        {hasProof ? (
+          <Button type="button" variant="secondary" onClick={() => proofViewer.open(paymentId)}>
+            <Eye aria-hidden />
+            {paymentProofViewerCopy.action}
+          </Button>
+        ) : null}
         <Button type="button" variant="secondary" onClick={() => void send()} disabled={sending}>
           <Mail aria-hidden />
           {sending ? copy.sending : copy.send}
         </Button>
         <Button asChild variant="secondary">
-          <Link href={receiptPrintHref(paymentId, '80mm')} target="_blank" rel="noopener">
+          <ExternalLink href={receiptPrintHref(paymentId, '80mm')}>
             <Printer aria-hidden />
             {copy.printRoll}
-            <span className="sr-only">{copy.newTab}</span>
-          </Link>
+          </ExternalLink>
         </Button>
         <Button asChild>
-          <Link href={receiptPrintHref(paymentId, 'a4')} target="_blank" rel="noopener">
+          <ExternalLink href={receiptPrintHref(paymentId, 'a4')}>
             <Printer aria-hidden />
             {copy.printA4}
-            <span className="sr-only">{copy.newTab}</span>
-          </Link>
+          </ExternalLink>
         </Button>
       </DialogFooter>
+      {proofViewer.dialog}
     </>
   );
 }

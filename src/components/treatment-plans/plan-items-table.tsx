@@ -4,10 +4,17 @@ import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeMoney } from '@/lib/format/sede-number';
 import type { DentalCatalogItem } from '@/lib/odontogram/catalog-api';
 import type { PlanItemBalance } from '@/lib/payments/payments-api';
-import { DISCOUNT_REASON_LABELS, effectiveDiscount, type DiscountReasonCode } from '@/lib/discounts/discount-rules';
+import {
+  DISCOUNT_REASON_LABELS,
+  referenceInPlan,
+  effectiveDiscount,
+  type DiscountReasonCode,
+} from '@/lib/discounts/discount-rules';
 import { ITEM_STATUS_LABELS } from '@/lib/treatment-plans/item-status';
 import { attributionText } from '@/lib/treatment-plans/item-attribution';
+import type { SedePainters } from '@/lib/locations/sede-stamp';
 import { formatListPrice, sedeListPriceFormat } from '@/lib/treatment-plans/list-price';
+import { referenceRateText } from '@/lib/discounts/reference-rate';
 import type { TreatmentPlanItem, TreatmentPlanItemStatus } from '@/lib/treatment-plans/treatment-plans-api';
 import { voidFeeCopy } from '@/components/appointments/fee-reason-modal';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -23,9 +30,11 @@ import { itemPriceOriginText, type ListPriceText } from './price-quote-line';
 import {
   ITEM_STATUS_OPTIONS,
   copy,
+  itemRefs,
   procedureName,
   surfacesLabel,
   type FeeRef,
+  type ItemRef,
 } from './treatment-plans-tab-copy';
 
 /*
@@ -39,11 +48,6 @@ export interface ItemsTableProps {
   catalogById: Map<string, DentalCatalogItem>;
   /** The plan's currency (`planDetail.currency`) — item prices don't carry their own currency. */
   currency: string;
-  /**
-   * DX-489: moneda del catálogo (`clinicBaseCurrency`), la del «precio de
-   * lista»; `null` si no se sabe (la cifra va sin moneda).
-   */
-  catalogCurrency: string | null;
   /** La visita cuyos ítems lista (`null` sin visitas): nombra la tabla. */
   visit: number | null;
   /** DX-343: «Cargo n de N» de cada ítem de cargo (ver `feeReferences`). */
@@ -102,6 +106,8 @@ export interface ItemsTableProps {
    * (precio, descuento, cobrado, pendiente); `null` mientras carga («—»).
    */
   fmt: RegionalFormat | null;
+  /** DX-354b: el pintor de la pantalla, para la fecha de «Realizado por …» (la de la sede donde se realizó). */
+  stamp: SedePainters;
 }
 
 /**
@@ -110,12 +116,16 @@ export interface ItemsTableProps {
  */
 function ItemAttributionLine({
   item,
+  itemRef,
   onCorrect,
+  stamp,
 }: {
   item: TreatmentPlanItem;
+  itemRef: ItemRef;
   onCorrect?: (itemId: string) => void;
+  stamp: SedePainters;
 }) {
-  const text = attributionText(item);
+  const text = attributionText(item, stamp);
   if (!text) return null;
   return (
     <span className="flex flex-wrap items-center gap-x-2 t-caption text-muted">
@@ -128,8 +138,8 @@ function ItemAttributionLine({
           className="px-2"
           aria-label={
             item.performedLocationId === null
-              ? copy.attributeItemFor(item.toothNumber)
-              : copy.correctAttributionFor(item.toothNumber)
+              ? copy.attributeItemFor(itemRef)
+              : copy.correctAttributionFor(itemRef)
           }
           onClick={() => onCorrect(item.id)}
         >
@@ -188,25 +198,41 @@ function FeeItemLine({
 /** Línea del descuento de un ítem: importe y, si lo tiene, su motivo. */
 function ItemDiscountLine({
   item,
+  currency,
   money,
   listPrice,
+  fmt,
 }: {
   item: TreatmentPlanItem;
+  /** Moneda del plan: la rebaja solo se mide en ella (DX-513). */
+  currency: string;
   money: (amount: number) => string;
   listPrice: ListPriceText;
+  fmt: RegionalFormat | null;
 }) {
-  const { priceReduction } = effectiveDiscount(item.catalogPrice, item.price, item.discount);
+  // DX-513-bis: la rebaja frente a la referencia en la moneda del plan (la
+  // foto, convertida con su tasa); un ítem anterior sin foto, como en DX-513.
+  const reference = referenceInPlan(item, currency);
+  const { priceReduction } = effectiveDiscount(reference, item.price, item.discount);
   const origin = itemPriceOriginText(item, listPrice);
+  const converted =
+    item.referenceRate && item.referenceCurrency && item.catalogPrice !== null
+      ? copy.itemReferenceConverted(
+          listPrice(item.catalogPrice) ?? '',
+          referenceRateText(item.referenceRate, item.referenceCurrency, currency, fmt),
+        )
+      : null;
   if (item.discount <= 0 && priceReduction <= 0 && !origin) return null;
   const reason = item.discountReason as DiscountReasonCode | null;
   return (
     <span className="block t-caption font-normal text-muted">
       {origin ? <span className="block tabular-nums">{origin}</span> : null}
-      {priceReduction > 0 && item.catalogPrice !== null ? (
+      {priceReduction > 0 && reference !== null ? (
         <span className="block">
-          {copy.itemPriceReduction(money(priceReduction), money(item.catalogPrice))}
+          {copy.itemPriceReduction(money(priceReduction), money(reference))}
         </span>
       ) : null}
+      {priceReduction > 0 && converted ? <span className="block tabular-nums">{converted}</span> : null}
       {item.discount > 0 ? <span className="block">{copy.itemDiscount(money(item.discount))}</span> : null}
       {reason ? (
         <span className="block">{copy.itemDiscountReason(DISCOUNT_REASON_LABELS[reason])}</span>
@@ -217,14 +243,16 @@ function ItemDiscountLine({
 
 function ItemSelectBox({
   item,
+  itemRef,
   selection,
 }: {
   item: TreatmentPlanItem;
+  itemRef: ItemRef;
   selection: NonNullable<ItemsTableProps['selection']>;
 }) {
   return (
     <Checkbox
-      aria-label={copy.selectItem(item.toothNumber)}
+      aria-label={copy.selectItem(itemRef)}
       checked={selection.selectedIds.has(item.id)}
       onChange={(e) => selection.onToggle(item.id, e.target.checked)}
     />
@@ -252,7 +280,7 @@ function OdontogramLink({
       // cinco filas ofrecerían cinco enlaces con el mismo nombre y ninguna
       // pista de a qué diente lleva cada uno.
       aria-label={copy.viewInOdontogramFor(toothNumber)}
-      className="text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+      className="text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
     >
       {copy.viewInOdontogram}
     </Link>
@@ -275,7 +303,7 @@ function RegisterImplantLink({
     <Link
       href={href(item)}
       aria-label={copy.registerImplantFor(item.toothNumber)}
-      className="text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+      className="text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
     >
       {copy.registerImplant}
     </Link>
@@ -286,7 +314,6 @@ export function ItemsTable({
   items,
   catalogById,
   currency,
-  catalogCurrency,
   updatingItemId,
   visit,
   feeRefs,
@@ -305,12 +332,17 @@ export function ItemsTable({
   itemBalances,
   selection,
   fmt,
+  stamp,
 }: ItemsTableProps) {
   // DX-489: un único formato para los importes del plan, el de la sede (el de
-  // la lista de abonos); el precio de lista, en la moneda del catálogo.
+  // la lista de abonos); el precio de lista, en la moneda del catálogo que
+  // congeló cada ítem al darlo de alta (DX-502, `catalogCurrency`).
   const money = (amount: number) => sedeMoney(amount, currency, fmt);
   const listPriceFormat = sedeListPriceFormat(fmt);
-  const listPrice: ListPriceText = (value) => formatListPrice(value, catalogCurrency, listPriceFormat);
+  const listPriceOf =
+    (item: TreatmentPlanItem): ListPriceText =>
+    (value) =>
+      formatListPrice(value, item.catalogCurrency, listPriceFormat);
   // SEC-050: el ítem de un cargo vigente no se quita, no cambia de estado ni
   // entra en «Descuento %».
   const isFee = (item: TreatmentPlanItem) => Boolean(item.cancellationFeeAppointmentId);
@@ -329,6 +361,10 @@ export function ItemsTable({
     (locked && status === 'PROPOSED') ||
     (closed && status !== item.status && status !== 'DONE') ||
     (item.status === 'DONE' && status !== 'DONE' && !canLeaveDone(item));
+  // DX-546 · FE-111: el nombre de los controles de cada ítem (único en la lista).
+  const refs = itemRefs(items, catalogById);
+  const refOf = (item: TreatmentPlanItem): ItemRef =>
+    refs.get(item.id) ?? { tooth: item.toothNumber, procedure: procedureName(item, catalogById), position: null };
   if (items.length === 0) {
     return <EmptyState size="inline" role="status" title={copy.emptyItemsTitle} description={copy.emptyItemsDescription} />;
   }
@@ -367,6 +403,7 @@ export function ItemsTable({
               const updating = updatingItemId === item.id;
               const focused = focusedTooth === item.toothNumber;
               const implantLink = implantLinkFor(item);
+              const ref = refOf(item);
               return (
                 <TableRow
                   key={item.id}
@@ -378,7 +415,7 @@ export function ItemsTable({
                 >
                   {selection ? (
                     <TableCell className="w-10">
-                      {isFee(item) ? null : <ItemSelectBox item={item} selection={selection} />}
+                      {isFee(item) ? null : <ItemSelectBox item={item} itemRef={ref} selection={selection} />}
                     </TableCell>
                   ) : null}
                   <TableCell className="font-medium tabular-nums">{item.toothNumber || copy.noTooth}</TableCell>
@@ -386,7 +423,7 @@ export function ItemsTable({
                   <TableCell className="text-muted">{surfacesLabel(item)}</TableCell>
                   <TableCell className="tabular-nums">
                     {money(item.price)}
-                    <ItemDiscountLine item={item} money={money} listPrice={listPrice} />
+                    <ItemDiscountLine item={item} currency={currency} money={money} listPrice={listPriceOf(item)} fmt={fmt} />
                   </TableCell>
                   {itemBalances ? <ItemPaidCell item={itemBalances.get(item.id)} currency={currency} fmt={fmt} /> : null}
                   <TableCell>
@@ -396,7 +433,7 @@ export function ItemsTable({
                         <NativeSelect
                           size="sm"
                           className="w-auto"
-                          aria-label={copy.itemStatusSelectLabel(item.toothNumber)}
+                          aria-label={copy.itemStatusSelectLabel(ref)}
                           value={item.status}
                           disabled={updating || statusFrozen(item)}
                           onChange={(e) => onStatusChange(item.id, e.target.value as TreatmentPlanItemStatus)}
@@ -413,7 +450,7 @@ export function ItemsTable({
                           </span>
                         )}
                       </span>
-                      <ItemAttributionLine item={item} onCorrect={onCorrectAttribution} />
+                      <ItemAttributionLine item={item} itemRef={ref} onCorrect={onCorrectAttribution} stamp={stamp} />
                       <FeeItemLine
                         item={item}
                         label={procedureName(item, catalogById)}
@@ -461,6 +498,7 @@ export function ItemsTable({
           const updating = updatingItemId === item.id;
           const focused = focusedTooth === item.toothNumber;
           const implantLink = implantLinkFor(item);
+          const ref = refOf(item);
           return (
             <li
               key={item.id}
@@ -469,7 +507,7 @@ export function ItemsTable({
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-3 font-medium text-ink tabular-nums">
-                  {selection && !isFee(item) ? <ItemSelectBox item={item} selection={selection} /> : null}
+                  {selection && !isFee(item) ? <ItemSelectBox item={item} itemRef={ref} selection={selection} /> : null}
                   {item.toothNumber ? `${copy.colTooth} ${item.toothNumber}` : copy.noTooth}
                 </span>
                 <StatusBadge kind="treatmentPlanItem" status={item.status} />
@@ -478,7 +516,7 @@ export function ItemsTable({
               <p className="mt-1 text-sm text-muted">{surfacesLabel(item)}</p>
               <p className="mt-1 font-medium text-ink tabular-nums">
                 {money(item.price)}
-                <ItemDiscountLine item={item} money={money} listPrice={listPrice} />
+                <ItemDiscountLine item={item} currency={currency} money={money} listPrice={listPriceOf(item)} fmt={fmt} />
               </p>
               {itemBalances?.has(item.id) ? (
                 <div className="mt-1">
@@ -486,7 +524,7 @@ export function ItemsTable({
                 </div>
               ) : null}
               <div className="mt-1">
-                <ItemAttributionLine item={item} onCorrect={onCorrectAttribution} />
+                <ItemAttributionLine item={item} itemRef={ref} onCorrect={onCorrectAttribution} stamp={stamp} />
               </div>
               {isFee(item) ? (
                 <div className="mt-2">
@@ -503,7 +541,7 @@ export function ItemsTable({
               <div className="mt-3 flex items-center justify-between gap-2">
                 <NativeSelect
                   className="w-auto"
-                  aria-label={copy.itemStatusSelectLabel(item.toothNumber)}
+                  aria-label={copy.itemStatusSelectLabel(ref)}
                   value={item.status}
                   disabled={updating || statusFrozen(item)}
                   onChange={(e) => onStatusChange(item.id, e.target.value as TreatmentPlanItemStatus)}

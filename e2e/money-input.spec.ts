@@ -10,13 +10,13 @@ import { API_URL, tenantOrigin } from './support/urls';
 
 /**
  * e2e DX-241 · Importes bien leídos: recepción registra un compromiso de
- * «150,50» USD y un abono de «150.000» COP, ve «Se guardará: …» bajo cada
+ * «150,50» USD y un abono de «150.000» VES, ve «Se guardará: …» bajo cada
  * campo antes de guardar, y el importe correcto (no ×100) sale en la Cartera
  * y en la ficha. A 1440 px en claro y a 390 px en oscuro.
  *
  * Una clínica nueva por corrida con un deudor por viewport (cada paciente
  * admite un solo compromiso abierto): dos planes vencidos, uno de 400 USD y
- * otro de 400.000 COP, en cuotas desde hace más de un año.
+ * otro de 400.000 VES, en cuotas desde hace más de un año.
  */
 const suffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase();
 const subdomain = `importes-${suffix}`.slice(0, 40);
@@ -57,16 +57,22 @@ test.beforeAll(async ({ request }) => {
       docType: 'NATIONAL_ID',
       docNumber: `IM${v.tag}${suffix}`.slice(0, 20),
       sex: 'F',
-      phone: '300 555 0188',
-      countryCode: 'CO',
+      phone: '412 555 0188',
+      countryCode: 'VE',
     });
     await seedOverduePlan(request, id, { currency: 'USD', price: 400, tag: `${v.tag}u` });
-    await seedOverduePlan(request, id, { currency: 'COP', price: 400000, tag: `${v.tag}c` });
+    await seedOverduePlan(request, id, { currency: 'VES', price: 400000, tag: `${v.tag}c` });
     patients[v.tag] = { id, fullName: `${v.firstName} ${lastName}` };
   }
 });
 
-/** Un plan aceptado en `currency`, en dos cuotas mensuales desde hace 400 días. */
+/**
+ * Un plan aceptado en `currency`, en dos cuotas mensuales desde hace 400 días.
+ * DX-513-bis: el ítem es libre (sin precio de catálogo) con el precio
+ * explícito: el plan en VES de una sede en USD no tiene tasa en esta clínica
+ * y una referencia de catálogo en USD respondería 422. El importe del plan no
+ * cambia (400 USD y 400.000 VES), que es lo que el spec mide.
+ */
 async function seedOverduePlan(
   request: APIRequestContext,
   patientId: string,
@@ -77,7 +83,6 @@ async function seedOverduePlan(
     kind: 'PROCEDURE',
     labelEs: `Corona ${p.tag} ${suffix.slice(0, 6)}`,
     color: '#3366CC',
-    defaultPrice: p.price,
   });
   const plan = await apiPost<{ id: string }>(request, session, `/patients/${patientId}/treatment-plans`, {
     currency: p.currency,
@@ -85,6 +90,7 @@ async function seedOverduePlan(
   const item = await apiPost<{ id: string }>(request, session, `/treatment-plans/${plan.id}/items`, {
     toothNumber: '11',
     catalogItemId: catalog.id,
+    price: p.price,
   });
   const accept = await request.patch(`${API_URL}/treatment-plans/${plan.id}/items/${item.id}`, {
     headers: session.headers,
@@ -109,7 +115,7 @@ function debtorIn(page: Page, width: number, fullName: string) {
 const money = (text: string) => new RegExp(text.replace(/\./g, '\\.').replace(/ /g, '\\s').replace(/\$/g, '\\$'));
 
 for (const v of viewports) {
-  test(`compromiso 150,50 USD y abono 150.000 COP con el importe correcto en Cartera y ficha (${v.width} px, ${v.scheme})`, async ({
+  test(`compromiso 150,50 USD y abono 150.000 VES con el importe correcto en Cartera y ficha (${v.width} px, ${v.scheme})`, async ({
     page,
   }) => {
     const patient = patients[v.tag];
@@ -136,34 +142,34 @@ for (const v of viewports) {
     await expect(promise.getByText(/No sabemos leer «1\.50\.0»/)).toBeVisible();
     await expect(promise.getByLabel('Importe')).toHaveAttribute('aria-invalid', 'true');
     await promise.getByLabel('Importe').fill('150,50');
-    await expect(promise.getByText(money('Se guardará: 150,50 USD'))).toBeVisible();
+    await expect(promise.getByText(money('Se guardará: USD 150,50'))).toBeVisible();
     await promise.getByRole('button', { name: 'Guardar compromiso' }).click();
     await expect(promise).toBeHidden({ timeout: 10_000 });
     const status = debtor.getByTestId('promise-status');
     await expect(status.getByText('Abierto')).toBeVisible({ timeout: 15_000 });
-    await expect(status).toContainText(money('150,50 USD'));
+    await expect(status).toContainText(money('USD 150,50'));
     await expectNoHorizontalScroll(page);
 
-    // Ficha → «Registrar abono» de «150.000» al plan en COP.
+    // Ficha → «Registrar abono» de «150.000» al plan en VES.
     await page.goto(`${origin}/patients/${patient.id}?tab=account-statement`);
     const block = page.getByTestId('patient-collections');
-    await expect(block.getByTestId('promise-row')).toContainText(money('150,50 USD'), { timeout: 15_000 });
+    await expect(block.getByTestId('promise-row')).toContainText(money('USD 150,50'), { timeout: 15_000 });
     const panel = page.locator('#tabpanel-account-statement');
     await panel.getByRole('button', { name: 'Registrar abono' }).click();
     const payment = page.getByRole('dialog', { name: 'Registrar abono' });
     const plan = payment.getByLabel('Plan');
     await expect(plan).toBeVisible({ timeout: 10_000 });
-    const copPlan = await plan.locator('option', { hasText: 'COP' }).getAttribute('value');
-    await plan.selectOption(copPlan!);
-    await expect(payment.getByLabel('Moneda')).toHaveValue('COP');
+    const vesPlan = await plan.locator('option', { hasText: 'VES' }).getAttribute('value');
+    await plan.selectOption(vesPlan!);
+    await expect(payment.getByLabel('Moneda')).toHaveValue('VES');
     await expectDialogInsideViewport(page, payment);
     await payment.getByLabel('Importe').fill('150.000');
-    await expect(payment.getByText(money('Se guardará: 150.000,00 COP'))).toBeVisible();
+    await expect(payment.getByText(money('Se guardará: VES 150.000,00'))).toBeVisible();
     await payment.getByLabel('Método').selectOption({ label: 'Efectivo' });
     await payment.getByRole('button', { name: 'Registrar abono' }).click();
     await expect(payment).toBeHidden({ timeout: 10_000 });
     // UX v2: el movimiento nuevo, con «Anular» en su «⋯».
-    const actions = panel.getByRole('button', { name: /^Acciones de abono de 150\.000,00\sCOP/ });
+    const actions = panel.getByRole('button', { name: /^Acciones de abono de VES\s150\.000,00/ });
     await expect(actions).toBeVisible({ timeout: 15_000 });
     await actions.click();
     await expect(page.getByRole('menuitem', { name: 'Anular' })).toBeVisible();
@@ -172,11 +178,11 @@ for (const v of viewports) {
     await expect(block.getByTestId('promise-row').getByText('Abierto')).toBeVisible();
     await expectNoHorizontalScroll(page);
 
-    // Cartera: el saldo en COP bajó 150.000 (no 150), y el compromiso sigue en 150,50 USD.
+    // Cartera: el saldo en VES bajó 150.000 (no 150), y el compromiso sigue en 150,50 USD.
     await page.goto(`${origin}/caja/cartera`);
     const after = debtorIn(page, v.width, patient.fullName);
-    await expect(after).toContainText(money('250.000,00 COP'), { timeout: 15_000 });
-    await expect(after.getByTestId('promise-status')).toContainText(money('150,50 USD'));
+    await expect(after).toContainText(money('VES 250.000,00'), { timeout: 15_000 });
+    await expect(after.getByTestId('promise-status')).toContainText(money('USD 150,50'));
     await expectNoHorizontalScroll(page);
   });
 }

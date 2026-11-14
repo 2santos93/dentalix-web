@@ -1,6 +1,7 @@
 import { AlertTriangle } from 'lucide-react';
+import type { RegionalFormat } from '@/lib/format/regional-format';
 import type { OverdueBalance } from '@/lib/collections/collections-api';
-import { overdueChipText } from '@/lib/collections/presentation';
+import { incompleteBalanceChipText, overdueChipText } from '@/lib/collections/presentation';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
@@ -14,19 +15,37 @@ export function OverdueChip({
   balance,
   className,
   compact = false,
+  fmt,
 }: {
   balance: OverdueBalance | null | undefined;
+  /** El formato de la sede de la pantalla para el importe (DX-354); `null` → sin importe. */
+  fmt: RegionalFormat | null;
   className?: string;
   /** En la tarjeta de la agenda: una línea, sin icono. */
   compact?: boolean;
 }) {
-  const text = overdueChipText(balance);
+  const text = overdueChipText(balance, fmt);
   if (!text) return null;
   return (
     // «Vencido» es danger en todo el producto (DESIGN.md → Status tones).
     <Badge variant="danger" data-testid="overdue-chip" title={text} className={cn('tabular-nums', className)}>
       {compact ? null : <AlertTriangle aria-hidden className="size-3.5 shrink-0" />}
       <span className="min-w-0 truncate">{text}</span>
+    </Badge>
+  );
+}
+
+/**
+ * DX-472-bis: sin saldo vencido, pero el saldo no cuenta algún abono en otra
+ * moneda (sin tasa todavía): en la ficha, un aviso en tono de advertencia en
+ * lugar de nada. El detalle está en el estado de cuenta.
+ */
+export function IncompleteBalanceChip({ balance }: { balance: OverdueBalance | null | undefined }) {
+  const text = incompleteBalanceChipText(balance);
+  if (!text) return null;
+  return (
+    <Badge variant="warning" data-testid="incomplete-balance-chip">
+      {text}
     </Badge>
   );
 }

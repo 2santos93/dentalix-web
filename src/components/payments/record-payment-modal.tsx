@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import {
   SPLIT_MAX_LINES,
@@ -14,7 +14,12 @@ import {
 import { ApiError } from '@/lib/api/api-error';
 import { Button } from '@/components/ui/button';
 import type { AccountStatementOpeningBalance } from '@/lib/account-statement/account-statement-api';
+import { PAYMENT_PROOF_REJECTED } from '@/lib/payments/payment-proof-api';
 import { recordPaymentErrorMessage } from '@/lib/payments/payment-errors';
+import { PAYMENT_PROOF_RULES, requestPaymentProofUpload } from '@/lib/payments/payment-proof-api';
+import type { SingleFileUploadRequest } from '@/lib/files/upload-single-file';
+import { useSingleFileUpload } from '@/components/shared/single-file-field';
+import { PaymentProofField, paymentProofFieldCopy } from './payment-proof-field';
 import { statementCopy } from '@/lib/account-statement/presentation';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
@@ -23,6 +28,7 @@ import { NativeSelect } from '@/components/ui/native-select';
 import { cn } from '@/lib/utils';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
+import { PaymentAdjustmentsPreview } from './payment-adjustments-preview';
 import { parseMoneyInput } from '@/lib/format/money';
 import { FormModal } from '@/components/shared/form-modal';
 import { CurrencySelect } from '@/components/shared/currency-select';
@@ -32,7 +38,7 @@ import { usePaymentLocationHint } from './use-payment-location-hint';
 import { useExchangeRates } from './use-exchange-rates';
 import { PaymentRatePreview, ratePreviewCopy, type PreviewPlanBalance } from './payment-rate-preview';
 import { usePlanBalance } from './use-plan-balance';
-import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { SEDE_TIME_ZONE_ERROR, readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import {
   PaymentMethodSelect,
@@ -51,6 +57,7 @@ import {
   splitTotalOf,
   useSplitLines,
 } from './split-payment-lines';
+import { amountCents } from '@/lib/money/round';
 
 // Copy como constantes (i18n-ready).
 export const recordPaymentCopy = {
@@ -64,6 +71,7 @@ export const recordPaymentCopy = {
   date: 'Fecha de pago',
   invalidAmount: 'Escribe un importe mayor que 0.',
   invalidDate: 'Elige la fecha de pago.',
+  futureDate: 'La fecha de pago no puede ser posterior a hoy.',
   recorded: (amount: string, date: string, plan: string) => `Abono registrado: ${amount} · ${date} · ${plan}.`,
   // DX-375: sin tasa de su día el abono se guarda igual, pero el saldo no lo
   // cuenta todavía (el plan lo enseña con su aviso).
@@ -83,6 +91,13 @@ export const recordPaymentCopy = {
   recordedSplit: (total: string, count: number, date: string, plan: string, receipt: string | null) =>
     `Cobro registrado: ${total} en ${count} formas de pago · ${date} · ${plan}${receipt ? ` · recibo ${receipt}` : ''}.`,
   split: splitPaymentCopy,
+  // DX-389: comprobante del cobro.
+  proofRejected:
+    'El comprobante no es una imagen JPG, PNG o WebP ni un PDF válido. Elige otro archivo.',
+  proofFailed: 'El comprobante no se subió. Reintenta la subida o quítalo.',
+  // Con un medio que exige comprobante, el cobro dividido no lo admite (solo el abono suelto).
+  splitProofRequired:
+    'Este medio exige el comprobante del cobro: regístralo como un abono suelto o elige otro medio.',
 };
 const copy = recordPaymentCopy;
 
@@ -128,7 +143,8 @@ interface RecordPaymentModalProps {
    */
   openingBalances?: AccountStatementOpeningBalance[];
   /** Tras registrar, con el aviso a enseñar: quien abre cierra y recarga. */
-  onRecorded: (notice: string) => void;
+  /** `persistent`: el aviso lleva una advertencia o un recibo que no debe perderse. */
+  onRecorded: (notice: string, opts?: { persistent?: boolean }) => void;
 }
 
 /**
@@ -162,6 +178,8 @@ export function RecordPaymentModal({
   const fmt = readyFormat(useSedeFormat(token));
   const money = (amount: number, code: string) => sedeMoney(amount, code, fmt);
   const timeZone = readyTimeZone(zone);
+  // La fecha de «Plan del …» en la zona y el formato de la sede (DX-354).
+  const planDates = fmt && timeZone ? { fmt, timeZone } : null;
   const today = timeZone ? sedeToday(timeZone) : '';
   const [form, setForm] = useState<FormState>(() => initialForm(today));
   // La clave y lo que identifica la petición que ya viajó con ella (como la
@@ -171,11 +189,19 @@ export function RecordPaymentModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [amountError, setAmountError] = useState<string | null>(null);
+  const [dateError, setDateError] = useState<string | null>(null);
   // DX-377: medio de la clínica, referencia y aviso de referencia repetida.
   const methodFields = usePaymentMethodFields(token, open);
   // DX-390: las formas de pago 2.ª a 5.ª del cobro dividido, con los mismos
   // medios que la primera.
   const split = useSplitLines(methodFields.methods);
+  // DX-389: el comprobante del cobro (subida directa al almacén privado).
+  const requestProofTicket = useCallback(
+    (request: SingleFileUploadRequest) => requestPaymentProofUpload(token, request),
+    [token],
+  );
+  const proofUpload = useSingleFileUpload(PAYMENT_PROOF_RULES, requestProofTicket);
+  const [proofError, setProofError] = useState<string | null>(null);
   const [confirmCredit, setConfirmCredit] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   // Tras un 409 de «lo pendiente cambió» se vuelve a leer el saldo del plan.
@@ -227,8 +253,11 @@ export function RecordPaymentModal({
       setDateTouched(false);
       setError(null);
       setAmountError(null);
+      setDateError(null);
       methodFields.reset();
       split.reset();
+      proofUpload.clear();
+      setProofError(null);
       setConfirmCredit(false);
       setConfirmError(null);
     }
@@ -252,16 +281,37 @@ export function RecordPaymentModal({
   // DX-390: con varias formas de pago (solo a un plan), el total y lo
   // pendiente en la moneda del plan.
   const isSplit = plan !== null && split.lines.length > 0;
+  // DX-389: el comprobante aparece según el medio (obligatorio u optativo) y solo
+  // en el abono suelto; el cobro dividido no lo admite por línea (ver `submitSplit`).
+  const proofPolicy = methodFields.selected?.proofPolicy ?? 'NONE';
+  const proofShown = !isSplit && proofPolicy !== 'NONE';
+  const clearProof = proofUpload.clear;
+  useEffect(() => {
+    if (!proofShown) clearProof();
+  }, [proofShown, clearProof]);
   const lineCurrency = (c: string) => c || plan?.currency || '';
   const splitOtherCurrency =
     isSplit && plan !== null && split.lines.some((l) => lineCurrency(l.currency) !== plan.currency);
-  const rates = useExchangeRates(token, form.date, open && (otherCurrency || splitOtherCurrency));
+  // DX-384: las monedas del cobro (abono, líneas y plan) para que la API dé, con tasa
+  // manual y sin la del día, la última registrada dentro del plazo y su fecha.
+  // Limitación conocida: en un cobro dividido con varias monedas distintas de USD se piden
+  // todas juntas (una fecha común), mientras la API cotiza cada línea con su par; con tasas
+  // sueltas en fechas distintas la previsualización puede diferir de lo que se congela.
+  // Con USD/VES no ocurre.
+  const rateCurrencies = [currency, plan?.currency ?? '', ...split.lines.map((l) => lineCurrency(l.currency))].filter(
+    (c) => c !== '',
+  );
+  const rates = useExchangeRates(token, form.date, open && (otherCurrency || splitOtherCurrency), rateCurrencies);
   // Lo pendiente sale del saldo del plan con los abonos en otra moneda ya
   // convertidos: `plan.balance` (lista de cobrables) no los descuenta.
   const balance = usePlanBalance(token, plan?.id ?? null, open && (otherCurrency || isSplit), balanceRefresh);
   const previewBalance: PreviewPlanBalance =
     balance.status === 'ready'
-      ? { balance: balance.balance.balance, paymentsWithoutRate: balance.balance.paymentsWithoutRate.length }
+      ? {
+          balance: balance.balance.balance,
+          paymentsWithoutRate: balance.balance.paymentsWithoutRate.length,
+          rateProviderTimedOut: balance.balance.rateProviderTimedOut,
+        }
       : balance.status === 'error'
         ? 'error'
         : 'loading';
@@ -325,6 +375,13 @@ export function RecordPaymentModal({
     for (const line of split.lines) {
       if (!split.fields(line).validate({ requireMethod: true })) return;
     }
+    // DX-389: el comprobante obligatorio solo se adjunta en el abono suelto.
+    for (const fields of [methodFields, ...split.lines.map((l) => split.fields(l))]) {
+      if (fields.selected?.proofPolicy === 'REQUIRED') {
+        fields.markMethod(copy.splitProofRequired);
+        return;
+      }
+    }
     // La misma regla que la API (400): dos líneas con el mismo medio y la
     // misma referencia. Se marca en la segunda, antes de enviar.
     const allFields: PaymentMethodFieldsState[] = [methodFields, ...split.lines.map((l) => split.fields(l))];
@@ -379,14 +436,13 @@ export function RecordPaymentModal({
           : money(saved.total, saved.planCurrency),
         saved.payments.length,
         head ? sedeCivilDate(head.paidOn, fmt) : '',
-        savedPlan ? statementCopy.planLabel(savedPlan.createdAt) : '',
+        savedPlan ? statementCopy.planLabel(savedPlan.createdAt, planDates) : '',
         saved.receiptNumber,
       );
-      onRecorded(
-        saved.payments.some((p) => p.exchangeRateStatus === 'MISSING')
-          ? `${recorded} ${copy.recordedWithoutRate}`
-          : recorded,
-      );
+      const withoutRate = saved.payments.some((p) => p.exchangeRateStatus === 'MISSING');
+      onRecorded(withoutRate ? `${recorded} ${copy.recordedWithoutRate}` : recorded, {
+        persistent: withoutRate || Boolean(saved.receiptNumber),
+      });
     } catch (err) {
       // La clave NO cambia: el reintento de este cobro la reusa.
       if (err instanceof ApiError && err.code === SPLIT_PAYMENT_EXCEEDS_BALANCE) {
@@ -423,7 +479,7 @@ export function RecordPaymentModal({
       focusField('rp-amount');
       return;
     }
-    if (opening && Math.round(parsed.value * 100) > Math.round(opening.pending * 100)) {
+    if (opening && amountCents(parsed.value) > amountCents(opening.pending)) {
       setAmountError(copy.overPending(money(opening.pending, opening.currency)));
       focusField('rp-amount');
       return;
@@ -434,6 +490,22 @@ export function RecordPaymentModal({
       setError(copy.invalidDate);
       return;
     }
+    // DX-075: «hoy» es el de la sede (nunca el reloj del navegador); un día
+    // posterior se dice junto al campo, con el foco, sin llamar a la API.
+    // Sin zona lista no hay «hoy» con el que contar: se dice junto al campo en
+    // vez de dejar pasar el día (la API lo rechazaría con un aviso genérico).
+    if (!today) {
+      setDateError(SEDE_TIME_ZONE_ERROR);
+      document.getElementById('rp-date')?.querySelector<HTMLElement>('[role="spinbutton"]')?.focus();
+      return;
+    }
+    if (form.date > today) {
+      setDateError(copy.futureDate);
+      // El id de `DatePicker` es el del grupo: el foco va a su primer segmento.
+      document.getElementById('rp-date')?.querySelector<HTMLElement>('[role="spinbutton"]')?.focus();
+      return;
+    }
+    setDateError(null);
     // DX-097: se manda el DÍA (`YYYY-MM-DD`), no la medianoche UTC: la API lo
     // guarda al mediodía de la sede, así cae en ese día de caja en su zona
     // (medianoche UTC sería la tarde del día anterior en una sede al oeste de UTC).
@@ -445,13 +517,33 @@ export function RecordPaymentModal({
     // DX-395: la referencia o el motivo que faltan se marcan en su campo,
     // que recibe el foco.
     if (!methodFields.validate()) return;
+    // DX-389: el comprobante, según lo que pide el medio. Una subida a medias o
+    // fallida no se descarta en silencio: el error va junto al campo.
+    if (proofShown) {
+      const missing =
+        proofUpload.busy
+          ? paymentProofFieldCopy.waiting
+          : proofUpload.state.status === 'error' && proofUpload.state.file
+            ? copy.proofFailed
+            : proofPolicy === 'REQUIRED' && !proofUpload.uploadId
+              ? paymentProofFieldCopy.missing
+              : null;
+      if (missing) {
+        setProofError(missing);
+        document.getElementById('rp-proof-group')?.querySelector<HTMLElement>('button')?.focus();
+        return;
+      }
+    }
+    setProofError(null);
     setSubmitting(true);
     try {
+      const proofUploadId = proofShown ? proofUpload.uploadId : undefined;
       const body = {
         amount,
         currency,
         paidAt,
         ...methodFields.body(),
+        ...(proofUploadId ? { proofUploadId } : {}),
       };
       const key = keyFor([
         opening ? `ob:${opening.id}` : (plan as NonNullable<typeof plan>).id,
@@ -460,6 +552,7 @@ export function RecordPaymentModal({
         paidAt,
         body.paymentMethodId ?? null,
         body.reference ?? null,
+        proofUploadId ?? null,
       ]);
       const saved = opening
         ? await recordOpeningBalancePayment(token, opening.id, body, key)
@@ -477,14 +570,21 @@ export function RecordPaymentModal({
         savedOpening
           ? copy.openingLabel(savedOpening.concept)
           : savedPlan
-            ? statementCopy.planLabel(savedPlan.createdAt)
+            ? statementCopy.planLabel(savedPlan.createdAt, planDates)
             : '',
       );
-      onRecorded(saved.exchangeRateStatus === 'MISSING' ? `${recorded} ${copy.recordedWithoutRate}` : recorded);
+      const withoutRate = saved.exchangeRateStatus === 'MISSING';
+      onRecorded(withoutRate ? `${recorded} ${copy.recordedWithoutRate}` : recorded, { persistent: withoutRate });
     } catch (err) {
       // La clave NO cambia: el reintento de este mismo abono la reusa y el
       // servidor lo deduplica en vez de cobrar dos veces.
       if (methodFields.catchDuplicate(err)) return;
+      // DX-389: la API borró un comprobante que no es lo que dice ser: se elige otro.
+      if (err instanceof ApiError && err.code === PAYMENT_PROOF_REJECTED) {
+        proofUpload.clear();
+        setProofError(copy.proofRejected);
+        return;
+      }
       setError(recordPaymentErrorMessage(err));
     } finally {
       setSubmitting(false);
@@ -504,7 +604,7 @@ export function RecordPaymentModal({
           : copy.submit
       }
       submitting={submitting}
-      submitDisabled={plan === null && opening === null}
+      submitDisabled={(plan === null && opening === null) || proofUpload.busy}
       error={error}
       size="lg"
       touchTargets
@@ -559,6 +659,7 @@ export function RecordPaymentModal({
               }}
               disabled={submitting}
               money={money}
+              planDates={planDates}
             />
           )}
           {plan || opening ? (
@@ -582,6 +683,7 @@ export function RecordPaymentModal({
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FormField htmlFor="rp-amount" label={copy.amount} error={amountError}>
                     <MoneyInput
+                      money={money}
                       id="rp-amount"
                       currency={currency}
                       requirePositive
@@ -612,13 +714,14 @@ export function RecordPaymentModal({
                     paymentCurrency={currency}
                     planCurrency={plan.currency}
                     planBalance={previewBalance}
+                    onRetryBalance={() => setBalanceRefresh((n) => n + 1)}
                     date={form.date}
                     fmt={fmt}
                   />
                 ) : null}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <PaymentMethodSelect fields={methodFields} id="rp-method" disabled={submitting} />
-                  <FormField htmlFor="rp-date" label={copy.date}>
+                  <FormField htmlFor="rp-date" label={copy.date} error={dateError}>
                     {zone.status === 'error' && !dateTouched ? (
                       <SedeConfigError kind="timeZone" variant="field" retryId="rp-date" onRetry={zone.retry} />
                     ) : (
@@ -627,8 +730,12 @@ export function RecordPaymentModal({
                         name="rp-date"
                         value={form.date || null}
                         disabled={submitting}
+                        max={today || undefined}
+                        aria-invalid={dateError ? true : undefined}
+                        aria-describedby={dateError ? fieldErrorId('rp-date') : undefined}
                         onChange={(next) => {
                           setDateTouched(true);
+                          setDateError(null);
                           patch({ date: next ?? '' });
                         }}
                       />
@@ -636,6 +743,28 @@ export function RecordPaymentModal({
                   </FormField>
                 </div>
                 <PaymentReferenceFields fields={methodFields} idPrefix="rp" disabled={submitting} />
+                {/* DX-389: el comprobante del cobro, si el medio lo admite o lo exige. */}
+                {proofShown ? (
+                  <PaymentProofField
+                    id="rp-proof"
+                    policy={proofPolicy}
+                    upload={proofUpload}
+                    error={
+                      proofUpload.state.status === 'idle' || proofUpload.state.status === 'error' ? proofError : null
+                    }
+                    disabled={submitting}
+                    fmt={fmt}
+                  />
+                ) : null}
+                {/* DX-516: los ajustes del medio sobre este importe y lo que se cobra. */}
+                <PaymentAdjustmentsPreview
+                  id="rp-adjustments"
+                  token={token}
+                  method={methodFields.selected}
+                  amount={previewAmount}
+                  currency={currency}
+                  money={money}
+                />
               </div>
               {plan && !opening
                 ? split.lines.map((line, index) => (
@@ -646,6 +775,7 @@ export function RecordPaymentModal({
                       fields={split.fields(line)}
                       token={token}
                       defaultCurrency={plan.currency}
+                      money={money}
                       disabled={submitting}
                       onPatch={(next) => split.patch(line.key, next)}
                       onRemove={() => {
@@ -689,6 +819,7 @@ export function RecordPaymentModal({
                   }}
                   confirmError={confirmError}
                   disabled={submitting}
+                  onRetryBalance={() => setBalanceRefresh((n) => n + 1)}
                 />
               ) : null}
             </>

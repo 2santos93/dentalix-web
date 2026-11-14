@@ -79,6 +79,7 @@ export function VoidPaymentModal({
 
   return (
     <FormModal
+      touchTargets
       open={open}
       onOpenChange={onOpenChange}
       title={copy.title}

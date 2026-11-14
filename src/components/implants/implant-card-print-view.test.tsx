@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { ImplantCardPrintView } from './implant-card-print-view';
 import { getImplantCard, printImplantCard } from '@/lib/implants/implants-api';
@@ -8,6 +9,7 @@ import { makeImplantCard, tokenFor } from '@/lib/test/implants';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
 import { citesLaw } from '@/architecture/law-citation';
+import { REGIONAL_DE, REGIONAL_US } from '@/lib/test/document-regional';
 
 jest.mock('../../lib/implants/implants-api', () => ({
   ...jest.requireActual('../../lib/implants/implants-api'),
@@ -33,44 +35,66 @@ describe('ImplantCardPrintView (DX-191)', () => {
     window.print = realPrint;
   });
 
-  it('formatImplantSize en-US is 4.1 × 10 mm: la medida con el formato de la sede de la pantalla', async () => {
-    mockedLocations.mockResolvedValue([clinicLocation({ locale: 'en-US', hourCycle: 'h12' })]);
-    mockedGet.mockResolvedValue(makeImplantCard());
+  it('formatImplantSize en-US is 4.1 × 10 mm: la medida con el formato de la sede de la tarjeta', async () => {
+    mockedGet.mockResolvedValue(makeImplantCard({ regional: REGIONAL_US }));
     render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
     const card = await screen.findByRole('article');
     expect(await within(card).findByText('4.1 × 10 mm')).toBeInTheDocument();
   });
 
-  it('«Configurar sede» abre la sede sin formato o sin reloj, no la lista', async () => {
+  it('el tamaño y las fechas usan la misma sede del documento, no la activa', async () => {
+    // La sede activa de la pantalla es alemana (24 h, coma decimal); la tarjeta es de una sede en-US.
+    mockedLocations.mockResolvedValue([clinicLocation({ locale: 'de-DE', hourCycle: 'h23' })]);
+    mockedGet.mockResolvedValue(
+      makeImplantCard({ regional: REGIONAL_US, deliveredAt: '2027-05-03T19:05:00.000Z', placedOn: '2027-05-03' }),
+    );
+    render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2027-05-03" />);
+    const card = await screen.findByRole('article');
+    expect(within(card).getAllByRole('listitem')[0]).toHaveTextContent('4.1 × 10 mm');
+    expect(card).toHaveTextContent('05/03/2027');
+    expect(card).toHaveTextContent('05/03/2027 3:05 p. m.');
+    expect(card).not.toHaveTextContent('03.05.2027');
+  });
+
+  it('B: sede de-DE, las fechas y el tamaño en el orden y los separadores alemanes', async () => {
+    mockedGet.mockResolvedValue(
+      makeImplantCard({ regional: REGIONAL_DE, deliveredAt: '2027-05-03T19:05:00.000Z', placedOn: '2027-05-03' }),
+    );
+    render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2027-05-03" />);
+    const card = await screen.findByRole('article');
+    expect(within(card).getAllByRole('listitem')[0]).toHaveTextContent('4,1 × 10 mm');
+    expect(card).toHaveTextContent('03.05.2027 21:05');
+  });
+
+  it('«Configurar sede» abre la sede de la tarjeta sin formato, no la lista', async () => {
     useAuthStore.setState({ accessToken: tokenFor('ADMIN') });
     try {
-      mockedLocations.mockResolvedValue([clinicLocation({ id: 'sede-sin-reloj', locale: 'en-US', hourCycle: null })]);
-      mockedGet.mockResolvedValue(makeImplantCard());
+      mockedGet.mockResolvedValue(makeImplantCard({ regional: null }));
       render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
       expect(await screen.findByRole('link', { name: 'Configurar sede' })).toHaveAttribute(
         'href',
-        '/settings/sedes?sede=sede-sin-reloj',
+        '/settings/sedes?sede=loc-1',
       );
     } finally {
       useAuthStore.setState({ accessToken: null });
     }
   });
 
-  it('sin formato de la sede: la medida «—» y el aviso, fuera de la impresión', async () => {
-    mockedLocations.mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
-    mockedGet.mockResolvedValue(makeImplantCard());
+  it('sin formato de la sede: la medida y las fechas «—» y el aviso, fuera de la impresión', async () => {
+    mockedGet.mockResolvedValue(makeImplantCard({ regional: null, deliveredAt: '2026-10-17T15:00:00.000Z' }));
     render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
     const note = await screen.findByText(/No se pudo saber el formato regional o el reloj de la sede/);
-    expect(note.closest('[role="status"]')).toHaveClass('print:hidden');
-    const items = within(screen.getByRole('article')).getAllByRole('listitem');
+    expect(note.closest('.print\\:hidden')).not.toBeNull();
+    const card = screen.getByRole('article');
+    const items = within(card).getAllByRole('listitem');
     expect(items[0]).not.toHaveTextContent('mm');
     expect(items[0]).toHaveTextContent('—');
+    expect(card.textContent).not.toMatch(/\d{2}\/\d{2}\/\d{4}/);
   });
 
   it('sin formato de la sede no se imprime ni se registra la entrega (las medidas saldrían «—»)', async () => {
     const user = setupUser();
-    mockedLocations.mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
-    mockedGet.mockResolvedValue(makeImplantCard());
+    mockedGet.mockResolvedValue(makeImplantCard({ regional: null }));
     render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
     await screen.findByText(/No se pudo saber el formato regional o el reloj de la sede/);
     const print = screen.getByRole('button', { name: /imprimir y registrar la entrega/i });
@@ -80,12 +104,30 @@ describe('ImplantCardPrintView (DX-191)', () => {
     expect(window.print).not.toHaveBeenCalled();
   });
 
-  it('mientras carga el formato de la sede, «Imprimir» espera', async () => {
-    mockedLocations.mockReturnValue(new Promise(() => {}));
-    mockedGet.mockResolvedValue(makeImplantCard());
+  it('DX-354b (E7.2, criterio 9): la región de estado del aviso se monta siempre; vacía con formato, con el aviso sin él', async () => {
+    const noteRegion = () => screen.getAllByRole('status').find((r) => r.classList.contains('print:hidden'));
+    mockedGet.mockResolvedValueOnce(makeImplantCard({ regional: REGIONAL_US }));
+    const first = render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
+    await screen.findByRole('article');
+    expect(noteRegion()).toBeDefined();
+    expect(noteRegion()).toBeEmptyDOMElement();
+    first.unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
+
+    mockedGet.mockResolvedValueOnce(makeImplantCard({ regional: null }));
     render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
     await screen.findByRole('article');
-    expect(screen.getByRole('button', { name: /imprimir y registrar la entrega/i })).toBeDisabled();
+    expect(noteRegion()).toHaveTextContent('No se pudo saber el formato regional o el reloj de la sede');
+  });
+
+  it('Reintentar vuelve a leer la tarjeta, que trae el formato de su sede', async () => {
+    const user = setupUser();
+    mockedGet.mockResolvedValueOnce(makeImplantCard({ regional: null }));
+    mockedGet.mockResolvedValueOnce(makeImplantCard({ regional: REGIONAL_US }));
+    render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
+    await user.click(await screen.findByRole('button', { name: 'Reintentar' }));
+    expect(await screen.findByText('4.1 × 10 mm')).toBeInTheDocument();
+    expect(screen.queryByText(/No se pudo saber el formato regional/)).not.toBeInTheDocument();
   });
 
   it('la tarjeta lleva nombre y documento, centro, fecha y los dos componentes; el anulado, marcado', async () => {

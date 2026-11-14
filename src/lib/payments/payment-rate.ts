@@ -1,6 +1,7 @@
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import type { Payment } from './payments-api';
+import { roundAmount } from '@/lib/money/round';
 
 /** Estado de la tasa de un abono (DX-375). */
 export type PaymentExchangeRateStatus = Payment['exchangeRateStatus'];
@@ -11,7 +12,21 @@ export const paymentRateCopy = {
   missingHelp: 'Falta la tasa de cambio de su día: el saldo no lo cuenta todavía.',
   source: { AUTOMATIC: 'automática', MANUAL: 'manual' } as const,
   frozen: (pair: string, source: string, date: string) => `Tasa congelada: ${pair} · ${source} · ${date}`,
+  /** DX-384: la tasa es la última registrada, de un día anterior al del abono. */
+  rateOfDay: (date: string) => `tasa del ${date}`,
 };
+
+/**
+ * DX-384: el día de la tasa para mostrarlo junto a un abono (o a su vista
+ * previa), con `formatDay` (el formato de la sede). Si es el del propio abono, el día tal
+ * cual; si es anterior (la clínica no registró la de ese día y se usó la
+ * última dentro de su plazo), «tasa del 30/10/2026», para que no se lea como
+ * la tasa del día del abono.
+ */
+export function rateDayLabel(rateDate: string, paidOn: string, formatDay: (day: string) => string): string {
+  const day = formatDay(rateDate);
+  return rateDate === paidOn ? day : paymentRateCopy.rateOfDay(day);
+}
 
 /**
  * Una cotización entre la moneda de un abono y la de su destino: las dos en
@@ -82,7 +97,7 @@ export function ratePairLabel(
  * cobro coincide céntimo a céntimo con lo que guarda.
  */
 export function convertWithRate(amount: number, rate: Pick<RateQuote, 'fromPerBase' | 'toPerBase'>): number {
-  return Math.round((amount / rate.fromPerBase) * rate.toPerBase * 100) / 100;
+  return roundAmount((amount / rate.fromPerBase) * rate.toPerBase);
 }
 
 /**
@@ -93,11 +108,11 @@ export function convertWithRate(amount: number, rate: Pick<RateQuote, 'fromPerBa
  * congeló ninguna.
  */
 export function frozenRateLabel(
-  payment: Pick<Payment, 'currency' | 'frozenRate'>,
+  payment: Pick<Payment, 'currency' | 'frozenRate' | 'paidOn'>,
   fmt: RegionalFormat | null,
 ): string | null {
   const rate = payment.frozenRate;
   if (!rate) return null;
   const pair = ratePairLabel(payment.currency, rate, (amount, currency) => sedeMoney(amount, currency, fmt));
-  return paymentRateCopy.frozen(pair, paymentRateCopy.source[rate.source], sedeCivilDate(rate.date, fmt));
+  return paymentRateCopy.frozen(pair, paymentRateCopy.source[rate.source], rateDayLabel(rate.date, payment.paidOn, (day) => sedeCivilDate(day, fmt)));
 }

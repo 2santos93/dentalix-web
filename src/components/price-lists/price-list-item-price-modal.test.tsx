@@ -2,7 +2,10 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import { PriceListItemPriceModal } from './price-list-item-price-modal';
 import { replacePriceListItems, type PriceListItemRow } from '@/lib/price-lists/price-lists-api';
 import { setupUser } from '@/lib/test/user';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
 
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../../lib/price-lists/price-lists-api', () => ({
   ...jest.requireActual('../../lib/price-lists/price-lists-api'),
   replacePriceListItems: jest.fn(),
@@ -18,7 +21,11 @@ const row: PriceListItemRow = {
   price: null,
 };
 
-function setup(overrides: Partial<PriceListItemRow> = {}, currency = 'COP') {
+function setup(
+  overrides: Partial<PriceListItemRow> = {},
+  currency = 'USD',
+  catalogCurrency: string | null = currency,
+) {
   const onSaved = jest.fn();
   const onOpenChange = jest.fn();
   render(
@@ -28,6 +35,7 @@ function setup(overrides: Partial<PriceListItemRow> = {}, currency = 'COP') {
       token="tok"
       priceListId="pl-1"
       currency={currency}
+      catalogCurrency={catalogCurrency}
       row={{ ...row, ...overrides }}
       onSaved={onSaved}
     />,
@@ -38,12 +46,43 @@ function setup(overrides: Partial<PriceListItemRow> = {}, currency = 'COP') {
 describe('PriceListItemPriceModal (DX-105)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (listLocations as jest.Mock).mockResolvedValue([clinicLocation({ locale: 'es-VE' })]);
     mockedReplace.mockResolvedValue({ upserted: 1, removed: 0 });
   });
 
-  it('nombra el procedimiento y su precio de catálogo', () => {
+  it('nombra el procedimiento y su precio de catálogo, con el código y el formato de la sede (DX-522)', async () => {
     const { dialog } = setup();
-    expect(within(dialog).getByText(/Profilaxis\. Precio de catálogo: .*80\.000/)).toBeInTheDocument();
+    expect(await within(dialog).findByText(/Profilaxis\. Precio de catálogo: USD\s80\.000,00/)).toBeInTheDocument();
+  });
+
+  it.each([
+    ['es-VE', 'VES', /Precio de catálogo: VES\s80\.000,00/],
+    ['en-US', 'USD', /Precio de catálogo: USD\s80,000\.00/],
+    ['de-DE', 'EUR', /Precio de catálogo: 80\.000,00\sEUR/],
+  ])('con la sede %s pinta el catálogo en %s con su formato', async (locale, currency, expected) => {
+    (listLocations as jest.Mock).mockResolvedValue([clinicLocation({ locale, currency })]);
+    const { dialog } = setup({}, currency);
+    expect(await within(dialog).findByText(expected)).toBeInTheDocument();
+  });
+
+  it('mientras la sede no tiene formato pinta «—», nunca otro formato', () => {
+    (listLocations as jest.Mock).mockReturnValue(new Promise(() => {}));
+    const { dialog } = setup();
+    expect(within(dialog).getByText(/Precio de catálogo: —/)).toBeInTheDocument();
+  });
+
+  it('DX-502-ter: el precio de catálogo va en la moneda del catálogo, no en la de la lista, y lo dice', async () => {
+    (listLocations as jest.Mock).mockResolvedValue([clinicLocation({ locale: 'en-US', currency: 'EUR' })]);
+    const { dialog } = setup({}, 'EUR', 'USD');
+    expect(
+      await within(dialog).findByText(/Precio de catálogo: USD\s80,000\.00 \(otra moneda: no se convierte a EUR\)\./),
+    ).toBeInTheDocument();
+  });
+
+  it('DX-502-ter: sin moneda de catálogo conocida no inventa una: «sin precio»', () => {
+    const { dialog } = setup({}, 'USD', null);
+    expect(within(dialog).getByText(/Precio de catálogo: sin precio\./)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/80/)).not.toBeInTheDocument();
   });
 
   it('sin precio de catálogo lo dice', () => {

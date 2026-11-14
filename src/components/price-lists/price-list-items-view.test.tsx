@@ -9,7 +9,12 @@ import {
 } from '@/lib/price-lists/price-lists-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
+import { listCatalogDirectory } from '@/lib/odontogram/catalog-api';
 
+jest.mock('../../lib/odontogram/catalog-api', () => ({ listCatalogDirectory: jest.fn() }));
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../../lib/price-lists/price-lists-api', () => ({
   ...jest.requireActual('../../lib/price-lists/price-lists-api'),
   listPriceLists: jest.fn(),
@@ -17,6 +22,7 @@ jest.mock('../../lib/price-lists/price-lists-api', () => ({
   replacePriceListItems: jest.fn(),
 }));
 
+const mockedCatalog = listCatalogDirectory as jest.MockedFunction<typeof listCatalogDirectory>;
 const mockedLists = listPriceLists as jest.MockedFunction<typeof listPriceLists>;
 const mockedItems = listPriceListItems as jest.MockedFunction<typeof listPriceListItems>;
 const mockedReplace = replacePriceListItems as jest.MockedFunction<typeof replacePriceListItems>;
@@ -24,7 +30,7 @@ const mockedReplace = replacePriceListItems as jest.MockedFunction<typeof replac
 const list: PriceList = {
   id: 'pl-1',
   name: 'Surco 2026',
-  currency: 'COP',
+  currency: 'USD',
   locationId: null,
   active: true,
   itemCount: 1,
@@ -67,6 +73,8 @@ describe('PriceListItemsView (DX-105)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedLists.mockResolvedValue([list]);
+    mockedCatalog.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 1, catalogCurrency: 'USD' });
+    (listLocations as jest.Mock).mockResolvedValue([clinicLocation({ locale: 'es-VE' })]);
     mockedItems.mockResolvedValue(page([profilaxis, resina]));
     mockedReplace.mockResolvedValue({ upserted: 1, removed: 0 });
   });
@@ -75,7 +83,7 @@ describe('PriceListItemsView (DX-105)', () => {
     const user = setupUser();
     render_();
     expect(await screen.findByRole('heading', { name: 'Surco 2026' })).toBeInTheDocument();
-    expect(screen.getByText(/Precios en COP/)).toBeInTheDocument();
+    expect(screen.getByText(/Precios en USD/)).toBeInTheDocument();
     const table = await screen.findByRole('table', { name: 'Precios de la lista' });
     expect(
       within(table).getAllByRole('columnheader').map((h) => h.textContent),
@@ -90,8 +98,8 @@ describe('PriceListItemsView (DX-105)', () => {
     const rows = within(table).getAllByRole('row');
     expect(rows[1]).toHaveTextContent('PROF');
     expect(rows[1]).toHaveTextContent('Preventiva');
-    expect(rows[1]).toHaveTextContent(/80\.000/);
-    expect(rows[1]).toHaveTextContent(/60\.000/);
+    expect(rows[1]).toHaveTextContent(/USD\s80\.000,00/);
+    expect(rows[1]).toHaveTextContent(/USD\s60\.000,00/);
     expect(rows[2]).toHaveTextContent('Sin precio');
     expect(mockedItems).toHaveBeenCalledWith('tok', 'pl-1', { page: 1, pageSize: 20 });
     expect(screen.getByRole('link', { name: 'Listas de precios' })).toHaveAttribute(
@@ -100,6 +108,35 @@ describe('PriceListItemsView (DX-105)', () => {
     );
     // Sin precio de lista no hay nada que quitar: el «⋯» solo ofrece editarlo.
     expect(await menuOf(user, 'Resina')).toEqual(['Editar precio']);
+  });
+
+  it('DX-502-ter: el precio de catálogo va en la moneda del catálogo y avisa si no es la de la lista', async () => {
+    mockedLists.mockResolvedValue([{ ...list, currency: 'EUR' }]);
+    render_();
+    const table = await screen.findByRole('table', { name: 'Precios de la lista' });
+    const rows = within(table).getAllByRole('row');
+    expect(rows[1]).toHaveTextContent(/USD\s80\.000,00/);
+    expect(rows[1]).toHaveTextContent(/EUR\s60\.000,00/);
+    expect(await screen.findByTestId('catalog-other-currency-note')).toHaveTextContent(
+      'El precio de catálogo está en USD: es de referencia y no se convierte a EUR.',
+    );
+  });
+
+  it('DX-502-ter: misma moneda, sin aviso', async () => {
+    render_();
+    const table = await screen.findByRole('table', { name: 'Precios de la lista' });
+    expect(within(table).getAllByRole('row')[1]).toHaveTextContent(/USD\s80\.000,00/);
+    expect(screen.queryByTestId('catalog-other-currency-note')).not.toBeInTheDocument();
+  });
+
+  it('DX-502-ter: sin moneda de catálogo (null) el precio de catálogo no lleva moneda inventada', async () => {
+    mockedCatalog.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 1, catalogCurrency: null });
+    render_();
+    const table = await screen.findByRole('table', { name: 'Precios de la lista' });
+    await waitFor(() => expect(mockedCatalog).toHaveBeenCalled());
+    expect(within(table).getAllByRole('row')[1]).not.toHaveTextContent(/80\.000/);
+    expect(within(table).getAllByRole('row')[1]).toHaveTextContent(/USD\s60\.000,00/);
+    expect(screen.queryByTestId('catalog-other-currency-note')).not.toBeInTheDocument();
   });
 
   it('una lista que no existe lo dice y ofrece volver', async () => {
@@ -220,7 +257,7 @@ describe('PriceListItemsView (DX-105)', () => {
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Quitar precio' }));
     expect(await within(dialog).findByText('No pudimos quitar el precio.')).toBeInTheDocument();
-    expect(within(table).getAllByRole('row', { hidden: true })[1]).toHaveTextContent(/60\.000/);
+    expect(within(table).getAllByRole('row', { hidden: true })[1]).toHaveTextContent(/USD\s60\.000,00/);
   });
 
   it('busca con debounce desde la página 1 y pagina', async () => {

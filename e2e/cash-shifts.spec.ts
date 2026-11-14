@@ -192,7 +192,8 @@ for (const viewport of [
     const narrow = viewport.width === 390;
     const listing = page.getByRole(narrow ? 'list' : 'table', { name: 'Turnos de caja' });
     const row = listing.getByRole(narrow ? 'listitem' : 'row').filter({ hasText: 'Cerrada' }).first();
-    await expect(row).toContainText(figure(-1_000));
+    // DX-522: el listado de turnos pinta con el formato de la sede y el código.
+    await expect(row).toContainText('-1.000,00');
     if (viewport.width === 390) await expectNoHorizontalScroll(page);
 
     // Ficha del turno: inmutable (sin «Cerrar caja»), con el informe.

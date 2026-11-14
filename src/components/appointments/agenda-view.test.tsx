@@ -1,9 +1,12 @@
 import type { ReactElement } from 'react';
-import { act, configure, render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
+import { useAuthStore } from '@/lib/auth/auth-store';
+import { act, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readDate, readTime, typeDate, typeTime } from './date-segments-for-tests';
 import { AgendaView } from './agenda-view';
 import { Toaster } from '@/components/errors/toaster';
+import { toast } from 'sonner';
 import { ApiError } from '@/lib/api/client';
 import { wallDayRange, wallWeekRange } from '@/lib/time/wall-clock';
 import { caracasSede, utcSede } from '@/lib/test/sede-clock';
@@ -12,7 +15,7 @@ import { listStaff } from '@/lib/appointments/staff-api';
 import { listPatients } from '@/lib/patients/patients-api';
 import { createConfirmationLink } from '@/lib/appointments/confirmations-api';
 import { getAppointmentReminders } from '@/lib/reminders/reminders-api';
-import { getAppointmentPostOp } from '@/lib/postop/postop-api';
+import { deliverPostOp, getAppointmentPostOp } from '@/lib/postop/postop-api';
 import { deleteScheduleBlock, listScheduleBlocks } from '@/lib/appointments/schedule-blocks-api';
 import { listWaitlist, scheduleFromWaitlist } from '@/lib/appointments/waitlist-api';
 import { listLocations } from '@/lib/locations/locations-api';
@@ -22,6 +25,7 @@ import { getRoster } from '@/lib/locations/provider-schedule-api';
 import { setActiveLocationId } from '@/lib/locations/location-store';
 import { listChairs } from '@/lib/chairs/chairs-api';
 import { notifyError } from '@/components/errors/notify';
+import { PUBLIC_REGIONAL_VE } from '@/lib/test/document-regional';
 
 // Los campos de fecha y hora por segmentos (react-aria) hacen el formulario más
 // pesado en jsdom: con la máquina cargada, 1 s de espera de `findBy` se quedaba corto
@@ -173,6 +177,7 @@ const patientsPage = {
     {
       id: 'pat-1',
       tenantId: 't1',
+      patientCode: '1179',
       firstName: 'María',
       lastName: 'López',
       docType: 'NATIONAL_ID' as const,
@@ -196,6 +201,7 @@ const patientsPage = {
 function appointment(overrides: Partial<import('@/lib/appointments/appointments-api').Appointment> & { id: string }) {
   return {
     tenantId: 't1',
+    patientCode: '1202',
     patientId: 'pat-1',
     patientFirstName: null,
     patientLastName: null,
@@ -304,6 +310,7 @@ describe('AgendaView', () => {
     const { unmount } = await renderAgenda(<AgendaView token={tokenFor('DENTIST')} />);
     expect(screen.queryByRole('button', { name: 'Agenda de contingencia' })).not.toBeInTheDocument();
     unmount();
+    clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
     await renderAgenda(<AgendaView token={tokenFor('RECEPTION')} />);
     await user.click(screen.getByRole('button', { name: 'Agenda de contingencia' }));
@@ -460,6 +467,170 @@ describe('AgendaView', () => {
       expect(within(table).getByRole('combobox')).toHaveTextContent('Confirmada'),
     );
     expect(screen.getByRole('table', { name: /agenda del día/i })).toBe(table);
+  });
+
+  describe('urgencia en sobrecupo (DX-509)', () => {
+    async function openList(user: ReturnType<typeof userEvent.setup>) {
+      await renderAgenda(<AgendaView token="tok" />);
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await user.click(screen.getByRole('button', { name: /^lista$/i }));
+      return screen.findByRole('table', { name: /agenda del día/i });
+    }
+
+    it('el distintivo «Sobrecupo» sale solo mientras lo es (no en una normal ni en una cancelada)', async () => {
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListAppointments.mockResolvedValue([
+        appointment({ id: 'urg', patientFirstName: 'Úrsula', patientLastName: 'Pérez', overbooked: true, status: 'ARRIVED' }),
+        appointment({
+          id: 'normal',
+          patientFirstName: 'Berta',
+          patientLastName: 'Gil',
+          start: '2026-03-10T10:00:00.000Z',
+          end: '2026-03-10T10:30:00.000Z',
+          overbooked: false,
+        }),
+        appointment({
+          id: 'cancelada',
+          patientFirstName: 'Carla',
+          patientLastName: 'Ruiz',
+          start: '2026-03-10T11:00:00.000Z',
+          end: '2026-03-10T11:30:00.000Z',
+          overbooked: true,
+          status: 'CANCELLED',
+        }),
+      ]);
+      const user = userEvent.setup();
+      const table = await openList(user);
+      const rows = within(table).getAllByRole('row').slice(1);
+      const chipIn = (name: RegExp) =>
+        within(rows.find((r) => name.test(r.textContent ?? ''))!).queryByTestId('overbooked-chip');
+      expect(chipIn(/Úrsula/)).toHaveTextContent('Sobrecupo');
+      expect(chipIn(/Berta/)).toBeNull();
+      expect(chipIn(/Carla/)).toBeNull();
+    });
+
+    it('reactivar con su hora ocupada: pregunta y «Mantener en sobrecupo» reenvía con keepOverbooked', async () => {
+      mockedListStaff.mockResolvedValue(staff);
+      const cancelled = appointment({ id: 'urg', overbooked: true, status: 'CANCELLED', cancelledByKind: 'STAFF_FOR_PATIENT' });
+      mockedListAppointments.mockResolvedValue([cancelled]);
+      mockedUpdateAppointment
+        .mockRejectedValueOnce(
+          new ApiError(
+            409,
+            'Esta urgencia se atendió en sobrecupo y su hora ya la ocupa otra cita del profesional. Muévela a otra hora o mantenla como sobrecupo.',
+            { code: 'OVERBOOK_SLOT_TAKEN' },
+          ),
+        )
+        .mockResolvedValueOnce({ ...cancelled, status: 'SCHEDULED' });
+      const user = userEvent.setup();
+      const table = await openList(user);
+      await pickStatus(user, within(table).getByRole('combobox'), 'Agendada');
+
+      const dialog = await screen.findByRole('dialog', { name: 'Su hora ya está ocupada' });
+      expect(dialog).toHaveTextContent('mantenla como sobrecupo');
+      expect(mockedUpdateAppointment).toHaveBeenCalledTimes(1);
+      await user.click(within(dialog).getByRole('button', { name: 'Mantener en sobrecupo' }));
+      await waitFor(() =>
+        expect(mockedUpdateAppointment).toHaveBeenLastCalledWith('tok', 'urg', {
+          status: 'SCHEDULED',
+          keepOverbooked: true,
+        }),
+      );
+      await waitFor(() =>
+        expect(screen.queryByRole('dialog', { name: 'Su hora ya está ocupada' })).not.toBeInTheDocument(),
+      );
+    });
+  });
+
+  describe('reactivar con las reglas de mover (DX-267-bis)', () => {
+    const OFF_SCHEDULE =
+      'Fuera del horario del profesional: no trabaja en Sede principal el martes 10 de marzo.';
+
+    it('fuera del horario del profesional: la cita se reactiva y sale el aviso', async () => {
+      mockedListStaff.mockResolvedValue(staff);
+      const cancelled = appointment({ id: 'apt-c', status: 'CANCELLED', cancelledByKind: 'STAFF_FOR_PATIENT' });
+      mockedListAppointments.mockResolvedValue([cancelled]);
+      mockedUpdateAppointment.mockResolvedValueOnce({
+        ...cancelled,
+        status: 'SCHEDULED',
+        warnings: [OFF_SCHEDULE],
+        warningCodes: ['PROVIDER_OFF_SCHEDULE'],
+      } as Awaited<ReturnType<typeof updateAppointment>>);
+      const user = userEvent.setup();
+      await renderAgenda(
+        <>
+          <AgendaView token="tok" />
+          <Toaster />
+        </>,
+      );
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await user.click(screen.getByRole('button', { name: /^lista$/i }));
+      const table = await screen.findByRole('table', { name: /agenda del día/i });
+      await pickStatus(user, within(table).getByRole('combobox'), 'Agendada');
+
+      expect(await screen.findByText('Cita fuera del horario del profesional')).toBeInTheDocument();
+      expect(screen.getByText(OFF_SCHEDULE)).toBeInTheDocument();
+      expect(mockedUpdateAppointment).toHaveBeenCalledWith('tok', 'apt-c', { status: 'SCHEDULED' });
+    });
+
+    it('mantenerla en sobrecupo al reactivar también enseña los avisos', async () => {
+      mockedListStaff.mockResolvedValue(staff);
+      const cancelled = appointment({ id: 'urg', overbooked: true, status: 'CANCELLED', cancelledByKind: 'STAFF_FOR_PATIENT' });
+      mockedListAppointments.mockResolvedValue([cancelled]);
+      mockedUpdateAppointment
+        .mockRejectedValueOnce(
+          new ApiError(409, 'Su hora ya la ocupa otra cita del profesional.', { code: 'OVERBOOK_SLOT_TAKEN' }),
+        )
+        .mockResolvedValueOnce({
+          ...cancelled,
+          status: 'SCHEDULED',
+          warnings: [OFF_SCHEDULE],
+          warningCodes: ['PROVIDER_OFF_SCHEDULE'],
+        } as Awaited<ReturnType<typeof updateAppointment>>);
+      const user = userEvent.setup();
+      await renderAgenda(
+        <>
+          <AgendaView token="tok" />
+          <Toaster />
+        </>,
+      );
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await user.click(screen.getByRole('button', { name: /^lista$/i }));
+      const table = await screen.findByRole('table', { name: /agenda del día/i });
+      await pickStatus(user, within(table).getByRole('combobox'), 'Agendada');
+      const dialog = await screen.findByRole('dialog', { name: 'Su hora ya está ocupada' });
+      await user.click(within(dialog).getByRole('button', { name: 'Mantener en sobrecupo' }));
+
+      expect(await screen.findByText('Cita fuera del horario del profesional')).toBeInTheDocument();
+      expect(screen.getByText(OFF_SCHEDULE)).toBeInTheDocument();
+      expect(mockedUpdateAppointment).toHaveBeenLastCalledWith('tok', 'urg', {
+        status: 'SCHEDULED',
+        keepOverbooked: true,
+      });
+    });
+
+    it('una cita que ya pasó: el mensaje del servidor en el detalle, sin «Reintentar»', async () => {
+      const tokenFor = (role: string) =>
+        `h.${btoa(JSON.stringify({ sub: 'staff-1', tenantId: 't1', role }))}.s`;
+      const cancelled = appointment({ id: 'apt-p', status: 'CANCELLED', cancelledByKind: 'STAFF_FOR_PATIENT' });
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListAppointments.mockResolvedValue([cancelled]);
+      mockedUpdateAppointment.mockRejectedValueOnce(
+        new ApiError(409, 'La cita ya pasó: agenda una nueva', { code: 'APPOINTMENT_PAST' }),
+      );
+      const user = userEvent.setup();
+      await renderAgenda(<AgendaView token={tokenFor('RECEPTION')} />);
+      await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+      await goToDate(user, '2026-03-11');
+      await user.click(screen.getByRole('button', { name: /^semana$/i }));
+      await screen.findByLabelText(/agenda de la semana/i);
+      await user.click(screen.getByTestId('week-grid-appointment'));
+      await pickStatus(user, await screen.findByRole('combobox', { name: /^Estado: / }), 'Agendada');
+
+      const dialog = screen.getByRole('dialog');
+      expect(await within(dialog).findByText('La cita ya pasó: agenda una nueva')).toBeInTheDocument();
+      expect(within(dialog).queryByRole('button', { name: /reintentar/i })).not.toBeInTheDocument();
+    });
   });
 
   it('keeps the row\'s status select disabled until the in-place refresh actually resolves, not just until the PATCH settles (review fix)', async () => {
@@ -637,7 +808,7 @@ describe('AgendaView', () => {
     });
   });
 
-  it('defaults to Mes (calendar) view; switching to Semana fetches the week range and renders WeekAgenda', async () => {
+  it('defaults to Mes (calendar) view; switching to Semana fetches the week range and renders WeekTimeGrid', async () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([]);
     const user = userEvent.setup();
@@ -733,8 +904,8 @@ describe('AgendaView', () => {
     expect(agendaDate()).toBe('2026-03-09');
     // Back in Día view (columnas por profesional, DX-121) — with no
     // appointments mocked for this test, each column's empty state confirms
-    // it's the one rendering (WeekAgenda has no such copy).
-    expect(await screen.findAllByText('Sin citas hoy')).toHaveLength(staff.length);
+    // it's the one rendering (the week grid has no such copy).
+    expect(await screen.findAllByText('Sin citas este día')).toHaveLength(staff.length);
     expect(screen.queryByLabelText(/agenda de la semana/i)).not.toBeInTheDocument();
   });
 
@@ -763,6 +934,8 @@ describe('AgendaView', () => {
 
   it('DX-247: al abrir la cita de un paciente con profilaxis antibiótica el detalle avisa «Requiere premedicación»', async () => {
     mockedListStaff.mockResolvedValue(staff);
+    // La nota de anamnesis lee el formato de la sede con la sesión (DX-354b).
+    useAuthStore.setState({ accessToken: 'tok' });
     mockedListAppointments.mockResolvedValue([
       {
         ...apt1,
@@ -785,9 +958,12 @@ describe('AgendaView', () => {
 
     await user.click(screen.getByTestId('week-grid-appointment'));
     expect(await screen.findByTestId('premedication-notice')).toHaveTextContent('Requiere premedicación');
-    expect(screen.getByTestId('appointment-medical-alerts')).toHaveTextContent(
-      'Anamnesis caducada · última revisión 10/01/2025',
+    await waitFor(() =>
+      expect(screen.getByTestId('appointment-medical-alerts')).toHaveTextContent(
+        'Anamnesis caducada · última revisión 10/01/2025',
+      ),
     );
+    useAuthStore.setState({ accessToken: null });
   });
 
   it('week mode: the detail panel\'s status select reflects the server-confirmed status, not an optimistic one — a failed PATCH leaves it showing the real (unchanged) status', async () => {
@@ -868,7 +1044,7 @@ describe('AgendaView', () => {
     await user.click(screen.getByRole('button', { name: /^día$/i }));
     await goToDate(user, day);
 
-    const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
     await user.click(detail);
 
     expect(await screen.findByTestId('coverage-detail-line')).toHaveTextContent(expected);
@@ -896,7 +1072,7 @@ describe('AgendaView', () => {
     await user.click(screen.getByRole('button', { name: /^día$/i }));
     await goToDate(user, day);
 
-    const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
     await user.click(detail);
 
     await screen.findByLabelText(/estado/i);
@@ -916,7 +1092,7 @@ describe('AgendaView', () => {
     mockedCreateConfirmationLink.mockResolvedValue({
       url: 'http://demo.localhost:3001/confirmar/tok',
       expiresAt: start,
-      whatsappPhone: '573105550101',
+      whatsappPhone: '584145550101',
       appointment: {
         patientFirstName: 'María',
         start,
@@ -924,6 +1100,10 @@ describe('AgendaView', () => {
         providerName: 'Dra. Ana Ríos',
         locationName: 'Sede principal',
         locationAddress: null,
+        wantsEarlier: false,
+        earlierWindow: null,
+        earlierAllowed: true,
+        ...PUBLIC_REGIONAL_VE,
       },
     });
     const user = userEvent.setup();
@@ -933,7 +1113,7 @@ describe('AgendaView', () => {
     await user.click(screen.getByRole('button', { name: /^día$/i }));
     await goToDate(user, day);
 
-    const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
     await user.click(detail);
 
     // Tras generar, el refresh trae la cita ya marcada como pendiente.
@@ -948,7 +1128,7 @@ describe('AgendaView', () => {
     );
     expect(screen.getByRole('link', { name: /abrir whatsapp/i })).toHaveAttribute(
       'href',
-      expect.stringMatching(/^https:\/\/wa\.me\/573105550101\?text=/),
+      expect.stringMatching(/^https:\/\/wa\.me\/584145550101\?text=/),
     );
     await waitFor(() =>
       expect(screen.getAllByTestId('appointment-confirmation-indicator').length).toBeGreaterThan(0),
@@ -967,8 +1147,9 @@ describe('AgendaView', () => {
   // DX-222: «Indicaciones» en el detalle de la cita, para cualquier rol de la clínica.
   it('el detalle de la cita monta el panel «Indicaciones» de esa cita', async () => {
     const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'RECEPTION' }))}.s`;
-    const future = new Date(Date.now() + 3 * 24 * 3600_000);
-    const day = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-${String(future.getDate()).padStart(2, '0')}`;
+    // DX-250: solo se ofrecen en una cita de hoy o de un día pasado.
+    const past = new Date(Date.now() - 3 * 24 * 3600_000);
+    const day = `${past.getFullYear()}-${String(past.getMonth() + 1).padStart(2, '0')}-${String(past.getDate()).padStart(2, '0')}`;
     const start = new Date(`${day}T09:00:00`).toISOString();
     const end = new Date(`${day}T09:30:00`).toISOString();
     mockedListStaff.mockResolvedValue(staff);
@@ -982,7 +1163,7 @@ describe('AgendaView', () => {
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
     await user.click(screen.getByRole('button', { name: /^día$/i }));
     await goToDate(user, day);
-    const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
     await user.click(detail);
 
     expect(await screen.findByRole('region', { name: 'Indicaciones' })).toBeInTheDocument();
@@ -994,6 +1175,71 @@ describe('AgendaView', () => {
     );
     expect(duplicateKeys).toEqual([]);
     consoleError.mockRestore();
+  });
+
+  // DX-250: una cita de un día que aún no llega: ni se monta el panel ni se pide su lista.
+  it('una cita SCHEDULED de un día posterior: el detalle no monta «Indicaciones» ni pide GET …/post-op-instructions', async () => {
+    const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'RECEPTION' }))}.s`;
+    const when = new Date(Date.now() + 3 * 24 * 3600_000);
+    const day = `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, '0')}-${String(when.getDate()).padStart(2, '0')}`;
+    const start = new Date(`${day}T09:00:00`).toISOString();
+    const end = new Date(`${day}T09:30:00`).toISOString();
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockResolvedValue([appointment({ id: 'apt-x', start, end, status: 'SCHEDULED' })]);
+    (getAppointmentPostOp as jest.Mock).mockClear();
+    const user = userEvent.setup();
+
+    await renderAgenda(<AgendaView token={receptionToken} />);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await goToDate(user, day);
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
+    await user.click(detail);
+
+    expect(await screen.findByRole('heading', { name: 'Recordatorios por email' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Indicaciones' })).not.toBeInTheDocument();
+    expect(getAppointmentPostOp).not.toHaveBeenCalled();
+  });
+
+  // DX-250 (L5): cancelada o no-show — lo ya entregado se sigue viendo, sin acciones.
+  it.each(['CANCELLED', 'NO_SHOW'] as const)('una cita %s con entregas anteriores: las lista sin botones de entrega', async (status) => {
+    const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'RECEPTION' }))}.s`;
+    const past = new Date(Date.now() - 3 * 24 * 3600_000);
+    const day = `${past.getFullYear()}-${String(past.getMonth() + 1).padStart(2, '0')}-${String(past.getDate()).padStart(2, '0')}`;
+    const start = new Date(`${day}T09:00:00`).toISOString();
+    const end = new Date(`${day}T09:30:00`).toISOString();
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockResolvedValue([appointment({ id: 'apt-x', start, end, status })]);
+    (getAppointmentPostOp as jest.Mock).mockResolvedValueOnce({
+      patientId: 'p1',
+      suggested: [],
+      others: [],
+      email: { allowed: true, reason: null, toMasked: 'a***@correo.com', toResponsible: false },
+      whatsapp: { phone: null, reason: null },
+      locationPhone: null,
+      deliveries: [
+        {
+          id: 'del-1', patientId: 'p1', appointmentId: 'apt-x', templateId: 't', templateCode: 'EXO',
+          templateTitle: 'Tras una extracción', templateVersion: 1, channel: 'PRINT',
+          deliveredAt: '2026-03-01T10:00:00.000Z', deliveredByName: 'Laura', recipientMasked: null,
+          sentToResponsible: false, firstOpenedAt: null, linkExpiresAt: null, emailStatus: null,
+        },
+      ],
+    });
+    const user = userEvent.setup();
+
+    await renderAgenda(<AgendaView token={receptionToken} />);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await goToDate(user, day);
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
+    await user.click(detail);
+
+    const region = await screen.findByRole('region', { name: 'Indicaciones' });
+    expect(within(region).getByRole('list', { name: 'Entregadas en esta cita' })).toHaveTextContent('EXO v1');
+    expect(within(region).queryByRole('button')).not.toBeInTheDocument();
+    expect(within(region).queryByRole('radio')).not.toBeInTheDocument();
+    expect(deliverPostOp).not.toHaveBeenCalled();
   });
 
   // DX-121: vista Día en columnas por profesional.
@@ -1146,7 +1392,7 @@ describe('AgendaView', () => {
           from: params.weekStart,
           to: params.weekStart,
           locationId: 'loc-1',
-          locations: [{ id: 'loc-1', name: 'Sede principal', timeZone: 'America/Bogota' }],
+          locations: [{ id: 'loc-1', name: 'Sede principal', timeZone: 'America/Caracas' }],
           providers: [
             {
               providerId: 'staff-1',
@@ -1211,6 +1457,7 @@ describe('AgendaView', () => {
     const lunch = {
       id: 'b-1',
       tenantId: 't1',
+      patientCode: '2456',
       providerId: null,
       locationId: null,
       start: new Date(`${today}T13:00:00`).toISOString(),
@@ -1265,6 +1512,7 @@ describe('AgendaView', () => {
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
       expect(screen.queryByRole('button', { name: 'Bloquear horario' })).not.toBeInTheDocument();
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
       const user = userEvent.setup();
       await renderAgenda(<AgendaView token={tokenFor('RECEPTION')} />);
@@ -1436,7 +1684,7 @@ describe('AgendaView', () => {
     const FIXED_NOW = new Date(2026, 5, 15, 12, 0, 0);
     const today = '2026-06-15';
     const hours = {
-      timezone: 'America/Bogota',
+      timezone: 'America/Caracas',
       ranges: [{ weekday: FIXED_NOW.getDay(), startMinute: 14 * 60, endMinute: 18 * 60 }],
     };
     const sedes = [utcSede({ id: 'loc-1', name: 'Sede principal' }), utcSede({ id: 'loc-2', name: 'Sede Norte' })];
@@ -1486,10 +1734,11 @@ describe('AgendaView', () => {
       mockedCandidates.mockImplementation((_t, slot) =>
         Promise.resolve({
           ...slot,
-          timeZone: 'America/Bogota',
+          timeZone: 'America/Caracas',
           providerOffSchedule: false,
           linkOffers: { pending: 0, total: 0, acceptedBy: null, expired: false },
           linkOfferOpen: true,
+          linkOfferClosedMessage: null,
           offerCap: 2,
           items: [candidate],
           truncated: false,
@@ -1508,7 +1757,7 @@ describe('AgendaView', () => {
       );
       await user.click(screen.getByRole('button', { name: /^día$/i }));
       const [gap] = await screen.findAllByRole('button', {
-        name: /^Ocupar el hueco libre de 14:00–18:00 · Dra\. Ana Ríos$/,
+        name: /^Hueco libre · 14:00–18:00 · Ocupar con Dra\. Ana Ríos$/,
       });
       await user.click(gap);
 
@@ -1545,7 +1794,8 @@ describe('AgendaView', () => {
         providerOffSchedule: false,
         linkOffers: { pending: 0, total: 0, acceptedBy: null, expired: false },
         linkOfferOpen: true,
-        timeZone: 'America/Bogota',
+        linkOfferClosedMessage: null,
+        timeZone: 'America/Caracas',
         offerCap: 2,
         items: [],
         truncated: false,
@@ -1582,6 +1832,7 @@ describe('AgendaView', () => {
       const gaps = await screen.findAllByTestId('free-gap');
       expect(gaps.every((g) => /Dr\. Luis Gómez$/.test(g.getAttribute('aria-label') ?? ''))).toBe(true);
       unmount();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
       await renderAgenda(<AgendaView token={tokenFor('ASSISTANT')} />);
       await user.click(screen.getByRole('button', { name: /^día$/i }));
@@ -1668,6 +1919,7 @@ describe('AgendaView con el reloj de la sede (DX-378)', () => {
     const token = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'RECEPTION' }))}.s`;
     const base = {
       tenantId: 't1',
+      patientCode: '2913',
       locationId: 'loc-1',
       defaultProviderId: null,
       createdAt: '2026-01-01T00:00:00.000Z',
@@ -1742,6 +1994,203 @@ describe('AgendaView con el reloj de la sede (DX-378)', () => {
       const { onRetry } = (notifyError as jest.Mock).mock.calls.at(-1)[1] as { onRetry: () => void };
       act(() => onRetry());
       expect(await screen.findByRole('region', { name: 'Agenda del día por sillón' })).toBeInTheDocument();
+    });
+
+    describe('arrastre entre sillones (DX-479)', () => {
+      // jsdom no trae PointerEvent (ver day-columns.test.tsx).
+      if (typeof window.PointerEvent === 'undefined') {
+        class PointerEventPolyfill extends MouseEvent {
+          pointerId: number;
+          pointerType: string;
+          constructor(type: string, init: PointerEventInit = {}) {
+            super(type, init);
+            this.pointerId = init.pointerId ?? 0;
+            this.pointerType = init.pointerType ?? '';
+          }
+        }
+        window.PointerEvent = PointerEventPolyfill as unknown as typeof PointerEvent;
+      }
+      // «Sillón 2» tiene al Dr. Luis Gómez por defecto; la cita es de la Dra. Ana Ríos en «Sillón 1».
+      const chairsWithDefault = [
+        { ...base, id: 'ch-1', name: 'Sillón 1', sortOrder: 0, active: true },
+        { ...base, id: 'ch-2', name: 'Sillón 2', sortOrder: 1, active: true, defaultProviderId: 'staff-2' },
+      ];
+      const seated = appointment({
+        id: 'apt-s',
+        providerId: 'staff-1',
+        chairId: 'ch-1',
+        chair: { id: 'ch-1', name: 'Sillón 1', active: true },
+      });
+      const columnIds = ['ch-1', 'ch-2', 'sin-sillon'];
+      let rectSpy: jest.SpyInstance;
+
+      beforeEach(() => {
+        window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+        window.localStorage.setItem('dentalix.agenda.columnsBy.u1', 'chairs');
+        mockedListStaff.mockResolvedValue(staff);
+        mockedListChairs.mockResolvedValue(chairsWithDefault);
+        mockedListAppointments.mockResolvedValue([seated]);
+        mockedUpdateAppointment.mockResolvedValue({ ...seated, notes: null } as Awaited<ReturnType<typeof updateAppointment>>);
+        // Cada columna ocupa 200 px desde x = 100; las tarjetas no maquetan.
+        rectSpy = jest
+          .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+          .mockImplementation(function (this: HTMLElement) {
+            const index = columnIds.indexOf(this.dataset.chairColumn ?? '');
+            return index >= 0
+              ? ({ left: 100 + index * 200, right: 300 + index * 200, top: 0, bottom: 4000 } as DOMRect)
+              : ({ left: 0, right: 0, top: 0, bottom: 0 } as DOMRect);
+          });
+      });
+      afterEach(() => {
+        rectSpy.mockRestore();
+        mockedUpdateAppointment.mockReset();
+      });
+
+      /** Arrastra la única tarjeta a la columna `columnIndex`, 160 px más abajo (otra hora). */
+      async function dropOn(columnIndex: number) {
+        await openDay();
+        const card = await screen.findByTestId('day-column-appointment');
+        fireEvent.pointerDown(card, { pointerId: 21, pointerType: 'mouse', button: 0, clientX: 150, clientY: 0 });
+        fireEvent.pointerMove(window, { pointerId: 21, clientX: 150 + columnIndex * 200, clientY: 160 });
+        fireEvent.pointerUp(window, { pointerId: 21, clientX: 150 + columnIndex * 200, clientY: 160 });
+      }
+
+      it('soltar en un sillón con otro profesional por defecto pregunta; «Mantener» (con el foco) mueve sin cambiarlo', async () => {
+        const user = userEvent.setup();
+        await dropOn(1);
+        const dialog = await screen.findByRole('dialog', { name: '¿Asignar a Dr. Luis Gómez?' });
+        expect(dialog).toHaveAccessibleDescription(
+          '«Sillón 2» tiene a Dr. Luis Gómez como profesional por defecto. La cita sigue con Dra. Ana Ríos salvo que la asignes.',
+        );
+        // Nada se mandó todavía: se pregunta ANTES de mover.
+        expect(mockedUpdateAppointment).not.toHaveBeenCalled();
+        const keep = within(dialog).getByRole('button', { name: 'Mantener a Dra. Ana Ríos' });
+        await waitFor(() => expect(keep).toHaveFocus());
+        await user.click(keep);
+        await waitFor(() =>
+          expect(mockedUpdateAppointment).toHaveBeenCalledWith(
+            token,
+            'apt-s',
+            expect.objectContaining({ chairId: 'ch-2', providerId: 'staff-1', start: expect.any(String) }),
+          ),
+        );
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      });
+
+      it('«Asignar a X» mueve la cita con el profesional del sillón', async () => {
+        const user = userEvent.setup();
+        await dropOn(1);
+        await user.click(await screen.findByRole('button', { name: 'Asignar a Dr. Luis Gómez' }));
+        await waitFor(() =>
+          expect(mockedUpdateAppointment).toHaveBeenCalledWith(
+            token,
+            'apt-s',
+            expect.objectContaining({ chairId: 'ch-2', providerId: 'staff-2', start: expect.any(String), end: expect.any(String) }),
+          ),
+        );
+      });
+
+      it('Cancelar no mueve nada: la tarjeta sigue en su sillón', async () => {
+        const user = userEvent.setup();
+        await dropOn(1);
+        await user.click(await screen.findByRole('button', { name: 'Cancelar' }));
+        expect(mockedUpdateAppointment).not.toHaveBeenCalled();
+        expect(screen.getByTestId('day-column-appointment').closest('[data-chair-column]')).toHaveAttribute(
+          'data-chair-column',
+          'ch-1',
+        );
+      });
+
+      it('a «Sin sillón» no hay nada que preguntar: el PATCH sale con chairId null y se anuncia', async () => {
+        const announced = jest.spyOn(toast, 'success');
+        await dropOn(2);
+        await waitFor(() =>
+          expect(mockedUpdateAppointment).toHaveBeenCalledWith(
+            token,
+            'apt-s',
+            expect.objectContaining({ chairId: null, providerId: 'staff-1' }),
+          ),
+        );
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        await waitFor(() => expect(announced).toHaveBeenCalledWith(expect.stringMatching(/^Cita movida a Sin sillón, .+\.$/)));
+        announced.mockRestore();
+      });
+    });
+
+    // DX-480: el clic en un hueco de la columna de un sillón precarga el
+    // sillón y su profesional por defecto, y los dos se pueden cambiar.
+    describe('clic en un hueco (DX-480)', () => {
+      // «Sillón 2» tiene al Dr. Luis Gómez por defecto; «Sillón 1», a nadie.
+      const chairsWithDefault = [
+        { ...base, id: 'ch-1', name: 'Sillón 1', sortOrder: 0, active: true },
+        { ...base, id: 'ch-2', name: 'Sillón 2', sortOrder: 1, active: true, defaultProviderId: 'staff-2' },
+      ];
+      // Una cita en cada sillón: el clic es en el hueco libre de la columna,
+      // no en «Nueva cita» de una columna vacía.
+      const seated = [
+        appointment({ id: 'apt-1', chairId: 'ch-1', chair: { id: 'ch-1', name: 'Sillón 1', active: true } }),
+        appointment({ id: 'apt-2', chairId: 'ch-2', chair: { id: 'ch-2', name: 'Sillón 2', active: true } }),
+      ];
+
+      beforeEach(() => {
+        window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+        mockedListStaff.mockResolvedValue(staff);
+        mockedListChairs.mockResolvedValue(chairsWithDefault);
+        mockedListAppointments.mockResolvedValue(seated);
+      });
+
+      /** Abre la vista Día (por sillón o por profesional) y hace clic en el hueco de la columna `columnId`. */
+      async function clickSlot(by: 'chairs' | 'providers', columnId: string) {
+        if (by === 'chairs') window.localStorage.setItem('dentalix.agenda.columnsBy.u1', 'chairs');
+        const user = await openDay();
+        if (by === 'chairs') await screen.findByRole('region', { name: 'Agenda del día por sillón' });
+        const selector = by === 'chairs' ? `[data-chair-column="${columnId}"]` : `[data-provider-id="${columnId}"]`;
+        const column = await waitFor(() => {
+          const el = document.querySelector<HTMLElement>(selector);
+          expect(el).not.toBeNull();
+          return el!;
+        });
+        fireEvent.click(column, { clientY: 0 });
+        const dialog = await screen.findByRole('dialog', { name: 'Nueva cita' });
+        // El formulario ya cargó los sillones y el personal.
+        await within(dialog).findByRole('option', { name: 'Sillón 2' });
+        await within(dialog).findByRole('option', { name: 'Dr. Luis Gómez' });
+        return { user, dialog };
+      }
+
+      it('en un sillón con profesional por defecto, el formulario abre con el sillón, su profesional y la hora', async () => {
+        const { dialog } = await clickSlot('chairs', 'ch-2');
+        expect(within(dialog).getByLabelText('Sillón (opcional)')).toHaveValue('ch-2');
+        await waitFor(() => expect(within(dialog).getByLabelText(/^profesional$/i)).toHaveValue('staff-2'));
+        expect(readTime(/hora de inicio/i, dialog)).toMatch(/^\d{2}:\d{2}$/);
+      });
+
+      it('los dos siguen editables, y cambiar el sillón no cambia solo el profesional elegido', async () => {
+        const { user, dialog } = await clickSlot('chairs', 'ch-2');
+        const provider = within(dialog).getByLabelText(/^profesional$/i);
+        const chair = within(dialog).getByLabelText('Sillón (opcional)');
+        await waitFor(() => expect(provider).toHaveValue('staff-2'));
+        await user.selectOptions(provider, 'staff-1');
+        expect(provider).toHaveValue('staff-1');
+        await user.selectOptions(chair, 'ch-1');
+        expect(chair).toHaveValue('ch-1');
+        expect(provider).toHaveValue('staff-1');
+        // Volver al sillón con profesional por defecto tampoco pisa la elección.
+        await user.selectOptions(chair, 'ch-2');
+        expect(provider).toHaveValue('staff-1');
+      });
+
+      it('en un sillón sin profesional por defecto, trae el sillón y el profesional queda por elegir, como antes', async () => {
+        const { dialog } = await clickSlot('chairs', 'ch-1');
+        expect(within(dialog).getByLabelText('Sillón (opcional)')).toHaveValue('ch-1');
+        expect(within(dialog).getByLabelText(/^profesional$/i)).toHaveValue('');
+      });
+
+      it('en la columna de un profesional no cambia nada: ese profesional y sin sillón', async () => {
+        const { dialog } = await clickSlot('providers', 'staff-1');
+        expect(within(dialog).getByLabelText(/^profesional$/i)).toHaveValue('staff-1');
+        expect(within(dialog).getByLabelText('Sillón (opcional)')).toHaveValue('');
+      });
     });
 
     it('la preferencia guardada abre la vista por sillón', async () => {

@@ -14,6 +14,7 @@ import { InlineError } from '@/components/errors/inline-error';
 import { ConfirmationBadge, STATUS_LABELS } from './appointment-display';
 import type { SedeClock } from '@/lib/locations/sede-clock';
 import { sedeConfigErrorCopy } from '@/components/locations/sede-config-error';
+import { ExternalLink } from '@/components/shared/external-link';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -154,13 +155,9 @@ export function ConfirmationLinkPanel({ token, appointment, clock, onLinkCreated
             </Button>
             {link.whatsappPhone && clock ? (
               <Button asChild className="w-full sm:w-auto">
-                <a
-                  href={whatsAppUrl(link.whatsappPhone, confirmationMessage({ ...link, clock }))}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+                <ExternalLink href={whatsAppUrl(link.whatsappPhone, confirmationMessage({ ...link, clock }))}>
                   <MessageCircle aria-hidden /> {copy.whatsapp}
-                </a>
+                </ExternalLink>
               </Button>
             ) : (
               <Button type="button" disabled aria-describedby={noPhoneId} className="w-full sm:w-auto">

@@ -30,12 +30,14 @@ import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 import { ScheduleBlockDialog } from '@/components/appointments/schedule-block-dialog';
 import { StaffLocationsCard } from '@/components/staff/staff-locations-card';
+import { StaffMfaReset } from '@/components/staff/staff-mfa-reset';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import {
   blocksOwnAgendaOnly,
   canWriteScheduleBlocks,
 } from '@/lib/appointments/schedule-blocks-api';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { loadLocations } from '@/lib/session/session-store';
 import { useSedeClock } from '@/lib/locations/sede-clock';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { toast } from 'sonner';
@@ -168,7 +170,7 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
     }
     // Las sedes solo hacen falta aquí; sin ellas se bloquea en todas.
     if (locations.length === 0) {
-      setLocations(await listLocations(token).catch(() => []));
+      setLocations(await loadLocations(token).catch(() => []));
     }
     setBlocking(true);
   }
@@ -492,6 +494,14 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
                   </Callout>
                   {unlockRefused ? <InlineError>{unlockRefused}</InlineError> : null}
                 </div>
+              ) : null}
+              {member.status === 'ACTIVE' ? (
+                <StaffMfaReset
+                  token={token}
+                  userId={userId}
+                  memberName={member.fullName}
+                  self={getTokenUserId(token) === userId}
+                />
               ) : null}
               <div>
                 {member.status === 'ACTIVE' ? (

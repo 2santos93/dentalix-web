@@ -8,7 +8,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
 import { CurrencySelect } from '@/components/shared/currency-select';
+import { PaymentAdjustmentsPreview } from './payment-adjustments-preview';
 import { InlineError } from '@/components/errors/inline-error';
+import { FieldError } from '@/components/errors/field-error';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeMoney } from '@/lib/format/sede-number';
 import { parseMoneyInput } from '@/lib/format/money';
@@ -23,6 +25,7 @@ import {
   type MethodLineState,
   type PaymentMethodFieldsState,
 } from './payment-method-fields';
+import { amountCents, centsToAmount, roundAmount } from '@/lib/money/round';
 
 // Copy como constantes (i18n-ready). Ningún texto nombra un país ni un banco.
 export const splitPaymentCopy = {
@@ -39,6 +42,9 @@ export const splitPaymentCopy = {
   loading: 'Calculando el total…',
   loadingPending: 'Calculando lo pendiente…',
   balanceUnavailable: 'No se pudo leer el saldo del plan: lo pendiente se verá al guardar.',
+  // DX-442: rótulos cortos del escalón 2 (el control falló; el resto sigue).
+  balanceError: 'No se pudo leer',
+  ratesError: 'No se pudo consultar',
   ratesUnavailable:
     'Sin la tasa de algún importe en otra moneda: el total se verá al guardar y esa forma de pago queda «sin tasa» hasta que la haya.',
   exceeds: (excess: string) =>
@@ -113,6 +119,7 @@ export function SplitLineFields({
   fields,
   token,
   defaultCurrency,
+  money,
   disabled,
   onPatch,
   onRemove,
@@ -123,6 +130,8 @@ export function SplitLineFields({
   fields: PaymentMethodFieldsState;
   token: string;
   defaultCurrency: string;
+  /** El formato de la sede de la pantalla para los importes (`sedeMoney`). */
+  money: (amount: number, currency: string) => string;
   disabled: boolean;
   onPatch: (next: Partial<Omit<SplitLineState, 'key' | 'method'>>) => void;
   onRemove: () => void;
@@ -159,6 +168,7 @@ export function SplitLineFields({
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField htmlFor={`${prefix}-amount`} label="Importe" error={line.amountError}>
           <MoneyInput
+            money={money}
             id={`${prefix}-amount`}
             currency={currency}
             requirePositive
@@ -167,11 +177,13 @@ export function SplitLineFields({
             onValueChange={(amount) => onPatch({ amount, amountError: null })}
             aria-invalid={line.amountError ? true : undefined}
             aria-describedby={line.amountError ? fieldErrorId(`${prefix}-amount`) : undefined}
+            className="h-11 sm:h-10"
           />
         </FormField>
         <FormField htmlFor={`${prefix}-currency`} label="Moneda">
           <CurrencySelect
             id={`${prefix}-currency`}
+            className="h-11 sm:h-10"
             token={token}
             value={currency}
             disabled={disabled}
@@ -179,8 +191,17 @@ export function SplitLineFields({
           />
         </FormField>
       </div>
-      <PaymentMethodSelect fields={fields} id={`${prefix}-method`} disabled={disabled} />
+      <PaymentMethodSelect fields={fields} id={`${prefix}-method`} disabled={disabled} className="h-11 sm:h-10" />
       <PaymentReferenceFields fields={fields} idPrefix={prefix} disabled={disabled} />
+      {/* DX-516: cada forma de pago, con los ajustes de su propio medio. */}
+      <PaymentAdjustmentsPreview
+        id={`${prefix}-adjustments`}
+        token={token}
+        method={fields.selected}
+        amount={lineAmount(line.amount, currency)}
+        currency={currency}
+        money={money}
+      />
     </fieldset>
   );
 }
@@ -194,7 +215,9 @@ export function lineAmount(text: string, currency: string): number | null {
 
 export type SplitTotal =
   | { status: 'loading' }
-  /** Alguna línea en otra moneda sin tasa de su día (o las tasas no cargaron). */
+  /** DX-442: las tasas no se pudieron consultar (red, servidor); se reintenta. */
+  | { status: 'error'; retry: () => void }
+  /** Alguna línea en otra moneda sin tasa de su día: no es un fallo, falta la tasa. */
   | { status: 'unavailable' }
   | { status: 'ready'; total: number };
 
@@ -212,16 +235,17 @@ export function splitTotalOf(
   for (const line of lines) {
     if (line.amount === null) continue;
     if (line.currency === planCurrency) {
-      cents += Math.round(line.amount * 100);
+      cents += amountCents(line.amount);
       continue;
     }
     if (rates.status === 'loading' || rates.status === 'idle') return { status: 'loading' };
+    if (rates.status === 'error') return { status: 'error', retry: rates.retry };
     if (rates.status !== 'ready') return { status: 'unavailable' };
     const quote = quoteFromRates(rates.rates, line.currency, planCurrency);
     if (quote === null) return { status: 'unavailable' };
-    cents += Math.round(convertWithRate(line.amount, quote) * 100);
+    cents += amountCents(convertWithRate(line.amount, quote));
   }
-  return { status: 'ready', total: cents / 100 };
+  return { status: 'ready', total: centsToAmount(cents) };
 }
 
 /**
@@ -230,7 +254,7 @@ export function splitTotalOf(
  * cobro. La misma cuenta que `excessOverPending` de la API (QA DX-390).
  */
 export function excessOverPending(total: number, pending: number): number {
-  return Math.max(0, Math.round(total * 100) - Math.max(0, Math.round(pending * 100))) / 100;
+  return centsToAmount(Math.max(0, amountCents(total) - Math.max(0, amountCents(pending))));
 }
 
 /**
@@ -246,10 +270,13 @@ export function SplitPaymentSummary({
   onConfirmCredit,
   confirmError,
   disabled,
+  onRetryBalance,
 }: {
   total: SplitTotal;
   /** Pendiente del plan antes del cobro; `'loading'` o `'error'` si no se sabe. */
   pending: number | 'loading' | 'error';
+  /** DX-442: vuelve a pedir el saldo del plan cuando `pending` es `'error'`. */
+  onRetryBalance: () => void;
   planCurrency: string;
   fmt: RegionalFormat | null;
   confirmCredit: boolean;
@@ -259,7 +286,7 @@ export function SplitPaymentSummary({
 }) {
   const money = (value: number) => sedeMoney(value, planCurrency, fmt);
   const known = total.status === 'ready' && typeof pending === 'number';
-  const after = known ? Math.round((pending - total.total) * 100) / 100 : null;
+  const after = known ? roundAmount(pending - total.total) : null;
   const excess = known ? excessOverPending(total.total, pending) : 0;
   const exceeds = excess > 0;
   return (
@@ -280,6 +307,8 @@ export function SplitPaymentSummary({
                 <Loader2 aria-hidden className="size-4 animate-spin" />
                 <span className="sr-only">{copy.loading}</span>
               </span>
+            ) : total.status === 'error' ? (
+              <FieldError label={copy.ratesError} onRetry={total.retry} className="h-8 font-normal" />
             ) : (
               '—'
             )}
@@ -296,7 +325,7 @@ export function SplitPaymentSummary({
                 <span className="sr-only">{copy.loadingPending}</span>
               </span>
             ) : (
-              '—'
+              <FieldError label={copy.balanceError} onRetry={onRetryBalance} className="h-8 font-normal" />
             )}
           </dd>
         </div>

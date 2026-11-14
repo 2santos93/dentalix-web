@@ -56,8 +56,8 @@ const staff = [
   { userId: 'prov-2', fullName: 'Dr. Luis Gómez', role: 'DENTIST' as const, locationIds: null },
 ];
 const locations = [
-  clinicLocation({ id: 'loc-1', name: 'Sede principal', address: null, country: 'CO' as const, isActive: true, timeZone: 'America/Bogota', createdAt: '' }),
-  clinicLocation({ id: 'loc-2', name: 'Sede Norte', address: null, country: 'CO' as const, isActive: true, timeZone: 'America/Bogota', createdAt: '' }),
+  clinicLocation({ id: 'loc-1', name: 'Sede principal', address: null, country: 'VE' as const, isActive: true, timeZone: 'America/Caracas', createdAt: '' }),
+  clinicLocation({ id: 'loc-2', name: 'Sede Norte', address: null, country: 'VE' as const, isActive: true, timeZone: 'America/Caracas', createdAt: '' }),
 ];
 const created = { id: 'b-1' } as SavedScheduleBlock;
 const local = (day: string, hhmm: string) => new Date(`${day}T${hhmm}:00`).toISOString();

@@ -5,10 +5,13 @@ on:
     branches: [main]
   pull_request:
 
-# Un push nuevo a la misma rama/PR cancela la ejecución anterior.
+# Solo un push nuevo a un PR cancela la ejecución anterior del PR. En main no
+# (DX-494, TST-061): cada merge tiene su CI completa. Su grupo lleva el sha
+# del push, porque en un grupo compartido GitHub cancela la run que espera
+# turno cuando llega otra, aunque no haya `cancel-in-progress`.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -17,7 +20,9 @@ jobs:
   checks:
     name: Lint, tipos, tests y build
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # OPS-057: 5,6–11 min por run; el paso de Chromium tiene tope propio de 10
+    # (un mirror de apt lento llegó a 9 min en la E2E) y el job lo absorbe.
+    timeout-minutes: 30
     env:
       NEXT_TELEMETRY_DISABLED: '1'
       # La URL de la API (API_URL) es de runtime (DX-083) y el build no la
@@ -40,8 +45,97 @@ jobs:
       # `npm run lint` es `eslint` a secas (sin --fix): sirve tal cual en CI.
       - run: npm run lint
       - run: npx tsc --noEmit
+      # DX-297: Jest resolves compiled form colors in real Chromium.
+      # OPS-057: como en la E2E (e2e.yml), los navegadores se cachean por la
+      # versión exacta de @playwright/test del package-lock y el SO; con caché
+      # solo se instalan las librerías del sistema. apt reintenta cada descarga
+      # (`Acquire::Retries` en apt.conf.d, porque Playwright lanza su propio
+      # `apt-get`) y el paso, hasta 3 veces. Su duración va al resumen.
+      - name: Versión de Playwright y SO (clave de la caché de navegadores)
+        id: playwright-version
+        timeout-minutes: 1
+        run: |
+          version="$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test']?.version ?? ''")"
+          if ! [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            echo "::error title=Versión de Playwright::package-lock.json no tiene node_modules/@playwright/test con una versión exacta (es «${version}»)"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "os=$(. /etc/os-release && echo "${ID}-${VERSION_ID}")-$(uname -m)" >> "$GITHUB_OUTPUT"
+      - name: Navegadores de Playwright (restaurar la caché)
+        id: playwright-cache
+        timeout-minutes: 2
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ steps.playwright-version.outputs.os }}-${{ steps.playwright-version.outputs.version }}
+      - name: Hora de inicio de Chromium
+        id: chromium-start
+        timeout-minutes: 1
+        run: echo "at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: Instalar Chromium para las pruebas de contraste
+        id: chromium
+        timeout-minutes: 10
+        env:
+          BROWSERS_CACHED: ${{ steps.playwright-cache.outputs.cache-hit }}
+        run: |
+          echo 'Acquire::Retries "3";' | sudo tee /etc/apt/apt.conf.d/80-dentalix-retries >/dev/null
+          if [[ "${BROWSERS_CACHED}" == "true" ]]; then
+            install=(install-deps chromium)
+          else
+            install=(install --with-deps chromium)
+          fi
+          for attempt in 1 2 3; do
+            if npx playwright "${install[@]}"; then
+              exit 0
+            fi
+            if [[ "${attempt}" -lt 3 ]]; then
+              echo "::warning title=Chromium de Playwright::intento ${attempt} de 3 fallido (playwright ${install[*]}); reintento"
+              sleep $((attempt * 15))
+            fi
+          done
+          echo "::error title=Chromium de Playwright::playwright ${install[*]} falló en 3 intentos"
+          exit 1
+      - name: Duración de Chromium
+        if: always() && steps.chromium.outcome != 'skipped'
+        timeout-minutes: 1
+        env:
+          STEP_STARTED_AT: ${{ steps.chromium-start.outputs.at }}
+          DURATION_HINT: Suele ser el mirror de apt; mira los reintentos en el log del paso.
+        run: scripts/report-step-duration.sh "Chromium (pruebas de contraste)" 10
+      # `continue-on-error`: una carrera con otra run por la misma clave no
+      # pone la CI en rojo; la próxima run la vuelve a intentar.
+      - name: Navegadores de Playwright (guardar la caché)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 2
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
+      - name: Supuestos de país (check:country-assumptions)
+        run: npm run check:country-assumptions
       - run: npx jest --ci
       - run: npm run build
+      # DX-117 (FE-021): JS de primera carga por ruta en KB gzip (método en el
+      # script), en el log, en el resumen del job y como artefacto.
+      # Presupuesto de la ficha: lo medido tras partirla (propio 68,8 KB y
+      # total 442,1 KB en la CI de la porción 4) + ~5 %. El total lo domina el
+      # shell de `(app)` (373 KB, común a todas sus rutas).
+      # 2026-11-12, propio 72 → 73: main ya medía 71,9 KB (la ficha creció
+      # 3,1 KB desde DX-117 en dos días de funcionalidades) y DX-015-bis
+      # porción 2 suma 0,2 KB (el aviso de exclusión de recall en la ficha).
+      # Subirlo no es la solución de fondo: el siguiente paso es volver a
+      # partir la ficha (carga diferida de pestañas), no otro aumento.
+      - name: Informe de JS por ruta
+        run: node scripts/bundle-report.mjs --budget '/patients/[id]:total=465,own=73'
+      - name: Subir el informe de JS por ruta
+        if: always() && hashFiles('.next/bundle-report.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-report
+          path: .next/bundle-report.json
+          if-no-files-found: error
 
   # DX-495 (TST-062): fronteras de calendario. El cambio de mes del 31-10 al
   # 01-11 dejó en rojo `expenses-summary-view` (DX-466) y ningún job corría el
@@ -82,6 +176,9 @@ jobs:
   # arranca contra dos APIs (falsas) distintas cambiando solo API_URL y
   # FILES_ORIGIN: el proxy /api/v1 llega a cada una, el origen de la URL
   # `inline` de un documento está en la CSP servida, y sin API_URL no arranca.
+  # DX-458: además, /api/health, el keep-alive de 65 s y el apagado ordenado
+  # con SIGTERM (drenaje, conexiones nuevas rechazadas, petición en vuelo
+  # terminada, y corte con código 1 si vence el tope).
   docker-image:
     name: Imagen Docker (build y humo con dos APIs)
     runs-on: ubuntu-24.04
@@ -97,6 +194,6 @@ jobs:
       - name: Sin .env y sin root en la imagen
         run: |
           docker run --rm dentalix-web:ci sh -c '
-            test "$(id -u)" != 0 && ! ls -a /app | grep -q "^\.env" && test -f server.js'
+            test "$(id -u)" != 0 && ! ls -a /app | grep -q "^\.env" && test -f server.js && test -f server-entry.cjs'
       - name: Prueba de humo con dos URLs de API
         run: scripts/docker-smoke/web.sh dentalix-web:ci

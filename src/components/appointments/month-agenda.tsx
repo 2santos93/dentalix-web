@@ -9,6 +9,7 @@ import { patientLabel, patientShortLabel, STATUS_LABELS } from './appointment-di
 import { STATUS_PRESENTATION, statusTone, TONE_CLASSES, type StatusTone } from '@/lib/status/tones';
 import { medicalAlertSeverity, medicalAlertSummary, MEDICAL_ALERTS_TITLE } from '@/lib/clinical/medical-alerts';
 import { SectionError } from '@/components/errors/section-error';
+import { chairDisplayName } from '@/lib/chairs/chair-columns';
 import { cn } from '@/lib/utils';
 
 // Copy as constants (i18n-ready, es-first) — matches day-agenda.tsx convention.
@@ -159,7 +160,7 @@ export function MonthAgenda({
                 onClick={() => onSelectDay(day.date)}
                 aria-pressed={isSelected}
                 aria-label={copy.dayLabel(longDayLabel(day.date), count)}
-                className="absolute inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+                className="absolute inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-text"
               />
               <span
                 className={cn(
@@ -194,14 +195,16 @@ export function MonthAgenda({
                     const full = patientLabel(a, patientNames);
                     const critical = hasCriticalAlert(a);
                     const alertText = critical ? medicalAlertSummary(a.medicalAlerts) : null;
+                    const chair = a.chair ? chairDisplayName(a.chair) : null;
                     return (
                       <span
                         key={a.id}
                         data-testid="month-appointment"
                         data-status={a.status}
-                        title={[full, STATUS_LABELS[a.status], alertText].filter(Boolean).join(' · ')}
+                        title={[full, STATUS_LABELS[a.status], chair, alertText].filter(Boolean).join(' · ')}
                         className={cn(
-                          'flex h-5 min-w-0 items-center gap-[3px] rounded px-1 text-xs leading-none text-ink',
+                          'flex min-w-0 flex-wrap items-center gap-x-[3px] rounded px-1 text-xs leading-none text-ink',
+                          chair ? 'min-h-5 pb-1' : 'h-5',
                           isToday ? 'bg-surface/80' : 'bg-surface-sunken',
                         )}
                       >
@@ -210,8 +213,9 @@ export function MonthAgenda({
                           {sedeTime(a.start, clock.of(a.locationId))}
                         </span>
                         <span
+                          data-testid="month-appointment-patient"
                           className={cn(
-                            'min-w-0 flex-1 truncate font-medium',
+                            'min-w-0 flex-1 truncate glyph-room font-medium',
                             isInactive(a.status) && 'text-muted line-through',
                           )}
                         >
@@ -225,6 +229,12 @@ export function MonthAgenda({
                           <span data-testid="month-alert-marker" className="inline-flex shrink-0 text-danger-text">
                             <TriangleAlert aria-hidden className="size-3" />
                             <span className="sr-only">{`, ${alertText}`}</span>
+                          </span>
+                        ) : null}
+                        {/* DX-492: en su línea: en una celda estrecha no le quita sitio al paciente. */}
+                        {chair ? (
+                          <span data-testid="month-appointment-chair" className="w-full truncate glyph-room text-muted">
+                            {chair}
                           </span>
                         ) : null}
                       </span>

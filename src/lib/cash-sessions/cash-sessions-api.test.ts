@@ -42,13 +42,13 @@ describe('cash-sessions-api (DX-027)', () => {
     window.localStorage.setItem('dentalix.activeLocationId', 'loc-2');
     const spy = mockFetch();
     await getCurrentCashSession('tok');
-    await openCashSession('tok', { floats: [{ currency: 'COP', amount: 50_000 }] });
+    await openCashSession('tok', { floats: [{ currency: 'USD', amount: 50_000 }] });
     expect(call(spy).url.pathname).toMatch(/\/cash-sessions\/current$/);
     expect(call(spy).init.headers['X-Location-Id']).toBe('loc-2');
     const open = call(spy, 1);
     expect(open.url.pathname).toMatch(/\/cash-sessions\/open$/);
     expect(open.init.method).toBe('POST');
-    expect(JSON.parse(String(open.init.body))).toEqual({ floats: [{ currency: 'COP', amount: 50_000 }] });
+    expect(JSON.parse(String(open.init.body))).toEqual({ floats: [{ currency: 'USD', amount: 50_000 }] });
   });
 
   it('la lista no manda filtros ausentes', async () => {
@@ -67,7 +67,7 @@ describe('cash-sessions-api (DX-027)', () => {
   it('cerrar, reabrir y guardar los ajustes', async () => {
     const spy = mockFetch();
     await closeCashSession('tok', 's 1', {
-      counts: [{ currency: 'COP', method: 'CASH', counted: 1 }],
+      counts: [{ currency: 'USD', method: 'CASH', counted: 1 }],
       differenceReason: 'Faltó cambio',
     });
     await reopenCashSession('tok', 's1', 'Faltó un abono');

@@ -26,6 +26,9 @@ export const publicSignedCopyCopy = {
   downloadedTitle: 'Descarga iniciada',
   downloadedMessage:
     'Guarda el PDF: este enlace ya no sirve otra vez. Si necesitas otra copia, pídesela a la clínica.',
+  // DX-487: si el navegador no lo guardó, la misma URL firmada mientras dura.
+  downloadAgain: 'Volver a descargar',
+  downloadAgainHint: 'Si no se guardó, puedes volver a descargarlo durante un minuto.',
   usedTitle: 'Este enlace ya se usó',
   usedMessage: 'Si necesitas otra copia del documento firmado, pídesela a la clínica.',
   invalidTitle: 'Enlace no válido',
@@ -40,6 +43,9 @@ type LoadState =
   | { kind: 'invalid' }
   | { kind: 'ready'; data: PublicSignedPdfCopy }
   | { kind: 'downloaded'; data: PublicSignedPdfCopy };
+
+/** La URL firmada que ya se entregó y hasta cuándo vale. */
+type Delivered = { url: string; expiresAt: string };
 
 function isLinkUsed(err: unknown): boolean {
   return err instanceof ApiError && (err.status === 410 || err.code === SIGNED_PDF_COPY_LINK_USED);
@@ -57,6 +63,15 @@ export function PublicSignedCopyView({ token }: { token: string }) {
   const [reloadKey, setReloadKey] = useState(0);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [delivered, setDelivered] = useState<Delivered | null>(null);
+
+  // DX-487: volver a descargar reusa la URL firmada de 60 s de la API, sin tocar
+  // el enlace: ni alarga su vigencia ni reabre un enlace de un solo uso.
+  useEffect(() => {
+    if (!delivered) return;
+    const timer = setTimeout(() => setDelivered(null), new Date(delivered.expiresAt).getTime() - Date.now());
+    return () => clearTimeout(timer);
+  }, [delivered]);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,8 +92,9 @@ export function PublicSignedCopyView({ token }: { token: string }) {
     setDownloading(true);
     setDownloadError(null);
     try {
-      const { url } = await downloadPublicSignedPdfCopy(token);
+      const { url, expiresAt } = await downloadPublicSignedPdfCopy(token);
       startDownload(url);
+      setDelivered({ url, expiresAt });
       setState({ kind: 'downloaded', data });
     } catch (err) {
       if (isLinkUsed(err)) setState({ kind: 'ready', data: { ...data, state: 'USED' } });
@@ -147,6 +163,21 @@ export function PublicSignedCopyView({ token }: { token: string }) {
                   message={publicSignedCopyCopy.downloadedMessage}
                 />
               </div>
+            )}
+
+            {state.kind === 'downloaded' && delivered && (
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="lg"
+                      className="h-12 w-full"
+                      onClick={() => startDownload(delivered.url)}
+                    >
+                      <Download aria-hidden /> {publicSignedCopyCopy.downloadAgain}
+                    </Button>
+                    <p className="text-sm text-muted">{publicSignedCopyCopy.downloadAgainHint}</p>
+                  </div>
             )}
 
             {state.kind === 'ready' && data.state === 'USED' && (

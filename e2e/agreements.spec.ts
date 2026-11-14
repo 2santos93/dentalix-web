@@ -8,17 +8,18 @@ import { E2E_REGION } from './support/regional';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
+import { expectTouchTarget } from './support/touch-targets';
 import { API_URL, tenantOrigin } from './support/urls';
 
 /**
  * e2e DX-105: listas de precios y convenios.
  *
- * ADMIN crea (por la UI) la lista «Tarifa» en COP y le pone precio a un
+ * ADMIN crea (por la UI) la lista «Tarifa» en USD y le pone precio a un
  * procedimiento («Editar precio»), y el convenio «Surco −20 %» (el pagador se
  * crea por la API, con la cobertura del paciente: SEC-047). RECEPCIÓN asigna
  * el convenio en la ficha —el diálogo elige la cobertura vigente— y ve el chip
  * «Convenio: Surco −20 %». El DENTISTA abre la pestaña Plan, crea un plan en
- * COP, elige el procedimiento y el precio llega precargado con el −20 % y la
+ * USD, elige el procedimiento y el precio llega precargado con el −20 % y la
  * línea de origen «Convenio · Surco −20 %»; la fila del plan y el presupuesto
  * imprimible dicen «Convenio» y «Ahorro por convenio». Todo a 390 px sin
  * scroll horizontal y con los diálogos dentro de la pantalla.
@@ -43,11 +44,11 @@ const LIST_PRICE = 140_000;
 const PERCENT = 20;
 const AGREEMENT_PRICE = CATALOG_PRICE * (1 - PERCENT / 100);
 const SAVING = CATALOG_PRICE - AGREEMENT_PRICE;
-const money = (amount: number): string => formatCurrency(amount, 'COP');
-// Solo la cifra («120.000,00»): entre ella y «COP» va un espacio duro.
+const money = (amount: number): string => formatCurrency(amount, 'USD');
+// Solo la cifra («120.000,00»): entre ella y «USD» va un espacio duro.
 const figure = (amount: number): string => money(amount).split(/\s/)[0];
 /** La pestaña del plan pinta sus importes con el formato de la sede (DX-386, DX-489). */
-const sedeMoney = (amount: number): string => moneyWithCode(amount, 'COP', regionalFormat(E2E_REGION));
+const sedeMoney = (amount: number): string => moneyWithCode(amount, 'USD', regionalFormat(E2E_REGION));
 
 const QA_DIR = path.resolve(process.env.DX105_QA_DIR ?? 'e2e/.qa-shots');
 const QA = process.env.DX105_QA_SHOTS === '1';
@@ -107,7 +108,7 @@ test.beforeAll(async ({ request }) => {
   });
 });
 
-test('ADMIN crea la lista «Tarifa» en COP y le pone precio a un procedimiento; a 390 px sin scroll horizontal', async ({
+test('ADMIN crea la lista «Tarifa» en USD y le pone precio a un procedimiento; a 390 px sin scroll horizontal', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -118,13 +119,13 @@ test('ADMIN crea la lista «Tarifa» en COP y le pone precio a un procedimiento;
   await page.getByRole('button', { name: 'Nueva lista' }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Nueva lista de precios' });
   await dialog.getByLabel('Nombre').fill(listName);
-  await dialog.getByLabel('Moneda').selectOption('COP');
+  await dialog.getByLabel('Moneda').selectOption('USD');
   await dialog.getByRole('button', { name: 'Crear lista' }).click();
   await expect(dialog).toBeHidden({ timeout: 10_000 });
 
   const table = page.getByRole('table', { name: 'Listas de precios' });
   const row = table.getByRole('row', { name: new RegExp(listName) });
-  await expect(row).toContainText('COP');
+  await expect(row).toContainText('USD');
   await expect(row).toContainText('Toda la clínica');
   await expect(row).toContainText('0');
   // Activa: sin marca (solo las inactivas la llevan).
@@ -147,7 +148,7 @@ test('ADMIN crea la lista «Tarifa» en COP y le pone precio a un procedimiento;
   // La fila abre «Editar precio».
   await itemRow.getByRole('button', { name: procedureLabel, exact: true }).click();
   const priceDialog = page.getByRole('dialog', { name: 'Editar precio' });
-  await expect(priceDialog).toContainText(`Precio de catálogo: ${money(CATALOG_PRICE)}`);
+  await expect(priceDialog).toContainText(`Precio de catálogo: ${sedeMoney(CATALOG_PRICE)}`);
   await priceDialog.getByLabel('Precio de lista').fill(String(LIST_PRICE));
   await priceDialog.getByRole('button', { name: 'Guardar' }).click();
   await expect(priceDialog).toBeHidden({ timeout: 10_000 });
@@ -186,6 +187,12 @@ test('ADMIN crea la lista «Tarifa» en COP y le pone precio a un procedimiento;
   await page.goto(`${origin}/settings/listas-de-precios`);
   await expect(page.getByText(listName).locator('visible=true').first()).toBeVisible({ timeout: 10_000 });
   await expectNoHorizontalScroll(page);
+  // DX-105-bis: a 390 px el selector de sede de «Nueva lista» mide 44 px.
+  await page.getByRole('button', { name: 'Nueva lista' }).locator('visible=true').first().click();
+  const newList390 = page.getByRole('dialog', { name: 'Nueva lista de precios' });
+  await expectTouchTarget(newList390.getByLabel('Sede'), { scope: newList390, label: 'selector de sede' });
+  await newList390.getByRole('button', { name: 'Cancelar' }).click();
+  await expect(newList390).toBeHidden();
 });
 
 test('ADMIN crea el convenio «Surco −20 %» y lo ve activo; a 390 px sin scroll horizontal', async ({ page }) => {
@@ -288,7 +295,7 @@ test('el DENTISTA abre el plan: el precio llega precargado con el convenio, la f
   await expect(panel.getByText('Este paciente todavía no tiene un plan de tratamiento.')).toBeVisible({
     timeout: 15_000,
   });
-  await panel.getByLabel('Moneda del nuevo plan').selectOption('COP');
+  await panel.getByLabel('Moneda del nuevo plan').selectOption('USD');
   await panel.getByRole('button', { name: 'Nuevo plan' }).click();
   await expect(panel.getByRole('heading', { name: 'Detalle del plan' })).toBeVisible({ timeout: 10_000 });
 
@@ -328,10 +335,10 @@ test('el DENTISTA abre el plan: el precio llega precargado con el convenio, la f
   const agreementBlock = printPage.getByTestId('quote-agreement');
   await expect(agreementBlock).toContainText('Convenio');
   await expect(agreementBlock).toContainText(`${agreementName} · ${payerName}`);
-  const saving = printPage.getByTestId('quote-saving-COP');
+  const saving = printPage.getByTestId('quote-saving-USD');
   await expect(saving).toContainText('Ahorro por convenio');
   await expect(saving).toContainText(figure(SAVING));
-  await expect(printPage.getByTestId('quote-total-COP')).toContainText(figure(AGREEMENT_PRICE));
+  await expect(printPage.getByTestId('quote-total-USD')).toContainText(figure(AGREEMENT_PRICE));
   const quoteRow = printPage.getByRole('row').filter({ hasText: procedureLabel }).locator('visible=true').first();
   await expect(quoteRow).toContainText(figure(AGREEMENT_PRICE));
   await expectNoHorizontalScroll(printPage);

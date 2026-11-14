@@ -1,6 +1,9 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SupportAccessesView } from './support-accesses-view';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
+import { dateTimeIn, STAMP_SEDES } from '@/lib/test/stamp';
 import { ApiError } from '@/lib/api/client';
 import {
   canReadSupportAccesses,
@@ -13,6 +16,9 @@ jest.mock('../../lib/support-accesses/support-accesses-api', () => ({
   listSupportAccesses: jest.fn(),
 }));
 
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 const mockedList = listSupportAccesses as jest.MockedFunction<typeof listSupportAccesses>;
 
 const access: SupportAccess = {
@@ -28,6 +34,7 @@ const access: SupportAccess = {
 
 beforeEach(() => {
   mockedList.mockReset();
+  mockedLocations.mockReset().mockResolvedValue([STAMP_SEDES.caracas]);
 });
 
 describe('SupportAccessesView (SEC-008)', () => {
@@ -117,5 +124,48 @@ describe('SupportAccessesView (SEC-008)', () => {
       expect(canReadSupportAccesses(role)).toBe(false);
     }
     expect(canReadSupportAccesses(null)).toBe(false);
+  });
+});
+
+describe('SupportAccessesView: fechas con el formato de la sede (DX-354b)', () => {
+  it('Caracas (es-VE, 12 h): cuándo y hasta cuándo con su reloj, no con el del navegador', async () => {
+    mockedList.mockResolvedValueOnce({ items: [access], nextCursor: null });
+    render(<SupportAccessesView token="t" />);
+    const table = await screen.findByRole('table', { name: 'Accesos de soporte a la clínica' });
+    const row = within(table).getAllByRole('row')[1];
+    await waitFor(() => expect(row).toHaveTextContent(dateTimeIn('caracas', access.createdAt)));
+    expect(row).toHaveTextContent(dateTimeIn('caracas', access.expiresAt));
+    expect(dateTimeIn('caracas', access.createdAt)).toMatch(/[ap]\. ?m\./i);
+  });
+
+  it('Berlín (de-DE, 24 h): la misma entrada sale con otra fecha y otro reloj', async () => {
+    mockedLocations.mockResolvedValue([STAMP_SEDES.berlin]);
+    mockedList.mockResolvedValueOnce({ items: [access], nextCursor: null });
+    render(<SupportAccessesView token="t" />);
+    const table = await screen.findByRole('table', { name: 'Accesos de soporte a la clínica' });
+    const row = within(table).getAllByRole('row')[1];
+    await waitFor(() => expect(row).toHaveTextContent(dateTimeIn('berlin', access.createdAt)));
+    expect(dateTimeIn('berlin', access.createdAt)).not.toBe(dateTimeIn('caracas', access.createdAt));
+  });
+
+  it('sin formato de la sede: «—» en vez de la fecha (y sin «Hasta —» en el teléfono) y un solo aviso', async () => {
+    mockedLocations.mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
+    mockedList.mockResolvedValueOnce({ items: [access], nextCursor: null });
+    const { container } = render(<SupportAccessesView token="t" />);
+    expect(
+      await screen.findAllByText(/No se pudo saber el formato regional o el reloj de la sede/),
+    ).toHaveLength(1);
+    expect(container).not.toHaveTextContent('2026');
+    expect(container).not.toHaveTextContent('Hasta —');
+    expect(screen.getAllByText('Sin dato').length).toBeGreaterThan(0);
+  });
+
+  it('mientras cargan las sedes: «—» sin aviso', async () => {
+    mockedLocations.mockReturnValue(new Promise(() => undefined));
+    mockedList.mockResolvedValueOnce({ items: [access], nextCursor: null });
+    const { container } = render(<SupportAccessesView token="t" />);
+    await screen.findByRole('table', { name: 'Accesos de soporte a la clínica' });
+    expect(container).not.toHaveTextContent('2026');
+    expect(screen.queryByText(/No se pudo saber el formato regional/)).not.toBeInTheDocument();
   });
 });

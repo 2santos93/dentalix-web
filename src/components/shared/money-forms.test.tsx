@@ -29,7 +29,7 @@ jest.mock('../../lib/locations/locations-api', () => ({
 }));
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([
-    { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+    { code: 'VES', name: 'Bolívar venezolano', symbol: 'VES' },
     { code: 'USD', name: 'Dólar estadounidense', symbol: 'US$' },
   ]),
 }));
@@ -66,6 +66,8 @@ function billablePlan(currency: string): BillablePlan {
     paidOtherCurrencies: [],
     balance: 5_000_000,
     hasActivePaymentPlan: false,
+    paymentsWithoutRate: [],
+    rateProviderTimedOut: false,
   };
 }
 
@@ -121,7 +123,7 @@ const forms: Record<string, FormDriver> = {
       const session = cashSessionFixture({
         floats: [{ currency, amount: 0 }],
         expected: [
-          { currency, method: 'CASH', opening: 0, payments: expected, paymentsCount: 1, adjustments: 0, outflows: 0, outflowsCount: 0, expected },
+          { currency, method: 'CASH', opening: 0, payments: expected, paymentsCount: 1, paymentAdjustments: 0, adjustments: 0, outflows: 0, outflowsCount: 0, expected, amountHidden: false },
         ],
       });
       render(
@@ -147,6 +149,7 @@ const forms: Record<string, FormDriver> = {
           onOpenChange={() => undefined}
           token="tok"
           sessionId="cs-1"
+          locationId="loc-1"
           defaultCurrency={currency}
           onCreated={() => undefined}
         />,
@@ -200,8 +203,8 @@ const cases: [text: string, currency: string, expected: number][] = [
   ['150,50', 'USD', 150.5],
   ['1,500.25', 'USD', 1500.25],
   ['1.500.000,25', 'USD', 1_500_000.25],
-  ['150.000', 'COP', 150_000],
-  ['150,000', 'COP', 150_000],
+  ['150.000', 'VES', 150_000],
+  ['150,000', 'VES', 150_000],
 ];
 
 describe.each(formNames)('%s (DX-241)', (name) => {
@@ -251,7 +254,7 @@ describe.each(formNames)('%s (DX-241)', (name) => {
     const previewId = (input.getAttribute('aria-describedby') ?? '').split(' ').find((id) => id.endsWith('-preview'));
     const preview = document.getElementById(previewId ?? '');
     expect(preview).toHaveAttribute('aria-live', 'polite');
-    await waitFor(() => expect(preview).toHaveTextContent(/^Se guardará: 150,50\sUSD$/));
+    await waitFor(() => expect(preview).toHaveTextContent(/^Se guardará: USD\s150,50$/));
     expect(within(document.body).getAllByText(/^Se guardará:/)).toHaveLength(1);
   });
 });

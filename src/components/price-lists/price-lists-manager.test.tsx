@@ -33,26 +33,26 @@ const mockedLocations = listLocations as jest.MockedFunction<typeof listLocation
 const mockedCurrencies = listCurrencies as jest.MockedFunction<typeof listCurrencies>;
 const mockedNotify = notifyError as jest.MockedFunction<typeof notifyError>;
 
-function location(id: string, name: string, country: 'CO' | 'ES'): ClinicLocation {
+function location(id: string, name: string, country: 'VE' | 'ES'): ClinicLocation {
   return clinicLocation({
     id,
     name,
     address: null,
     country,
     isActive: true,
-    currency: country === 'ES' ? 'EUR' : 'COP',
-    timeZone: country === 'ES' ? 'Europe/Madrid' : 'America/Bogota',
-    locale: country === 'ES' ? 'es-ES' : 'es-CO',
+    currency: country === 'ES' ? 'EUR' : 'USD',
+    timeZone: country === 'ES' ? 'Europe/Madrid' : 'America/Caracas',
+    locale: country === 'ES' ? 'es-ES' : 'es-VE',
     createdAt: '2026-01-01T00:00:00Z',
   });
 }
-const norte = location('loc-1', 'Sede Norte', 'CO');
+const norte = location('loc-1', 'Sede Norte', 'VE');
 const madrid = location('loc-2', 'Sede Madrid', 'ES');
 
 const base: PriceList = {
   id: 'pl-1',
   name: 'Tarifas Norte',
-  currency: 'COP',
+  currency: 'USD',
   locationId: 'loc-1',
   active: true,
   itemCount: 12,
@@ -74,7 +74,7 @@ describe('PriceListsManager (DX-105)', () => {
     mockedList.mockResolvedValue([base, surco, vieja]);
     mockedLocations.mockResolvedValue([norte, madrid]);
     mockedCurrencies.mockResolvedValue([
-      { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+      { code: 'USD', name: 'Dólar estadounidense', symbol: '$' },
       { code: 'EUR', name: 'Euro', symbol: '€' },
     ] as never);
   });
@@ -90,7 +90,7 @@ describe('PriceListsManager (DX-105)', () => {
     const table = await screen.findByRole('table', { name: 'Listas de precios' });
     const rows = within(table).getAllByRole('row');
     expect(rows[1]).toHaveTextContent('Tarifas Norte');
-    expect(rows[1]).toHaveTextContent('COP');
+    expect(rows[1]).toHaveTextContent('USD');
     expect(rows[1]).toHaveTextContent('Sede Norte');
     expect(rows[1]).toHaveTextContent('12');
     // El estado solo se ve cuando es la excepción.

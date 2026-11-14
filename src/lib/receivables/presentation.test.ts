@@ -44,22 +44,22 @@ describe('cartera · presentación (DX-145)', () => {
       'Hola Ana, te escribimos de Clínica Sonrisas. ¿Tienes un momento para hablar con nosotros? Puedes respondernos por aquí.',
     );
     expect(text).not.toMatch(/\d/);
-    expect(text).not.toMatch(/\$|COP|saldo|deuda|cuota|tratamiento/i);
+    expect(text).not.toMatch(/\$|USD|saldo|deuda|cuota|tratamiento/i);
   });
 
   it('sin nombre de clínica dice «la clínica» y añade su teléfono de contacto si lo hay', () => {
     expect(
-      collectionMessage({ patientName: '', clinicName: null, contactPhone: '+57 601 555 0000' }),
+      collectionMessage({ patientName: '', clinicName: null, contactPhone: '+58 212 555 0000' }),
     ).toBe(
-      'Hola, te escribimos de la clínica. ¿Tienes un momento para hablar con nosotros? Puedes respondernos por aquí o llamarnos al +57 601 555 0000.',
+      'Hola, te escribimos de la clínica. ¿Tienes un momento para hablar con nosotros? Puedes respondernos por aquí o llamarnos al +58 212 555 0000.',
     );
   });
 
   it('arma el enlace wa.me solo si el teléfono sirve', () => {
     expect(
-      collectionWhatsAppHref({ fullName: 'Ana Pérez', whatsApp: '573001234567' }, 'Clínica X'),
+      collectionWhatsAppHref({ fullName: 'Ana Pérez', whatsApp: '584121234567' }, 'Clínica X'),
     ).toBe(
-      `https://wa.me/573001234567?text=${encodeURIComponent(
+      `https://wa.me/584121234567?text=${encodeURIComponent(
         'Hola Ana, te escribimos de Clínica X. ¿Tienes un momento para hablar con nosotros? Puedes respondernos por aquí.',
       )}`,
     );
@@ -67,7 +67,7 @@ describe('cartera · presentación (DX-145)', () => {
   });
 
   it('tel: sin espacios ni guiones', () => {
-    expect(telHref('+57 300-123 4567')).toBe('tel:+573001234567');
+    expect(telHref('+58 412-123 4567')).toBe('tel:+584121234567');
   });
 
   it('nombra el CSV con la fecha de la sede', () => {

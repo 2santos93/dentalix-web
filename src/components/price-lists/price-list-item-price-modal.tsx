@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { replacePriceListItems, type PriceListItemRow } from '@/lib/price-lists/price-lists-api';
 import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
-import { formatCurrency } from '@/lib/format/currency';
+import { sedeMoney } from '@/lib/format/sede-number';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
@@ -14,6 +15,7 @@ const copy = {
   description: (name: string, catalogPrice: string) =>
     `${name}. Precio de catálogo: ${catalogPrice}.`,
   noCatalogPrice: 'sin precio',
+  catalogOtherCurrency: (list: string) => ` (otra moneda: no se convierte a ${list})`,
   price: 'Precio de lista',
   hint: 'Hasta 2 decimales. Para dejar este procedimiento sin precio en la lista, usa «Quitar precio».',
   save: 'Guardar',
@@ -28,6 +30,8 @@ interface PriceListItemPriceModalProps {
   priceListId: string;
   /** Moneda de la lista: da los decimales y el formato del importe. */
   currency: string;
+  /** Moneda del precio de catálogo (la de la clínica, según la API); `null` = no se sabe. */
+  catalogCurrency: string | null;
   row: PriceListItemRow;
   onSaved: (catalogItemId: string, price: number) => void;
 }
@@ -43,9 +47,12 @@ export function PriceListItemPriceModal({
   token,
   priceListId,
   currency,
+  catalogCurrency,
   row,
   onSaved,
 }: PriceListItemPriceModalProps) {
+  const fmt = readyFormat(useSedeFormat(token));
+  const money = (amount: number, code: string) => sedeMoney(amount, code, fmt);
   const [price, setPrice] = useState(row.price === null ? '' : moneyInputText(row.price));
   const [priceError, setPriceError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -74,7 +81,10 @@ export function PriceListItemPriceModal({
   }
 
   const catalogPrice =
-    row.defaultPrice === null ? copy.noCatalogPrice : formatCurrency(row.defaultPrice, currency);
+    row.defaultPrice === null || !catalogCurrency
+      ? copy.noCatalogPrice
+      : sedeMoney(row.defaultPrice, catalogCurrency, fmt) +
+        (catalogCurrency !== currency ? copy.catalogOtherCurrency(currency) : '');
 
   return (
     <FormModal
@@ -90,6 +100,7 @@ export function PriceListItemPriceModal({
     >
       <FormField htmlFor="price-list-item-price" label={copy.price} hint={copy.hint} error={priceError}>
         <MoneyInput
+          money={money}
           id="price-list-item-price"
           currency={currency}
           value={price}

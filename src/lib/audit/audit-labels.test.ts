@@ -1,5 +1,11 @@
+import { regionalFormat } from '@/lib/format/regional-format';
+import type { AuditEvent } from './audit-api';
 import {
   exchangeRateBackupDetail,
+  exchangeRateDetail,
+  paymentAllocationDetail,
+  receiptDetail,
+  receiptsSummaryPeriodDetail,
   cancellationDetail,
   importBatchDetail,
   AUDIT_ACTION_LABELS,
@@ -15,6 +21,7 @@ import {
   cashSessionDetail,
   sedationDetail,
   chairDetail,
+  recallViaDetail,
   scheduleChangeDetail,
   patientFlowDetail,
   planItemAttributionDetail,
@@ -25,7 +32,12 @@ import {
   locationNameMap,
   signatureRequestDetail,
   confirmationLinkDetail,
+  appointmentMoveDetail,
+  staffNameMap,
+  treatmentPlanAcceptanceDetail,
 } from './audit-labels';
+
+type AuditMetadata = AuditEvent['metadata'];
 
 describe('etiquetas de auditoría', () => {
   it('cada acción y cada recurso tienen etiqueta en español', () => {
@@ -73,6 +85,11 @@ describe('etiquetas de auditoría', () => {
       expect(AUDIT_RESOURCE_LABELS[resource as keyof typeof expected]).toBe(label);
       expect(AUDIT_RESOURCE_OPTIONS).toContain(resource);
     }
+  });
+
+  it('DX-015-bis: los tipos de recall tienen su etiqueta y salen en el filtro', () => {
+    expect(AUDIT_RESOURCE_LABELS.RECALL_TYPE).toBe('Tipo de recall');
+    expect(AUDIT_RESOURCE_OPTIONS).toContain('RECALL_TYPE');
   });
 
   it('las opciones no repiten valores', () => {
@@ -135,6 +152,7 @@ describe('chairDetail (DX-211)', () => {
     expect(chairDetail({ reason: 'CHAIR_ORDER' })).toBe('Orden de los sillones');
     expect(chairDetail({ reason: 'CHAIR_DEACTIVATED' })).toBe('Sillón desactivado');
     expect(chairDetail({ reason: 'CHAIR_REACTIVATED' })).toBe('Sillón reactivado');
+    expect(chairDetail({ reason: 'EQUIPMENT_RETIRED' })).toBe('Equipo dado de baja');
     expect(chairDetail({ reason: 'SEDATION_VITALS' })).toBeNull();
   });
 });
@@ -165,19 +183,31 @@ describe('cashSessionDetail (DX-027)', () => {
   });
 });
 
+const H23 = regionalFormat({ locale: 'es', hourCycle: 'h23' });
+const H12 = regionalFormat({ locale: 'en-US', hourCycle: 'h12' });
+const WEEKLY: AuditMetadata = {
+  scheduleChange: {
+    before: [],
+    after: [
+      { locationId: 'a', weekday: 1, startMinute: 480, endMinute: 780 },
+      { locationId: 'b', weekday: 4, startMinute: 840, endMinute: 1140 },
+    ],
+  },
+};
+
 describe('scheduleChangeDetail (DX-233)', () => {
   it('semanal: antes y después por día', () => {
     expect(
-      scheduleChangeDetail({
-        scheduleChange: {
-          before: [],
-          after: [
-            { locationId: 'a', weekday: 1, startMinute: 480, endMinute: 780 },
-            { locationId: 'b', weekday: 4, startMinute: 840, endMinute: 1140 },
-          ],
-        },
-      }),
+      scheduleChangeDetail(WEEKLY, H23),
     ).toBe('Antes: sin horario · Después: lun 08:00–13:00, jue 14:00–19:00');
+  });
+  it('DX-354: cambio de horario en 12 h con una sede h12', () => {
+    expect(scheduleChangeDetail(WEEKLY, H12)).toBe(
+      'Antes: sin horario · Después: lun 8:00 a. m.–1:00 p. m., jue 2:00 p. m.–7:00 p. m.',
+    );
+  });
+  it('DX-354: con fmt null «—», no otro reloj', () => {
+    expect(scheduleChangeDetail(WEEKLY, null)).toBe('Antes: sin horario · Después: —');
   });
   it('excepción: fecha y «no trabaja»', () => {
     expect(
@@ -186,11 +216,11 @@ describe('scheduleChangeDetail (DX-233)', () => {
           before: [{ locationId: 'b', date: '2026-10-22', startMinute: 840, endMinute: 1140 }],
           after: [{ locationId: 'b', date: '2026-10-22', off: true }],
         },
-      }),
-    ).toBe('Antes: 22/10 14:00–19:00 · Después: 22/10 no trabaja');
+      }, H23),
+    ).toBe('Antes: 22 de octubre 14:00–19:00 · Después: 22 de octubre no trabaja');
   });
   it('sin cambio de horario, null', () => {
-    expect(scheduleChangeDetail({})).toBeNull();
+    expect(scheduleChangeDetail({}, H23)).toBeNull();
   });
 });
 
@@ -215,6 +245,9 @@ describe('importBatchDetail (DX-107)', () => {
   });
 });
 
+/** El reloj de la pantalla de auditoría de una sede en UTC con locale `es`. */
+const CLOCK = { timeZone: 'UTC', fmt: H23 };
+
 describe('planItemAttributionDetail (DX-050)', () => {
   const before = {
     performedById: '11111111-1111-4111-8111-111111111111',
@@ -227,13 +260,13 @@ describe('planItemAttributionDetail (DX-050)', () => {
       planItemAttributionDetail({
         reason: 'PLAN_ITEM_ATTRIBUTION_CORRECTED',
         attribution: { before, after: { ...before, performedById: '22222222-2222-4222-8222-222222222222' } },
-      }),
+      }, CLOCK),
     ).toBe('Corrección de quién lo realizó · Otro profesional');
     expect(
       planItemAttributionDetail({
         reason: 'PLAN_ITEM_ATTRIBUTION_CORRECTED',
         attribution: { before, after: { ...before, completedAt: '2026-10-19T15:00:00.000Z' } },
-      }),
+      }, CLOCK),
     ).toBe('Corrección de quién lo realizó · Fecha 20/10/2026 → 19/10/2026');
   });
 
@@ -245,7 +278,7 @@ describe('planItemAttributionDetail (DX-050)', () => {
           before: { performedById: null, locationId: null, completedAt: null },
           after: { performedById: before.performedById, locationId: null, completedAt: null },
         },
-      }),
+      }, CLOCK),
     ).toBe('Corrección de quién lo realizó · Antes sin atribuir');
   });
 
@@ -254,14 +287,26 @@ describe('planItemAttributionDetail (DX-050)', () => {
       planItemAttributionDetail({
         reason: 'PLAN_ITEM_DONE_REVERTED',
         attribution: { before, after: { performedById: null, locationId: null, completedAt: null } },
-      }),
+      }, CLOCK),
     ).toBe('Se quitó «Realizado» · realizado el 20/10/2026');
-    expect(planItemAttributionDetail({ reason: 'PLAN_ITEM_DONE_REVERTED' })).toBe('Se quitó «Realizado»');
+    expect(planItemAttributionDetail({ reason: 'PLAN_ITEM_DONE_REVERTED' }, CLOCK)).toBe('Se quitó «Realizado»');
+  });
+
+  it('DX-354: las fechas con la zona y el formato de la sede de la pantalla; sin él, «—»', () => {
+    const reverted: AuditMetadata = {
+      reason: 'PLAN_ITEM_DONE_REVERTED',
+      attribution: { before, after: { performedById: null, locationId: null, completedAt: null } },
+    };
+    // 15:00 UTC del 20/10 es el 20/10 en Nueva York, en el orden de en-US.
+    expect(planItemAttributionDetail(reverted, { timeZone: 'America/New_York', fmt: H12 })).toBe(
+      'Se quitó «Realizado» · realizado el 10/20/2026',
+    );
+    expect(planItemAttributionDetail(reverted, null)).toBe('Se quitó «Realizado» · realizado el —');
   });
 
   it('null fuera de la atribución', () => {
-    expect(planItemAttributionDetail({ reason: 'PATIENT_FLOW' })).toBeNull();
-    expect(planItemAttributionDetail({ changedFields: ['performedById'] })).toBeNull();
+    expect(planItemAttributionDetail({ reason: 'PATIENT_FLOW' }, CLOCK)).toBeNull();
+    expect(planItemAttributionDetail({ changedFields: ['performedById'] }, CLOCK)).toBeNull();
   });
 });
 
@@ -403,6 +448,18 @@ describe('clinicSettingsDetail (DX-328)', () => {
     expect(clinicSettingsDetail({ reason: 'EXCHANGE_RATE_SOURCE', statusChange: { from: 'AUTOMATIC', to: 'OTRA' } })).toBeNull();
   });
 
+  it.each([
+    ['OFF', 'ON', 'Aviso de registro profesional en las evoluciones: activado'],
+    ['ON', 'OFF', 'Aviso de registro profesional en las evoluciones: desactivado'],
+  ])('DX-540: CLINICAL_ENTRY_LICENSE_WARNING %s → %s', (from, to, text) => {
+    expect(clinicSettingsDetail({ reason: 'CLINICAL_ENTRY_LICENSE_WARNING', statusChange: { from, to } })).toBe(text);
+  });
+
+  it('DX-540: CLINICAL_ENTRY_LICENSE_WARNING with unknown codes → null', () => {
+    expect(clinicSettingsDetail({ reason: 'CLINICAL_ENTRY_LICENSE_WARNING', statusChange: { from: 'ON', to: 'ON' } })).toBeNull();
+    expect(clinicSettingsDetail({ reason: 'CLINICAL_ENTRY_LICENSE_WARNING' })).toBeNull();
+  });
+
   it('PRESCRIPTION_SETTINGS without statusChange → null; majority-age codes stay its own', () => {
     expect(clinicSettingsDetail({ reason: 'PRESCRIPTION_SETTINGS' })).toBeNull();
     expect(
@@ -411,6 +468,51 @@ describe('clinicSettingsDetail (DX-328)', () => {
     expect(
       clinicSettingsDetail({ reason: 'MAJORITY_AGE_SETTINGS', statusChange: { from: 'AGE_18', to: 'AGE_21' } }),
     ).toBe('Mayoría de edad: 18 → 21 años');
+  });
+
+  it('DX-379: QUOTE_SETTINGS → «Validez del presupuesto: 30 días → 45 días» (y «1 día»); un código raro → null', () => {
+    expect(
+      clinicSettingsDetail({ reason: 'QUOTE_SETTINGS', statusChange: { from: 'QT_V30', to: 'QT_V45' } }),
+    ).toBe('Validez del presupuesto: 30 días → 45 días');
+    expect(
+      clinicSettingsDetail({ reason: 'QUOTE_SETTINGS', statusChange: { from: 'QT_V30', to: 'QT_V1' } }),
+    ).toBe('Validez del presupuesto: 30 días → 1 día');
+    expect(clinicSettingsDetail({ reason: 'QUOTE_SETTINGS', statusChange: { from: 'AGE_18', to: 'QT_V45' } })).toBeNull();
+    expect(clinicSettingsDetail({ reason: 'QUOTE_SETTINGS' })).toBeNull();
+  });
+
+  describe('CLINICAL_RECORD_RETENTION_SETTINGS (DX-330)', () => {
+    const event = (direction: 'UP' | 'DOWN', n: number, win = false) => ({
+      reason: 'CLINICAL_RECORD_RETENTION_SETTINGS',
+      configChange: { before: { clinicalRecordRetentionYears: 25 }, after: { clinicalRecordRetentionYears: 15 } },
+      retentionTermChange: {
+        direction,
+        protectedPatients: n,
+        effectiveBefore: 25,
+        effectiveAfter: 15,
+        withinCorrectionWindow: win,
+      },
+    });
+    it.each([
+      [0, 'Conservación de la historia clínica'],
+      [1, 'Conservación de la historia clínica · 1 historia mantiene su fecha'],
+      [2, 'Conservación de la historia clínica · 2 historias mantienen su fecha'],
+    ])('bajada con n = %i', (n, text) => {
+      expect(clinicSettingsDetail(event('DOWN', n))).toBe(text);
+    });
+    it('bajada dentro de la ventana de corrección', () => {
+      expect(clinicSettingsDetail(event('DOWN', 2, true))).toBe(
+        'Conservación de la historia clínica · 2 historias mantienen su fecha · corrección de una subida',
+      );
+      expect(clinicSettingsDetail(event('DOWN', 0, true))).toBe(
+        'Conservación de la historia clínica · corrección de una subida',
+      );
+    });
+    it('subida y metadata rota → null', () => {
+      expect(clinicSettingsDetail(event('UP', 0))).toBeNull();
+      expect(clinicSettingsDetail({ reason: 'CLINICAL_RECORD_RETENTION_SETTINGS' })).toBeNull();
+      expect(clinicSettingsDetail(event('DOWN', -1))).toBeNull();
+    });
   });
 
   it('null para otra reason', () => {
@@ -619,9 +721,9 @@ describe('exchangeRateBackupDetail (DX-402)', () => {
       exchangeRateBackupDetail({
         reason: 'EXCHANGE_RATE_BACKUP',
         origin: 'JOB',
-        exchangeRateBackup: { rateDate: '2026-10-28', manualSince: '2026-10-30', currencies: ['COP', 'USD'] },
+        exchangeRateBackup: { rateDate: '2026-10-28', manualSince: '2026-10-30', currencies: ['VES', 'USD'] },
       }),
-    ).toBe('Tasa de respaldo: la manual de un día anterior a «manual desde» (COP, USD) · proceso automático');
+    ).toBe('Tasa de respaldo: la manual de un día anterior a «manual desde» (VES, USD) · proceso automático');
   });
 
   it('null para otra reason', () => {
@@ -680,5 +782,256 @@ describe('exchangeRateBackupDetail (DX-402)', () => {
     expect(signatureRequestDetail({ reason: 'OTRA_COSA' })).toBeNull();
     expect(isPatientOptOut({ reason: 'SIGNATURE_PATIENT_SIGNED', origin: 'LINK' })).toBe(true);
     expect(isPatientOptOut({ reason: 'SIGNATURE_REQUEST_SENT' })).toBe(false);
+  });
+});
+
+describe('recibo no fiscal en la auditoría (DX-515)', () => {
+  it.each([
+    ['RECEIPT_SETTINGS', 'Título y leyenda del recibo'],
+    ['RECEIPT_LEGEND', 'Leyenda del recibo de la sede'],
+    ['EXTERNAL_INVOICE_NUMBER', 'Nº de factura externa del abono'],
+    ['CURRENCY_TEXTS', 'Texto de las monedas'],
+    ['CLINIC_PROFILE', 'Datos de la clínica'],
+    ['CLINIC_LOGO', 'Logo de la clínica'],
+  ])('%s → %s', (reason, text) => {
+    expect(receiptDetail({ reason })).toBe(text);
+  });
+});
+
+describe('exchangeRateDetail (DX-381)', () => {
+  const VES = { currency: 'VES', day: '2026-10-29', rate: '36.5' };
+  const ES_VE = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
+
+  it('moneda · día · tasa con el formato de la sede', () => {
+    expect(exchangeRateDetail({ exchangeRate: VES }, H23)).toBe('VES · 29/10/2026 · 36,5');
+    expect(exchangeRateDetail({ exchangeRate: VES }, ES_VE)).toBe('VES · 29/10/2026 · 36,5');
+    expect(exchangeRateDetail({ exchangeRate: VES }, H12)).toBe('VES · 10/29/2026 · 36.5');
+  });
+
+  it('los decimales de la tasa se conservan hasta 8, sin ceros de más', () => {
+    expect(exchangeRateDetail({ exchangeRate: { ...VES, rate: '40.12345678' } }, H23)).toBe(
+      'VES · 29/10/2026 · 40,12345678',
+    );
+    expect(exchangeRateDetail({ exchangeRate: { ...VES, rate: '0.91' } }, H23)).toBe('VES · 29/10/2026 · 0,91');
+  });
+
+  it('sin el formato de la sede no inventa otro: «—»', () => {
+    expect(exchangeRateDetail({ exchangeRate: VES }, null)).toBe('VES · — · —');
+  });
+
+  it('null si el evento no trae tasa', () => {
+    expect(exchangeRateDetail({}, H23)).toBeNull();
+    expect(exchangeRateDetail({ reason: 'EXCHANGE_RATE_BACKUP' }, H23)).toBeNull();
+  });
+});
+
+describe('staffDetail › cambio de sedes del miembro (DX-381)', () => {
+  const CENTRO = '3f1c2a10-0000-4000-8000-000000000001';
+  const NORTE = '3f1c2a10-0000-4000-8000-000000000002';
+  const names = locationNameMap([
+    { id: CENTRO, name: 'Sede Centro' },
+    { id: NORTE, name: 'Sede Norte' },
+  ]);
+  const change = (before: string[] | null, after: string[] | null): AuditMetadata => ({
+    reason: 'LOCATIONS_CHANGED',
+    staffAccess: { before: { locationIds: before }, after: { locationIds: after } },
+  });
+
+  it('antes → después por nombre de sede', () => {
+    expect(staffDetail(change([CENTRO], [CENTRO, NORTE]), names)).toBe(
+      'Sedes del miembro cambiadas · Sedes: Sede Centro → Sede Centro, Sede Norte',
+    );
+  });
+
+  it('null = «Todas las sedes» en cualquiera de los lados', () => {
+    expect(staffDetail(change(null, [NORTE]), names)).toBe(
+      'Sedes del miembro cambiadas · Sedes: Todas las sedes → Sede Norte',
+    );
+    expect(staffDetail(change([CENTRO], null), names)).toBe(
+      'Sedes del miembro cambiadas · Sedes: Sede Centro → Todas las sedes',
+    );
+  });
+
+  it('un evento anterior, sin antes ni después, sigue diciendo solo el motivo', () => {
+    expect(staffDetail({ reason: 'LOCATIONS_CHANGED' }, names)).toBe('Sedes del miembro cambiadas');
+  });
+});
+
+describe('paymentAllocationDetail (DX-399)', () => {
+  // Intl separa el código del importe con un espacio duro.
+  const detail = (...args: Parameters<typeof paymentAllocationDetail>) =>
+    paymentAllocationDetail(...args)?.replace(/\u00a0/g, ' ');
+  const ES_VE = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
+  const ITEM_A = '11111111-1111-4111-8111-111111111111';
+  const ITEM_B = '22222222-2222-4222-8222-222222222222';
+  const manual = {
+    reason: 'PAYMENT_REALLOCATED',
+    allocation: {
+      currency: 'EUR',
+      mode: 'MANUAL' as const,
+      before: [{ itemId: ITEM_A, amount: 100 }],
+      after: [{ itemId: ITEM_B, amount: 25.5 }],
+    },
+  };
+
+  it('fijada a mano: la regla y el antes y el después con el importe en la moneda del plan', () => {
+    expect(detail(manual, ES_VE)).toBe(
+      'Imputación fijada a mano · antes: 1 ítem · EUR 100,00 → después: 1 ítem · EUR 25,50',
+    );
+  });
+
+  it('devuelta al reparto automático, con varios ítems y un lado sin imputar', () => {
+    expect(
+      detail(
+        {
+          reason: 'PAYMENT_REALLOCATED',
+          allocation: {
+            currency: 'USD',
+            mode: 'AUTO',
+            before: [],
+            after: [
+              { itemId: ITEM_A, amount: 10.1 },
+              { itemId: ITEM_B, amount: 20.2 },
+            ],
+          },
+        },
+        ES_VE,
+      ),
+    ).toBe('Imputación devuelta al reparto automático · antes: sin imputar → después: 2 ítems · USD 30,30');
+    expect(
+      detail(
+        {
+          reason: 'PAYMENT_REALLOCATED',
+          allocation: { currency: 'EUR', mode: 'AUTO', before: [{ itemId: ITEM_A, amount: 25.5 }], after: [] },
+        },
+        ES_VE,
+      ),
+    ).toBe('Imputación devuelta al reparto automático · antes: 1 ítem · EUR 25,50 → después: lo reparte el sistema');
+
+  });
+
+  it('sin el formato de la sede no inventa otro: «—»', () => {
+    expect(paymentAllocationDetail(manual, null)).toBe(
+      'Imputación fijada a mano · antes: 1 ítem · — → después: 1 ítem · —',
+    );
+  });
+
+  it('null si el evento no es de una reimputación', () => {
+    expect(paymentAllocationDetail({}, ES_VE)).toBeNull();
+    expect(paymentAllocationDetail({ reason: 'PAYMENT_REALLOCATED' }, ES_VE)).toBeNull();
+    expect(paymentAllocationDetail({ allocation: manual.allocation }, ES_VE)).toBeNull();
+  });
+});
+
+describe('appointmentMoveDetail (DX-133-bis)', () => {
+  const ANA = 'AAAAAAAA-1111-4111-8111-111111111111';
+  const LUIS = '22222222-2222-4222-8222-222222222222';
+  const VE = { timeZone: 'America/Caracas', fmt: regionalFormat({ locale: 'es-VE', hourCycle: 'h12' }) };
+  const staff = staffNameMap([
+    { userId: ANA, fullName: 'Ana Pérez' },
+    { userId: LUIS, fullName: 'Luis Gómez' },
+  ]);
+  // 13:00 y 14:00 en Caracas (UTC−4).
+  const move = {
+    from: { start: '2026-11-10T17:00:00.000Z', end: '2026-11-10T17:30:00.000Z', providerId: ANA.toLowerCase() },
+    to: { start: '2026-11-10T18:00:00.000Z', end: '2026-11-10T18:30:00.000Z', providerId: LUIS },
+  };
+
+  it('pinta la hora con el reloj de la sede y el profesional antes y después', () => {
+    const detail = appointmentMoveDetail({ reason: 'APPOINTMENT_MOVED', move }, VE, staff);
+    expect(detail).toBe(
+      `Cita movida · Antes: ${VE.fmt.dateTime(new Date(move.from.start), VE.timeZone)}, Ana Pérez · Después: ${VE.fmt.dateTime(new Date(move.to.start), VE.timeZone)}, Luis Gómez`,
+    );
+    expect(detail).toMatch(/1:00/);
+    expect(detail).toMatch(/2:00/);
+  });
+
+  it('DX-436-bis: «Asignar» desde «Ocupar este hueco» se nombra como tal', () => {
+    const detail = appointmentMoveDetail(
+      { reason: 'APPOINTMENT_MOVED', move: { ...move, via: 'OPENING' as const } },
+      VE,
+      staff,
+    );
+    expect(detail).toMatch(/^Cita movida a un hueco liberado · Antes: /);
+  });
+
+  it('un profesional que ya no está se nombra como retirado, nunca por su id', () => {
+    const detail = appointmentMoveDetail(
+      { reason: 'APPOINTMENT_MOVED', move: { ...move, to: { ...move.to, providerId: '99999999-9999-4999-8999-999999999999' } } },
+      VE,
+      staff,
+    );
+    expect(detail).toContain('profesional retirado');
+    expect(detail).not.toContain('9999');
+  });
+
+  it('sin la lista del personal no nombra a nadie: solo si cambió de profesional', () => {
+    expect(appointmentMoveDetail({ reason: 'APPOINTMENT_MOVED', move }, VE, null)).toBe(
+      `Cita movida · ${VE.fmt.dateTime(new Date(move.from.start), VE.timeZone)} → ${VE.fmt.dateTime(new Date(move.to.start), VE.timeZone)} · otro profesional`,
+    );
+    expect(
+      appointmentMoveDetail({ reason: 'APPOINTMENT_MOVED', move: { ...move, to: { ...move.to, providerId: ANA } } }, VE, null),
+    ).not.toContain('otro profesional');
+  });
+
+  it('sin el reloj de la sede, «—» en vez de otra hora; null si no es un movimiento', () => {
+    expect(appointmentMoveDetail({ reason: 'APPOINTMENT_MOVED', move }, null, staff)).toBe(
+      'Cita movida · Antes: —, Ana Pérez · Después: —, Luis Gómez',
+    );
+    expect(appointmentMoveDetail({ reason: 'APPOINTMENT_MOVED' }, VE, staff)).toBe('Cita movida');
+    expect(appointmentMoveDetail({ reason: 'PATIENT_FLOW' }, VE, staff)).toBeNull();
+  });
+});
+
+describe('treatmentPlanAcceptanceDetail (DX-379 C)', () => {
+  it('nombra cómo se aceptó un presupuesto vencido y la vista previa de la firma', () => {
+    expect(treatmentPlanAcceptanceDetail({ reason: 'QUOTE_EXPIRED_ORIGINAL_PRICES' })).toBe(
+      'Presupuesto vencido aceptado con los precios originales',
+    );
+    expect(treatmentPlanAcceptanceDetail({ reason: 'QUOTE_EXPIRED_REPRICED' })).toBe(
+      'Presupuesto vencido aceptado con los precios actualizados',
+    );
+    expect(treatmentPlanAcceptanceDetail({ reason: 'ACCEPT_REPRICE_PREVIEW' })).toBe(
+      'Vista previa de los precios actualizados para aceptar',
+    );
+    expect(treatmentPlanAcceptanceDetail({ reason: 'CHAIR_ORDER' })).toBeNull();
+    expect(treatmentPlanAcceptanceDetail({})).toBeNull();
+  });
+
+  it('DX-417: nombra la aceptación parcial, su vista previa y el alta del presupuesto pendiente', () => {
+    expect(treatmentPlanAcceptanceDetail({ reason: 'PLAN_PARTIALLY_ACCEPTED' })).toBe('Presupuesto aceptado en parte');
+    expect(treatmentPlanAcceptanceDetail({ reason: 'ACCEPT_PARTIAL_PREVIEW' })).toBe(
+      'Vista previa de la aceptación parcial',
+    );
+    expect(treatmentPlanAcceptanceDetail({ reason: 'PLAN_SPLIT_PENDING' })).toBe(
+      'Presupuesto pendiente creado por una aceptación parcial',
+    );
+    expect(treatmentPlanAcceptanceDetail({})).toBeNull();
+  });
+});
+
+describe('receiptsSummaryPeriodDetail (DX-401)', () => {
+  const H23 = regionalFormat({ locale: 'es-VE', hourCycle: 'h23' });
+  const period = { from: '2026-11-01', to: '2026-11-30' };
+
+  it('el periodo del resumen con el formato de la sede', () => {
+    expect(receiptsSummaryPeriodDetail({ period }, H23)).toBe('Periodo 01/11/2026 – 30/11/2026');
+    expect(AUDIT_RESOURCE_LABELS.PAYMENT_RECEIPT_SUMMARY).toBe('Resumen de recibos');
+  });
+
+  it('sin el formato de la sede, «—»; sin periodo, null', () => {
+    expect(receiptsSummaryPeriodDetail({ period }, null)).toBe('Periodo — – —');
+    expect(receiptsSummaryPeriodDetail({}, H23)).toBeNull();
+  });
+});
+
+describe('recallViaDetail (DX-015-bis)', () => {
+  it('rotula por dónde se programó el recall', () => {
+    expect(recallViaDetail({ via: 'DEFAULT' })).toBe('Recall por defecto');
+    expect(recallViaDetail({ via: 'CLINICAL_ENTRY' })).toBe('Desde la evolución');
+  });
+  it('sin `via` o con uno desconocido, nada', () => {
+    expect(recallViaDetail({})).toBeNull();
+    expect(recallViaDetail({ via: 'OTRO' as never })).toBeNull();
   });
 });

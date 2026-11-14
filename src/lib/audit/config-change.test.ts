@@ -11,6 +11,57 @@ const configChangeItems = (metadata: Parameters<typeof items_>[0]) =>
   items_(metadata, fmt);
 
 describe("configChangeItems (DX-360)", () => {
+  it("DX-497: la lista de idiomas de los pacientes, con el nombre de cada idioma", () => {
+    const items = configChangeItems({
+      reason: "PATIENT_LANGUAGES_SETTINGS",
+      changedFields: ["patientLanguages"],
+      configChange: {
+        before: { patientLanguages: ["es"] },
+        after: { patientLanguages: ["es", "en", "ca"] },
+      },
+    });
+    expect(configChangeText(items!)).toBe(
+      "Idiomas de los pacientes: Español (es) → Español (es), English (en), Català (ca)",
+    );
+  });
+
+  it("DX-497: el idioma del paciente; null es «Idioma de la clínica»", () => {
+    const items = configChangeItems({
+      reason: "COMMUNICATION_PREFERENCES_CHANGED",
+      changedFields: ["preferredLanguage"],
+      configChange: {
+        before: { preferredLanguage: null },
+        after: { preferredLanguage: "en" },
+      },
+    });
+    expect(configChangeText(items!)).toBe(
+      "Idioma de los mensajes: Idioma de la clínica → English (en)",
+    );
+  });
+
+  it("DX-015-bis: la edición de un tipo de recall dice el intervalo en meses y el grupo de exclusión", () => {
+    const items = configChangeItems({
+      reason: "RECALL_TYPE_UPDATED",
+      changedFields: ["defaultIntervalMonths", "exclusionGroup"],
+      configChange: {
+        before: { defaultIntervalMonths: 6, exclusionGroup: null },
+        after: { defaultIntervalMonths: 4, exclusionGroup: "G_AB12CD34" },
+      },
+    });
+    expect(configChangeText(items!)).toBe(
+      "Intervalo por defecto: 6 → 4 meses · Grupo de exclusión: — → G_AB12CD34",
+    );
+  });
+
+  it("DX-015-bis: el cambio de disparadores es un evento de configuración", () => {
+    const items = configChangeItems({
+      reason: "RECALL_TYPE_TRIGGERS_UPDATED",
+      changedFields: ["catalogItemIds"],
+      configChange: { before: { catalogItemIds: [] }, after: { catalogItemIds: ["c-1"] } },
+    });
+    expect(items?.[0]).toMatchObject({ label: "Procedimientos que lo reinician", before: "—", after: "c-1" });
+  });
+
   it("edición: solo lo que cambió, con su antes y su después, en un orden fijo (nombre y duración primero)", () => {
     const items = configChangeItems({
       reason: "APPOINTMENT_TYPE_UPDATED",
@@ -47,11 +98,11 @@ describe("configChangeItems (DX-360)", () => {
       configChangeItems({
         reason: "PAYER_CREATED",
         configChange: {
-          after: { name: "Sanitas", type: "INSURER", active: true },
+          after: { name: "Sanavida", type: "INSURER", active: true },
         },
       }),
     ).toEqual([
-      { field: "name", label: "Nombre", kind: "added", value: "Sanitas" },
+      { field: "name", label: "Nombre", kind: "added", value: "Sanavida" },
       { field: "type", label: "Tipo", kind: "added", value: "Aseguradora" },
       { field: "active", label: "Activo", kind: "added", value: "Sí" },
     ]);
@@ -243,5 +294,150 @@ describe("configChangeItems (DX-360)", () => {
     expect(
       configChangeItems({ configChange: { before: {}, after: {} } }),
     ).toBeNull();
+  });
+});
+
+it('DX-515: el nº de factura externa y la leyenda del recibo con su antes y después', () => {
+  const items = configChangeItems(
+    {
+      reason: 'EXTERNAL_INVOICE_NUMBER',
+      configChange: { before: { externalInvoiceNumber: null }, after: { externalInvoiceNumber: 'F-0001' } },
+    },
+  );
+  expect(items).toEqual([expect.objectContaining({ field: 'externalInvoiceNumber', label: 'Nº de factura externa' })]);
+  const legend = configChangeItems(
+    {
+      reason: 'RECEIPT_LEGEND',
+      configChange: {
+        before: { receiptLegendOverride: false, receiptLegend: null },
+        after: { receiptLegendOverride: true, receiptLegend: 'De la sede' },
+      },
+    },
+  );
+  expect(legend?.map((i) => i.label)).toEqual(['Leyenda propia de la sede', 'Leyenda del recibo']);
+});
+
+describe("DX-516: ajustes por medio de pago", () => {
+  it("pinta el tipo y el cálculo en palabras y el antes y el después", () => {
+    const items = configChangeItems(
+      {
+        reason: "PAYMENT_METHOD_ADJUSTMENT_UPDATED",
+        changedFields: ["adjustmentLabel", "percent"],
+        configChange: {
+          before: { adjustmentLabel: "Impuesto 3 %", percent: 3 },
+          after: { adjustmentLabel: "Impuesto 10 %", percent: 10 },
+        },
+      },
+    );
+    expect(items?.map((i) => i.label)).toEqual(["Ajuste", "Porcentaje"]);
+    const created = configChangeItems(
+      {
+        reason: "PAYMENT_METHOD_ADJUSTMENT_CREATED",
+        configChange: { after: { adjustmentType: "SURCHARGE", calculation: "FIXED" } },
+      },
+    );
+    expect(configChangeText(created ?? [])).toBe("Tipo de ajuste: Recargo · Cálculo: Importe fijo");
+  });
+});
+
+describe("plazo de conservación (DX-330)", () => {
+  it("se lee en español, con antes, después y unidad", () => {
+    const list = configChangeItems({
+      reason: "CLINICAL_RECORD_RETENTION_SETTINGS",
+      configChange: {
+        before: { clinicalRecordRetentionYears: 25 },
+        after: { clinicalRecordRetentionYears: 15 },
+      },
+    });
+    expect(configChangeText(list!)).toBe(
+      "Plazo de conservación de la historia clínica: 25 → 15 años",
+    );
+  });
+});
+
+describe("texto de las monedas en la auditoría (DX-517)", () => {
+  it("pinta el antes y el después de cada moneda", () => {
+    const items = configChangeItems({
+      reason: "CURRENCY_TEXTS",
+      changedFields: ["currencyTexts"],
+      configChange: {
+        before: { currencyTexts: [] },
+        after: { currencyTexts: ["EUR=€", "VES=Bs."] },
+      },
+    });
+    expect(items).toHaveLength(1);
+    const item = items![0];
+    expect(item).toMatchObject({ field: "currencyTexts", label: "Texto de las monedas", kind: "changed" });
+    expect(item.kind === "changed" ? item.after : "").toContain("VES=Bs.");
+  });
+});
+
+describe("moneda del catálogo en la auditoría (DX-502-bis)", () => {
+  it("la nombra y pinta el antes y el después", () => {
+    const items = configChangeItems({
+      reason: "CLINIC_PROFILE",
+      changedFields: ["catalogCurrency"],
+      configChange: {
+        before: { catalogCurrency: null },
+        after: { catalogCurrency: "USD" },
+      },
+    });
+    expect(items).toHaveLength(1);
+    const item = items![0];
+    expect(item).toMatchObject({ field: "catalogCurrency", label: "Moneda del catálogo", kind: "changed" });
+    expect(item.kind === "changed" ? item.after : "").toBe("USD");
+  });
+});
+
+describe("datos de la clínica en la auditoría (DX-019)", () => {
+  it("pinta el antes y el después del identificador fiscal y del logo", () => {
+    const items = configChangeItems({
+      reason: "CLINIC_PROFILE",
+      changedFields: ["taxId", "taxIdLabel"],
+      configChange: {
+        before: { taxId: null, taxIdLabel: null },
+        after: { taxId: "J-123", taxIdLabel: "ID fiscal" },
+      },
+    });
+    expect(items?.map((i) => i.label)).toEqual(["Identificador fiscal", "Nombre del identificador fiscal"]);
+    const logo = configChangeItems({
+      reason: "CLINIC_LOGO",
+      changedFields: ["logo"],
+      configChange: { before: { logo: null }, after: { logo: "logos/x-0123456789abcdef.png" } },
+    });
+    expect(logo?.[0]).toMatchObject({ field: "logo", label: "Logo" });
+  });
+});
+
+describe("DX-384: plazo de la última tasa manual", () => {
+  it("lo dice en español, con su unidad", () => {
+    const list = configChangeItems({
+      reason: "EXCHANGE_RATE_MAX_AGE",
+      configChange: {
+        before: { manualRateMaxAgeDays: 3 },
+        after: { manualRateMaxAgeDays: 0 },
+      },
+    });
+    expect(configChangeText(list!)).toBe(
+      "Días de validez de la última tasa manual: 3 → 0 días",
+    );
+  });
+});
+
+describe("DX-448: ajustes de la oferta de hueco", () => {
+  it("lo dice en español; sin elegir antes, «Por defecto»", () => {
+    const list = configChangeItems(
+      {
+        reason: "SLOT_OFFER_SETTINGS",
+        changedFields: ["expiryLeadMinutes", "minLeadMinutes"],
+        configChange: {
+          before: { expiryLeadMinutes: null, minLeadMinutes: 20 },
+          after: { expiryLeadMinutes: 60, minLeadMinutes: 30 },
+        },
+      },
+    );
+    expect(configChangeText(list!)).toBe(
+      "Caducidad del enlace de la oferta de hueco: Por defecto → 60 min antes del hueco · Antelación mínima para ofrecer un hueco: 20 → 30 min",
+    );
   });
 });

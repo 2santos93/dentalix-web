@@ -2,14 +2,17 @@ import { test, expect, type Page } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
+import { E2E_REGION } from './support/regional';
+import { regionalFormat } from '../src/lib/format/regional-format';
 
 /**
- * e2e (DX-039): retención legal de la historia clínica (Res. 839/2017).
+ * e2e (DX-039): retención de la historia clínica.
  *
  * Registra una clínica (su dueño es ADMIN) y, por la API real, crea un
- * paciente con una evolución (queda en retención 15 años) y otro sin
+ * paciente con una evolución (queda en retención por el plazo de la clínica, que
+ * se lee de la API) y otro sin
  * atenciones. En la ficha:
- *   - el badge «Historia en retención legal hasta DD/MM/AAAA» con la fecha que
+ *   - el badge «Historia en retención hasta DD/MM/AAAA» con la fecha que
  *     calcula la API;
  *   - «Archivar paciente» responde 409 y el modal lo dice en español;
  *   - el paciente sin atenciones se archiva y la app vuelve al listado;
@@ -33,9 +36,9 @@ async function expectNoHorizontalScroll(page: Page): Promise<void> {
   expect(overflow).toBeLessThanOrEqual(0);
 }
 
-function ddmmyyyy(isoDate: string): string {
-  const [y, m, d] = isoDate.split('-');
-  return `${d}/${m}/${y}`;
+/** El día civil con el formato de la sede de la suite (DX-354b): el mismo de la app, calculado con `Intl`, no a mano. */
+function shownDay(isoDate: string): string {
+  return regionalFormat(E2E_REGION).civilDate(isoDate.slice(0, 10));
 }
 
 /** «Archivar paciente» está en el menú «⋯» («Más acciones») de la cabecera de la ficha. */
@@ -45,7 +48,7 @@ async function openArchive(page: Page) {
 }
 
 for (const viewport of VIEWPORTS) {
-  test(`retención legal: badge, 409 en español al archivar y archivo sin atenciones (${viewport.name})`, async ({
+  test(`retención: badge, 409 en español al archivar y archivo sin atenciones (${viewport.name})`, async ({
     page,
   }) => {
     test.setTimeout(90_000);
@@ -83,16 +86,22 @@ for (const viewport of VIEWPORTS) {
       sex: 'M',
     });
     const detail = await page.request.get(`${API_URL}/patients/${retained.id}`, { headers });
-    const { retentionUntil } = (await detail.json()) as { retentionUntil: string };
-    const until = ddmmyyyy(retentionUntil);
+    const { retentionUntil, clinicRetentionYears } = (await detail.json()) as {
+      retentionUntil: string;
+      clinicRetentionYears: number;
+    };
+    const until = shownDay(retentionUntil);
 
     await page.goto(`${origin}/patients/${retained.id}`);
     const section = page.getByRole('region', {
-      name: 'Retención legal de la historia clínica',
+      name: 'Retención de la historia clínica',
     });
-    await expect(section.getByText(`Historia en retención legal hasta ${until}`)).toBeVisible({
+    await expect(section.getByText(`Historia en retención hasta ${until}`)).toBeVisible({
       timeout: 15_000,
     });
+    // El plazo es el de la clínica, leído de la API, y la ficha no habla de ley.
+    await expect(section).toContainText(`Se conserva ${clinicRetentionYears} años desde la última atención`);
+    await expect(section).not.toContainText(/legal|839/i);
     await expectNoHorizontalScroll(page);
 
     // Las acciones de ADMIN viven en el menú «⋯» de la cabecera (UX v2 · K3).
@@ -101,8 +110,9 @@ for (const viewport of VIEWPORTS) {
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: 'Archivar' }).click();
     await expect(
-      dialog.getByText(`está en retención legal hasta el ${until}`, { exact: false }),
+      dialog.getByText(`está en retención hasta el ${until}`, { exact: false }),
     ).toBeVisible({ timeout: 10_000 });
+    await expect(dialog).not.toContainText(/legal|839/i);
     await expectNoHorizontalScroll(page);
     await dialog.getByRole('button', { name: 'Cancelar' }).click();
     await expect(dialog).toBeHidden();
@@ -123,7 +133,7 @@ for (const viewport of VIEWPORTS) {
     // Sin atenciones clínicas: se archiva como siempre y vuelve al listado.
     await page.goto(`${origin}/patients/${free.id}`);
     await expect(
-      section.getByText('Sin atenciones clínicas: sin retención legal'),
+      section.getByText('Sin atenciones clínicas: sin retención'),
     ).toBeVisible({ timeout: 15_000 });
     await openArchive(page);
     const archiveDialog = page.getByRole('dialog', { name: 'Archivar paciente' });

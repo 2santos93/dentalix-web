@@ -8,7 +8,8 @@ import {
   replaceStaffLocations,
   type ClinicRole,
 } from '@/lib/staff/staff-api';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { loadLocations } from '@/lib/session/session-store';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Callout } from '@/components/ui/callout';
@@ -81,7 +82,7 @@ function EditableStaffLocations({ token, userId }: { token: string; userId: stri
       try {
         const [current, clinicLocations] = await Promise.all([
           getStaffLocations(token, userId),
-          listLocations(token),
+          loadLocations(token),
         ]);
         if (cancelled) return;
         setLocations(clinicLocations);

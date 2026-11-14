@@ -130,13 +130,22 @@ describe('PublicSignatureView (DX-243)', () => {
     expect(doc).toHaveTextContent('a realizar la exodoncia del 38.');
     expect(mockedDocument).toHaveBeenCalledWith('tok', 'S'.repeat(43));
 
-    // Sin confirmar la lectura ni firmar: dice qué falta.
+    // DX-441: al llegar al paso, el foco va a su título.
+    expect(within(doc).getByRole('heading', { level: 1 })).toHaveFocus();
+
+    // Sin confirmar la lectura ni firmar: dice qué falta y lleva al primer error.
     await user.click(screen.getByRole('button', { name: 'Firmar' }));
     expect(screen.getByText('Confirma que leíste el documento completo.')).toBeInTheDocument();
     expect(screen.getByText('Firma en el recuadro.')).toBeInTheDocument();
     expect(mockedSign).not.toHaveBeenCalled();
+    expect(screen.getByRole('checkbox', { name: /he leído el documento completo/i })).toHaveFocus();
 
     await user.click(screen.getByRole('checkbox', { name: /he leído el documento completo/i }));
+    // DX-441: sin firma, el foco va al lienzo, que describe el error.
+    await user.click(screen.getByRole('button', { name: 'Firmar' }));
+    const canvas = screen.getByRole('img', { name: 'Tu firma' });
+    expect(canvas).toHaveFocus();
+    expect(canvas).toHaveAccessibleDescription(expect.stringContaining('Firma en el recuadro.'));
     draw(screen.getByRole('img', { name: 'Tu firma' }));
     await user.click(screen.getByRole('button', { name: 'Firmar' }));
     await waitFor(() =>
@@ -145,7 +154,7 @@ describe('PublicSignatureView (DX-243)', () => {
         accepted: true,
       }),
     );
-    expect(await screen.findByRole('heading', { name: 'Documento firmado' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Documento firmado' })).toHaveFocus();
     expect(screen.getByText('a'.repeat(64))).toBeInTheDocument();
     // La copia que imprime lleva la firma que acaba de dibujar.
     expect(screen.getByRole('img', { name: 'Firma de Laura Castro' })).toHaveAttribute(
@@ -253,7 +262,7 @@ describe('PublicSignatureView (DX-243)', () => {
   it('presupuesto (DX-415): tras el código ve ítems, totales en la moneda y el formato de la sede y condiciones; acepta y queda la copia', async () => {
     const user = setupUser();
     const budget = {
-      currency: 'COP',
+      currency: 'USD',
       clinicName: 'Clínica Sonrisas',
       location: { name: 'Sede Centro', address: 'Calle 1' },
       patient: { name: 'Laura Castro', document: 'CI 123' },
@@ -273,9 +282,10 @@ describe('PublicSignatureView (DX-243)', () => {
           subtotal: 270000,
           listPrice: null,
           agreementName: null,
+          listPriceCurrency: null,
         },
       ],
-      totals: [{ currency: 'COP', gross: 300000, discount: 30000, net: 270000, agreementSaving: 0 }],
+      totals: [{ currency: 'USD', gross: 300000, discount: 30000, net: 270000, agreementSaving: 0 }],
     };
     const doc = documentFixture({
       type: 'BUDGET',
@@ -308,7 +318,7 @@ describe('PublicSignatureView (DX-243)', () => {
     const items = within(article).getByRole('list', { name: 'Procedimientos del presupuesto' });
     expect(within(items).getAllByRole('listitem')).toHaveLength(1);
     // Formato de la sede (es-VE) y el código ISO de la moneda del plan (DX-378).
-    expect(article).toHaveTextContent(/Total \(COP\)\s*COP\s270\.000,00/);
+    expect(article).toHaveTextContent(/Total \(USD\)\s*USD\s270\.000,00/);
 
     await user.click(screen.getByRole('checkbox', { name: /he revisado el presupuesto/i }));
     draw(screen.getByRole('img', { name: 'Tu firma' }));

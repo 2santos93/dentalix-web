@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { SIGNER_TYPE_LABELS, type PatientConsentDocument } from '@/lib/consents/consents-api';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
-import { formatDateTime } from '@/lib/format/date';
+import { documentTexts, type DocumentFormat } from '@/lib/format/document-format';
 import { ClinicLogo } from '@/components/brand/clinic-brand';
 
 const copy = {
@@ -37,6 +37,8 @@ const copy = {
 
 interface ConsentDocumentProps {
   consent: PatientConsentDocument;
+  /** El formato de la sede del consentimiento (`documentFormat`); `null` → «—» en las fechas y horas. */
+  format: DocumentFormat | null;
 }
 
 /**
@@ -48,7 +50,9 @@ interface ConsentDocumentProps {
  * Misma excepción de fidelidad de impresión que el estado de cuenta: papel
  * blanco y tinta oscura explícitos, también en modo oscuro.
  */
-export function ConsentDocument({ consent }: ConsentDocumentProps) {
+export function ConsentDocument({ consent, format }: ConsentDocumentProps) {
+  // DX-354: firmas y envíos con la zona y el reloj de la sede del documento.
+  const doc = documentTexts(format);
   const { clinic, patient } = consent;
   const patientName = `${patient.firstName} ${patient.lastName}`;
   const guardian = consent.signerType === 'GUARDIAN';
@@ -71,7 +75,7 @@ export function ConsentDocument({ consent }: ConsentDocumentProps) {
           {copy.signedAt}
           <br />
           <span className="font-medium text-[#111827] tabular-nums">
-            {formatDateTime(consent.signedAt)}
+            {doc.dateTime(consent.signedAt)}
           </span>
         </p>
       </header>
@@ -135,15 +139,15 @@ export function ConsentDocument({ consent }: ConsentDocumentProps) {
           <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2 print:grid-cols-2">
             {(
               [
-                [copy.remoteSent, formatDateTime(consent.remote.sentAt)],
-                [copy.remoteOpened, formatDateTime(consent.remote.openedAt)],
-                [copy.remoteVerified, formatDateTime(consent.remote.verifiedAt)],
-                [copy.remoteSigned(signedBy), formatDateTime(consent.signedAt)],
+                [copy.remoteSent, doc.dateTime(consent.remote.sentAt)],
+                [copy.remoteOpened, doc.dateTime(consent.remote.openedAt)],
+                [copy.remoteVerified, doc.dateTime(consent.remote.verifiedAt)],
+                [copy.remoteSigned(signedBy), doc.dateTime(consent.signedAt)],
                 [copy.remoteIp(guardian), consent.remoteIpAddress ?? copy.noDocument],
                 [
                   copy.professionalSignedAt,
                   consent.professionalSignedAt
-                    ? formatDateTime(consent.professionalSignedAt)
+                    ? doc.dateTime(consent.professionalSignedAt)
                     : copy.professionalPending,
                 ],
               ] as const
@@ -164,7 +168,7 @@ export function ConsentDocument({ consent }: ConsentDocumentProps) {
         {!consent.complete ? <p className="font-medium text-[#b45309]">{copy.incomplete(signedBy)}</p> : null}
         <p>
           {copy.footerSignedAt}:{' '}
-          <span className="tabular-nums text-[#111827]">{formatDateTime(consent.signedAt)}</span> ·{' '}
+          <span className="tabular-nums text-[#111827]">{doc.dateTime(consent.signedAt)}</span> ·{' '}
           {copy.footerVersion(consent.templateVersion)}
         </p>
         <p>

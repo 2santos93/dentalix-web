@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, Lock, Printer, ReceiptText } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
@@ -9,11 +9,14 @@ import {
   type PaymentReceipt,
   type ReceiptPrintFormat,
 } from '@/lib/payments/payment-receipts-api';
+import { documentFormat } from '@/lib/format/document-format';
+import { DocumentFormatNote } from '@/components/documents/document-format-note';
 import { PaymentReceiptDocument } from './payment-receipt-document';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { usePrintDocumentTitle } from '@/lib/print/use-print-document-title';
 
 const copy = {
   toolbar: 'Acciones del recibo',
@@ -58,6 +61,8 @@ export function PaymentReceiptPrintView({
   const [notFound, setNotFound] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const printed = useRef(false);
+  // DX-354: sin formato de sede no se abre el diálogo de impresión solo: saldría lleno de «—» antes de leer el aviso.
+  const docFormat = useMemo(() => (receipt ? documentFormat(receipt.regional) : null), [receipt]);
   const forbidden = !allowed || deniedByApi;
 
   useEffect(() => {
@@ -84,22 +89,23 @@ export function PaymentReceiptPrintView({
   }, [token, paymentId, reloadKey, allowed]);
 
   useEffect(() => {
-    if (receipt && !printed.current) {
+    if (receipt && docFormat !== null && !printed.current) {
       printed.current = true;
       window.print();
     }
-  }, [receipt]);
+  }, [receipt, docFormat]);
 
   const backHref = receipt
     ? `/patients/${encodeURIComponent(receipt.snapshot.patient.id)}?tab=treatment-plans`
     : '/patients';
 
+  // DX-118 (FE-033): título neutro en la pestaña; el del documento solo al imprimir.
+  usePrintDocumentTitle('Recibo de caja', receipt ? copy.documentTitle(receipt.reference) : null);
   return (
     <div
       data-format={format}
       className="receipt-print-page flex min-h-full flex-1 flex-col bg-surface-sunken print:bg-white"
     >
-      {receipt ? <title>{copy.documentTitle(receipt.reference)}</title> : null}
       <div
         role="toolbar"
         aria-label={copy.toolbar}
@@ -128,7 +134,7 @@ export function PaymentReceiptPrintView({
               </Link>
             ))}
           </nav>
-          <Button type="button" onClick={() => window.print()} disabled={!receipt}>
+          <Button type="button" onClick={() => window.print()} disabled={!receipt || docFormat === null}>
             <Printer aria-hidden />
             {copy.print}
           </Button>
@@ -137,14 +143,22 @@ export function PaymentReceiptPrintView({
 
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {receipt ? (
-          <div
-            className={cn(
-              'mx-auto sm:border sm:border-border print:border-0',
-              format === '80mm' ? 'max-w-[80mm]' : 'max-w-[210mm]',
-            )}
-          >
-            <PaymentReceiptDocument receipt={receipt} format={format} />
-          </div>
+          <>
+            <DocumentFormatNote
+              locationId={receipt.snapshot.location.id}
+              onRetry={() => setReloadKey((k) => k + 1)}
+              className="mx-auto max-w-[210mm] px-4 pb-4 sm:px-0"
+              active={docFormat === null}
+            />
+            <div
+              className={cn(
+                'mx-auto sm:border sm:border-border print:border-0',
+                format === '80mm' ? 'max-w-[80mm]' : 'max-w-[210mm]',
+              )}
+            >
+              <PaymentReceiptDocument receipt={receipt} format={format} />
+            </div>
+          </>
         ) : forbidden ? (
           <div className="mx-auto max-w-xl px-4 py-8">
             <EmptyState

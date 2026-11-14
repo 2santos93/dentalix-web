@@ -78,4 +78,33 @@ describe('ForgotPasswordForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Enviar otro enlace' }));
     await waitFor(() => expect(screen.getByLabelText('Correo electrónico')).toBeInTheDocument());
   });
+
+  // DX-114 (FE-040): el foco sigue a la pantalla.
+  it('tras enviar, el foco va al título «Revisa tu correo»', async () => {
+    (apiFetch as jest.Mock).mockResolvedValueOnce({ message: SENT });
+    render(<ForgotPasswordForm />);
+    submit('ana@clinica.co');
+    const heading = await screen.findByRole('heading', { name: 'Revisa tu correo' });
+    await waitFor(() => expect(document.activeElement).toBe(heading));
+    expect(heading).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('«Enviar otro enlace» devuelve el foco al campo de correo, con el correo puesto', async () => {
+    (apiFetch as jest.Mock).mockResolvedValueOnce({ message: SENT });
+    render(<ForgotPasswordForm />);
+    submit('ana@clinica.co');
+    await screen.findByRole('heading', { name: 'Revisa tu correo' });
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar otro enlace' }));
+    const field = await screen.findByLabelText('Correo electrónico');
+    await waitFor(() => expect(document.activeElement).toBe(field));
+    expect(field).toHaveValue('ana@clinica.co');
+  });
+
+  it('si el envío falla, el foco no salta al título', async () => {
+    (apiFetch as jest.Mock).mockRejectedValueOnce(new ApiError(500, 'boom'));
+    render(<ForgotPasswordForm />);
+    submit('ana@clinica.co');
+    await screen.findByRole('alert');
+    expect(screen.queryByRole('heading', { name: 'Revisa tu correo' })).not.toBeInTheDocument();
+  });
 });

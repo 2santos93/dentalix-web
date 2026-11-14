@@ -8,6 +8,7 @@ import { E2E_REGION } from './support/regional';
 import { regionalFormat } from '../src/lib/format/regional-format';
 import { moneyWithCode } from '../src/lib/format/sede-number';
 import { API_URL } from './support/urls';
+import { fillDate } from './support/dates';
 
 /**
  * e2e (DX-375): el aviso «sin tasa». Una clínica nueva por corrida, en tasa
@@ -17,8 +18,9 @@ import { API_URL } from './support/urls';
  *  1. ADMIN, plan de tratamiento: el aviso «1 abono sin tasa» va junto a las
  *     cifras, el abono lleva «Sin tasa» y el enlace lleva a Ajustes › Tasa de
  *     cambio, donde la tasa se registra y queda corregible (nadie la usó).
- *  2. RECEPCIÓN, estado de cuenta › «Ver por ítem»: el mismo aviso, sin enlace
- *     y diciendo que lo pida a un administrador.
+ *  2. RECEPCIÓN, estado de cuenta: el aviso, una sola vez arriba, sin enlace
+ *     y diciendo que lo pida a un administrador; «Ver por ítem» solo remite a
+ *     él (DX-472-bis).
  *  3. DX-386, otra clínica con la fuente AUTOMÁTICA y sin tasa del proveedor
  *     (la suite no tiene clave): el aviso del ADMIN no invita a registrar una
  *     tasa manual; dice que la del proveedor aún no está y explica pasar a
@@ -27,7 +29,9 @@ import { API_URL } from './support/urls';
  */
 const rawSuffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase();
 const password = 'Password123!';
-const LOCAL = E2E_REGION.currency;
+// La sede cobra en VES: USD es la moneda base del proveedor y no admite tasa manual.
+const REGION = { ...E2E_REGION, currency: 'VES' };
+const LOCAL = REGION.currency;
 const VIEWPORTS = [
   { name: 'escritorio', width: 1440, height: 900 },
   { name: 'móvil', width: 390, height: 844 },
@@ -40,8 +44,8 @@ let patientId: string;
 let autoOrigin: string;
 let autoAdminEmail: string;
 let autoPatientId: string;
-/** DX-386: el abono con el formato de la sede y el código ISO («COP 200.000,00»). */
-const PAYMENT_TEXT = moneyWithCode(200000, LOCAL, regionalFormat(E2E_REGION));
+/** DX-386: el abono con el formato de la sede y el código ISO («VES 200.000,00»). */
+const PAYMENT_TEXT = moneyWithCode(200000, LOCAL, regionalFormat(REGION));
 
 /** Hoy en la zona de la sede de e2e. */
 function sedeToday(): string {
@@ -51,6 +55,13 @@ function sedeToday(): string {
     month: '2-digit',
     day: '2-digit',
   }).format(new Date());
+}
+
+/** El día anterior a `sedeToday()`: sin abonos en la clínica de este spec. */
+function sedeYesterday(): string {
+  const day = new Date(`${sedeToday()}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() - 1);
+  return day.toISOString().slice(0, 10);
 }
 
 async function put(request: APIRequestContext, session: ApiSession, path: string, data: object): Promise<void> {
@@ -72,6 +83,11 @@ async function seedPlanWithoutRate(request: APIRequestContext, admin: ApiSession
     docNumber: `ST${suffix}`.slice(0, 20),
     sex: 'F',
   });
+  // DX-513-bis: el catálogo en la moneda del plan (USD), fijado por la
+  // clínica. Así el ítem se da de alta sin tasa (su referencia está en la
+  // moneda del plan) con el mismo precio de siempre, y lo único «sin tasa» es
+  // lo que este spec prueba: el abono de hoy en la moneda de la sede.
+  await patch(request, admin, '/clinic/settings', { catalogCurrency: 'USD' });
   const catalog = await apiPost<{ id: string }>(request, admin, '/catalog/items', {
     code: `st-${suffix}`,
     kind: 'PROCEDURE',
@@ -110,6 +126,7 @@ test.beforeAll(async ({ playwright }) => {
       fullName: 'Dra Tasa',
       email: adminEmail,
       password,
+      location: REGION,
     });
     origin = admin.origin;
     await addStaffViaApi(request, admin, {
@@ -131,6 +148,7 @@ test.beforeAll(async ({ playwright }) => {
       fullName: 'Dra Auto',
       email: autoAdminEmail,
       password,
+      location: REGION,
     });
     autoOrigin = autoAdmin.origin;
     autoPatientId = await seedPlanWithoutRate(request, autoAdmin, `a${suffix}`);
@@ -150,6 +168,16 @@ for (const viewport of VIEWPORTS) {
   test(`ADMIN: el saldo del plan avisa «sin tasa» y enlaza a Ajustes › Tasa de cambio (${viewport.name})`, async ({
     page,
   }) => {
+    // DX-394: ningún aviso de hidratación ni de anidación del DOM en la consola.
+    const domWarnings: string[] = [];
+    page.on('console', (msg) => {
+      if (/hydrat|validateDOMNesting|cannot (be a descendant|contain)|In HTML, /i.test(msg.text())) {
+        domWarnings.push(msg.text());
+      }
+    });
+    page.on('pageerror', (err) => {
+      if (/hydrat/i.test(err.message)) domWarnings.push(err.message);
+    });
     await page.setViewportSize(viewport);
     await loginAs(page, origin, adminEmail, password);
     const panel = await openPlanTab(page);
@@ -166,6 +194,30 @@ for (const viewport of VIEWPORTS) {
     await expect(panel.getByText(/^Sin tasa/).locator('visible=true').first()).toBeVisible();
     // DX-386: el importe del abono con el código ISO y el formato de la sede, sin símbolo.
     await expect(panel.getByText(PAYMENT_TEXT).locator('visible=true').first()).toBeVisible();
+    // DX-394: ninguna cifra de la pestaña Plan lleva el símbolo «US$».
+    expect(await panel.innerText()).not.toContain('US$');
+
+    // DX-394: «Registrar abono» con botones del pie y «Cerrar» de al menos 44 px.
+    await panel.getByRole('button', { name: 'Registrar abono' }).first().click();
+    const modal = page.getByRole('dialog', { name: 'Registrar abono' });
+    await expect(modal).toBeVisible();
+    // Tras la animación de apertura (escala .98 → 1) el sondeo ve la medida final. A 1440 la X es de 24 px por
+    // diseño: solo se mide a 390 (DX-395); los botones del pie, siempre.
+    const targets = [
+      modal.getByRole('button', { name: 'Cancelar' }),
+      modal.getByRole('button', { name: 'Registrar abono' }),
+      ...(viewport.width === 390 ? [modal.getByRole('button', { name: 'Cerrar' })] : []),
+    ];
+    const minHeight = viewport.width === 390 ? 44 : 32;
+    for (const target of targets) {
+      await expect.poll(async () => (await target.boundingBox())?.height ?? 0, { message: 'alto del botón' }).toBeGreaterThanOrEqual(minHeight);
+      if (viewport.width === 390) {
+        await expect.poll(async () => (await target.boundingBox())?.width ?? 0, { message: 'ancho del botón' }).toBeGreaterThanOrEqual(44);
+      }
+    }
+    await modal.getByRole('button', { name: 'Cerrar' }).click();
+    await expect(modal).toHaveCount(0);
+    expect(domWarnings, 'avisos de hidratación/anidación').toEqual([]);
 
     await notice.getByRole('link', { name: 'Registrar la tasa en Ajustes › Tasa de cambio' }).click();
     await expect(page).toHaveURL(/\/settings\/tasa-de-cambio$/);
@@ -178,6 +230,10 @@ test('ADMIN: la tasa registrada desde el aviso se puede corregir mientras ningú
   await page.goto(`${origin}/settings/tasa-de-cambio`);
   await page.getByRole('button', { name: 'Registrar tasa' }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Registrar tasa' });
+  // DX-531: la tasa de ayer, no la de hoy. Registrar la de hoy adelanta el
+  // barrido (DX-402), que la congela en el abono «sin tasa» de hoy; si llega
+  // antes de «Corregir», la tasa ya está en uso y no se puede cambiar.
+  await fillDate(dialog, 'Fecha', sedeYesterday());
   const currency = dialog.getByLabel('Moneda');
   await expect(currency.locator(`option[value="${LOCAL}"]`)).toHaveCount(1, { timeout: 15_000 });
   await currency.selectOption(LOCAL);
@@ -195,18 +251,29 @@ test('ADMIN: la tasa registrada desde el aviso se puede corregir mientras ningú
   await expect(page.getByText(`Tasa de ${LOCAL} corregida.`)).toBeVisible();
 });
 
-test('RECEPCIÓN: «Ver por ítem» avisa «sin tasa» sin enlace y dice a quién pedirla', async ({ page }) => {
+test('RECEPCIÓN: el estado de cuenta avisa «sin tasa» una vez, sin enlace, y «Ver por ítem» remite a ese aviso', async ({
+  page,
+}) => {
   await page.setViewportSize(VIEWPORTS[1]);
   await loginAs(page, origin, receptionEmail, password);
   await page.goto(`${origin}/patients/${patientId}?tab=account-statement`);
   const statement = page.locator('#tabpanel-account-statement');
-  const toggle = statement.getByRole('button', { name: /^Ver por ítem/ });
-  await expect(toggle).toBeVisible({ timeout: 15_000 });
-  await toggle.click();
+  // DX-472 (A1) puso el aviso arriba del estado de cuenta. DX-472-bis: es el
+  // único (DESIGN.md › Callout: lo que hay que saber en ESTA pantalla, una
+  // vez); repetirlo en el detalle era ruido para recepción.
   const notice = statement.getByRole('status').filter({ hasText: '1 abono sin tasa' });
-  await expect(notice).toBeVisible({ timeout: 15_000 });
+  await expect(notice).toHaveCount(1, { timeout: 15_000 });
   await expect(notice).toContainText('pide a un administrador que revise la tasa de cambio de ese día');
   await expect(notice.getByRole('link')).toHaveCount(0);
+
+  const toggle = statement.getByRole('button', { name: /^Ver por ítem/ });
+  await toggle.click();
+  const detail = statement.locator(`#${await toggle.getAttribute('aria-controls')}`);
+  // El detalle explica por qué lo cobrado no llega a lo abonado y remite al aviso.
+  const line = detail.getByText('1 abono sin tasa todavía no cuenta aquí: el aviso de arriba dice cuál es y qué hacer.');
+  await expect(line).toBeVisible({ timeout: 15_000 });
+  await expect(detail.getByRole('status').filter({ hasText: '1 abono sin tasa' })).toHaveCount(0);
+  await expect(notice).toHaveCount(1);
   await expectNoHorizontalScroll(page);
 });
 

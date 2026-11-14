@@ -1,8 +1,8 @@
 import { apiFetch } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
+import type { MfaChallenge, SecondFactor } from '@/lib/auth/mfa-api';
 
 export type PlatformMfaStatus = components['schemas']['PlatformMfaStatusDto'];
-export type PlatformMfaEnrollment = components['schemas']['PlatformMfaEnrollmentDto'];
 
 /** Una clínica tal como la lista el área de plataforma. */
 export interface PlatformTenant {
@@ -16,15 +16,13 @@ export interface PlatformTenant {
  * Login de PLATAFORMA: es el mismo `POST /auth/login` de siempre, pero hecho
  * desde el apex. El cliente manda `X-Tenant-Host` con el host actual y, al no
  * haber subdominio de clínica, el backend no resuelve ningún tenant y responde
- * con un token de plataforma (solo si el usuario es superadmin; en cualquier
- * otro caso, 401 con el mismo mensaje que unas credenciales malas). El refresh
- * queda en la cookie HttpOnly del apex (DX-062).
+ * con el paso del segundo factor (solo si el usuario es superadmin; en cualquier
+ * otro caso, 401 con el mismo mensaje que unas credenciales malas). DX-021-bis:
+ * el token de plataforma sale tras ese paso, y el refresh queda en la cookie
+ * HttpOnly del apex (DX-062).
  */
-export async function loginPlatform(
-  email: string,
-  password: string,
-): Promise<{ accessToken: string }> {
-  return apiFetch<{ accessToken: string }>(
+export async function loginPlatform(email: string, password: string): Promise<MfaChallenge> {
+  return apiFetch<MfaChallenge>(
     '/auth/login',
     { method: 'POST', body: { email, password } },
   );
@@ -53,22 +51,18 @@ export async function getPlatformMfa(token: string): Promise<PlatformMfaStatus> 
   return apiFetch<PlatformMfaStatus>('/platform/mfa', { token });
 }
 
-/**
- * `POST /platform/mfa/enrollment` — genera un secreto nuevo (pendiente hasta
- * confirmarlo). El secreto solo viaja en esta respuesta: no se guarda en el
- * navegador.
- */
-export async function startPlatformMfaEnrollment(token: string): Promise<PlatformMfaEnrollment> {
-  return apiFetch<PlatformMfaEnrollment>('/platform/mfa/enrollment', { method: 'POST', token });
-}
-
-/** `POST /platform/mfa/enrollment/confirm` — activa el MFA con un código de la app. */
-export async function confirmPlatformMfa(token: string, code: string): Promise<PlatformMfaStatus> {
-  return apiFetch<PlatformMfaStatus>('/platform/mfa/enrollment/confirm', {
+/** `POST /platform/mfa/recovery-codes` — los anteriores dejan de valer. */
+export async function regeneratePlatformRecoveryCodes(
+  token: string,
+  currentPassword: string,
+  factor: SecondFactor,
+): Promise<string[]> {
+  const res = await apiFetch<{ recoveryCodes: string[] }>('/platform/mfa/recovery-codes', {
     method: 'POST',
     token,
-    body: { code },
+    body: { currentPassword, ...factor },
   });
+  return res.recoveryCodes;
 }
 
 /** El secreto en grupos de 4 para teclearlo sin perderse («ABCD EFGH …»). */

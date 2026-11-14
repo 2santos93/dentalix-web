@@ -67,34 +67,13 @@ describe('ToothRecordPanel', () => {
     mockedAddRecord.mockReset();
   });
 
-  it('shows a loading state while fetching the catalog', () => {
-    mockedListCatalog.mockReturnValue(new Promise(() => {}));
-    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />);
-    expect(screen.getByRole('status')).toHaveTextContent(/cargando/i);
-  });
-
-  it('shows an empty state when the catalog has no items', async () => {
-    mockedListCatalog.mockResolvedValue([]);
-    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />);
-    expect(await screen.findByText(/no hay.*cat[aá]logo/i)).toBeInTheDocument();
-  });
-
-  it('shows an alert with the API error message when loading the catalog fails, with a retry', async () => {
-    const { ApiError } = jest.requireActual('../../lib/api/client');
-    mockedListCatalog.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
-    mockedListCatalog.mockResolvedValueOnce(catalog);
-
-    const user = userEvent.setup();
-    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar el catálogo.');
-
-    await user.click(screen.getByRole('button', { name: /reintentar/i }));
-    expect(await screen.findByRole('radio', { name: /caries/i })).toBeInTheDocument();
+  it('shows an empty state when the catalog has no items', () => {
+    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" catalog={[]} onRecordAdded={jest.fn()} />);
+    expect(screen.getByText(/no hay.*cat[aá]logo/i)).toBeInTheDocument();
   });
 
   it('renders each catalog item as an accessible option with its color swatch', async () => {
-    mockedListCatalog.mockResolvedValue(catalog);
-    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />);
+    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" catalog={catalog} onRecordAdded={jest.fn()} />);
 
     const cariesOption = await screen.findByRole('radio', { name: /caries/i });
     const resinaOption = screen.getByRole('radio', { name: /resina/i });
@@ -106,8 +85,7 @@ describe('ToothRecordPanel', () => {
   });
 
   it('renders the 5 surface checkboxes plus a whole-tooth checkbox, all with accessible labels', async () => {
-    mockedListCatalog.mockResolvedValue(catalog);
-    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />);
+    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" catalog={catalog} onRecordAdded={jest.fn()} />);
     await screen.findByRole('radio', { name: /caries/i });
 
     expect(screen.getByRole('checkbox', { name: /vestibular/i })).toBeInTheDocument();
@@ -119,12 +97,12 @@ describe('ToothRecordPanel', () => {
   });
 
   it('pre-checks the surface passed via initialSurface', async () => {
-    mockedListCatalog.mockResolvedValue(catalog);
     render(
       <ToothRecordPanel
         token="tok"
         patientId="p1"
         toothNumber="11"
+        catalog={catalog}
         initialSurface="OCCLUSAL"
         onRecordAdded={jest.fn()}
       />,
@@ -134,9 +112,8 @@ describe('ToothRecordPanel', () => {
   });
 
   it('checking "diente completo" clears/disables the individual surface checkboxes', async () => {
-    mockedListCatalog.mockResolvedValue(catalog);
     const user = userEvent.setup();
-    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />);
+    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" catalog={catalog} onRecordAdded={jest.fn()} />);
     await screen.findByRole('radio', { name: /caries/i });
 
     const occlusal = screen.getByRole('checkbox', { name: /oclusal/i });
@@ -149,9 +126,8 @@ describe('ToothRecordPanel', () => {
   });
 
   it('shows a validation message when submitting without selecting a catalog item', async () => {
-    mockedListCatalog.mockResolvedValue(catalog);
     const user = userEvent.setup();
-    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />);
+    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" catalog={catalog} onRecordAdded={jest.fn()} />);
     await screen.findByRole('radio', { name: /caries/i });
 
     await user.click(screen.getByRole('checkbox', { name: /oclusal/i }));
@@ -162,9 +138,8 @@ describe('ToothRecordPanel', () => {
   });
 
   it('shows a validation message when submitting without any surface or whole-tooth selected', async () => {
-    mockedListCatalog.mockResolvedValue(catalog);
     const user = userEvent.setup();
-    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />);
+    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" catalog={catalog} onRecordAdded={jest.fn()} />);
     await screen.findByRole('radio', { name: /caries/i });
 
     await user.click(screen.getByRole('radio', { name: /caries/i }));
@@ -175,12 +150,11 @@ describe('ToothRecordPanel', () => {
   });
 
   it('submits with the kind derived from the chosen catalog item, calls addToothRecord and onRecordAdded', async () => {
-    mockedListCatalog.mockResolvedValue(catalog);
     mockedAddRecord.mockResolvedValue(createdRecord);
     const onRecordAdded = jest.fn();
 
     const user = userEvent.setup();
-    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={onRecordAdded} />);
+    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" catalog={catalog} onRecordAdded={onRecordAdded} />);
     await screen.findByRole('radio', { name: /caries/i });
 
     await user.click(screen.getByRole('radio', { name: /caries/i }));
@@ -201,11 +175,10 @@ describe('ToothRecordPanel', () => {
   });
 
   it('envía el origen elegido cuando no es «Hecho en la clínica» (DX-120)', async () => {
-    mockedListCatalog.mockResolvedValue(catalog);
     mockedAddRecord.mockResolvedValue(createdRecord);
 
     const user = userEvent.setup();
-    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />);
+    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" catalog={catalog} onRecordAdded={jest.fn()} />);
     await screen.findByRole('radio', { name: /caries/i });
 
     await user.click(screen.getByRole('radio', { name: /caries/i }));
@@ -221,11 +194,10 @@ describe('ToothRecordPanel', () => {
   });
 
   it('submits with an empty surfaces array when "diente completo" is checked', async () => {
-    mockedListCatalog.mockResolvedValue(catalog);
     mockedAddRecord.mockResolvedValue(createdRecord);
 
     const user = userEvent.setup();
-    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />);
+    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" catalog={catalog} onRecordAdded={jest.fn()} />);
     await screen.findByRole('radio', { name: /resina/i });
 
     await user.click(screen.getByRole('radio', { name: /resina/i }));
@@ -241,11 +213,10 @@ describe('ToothRecordPanel', () => {
   });
 
   it('lets the user pick the PLANNED/COMPLETED status', async () => {
-    mockedListCatalog.mockResolvedValue(catalog);
     mockedAddRecord.mockResolvedValue(createdRecord);
 
     const user = userEvent.setup();
-    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />);
+    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" catalog={catalog} onRecordAdded={jest.fn()} />);
     await screen.findByRole('radio', { name: /caries/i });
 
     await user.click(screen.getByRole('radio', { name: /caries/i }));
@@ -262,12 +233,11 @@ describe('ToothRecordPanel', () => {
   });
 
   it('shows an alert with the API error message when saving fails', async () => {
-    mockedListCatalog.mockResolvedValue(catalog);
     const { ApiError } = jest.requireActual('../../lib/api/client');
     mockedAddRecord.mockRejectedValue(new ApiError(400, 'Datos inválidos'));
 
     const user = userEvent.setup();
-    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />);
+    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" catalog={catalog} onRecordAdded={jest.fn()} />);
     await screen.findByRole('radio', { name: /caries/i });
 
     await user.click(screen.getByRole('radio', { name: /caries/i }));
@@ -278,11 +248,10 @@ describe('ToothRecordPanel', () => {
   });
 
   it('resets the catalog selection and surfaces after a successful submit', async () => {
-    mockedListCatalog.mockResolvedValue(catalog);
     mockedAddRecord.mockResolvedValue(createdRecord);
 
     const user = userEvent.setup();
-    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />);
+    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" catalog={catalog} onRecordAdded={jest.fn()} />);
     await screen.findByRole('radio', { name: /caries/i });
 
     await user.click(screen.getByRole('radio', { name: /caries/i }));
@@ -295,11 +264,10 @@ describe('ToothRecordPanel', () => {
   });
 
   it('confirms the save by naming what was recorded — tooth, catalog item and surfaces', async () => {
-    mockedListCatalog.mockResolvedValue(catalog);
     mockedAddRecord.mockResolvedValue(createdRecord);
 
     const user = userEvent.setup();
-    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="26" onRecordAdded={jest.fn()} />);
+    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="26" catalog={catalog} onRecordAdded={jest.fn()} />);
     await screen.findByRole('radio', { name: /resina/i });
 
     await user.click(screen.getByRole('radio', { name: /resina/i }));
@@ -311,11 +279,10 @@ describe('ToothRecordPanel', () => {
   });
 
   it('names "diente completo" in the confirmation when no surfaces were picked', async () => {
-    mockedListCatalog.mockResolvedValue(catalog);
     mockedAddRecord.mockResolvedValue(createdRecord);
 
     const user = userEvent.setup();
-    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />);
+    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" catalog={catalog} onRecordAdded={jest.fn()} />);
     await screen.findByRole('radio', { name: /caries/i });
 
     await user.click(screen.getByRole('radio', { name: /caries/i }));
@@ -326,12 +293,11 @@ describe('ToothRecordPanel', () => {
   });
 
   it('clears the confirmation when the user starts another entry, and when the tooth changes', async () => {
-    mockedListCatalog.mockResolvedValue(catalog);
     mockedAddRecord.mockResolvedValue(createdRecord);
 
     const user = userEvent.setup();
     const { rerender } = render(
-      <ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />,
+      <ToothRecordPanel token="tok" patientId="p1" toothNumber="11" catalog={catalog} onRecordAdded={jest.fn()} />,
     );
     await screen.findByRole('radio', { name: /caries/i });
 
@@ -349,17 +315,16 @@ describe('ToothRecordPanel', () => {
     await user.click(screen.getByRole('button', { name: /guardar/i }));
     await screen.findByText(/^Registrado en el diente 11/);
 
-    rerender(<ToothRecordPanel token="tok" patientId="p1" toothNumber="21" onRecordAdded={jest.fn()} />);
+    rerender(<ToothRecordPanel token="tok" patientId="p1" toothNumber="21" catalog={catalog} onRecordAdded={jest.fn()} />);
     expect(screen.queryByText(/^Registrado en el diente/)).not.toBeInTheDocument();
   });
 
   it('keeps the save confirmation in a live region that is mounted from the start (not conditionally)', async () => {
-    mockedListCatalog.mockResolvedValue(catalog);
     mockedAddRecord.mockResolvedValue(createdRecord);
 
     const user = userEvent.setup();
     const { container } = render(
-      <ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />,
+      <ToothRecordPanel token="tok" patientId="p1" toothNumber="11" catalog={catalog} onRecordAdded={jest.fn()} />,
     );
     await screen.findByRole('radio', { name: /caries/i });
 
@@ -376,24 +341,21 @@ describe('ToothRecordPanel', () => {
     await waitFor(() => expect(region).toHaveTextContent(/^Registrado en el diente 11/));
   });
 
-  it('does not refetch the catalog when only toothNumber changes (catalog is tenant-wide, not per-tooth)', async () => {
-    mockedListCatalog.mockResolvedValue(catalog);
+  it('DX-117 (FE-022): usa el catálogo que recibe por prop y nunca lo pide a la API, tampoco al cambiar de diente', async () => {
     const { rerender } = render(
-      <ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />,
+      <ToothRecordPanel token="tok" patientId="p1" toothNumber="11" catalog={catalog} onRecordAdded={jest.fn()} />,
     );
     await screen.findByRole('radio', { name: /caries/i });
-    expect(mockedListCatalog).toHaveBeenCalledTimes(1);
-
-    rerender(<ToothRecordPanel token="tok" patientId="p1" toothNumber="21" onRecordAdded={jest.fn()} />);
-    expect(mockedListCatalog).toHaveBeenCalledTimes(1);
+    rerender(<ToothRecordPanel token="tok" patientId="p1" toothNumber="21" catalog={catalog} onRecordAdded={jest.fn()} />);
+    expect(screen.getByRole('radio', { name: /caries/i })).toBeInTheDocument();
+    expect(mockedListCatalog).not.toHaveBeenCalled();
   });
 
   describe('catalog filter', () => {
     it('narrows the catalog by label or code as you type', async () => {
       const user = userEvent.setup();
-      mockedListCatalog.mockResolvedValue(catalog);
       render(
-        <ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />,
+        <ToothRecordPanel token="tok" patientId="p1" toothNumber="11" catalog={catalog} onRecordAdded={jest.fn()} />,
       );
 
       expect(await screen.findByRole('radio', { name: /caries/i })).toBeInTheDocument();
@@ -413,9 +375,8 @@ describe('ToothRecordPanel', () => {
 
     it('names the problem when nothing matches', async () => {
       const user = userEvent.setup();
-      mockedListCatalog.mockResolvedValue(catalog);
       render(
-        <ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />,
+        <ToothRecordPanel token="tok" patientId="p1" toothNumber="11" catalog={catalog} onRecordAdded={jest.fn()} />,
       );
 
       await user.type(await screen.findByLabelText('Buscar en el catálogo'), 'implante');
@@ -427,9 +388,8 @@ describe('ToothRecordPanel', () => {
     });
 
     it('shows each item kind so a long catalog stays scannable', async () => {
-      mockedListCatalog.mockResolvedValue(catalog);
       render(
-        <ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />,
+        <ToothRecordPanel token="tok" patientId="p1" toothNumber="11" catalog={catalog} onRecordAdded={jest.fn()} />,
       );
 
       expect(await screen.findByRole('radio', { name: /caries.*diagn/i })).toBeInTheDocument();

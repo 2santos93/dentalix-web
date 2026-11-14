@@ -23,3 +23,15 @@ const CLOSED_STATUSES: readonly TreatmentPlanStatus[] = ['CANCELLED', 'REJECTED'
 export function isPlanClosed(status: TreatmentPlanStatus): boolean {
   return CLOSED_STATUSES.includes(status);
 }
+
+/**
+ * DX-379: la validez del presupuesto («Válido hasta» / «Vencido») solo se
+ * enseña mientras el presupuesto está vivo: borrador o presentado. Gemelo de
+ * `quoteCanExpire` de la API, que solo da `quoteExpired: true` en esos dos.
+ * Aceptado, completado, rechazado o cancelado no «vale hasta» nada.
+ */
+const QUOTE_VALIDITY_STATUSES: readonly TreatmentPlanStatus[] = ['DRAFT', 'PRESENTED'];
+
+export function showsQuoteValidity(status: TreatmentPlanStatus): boolean {
+  return QUOTE_VALIDITY_STATUSES.includes(status);
+}

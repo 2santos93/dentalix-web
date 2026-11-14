@@ -6,13 +6,15 @@ import { SectionHeader } from '@/components/ui/section-header';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
+import { RateCountNotice } from '@/components/payments/rate-count-notice';
 import { getReceivablesSummary, overdueOf, type AgingBuckets, type AgingTotal } from './inicio-api';
 import { sectionLinkClass } from './today-section';
 import { useLoad } from './use-load';
 
 export const agingCopy = {
   heading: 'Cartera por antigüedad',
-  asOf: (day: string) => `Al ${day}. Por moneda, sin convertir; el saldo a favor no se resta.`,
+  asOf: (day: string) =>
+    `Al ${day}. Por moneda de cada plan, sin sumar monedas entre sí; lo abonado en otra moneda se convierte con la tasa de su día. El saldo a favor no se resta.`,
   link: 'Ver cartera',
   loading: 'Cargando la cartera…',
   error: 'No pudimos cargar la cartera.',
@@ -78,11 +80,19 @@ export function AgingSection({ token, scopeKey, fmt }: { token: string; scopeKey
       ) : load.data.totals.length === 0 ? (
         <EmptyState role="status" title={copy.emptyTitle} description={copy.emptyDescription} />
       ) : (
-        <ul className="divide-y divide-border-subtle overflow-hidden rounded-xl border border-border bg-surface">
-          {load.data.totals.map((total) => (
-            <AgingCurrency key={total.currency} total={total} fmt={fmt} />
-          ))}
-        </ul>
+        <>
+          <ul className="divide-y divide-border-subtle overflow-hidden rounded-xl border border-border bg-surface">
+            {load.data.totals.map((total) => (
+              <AgingCurrency key={total.currency} total={total} fmt={fmt} />
+            ))}
+          </ul>
+          {/* DX-472-ter: «sin tasa» o «el proveedor no respondió», con los textos del estado de cuenta. */}
+          <RateCountNotice
+            paymentsCount={load.data.paymentsWithoutRateCount}
+            timedOut={load.data.rateProviderTimedOut}
+            onRetry={load.reload}
+          />
+        </>
       )}
     </section>
   );

@@ -8,7 +8,7 @@ import {
   type PerioExamSummary,
   perioErrorMessage
 } from '@/lib/perio/perio-api';
-import { formatCivilDate } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { perioPercent } from '@/lib/perio/perio-percent';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
@@ -36,6 +36,7 @@ const copy = {
   colPlaque: 'Placa',
   colDeep: 'Sitios ≥4 / ≥6 mm',
   open: (date: string) => `Abrir examen del ${date}`,
+  openBare: 'Abrir examen',
   openShort: 'Abrir',
   deep: (d4: number, d6: number) => `${d4} / ${d6}`,
 };
@@ -73,6 +74,8 @@ export function PerioTab({ token, patientId }: PerioTabProps) {
   const sedeFormat = useSedeFormat(token);
   const fmt = readyFormat(sedeFormat);
   const pct = (value: number) => perioPercent(value, fmt);
+  // DX-354b: el día del examen con el formato de la sede; el aviso (una vez) es el de `sedeFormat`, abajo.
+  const stamp = useSedeStamp(token);
 
   useEffect(() => {
     let cancelled = false;
@@ -115,6 +118,7 @@ export function PerioTab({ token, patientId }: PerioTabProps) {
         examId={openExamId}
         previous={previous ? { id: previous.id, examDate: previous.examDate } : null}
         sedeFormat={sedeFormat}
+        stamp={stamp}
         onBack={() => setOpenExamId(null)}
         onChanged={() => setReloadKey((k) => k + 1)}
         onDeleted={() => {
@@ -138,7 +142,11 @@ export function PerioTab({ token, patientId }: PerioTabProps) {
         variant="secondary"
         size="sm"
         onClick={() => setOpenExamId(exam.id)}
-        aria-label={copy.open(formatCivilDate(exam.examDate))}
+        aria-label={(() => {
+          // Una etiqueta que se anuncia nunca lleva «—» (DESIGN.md): sin formato, solo «Abrir examen».
+          const day = stamp.maybe.civilDate(exam.examDate);
+          return day ? copy.open(day) : copy.openBare;
+        })()}
         className="w-full sm:w-auto"
       >
         {copy.openShort}
@@ -212,7 +220,7 @@ export function PerioTab({ token, patientId }: PerioTabProps) {
           <tbody>
             {exams.map((exam) => (
               <tr key={exam.id} className="border-b border-border-subtle last:border-0">
-                <td className="px-4 py-3 tabular-nums">{formatCivilDate(exam.examDate)}</td>
+                <td className="px-4 py-3 tabular-nums">{stamp.civilDate(exam.examDate)}</td>
                 <td className="px-4 py-3">{exam.providerName}</td>
                 <td className="px-4 py-3">{statusBadge(exam)}</td>
                 <td className="px-4 py-3 text-right tabular-nums">
@@ -237,7 +245,7 @@ export function PerioTab({ token, patientId }: PerioTabProps) {
               className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink"
             >
               <div className="flex items-center justify-between gap-2">
-                <p className="font-medium tabular-nums">{formatCivilDate(exam.examDate)}</p>
+                <p className="font-medium tabular-nums">{stamp.civilDate(exam.examDate)}</p>
                 {statusBadge(exam)}
               </div>
               <p className="text-muted">{exam.providerName}</p>

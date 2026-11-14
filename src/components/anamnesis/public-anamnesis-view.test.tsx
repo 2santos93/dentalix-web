@@ -1,25 +1,32 @@
+import { execFileSync } from 'node:child_process';
+import { contrastRatio } from '@/lib/color/contrast';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { PublicAnamnesisView } from './public-anamnesis-view';
 import { ApiError, NetworkError } from '@/lib/api/api-error';
 import {
   getPublicAnamnesis,
+  markPublicAnamnesisOpened,
   submitPublicAnamnesis,
   type PublicAnamnesis,
 } from '@/lib/anamnesis/anamnesis-api';
+import { REGIONAL_DE, REGIONAL_VE } from '@/lib/test/document-regional';
 
 jest.mock('../../lib/anamnesis/anamnesis-api', () => ({
   ...jest.requireActual('../../lib/anamnesis/anamnesis-api'),
   getPublicAnamnesis: jest.fn(),
+  markPublicAnamnesisOpened: jest.fn(),
   submitPublicAnamnesis: jest.fn(),
 }));
 
 const mockedGet = getPublicAnamnesis as jest.MockedFunction<typeof getPublicAnamnesis>;
 const mockedSubmit = submitPublicAnamnesis as jest.MockedFunction<typeof submitPublicAnamnesis>;
+const mockedOpened = markPublicAnamnesisOpened as jest.MockedFunction<typeof markPublicAnamnesisOpened>;
 
 function fixture(overrides: Partial<PublicAnamnesis> = {}): PublicAnamnesis {
   return {
     clinic: { name: 'Clínica Sonrisas', logoUrl: null, primaryColor: '#0E7490' },
     patientFirstName: 'Mariana',
+    regional: REGIONAL_VE,
     expiresAt: '2026-10-30T15:00:00.000Z',
     consent: { required: false, policy: null },
     questionnaire: {
@@ -62,6 +69,27 @@ describe('PublicAnamnesisView (DX-099)', () => {
   beforeEach(() => {
     mockedGet.mockReset();
     mockedSubmit.mockReset();
+    mockedOpened.mockReset();
+    mockedOpened.mockResolvedValue(undefined);
+  });
+
+  it('DX-424: con el cuestionario a la vista avisa una vez de la apertura; si el aviso falla, el paciente no lo nota', async () => {
+    mockedGet.mockResolvedValue(fixture());
+    mockedOpened.mockRejectedValue(new NetworkError(new TypeError('Failed to fetch')));
+    const { rerender } = render(<PublicAnamnesisView linkToken="tok" />);
+    expect(mockedOpened).not.toHaveBeenCalled();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Cuestionario de salud' })).toBeInTheDocument();
+    await waitFor(() => expect(mockedOpened).toHaveBeenCalledWith('tok'));
+    rerender(<PublicAnamnesisView linkToken="tok" />);
+    expect(mockedOpened).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('DX-424: un enlace que ya no vale no avisa de apertura', async () => {
+    mockedGet.mockRejectedValue(new ApiError(410, 'gone'));
+    render(<PublicAnamnesisView linkToken="tok" />);
+    expect(await screen.findByRole('heading', { name: 'Este enlace ya no es válido' })).toBeInTheDocument();
+    expect(mockedOpened).not.toHaveBeenCalled();
   });
 
   it('carga con esqueleto y saluda solo con el nombre de pila y la clínica', async () => {
@@ -73,6 +101,21 @@ describe('PublicAnamnesisView (DX-099)', () => {
     expect(screen.getByText('Clínica Sonrisas')).toBeInTheDocument();
     // Nada precargado: ninguna respuesta marcada.
     expect(screen.getAllByRole('radio').every((r) => !(r as HTMLInputElement).checked)).toBe(true);
+  });
+
+  it('DX-354: la caducidad sigue el formato de la sede de referencia de la clínica, no el del navegador', async () => {
+    mockedGet.mockResolvedValue(fixture({ regional: REGIONAL_DE }));
+    render(<PublicAnamnesisView linkToken="tok" />);
+    // 15:00 UTC es 16:00 en Berlín (CET).
+    expect(await screen.findByText('El enlace caduca el 30.10.2026 16:00.')).toBeInTheDocument();
+  });
+
+  it('DX-354: sin formato de la sede, «—» y «llama a la clínica»', async () => {
+    mockedGet.mockResolvedValue(fixture({ regional: null }));
+    render(<PublicAnamnesisView linkToken="tok" />);
+    const line = await screen.findByText(/El enlace caduca el —\./);
+    expect(line).toHaveTextContent('Llama a la clínica para saber hasta cuándo es válido el enlace.');
+    expect(line.textContent).not.toMatch(/\d{2}[./]\d{2}[./]\d{4}/);
   });
 
   it('caducado, anulado o ya usado (410) → «Este enlace ya no es válido, contacte con su clínica.»', async () => {
@@ -107,6 +150,7 @@ describe('PublicAnamnesisView (DX-099)', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /Autorizo el tratamiento/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
     expect(screen.getByRole('radiogroup', { name: '¿Tiene alguna alergia?' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Cuestionario de salud' })).toHaveFocus();
 
     answer('¿Tiene alguna alergia?', 'No');
     answer('¿Tiene diabetes?', 'No sé');
@@ -144,7 +188,7 @@ describe('PublicAnamnesisView (DX-099)', () => {
     });
     expect(body.consent).toBeUndefined();
     resolve({ submittedAt: '2026-10-23T15:00:00.000Z' });
-    expect(await screen.findByRole('heading', { name: '¡Gracias! Recibimos sus respuestas' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '¡Gracias! Recibimos sus respuestas' })).toHaveFocus();
   });
 
   it('si al enviar el enlace ya no vale (410) muestra el aviso; si falla la red, un error con reintento', async () => {
@@ -163,4 +207,64 @@ describe('PublicAnamnesisView (DX-099)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Enviar respuestas' }));
     expect(await screen.findByText('Este enlace ya no es válido, contacte con su clínica.')).toBeInTheDocument();
   });
+});
+
+
+describe('DX-297 semantics', () => {
+  beforeEach(() => { mockedGet.mockReset(); mockedSubmit.mockReset(); });
+
+  it.each([404, 410])('has exactly one page heading for an unavailable link (%s)', async (status) => {
+    mockedGet.mockRejectedValue(new ApiError(status, 'gone'));
+    render(<PublicAnamnesisView linkToken="synthetic" />);
+    await screen.findByText('Este enlace ya no es válido, contacte con su clínica.');
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  });
+
+  it('marks only the checked answer with a decorative icon and keeps the native radio name', async () => {
+    mockedGet.mockResolvedValue(fixture());
+    render(<PublicAnamnesisView linkToken="synthetic" />);
+    await screen.findByText('Hola, Mariana.');
+    answer('¿Tiene alguna alergia?', 'No');
+    const group = screen.getByRole('radiogroup', { name: '¿Tiene alguna alergia?' });
+    const selected = within(group).getByRole('radio', { name: 'No', checked: true });
+    expect(selected.closest('label')?.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    expect(within(group).getByRole('radio', { name: 'Sí' }).closest('label')?.querySelector('svg')).toBeNull();
+  });
+});
+
+
+it('DX-297 resolves the actual CSS in Chromium: six brand/theme pairs meet contrast and structural requirements', async () => {
+  const snapshots: { html: string; dark: boolean }[] = [];
+  for (const primaryColor of ['#38BDF8', '#0E7490', '#1E3A8A']) {
+    for (const dark of [false, true]) {
+      mockedGet.mockResolvedValue(fixture({ clinic: { name: 'Synthetic clinic', logoUrl: null, primaryColor },
+        consent: { required: true, policy: { id: 'synthetic-policy', version: 1, sensitiveHealthText: 'Synthetic consent.', policyText: 'Synthetic policy.' } } }));
+      const view = render(<PublicAnamnesisView linkToken="synthetic" />);
+      await screen.findByText('Synthetic consent.');
+      snapshots.push({ html: view.container.innerHTML, dark });
+      fireEvent.click(screen.getByRole('checkbox', { name: /Autorizo el tratamiento/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+      answer('¿Tiene alguna alergia?', 'No');
+      // React updates the checked property; serialize it for the separate browser.
+      view.container.querySelectorAll<HTMLInputElement>('input').forEach(input => {
+        if (input.checked) input.setAttribute('checked', '');
+      });
+      snapshots.push({ html: view.container.innerHTML, dark });
+      view.unmount();
+    }
+  }
+  const resolved = JSON.parse(execFileSync(process.execPath, ['e2e/support/resolve-public-styles.mjs'], {
+    input: JSON.stringify(snapshots), encoding: 'utf8', timeout: 30000,
+  }));
+  const hex = (rgb: string) => '#' + rgb.match(/[\d.]+/g)!.slice(0, 3).map(n => Math.round(Number(n)).toString(16).padStart(2, '0')).join('');
+  for (let i = 0; i < resolved.length; i += 2) {
+    const policy = resolved[i].policy;
+    const { selected, unselectedWeight, fieldsetBorders } = resolved[i + 1];
+    expect(contrastRatio(hex(selected.color), hex(selected.background))).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(hex(policy.color), hex(policy.background))).toBeGreaterThanOrEqual(4.5);
+    expect(selected.icon).not.toBeNull();
+    expect(contrastRatio(hex(selected.icon), hex(selected.background))).toBeGreaterThanOrEqual(3);
+    expect(Number(selected.weight)).toBeGreaterThan(Number(unselectedWeight));
+    expect(fieldsetBorders.every((width: string) => width === '0px')).toBe(true);
+  }
 });

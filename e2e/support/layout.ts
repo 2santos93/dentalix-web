@@ -89,3 +89,36 @@ export async function expectNoHorizontalOverflowInDialog(dialog: Locator): Promi
     expect(overflow, `scroll horizontal dentro del diálogo (<${tag}>)`).toBeLessThanOrEqual(0);
   }
 }
+
+/**
+ * DX-536: en cada elemento (una línea con `truncate`), la tilde de una mayúscula
+ * («Á», «Ñ») y el rabo de «g»/«y» caben en la caja que recorta (overflow: hidden).
+ * Se mide con la fuente real del elemento, sea cual sea su texto: lo que importa
+ * es que un nombre como «Ángela» no salga cortado.
+ */
+export async function expectGlyphsFit(locator: Locator, what: string): Promise<void> {
+  const boxes = await locator.evaluateAll((els) => {
+    const ctx = document.createElement('canvas').getContext('2d')!;
+    return els.map((el) => {
+      const style = getComputedStyle(el);
+      ctx.font = style.font;
+      const caps = ctx.measureText('ÁÉÍÓÚÑ');
+      const tails = ctx.measureText('gjpqy');
+      const fontHeight = caps.fontBoundingBoxAscent + caps.fontBoundingBoxDescent;
+      const line = style.lineHeight === 'normal' ? fontHeight : parseFloat(style.lineHeight);
+      // La línea va dentro del relleno; su línea base, a media holgura + el ascendente de la fuente.
+      const baseline = parseFloat(style.paddingTop) + (line - fontHeight) / 2 + caps.fontBoundingBoxAscent;
+      return {
+        text: el.textContent ?? '',
+        top: baseline - caps.actualBoundingBoxAscent,
+        bottom: baseline + tails.actualBoundingBoxDescent,
+        height: el.clientHeight,
+      };
+    });
+  });
+  expect(boxes.length, `no hay ningún ${what}`).toBeGreaterThan(0);
+  for (const box of boxes) {
+    expect(box.top, `${what} «${box.text}»: la tilde de la mayúscula se corta por arriba`).toBeGreaterThanOrEqual(-0.5);
+    expect(box.bottom, `${what} «${box.text}»: el rabo de la «g» se corta por abajo`).toBeLessThanOrEqual(box.height + 0.5);
+  }
+}

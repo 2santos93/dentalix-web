@@ -96,6 +96,8 @@ export interface PaymentMethodFieldsState {
    * la misma en dos formas de pago del cobro), con el foco en ella.
    */
   markReference: (message: string) => void;
+  /** DX-389: marca el medio con un error que se ve antes de enviar, con el foco en él. */
+  markMethod: (message: string) => void;
   /** Lo que se añade al cuerpo del abono. */
   body: () => MethodBody;
   /** `true` si el error es el 409 de referencia repetida (ya avisado). */
@@ -201,6 +203,7 @@ export function methodFieldsOf(
       return true;
     },
     markReference: (message) => update((s) => withFocus({ ...s, referenceError: message }, 'reference')),
+    markMethod: (message) => update((s) => withFocus({ ...s, methodError: message }, 'method')),
     body: () => {
       const trimmed = state.reference.trim();
       const reason = state.duplicateReason.trim();
@@ -241,11 +244,14 @@ export function PaymentMethodSelect({
   id,
   label = copy.method,
   disabled,
+  className,
 }: {
   fields: PaymentMethodFieldsState;
   id: string;
   label?: string;
   disabled?: boolean;
+  /** Clases del select nativo (p. ej. su alto en el teléfono). */
+  className?: string;
 }) {
   const { methods, methodError, focusRequest } = fields;
   const selectRef = useRef<HTMLSelectElement>(null);
@@ -266,6 +272,7 @@ export function PaymentMethodSelect({
         <NativeSelect
           id={id}
           ref={selectRef}
+          selectClassName={className}
           value={fields.paymentMethodId}
           disabled={disabled || methods.status === 'loading'}
           onChange={(e) => fields.selectMethod(e.target.value)}

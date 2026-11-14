@@ -18,9 +18,9 @@ describe('formatCurrency', () => {
     }
   });
 
-  it('siempre pinta dos decimales, también en COP (ICU reciente le da 0)', () => {
-    expect(formatCurrency(150000.5, 'COP').replace(/\s/g, ' ')).toMatch(/150\.000,50/);
-    expect(formatCurrency(1800000, 'COP').replace(/\s/g, ' ')).toMatch(/1\.800\.000,00/);
+  it('siempre pinta dos decimales, también en MXN (ICU reciente le da 0)', () => {
+    expect(formatCurrency(150000.5, 'MXN').replace(/\s/g, ' ')).toMatch(/150\.000,50/);
+    expect(formatCurrency(1800000, 'MXN').replace(/\s/g, ' ')).toMatch(/1\.800\.000,00/);
   });
 
   it('JPY location shows JPY without decimals', () => {

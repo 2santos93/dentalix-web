@@ -1,3 +1,4 @@
+import { auditRenderedControls } from '@/lib/test/rendered-a11y';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WeekTimeGrid } from './week-time-grid';
@@ -34,12 +35,50 @@ it('renders 7 day headers Mon..Sun', () => {
       onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop}
     />,
   );
-  // Reusa el mismo testid que WeekAgenda ('week-day-header') para que los
+  // Testid 'week-day-header' (el de la antigua lista semanal, retirada en DX-509-bis): así los
   // tests de agenda-view que ya lo usan sigan pasando tras el swap (Task 5).
   const headers = screen.getAllByTestId('week-day-header');
   expect(headers).toHaveLength(7);
   expect(headers[0]).toHaveAttribute('data-date', '2026-03-09');
   expect(headers[6]).toHaveAttribute('data-date', '2026-03-15');
+});
+
+it('DX-492: la tarjeta lleva el sillón cuando lo tiene, también en las de 15 min', () => {
+  const chair = { id: 'c1', name: 'Sillón 1', active: true };
+  render(
+    <WeekTimeGrid clock={CLOCK}
+      appointments={[
+        appointment({ id: 'a', chair }),
+        appointment({ id: 'b', chair, start: '2026-03-10T09:00:00.000Z', end: '2026-03-10T09:15:00.000Z' }),
+        appointment({ id: 'c', start: '2026-03-11T09:00:00.000Z', end: '2026-03-11T09:30:00.000Z' }),
+      ]}
+      weekStart={WEEK_START}
+      onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop}
+    />,
+  );
+  expect(screen.getAllByTestId('week-appointment-chair')).toHaveLength(2);
+  expect(screen.getAllByTestId('week-grid-appointment')[0]).toHaveAttribute('title', expect.stringContaining('Sillón 1'));
+});
+
+it('DX-492-bis: con nombre largo, cede antes el paciente (hasta 4 caracteres); el sillón se recorta pasado el 45 %', () => {
+  // jsdom no mide: el reparto lo comprueba el Playwright de sillones; aquí, las clases que lo deciden.
+  const chair = { id: 'c1', name: 'Sillón 1', active: true };
+  render(
+    <WeekTimeGrid clock={CLOCK}
+      appointments={[
+        appointment({ id: 'a', chair, patientFirstName: 'María Fernanda', patientLastName: 'Rodríguez Villalobos' }),
+        appointment({ id: 'b', chair: { id: 'c2', name: 'Sillón 2', active: true }, patientId: 'pat-2' }),
+        appointment({ id: 'c', chair, start: '2026-03-10T09:00:00.000Z', end: '2026-03-10T09:15:00.000Z' }),
+      ]}
+      weekStart={WEEK_START}
+      onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop}
+    />,
+  );
+  for (const label of screen.getAllByTestId('week-appointment-chair')) {
+    expect(label).toHaveClass('min-w-0', 'max-w-[45%]', 'truncate');
+    expect(label).not.toHaveClass('shrink-0');
+    expect(label.previousElementSibling).toHaveClass('min-w-[4ch]', 'max-w-max', 'flex-1', 'truncate');
+  }
 });
 
 it('clicking a day header calls onSelectDay with its date', async () => {
@@ -66,6 +105,74 @@ it('clicking an empty slot calls onSelectSlot with that day and time', async () 
   const slot = screen.getByTestId('week-grid-slot-2026-03-09-09:00');
   await userEvent.click(slot);
   expect(onSelectSlot).toHaveBeenCalledWith('2026-03-09', '09:00');
+});
+
+describe('DX-180: la rejilla de huecos con teclado', () => {
+  const grid = (props: Partial<React.ComponentProps<typeof WeekTimeGrid>> = {}) => {
+    const onSelectSlot = jest.fn();
+    render(
+      <WeekTimeGrid clock={CLOCK}
+        appointments={[]} weekStart={WEEK_START}
+        onSelectDay={noop} onSelectSlot={onSelectSlot} onSelectAppointment={noop}
+        {...props}
+      />,
+    );
+    return onSelectSlot;
+  };
+  const tabbableSlots = () =>
+    screen.getAllByRole('button', { name: /^Crear cita/ }).filter((b) => b.tabIndex === 0);
+
+  it('los 336 huecos son UNA parada de tabulador; flechas, Inicio y Fin se mueven y Enter crea', async () => {
+    const onSelectSlot = grid();
+    expect(screen.getAllByRole('button', { name: /^Crear cita/ })).toHaveLength(336);
+    expect(tabbableSlots()).toHaveLength(1);
+    const first = tabbableSlots()[0];
+    expect(first).toHaveAttribute('data-testid', 'week-grid-slot-2026-03-09-07:00');
+
+    first.focus();
+    await userEvent.keyboard('{ArrowDown}{ArrowRight}');
+    expect(document.activeElement).toHaveAttribute('data-testid', 'week-grid-slot-2026-03-10-07:30');
+    expect(tabbableSlots()).toEqual([document.activeElement]);
+    await userEvent.keyboard('{Enter}');
+    expect(onSelectSlot).toHaveBeenCalledWith('2026-03-10', '07:30');
+
+    await userEvent.keyboard('{Home}');
+    expect(document.activeElement).toHaveAttribute('data-testid', 'week-grid-slot-2026-03-10-00:00');
+    await userEvent.keyboard('{ArrowUp}');
+    expect(document.activeElement).toHaveAttribute('data-testid', 'week-grid-slot-2026-03-10-00:00');
+    await userEvent.keyboard('{End}');
+    expect(document.activeElement).toHaveAttribute('data-testid', 'week-grid-slot-2026-03-10-23:30');
+  });
+
+  it('anuncia el hueco con la fecha larga y el bloqueo que no admite citas', () => {
+    grid({
+      blocks: [
+        {
+          id: 'b1',
+          providerId: null,
+          locationId: null,
+          start: new Date('2026-03-09T09:00:00.000Z').toISOString(),
+          end: new Date('2026-03-09T10:00:00.000Z').toISOString(),
+          kind: 'OTHER',
+          allowsBooking: false,
+          note: 'Fumigación',
+        },
+      ] as never,
+    });
+    const free = screen.getByTestId('week-grid-slot-2026-03-09-07:00').getAttribute('aria-label');
+    expect(free).toMatch(/^Crear cita el .*9 de marzo a las /);
+    expect(free).not.toContain('bloqueado');
+    const blockedSlots = screen
+      .getAllByRole('button', { name: /^Crear cita/ })
+      .filter((b) => b.getAttribute('aria-label')?.includes('bloqueado:'));
+    expect(blockedSlots.length).toBeGreaterThan(0);
+    expect(blockedSlots[0].getAttribute('aria-label')).toContain('Fumigación');
+  });
+
+  it('el marco es una región con nombre', () => {
+    grid();
+    expect(screen.getByRole('region', { name: 'Agenda de la semana' })).toBeInTheDocument();
+  });
 });
 
 it('renders an appointment block and calls onSelectAppointment on click', async () => {
@@ -277,6 +384,65 @@ it('DX-378: el día, la fila y la hora de cada cita salen del reloj de la sede (
   expect(monday).toContainElement(card);
   expect(tuesday).not.toContainElement(card);
   expect(card.parentElement).toHaveStyle({ top: `${((22 * 60 + 30) / SLOT_MINUTES) * ROW_HEIGHT_PX}px` });
-  expect(card).toHaveAccessibleName(/^10:30 p\. m\. – 11:00 p\. m\./);
+  expect(card).toHaveAccessibleName(/^pat-1 Agend\. 10:30 p\. m\. – 11:00 p\. m\./);
   expect(screen.getByText('9:00 a. m.')).toBeInTheDocument();
+});
+
+
+it('DX-297 audits all full and compact visible statuses while retaining clinical context', () => {
+  const snapshots = [];
+  for (const status of ['SCHEDULED', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'ARRIVED', 'IN_CHAIR', 'READY_FOR_CHECKOUT'] as const) {
+    for (const minutes of [15, 90]) {
+      const view = render(<WeekTimeGrid clock={CLOCK} weekStart={WEEK_START}
+        appointments={[appointment({ id: 'audit', status, patientFirstName: 'Ana', patientLastName: 'García',
+          end: minutes === 15 ? '2026-03-09T09:15:00.000Z' : '2026-03-09T10:30:00.000Z',
+          appointmentType: { id: 'type', name: 'Endodoncia', durationMinutes: minutes, color: '#0E7490' },
+          balance: { hasOverdue: true, overdueDays: 40 }, attendance: { noShows: 2, lateCancellations: 1 },
+          coverage: { status: 'EXPIRED', payerName: 'Synthetic payer', planName: null, validTo: '2026-01-01' },
+          confirmationSentAt: '2026-03-01T00:00:00.000Z',
+        })]} onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop} />);
+      const card = screen.getByTestId('week-grid-appointment');
+      const labels = { SCHEDULED: 'Agendada', CONFIRMED: 'Confirmada', COMPLETED: 'Completada', CANCELLED: 'Cancelada', NO_SHOW: 'No asistió', ARRIVED: 'En espera', IN_CHAIR: 'En sillón', READY_FOR_CHECKOUT: 'Listo para cobrar' };
+      expect(card).toHaveAccessibleName(expect.stringContaining(labels[status]));
+      expect(card).toHaveAccessibleName(/Endodoncia/);
+      expect(card).toHaveAccessibleName(/Cobertura vencida/);
+      expect(card).toHaveAccessibleName(/Saldo vencido · 40 días/);
+      expect(card).toHaveAccessibleName(/2 inasistencias · 1 cancelación tardía/);
+      if (status === 'SCHEDULED') expect(card).toHaveAccessibleName(/Confirmación pendiente/);
+      snapshots.push({ html: view.container.innerHTML, selector: '[data-testid="week-grid-appointment"]' });
+      view.unmount();
+    }
+  }
+  auditRenderedControls(snapshots);
+});
+
+
+it('DX-297: rejilla estrecha conserva estado y paciente legibles junto al indicador médico', () => {
+  const snapshots = [];
+  for (const width of [390, 790]) for (const theme of ['light', 'dark']) {
+    for (const status of ['SCHEDULED', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'ARRIVED', 'IN_CHAIR', 'READY_FOR_CHECKOUT'] as const) {
+      const view = render(<div className={theme} style={{ width }}><WeekTimeGrid clock={CLOCK} weekStart={WEEK_START}
+        appointments={[appointment({ id: 'compact', status, patientFirstName: 'Estado 3', patientLastName: 'QA',
+          end: '2026-03-09T09:15:00.000Z',
+          medicalAlerts: { hasCriticalAlert: false, alerts: [], requiresPremedication: false, anamnesisStatus: 'MISSING', anamnesisReviewedAt: null },
+          appointmentType: { id: 'type', name: 'Control', durationMinutes: 15, color: '#0E7490' },
+        })]} onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop} /></div>);
+      const card = screen.getByTestId('week-grid-appointment');
+      expect(card).toHaveAccessibleName(/09:00–09:15/);
+      expect(card).toHaveAccessibleName(/Estado 3 QA/);
+      expect(card).toHaveAccessibleName(/Control/);
+      snapshots.push({ html: view.container.innerHTML, selector: '[data-testid="week-grid-appointment"]', viewport: { width: width === 390 ? 390 : 1440, height: 900 } });
+      view.unmount();
+    }
+  }
+  const reports = auditRenderedControls(snapshots);
+  for (const report of reports) {
+    // Antes: 90/100 × 20 px; el indicador médico dejaba la hora a ancho cero.
+    // El carril ahora permite leer estado y paciente sin alterar la duración.
+    expect(report.geometry.height).toBe(20);
+    expect(report.geometry.width).toBeGreaterThanOrEqual(180);
+    const patient = report.spans.find(span => span.text === 'Estado 3 QA');
+    expect(patient).toBeDefined();
+    expect(patient!.width).toBeGreaterThanOrEqual(patient!.scrollWidth - 1);
+  }
 });

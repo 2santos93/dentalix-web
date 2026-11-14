@@ -1,3 +1,5 @@
+import { dateTimeIn, STAMP_SEDES } from '@/lib/test/stamp';
+import { listLocations } from '@/lib/locations/locations-api';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { PostOpTemplatesManager } from './postop-templates-manager';
 import {
@@ -12,6 +14,10 @@ import { notifyError } from '@/components/errors/notify';
 import { Toaster } from '@/components/errors/toaster';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
+
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]),
+}));
 
 jest.mock('../../lib/postop/postop-api', () => ({
   ...jest.requireActual('../../lib/postop/postop-api'),
@@ -193,5 +199,19 @@ describe('PostOpTemplatesManager', () => {
     renderManager();
     const table = await screen.findByRole('table');
     expect(within(table).getAllByRole('row')[1]).toHaveTextContent('Sin vínculos');
+  });
+});
+
+describe('PostOpTemplatesManager con cada sede (DX-354b)', () => {
+  const mockedSedes = listLocations as jest.Mock;
+  afterEach(() => mockedSedes.mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]));
+  const UPDATED = '2026-11-02T03:30:00.000Z';
+
+  it.each([['caracas'], ['berlin']] as const)('con la pantalla en %s: la última edición con su reloj', async (key) => {
+    mockedSedes.mockResolvedValue([STAMP_SEDES[key]]);
+    (listPostOpTemplates as jest.Mock).mockResolvedValue([template({ updatedAt: UPDATED })]);
+    render(<PostOpTemplatesManager token="tok" allowed />);
+    const table = await screen.findByRole('table');
+    await waitFor(() => expect(within(table).getAllByRole('row')[1]).toHaveTextContent(dateTimeIn(key, UPDATED)));
   });
 });

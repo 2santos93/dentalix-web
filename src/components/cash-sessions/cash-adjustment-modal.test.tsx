@@ -1,8 +1,13 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { CashAdjustmentModal } from './cash-adjustment-modal';
 import { addCashAdjustment, type CashAdjustment } from '@/lib/cash-sessions/cash-sessions-api';
 import { ApiError } from '@/lib/api/client';
+import { listLocations } from '@/lib/locations/locations-api';
+import { STAMP_SEDES } from '@/lib/test/stamp';
+
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 
 jest.mock('../../lib/cash-sessions/cash-sessions-api', () => ({
   ...jest.requireActual('../../lib/cash-sessions/cash-sessions-api'),
@@ -11,7 +16,7 @@ jest.mock('../../lib/cash-sessions/cash-sessions-api', () => ({
 const mockedAdd = addCashAdjustment as jest.MockedFunction<typeof addCashAdjustment>;
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([
-    { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+    { code: 'VES', name: 'Bolívar venezolano', symbol: 'VES' },
     { code: 'USD', name: 'Dólar estadounidense', symbol: 'US$' },
   ]),
 }));
@@ -19,19 +24,21 @@ jest.mock('../../lib/reference/currencies-api', () => ({
 const adjustment: CashAdjustment = {
   id: 'adj-1',
   kind: 'CORRECTION',
-  currency: 'COP',
+  currency: 'VES',
   method: 'CASH',
   amount: 5_000,
   reason: 'Abono sin registrar',
   createdAt: '2026-10-17T15:00:00.000Z',
   createdBy: { id: 'u-admin', fullName: 'Admin' },
   sessionId: 'cs-2',
+  sessionStatus: 'OPEN',
+  amountHidden: false,
   payment: null,
   expensePayment: null,
   originalSession: null,
 };
 
-function renderModal() {
+function renderModal(locationId = 'sede-caracas') {
   const onCreated = jest.fn();
   render(
     <CashAdjustmentModal
@@ -39,7 +46,8 @@ function renderModal() {
       onOpenChange={() => undefined}
       token="tok"
       sessionId="cs-1"
-      defaultCurrency="COP"
+      locationId={locationId}
+      defaultCurrency="VES"
       onCreated={onCreated}
     />,
   );
@@ -49,7 +57,30 @@ function renderModal() {
 const submit = () => screen.getByRole('button', { name: 'Registrar ajuste' });
 
 describe('CashAdjustmentModal (DX-027, DX-252)', () => {
-  beforeEach(() => mockedAdd.mockReset());
+  beforeEach(() => {
+    mockedAdd.mockReset();
+    jest.mocked(listLocations).mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin, STAMP_SEDES.miami]);
+  });
+
+  it('la vista previa del importe usa el formato de la sede de LA CAJA (DX-354b): Caracas, Berlín y Miami', async () => {
+    jest.useFakeTimers({ advanceTimers: true });
+    try {
+      for (const [id, expected] of [
+        ['sede-caracas', 'VES 1.234,50'],
+        ['sede-berlin', '1.234,50 VES'],
+        ['sede-miami', 'VES 1,234.50'],
+      ] as const) {
+        const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+        renderModal(id);
+        await user.type(screen.getByLabelText('Importe'), '1234,5');
+        await waitFor(() => expect(document.body.textContent?.replace(/\s/g, ' ')).toContain(`Se guardará: ${expected}`), { timeout: 3000 });
+        cleanup();
+        clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
+      }
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
   it('exige un importe mayor que 0 y el motivo antes de llamar a la API', async () => {
     const user = userEvent.setup();
@@ -79,7 +110,7 @@ describe('CashAdjustmentModal (DX-027, DX-252)', () => {
     await user.click(submit());
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith(adjustment));
     expect(mockedAdd).toHaveBeenCalledWith('tok', 'cs-1', {
-      currency: 'COP',
+      currency: 'VES',
       method: 'CASH',
       amount: 5_000,
       reason: 'Abono sin registrar',

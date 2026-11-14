@@ -88,14 +88,14 @@ test('escritorio: recepción pasa a WhatsApp con opt-in en persona y el móvil i
   await expect(dialog.getByLabel('Móvil')).toHaveAttribute('aria-invalid', 'true');
   await expect(dialog.getByLabel('Móvil')).toBeFocused();
 
-  await dialog.getByLabel('Móvil').fill('310 123 4567');
+  await dialog.getByLabel('Móvil').fill('414 123 4567');
   await dialog.getByLabel('Acepta que la clínica le escriba por WhatsApp').check();
   await expect(dialog.getByLabel('¿Dónde lo aceptó?')).toHaveValue('IN_PERSON');
   await dialog.getByRole('button', { name: 'Guardar' }).click();
   await expect(dialog).toBeHidden();
 
   await expect(block).toContainText('WhatsApp');
-  await expect(block).toContainText('+57 310 1234567');
+  await expect(block).toContainText('+58 414 1234567');
   await expect(block.getByText('Móvil válido')).toBeVisible();
   await expect(block).toContainText(`En persona · lo registró ${reception.fullName}`);
 });

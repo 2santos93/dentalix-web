@@ -1,13 +1,13 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render as rtlRender, screen, waitFor, within } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import userEvent from '@testing-library/user-event';
 import { DashboardView } from './dashboard-view';
+import { TodaySection } from './today-section';
 import { getDashboard, type Dashboard } from '@/lib/dashboard/dashboard-api';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { listAppointments, type ListAppointment } from '@/lib/appointments/appointments-api';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
-import { getAnamnesisInboxSummary } from '@/lib/anamnesis/anamnesis-api';
-import { listWaitlist } from '@/lib/appointments/waitlist-api';
 import { getCurrentCashSession } from '@/lib/cash-sessions/cash-sessions-api';
 import { listInventoryItems } from '@/lib/inventory/inventory-api';
 import {
@@ -16,15 +16,17 @@ import {
   type LocationsComparison,
 } from '@/lib/reports/reports-api';
 import { clinicLocation } from '@/lib/test/locations';
+import { STAMP_SEDES, timeIn } from '@/lib/test/stamp';
 import { tokenForRole } from '@/lib/test/data-consents';
 import { cashSessionFixture } from '@/lib/test/cash-session';
-import {
-  getClosingQueueCount,
-  getFollowUpCount,
-  getReceivablesSummary,
-  getUnscheduledCount,
-  type ReceivablesSummary,
-} from './inicio-api';
+import { getReceivablesSummary, type ReceivablesSummary } from './inicio-api';
+import { rateProviderCopy } from '@/components/payments/rate-provider-notice';
+import { withoutRateCopy } from '@/components/payments/without-rate-notice';
+import { getWorkQueuesSummary, type WorkQueueItem, type WorkQueueKey } from '@/lib/work-queues/work-queues-api';
+import { WorkQueuesProvider } from '@/components/work-queues/work-queues-context';
+import { getTokenRole } from '@/lib/auth/token-role';
+import { getMaintenanceDue } from '@/lib/equipment/equipment-api';
+import { maintenanceDueFixture } from '@/lib/test/equipment';
 
 // jest.mock no reescribe alias: rutas relativas (convención del repo).
 jest.mock('../../lib/dashboard/dashboard-api', () => ({ getDashboard: jest.fn() }));
@@ -32,8 +34,16 @@ jest.mock('../../lib/reference/currencies-api', () => ({ listCurrencies: jest.fn
 jest.mock('../../lib/appointments/staff-api', () => ({ listStaff: jest.fn() }));
 jest.mock('../../lib/appointments/appointments-api', () => ({ listAppointments: jest.fn() }));
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
-jest.mock('../../lib/anamnesis/anamnesis-api', () => ({ getAnamnesisInboxSummary: jest.fn() }));
-jest.mock('../../lib/appointments/waitlist-api', () => ({ listWaitlist: jest.fn() }));
+// DX-503: los recuentos de «Pendientes» salen de una sola lectura agregada.
+jest.mock('../../lib/work-queues/work-queues-api', () => ({
+  ...jest.requireActual('../../lib/work-queues/work-queues-api'),
+  getWorkQueuesSummary: jest.fn(),
+}));
+// DX-543: los avisos de mantenimiento de equipos (solo ADMIN).
+jest.mock('../../lib/equipment/equipment-api', () => ({
+  ...jest.requireActual('../../lib/equipment/equipment-api'),
+  getMaintenanceDue: jest.fn(),
+}));
 jest.mock('../../lib/cash-sessions/cash-sessions-api', () => ({ getCurrentCashSession: jest.fn() }));
 jest.mock('../../lib/inventory/inventory-api', () => ({ listInventoryItems: jest.fn() }));
 jest.mock('../../lib/reports/reports-api', () => ({
@@ -42,14 +52,12 @@ jest.mock('../../lib/reports/reports-api', () => ({
 }));
 jest.mock('./inicio-api', () => ({
   ...jest.requireActual('./inicio-api'),
-  getClosingQueueCount: jest.fn(),
-  getFollowUpCount: jest.fn(),
-  getUnscheduledCount: jest.fn(),
   getReceivablesSummary: jest.fn(),
 }));
 // Los avisos de ADMIN tienen sus propias pruebas y sus propias llamadas.
 jest.mock('../locations/regional-review-notice', () => ({ RegionalReviewNotice: () => null }));
 jest.mock('../payments/rate-backlog-notice', () => ({ RateBacklogNotice: () => null }));
+jest.mock('../clinic-settings/clinic-fiscal-notice', () => ({ ClinicFiscalNotice: () => null }));
 
 const m = {
   getDashboard: jest.mocked(getDashboard),
@@ -57,24 +65,63 @@ const m = {
   listStaff: jest.mocked(listStaff),
   listAppointments: jest.mocked(listAppointments),
   listLocations: jest.mocked(listLocations),
-  anamnesis: jest.mocked(getAnamnesisInboxSummary),
-  waitlist: jest.mocked(listWaitlist),
   cash: jest.mocked(getCurrentCashSession),
   inventory: jest.mocked(listInventoryItems),
   comparison: jest.mocked(getLocationsComparison),
   production: jest.mocked(getProductionByProcedure),
-  closing: jest.mocked(getClosingQueueCount),
-  followUp: jest.mocked(getFollowUpCount),
-  unscheduled: jest.mocked(getUnscheduledCount),
   receivables: jest.mocked(getReceivablesSummary),
+  workQueues: jest.mocked(getWorkQueuesSummary),
+  equipmentDue: jest.mocked(getMaintenanceDue),
 };
 
-// Sábado 15/08/2026 07:00 en Bogotá (GMT−5): citas antes y después de «ahora».
-const FROZEN_NOW = new Date('2026-08-15T12:00:00.000Z');
+/** Lo que devuelve la API por rol (WORK_QUEUE_ROLES): la API reparte, la web pinta. */
+const QUEUES_BY_ROLE: Record<string, WorkQueueKey[]> = {
+  ADMIN: ['CLOSING_QUEUE', 'ANAMNESIS_REVIEW', 'QUOTE_FOLLOW_UP', 'ACCEPTED_UNSCHEDULED', 'WAITLIST', 'RECALL', 'RECEIVABLES', 'LOW_STOCK'],
+  DENTIST: ['CLOSING_QUEUE', 'ANAMNESIS_REVIEW'],
+  RECEPTION: ['CLOSING_QUEUE', 'QUOTE_FOLLOW_UP', 'ACCEPTED_UNSCHEDULED', 'WAITLIST', 'RECALL', 'RECEIVABLES'],
+  ASSISTANT: ['ANAMNESIS_REVIEW', 'LOW_STOCK'],
+};
+const QUEUE_ITEMS: Record<WorkQueueKey, WorkQueueItem> = {
+  CLOSING_QUEUE: { key: 'CLOSING_QUEUE', status: 'OK', count: 3 },
+  ANAMNESIS_REVIEW: { key: 'ANAMNESIS_REVIEW', status: 'OK', count: 5 },
+  QUOTE_FOLLOW_UP: { key: 'QUOTE_FOLLOW_UP', status: 'OK', count: 2 },
+  ACCEPTED_UNSCHEDULED: { key: 'ACCEPTED_UNSCHEDULED', status: 'OK', count: 0 },
+  WAITLIST: { key: 'WAITLIST', status: 'OK', count: 1 },
+  RECALL: { key: 'RECALL', status: 'OK', count: 3 },
+  RECEIVABLES: { key: 'RECEIVABLES', status: 'OK', count: 2, overdue: [{ currency: 'VES', amount: 780000 }] },
+  LOW_STOCK: { key: 'LOW_STOCK', status: 'OK', count: 4 },
+};
+function queuesFor(
+  token: string,
+  keys?: readonly WorkQueueKey[],
+  override: Partial<Record<WorkQueueKey, WorkQueueItem>> = {},
+) {
+  const role = getTokenRole(token) ?? 'ADMIN';
+  return {
+    generatedAt: FROZEN_NOW.toISOString(),
+    items: QUEUES_BY_ROLE[role]
+      .filter((k) => !keys || keys.includes(k))
+      .map((k) => override[k] ?? QUEUE_ITEMS[k]),
+  };
+}
+/** Las lecturas COMPLETAS (las de «Mi día»; las del menú llevan `keys`). */
+const fullReads = () => m.workQueues.mock.calls.filter(([, keys]) => keys === undefined).length;
+
+/** Inicio vive dentro del AppShell, que da la lectura compartida de las listas. */
+function render(ui: ReactElement<{ token: string }>) {
+  return rtlRender(
+    <WorkQueuesProvider token={ui.props.token} pathname="/dashboard">
+      {ui}
+    </WorkQueuesProvider>,
+  );
+}
+
+// Sábado 15/08/2026 07:00 en la sede (GMT−4): citas antes y después de «ahora».
+const FROZEN_NOW = new Date('2026-08-15T11:00:00.000Z');
 
 const sedes: ClinicLocation[] = [
-  clinicLocation({ id: 'loc-1', name: 'Sede principal' }),
-  clinicLocation({ id: 'loc-2', name: 'Sede Norte', createdAt: '2026-02-01T00:00:00.000Z' }),
+  clinicLocation({ id: 'loc-1', name: 'Sede principal', currency: 'VES' }),
+  clinicLocation({ id: 'loc-2', name: 'Sede Norte', currency: 'VES', createdAt: '2026-02-01T00:00:00.000Z' }),
 ];
 
 function appointment(overrides: Partial<ListAppointment>): ListAppointment {
@@ -86,8 +133,8 @@ function appointment(overrides: Partial<ListAppointment>): ListAppointment {
     patientFirstName: 'María',
     patientLastName: 'López',
     providerId: 'staff-1',
-    start: '2026-08-15T14:00:00.000Z',
-    end: '2026-08-15T14:30:00.000Z',
+    start: '2026-08-15T13:00:00.000Z',
+    end: '2026-08-15T13:30:00.000Z',
     status: 'SCHEDULED',
     reason: null,
     planItemIds: [],
@@ -98,13 +145,13 @@ function appointment(overrides: Partial<ListAppointment>): ListAppointment {
 }
 
 const todayAppointments: ListAppointment[] = [
-  appointment({ id: 'a1', start: '2026-08-15T13:00:00.000Z', status: 'COMPLETED' }),
+  appointment({ id: 'a1', start: '2026-08-15T12:00:00.000Z', status: 'COMPLETED' }),
   appointment({
     id: 'a2',
     patientId: 'p-2',
     patientFirstName: 'Luis',
     patientLastName: 'Pérez',
-    start: '2026-08-15T15:00:00.000Z',
+    start: '2026-08-15T14:00:00.000Z',
     status: 'SCHEDULED',
     medicalAlerts: {
       hasCriticalAlert: true,
@@ -115,9 +162,9 @@ const todayAppointments: ListAppointment[] = [
     },
     balance: { hasOverdue: true, overdueDays: 40 },
   }),
-  appointment({ id: 'a3', start: '2026-08-15T16:00:00.000Z', status: 'CONFIRMED' }),
-  appointment({ id: 'a4', start: '2026-08-15T17:00:00.000Z', status: 'ARRIVED' }),
-  appointment({ id: 'a5', start: '2026-08-15T18:00:00.000Z', status: 'CANCELLED' }),
+  appointment({ id: 'a3', start: '2026-08-15T15:00:00.000Z', status: 'CONFIRMED' }),
+  appointment({ id: 'a4', start: '2026-08-15T16:00:00.000Z', status: 'ARRIVED' }),
+  appointment({ id: 'a5', start: '2026-08-15T17:00:00.000Z', status: 'CANCELLED' }),
 ];
 
 function dashboard(): Dashboard {
@@ -126,13 +173,26 @@ function dashboard(): Dashboard {
     incomes: {
       from: '2026-08-01T00:00:00.000Z',
       to: '2026-08-16T00:00:00.000Z',
-      currency: 'COP',
+      currency: 'VES',
       totalConverted: 1250000,
       count: 12,
-      byCurrency: { COP: 1000000, USD: 60 },
+      byCurrency: { VES: 1000000, USD: 60 },
     },
     lowStockItems: { count: 0, items: [] },
-    upcomingAppointments: [],
+    // El contrato de la API trae la sede de cada próxima cita (DX-354b, API1).
+    upcomingAppointments: [
+      {
+        id: 'up-1',
+        patientId: 'p-1',
+        patientFirstName: 'María',
+        patientLastName: 'López',
+        providerId: 'staff-1',
+        start: '2026-08-16T13:00:00.000Z',
+        end: '2026-08-16T13:30:00.000Z',
+        status: 'SCHEDULED',
+        locationId: 'loc-1',
+      },
+    ],
     patientCount: 42,
   };
 }
@@ -145,13 +205,13 @@ const metric = (value: number, previous: number, change: number, trend: 'BETTER'
 });
 function comparison(locations = 1): LocationsComparison {
   const metrics = {
-    production: [{ currency: 'COP', ...metric(3000000, 2500000, 20, 'BETTER') }],
-    collected: [{ currency: 'COP', ...metric(1000000, 900000, 11.1, 'BETTER') }],
-    collectionRate: [{ currency: 'COP', ...metric(33.3, 36, -2.7, 'WORSE') }],
+    production: [{ currency: 'VES', ...metric(3000000, 2500000, 20, 'BETTER') }],
+    collected: [{ currency: 'VES', ...metric(1000000, 900000, 11.1, 'BETTER') }],
+    collectionRate: [{ currency: 'VES', ...metric(33.3, 36, -2.7, 'WORSE') }],
     completedAppointments: metric(40, 38, 5.3, 'BETTER'),
     noShowRate: metric(5, 7, -2, 'BETTER'),
     newPatients: metric(6, 6, 0, 'EQUAL'),
-    averageTicket: [{ currency: 'COP', ...metric(75000, 65789, 14, 'BETTER') }],
+    averageTicket: [{ currency: 'VES', ...metric(75000, 65789, 14, 'BETTER') }],
     occupancy: metric(64, 60, 4, 'BETTER'),
   };
   const kpi = (key: string, label: string, unit: string, changeUnit: string) => ({
@@ -167,7 +227,7 @@ function comparison(locations = 1): LocationsComparison {
     locationId: id,
     name,
     isActive: true,
-    timeZone: 'America/Bogota',
+    timeZone: 'America/Caracas',
     hasActivity: true,
     previousPeriodUnattributed: false,
     metrics,
@@ -201,7 +261,7 @@ const receivables: ReceivablesSummary = {
   scope: { location: null },
   totals: [
     {
-      currency: 'COP',
+      currency: 'VES',
       patients: 2,
       balance: 880000,
       debt: 880000,
@@ -209,6 +269,8 @@ const receivables: ReceivablesSummary = {
       buckets: { current: 100000, days0to30: 100000, days31to60: 80000, days61to90: 100000, over90: 500000 },
     },
   ],
+  paymentsWithoutRateCount: 0,
+  rateProviderTimedOut: false,
 };
 
 function setActiveSede(id: string | null) {
@@ -228,32 +290,33 @@ beforeEach(() => {
   for (const fn of Object.values(m)) fn.mockReset();
   m.listLocations.mockResolvedValue(sedes);
   m.listCurrencies.mockResolvedValue([
-    { code: 'COP', name: 'Peso', symbol: '$' },
+    { code: 'VES', name: 'Bolívar', symbol: 'Bs.' },
     { code: 'USD', name: 'Dólar', symbol: '$' },
   ]);
   m.listStaff.mockResolvedValue([{ userId: 'staff-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST', locationIds: null }] as never);
   m.listAppointments.mockResolvedValue(todayAppointments);
   m.getDashboard.mockResolvedValue(dashboard());
   m.comparison.mockResolvedValue(comparison());
-  m.closing.mockResolvedValue({ total: 3, outcome: 1, evolution: 1, treatment: 1 });
-  m.followUp.mockResolvedValue({ total: 2 });
-  m.unscheduled.mockResolvedValue({ total: 0 });
-  m.waitlist.mockResolvedValue({ items: [], total: 1, page: 1, pageSize: 1 } as never);
+  m.workQueues.mockImplementation(async (token, keys) => queuesFor(token, keys));
   m.receivables.mockResolvedValue(receivables);
+  m.equipmentDue.mockResolvedValue({
+    generatedAt: FROZEN_NOW.toISOString(),
+    items: [maintenanceDueFixture({ id: 'eq-1', name: 'Unidad dental Sillón 1', chairName: 'Sillón 1' })],
+    total: 1,
+  });
   m.inventory.mockResolvedValue({
     items: [{ id: 'i1', name: 'Guantes de nitrilo', unit: 'caja', stock: 1, minStock: 5, lowStock: true }],
     total: 4,
     page: 1,
     pageSize: 8,
   } as never);
-  m.anamnesis.mockResolvedValue({ submitted: 5 });
   m.cash.mockResolvedValue({
     locationId: 'loc-1',
     settings: { requireOpenSession: false, blindClose: false },
-    session: cashSessionFixture({ openedAt: '2026-08-15T13:02:00.000Z' }),
+    session: cashSessionFixture({ openedAt: '2026-08-15T12:02:00.000Z' }),
   } as never);
   m.production.mockResolvedValue({
-    totals: [{ currency: 'COP', count: 7, gross: 900000, discounts: 50000, net: 850000, averageNet: 121428 }],
+    totals: [{ currency: 'VES', count: 7, gross: 900000, discounts: 50000, net: 850000, averageNet: 121428 }],
   } as never);
 });
 
@@ -268,7 +331,7 @@ describe('Inicio · ADMIN', () => {
     const scope = await screen.findByTestId('dashboard-scope');
     expect(scope).toHaveTextContent('Todas las sedes');
     expect(await within(scope).findByTestId('dashboard-zone-note')).toHaveTextContent(
-      /^Días en hora de .+ \(UTC−5\) \(Sede principal\)\.$/,
+      /^Días en hora de .+ \(UTC−4\) \(Sede principal\)\.$/,
     );
     const change = within(scope).getByRole('link', { name: 'Cambiar zona' });
     expect(change).toHaveAttribute('href', '/settings/sedes?sede=loc-1');
@@ -295,12 +358,12 @@ describe('Inicio · ADMIN', () => {
     expect(within(row).getByText('Saldo vencido')).toBeInTheDocument();
     expect(within(row).getByText('Agendada')).toBeInTheDocument();
     await within(row).findByText('Dra. Ana Ríos');
-    // La hora es la de la sede: 15:00Z = 10:00 a. m. en Bogotá.
+    // La hora es la de la sede: 14:00Z = 10:00 a. m. en la sede.
     expect(within(row).getByText(/10:00/)).toBeInTheDocument();
     // Pide el día civil de la sede, sin acotar a un profesional.
     expect(m.listAppointments.mock.calls[0][1]).toEqual({
-      from: '2026-08-15T05:00:00.000Z',
-      to: '2026-08-16T04:59:59.999Z',
+      from: '2026-08-15T04:00:00.000Z',
+      to: '2026-08-16T03:59:59.999Z',
       providerId: undefined,
     });
   });
@@ -327,27 +390,104 @@ describe('Inicio · ADMIN', () => {
     );
   });
 
-  it('una fila que falla no tumba las demás y se reintenta sola', async () => {
-    m.followUp.mockRejectedValueOnce(new Error('network'));
+  it('una lista que falla avisa en su fila con Reintentar y las demás se pintan', async () => {
+    let failed = false;
+    m.workQueues.mockImplementation(async (token, keys) => {
+      if (keys === undefined && !failed) {
+        failed = true;
+        return queuesFor(token, keys, { QUOTE_FOLLOW_UP: { key: 'QUOTE_FOLLOW_UP', status: 'ERROR', count: null } });
+      }
+      return queuesFor(token, keys);
+    });
     render(<DashboardView token={tokenForRole('ADMIN')} />);
     const row = await screen.findByTestId('pending-follow-up');
     await within(row).findByText('No se pudo cargar');
     expect(await pendingValue('closing')).toHaveTextContent('3');
+    expect(await pendingValue('waitlist')).toHaveTextContent('1');
+    const before = fullReads();
     await userEvent.click(within(row).getByRole('button', { name: 'Volver a cargar «Presupuestos por seguir»' }));
     expect(await pendingValue('follow-up')).toHaveTextContent('2');
-    expect(m.followUp).toHaveBeenCalledTimes(2);
+    expect(fullReads()).toBe(before + 1);
+  });
+
+  it('si no se pueden contar las listas: error de sección con Reintentar (la caja sigue)', async () => {
+    let fail = true;
+    m.workQueues.mockImplementation(async (token, keys) => {
+      if (keys === undefined && fail) throw new Error('network');
+      return queuesFor(token, keys);
+    });
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const pending = await screen.findByRole('region', { name: 'Pendientes' });
+    expect(await within(pending).findByRole('alert')).toHaveTextContent('No se pudieron contar tus listas de trabajo.');
+    expect(await pendingValue('cash')).toHaveTextContent('Elige una sede');
+    fail = false;
+    await userEvent.click(within(pending).getByRole('button', { name: 'Reintentar' }));
+    expect(await pendingValue('closing')).toHaveTextContent('3');
+  });
+
+  it('«Mantenimientos de equipos» en la columna de «Mi día», con enlace a la hoja de vida (DX-543)', async () => {
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const block = await screen.findByRole('region', { name: 'Mantenimientos de equipos' });
+    expect(
+      await within(block).findByRole('link', { name: 'Unidad dental Sillón 1 (hoja de vida)' }),
+    ).toHaveAttribute('href', '/settings/equipos/eq-1');
+    expect(within(block).getByText('Vencido')).toBeInTheDocument();
+  });
+
+  it('si fallan los avisos de equipos, solo ese bloque avisa: «Pendientes» y Hoy siguen (DX-543)', async () => {
+    m.equipmentDue.mockRejectedValue(new Error('network'));
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const block = await screen.findByRole('region', { name: 'Mantenimientos de equipos' });
+    expect(await within(block).findByRole('alert')).toHaveTextContent(
+      'No se pudieron cargar los mantenimientos de los equipos.',
+    );
+    expect(await pendingValue('closing')).toHaveTextContent('3');
+    const today = screen.getByRole('region', { name: 'Hoy' });
+    expect(within(today).queryByRole('alert')).toBeNull();
+  });
+
+  it('las listas a 0 se pliegan en «Al día» y se despliegan con teclado', async () => {
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const toggle = await screen.findByTestId('pending-folded-toggle');
+    expect(toggle).toHaveTextContent('Al día: 1 lista');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByTestId('pending-unscheduled')).not.toBeVisible();
+    toggle.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('pending-unscheduled')).toBeVisible();
+    expect(screen.getByTestId('pending-unscheduled-value')).toHaveTextContent('Al día');
+  });
+
+  it('todas a 0: estado vacío «Todo al día», con las listas plegadas', async () => {
+    m.workQueues.mockImplementation(async (token, keys) => ({
+      generatedAt: FROZEN_NOW.toISOString(),
+      items: queuesFor(token, keys).items.map((i) =>
+        i.key === 'RECEIVABLES' ? { ...i, count: 0, overdue: [] } : { ...i, count: 0 },
+      ),
+    }));
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    expect(await screen.findByText('Todo al día')).toBeInTheDocument();
+    expect(screen.getByTestId('pending-folded-toggle')).toHaveTextContent('Al día: 8 listas');
+    expect(screen.queryByRole('list', { name: 'Pendientes' })).not.toBeInTheDocument();
+  });
+
+  it('una sola lectura completa alimenta «Mi día» (sin un /count por lista)', async () => {
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    expect(await pendingValue('closing')).toHaveTextContent('3');
+    expect(fullReads()).toBe(1);
   });
 
   it('Resultados del período: cobrado convertido (hasta + 1 día) y los indicadores frente al período anterior', async () => {
     render(<DashboardView token={tokenForRole('ADMIN')} />);
     await waitFor(() => expect(m.getDashboard).toHaveBeenCalledTimes(1));
-    expect(m.getDashboard.mock.calls[0][1]).toMatchObject({ from: '2026-08-01', to: '2026-08-16', currency: 'COP' });
+    expect(m.getDashboard.mock.calls[0][1]).toMatchObject({ from: '2026-08-01', to: '2026-08-16', currency: 'VES' });
     expect(m.comparison.mock.calls[0][1]).toEqual({ from: '2026-08-01', to: '2026-08-15', compare: 'previous' });
     const period = screen.getByRole('region', { name: 'Resultados del período' });
     const incomes = await within(period).findByTestId('dashboard-incomes');
-    expect(incomes).toHaveTextContent('Cobrado, en COP');
+    expect(incomes).toHaveTextContent('Cobrado, en VES');
     expect(incomes).toHaveTextContent('12 abonos');
-    expect(incomes).toHaveTextContent('Cada abono en otra moneda, a COP con la tasa de su día.');
+    expect(incomes).toHaveTextContent('Cada abono en otra moneda, a VES con la tasa de su día.');
     const production = await within(period).findByTestId('dashboard-kpi-production');
     expect(production).toHaveTextContent('Producción');
     expect(production).toHaveTextContent(/Mejora: \+20\s?% frente a/);
@@ -366,11 +506,40 @@ describe('Inicio · ADMIN', () => {
 
   it('Cartera por antigüedad: los cinco tramos por moneda y lo vencido', async () => {
     render(<DashboardView token={tokenForRole('ADMIN')} />);
-    const aging = await screen.findByTestId('aging-COP');
+    const aging = await screen.findByTestId('aging-VES');
     expect(aging).toHaveTextContent('2 pacientes');
     expect(aging).toHaveTextContent('Por vencer');
     expect(aging).toHaveTextContent('Más de 90 días');
-    expect(within(aging).getByRole('img', { name: 'Reparto por antigüedad de lo que se debe en COP' })).toBeInTheDocument();
+    expect(within(aging).getByRole('img', { name: 'Reparto por antigüedad de lo que se debe en VES' })).toBeInTheDocument();
+    expect(screen.queryByText(/Cifras incompletas/)).not.toBeInTheDocument();
+  });
+
+  it('Cartera por antigüedad, «sin tasa»: el mismo aviso que el estado de cuenta, sin reintento (DX-472-ter)', async () => {
+    m.receivables.mockResolvedValue({ ...receivables, paymentsWithoutRateCount: 2 });
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const section = await screen.findByRole('region', { name: 'Cartera por antigüedad' });
+    await within(section).findByTestId('aging-VES');
+    const notice = within(section).getByText(withoutRateCopy.title(2)).closest('[role="status"]');
+    expect(notice).toHaveTextContent(withoutRateCopy.title(2));
+    expect(notice).toHaveTextContent(withoutRateCopy.body);
+    expect(notice).not.toHaveTextContent(rateProviderCopy.title);
+    expect(within(section).queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
+  });
+
+  it('Cartera por antigüedad, proveedor sin respuesta: el aviso del estado de cuenta y «Reintentar» vuelve a pedir (DX-472-ter)', async () => {
+    m.receivables.mockResolvedValueOnce({ ...receivables, paymentsWithoutRateCount: 1, rateProviderTimedOut: true });
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const section = await screen.findByRole('region', { name: 'Cartera por antigüedad' });
+    await within(section).findByTestId('aging-VES');
+    expect(within(section).getByText(rateProviderCopy.title)).toBeInTheDocument();
+    expect(within(section).getByText(rateProviderCopy.notCounted(1))).toBeInTheDocument();
+    expect(within(section).queryByText(withoutRateCopy.title(1))).not.toBeInTheDocument();
+    const calls = m.receivables.mock.calls.length;
+    await userEvent.click(within(section).getByRole('button', { name: 'Reintentar' }));
+    await waitFor(() => expect(m.receivables.mock.calls.length).toBe(calls + 1));
+    // Ya respondió: sin aviso.
+    await within(section).findByTestId('aging-VES');
+    expect(within(section).queryByText(rateProviderCopy.title)).not.toBeInTheDocument();
   });
 
   it('un error de Hoy es del bloque (escalón 1) y su reintento vuelve a pedir', async () => {
@@ -393,6 +562,93 @@ describe('Inicio · ADMIN', () => {
   });
 });
 
+describe('Inicio · Hoy: la hora de cada fila con el reloj de SU sede (DX-354b, E1)', () => {
+  // 13:00Z del 15 de agosto: Caracas (UTC−4, 12 h) 9:00 a. m.; Berlín (UTC+2 en verano, 24 h) 15:00.
+  const at = '2026-08-15T13:00:00.000Z';
+  const caracas = { ...STAMP_SEDES.caracas, id: 'loc-1', name: 'Sede principal' };
+  const berlin = { ...STAMP_SEDES.berlin, id: 'loc-berlin', name: 'Berlín', createdAt: '2026-02-01T00:00:00.000Z' };
+
+  function rowOf(name: string): HTMLElement {
+    return screen.getByRole('link', { name }).closest('li') as HTMLElement;
+  }
+
+  it('«Todas las sedes»: una cita de Caracas en 12 h y otra de Berlín en 24 h, cada una con SU reloj', async () => {
+    m.listLocations.mockResolvedValue([caracas, berlin]);
+    m.listAppointments.mockResolvedValue([
+      appointment({ id: 'c', patientId: 'p-c', patientFirstName: 'Carolina', patientLastName: 'Ruiz', start: at, locationId: 'loc-1' }),
+      appointment({ id: 'b', patientId: 'p-b', patientFirstName: 'Jonas', patientLastName: 'Weber', start: at, locationId: 'loc-berlin' }),
+    ]);
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const today = await screen.findByRole('region', { name: 'Hoy' });
+    await within(today).findByRole('list', { name: 'Citas de hoy' });
+    const caracasTime = timeIn('caracas', at);
+    const berlinTime = timeIn('berlin', at);
+    expect(caracasTime).not.toBe(berlinTime);
+    expect(caracasTime).toMatch(/9:00/);
+    expect(berlinTime).toBe('15:00');
+    await waitFor(() => expect(within(rowOf('Carolina Ruiz')).getByText(caracasTime)).toBeInTheDocument());
+    expect(within(rowOf('Jonas Weber')).getByText(berlinTime)).toBeInTheDocument();
+    // Ninguna fila usa el reloj de la otra ni cae al de la pantalla.
+    expect(within(rowOf('Carolina Ruiz')).queryByText(berlinTime)).not.toBeInTheDocument();
+    expect(within(rowOf('Jonas Weber')).queryByText(caracasTime)).not.toBeInTheDocument();
+  });
+
+  it('una cita de una sede desconocida: «—» (no la hora de la pantalla) y un solo aviso', async () => {
+    m.listLocations.mockResolvedValue([caracas, berlin]);
+    m.listAppointments.mockResolvedValue([
+      appointment({ id: 'x', patientId: 'p-x', patientFirstName: 'Ana', patientLastName: 'Sin Sede', start: at, locationId: 'sede-borrada' }),
+      appointment({ id: 'y', patientId: 'p-y', patientFirstName: 'Beto', patientLastName: 'Sin Sede', start: at, locationId: 'sede-borrada' }),
+      appointment({ id: 'c', patientId: 'p-c', patientFirstName: 'Carolina', patientLastName: 'Ruiz', start: at, locationId: 'loc-1' }),
+    ]);
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const today = await screen.findByRole('region', { name: 'Hoy' });
+    await within(today).findByRole('list', { name: 'Citas de hoy' });
+    expect(within(rowOf('Ana Sin Sede')).getByText('—')).toBeInTheDocument();
+    expect(within(rowOf('Ana Sin Sede')).queryByText(timeIn('caracas', at))).not.toBeInTheDocument();
+    expect(await within(today).findAllByText(/No se pudo saber el formato regional o el reloj de la sede/)).toHaveLength(1);
+    // La fila con sede conocida sigue bien.
+    expect(within(rowOf('Carolina Ruiz')).getByText(timeIn('caracas', at))).toBeInTheDocument();
+  });
+
+  it('con una sola sede nada cambia: todas las filas con su reloj y sin aviso', async () => {
+    m.listLocations.mockResolvedValue([caracas]);
+    m.listAppointments.mockResolvedValue([
+      appointment({ id: 'c', patientId: 'p-c', patientFirstName: 'Carolina', patientLastName: 'Ruiz', start: at, locationId: 'loc-1' }),
+    ]);
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    const today = await screen.findByRole('region', { name: 'Hoy' });
+    await within(today).findByRole('list', { name: 'Citas de hoy' });
+    await waitFor(() => expect(within(rowOf('Carolina Ruiz')).getByText(timeIn('caracas', at))).toBeInTheDocument());
+    expect(within(today).queryByText(/No se pudo saber el formato regional/)).not.toBeInTheDocument();
+  });
+});
+
+describe('Inicio · Hoy sin formato de la sede (DX-354b, T26-ter)', () => {
+  it('el día y las cuentas salen «—» con el aviso, no como el día ISO crudo ni como un número sin formato', async () => {
+    m.listLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', locale: null, hourCycle: null })]);
+    m.listAppointments.mockResolvedValue([
+      appointment({ id: 'c', patientId: 'p-c', patientFirstName: 'Carolina', patientLastName: 'Ruiz', start: '2026-08-15T13:00:00.000Z', locationId: 'loc-1' }),
+    ]);
+    render(
+      <TodaySection
+        token={tokenForRole('ADMIN')}
+        role="ADMIN"
+        userId={null}
+        timeZone="America/Caracas"
+        today="2026-08-15"
+        scopeLabel="todas las sedes"
+        scopeKey="all"
+        fmt={null}
+        staffNames={{}}
+      />,
+    );
+    const today = await screen.findByRole('region', { name: 'Hoy' });
+    expect(await within(today).findAllByText(/No se pudo saber el formato regional o el reloj de la sede/)).toHaveLength(1);
+    expect(today).not.toHaveTextContent('2026-08-15');
+    expect(within(today).getAllByText('—').length).toBeGreaterThan(0);
+  });
+});
+
 describe('Inicio · RECEPTION', () => {
   it('ve hoy y sus pendientes, nunca pide el panel financiero, los reportes ni lo clínico', async () => {
     setActiveSede('loc-2');
@@ -410,8 +666,9 @@ describe('Inicio · RECEPTION', () => {
     expect(screen.queryByRole('region', { name: 'Cartera por antigüedad' })).not.toBeInTheDocument();
     expect(m.getDashboard).not.toHaveBeenCalled();
     expect(m.comparison).not.toHaveBeenCalled();
-    expect(m.anamnesis).not.toHaveBeenCalled();
     expect(m.inventory).not.toHaveBeenCalled();
+    expect(m.equipmentDue).not.toHaveBeenCalled();
+    expect(screen.queryByRole('region', { name: 'Mantenimientos de equipos' })).not.toBeInTheDocument();
   });
 });
 
@@ -423,10 +680,10 @@ describe('Inicio · DENTIST', () => {
     expect(m.listAppointments.mock.calls[0][1]).toMatchObject({ providerId: 'u1' });
     expect(await pendingValue('closing')).toHaveTextContent('3');
     expect(await pendingValue('anamnesis')).toHaveTextContent('5');
-    const production = await screen.findByTestId('production-COP');
+    const production = await screen.findByTestId('production-VES');
     expect(production).toHaveTextContent('7 procedimientos');
     expect(m.production.mock.calls[0][1]).toEqual({ from: '2026-08-01', to: '2026-08-15' });
-    for (const fn of [m.getDashboard, m.comparison, m.followUp, m.receivables, m.cash, m.inventory, m.listStaff]) {
+    for (const fn of [m.getDashboard, m.comparison, m.receivables, m.cash, m.inventory, m.listStaff, m.equipmentDue]) {
       expect(fn).not.toHaveBeenCalled();
     }
   });
@@ -442,7 +699,7 @@ describe('Inicio · ASSISTANT', () => {
     expect(gloves).toHaveTextContent('Faltan 4');
     expect(within(lowStock).getByText('Se muestran 1 de 4.')).toBeInTheDocument();
     expect(screen.queryByTestId('pending-closing')).not.toBeInTheDocument();
-    expect(m.closing).not.toHaveBeenCalled();
     expect(m.getDashboard).not.toHaveBeenCalled();
+    expect(m.equipmentDue).not.toHaveBeenCalled();
   });
 });

@@ -17,8 +17,6 @@ import {
 } from '@/lib/expenses/expenses-api';
 import { EXPENSE_RECEIPT_ACCEPT, EXPENSE_RECEIPT_RULES, isImageReceipt } from '@/lib/expenses/presentation';
 import type { SingleFileUploadRequest } from '@/lib/files/upload-single-file';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { startDownload } from '@/lib/patient-documents/download';
 import { formatFileSize } from '@/lib/patient-documents/patient-documents-api';
@@ -37,8 +35,8 @@ import { ExpensePaymentModal } from './expense-payment-modal';
 import { ExpenseStatusBadges } from './expense-status-badges';
 import { ExpenseVoidModal } from './expense-void-modal';
 import type { ExpenseCategoriesState } from './use-expense-categories';
-import { locationRegionalFormat } from '@/lib/locations/location-settings';
-import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { useSedeStamp, type SedePainters } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
 import { Callout } from '@/components/ui/callout';
 
@@ -75,7 +73,7 @@ export const expenseDetailCopy = {
   fromCashLink: 'Ver la caja',
   paymentBy: (name: string) => `Registró ${name}`,
   voidPayment: 'Anular pago',
-  voidPaymentLabel: (amount: string, day: string) => `Anular el pago de ${amount} del ${day}`,
+  voidPaymentLabel: (amount: string, day: string) => `Anular pago de ${amount} del ${day}`,
   addPayment: 'Registrar pago',
   edit: 'Editar',
   voidExpense: 'Anular gasto',
@@ -97,13 +95,6 @@ interface ExpenseDetailModalProps {
   token: string;
   expenseId: string;
   locations: ClinicLocation[];
-  /**
-   * La lista de sedes ya cargó o falló. Mientras carga no se sabe si la sede
-   * del gasto tiene formato: el tamaño sale «—» sin aviso, para que no destelle.
-   */
-  locationsSettled: boolean;
-  /** Vuelve a leer las sedes (el soporte de una sede sin formato lo ofrece en su aviso). */
-  onRetryLocations: () => void;
   categories: ExpenseCategoriesState;
   onManageCategories: () => void;
   /** Tras cualquier cambio, con el aviso: la lista se recarga. */
@@ -132,8 +123,6 @@ export function ExpenseDetailModal({
   token,
   expenseId,
   locations,
-  locationsSettled,
-  onRetryLocations,
   categories,
   onManageCategories,
   onChanged,
@@ -244,10 +233,12 @@ export function ExpenseDetailModal({
   }
 
   const location = detail ? locations.find((l) => l.id === detail.locationId) : undefined;
-  // G1-B (R12): el tamaño del recibo con el formato de la sede del gasto, como en el alta; sin él, «—» y el aviso.
-  const fmt = locationRegionalFormat(location);
+  // DX-354b: fechas, importes y tamaño del recibo con el formato de la sede del GASTO (`detail.locationId`);
+  // sin él, «—» y un solo aviso (cargando, sin aviso).
+  const stamp = useSedeStamp(token, [detail?.locationId]);
+  const fmt = stamp.fmtOf(detail?.locationId);
   const live = detail !== null && detail.status !== 'VOIDED';
-  const money = (amount: number) => (detail ? formatCurrency(amount, detail.currency) : '');
+  const money = (amount: number) => (detail ? stamp.money(amount, detail.currency, detail.locationId) : '');
 
   let body: React.ReactNode;
   if (loadError) {
@@ -287,11 +278,11 @@ export function ExpenseDetailModal({
               <span className="tabular-nums">{money(detail.pendingAmount)}</span>
             </Field>
             <Field label={expenseDetailCopy.invoiceDate}>
-              <span className="tabular-nums">{formatCivilDate(detail.invoiceDate)}</span>
+              <span className="tabular-nums">{stamp.civilDate(detail.invoiceDate, detail.locationId)}</span>
             </Field>
             <Field label={expenseDetailCopy.dueDate}>
               <span className="tabular-nums">
-                {detail.dueDate ? formatCivilDate(detail.dueDate) : expenseDetailCopy.noDueDate}
+                {detail.dueDate ? stamp.civilDate(detail.dueDate, detail.locationId) : expenseDetailCopy.noDueDate}
               </span>
             </Field>
             <Field label={expenseDetailCopy.location}>{location?.name ?? '—'}</Field>
@@ -305,7 +296,7 @@ export function ExpenseDetailModal({
           <p className="text-xs text-muted tabular-nums">
             {expenseDetailCopy.createdBy(
               detail.createdByName ?? expenseDetailCopy.someone,
-              formatDateTime(detail.createdAt),
+              stamp.dateTime(detail.createdAt, detail.locationId),
             )}
           </p>
           {detail.voidedAt ? (
@@ -319,9 +310,6 @@ export function ExpenseDetailModal({
           <h3 id="expense-receipt-title" className="t-title text-ink">
             {expenseDetailCopy.receipt}
           </h3>
-          {!fmt && locationsSettled && (attachment || live) ? (
-            <SedeConfigError kind="locale" variant="note" onRetry={onRetryLocations} locationId={detail.locationId} />
-          ) : null}
           {attachment ? (
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <span className="min-w-0 text-sm text-ink [overflow-wrap:anywhere]">
@@ -373,6 +361,8 @@ export function ExpenseDetailModal({
                 <PaymentRow
                   key={payment.id}
                   payment={payment}
+                  stamp={stamp}
+                  locationId={detail.locationId}
                   canVoid={live && !payment.voidedAt}
                   onVoid={() => openSub({ kind: 'void-payment', payment })}
                 />
@@ -413,18 +403,19 @@ export function ExpenseDetailModal({
           <DialogTitle
             ref={titleRef}
             tabIndex={-1}
-            className="[overflow-wrap:anywhere] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="[overflow-wrap:anywhere] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
           >
             {title}
           </DialogTitle>
           <DialogDescription>
-            {detail ? `${formatCivilDate(detail.invoiceDate)} · ${money(detail.amount)}` : expenseDetailCopy.loading}
+            {detail ? `${stamp.civilDate(detail.invoiceDate, detail.locationId)} · ${money(detail.amount)}` : expenseDetailCopy.loading}
           </DialogDescription>
         </DialogHeader>
         {actionError ? <InlineError variant="summary">{actionError}</InlineError> : null}
         <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
           {notice}
         </p>
+        <SedeStampNote stamp={stamp} />
         {body}
 
         {detail && sub?.kind === 'pay' ? (
@@ -462,8 +453,8 @@ export function ExpenseDetailModal({
             kind={sub.kind === 'void-expense' ? 'expense' : 'payment'}
             subject={
               sub.kind === 'void-expense'
-                ? `${title} · ${money(detail.amount)} · ${formatCivilDate(detail.invoiceDate)}`
-                : `${money(sub.payment.amount)} · ${PAYMENT_METHOD_LABELS[sub.payment.method]} · ${formatCivilDate(sub.payment.paidOn)}`
+                ? `${title} · ${money(detail.amount)} · ${stamp.civilDate(detail.invoiceDate, detail.locationId)}`
+                : `${money(sub.payment.amount)} · ${PAYMENT_METHOD_LABELS[sub.payment.method]} · ${stamp.civilDate(sub.payment.paidOn, detail.locationId)}`
             }
             onConfirm={(reason) => void confirmVoid(reason)}
             submitting={voiding}
@@ -487,9 +478,22 @@ export function ExpenseDetailModal({
   );
 }
 
-function PaymentRow({ payment, canVoid, onVoid }: { payment: ExpensePayment; canVoid: boolean; onVoid: () => void }) {
-  const amount = formatCurrency(payment.amount, payment.currency);
-  const day = formatCivilDate(payment.paidOn);
+function PaymentRow({
+  payment,
+  stamp,
+  locationId,
+  canVoid,
+  onVoid,
+}: {
+  payment: ExpensePayment;
+  stamp: SedePainters;
+  /** La sede del gasto: el pago se pinta con su formato. */
+  locationId: string;
+  canVoid: boolean;
+  onVoid: () => void;
+}) {
+  const amount = stamp.money(payment.amount, payment.currency, locationId);
+  const day = stamp.civilDate(payment.paidOn, locationId);
   const voided = payment.voidedAt !== null;
   return (
     <li className="flex flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:justify-between">
@@ -501,7 +505,7 @@ function PaymentRow({ payment, canVoid, onVoid }: { payment: ExpensePayment; can
           {payment.cashSessionId ? (
             <Link
               href={cashSessionHref(payment.cashSessionId)}
-              className="inline-flex min-h-11 items-center gap-1 text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:min-h-0"
+              className="inline-flex min-h-11 items-center gap-1 text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text sm:min-h-0"
             >
               <Wallet aria-hidden className="size-3.5" />
               {expenseDetailCopy.fromCash} · {expenseDetailCopy.fromCashLink}

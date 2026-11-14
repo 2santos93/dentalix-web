@@ -59,7 +59,7 @@ export function MoreSheet({
   };
 
   const row =
-    'flex min-h-12 w-full items-center gap-3 rounded-lg px-3 text-[0.9375rem] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary';
+    'flex min-h-12 w-full items-center gap-3 rounded-lg px-3 text-[0.9375rem] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-text';
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

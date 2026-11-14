@@ -10,6 +10,7 @@ import type { components } from '@/lib/api/schema';
 export type LocationCalendar = components['schemas']['LocationCalendarDto'];
 export type LocationHoliday = components['schemas']['LocationHolidayDto'];
 export type HolidayImportResult = components['schemas']['HolidayImportResultDto'];
+export type HolidayOnDay = components['schemas']['HolidayOnDayDto'];
 export type HolidayImportRow = components['schemas']['HolidayImportRowDto'];
 
 type HolidayInput = { date: string; name: string; recurring: boolean };
@@ -27,6 +28,15 @@ function fileForm(file: File): FormData {
   const form = new FormData();
   form.append('file', file);
   return form;
+}
+
+/** DX-358: `GET /locations/:id/holiday`: el festivo de ese día en la sede, para avisar al agendar. */
+export function getHolidayOnDay(
+  token: string,
+  locationId: string,
+  date: string,
+): Promise<HolidayOnDay> {
+  return apiFetch<HolidayOnDay>(`${base(locationId)}/holiday?date=${encodeURIComponent(date)}`, { token });
 }
 
 /** `GET /locations/:id/calendar`: días hábiles y festivos vivos, ya ordenados. */

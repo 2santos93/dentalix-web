@@ -1,7 +1,8 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { documentFormat } from '@/lib/format/document-format';
+import { DocumentFormatNote } from '@/components/documents/document-format-note';
 import { Lock, Printer, Wallet } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -10,7 +11,7 @@ import {
   getCashSession,
   type CashSessionDetail,
 } from '@/lib/cash-sessions/cash-sessions-api';
-import { listLocations } from '@/lib/locations/locations-api';
+import { invalidateLocations, loadLocations } from '@/lib/session/session-store';
 import { locationCurrency } from '@/lib/locations/location-settings';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { PageHeader } from '@/components/shared/page-header';
@@ -22,6 +23,7 @@ import { CashSessionReport } from './cash-session-report';
 import { CloseCashSessionModal } from './close-cash-session-modal';
 import { ReopenCashSessionModal } from './reopen-cash-session-modal';
 import { CashAdjustmentModal } from './cash-adjustment-modal';
+import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
   title: 'Turno de caja',
@@ -70,7 +72,7 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
       try {
         const [res, locations] = await Promise.all([
           getCashSession(token, sessionId),
-          listLocations(token).catch(() => []),
+          loadLocations(token).catch(() => []),
         ]);
         if (cancelled) return;
         setSession(res);
@@ -88,6 +90,12 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
       cancelled = true;
     };
   }, [token, sessionId, reloadKey]);
+
+  /** La sede no traía moneda o formato: la lista cacheada de la sesión no sirve, se relee. */
+  function retryLocations() {
+    invalidateLocations();
+    setReloadKey((k) => k + 1);
+  }
 
   function done(message: string) {
     setModal(null);
@@ -148,10 +156,10 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
             ) : null}
             {session.status === 'CLOSED' ? (
               <Button asChild variant={session.can.reopen || session.can.adjust ? 'secondary' : 'default'}>
-                <Link href={cashSessionReportHref(session.id)} target="_blank">
+                <ExternalLink href={cashSessionReportHref(session.id)}>
                   <Printer aria-hidden />
                   {copy.print}
-                </Link>
+                </ExternalLink>
               </Button>
             ) : null}
           </div>
@@ -163,11 +171,17 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
       {currency === null && session.can.adjust ? (
         <SedeConfigError
           kind="currency"
-          onRetry={() => setReloadKey((k) => k + 1)}
+          onRetry={retryLocations}
           locationId={session.location.id}
           className="mb-4"
         />
       ) : null}
+      <DocumentFormatNote
+        locationId={session.location.id}
+        onRetry={retryLocations}
+        className="mb-4"
+        active={documentFormat(session.regional) === null}
+      />
       <div className="overflow-hidden rounded-xl border border-border">
         <CashSessionReport session={session} titleAs="h2" paper={false} />
       </div>
@@ -200,6 +214,7 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
           onOpenChange={(open) => !open && setModal(null)}
           token={token}
           sessionId={session.id}
+          locationId={session.location.id}
           defaultCurrency={currency}
           onCreated={() => done(copy.adjusted)}
         />

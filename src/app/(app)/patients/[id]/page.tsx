@@ -4,10 +4,6 @@ import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigat
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getPatient, replacePatientKeepingDerived, type Patient } from '@/lib/patients/patients-api';
-import { MedicalHistoryPanel } from '@/components/patients/medical-history-panel';
-import { ClinicalEntriesList } from '@/components/patients/clinical-entries-list';
-import { PatientPostOpDeliveries } from '@/components/postop/patient-postop-deliveries';
-import { ClinicalAlertBanner } from '@/components/patients/clinical-alert-banner';
 import { AnamnesisReviewLine } from '@/components/clinical/anamnesis-review-line';
 import { usePatientMedicalAlerts } from '@/components/clinical/use-patient-medical-alerts';
 import { usePatientAttendance } from '@/components/patients/use-patient-attendance';
@@ -18,8 +14,8 @@ import {
 } from '@/components/patients/patient-detail-tabs';
 import { PatientDataPanel } from '@/components/patients/patient-data-panel';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
-import { PatientEditModal } from '@/components/patients/patient-edit-modal';
 import { PatientRecordHeader } from '@/components/patients/patient-record-header';
+import { ImagingExportDialog, imagingExportMenuAction } from '@/components/patients/imaging-export-dialog';
 import {
   PatientRetentionDialogs,
   PatientRetentionSection,
@@ -27,39 +23,54 @@ import {
   retentionChip,
   type RetentionDialog,
 } from '@/components/patients/patient-retention-section';
-import { AnamnesisSendDialog } from '@/components/anamnesis/anamnesis-send-dialog';
 import type { RowAction } from '@/components/shared/row-actions';
 import { Archive, ClipboardList, Eraser, ShieldCheck } from 'lucide-react';
 import { PatientCommunicationSection } from '@/components/patients/patient-communication-section';
+import { PatientRecallSection } from '@/components/recall/patient-recall-section';
+import { canManageRecall, canSetRecall } from '@/lib/recall/presentation';
 import { PatientResponsiblePartiesSection } from '@/components/patients/patient-responsible-parties-section';
+import { MajorityReviewBanner } from '@/components/patients/majority-review-banner';
+import { canReviewMajority } from '@/lib/patients/majority-review-api';
 import { PatientAgreementSection } from '@/components/patients/patient-agreement-section';
 import { PatientCoverageSection } from '@/components/patients/patient-coverage-section';
 import { canEditCommunication, withCommunication } from '@/lib/patients/communication-api';
-import { OdontogramTab } from '@/components/odontogram/odontogram-tab';
-import { TreatmentPlansTab } from '@/components/treatment-plans/treatment-plans-tab';
 import { SectionError } from '@/components/errors/section-error';
-import { AccountStatementView } from '@/components/account-statement/account-statement-view';
-import { PatientCollectionsSection } from '@/components/collections/patient-collections-section';
-import { FamilyAccountStatementSection } from '@/components/account-statement/family-account-statement-section';
 import { canManageCollections } from '@/lib/collections/presentation';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { patientTabAccess, resolvePatientTab } from '@/lib/patients/patient-tab-access';
-import { DataConsentsTab } from '@/components/data-consents/data-consents-tab';
-import { PatientConsentsTab } from '@/components/consents/patient-consents-tab';
-import { PerioTab } from '@/components/perio/perio-tab';
-import { PatientPrescriptionsTab } from '@/components/prescriptions/patient-prescriptions-tab';
-import { PatientImplantsTab } from '@/components/implants/patient-implants-tab';
-import { PatientDocumentsTab } from '@/components/patient-documents/patient-documents-tab';
+import { SedeNoticeOwner } from '@/components/locations/sede-stamp-note';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { PatientTabPanel as TabPanel } from '@/components/patients/patient-tab-panel';
 import { canRegisterImplants } from '@/lib/implants/implants-api';
-import { AuditLogView } from '@/components/audit/audit-log-view';
 import { PatientAnamnesisSection } from '@/components/anamnesis/patient-anamnesis-section';
 import { canSeeAnamnesisInbox } from '@/lib/anamnesis/anamnesis-api';
+import { MedicalHistoryPanel } from '@/components/patients/medical-history-panel';
+// DX-117 (FE-021): todo lo que no es la pestaña «Datos» llega en su propio
+// trozo de JS al abrir su pestaña (ver `patient-lazy-tabs`).
+import {
+  AccountStatementView,
+  AnamnesisSendDialog,
+  AuditLogView,
+  ClinicalAlertBanner,
+  ClinicalEntriesList,
+  DataConsentsTab,
+  FamilyAccountStatementSection,
+  OdontogramTab,
+  PatientCollectionsSection,
+  PatientConsentsTab,
+  PatientDocumentsTab,
+  PatientEditModal,
+  PatientImplantsTab,
+  PatientPostOpDeliveries,
+  PatientPrescriptionsTab,
+  PerioTab,
+  TreatmentPlansTab,
+} from '@/components/patients/patient-lazy-tabs';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
-  checkingSession: 'Verificando sesión…',
   loading: 'Cargando paciente…',
   genericError: 'No pudimos cargar el paciente.',
   notFound: 'No se encontró el paciente: puede que se haya eliminado o que el enlace sea incorrecto.',
@@ -108,7 +119,6 @@ function PatientDetailView() {
   const params = useParams<{ id: string }>();
   const patientId = params.id;
   const accessToken = useAuthStore((s) => s.accessToken);
-  const hasHydrated = useAuthStore((s) => s._hasHydrated);
   const [patient, setPatient] = useState<Patient | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -117,6 +127,8 @@ function PatientDetailView() {
   // Menú «⋯» de la cabecera: modales de retención (ADMIN) y «Enviar anamnesis».
   const [retentionDialog, setRetentionDialog] = useState<RetentionDialog | null>(null);
   const [sendingAnamnesis, setSendingAnamnesis] = useState(false);
+  // DX-484: «Datos para el software de imagen» (menú «⋯», roles clínicos).
+  const [imagingExportOpen, setImagingExportOpen] = useState(false);
   // Sube al generar un enlace: el bloque de anamnesis de la pestaña se relee.
   const [anamnesisVersion, setAnamnesisVersion] = useState(0);
   // «Registrar en Historia clínica» desde «Datos»: al abrir la pestaña, el foco
@@ -162,6 +174,10 @@ function PatientDetailView() {
   }, [accessToken, patientId]);
   // DX-247: banderas médicas de la cabecera (también la del plan y del
   // odontograma) y de la línea de revisión de la anamnesis.
+  // DX-354: el importe del chip «Saldo vencido» con el formato de la sede de la pantalla (sin token no pide nada).
+  const sedeFormat = readyFormat(useSedeFormat(accessToken ?? ''));
+  // DX-354b: las fechas de la ficha (nacimiento, consentimiento, retención) con el formato de la sede; el aviso lo da `SedeNoticeOwner`.
+  const stamp = useSedeStamp(accessToken ?? '');
   const medicalAlerts = usePatientMedicalAlerts(accessToken, patientId);
   // DX-279: insignia de inasistencias y cancelaciones tardías (12 meses).
   const attendance = usePatientAttendance(accessToken, patientId);
@@ -238,15 +254,8 @@ function PatientDetailView() {
   }, [activeTab]);
 
   useEffect(() => {
-    // Don't decide anything until the session bootstrap has resolved —
-    // accessToken is null until then, and redirecting on that would bounce
-    // an already-authenticated user.
-    if (!hasHydrated) return;
-
-    if (!accessToken) {
-      router.replace('/login');
-      return;
-    }
+    // La sesión la decide `RequireSession` (layout): aquí siempre hay token.
+    if (!accessToken) return;
 
     let cancelled = false;
     async function load() {
@@ -270,7 +279,7 @@ function PatientDetailView() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, router, hasHydrated, patientId, retryCount]);
+  }, [accessToken, patientId, retryCount]);
 
   const role = getTokenRole(accessToken);
   const isAdmin = role === 'ADMIN';
@@ -294,6 +303,9 @@ function PatientDetailView() {
       onSelect: () => setSendingAnamnesis(true),
     },
   ];
+  // DX-484: DENTIST, ASSISTANT y ADMIN (la API lo vuelve a exigir).
+  const imagingAction = imagingExportMenuAction(role, () => setImagingExportOpen(true));
+  if (imagingAction && patient) menuActions.push(imagingAction);
   if (isAdmin && patient) {
     menuActions.push({
       label: retentionActionLabels.retention,
@@ -351,21 +363,12 @@ function PatientDetailView() {
     );
   }
 
-  if (!hasHydrated) {
-    return (
-      <div className="flex min-h-full flex-1 items-center justify-center bg-bg px-4 py-8">
-        <p role="status" className="text-sm text-muted">
-          {copy.checkingSession}
-        </p>
-      </div>
-    );
-  }
-
   if (!accessToken) {
     return null;
   }
 
   return (
+    <SedeNoticeOwner token={accessToken} className="mb-4">
     <div className="flex flex-1 flex-col">
       <PatientRecordHeader
         patient={loading ? null : patient}
@@ -373,13 +376,14 @@ function PatientDetailView() {
         onEdit={() => setEditing(true)}
         editPrimary={activeTab === 'data'}
         menuActions={menuActions}
-        retention={patient && !loading ? retentionChip(patient) : null}
+        retention={patient && !loading ? retentionChip(patient, stamp) : null}
         medicalAlerts={medicalAlerts.data}
         medicalAlertsFailed={medicalAlerts.failed}
         onRetryMedicalAlerts={medicalAlerts.reload}
         attendance={attendance.data}
         attendanceFailed={attendance.failed}
         onRetryAttendance={attendance.reload}
+        fmt={sedeFormat}
       />
 
       {loading ? (
@@ -437,6 +441,15 @@ function PatientDetailView() {
             patientId={patientId}
             onCreated={() => setAnamnesisVersion((v) => v + 1)}
           />
+          {patient && imagingAction ? (
+            <ImagingExportDialog
+              open={imagingExportOpen}
+              onOpenChange={setImagingExportOpen}
+              token={accessToken}
+              patientId={patientId}
+              patientCode={patient.patientCode}
+            />
+          ) : null}
           {isAdmin ? (
             <PatientRetentionDialogs
               patient={patient}
@@ -456,8 +469,17 @@ function PatientDetailView() {
           >
             {/* DX-099/DX-247: «Sin anamnesis» como UN aviso con sus dos
                 salidas, y el estado de los enlaces enviados. */}
+            {/* DX-342: cumplió la mayoría de edad con un responsable de cuando
+                era menor: sus avisos esperan la revisión de recepción o ADMIN. */}
+            <MajorityReviewBanner
+              key={`majority-${patientId}`}
+              token={accessToken}
+              patient={{ id: patient.id, fullName: fullName(patient) }}
+              canReview={canReviewMajority(role)}
+              stamp={stamp}
+            />
             {anamnesisBlock('data')}
-            <PatientDataPanel patient={patient} docTypeNames={docTypeNames} />
+            <PatientDataPanel patient={patient} docTypeNames={docTypeNames} stamp={stamp} />
             {/* DX-128: canal de los recordatorios, móvil, opt-in y baja. Lo ven
                 todos; lo cambian recepción y ADMIN. */}
             <PatientCommunicationSection
@@ -470,6 +492,15 @@ function PatientDetailView() {
               onChanged={(c) =>
                 setPatient((prev) => (prev ? withCommunication(prev, c) : prev))
               }
+            />
+            {/* DX-015: cada cuánto vuelve y a quién se ha llamado. Lo ven todos;
+                lo fija el clínico y los contactos los registra el mostrador. */}
+            <PatientRecallSection
+              key={`recall-${patientId}`}
+              token={accessToken}
+              patient={{ id: patient.id, fullName: fullName(patient) }}
+              canSet={canSetRecall(getTokenRole(accessToken))}
+              canContact={canManageRecall(getTokenRole(accessToken))}
             />
             {/* DX-203: quién paga y quién recibe los avisos, y de quién es
                 responsable. Lo gestionan los 4 roles. */}
@@ -495,9 +526,9 @@ function PatientDetailView() {
               onChanged={onAgreementChanged}
               role={getTokenRole(accessToken)}
             />
-            {/* DX-039: retención legal (lo ven todos); los controles de ADMIN
+            {/* DX-039: retención (lo ven todos); los controles de ADMIN
                 están en el menú «⋯» de la cabecera. */}
-            <PatientRetentionSection patient={patient} />
+            <PatientRetentionSection patient={patient} stamp={stamp} />
           </TabPanel>
 
           <PatientEditModal
@@ -698,5 +729,6 @@ function PatientDetailView() {
         </div>
       ) : null}
     </div>
+    </SedeNoticeOwner>
   );
 }

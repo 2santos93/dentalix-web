@@ -11,7 +11,8 @@ import {
   prescriptionPrintHref,
   type Prescription,
 } from '@/lib/prescriptions/prescriptions-api';
-import { formatDateTime } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { AsyncSection } from '@/components/shared/async-section';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -22,6 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { NewPrescriptionModal } from './new-prescription-modal';
 import { VoidPrescriptionModal } from './void-prescription-modal';
+import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
   heading: 'Recetas',
@@ -46,9 +48,10 @@ const copy = {
     `Anulada el ${when} por ${who}. Motivo: ${reason}`,
   unknownUser: 'un usuario',
   print: 'Ver e imprimir',
-  printHint: (when: string) => `receta del ${when} (se abre en otra pestaña)`,
+  // Sin formato de sede no se anuncia «—»: el texto accesible omite la fecha.
+  printHint: (when: string | null) => (when ? `receta del ${when} (se abre en otra pestaña)` : '(se abre en otra pestaña)'),
   void: 'Anular',
-  rowLabel: (when: string) => `receta del ${when}`,
+  rowLabel: (when: string | null) => (when ? `receta del ${when}` : 'receta'),
   medication: (rx: Prescription['items'][number]) =>
     `${rx.activeIngredient} ${rx.concentration} · ${rx.totalQuantity} ${rx.quantityUnit}`,
 };
@@ -85,6 +88,11 @@ export function PatientPrescriptionsTab({ token, patientId }: PatientPrescriptio
   const [newOpen, setNewOpen] = useState(false);
   const [modalKey, setModalKey] = useState(0);
   const [voiding, setVoiding] = useState<Prescription | null>(null);
+  // Cada receta se pinta con el reloj de SU sede (`locationId`), no con el de la pantalla (DX-354b).
+  const stamp = useSedeStamp(
+    token,
+    prescriptions.map((rx) => rx.locationId),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -154,7 +162,7 @@ export function PatientPrescriptionsTab({ token, patientId }: PatientPrescriptio
         {voided ? (
           <p className="t-caption mt-1 text-ink">
             {copy.voidedDetail(
-              formatDateTime(rx.voidedAt),
+              stamp.dateTime(rx.voidedAt, rx.locationId),
               rx.voidedByName ?? copy.unknownUser,
               rx.voidReason ?? '',
             )}
@@ -167,11 +175,11 @@ export function PatientPrescriptionsTab({ token, patientId }: PatientPrescriptio
   function printLink(rx: Prescription) {
     return (
       <Button asChild variant="secondary" size="sm">
-        <a href={prescriptionPrintHref(patientId, rx.id)} target="_blank" rel="noopener">
+        <ExternalLink href={prescriptionPrintHref(patientId, rx.id)}>
           <Printer aria-hidden />
           {copy.print}
-          <span className="sr-only"> · {copy.printHint(formatDateTime(rx.issuedAt))}</span>
-        </a>
+          <span className="sr-only"> · {copy.printHint(stamp.maybe.dateTime(rx.issuedAt, rx.locationId))}</span>
+        </ExternalLink>
       </Button>
     );
   }
@@ -181,8 +189,8 @@ export function PatientPrescriptionsTab({ token, patientId }: PatientPrescriptio
       id: 'issued',
       header: copy.colIssued,
       mobile: 'primary',
-      cell: (rx) => <span className="t-data">{formatDateTime(rx.issuedAt)}</span>,
-      cellClassName: 'align-top whitespace-nowrap',
+      cell: (rx) => stamp.dateTime(rx.issuedAt, rx.locationId),
+      cellClassName: 't-data align-top whitespace-nowrap',
     },
     {
       id: 'medications',
@@ -231,6 +239,8 @@ export function PatientPrescriptionsTab({ token, patientId }: PatientPrescriptio
         }
       />
 
+      <SedeStampNote stamp={stamp} />
+
       <AsyncSection
         loading={loading}
         error={error}
@@ -247,7 +257,7 @@ export function PatientPrescriptionsTab({ token, patientId }: PatientPrescriptio
           rows={prescriptions}
           columns={columns}
           getRowKey={(rx) => rx.id}
-          getRowLabel={(rx) => copy.rowLabel(formatDateTime(rx.issuedAt))}
+          getRowLabel={(rx) => copy.rowLabel(stamp.maybe.dateTime(rx.issuedAt, rx.locationId))}
           rowActions={(rx) =>
             canVoidPrescription(rx, { role, userId })
               ? [{ label: copy.void, onSelect: () => setVoiding(rx), destructive: true }]

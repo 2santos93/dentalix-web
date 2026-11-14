@@ -14,7 +14,6 @@ import {
   listPatientImplants,
   type PatientImplant,
 } from '@/lib/implants/implants-api';
-import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 import { AsyncSection } from '@/components/shared/async-section';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
@@ -24,8 +23,9 @@ import { RowActions } from '@/components/shared/row-actions';
 import { cn } from '@/lib/utils';
 import { RegisterImplantModal } from './register-implant-modal';
 import { VoidImplantModal } from './void-implant-modal';
-import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
-import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
+import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
   heading: 'Implantes',
@@ -48,7 +48,9 @@ const copy = {
     `Anulado el ${when} por ${who}. Motivo: ${reason}`,
   unknownUser: 'un usuario',
   card: 'Tarjeta de implante',
-  cardHint: (date: string) => `de la intervención del ${date} (se abre en otra pestaña)`,
+  // Sin formato de sede no se anuncia «—»: el texto accesible omite la fecha.
+  cardHint: (date: string | null) =>
+    date ? `de la intervención del ${date} (se abre en otra pestaña)` : '(se abre en otra pestaña)',
   void: 'Anular',
   rowLabel: (kind: string, tooth: string) => `${kind.toLowerCase()} del diente ${tooth}`,
   actionsOf: (label: string) => `Acciones de ${label}`,
@@ -103,9 +105,12 @@ export function PatientImplantsTab({
     planItemId: shortcut ? registerPlanItemId : null,
   });
   const [voiding, setVoiding] = useState<PatientImplant | null>(null);
-  // G1-B: las medidas van con el formato de la sede de la pantalla; sin él, «—» y el aviso.
-  const sedeFormat = useSedeFormat(token);
-  const fmt = readyFormat(sedeFormat);
+  // Cada implante se pinta con el reloj y el formato de SU sede (`locationId`): fechas y medidas
+  // del mismo reloj; sin él, «—» y un aviso (DX-354b).
+  const stamp = useSedeStamp(
+    token,
+    implants.map((i) => i.locationId),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -151,8 +156,8 @@ export function PatientImplantsTab({
   function row(implant: PatientImplant) {
     const voided = implant.voidedAt !== null;
     const kind = IMPLANT_KIND_LABELS[implant.kind];
-    const placed = formatCivilDate(implant.placedOn);
-    const size = formatImplantSize(implant.diameterMm, implant.lengthMm, fmt);
+    const placed = stamp.civilDate(implant.placedOn, implant.locationId);
+    const size = formatImplantSize(implant.diameterMm, implant.lengthMm, stamp.fmtOf(implant.locationId));
     return (
       <li
         key={implant.id}
@@ -188,13 +193,13 @@ export function PatientImplantsTab({
           </p>
           {implant.cardDeliveredAt && !voided ? (
             <p className="t-caption text-muted">
-              {copy.delivered(formatDateTime(implant.cardDeliveredAt))}
+              {copy.delivered(stamp.dateTime(implant.cardDeliveredAt, implant.locationId))}
             </p>
           ) : null}
           {voided ? (
             <p className="t-caption text-ink">
               {copy.voidedDetail(
-                formatDateTime(implant.voidedAt),
+                stamp.dateTime(implant.voidedAt, implant.locationId),
                 implant.voidedByName ?? copy.unknownUser,
                 implant.voidReason ?? '',
               )}
@@ -203,11 +208,11 @@ export function PatientImplantsTab({
         </div>
         <div className="flex items-center gap-2 sm:justify-end">
           <Button asChild variant="secondary" size="sm" className="flex-1 sm:flex-none">
-            <a href={implantCardPrintHref(patientId, implant.placedOn)} target="_blank" rel="noopener">
+            <ExternalLink href={implantCardPrintHref(patientId, implant.placedOn)}>
               <CreditCard aria-hidden />
               {copy.card}
-              <span className="sr-only"> {copy.cardHint(placed)}</span>
-            </a>
+              <span className="sr-only"> {copy.cardHint(stamp.maybe.civilDate(implant.placedOn, implant.locationId))}</span>
+            </ExternalLink>
           </Button>
           {/* Sin «Editar» ni «Borrar»: el registro es inmutable; solo se anula. */}
           {canVoidImplant(implant, { role, userId }) ? (
@@ -237,9 +242,7 @@ export function PatientImplantsTab({
         }
       />
 
-      {sedeFormat.status === 'error' ? (
-        <SedeConfigError kind="locale" variant="note" onRetry={sedeFormat.retry} description={sedeFormat.message} locationId={sedeFormat.locationId} />
-      ) : null}
+      <SedeStampNote stamp={stamp} />
 
       <AsyncSection
         loading={loading}

@@ -19,6 +19,7 @@ import {
   roleCapMessage,
   type DiscountRules,
 } from '@/lib/discounts/discount-rules';
+import { referenceRateMissingText, referenceRateText } from '@/lib/discounts/reference-rate';
 import type { ClinicRole } from '@/lib/me/me-api';
 import {
   addItem,
@@ -59,8 +60,6 @@ interface PlanItemFormProps {
   /** DX-204: política de descuentos para avisar antes de enviar; `null` = decide la API. */
   discountRules: DiscountRules | null;
   role: ClinicRole | null;
-  /** DX-489: moneda del catálogo (la del «precio de lista»); `null` si no se sabe. */
-  catalogCurrency: string | null;
   /** DX-489: formato de la sede, el de los demás importes del plan; `null` mientras carga («—»). */
   fmt: RegionalFormat | null;
   /** Tras agregar: refresca el plan y el saldo (y se espera antes de reactivar el botón). */
@@ -82,11 +81,11 @@ export function PlanItemForm({
   catalogById,
   discountRules,
   role,
-  catalogCurrency,
   fmt,
   onAdded,
   submitPrimary = true,
 }: PlanItemFormProps) {
+  const money = (amount: number, code: string) => sedeMoney(amount, code, fmt);
   // Add-item form state.
   const [toothNumber, setToothNumber] = useState('');
   const [catalogItemId, setCatalogItemId] = useState('');
@@ -106,6 +105,17 @@ export function PlanItemForm({
   const [itemAmountErrors, setItemAmountErrors] = useState<{ price?: string; discount?: string }>({});
   const [addItemError, setAddItemError] = useState<string | null>(null);
 
+  // DX-513-bis (L5): el precio de catálogo crudo solo sirve de respaldo si está
+  // en la moneda del plan (o en una que no se sabe, como DX-513). En otra
+  // moneda conocida, sin el precio resuelto no hay cifra que proponer ni con
+  // la que medir la rebaja: el campo queda vacío y se dice que falló.
+  const catalogFallback = (id: string): number | null => {
+    const item = catalogById.get(id);
+    if (item?.defaultPrice == null) return null;
+    const currency = item.catalogCurrency ?? null;
+    return currency === null || currency === plan.currency ? item.defaultPrice : null;
+  };
+
   // DX-105: el precio resuelto de la prestación elegida para ESTE paciente
   // (convenio > lista de la sede > catálogo). Precarga el campo; si falla,
   // vuelve el precio de catálogo y el campo sigue editable.
@@ -116,20 +126,49 @@ export function PlanItemForm({
     currency: plan.currency,
     onSettled: (q) => {
       if (q) {
-        setPrice(q.price !== null ? String(q.price) : '');
+        // DX-513-bis: se propone la referencia en la moneda del plan (la del
+        // catálogo convertida con la tasa de hoy), nunca la cifra cruda de
+        // otra moneda; sin tasa, nada.
+        setPrice(q.referencePriceInPlan !== null ? String(q.referencePriceInPlan) : '');
         if (noDiscountAllowed(q)) setDiscount('');
       } else {
-        const fallback = catalogById.get(catalogItemId)?.defaultPrice;
-        setPrice(fallback != null ? String(fallback) : '');
+        const fallback = catalogFallback(catalogItemId);
+        setPrice(fallback !== null ? String(fallback) : '');
       }
       setPriceEdited(false);
     },
   });
   const quoteReady = priceQuote.status === 'ready' ? priceQuote.quote : null;
+  // DX-502: la moneda del catálogo la dice la API (la común de TODAS las sedes
+  // activas, no solo las del usuario); sin precio resuelto, no se sabe.
+  const catalogCurrency = quoteReady?.catalogCurrency ?? null;
   const addPriceLoading = priceQuote.status === 'loading';
   const addNoDiscount = noDiscountAllowed(quoteReady);
   // Referencia de la rebaja (R1): el precio resuelto, no el de catálogo.
-  const referencePrice = quoteReady ? quoteReady.price : (catalogById.get(catalogItemId)?.defaultPrice ?? null);
+  // DX-513-bis: en la moneda del plan; si el catálogo está en otra moneda, ya
+  // convertido con la tasa de hoy (como la API, `referenceInPlan`), así que
+  // bajar de ella cuenta como descuento igual que en la misma moneda.
+  const referencePrice = quoteReady
+    ? quoteReady.referencePriceInPlan
+    : catalogFallback(catalogItemId);
+  // DX-502: catálogo de moneda desconocida; la rebaja cuenta, pero su cifra no
+  // se pinta en la moneda del plan.
+  const catalogCurrencyUnknown = quoteReady?.source === 'CATALOG' && catalogCurrency === null;
+  const discountReference = referencePrice;
+  // DX-513-bis: hace falta una tasa de hoy y no la hay: la API respondería
+  // 422; se dice antes y no se envía.
+  const rateMissing = quoteReady?.rateMissing === true;
+  const rateMissingNotice =
+    rateMissing && quoteReady ? referenceRateMissingText(quoteReady.missingRateCurrency ?? catalogCurrency ?? '', plan.currency, role) : null;
+  // DX-513-bis: la referencia convertida, con la cifra original y la tasa.
+  const convertedNote =
+    quoteReady && quoteReady.rate && quoteReady.referenceCurrency && quoteReady.price !== null && quoteReady.referencePriceInPlan !== null
+      ? copy.referenceConverted(
+          sedeListPriceFormat(fmt)(quoteReady.price, quoteReady.referenceCurrency) ?? '',
+          sedeMoney(quoteReady.referencePriceInPlan, plan.currency, fmt),
+          referenceRateText(quoteReady.rate, quoteReady.referenceCurrency, plan.currency, fmt),
+        )
+      : null;
 
   function handleProcedureChange(nextCatalogItemId: string) {
     setCatalogItemId(nextCatalogItemId);
@@ -137,8 +176,8 @@ export function PlanItemForm({
     // the field stays editable afterwards.
     // El precio resuelto del paciente llega de `usePriceQuote`; hasta
     // entonces el campo está en espera.
-    const item = catalogById.get(nextCatalogItemId);
-    setPrice(item?.defaultPrice != null ? String(item.defaultPrice) : '');
+    const fallback = catalogFallback(nextCatalogItemId);
+    setPrice(fallback !== null ? String(fallback) : '');
     setPriceEdited(false);
   }
 
@@ -161,6 +200,7 @@ export function PlanItemForm({
       setAddItemValidationError(copy.selectProcedurePrompt);
       return;
     }
+    if (rateMissing) return;
 
     const selectedSurfaces = SURFACE_ORDER.filter((s) => surfaces[s]);
     const itemCurrency = plan.currency;
@@ -183,7 +223,8 @@ export function PlanItemForm({
     // resuelto ni descontar; se dice aquí, sin llamar a la API.
     if (
       addNoDiscount &&
-      (discountValue > 0 || (priceInput !== undefined && referencePrice !== null && priceInput < referencePrice))
+      (discountValue > 0 ||
+        (priceInput !== undefined && discountReference !== null && priceInput < discountReference))
     ) {
       setItemAmountErrors({
         [discountValue > 0 ? 'discount' : 'price']: NO_DISCOUNT_ALLOWED_NOTICE,
@@ -194,10 +235,9 @@ export function PlanItemForm({
     // API los vuelve a aplicar. SEC-041: sobre el descuento EFECTIVO, que
     // suma la rebaja del precio frente al de catálogo.
     setAddReasonErrors(null);
-    const catalogPrice = referencePrice;
-    const effectivePrice = priceInput ?? catalogPrice;
+    const effectivePrice = priceInput ?? referencePrice;
     const effective =
-      effectivePrice !== null ? effectiveDiscount(catalogPrice, effectivePrice, discountValue) : null;
+      effectivePrice !== null ? effectiveDiscount(discountReference, effectivePrice, discountValue) : null;
     if (discountRules && role && effective && exceedsCap(discountRules, role, effective.listPrice, effective.total)) {
       const cap = capFor(discountRules, role);
       setAddItemValidationError(
@@ -258,13 +298,9 @@ export function PlanItemForm({
   // un precio o descuento que no se entiende no hay aviso (el envío lo para).
   const addEffective =
     addPrice !== null && addDiscountInput !== null && addPriceInput !== null
-      ? effectiveDiscount(addCatalogPrice, addPrice, addDiscountValue)
+      ? effectiveDiscount(discountReference, addPrice, addDiscountValue)
       : null;
   const addBelowCatalog = addEffective !== null && addEffective.priceReduction > 0;
-  // DX-489: sin lista de precios en la moneda del plan, el precio de
-  // referencia es el del catálogo, en su propia moneda: no se resta del plan.
-  const catalogInOtherCurrency =
-    (quoteReady ? quoteReady.source === 'CATALOG' : true) && catalogCurrency !== plan.currency;
   const addDiscounted = addEffective ? addEffective.total > 0 : addDiscountValue > 0;
   const addReasonRequired =
     discountRules !== null &&
@@ -301,11 +337,17 @@ export function PlanItemForm({
         // etiqueta de tipo se repetiría en todas las filas sin
         // decir nada.
         showKind={false}
+        priceLabel={(item) =>
+          item.defaultPrice == null
+            ? null
+            : formatListPrice(item.defaultPrice, item.catalogCurrency ?? null, sedeListPriceFormat(fmt))
+        }
       />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField htmlFor="tp-price" label={copy.priceLabel} error={itemAmountErrors.price}>
           <MoneyInput
+            money={money}
             id="tp-price"
             currency={addCurrency}
             value={price}
@@ -322,6 +364,7 @@ export function PlanItemForm({
               [
                 itemAmountErrors.price ? fieldErrorId('tp-price') : null,
                 quoteReady && priceQuote.status === 'ready' ? 'tp-price-source' : null,
+                convertedNote ? 'tp-price-converted' : null,
                 addBelowCatalog ? 'tp-price-below-catalog' : null,
               ]
                 .filter(Boolean)
@@ -342,22 +385,30 @@ export function PlanItemForm({
               listPrice={(value) => formatListPrice(value, catalogCurrency, sedeListPriceFormat(fmt))}
             />
           ) : null}
+          {/* DX-513-bis: nota neutra con la cifra del catálogo en su
+              moneda, la convertida y la tasa de hoy. */}
+          {convertedNote ? (
+            <p id="tp-price-converted" className="t-caption text-muted tabular-nums">
+              {convertedNote}
+            </p>
+          ) : null}
           {/* SEC-041: aviso, no bloqueo; la API decide con el
-              tope del rol. */}
+              tope del rol, también frente a la referencia
+              convertida (DX-513-bis). */}
           <p id="tp-price-below-catalog" role="status" className="t-caption text-warning-text">
             {addBelowCatalog && addEffective && addCatalogPrice !== null ? (
               <>
                 <span className="block font-medium">{PRICE_BELOW_CATALOG_NOTICE}</span>
-                <span className="block">
-                  {catalogInOtherCurrency
-                    ? copy.priceBelowCatalogOtherCurrency(
-                        formatListPrice(addCatalogPrice, catalogCurrency, sedeListPriceFormat(fmt)),
-                      )
-                    : copy.priceBelowCatalogDetail(
-                        sedeMoney(addEffective.priceReduction, plan.currency, fmt),
-                        sedeMoney(addCatalogPrice, plan.currency, fmt),
-                      )}
-                </span>
+                {quoteReady ? (
+                  <span className="block">
+                    {catalogCurrencyUnknown
+                      ? copy.priceBelowCatalogUnknownCurrency
+                      : copy.priceBelowCatalogDetail(
+                          sedeMoney(addEffective.priceReduction, plan.currency, fmt),
+                          sedeMoney(addCatalogPrice, plan.currency, fmt),
+                        )}
+                  </span>
+                ) : null}
               </>
             ) : null}
           </p>
@@ -371,6 +422,7 @@ export function PlanItemForm({
           error={itemAmountErrors.discount}
         >
           <MoneyInput
+            money={money}
             id="tp-discount"
             currency={addCurrency}
             disabled={addNoDiscount}
@@ -428,13 +480,14 @@ export function PlanItemForm({
         />
       </FormField>
 
+      {rateMissingNotice && <InlineError>{rateMissingNotice}</InlineError>}
       {addItemValidationError && <InlineError>{addItemValidationError}</InlineError>}
       {addItemError && <InlineError>{addItemError}</InlineError>}
 
       <Button
         type="submit"
         variant={submitPrimary ? 'default' : 'secondary'}
-        disabled={addItemSubmitting || addPriceLoading}
+        disabled={addItemSubmitting || addPriceLoading || rateMissing}
         className="self-start"
       >
         {addItemSubmitting ? copy.addItemSubmitting : copy.addItemSubmit}

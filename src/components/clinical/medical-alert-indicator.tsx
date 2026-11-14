@@ -5,12 +5,13 @@ import { ClipboardClock, ClipboardX, Pill, TriangleAlert } from 'lucide-react';
 import {
   MEDICAL_ALERTS_TITLE,
   PREMEDICATION_LABEL,
-  anamnesisNote,
+  hasAnamnesisNote,
   medicalAlertLines,
   medicalAlertSeverity,
   medicalAlertSummary,
   type MedicalAlertFlags,
 } from '@/lib/clinical/medical-alerts';
+import { AnamnesisNoteText } from '@/components/clinical/anamnesis-note-text';
 import { cn } from '@/lib/utils';
 
 const copy = {
@@ -126,7 +127,6 @@ export function MedicalAlertIndicator({
   if (!flags || !severity) return null;
 
   const lines = medicalAlertLines(flags);
-  const note = anamnesisNote(flags);
   // El icono de la nota de anamnesis va por su estado, no por la gravedad: con
   // alertas y anamnesis caducada, el botón lleva el triángulo y la nota, la
   // carpeta con reloj.
@@ -180,7 +180,7 @@ export function MedicalAlertIndicator({
         className={cn(
           // El ::after amplía la zona táctil a 44 px sin mover nada. Su inset
           // cuenta desde dentro del borde de 1 px: 18 + 2·13 = 26 + 2·9 = 44.
-          "relative inline-flex shrink-0 items-center justify-center rounded-full border after:absolute after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+          "relative inline-flex shrink-0 items-center justify-center rounded-full border after:absolute after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text",
           size === 'compact' ? 'size-5 after:-inset-[13px]' : 'size-7 after:-inset-[9px]',
           severity === 'critical'
             ? 'border-danger/40 bg-surface text-danger-text'
@@ -235,12 +235,12 @@ export function MedicalAlertIndicator({
                   </ul>
                 </div>
               ) : null}
-              {note ? (
+              {hasAnamnesisNote(flags) ? (
                 <p className="flex items-start gap-1.5 text-warning-text">
                   <NoteIcon aria-hidden className="mt-0.5 size-4 shrink-0" />
                   <span>
                     <span className="sr-only">{copy.anamnesisTitle}: </span>
-                    {note}
+                    <AnamnesisNoteText flags={flags} />
                   </span>
                 </p>
               ) : null}

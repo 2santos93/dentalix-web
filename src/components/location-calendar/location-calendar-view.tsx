@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Lock } from 'lucide-react';
@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionHeader } from '@/components/ui/section-header';
+import { SaveBarFocusScope } from '@/components/settings/save-bar';
 import { HolidaysSection } from './holidays-section';
 import { WorkingWeekdaysForm } from './working-weekdays-form';
 
@@ -149,6 +150,7 @@ function LocationCalendarSections({
   // Las fechas salen del formato de la sede ELEGIDA, no de la activa.
   const fmt = locationRegionalFormat(location);
   const noFormatNoteId = useId();
+  const weekdaysHeadingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -195,16 +197,24 @@ function LocationCalendarSections({
         />
       )}
       <section aria-labelledby="working-weekdays-heading" className="flex flex-col gap-3">
-        <SectionHeader title={copy.weekdaysHeading} titleId="working-weekdays-heading" />
-        {/* Los nombres de los días no dependen del formato de la sede: el formulario va siempre (M3). */}
-        <WorkingWeekdaysForm
-          token={token}
-          locationId={location.id}
-          initial={calendar.workingWeekdays}
-          locale={location.locale}
-          // Solo los días: los festivos de la pantalla pueden ser más nuevos que la respuesta del PUT.
-          onSaved={(saved) => setCalendar((c) => (c ? { ...c, workingWeekdays: saved.workingWeekdays } : saved))}
+        <SectionHeader
+          title={copy.weekdaysHeading}
+          titleId="working-weekdays-heading"
+          titleRef={weekdaysHeadingRef}
+          titleFocusable
         />
+        {/* Los nombres de los días no dependen del formato de la sede: el formulario va siempre (M3). */}
+        {/* DX-546 · FE-110: al irse la SaveBar, el foco vuelve a este título. */}
+        <SaveBarFocusScope target={weekdaysHeadingRef}>
+          <WorkingWeekdaysForm
+            token={token}
+            locationId={location.id}
+            initial={calendar.workingWeekdays}
+            locale={location.locale}
+            // Solo los días: los festivos de la pantalla pueden ser más nuevos que la respuesta del PUT.
+            onSaved={(saved) => setCalendar((c) => (c ? { ...c, workingWeekdays: saved.workingWeekdays } : saved))}
+          />
+        </SaveBarFocusScope>
       </section>
       {/* Sin formato pinta «—» en las fechas y ninguna nota propia: ya está la de arriba. */}
       <HolidaysSection

@@ -19,7 +19,8 @@ import {
   type CountRow,
 } from '@/lib/cash-sessions/arqueo';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
-import { formatCurrency } from '@/lib/format/currency';
+import { sedeMoney } from '@/lib/format/sede-number';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { ApiError } from '@/lib/api/client';
 import { FormModal } from '@/components/shared/form-modal';
 import { CurrencySelect } from '@/components/shared/currency-select';
@@ -35,7 +36,7 @@ const copy = {
   description:
     'Cuenta lo que hay por moneda y método. Al cerrar se guarda el arqueo y el cierre ya no se puede editar.',
   blindDescription:
-    'Arqueo ciego: cuenta lo que hay por moneda y método antes de ver lo esperado. Lo que no cuentes va como 0. Al cerrar se guarda el arqueo y ya no se puede editar.',
+    'Arqueo ciego: cuenta lo que hay por moneda y método antes de ver lo esperado. Lo que no cuentes va como 0. Al cerrar se guarda el arqueo y ya no se puede editar; si no cuadra y no dejas motivo, queda como «diferencia sin justificar» para que administración lo revise.',
   countsLegend: 'Arqueo',
   rowLabel: (method: string, currency: string) => `${method} · ${currency}`,
   countedLabel: (method: string, currency: string) => `Contado en ${method.toLowerCase()} (${currency})`,
@@ -43,7 +44,7 @@ const copy = {
   difference: 'Diferencia',
   squared: 'Cuadra',
   reason: 'Motivo de la diferencia',
-  blindReason: 'Motivo, si el arqueo no cuadra',
+  blindReason: 'Motivo si crees que no cuadra (opcional)',
   reasonHint: `Entre ${CASH_REASON_MIN} y ${CASH_DIFFERENCE_REASON_MAX} caracteres. Queda en el cierre.`,
   reasonRequired: `El arqueo no cuadra: explica el motivo (al menos ${CASH_REASON_MIN} caracteres).`,
   invalidCounts: 'Hay importes que no se entienden: revisa los marcados.',
@@ -73,8 +74,10 @@ interface CloseCashSessionModalProps {
  * Cerrar la caja con arqueo (DX-027). Con el esperado a la vista, una fila por
  * cada moneda y método esperados con la diferencia en vivo; si no cuadra, el
  * motivo es obligatorio. Con «arqueo ciego» (`blindHidden`), las filas van en
- * blanco y sin esperado: la API calcula la diferencia y pide el motivo si hace
- * falta. La API recalcula todo con la caja bloqueada: esto solo guía.
+ * blanco y sin esperado: la API calcula la diferencia y, si no cuadra y no hay
+ * motivo, guarda el cierre marcado «diferencia sin justificar» (SEC-043: nunca
+ * contesta antes si cuadra). La API recalcula todo con la caja bloqueada: esto
+ * solo guía.
  */
 export function CloseCashSessionModal({
   open,
@@ -85,6 +88,9 @@ export function CloseCashSessionModal({
   onClosed,
 }: CloseCashSessionModalProps) {
   const baseId = useId();
+  // DX-522: importes con el formato de la sede y el código ISO; cargando, «—».
+  const fmt = readyFormat(useSedeFormat(token));
+  const money = (amount: number, code: string) => sedeMoney(amount, code, fmt);
   const blind = session.blindHidden;
   // Con arqueo ciego no se sabe qué monedas se cobraron: las del fondo, la de
   // la sede y las de los ajustes y salidas de caja de este turno (esos sí se
@@ -93,7 +99,8 @@ export function CloseCashSessionModal({
     () =>
       countRows(blind ? null : session.expected, [
         ...session.floats.map((f) => f.currency),
-        ...session.adjustments.map((a) => a.currency),
+        // SEC-043: con arqueo ciego los ajustes llegan a null.
+        ...(session.adjustments ?? []).map((a) => a.currency),
         ...session.outflows.map((o) => o.currency),
         // DX-253: las devoluciones de saldo a favor en efectivo también salen del cajón.
         ...(session.creditRefunds ?? []).map((r) => r.currency),
@@ -202,12 +209,13 @@ export function CloseCashSessionModal({
                   <p className="font-medium text-ink">{copy.rowLabel(method, row.currency)}</p>
                   {row.expected !== null ? (
                     <p className="text-xs text-muted tabular-nums">
-                      {copy.expected(formatCurrency(row.expected, row.currency))}
+                      {copy.expected(sedeMoney(row.expected, row.currency, fmt))}
                     </p>
                   ) : null}
                 </div>
                 <div className="flex min-w-0 items-start gap-3 sm:justify-end">
                   <MoneyInput
+                    money={money}
                     id={inputId}
                     aria-label={copy.countedLabel(method, row.currency)}
                     currency={row.currency}
@@ -228,7 +236,7 @@ export function CloseCashSessionModal({
                       )}
                     >
                       <span className="sr-only">{copy.difference}: </span>
-                      {diff === 0 ? copy.squared : formatCurrency(diff, row.currency)}
+                      {diff === 0 ? copy.squared : sedeMoney(diff, row.currency, fmt)}
                     </span>
                   ) : null}
                 </div>

@@ -76,8 +76,18 @@ export interface Appointment {
    * `active: false` si se desactivó después. Opcionales aquí solo para no
    * obligar a los dobles de los tests a llevarlos.
    */
+  /** DX-437: franja pedida y cuándo lo pidió el paciente desde el enlace (null = lo marcó el personal). */
+  earlierWindow?: 'MORNING' | 'AFTERNOON' | 'ANY' | null;
+  earlierRequestedAt?: string | null;
   chairId?: string | null;
   chair?: ChairSummary | null;
+  /**
+   * DX-470/DX-509: urgencia atendida en sobrecupo (no ocupa la hora del
+   * profesional). Deja de serlo al moverla, o al deshacer la llegada o
+   * reactivarla con su hora libre. Opcional aquí solo para no obligar a los
+   * dobles de los tests a llevarlo.
+   */
+  overbooked?: boolean;
   createdAt: string;
   updatedAt: string;
   /**

@@ -1,15 +1,22 @@
 'use client';
 import * as React from 'react';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
+import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   createNoteTemplate,
+  listNoteTemplates,
   updateNoteTemplate,
   type NotePromptType,
   type NoteTemplate,
 } from '@/lib/clinical-notes/note-templates-api';
 import { composeNote, initialAnswer } from '@/lib/clinical-notes/compose';
+import {
+  SHORTCUT_FORMAT_MESSAGE,
+  isValidShortcut,
+  normalizeShortcut,
+} from '@/lib/clinical-notes/shortcuts';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { Button } from '@/components/ui/button';
@@ -26,6 +33,9 @@ export const noteTemplateFormCopy = {
   namePlaceholder: 'Por ejemplo, Resina',
   category: 'Carpeta',
   categoryHint: 'Opcional. Agrupa las plantillas en el selector (Operatoria, Cirugía…).',
+  // DX-455
+  shortcut: 'Atajo',
+  shortcutHint: 'Opcional. Empieza por #, sin espacios. Ej.: #resina',
   body: 'Texto de la plantilla',
   bodyHint: 'Escribe {{Etiqueta}} donde va la respuesta de cada pregunta.',
   prompts: 'Preguntas',
@@ -54,16 +64,46 @@ export const noteTemplateFormCopy = {
   invalidName: 'Escribe un nombre (hasta 80 caracteres).',
   invalidBody: 'Escribe el texto de la plantilla.',
   genericError: 'No pudimos guardar la plantilla. Intenta de nuevo.',
+  // DX-231: otro ADMIN la guardó mientras esta se editaba (409).
+  stale:
+    'La plantilla cambió mientras la editabas. Recárgala para ver la versión guardada; lo que escribiste sin guardar se descarta.',
+  reload: 'Recargar',
+  reloadError: 'No pudimos recargar la plantilla. Intenta de nuevo.',
 };
 
 const copy = noteTemplateFormCopy;
 
+/** Código del 409 de versión optimista de la API (DX-231). */
+const STALE_TEMPLATE_CODE = 'NOTE_TEMPLATE_STALE';
+/** DX-455: el atajo choca con el de otra plantilla (409). */
+const SHORTCUT_CONFLICT_CODE = 'NOTE_SHORTCUT_CONFLICT';
+
+/** ¿El error de la API es del atajo? El 409 trae código; el 400 de formato, su texto. */
+function isShortcutError(err: unknown): boolean {
+  if (!(err instanceof ApiError)) return false;
+  if (err.status === 409) return err.code === SHORTCUT_CONFLICT_CODE;
+  return err.status === 400 && /\batajo\b/i.test(apiErrorMessage(err, ''));
+}
+
 interface PromptDraft {
   key: number;
+  /** Id de la pregunta ya guardada: se manda de vuelta para conservarlo. */
+  id?: string;
   label: string;
   type: NotePromptType;
   options: string;
   defaultValue: string;
+}
+
+function draftsOf(template: NoteTemplate | null | undefined): PromptDraft[] {
+  return (template?.prompts ?? []).map((p, i) => ({
+    key: i,
+    id: p.id,
+    label: p.label,
+    type: p.type,
+    options: p.options.join('\n'),
+    defaultValue: p.defaultValue ?? '',
+  }));
 }
 
 function optionList(text: string): string[] {
@@ -82,6 +122,8 @@ interface NoteTemplateFormModalProps {
   /** Carpetas ya usadas, para sugerirlas. */
   categories: string[];
   onSaved: (template: NoteTemplate) => void;
+  /** «Recargar» trajo la versión guardada: el padre actualiza su lista. */
+  onReloaded?: (template: NoteTemplate) => void;
 }
 
 /**
@@ -98,24 +140,63 @@ export function NoteTemplateFormModal({
   template,
   categories,
   onSaved,
+  onReloaded,
 }: NoteTemplateFormModalProps) {
-  const editing = !!template;
+  const [current, setCurrent] = useState(template ?? null);
+  const editing = !!current;
   const ids = useId();
   const [name, setName] = useState(template?.name ?? '');
   const [category, setCategory] = useState(template?.category ?? '');
   const [body, setBody] = useState(template?.body ?? '');
+  const [shortcut, setShortcut] = useState(template?.shortcut ?? '');
+  const [shortcutError, setShortcutError] = useState<string | null>(null);
+  // Cada error del atajo lleva el foco al campo (también si se repite el mismo).
+  const [shortcutFocus, setShortcutFocus] = useState(0);
+  const shortcutRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (shortcutFocus > 0) shortcutRef.current?.focus();
+  }, [shortcutFocus]);
+
+  function failShortcut(message: string) {
+    setShortcutError(message);
+    setShortcutFocus((n) => n + 1);
+  }
   const [nextKey, setNextKey] = useState(template?.prompts.length ?? 0);
-  const [prompts, setPrompts] = useState<PromptDraft[]>(
-    (template?.prompts ?? []).map((p, i) => ({
-      key: i,
-      label: p.label,
-      type: p.type,
-      options: p.options.join('\n'),
-      defaultValue: p.defaultValue ?? '',
-    })),
-  );
+  const [prompts, setPrompts] = useState<PromptDraft[]>(draftsOf(template));
   const [submitting, setSubmitting] = useState(false);
+  const [reloading, setReloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
+
+  /** Rellena el formulario con la plantilla guardada (la del servidor). */
+  function applyTemplate(t: NoteTemplate) {
+    setCurrent(t);
+    setName(t.name);
+    setCategory(t.category ?? '');
+    setBody(t.body);
+    setShortcut(t.shortcut ?? '');
+    setShortcutError(null);
+    setNextKey(t.prompts.length);
+    setPrompts(draftsOf(t));
+  }
+
+  async function handleReload() {
+    if (!current) return;
+    setReloading(true);
+    try {
+      const all = await listNoteTemplates(token, { includeInactive: true });
+      const fresh = all.find((t) => t.id === current.id);
+      if (!fresh) throw new Error('missing');
+      applyTemplate(fresh);
+      onReloaded?.(fresh);
+      setStale(false);
+      setError(null);
+    } catch {
+      setError(copy.reloadError);
+    } finally {
+      setReloading(false);
+    }
+  }
 
   function update(key: number, patch: Partial<PromptDraft>) {
     setPrompts((prev) => prev.map((p) => (p.key === key ? { ...p, ...patch } : p)));
@@ -150,6 +231,7 @@ export function NoteTemplateFormModal({
     // el selector ya muestra «Ninguno» y eso es lo que se manda.
     const valid = defaultValue !== '' && (p.type === 'TEXT' || options.includes(defaultValue));
     return {
+      ...(p.id ? { id: p.id } : {}),
       label: p.label.trim(),
       type: p.type,
       options,
@@ -166,9 +248,15 @@ export function NoteTemplateFormModal({
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    setStale(false);
     const trimmed = name.trim();
     if (trimmed === '' || trimmed.length > 80) return setError(copy.invalidName);
     if (body.trim() === '') return setError(copy.invalidBody);
+    // DX-455: el mismo formato que la API; si aun así responde 400/409, su
+    // texto (más concreto) es el que se enseña junto al campo.
+    const shortcutValue = normalizeShortcut(shortcut);
+    if (shortcutValue !== '' && !isValidShortcut(shortcutValue)) return failShortcut(SHORTCUT_FORMAT_MESSAGE);
+    setShortcutError(null);
     setSubmitting(true);
     try {
       const input = {
@@ -177,13 +265,27 @@ export function NoteTemplateFormModal({
         body: body.trim(),
         prompts: payloadPrompts,
       };
-      const saved = editing
-        ? await updateNoteTemplate(token, template.id, input)
-        : await createNoteTemplate(token, input);
+      // Al editar, vacío quita el atajo (`null`); al crear, vacío no se manda.
+      const saved = current
+        ? await updateNoteTemplate(token, current.id, {
+            ...input,
+            shortcut: shortcutValue === '' ? null : shortcutValue,
+            version: current.version,
+          })
+        : await createNoteTemplate(token, { ...input, ...(shortcutValue ? { shortcut: shortcutValue } : {}) });
       onSaved(saved);
       onOpenChange(false);
     } catch (err) {
-      setError(apiErrorMessage(err, copy.genericError));
+      if (isShortcutError(err)) {
+        setStale(false);
+        failShortcut(apiErrorMessage(err, SHORTCUT_FORMAT_MESSAGE));
+      } else if (err instanceof ApiError && err.status === 409 && err.code === STALE_TEMPLATE_CODE) {
+        setStale(true);
+        setError(copy.stale);
+      } else {
+        setStale(false);
+        setError(apiErrorMessage(err, copy.genericError));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -197,8 +299,9 @@ export function NoteTemplateFormModal({
       description={copy.description}
       onSubmit={handleSubmit}
       submitLabel={editing ? copy.save : copy.create}
-      submitting={submitting}
+      submitting={submitting || reloading}
       error={error}
+      errorRetry={stale ? { label: copy.reload, onRetry: () => void handleReload() } : null}
       size="lg"
     >
       <div className="grid gap-4 sm:grid-cols-2">
@@ -225,6 +328,24 @@ export function NoteTemplateFormModal({
               <option key={c} value={c} />
             ))}
           </datalist>
+        </FormField>
+        <FormField htmlFor="tpl-shortcut" label={copy.shortcut} hint={copy.shortcutHint} error={shortcutError}>
+          <Input
+            id="tpl-shortcut"
+            ref={shortcutRef}
+            value={shortcut}
+            maxLength={31}
+            placeholder="#resina"
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            aria-invalid={shortcutError ? true : undefined}
+            onChange={(e) => {
+              setShortcut(e.target.value);
+              setShortcutError(null);
+            }}
+            className="font-mono"
+          />
         </FormField>
       </div>
 

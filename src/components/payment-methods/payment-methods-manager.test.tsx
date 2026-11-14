@@ -1,8 +1,10 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { PaymentMethodsManager } from './payment-methods-manager';
 import {
+  createPaymentAdjustment,
   createPaymentMethod,
   listPaymentMethods,
+  updatePaymentAdjustment,
   updatePaymentMethod,
   type ClinicPaymentMethod,
 } from '@/lib/payments/payment-methods-api';
@@ -14,12 +16,16 @@ jest.mock('../../lib/payments/payment-methods-api', () => ({
   listPaymentMethods: jest.fn(),
   createPaymentMethod: jest.fn(),
   updatePaymentMethod: jest.fn(),
+  createPaymentAdjustment: jest.fn(),
+  updatePaymentAdjustment: jest.fn(),
 }));
 jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 
 const mockedList = listPaymentMethods as jest.MockedFunction<typeof listPaymentMethods>;
 const mockedCreate = createPaymentMethod as jest.MockedFunction<typeof createPaymentMethod>;
 const mockedUpdate = updatePaymentMethod as jest.MockedFunction<typeof updatePaymentMethod>;
+const mockedCreateAdjustment = createPaymentAdjustment as jest.MockedFunction<typeof createPaymentAdjustment>;
+const mockedUpdateAdjustment = updatePaymentAdjustment as jest.MockedFunction<typeof updatePaymentAdjustment>;
 
 const cash: ClinicPaymentMethod = {
   id: 'pm-cash',
@@ -27,7 +33,9 @@ const cash: ClinicPaymentMethod = {
   kind: 'CASH',
   active: true,
   requiresReference: false,
+  proofPolicy: 'NONE' as const,
   legacyMethod: 'CASH',
+  adjustments: [],
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-01T00:00:00.000Z',
 };
@@ -72,6 +80,7 @@ describe('PaymentMethodsManager (DX-377)', () => {
       name: 'Pago móvil',
       kind: 'DIGITAL',
       requiresReference: true,
+      proofPolicy: 'NONE' as const,
       legacyMethod: null,
     });
     render(<PaymentMethodsManager token="tok" allowed />);
@@ -86,9 +95,52 @@ describe('PaymentMethodsManager (DX-377)', () => {
         name: 'Pago móvil',
         kind: 'DIGITAL',
         requiresReference: true,
+        proofPolicy: 'NONE' as const,
       }),
     );
     expect((await screen.findAllByText('Pago móvil')).length).toBeGreaterThan(0);
+  });
+
+  it('DX-389: el medio muestra «Pide comprobante» y el alta lo manda (No / Opcional / Obligatorio)', async () => {
+    const user = setupUser();
+    mockedList.mockResolvedValue([
+      cash,
+      { ...cash, id: 'pm-mobile', name: 'Pago móvil', legacyMethod: null, proofPolicy: 'REQUIRED' as const },
+    ]);
+    mockedCreate.mockResolvedValue({ ...cash, id: 'pm-zelle', name: 'Zelle', legacyMethod: null, proofPolicy: 'OPTIONAL' as const });
+    render(<PaymentMethodsManager token="tok" allowed />);
+    const table = await screen.findByRole('table', { name: 'Medios de pago' });
+    const mobileRow = within(table).getAllByText('Pago móvil')[0].closest('tr') as HTMLElement;
+    expect(within(mobileRow).getByText('Obligatorio')).toBeInTheDocument();
+    const cashRow = within(table).getAllByText('Efectivo')[0].closest('tr') as HTMLElement;
+    expect(within(cashRow).getByText('No lo pide')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Nuevo medio' }));
+    const dialog = await screen.findByRole('dialog');
+    const policy = within(dialog).getByLabelText('Pide comprobante');
+    expect(policy).toHaveValue('NONE');
+    expect(within(policy).getAllByRole('option').map((o) => o.textContent)).toEqual(['No', 'Opcional', 'Obligatorio']);
+    await user.type(within(dialog).getByLabelText('Nombre'), 'Zelle');
+    await user.selectOptions(policy, 'Opcional');
+    await user.click(within(dialog).getByRole('button', { name: 'Crear medio' }));
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith('tok', expect.objectContaining({ name: 'Zelle', proofPolicy: 'OPTIONAL' })),
+    );
+  });
+
+  it('DX-389: al editar un medio se cambia «Pide comprobante»', async () => {
+    const user = setupUser();
+    mockedUpdate.mockResolvedValue({ ...cash, proofPolicy: 'REQUIRED' as const });
+    render(<PaymentMethodsManager token="tok" allowed />);
+    await screen.findByRole('table', { name: 'Medios de pago' });
+    await user.click(screen.getByRole('button', { name: 'Acciones de Efectivo' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Editar' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.selectOptions(within(dialog).getByLabelText('Pide comprobante'), 'Obligatorio');
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith('tok', 'pm-cash', expect.objectContaining({ proofPolicy: 'REQUIRED' })),
+    );
   });
 
   it('desactiva un medio', async () => {
@@ -155,5 +207,96 @@ describe('PaymentMethodsManager (DX-377)', () => {
     const dialog = await screen.findByRole('dialog');
     expect(dialog.className).toContain('max-sm:[&_select]:h-11');
     expect(within(dialog).getByRole('button', { name: 'Cerrar' }).className).toContain('max-sm:size-11');
+  });
+
+  describe('ajustes por medio de pago (DX-516)', () => {
+    const tax = {
+      id: 'adj-1',
+      paymentMethodId: 'pm-cash',
+      type: 'TAX' as const,
+      label: 'Impuesto 3 %',
+      calculation: 'PERCENT' as const,
+      percent: 3,
+      fixedAmount: null,
+      fixedCurrency: null,
+      active: true,
+      createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-01T00:00:00.000Z',
+    };
+
+    it('por defecto ningún medio tiene ajustes', async () => {
+      render(<PaymentMethodsManager token="tok" allowed />);
+      expect(await screen.findByText('Ningún medio de pago tiene ajustes.')).toBeInTheDocument();
+      const table = await screen.findByRole('table', { name: 'Medios de pago' });
+      expect(within(table).getByText('Ninguno')).toBeInTheDocument();
+    });
+
+    it('crea un impuesto en porcentaje y aparece en la lista y en el medio', async () => {
+      const user = setupUser();
+      mockedCreateAdjustment.mockResolvedValue(tax);
+      render(<PaymentMethodsManager token="tok" allowed />);
+      await screen.findByRole('table', { name: 'Medios de pago' });
+      await user.click(screen.getByRole('button', { name: 'Nuevo ajuste' }));
+      const dialog = await screen.findByRole('dialog');
+      await user.type(within(dialog).getByLabelText('Etiqueta'), 'Impuesto 3 %');
+      await user.type(within(dialog).getByLabelText('Porcentaje'), '3');
+      await user.click(within(dialog).getByRole('button', { name: 'Crear ajuste' }));
+      await waitFor(() =>
+        expect(mockedCreateAdjustment).toHaveBeenCalledWith('tok', 'pm-cash', {
+          type: 'TAX',
+          label: 'Impuesto 3 %',
+          calculation: 'PERCENT',
+          percent: 3,
+          fixedAmount: null,
+          fixedCurrency: null,
+          active: true,
+        }),
+      );
+      const list = await screen.findByRole('table', { name: 'Ajustes por medio de pago' });
+      expect(within(list).getByText('Impuesto 3 %')).toBeInTheDocument();
+      expect(within(list).getByText('3 %')).toBeInTheDocument();
+      const methods = screen.getByRole('table', { name: 'Medios de pago' });
+      expect(within(methods).getByText('1 ajuste')).toBeInTheDocument();
+    });
+
+    it('valida en el campo: etiqueta vacía y porcentaje fuera de rango, sin enviar', async () => {
+      const user = setupUser();
+      render(<PaymentMethodsManager token="tok" allowed />);
+      await screen.findByRole('table', { name: 'Medios de pago' });
+      await user.click(screen.getByRole('button', { name: 'Nuevo ajuste' }));
+      const dialog = await screen.findByRole('dialog');
+      await user.type(within(dialog).getByLabelText('Porcentaje'), '150');
+      await user.click(within(dialog).getByRole('button', { name: 'Crear ajuste' }));
+      const label = within(dialog).getByLabelText('Etiqueta');
+      expect(label).toHaveAttribute('aria-invalid', 'true');
+      expect(label).toHaveFocus();
+      expect(within(dialog).getByLabelText('Porcentaje')).toHaveAccessibleDescription(
+        'Escribe un porcentaje mayor que 0 y como mucho 100.',
+      );
+      expect(mockedCreateAdjustment).not.toHaveBeenCalled();
+    });
+
+    it('un recargo avisa, en genérico, de que puede no estar permitido', async () => {
+      const user = setupUser();
+      render(<PaymentMethodsManager token="tok" allowed />);
+      await screen.findByRole('table', { name: 'Medios de pago' });
+      await user.click(screen.getByRole('button', { name: 'Nuevo ajuste' }));
+      const dialog = await screen.findByRole('dialog');
+      await user.selectOptions(within(dialog).getByLabelText('Tipo'), 'SURCHARGE');
+      expect(within(dialog).getByText(/En algunos lugares cobrar un recargo/)).toBeInTheDocument();
+    });
+
+    it('desactiva un ajuste desde su fila', async () => {
+      const user = setupUser();
+      mockedList.mockResolvedValue([{ ...cash, adjustments: [tax] }]);
+      mockedUpdateAdjustment.mockResolvedValue({ ...tax, active: false });
+      render(<PaymentMethodsManager token="tok" allowed />);
+      await screen.findByRole('table', { name: 'Ajustes por medio de pago' });
+      await user.click(screen.getByRole('button', { name: 'Acciones de Impuesto 3 % · Efectivo' }));
+      await user.click(await screen.findByRole('menuitem', { name: 'Desactivar' }));
+      await waitFor(() =>
+        expect(mockedUpdateAdjustment).toHaveBeenCalledWith('tok', 'pm-cash', 'adj-1', { active: false }),
+      );
+    });
   });
 });

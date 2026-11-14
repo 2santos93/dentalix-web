@@ -7,6 +7,9 @@ import { notifyError } from '@/components/errors/notify';
 import { toast } from 'sonner';
 import { ImportHistory } from './import-history';
 import { regionalFormat } from '@/lib/format/regional-format';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
+import { dateTimeIn, STAMP_SEDES } from '@/lib/test/stamp';
 
 /** Sede de prueba con ajustes explícitos (los recuentos de estos tests no llegan a mil). */
 const FMT = regionalFormat({ locale: 'de-DE', hourCycle: 'h23' });
@@ -25,6 +28,7 @@ jest.mock('../../lib/patient-imports/patient-imports-api', () => ({
   undoBalances: jest.fn(),
   downloadErrorsCsv: jest.fn(),
 }));
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../../lib/files/save-csv', () => ({ saveCsv: jest.fn() }));
 
 const mockedList = listImports as jest.MockedFunction<typeof listImports>;
@@ -45,7 +49,10 @@ const page = (items = [completed]) => ({
   pageSize: 20,
 });
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  jest.mocked(listLocations).mockResolvedValue([clinicLocation()]);
+});
 
 
 /** Informe y deshacer viven en el «⋯» del lote (RowActions). */
@@ -106,6 +113,38 @@ it('deshacer: pide confirmación y deja el lote como deshecho', async () => {
   await user.click(screen.getByRole('button', { name: 'Acciones de pacientes.csv' }));
   await screen.findAllByRole('menuitem');
   expect(screen.queryByRole('menuitem', { name: 'Deshacer lote' })).not.toBeInTheDocument();
+});
+
+it('DX-294: mientras deshace, «Deshaciendo…» con su avance, sin cerrar ni relanzar; al terminar, el estado final', async () => {
+  mockedList.mockResolvedValue(page());
+  let finish!: (value: Awaited<ReturnType<typeof undoImport>>) => void;
+  mockedUndo.mockImplementation(() => new Promise((resolve) => (finish = resolve)));
+  const user = userEvent.setup();
+  render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
+  await historyAction(user, 'pacientes.csv', 'Deshacer lote');
+  const dialog = screen.getByRole('dialog');
+  expect(within(dialog).getByRole('status')).toBeEmptyDOMElement();
+  await user.click(within(dialog).getByRole('button', { name: 'Deshacer lote' }));
+
+  const busy = within(dialog).getByRole('button', { name: 'Deshaciendo…' });
+  expect(busy).toBeDisabled();
+  expect(busy).toHaveAttribute('aria-busy', 'true');
+  expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toBeDisabled();
+  expect(within(dialog).getByRole('status')).toHaveTextContent(
+    'Deshaciendo el lote: retirando 1 pacientes. Puede tardar unos segundos; no cierres esta ventana.',
+  );
+  // Ni Escape lo cierra ni se puede lanzar otro.
+  await user.keyboard('{Escape}');
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+  await user.click(busy);
+  expect(mockedUndo).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    finish({ ...completed, status: 'UNDONE', canUndo: false, undoneCreated: 1, undoneFilled: 1 });
+  });
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(screen.getByText('Deshecho: 1 pacientes retirados, 1 fichas revertidas')).toBeInTheDocument();
+  expect(toast.success).toHaveBeenCalledWith('Lote deshecho.');
 });
 
 it('deshacer rechazado (409): el motivo en el diálogo y el lote intacto', async () => {
@@ -230,7 +269,7 @@ it('DX-262: con saldos migrados, el deshacer avisa de que también se retiran y 
     ...completed,
     balances: balancesFixture({
       progress: { processed: 3, created: 3, skipped: 0, ambiguous: 0, existing: 0 },
-      imported: [{ currency: 'COP', count: 3, amount: 201000.5 }],
+      imported: [{ currency: 'USD', count: 3, amount: 201000.5 }],
     }),
   };
   mockedList.mockResolvedValue(page([withBalances]));
@@ -256,7 +295,7 @@ it('DX-262: «Retirar saldos migrados» retira solo los saldos (aunque los pacie
     ...completed,
     balances: balancesFixture({
       progress: { processed: 3, created: 2, skipped: 0, ambiguous: 1, existing: 0 },
-      imported: [{ currency: 'COP', count: 2, amount: 201000.5 }],
+      imported: [{ currency: 'USD', count: 2, amount: 201000.5 }],
       canUndo: true,
     }),
   };
@@ -276,4 +315,49 @@ it('DX-262: «Retirar saldos migrados» retira solo los saldos (aunque los pacie
   expect(mockedUndo).not.toHaveBeenCalled();
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(screen.queryByRole('button', { name: /retirar los saldos migrados/i })).not.toBeInTheDocument();
+});
+
+describe('ImportHistory: la fecha de confirmación con la sede de la pantalla (DX-354b)', () => {
+  const norm = (text: string | null) => (text ?? '').replace(/\s/g, ' ');
+
+  it.each(['caracas', 'berlin', 'miami'] as const)('con la sede de %s la fecha y la hora salen con su zona, formato y reloj', async (key) => {
+    jest.mocked(listLocations).mockResolvedValue([{ ...STAMP_SEDES[key], id: 'loc-1' }]);
+    mockedList.mockResolvedValue(page());
+    render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
+    const list = await screen.findByRole('list', { name: /importaciones de la clínica/i });
+    await waitFor(() => expect(norm(list.textContent)).toContain(norm(dateTimeIn(key, '2026-10-21T14:05:00.000Z'))));
+  });
+
+  it('las 14:05Z del 21 de octubre: Caracas 10:05 a. m., Berlín 16:05 (24 h), no la hora del navegador (UTC)', async () => {
+    jest.mocked(listLocations).mockResolvedValue([{ ...STAMP_SEDES.berlin, id: 'loc-1' }]);
+    mockedList.mockResolvedValue(page());
+    render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
+    const list = await screen.findByRole('list', { name: /importaciones de la clínica/i });
+    await waitFor(() => expect(norm(list.textContent)).toContain('21.10.2026 16:05'));
+    expect(norm(list.textContent)).not.toContain('14:05');
+  });
+
+  it('sin formato de la sede la fecha sale «—»', async () => {
+    jest.mocked(listLocations).mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
+    mockedList.mockResolvedValue(page());
+    render(<ImportHistory token="tok" reloadKey={0} fmt={null} />);
+    const list = await screen.findByRole('list', { name: /importaciones de la clínica/i });
+    expect(norm(list.textContent)).toContain('—');
+    expect(norm(list.textContent)).not.toContain('2026');
+  });
+
+  it('el lote de otra sede se fecha con el reloj de ESA sede (Berlín y Miami) aunque la pantalla sea de Caracas', async () => {
+    jest.mocked(listLocations).mockResolvedValue([STAMP_SEDES.caracas, STAMP_SEDES.berlin, STAMP_SEDES.miami]);
+    mockedList.mockResolvedValue(
+      page([
+        { ...completed, id: 'b-berlin', fileName: 'berlin.csv', locationId: 'sede-berlin' },
+        { ...completed, id: 'b-miami', fileName: 'miami.csv', locationId: 'sede-miami' },
+      ]),
+    );
+    render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
+    const list = await screen.findByRole('list', { name: /importaciones de la clínica/i });
+    await waitFor(() => expect(norm(list.textContent)).toContain(norm(dateTimeIn('berlin', '2026-10-21T14:05:00.000Z'))));
+    expect(norm(list.textContent)).toContain(norm(dateTimeIn('miami', '2026-10-21T14:05:00.000Z')));
+    expect(norm(list.textContent)).not.toContain(norm(dateTimeIn('caracas', '2026-10-21T14:05:00.000Z')));
+  });
 });

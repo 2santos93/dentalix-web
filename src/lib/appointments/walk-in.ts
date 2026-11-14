@@ -36,6 +36,14 @@ export const PHONE_MIN_DIGITS = 5;
 /** Códigos del 409 que el diálogo convierte en el paso siguiente. */
 export const NO_RESERVED_SLOT = 'NO_RESERVED_SLOT';
 export const PATIENT_DUPLICATE = 'PATIENT_DUPLICATE';
+/** DX-510: 422 de una Idempotency-Key que ya registró otra atención sin cita. */
+export const IDEMPOTENCY_KEY_REUSED = 'IDEMPOTENCY_KEY_REUSED';
+/**
+ * DX-509: 409 al deshacer la llegada o reactivar una urgencia en sobrecupo
+ * cuya hora ya ocupa otra cita del profesional: se puede mantener en
+ * sobrecupo reintentando con `keepOverbooked`.
+ */
+export const OVERBOOK_SLOT_TAKEN = 'OVERBOOK_SLOT_TAKEN';
 
 /** Quién lo usa: el mostrador, como «Llegó» (DX-200). */
 export function canWalkIn(role: string | null): boolean {
@@ -53,16 +61,24 @@ export function validOverbookReason(reason: string): boolean {
   return trimmed.length >= OVERBOOK_REASON_MIN && trimmed.length <= OVERBOOK_REASON_MAX && !/[\r\n]/.test(trimmed);
 }
 
-/** `POST /appointments/walk-in` en la sede `locationId` (si la hay elegida). */
+/**
+ * `POST /appointments/walk-in` en la sede `locationId` (si la hay elegida).
+ * DX-510: `idempotencyKey` es la del intento (estable mientras el modal está
+ * abierto): un doble clic o un reintento de red devuelve la misma cita.
+ */
 export async function createWalkIn(
   token: string,
   input: CreateWalkInInput,
   locationId: string | null,
+  idempotencyKey: string,
 ): Promise<WalkInResult> {
   return apiFetch<WalkInResult>('/appointments/walk-in', {
     method: 'POST',
     token,
     body: input,
-    ...(locationId ? { headers: { 'X-Location-Id': locationId } } : {}),
+    headers: {
+      'Idempotency-Key': idempotencyKey,
+      ...(locationId ? { 'X-Location-Id': locationId } : {}),
+    },
   });
 }

@@ -5,7 +5,8 @@ import { toast } from 'sonner';
 import { Copy, Globe, Lock, Plus } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { formatDateTime } from '@/lib/format/date';
+import { useSedeStamp, type SedePainters } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import {
   deleteDomain,
   listDomains,
@@ -26,6 +27,9 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { clinicAddress } from './clinic-address';
 import { RegisterDomainModal } from './register-domain-modal';
+
+/** Lo que las frases piden al pintor de la pantalla: las fechas de la sede, `null` sin formato. */
+type DomainStamp = Pick<SedePainters, 'maybe'>;
 
 const copy = {
   add: 'Añadir dominio',
@@ -52,23 +56,44 @@ const copy = {
     VERIFIED: 'Verificado',
     DISABLED: 'Desactivado',
   } satisfies Record<TenantDomainState, string>,
-  /** La línea de la lista: sin jerga de DNS (el registro está en el diálogo del dominio). */
+  /**
+   * La línea de la lista: sin jerga de DNS (el registro está en el diálogo del dominio).
+   * Las fechas salen con la sede de la pantalla (DX-354b); sin su formato, la frase se
+   * dice completa sin la fecha (nunca «Tienes hasta el —»): el aviso de la pantalla explica por qué.
+   */
   summary: {
-    PENDING: (d: TenantDomain) => `Sin verificar. Tienes hasta el ${formatDateTime(d.expiresAt)}.`,
+    PENDING: (d: TenantDomain, stamp: DomainStamp) => {
+      const when = stamp.maybe.dateTime(d.expiresAt);
+      return when === null ? 'Sin verificar. Aún está dentro de su plazo.' : `Sin verificar. Tienes hasta el ${when}.`;
+    },
     EXPIRED: () => 'Caducó sin verificarse. No abre Dentalix.',
-    VERIFIED: (d: TenantDomain) => `Abre Dentalix desde el ${formatDateTime(d.verifiedAt)}.`,
-    DISABLED: (d: TenantDomain) => `Desde el ${formatDateTime(d.disabledAt)} dejó de abrir Dentalix.`,
-  } satisfies Record<TenantDomainState, (d: TenantDomain) => string>,
+    VERIFIED: (d: TenantDomain, stamp: DomainStamp) => {
+      const when = stamp.maybe.dateTime(d.verifiedAt);
+      return when === null ? 'Abre Dentalix.' : `Abre Dentalix desde el ${when}.`;
+    },
+    DISABLED: (d: TenantDomain, stamp: DomainStamp) => {
+      const when = stamp.maybe.dateTime(d.disabledAt);
+      return when === null ? 'Dejó de abrir Dentalix.' : `Desde el ${when} dejó de abrir Dentalix.`;
+    },
+  } satisfies Record<TenantDomainState, (d: TenantDomain, stamp: DomainStamp) => string>,
   detail: {
-    PENDING: (d: TenantDomain) =>
-      `Publica este registro TXT y verifícalo antes del ${formatDateTime(d.expiresAt)}.`,
+    PENDING: (d: TenantDomain, stamp: DomainStamp) => {
+      const when = stamp.maybe.dateTime(d.expiresAt);
+      return when === null
+        ? 'Publica este registro TXT y verifícalo dentro de su plazo.'
+        : `Publica este registro TXT y verifícalo antes del ${when}.`;
+    },
     EXPIRED: () =>
       'Caducó sin verificarse o lo verificó otra cuenta. No abre Dentalix; elimínalo y vuelve a añadirlo si es tuyo.',
-    VERIFIED: (d: TenantDomain) =>
-      `Abre Dentalix desde el ${formatDateTime(d.verifiedAt)} mientras su registro TXT siga publicado. Lo comprobamos cada hora.`,
-    DISABLED: (d: TenantDomain) =>
-      `Desde el ${formatDateTime(d.disabledAt)} ya no encontramos su registro TXT y dejó de abrir Dentalix. Vuelve a publicarlo y verifícalo.`,
-  } satisfies Record<TenantDomainState, (d: TenantDomain) => string>,
+    VERIFIED: (d: TenantDomain, stamp: DomainStamp) => {
+      const when = stamp.maybe.dateTime(d.verifiedAt);
+      return `Abre Dentalix${when === null ? '' : ` desde el ${when}`} mientras su registro TXT siga publicado. Lo comprobamos cada hora.`;
+    },
+    DISABLED: (d: TenantDomain, stamp: DomainStamp) => {
+      const when = stamp.maybe.dateTime(d.disabledAt);
+      return `${when === null ? 'Ya' : `Desde el ${when} ya`} no encontramos su registro TXT y dejó de abrir Dentalix. Vuelve a publicarlo y verifícalo.`;
+    },
+  } satisfies Record<TenantDomainState, (d: TenantDomain, stamp: DomainStamp) => string>,
   recordName: 'Nombre',
   recordType: 'Tipo',
   recordValue: 'Valor',
@@ -166,26 +191,28 @@ function ClinicAddress() {
   );
 }
 
-const columns: DataListColumn<TenantDomain>[] = [
-  {
-    id: 'host',
-    header: copy.colHost,
-    mobile: 'primary',
-    cell: (d) => <span className="break-all">{d.host}</span>,
-  },
-  {
-    id: 'state',
-    header: copy.colState,
-    mobile: 'trailing',
-    cell: (d) => <StatusBadge kind="tenantDomain" status={d.status} />,
-  },
-  {
-    id: 'detail',
-    header: copy.colDetail,
-    cell: (d) => <span className="text-muted">{copy.summary[d.status](d)}</span>,
-    mobileCell: (d) => copy.summary[d.status](d),
-  },
-];
+function columnsFor(stamp: DomainStamp): DataListColumn<TenantDomain>[] {
+  return [
+    {
+      id: 'host',
+      header: copy.colHost,
+      mobile: 'primary',
+      cell: (d) => <span className="break-all">{d.host}</span>,
+    },
+    {
+      id: 'state',
+      header: copy.colState,
+      mobile: 'trailing',
+      cell: (d) => <StatusBadge kind="tenantDomain" status={d.status} />,
+    },
+    {
+      id: 'detail',
+      header: copy.colDetail,
+      cell: (d) => <span className="text-muted">{copy.summary[d.status](d, stamp)}</span>,
+      mobileCell: (d) => copy.summary[d.status](d, stamp),
+    },
+  ];
+}
 
 /**
  * Dominios propios de la clínica en /settings/dominios (SEC-009). Añadir uno
@@ -208,6 +235,8 @@ export function DomainsManager({ token, allowed }: DomainsManagerProps) {
   const [removing, setRemoving] = useState<TenantDomain | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
+  // DX-354b: los dominios son de la clínica (sin sede en el dato): fechas con la sede de la pantalla.
+  const stamp = useSedeStamp(token);
 
   useEffect(() => {
     if (!allowed) return;
@@ -335,6 +364,7 @@ export function DomainsManager({ token, allowed }: DomainsManagerProps) {
   return (
     <div className="flex flex-col gap-6">
       <ClinicAddress />
+      <SedeStampNote stamp={stamp} />
 
       <div className="flex flex-col gap-3">
         {/* Con filas, la primaria va en la barra; sin filas, dentro del vacío. */}
@@ -360,7 +390,7 @@ export function DomainsManager({ token, allowed }: DomainsManagerProps) {
           <DataList
             label={copy.listLabel}
             rows={domains}
-            columns={columns}
+            columns={columnsFor(stamp)}
             getRowKey={(d) => d.id}
             onRowClick={(d) => setOpenId(d.id)}
             rowActions={rowActions}
@@ -375,7 +405,7 @@ export function DomainsManager({ token, allowed }: DomainsManagerProps) {
           if (!open) setOpenId(null);
         }}
         title={opened?.host ?? ''}
-        description={opened ? copy.detail[opened.status](opened) : undefined}
+        description={opened ? copy.detail[opened.status](opened, stamp) : undefined}
         onSubmit={(e) => {
           e.preventDefault();
           if (opened) void verify(opened);

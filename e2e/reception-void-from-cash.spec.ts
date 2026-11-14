@@ -4,6 +4,7 @@ import { accessTokenOf, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
 import { openPatientTab } from './support/patient-tabs';
 import { dataList, dataListRows } from './support/data-list';
+import { DEMO_CURRENCY } from './support/demo';
 
 /**
  * e2e (DX-057): recepción anula desde la CAJA un abono suyo de hoy.
@@ -59,14 +60,14 @@ async function patientWithPlan(
     sex: 'F',
   });
   const plan = await post<{ id: string }>(`/patients/${patient.id}/treatment-plans`, {
-    currency: 'COP',
+    currency: DEMO_CURRENCY,
   });
   return { patientId: patient.id, planId: plan.id };
 }
 
 function payment(amount: number) {
   // Ahora mismo (DX-097): la caja corta «hoy» en la zona de la sede.
-  return { amount, currency: 'COP', paidAt: new Date().toISOString(), method: 'CASH' };
+  return { amount, currency: DEMO_CURRENCY, paidAt: new Date().toISOString(), method: 'CASH' };
 }
 
 for (const viewport of [
@@ -95,7 +96,7 @@ for (const viewport of [
     );
     const own = await patientWithPlan(adminPost, ownName, `DX57P${tag}`.slice(0, 20));
     const other = await patientWithPlan(adminPost, otherName, `DX57A${tag}`.slice(0, 20));
-    await adminPost(`/treatment-plans/${other.planId}/payments`, payment(57_000));
+    await adminPost(`/treatment-plans/${other.planId}/payments`, payment(57));
 
     // --- Recepción inicia sesión en la web y registra su abono de hoy.
     await page.goto(`${origin}/login`);
@@ -108,7 +109,7 @@ for (const viewport of [
       .toBe(true);
     await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 10_000 });
     const receptionPost = apiAs(page.request, origin, await accessTokenOf(page));
-    await receptionPost(`/treatment-plans/${own.planId}/payments`, payment(12_345));
+    await receptionPost(`/treatment-plans/${own.planId}/payments`, payment(123.45));
 
     // --- Caja: «Anular» solo en el abono propio.
     await page.goto(`${origin}/caja`);
@@ -131,7 +132,7 @@ for (const viewport of [
     await expect(dialog).toBeVisible();
     // Qué abono es y la regla de recepción, en español.
     await expect(dialog).toContainText(`Caja ${ownName}`);
-    await expect(dialog).toContainText('12.345');
+    await expect(dialog).toContainText('123,45');
     await expect(dialog).toContainText('solo los que registraste tú hoy');
 
     // Sin motivo: no anula y lo explica junto al campo.

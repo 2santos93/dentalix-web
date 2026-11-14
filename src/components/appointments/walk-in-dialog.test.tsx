@@ -1,4 +1,5 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
 import { ApiError, NetworkError } from '@/lib/api/api-error';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
@@ -6,6 +7,8 @@ import { getPatient, listPatients } from '@/lib/patients/patients-api';
 import { createWalkIn, type WalkInResult } from '@/lib/appointments/walk-in';
 import { notifyInClinicChanged } from '@/lib/appointments/patient-flow';
 import { listLocations } from '@/lib/locations/locations-api';
+import { listChairs, type Chair } from '@/lib/chairs/chairs-api';
+import { listAppointments } from '@/lib/appointments/appointments-api';
 import { clinicLocation } from '@/lib/test/locations';
 import { WalkInDialog, walkInCopy as copy } from './walk-in-dialog';
 
@@ -25,6 +28,11 @@ jest.mock('../../lib/appointments/walk-in', () => ({
 jest.mock('../../lib/locations/locations-api', () => ({
   listLocations: jest.fn(),
 }));
+jest.mock('../../lib/chairs/chairs-api', () => ({ listChairs: jest.fn() }));
+jest.mock('../../lib/appointments/appointments-api', () => ({
+  ...jest.requireActual('../../lib/appointments/appointments-api'),
+  listAppointments: jest.fn(),
+}));
 jest.mock('../../lib/appointments/patient-flow', () => ({
   ...jest.requireActual('../../lib/appointments/patient-flow'),
   notifyInClinicChanged: jest.fn(),
@@ -35,6 +43,8 @@ const patientsMock = listPatients as jest.MockedFunction<typeof listPatients>;
 const getPatientMock = getPatient as jest.MockedFunction<typeof getPatient>;
 const createMock = createWalkIn as jest.MockedFunction<typeof createWalkIn>;
 const locationsMock = listLocations as jest.MockedFunction<typeof listLocations>;
+const chairsMock = listChairs as jest.MockedFunction<typeof listChairs>;
+const appointmentsMock = listAppointments as jest.MockedFunction<typeof listAppointments>;
 
 const CENTRO = clinicLocation({ id: 'loc-centro', name: 'Sede Centro' });
 const NORTE = clinicLocation({ id: 'loc-norte', name: 'Sede Norte' });
@@ -47,6 +57,7 @@ const STAFF: StaffMember[] = [
 ];
 
 const RESULT = { id: 'a1', patientFirstName: 'Lucía', patientLastName: 'Sin Cita' } as WalkInResult;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function renderDialog(locationId: string | null = 'loc-centro', defaultProviderId: string | null = null) {
   const onOpenChange = jest.fn();
@@ -76,6 +87,72 @@ beforeEach(() => {
   staffMock.mockResolvedValue(STAFF);
   patientsMock.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 8 } as never);
   locationsMock.mockResolvedValue([CENTRO, NORTE, CERRADA]);
+  chairsMock.mockResolvedValue([]);
+  appointmentsMock.mockResolvedValue([]);
+});
+
+describe('WalkInDialog con sillón (DX-492)', () => {
+  const chair = (id: string, name: string) => ({ id, name, active: true }) as Chair;
+  const ongoing = (chairId: string) =>
+    ({
+      chairId,
+      status: 'IN_CHAIR',
+      start: new Date(Date.now() - 60_000).toISOString(),
+      end: new Date(Date.now() + 60_000).toISOString(),
+    }) as never;
+
+  it('solo ofrece los sillones libres de la sede y manda el elegido', async () => {
+    const user = userEvent.setup();
+    createMock.mockResolvedValue(RESULT);
+    chairsMock.mockResolvedValue([chair('c1', 'Sillón 1'), chair('c2', 'Sillón 2')]);
+    appointmentsMock.mockResolvedValue([ongoing('c1')]);
+    renderDialog();
+    await fillNewPatient(user);
+    await user.selectOptions(await screen.findByLabelText(copy.provider), 'dent-1');
+    const select = await screen.findByLabelText(copy.chair);
+    expect(within(select).queryByRole('option', { name: 'Sillón 1' })).not.toBeInTheDocument();
+    await user.selectOptions(select, 'c2');
+    await user.click(screen.getByRole('button', { name: copy.submit }));
+    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
+    expect(createMock.mock.calls[0][1]).toMatchObject({ chairId: 'c2' });
+    expect(chairsMock).toHaveBeenCalledWith('T', 'loc-centro');
+  });
+
+  it('sin sillones en la sede no pide nada; todos ocupados, lo dice y se atiende sin sillón', async () => {
+    const user = userEvent.setup();
+    chairsMock.mockResolvedValue([chair('c1', 'Sillón 1')]);
+    appointmentsMock.mockResolvedValue([ongoing('c1')]);
+    renderDialog();
+    await screen.findByText(copy.allChairsBusy);
+    expect(within(screen.getByLabelText(copy.chair)).getAllByRole('option')).toHaveLength(1);
+    await fillNewPatient(user);
+    await user.selectOptions(await screen.findByLabelText(copy.provider), 'dent-1');
+    createMock.mockResolvedValue(RESULT);
+    await user.click(screen.getByRole('button', { name: copy.submit }));
+    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
+    expect(createMock.mock.calls[0][1]).not.toHaveProperty('chairId');
+  });
+
+  it('si choca, enseña el 409 con el nombre y vuelve a leer los libres', async () => {
+    const user = userEvent.setup();
+    chairsMock.mockResolvedValue([chair('c1', 'Sillón 1')]);
+    createMock.mockRejectedValue(new ApiError(409, 'El sillón «Sillón 1» ya está ocupado de 10:00 a 10:30'));
+    renderDialog();
+    await fillNewPatient(user);
+    await user.selectOptions(await screen.findByLabelText(copy.provider), 'dent-1');
+    await user.selectOptions(await screen.findByLabelText(copy.chair), 'c1');
+    await user.click(screen.getByRole('button', { name: copy.submit }));
+    expect(await screen.findByText(/«Sillón 1» ya está ocupado/)).toBeInTheDocument();
+    await waitFor(() => expect(chairsMock).toHaveBeenCalledTimes(2));
+  });
+
+  it('sin poder leer los sillones, la urgencia se atiende igual', async () => {
+    chairsMock.mockRejectedValue(new Error('caído'));
+    renderDialog();
+    await screen.findByLabelText(copy.provider);
+    await waitFor(() => expect(chairsMock).toHaveBeenCalled());
+    expect(screen.queryByLabelText(copy.chair)).not.toBeInTheDocument();
+  });
 });
 
 describe('WalkInDialog (DX-470)', () => {
@@ -100,6 +177,7 @@ describe('WalkInDialog (DX-470)', () => {
         newPatient: { firstName: 'Lucía', lastName: 'Sin Cita', phone: '+58 412 555 0101' },
       },
       'loc-centro',
+      expect.stringMatching(UUID),
     );
     expect(notifyInClinicChanged).toHaveBeenCalled();
     expect(onCreated).toHaveBeenCalledWith(RESULT);
@@ -130,7 +208,12 @@ describe('WalkInDialog (DX-470)', () => {
     await user.selectOptions(await screen.findByLabelText(copy.provider), 'dent-1');
     await user.click(screen.getByRole('button', { name: copy.submit }));
     await waitFor(() =>
-      expect(createMock).toHaveBeenCalledWith('T', { providerId: 'dent-1', triageFlags: [], patientId: 'p-1' }, 'loc-centro'),
+      expect(createMock).toHaveBeenCalledWith(
+        'T',
+        { providerId: 'dent-1', triageFlags: [], patientId: 'p-1' },
+        'loc-centro',
+        expect.stringMatching(UUID),
+      ),
     );
   });
 
@@ -160,6 +243,8 @@ describe('WalkInDialog (DX-470)', () => {
     await user.click(screen.getByRole('button', { name: copy.submitOverbook }));
     await waitFor(() => expect(createMock).toHaveBeenCalledTimes(2));
     expect(createMock.mock.calls[1][1]).toMatchObject({ overbookReason: 'Dolor agudo, no puede esperar' });
+    // DX-510: el 409 no registró nada; el reintento es el mismo intento.
+    expect(createMock.mock.calls[1][3]).toBe(createMock.mock.calls[0][3]);
   });
 
   it('documento repetido: ofrece usar el paciente que ya existe', async () => {
@@ -523,5 +608,71 @@ describe('WalkInDialog (DX-470)', () => {
     staffMock.mockReturnValue(new Promise(() => {}));
     renderDialog();
     expect(screen.getByRole('option', { name: copy.providersLoading })).toBeInTheDocument();
+  });
+
+  describe('Idempotency-Key (DX-510)', () => {
+    async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>) {
+      await fillNewPatient(user);
+      await user.selectOptions(await screen.findByLabelText(copy.provider), 'dent-1');
+      await user.click(screen.getByRole('button', { name: copy.submit }));
+    }
+
+    it('mientras se envía, el botón queda deshabilitado y un doble clic no manda un segundo POST', async () => {
+      const user = userEvent.setup();
+      let resolve: (r: WalkInResult) => void = () => undefined;
+      createMock.mockReturnValueOnce(new Promise<WalkInResult>((r) => (resolve = r)));
+      const { onOpenChange } = renderDialog();
+      await fillNewPatient(user);
+      await user.selectOptions(await screen.findByLabelText(copy.provider), 'dent-1');
+      const submit = screen.getByRole('button', { name: copy.submit });
+      await user.dblClick(submit);
+      await waitFor(() => expect(submit).toBeDisabled());
+      expect(submit).toHaveAttribute('aria-busy', 'true');
+      // Enter en el formulario mientras tanto: tampoco.
+      await user.type(screen.getByLabelText(copy.firstName), '{Enter}');
+      expect(createMock).toHaveBeenCalledTimes(1);
+      expect(createMock.mock.calls[0][3]).toMatch(UUID);
+
+      resolve(RESULT);
+      await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+      expect(createMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('misma clave ya usada con otros datos (422): lo dice, refresca «En clínica» y el siguiente envío es otro intento', async () => {
+      const user = userEvent.setup();
+      createMock
+        .mockRejectedValueOnce(
+          new ApiError(
+            422,
+            'Esta atención sin cita ya se registró con otros datos. Revisa «En clínica» antes de volver a intentarlo.',
+            { code: 'IDEMPOTENCY_KEY_REUSED' },
+          ),
+        )
+        .mockResolvedValueOnce(RESULT);
+      renderDialog();
+      await fillAndSubmit(user);
+      expect(await screen.findByText(/ya se registró con otros datos/)).toBeInTheDocument();
+      expect(notifyInClinicChanged).toHaveBeenCalled();
+      expect(screen.queryByRole('button', { name: copy.retry })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: copy.submit }));
+      await waitFor(() => expect(createMock).toHaveBeenCalledTimes(2));
+      expect(createMock.mock.calls[1][3]).toMatch(UUID);
+      expect(createMock.mock.calls[1][3]).not.toBe(createMock.mock.calls[0][3]);
+    });
+
+    it('cada apertura del modal es un intento con su propia clave', async () => {
+      const user = userEvent.setup();
+      createMock.mockResolvedValue(RESULT);
+      const first = renderDialog();
+      await fillAndSubmit(user);
+      await waitFor(() => expect(first.onOpenChange).toHaveBeenCalledWith(false));
+      cleanup();
+      clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
+      renderDialog();
+      await fillAndSubmit(user);
+      await waitFor(() => expect(createMock).toHaveBeenCalledTimes(2));
+      expect(createMock.mock.calls[1][3]).not.toBe(createMock.mock.calls[0][3]);
+    });
   });
 });

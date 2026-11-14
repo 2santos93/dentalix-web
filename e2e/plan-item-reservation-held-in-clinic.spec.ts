@@ -40,7 +40,7 @@ const NOTICE = 'Tratamiento reservado en otra cita';
 const CLAIM = /Traer a esta cita/;
 
 /**
- * DX-449: la sede y el navegador van en `SEDE_TODAY_TZ` (Bogotá salvo cerca de
+ * DX-449: la sede y el navegador van en `SEDE_TODAY_TZ` (la zona de la suite salvo cerca de
  * su medianoche): las citas «de hoy que ya empezaron» caben antes de «ahora»
  * sin cruzar de día, corra la CI a la hora que corra.
  */
@@ -60,7 +60,7 @@ interface Scenario {
 
 /** `HH:MM` (24 h) de la sede, como el aviso. */
 function sedeClock(at: Date): string {
-  return new Intl.DateTimeFormat('es-CO', {
+  return new Intl.DateTimeFormat('es-VE', {
     timeZone: ZONE,
     hour: '2-digit',
     minute: '2-digit',
@@ -96,7 +96,7 @@ async function scenario(page: Page, name: string, base: number): Promise<Scenari
     sex: 'F',
   });
   const plan = await apiPost<{ id: string }>(request, session, `/patients/${patient.id}/treatment-plans`, {
-    currency: 'COP',
+    currency: 'USD',
   });
   const item = await apiPost<{ id: string }>(request, session, `/treatment-plans/${plan.id}/items`, {
     toothNumber: '36',

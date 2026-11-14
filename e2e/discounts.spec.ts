@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
 import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
+import { DEMO_CURRENCY } from './support/demo';
 
 /**
  * e2e (DX-204): tope de descuento por rol, motivo obligatorio e informe.
@@ -12,7 +13,7 @@ import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/
  * 10 %):
  *   1. El odontólogo selecciona tres ítems de un plan en borrador y pide un
  *      15 % con «Descuento %»: ve «Tu rol permite hasta un 10 %…» y nada
- *      cambia. Con un 10 % se aplica, redondeado al peso (COP sin decimales).
+ *      cambia. Con un 10 % se aplica, redondeado al céntimo (USD, DX-340).
  *   2. En «Agregar ítem», un descuento por encima del 10 % pide el motivo.
  *      SEC-041: bajar el precio del de catálogo avisa «Precio por debajo del
  *      de catálogo: cuenta como descuento.» y pide el motivo; al 50 % el
@@ -29,7 +30,9 @@ const DEMO_PASSWORD = process.env.E2E_DEMO_PASSWORD ?? 'DemoDentalix2026!';
 const ADMIN_EMAIL = process.env.E2E_DEMO_ADMIN_EMAIL ?? 'admin@demo.dentalix.app';
 const DENTIST_EMAIL = process.env.E2E_DEMO_DENTIST_EMAIL ?? 'dentista@demo.dentalix.app';
 
-const PRICES = [85_000, 123_457, 99_999];
+// En la moneda de la sede principal (USD, con céntimos: DX-340). Ninguno por
+// debajo del de catálogo (el primero), que contaría como descuento (SEC-041).
+const PRICES = [800, 923.45, 899.99];
 const PRICE_NOTICE = 'Precio por debajo del de catálogo: cuenta como descuento.';
 const PRICE_CAP_10 = `${PRICE_NOTICE} Tu rol permite hasta un 10 % de descuento por ítem.`;
 
@@ -48,7 +51,7 @@ async function apiLogin(request: APIRequestContext, host: string, email: string)
   return ((await res.json()) as { accessToken: string }).accessToken;
 }
 
-/** Siembra como ADMIN un paciente con un plan en COP de tres ítems sin descuento. */
+/** Siembra como ADMIN un paciente con un plan en la moneda de la sede (USD) de tres ítems sin descuento. */
 async function seed(
   request: APIRequestContext,
   origin: string,
@@ -87,7 +90,7 @@ async function seed(
     defaultPrice: PRICES[0],
   });
   const plan = await post<{ id: string }>(`/patients/${patient.id}/treatment-plans`, {
-    currency: 'COP',
+    currency: DEMO_CURRENCY,
   });
   for (const [i, price] of PRICES.entries()) {
     await post(`/treatment-plans/${plan.id}/items`, {
@@ -120,7 +123,7 @@ async function seed(
   });
   expect(assigned.ok(), `PUT agreement falló: ${await assigned.text()}`).toBeTruthy();
   const agreementPlan = await post<{ id: string }>(`/patients/${agreementPatient.id}/treatment-plans`, {
-    currency: 'COP',
+    currency: DEMO_CURRENCY,
   });
   await post(`/treatment-plans/${agreementPlan.id}/items`, { toothNumber: '11', catalogItemId: procedure.id });
   return {
@@ -196,29 +199,29 @@ for (const viewport of [
       'Tu rol permite hasta un 10 % de descuento por ítem.',
     );
 
-    // Con su 10 %, se aplica redondeado al peso.
+    // Con su 10 %, se aplica redondeado al céntimo.
     await dialog.getByLabel('Porcentaje de descuento').fill('10');
     await dialog.getByRole('button', { name: 'Aplicar descuento' }).click();
     await expect(dialog).toBeHidden({ timeout: 10_000 });
     await expect(panel.getByText('Descuento aplicado a 3 ítems.')).toBeVisible();
-    await expect(panel.getByText(/Descuento −(?:[A-Z]{3}\s)?8\.?500,00/).filter({ visible: true }).first()).toBeVisible();
+    await expect(panel.getByText(/Descuento −(?:[A-Z]{3}\s)?80,00/).filter({ visible: true }).first()).toBeVisible();
 
     // --- 2. «Agregar ítem» pide el motivo por encima del 10 % (del precio:
     // sin precio ni procedimiento no hay % que comparar).
-    await panel.getByLabel('Precio', { exact: true }).fill('100000');
-    await panel.getByLabel(/^descuento/i).fill('20000');
+    await panel.getByLabel('Precio', { exact: true }).fill('1000');
+    await panel.getByLabel(/^descuento/i).fill('200');
     await expect(panel.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeVisible();
 
-    // --- 2b. SEC-041: el precio por debajo del de catálogo (85.000) cuenta
+    // --- 2b. SEC-041: el precio por debajo del de catálogo (800) cuenta
     // como descuento: aviso, motivo y tope del rol.
     await panel.getByLabel(/^descuento/i).fill('');
     await panel.getByLabel('Código FDI').fill('46');
     await panel.getByLabel('Buscar en el catálogo').fill(data.procedureLabel);
     await panel.getByRole('radio', { name: data.procedureLabel }).check();
     const priceField = panel.getByLabel('Precio', { exact: true });
-    await expect(priceField).toHaveValue('85000');
+    await expect(priceField).toHaveValue('800');
     await expect(panel.getByText(PRICE_NOTICE, { exact: true })).toHaveCount(0);
-    await priceField.fill('42500');
+    await priceField.fill('400');
     await expect(panel.getByText(PRICE_NOTICE, { exact: true })).toBeVisible();
     await expect(panel.getByLabel('Motivo del descuento', { exact: true })).toBeVisible();
     await expect(panel.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeVisible();
@@ -226,7 +229,7 @@ for (const viewport of [
     await panel.getByRole('button', { name: 'Agregar ítem', exact: true }).click();
     await expect(panel.getByText(PRICE_CAP_10)).toBeVisible();
     // Al 95 % el aviso sigue, pero el motivo es opcional.
-    await priceField.fill('80750');
+    await priceField.fill('760');
     await expect(panel.getByText(PRICE_NOTICE, { exact: true })).toBeVisible();
     await expect(panel.getByLabel('Motivo del descuento (opcional)')).toBeVisible();
 
@@ -235,16 +238,16 @@ for (const viewport of [
     const dentistHeaders = { 'X-Tenant-Host': host, Authorization: `Bearer ${dentistToken}` };
     const halfPrice = await page.request.post(itemsUrl, {
       headers: dentistHeaders,
-      data: { toothNumber: '46', catalogItemId: data.procedureId, price: 42_500 },
+      data: { toothNumber: '46', catalogItemId: data.procedureId, price: 400 },
     });
     expect(halfPrice.status()).toBe(403);
     expect(((await halfPrice.json()) as { message: string }).message).toBe(PRICE_CAP_10);
     const reduced = await page.request.post(itemsUrl, {
       headers: dentistHeaders,
-      data: { toothNumber: '46', catalogItemId: data.procedureId, price: 80_750 },
+      data: { toothNumber: '46', catalogItemId: data.procedureId, price: 760 },
     });
     expect(reduced.status()).toBe(201);
-    expect(await reduced.json()).toMatchObject({ catalogPrice: 85_000, price: 80_750, discount: 0 });
+    expect(await reduced.json()).toMatchObject({ catalogPrice: 800, price: 760, discount: 0 });
 
     // --- 3. La administración ve el descuento en el informe.
     const adminContext = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
@@ -252,7 +255,7 @@ for (const viewport of [
     await webLogin(admin, origin, ADMIN_EMAIL);
     await admin.goto(`${origin}/caja/descuentos`);
     await expect(admin.getByRole('heading', { name: 'Descuentos', level: 1 })).toBeVisible({ timeout: 15_000 });
-    await expect(admin.getByTestId('discount-total-COP')).toBeVisible();
+    await expect(admin.getByTestId(`discount-total-${DEMO_CURRENCY}`)).toBeVisible();
     // DataList: filas de la tabla (escritorio) o tarjetas de la lista (teléfono).
     const rows =
       viewport.width === 390
@@ -262,8 +265,8 @@ for (const viewport of [
     // Los tres del 10 % y la rebaja de precio del 95 % (SEC-041).
     await expect(rows.filter({ hasText: data.fullName })).toHaveCount(4);
     await expect(
-      // DX-378 (FE-078): separadores de la sede (es-CO) y siempre el código de la moneda, nunca «$».
-      rows.filter({ hasText: data.fullName }).filter({ hasText: /Precio rebajado a COP\s80\.750,00/ }),
+      // DX-378 (FE-078): separadores de la sede (es-VE) y siempre el código de la moneda, nunca «$».
+      rows.filter({ hasText: data.fullName }).filter({ hasText: /Precio rebajado a USD\s760,00/ }),
     ).toHaveCount(1);
     // SEC-047: la línea solo de convenio, con su frase, sin desbordar a 390 px.
     const agreementLine = rows.filter({ hasText: data.agreementPatientName });

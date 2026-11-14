@@ -116,7 +116,7 @@ test.beforeAll(async ({ request }) => {
 
   // Dos pendientes con permiso de WhatsApp para la oferta con enlace.
   for (const [name, n] of [['Ana', 3], ['Carla', 4]] as const) {
-    const { id } = await patient(name, n, { phone: '3101234567' });
+    const { id } = await patient(name, n, { phone: '4141234567' });
     const optIn = await request.patch(`${API_URL}/patients/${id}/communication`, {
       headers: session.headers,
       data: { whatsappOptIn: true, whatsappOptInSource: 'IN_PERSON' },
@@ -210,7 +210,7 @@ test.describe('teléfono con pantalla táctil (390 px, pointer: coarse)', () => 
     await page.getByRole('button', { name: dentist.fullName, exact: true }).click();
     await page
       .locator(`[data-testid="day-column"][aria-label="${dentist.fullName}"]`)
-      .getByRole('button', { name: `Ocupar el hueco libre de 15:00–19:00 · ${dentist.fullName}` })
+      .getByRole('button', { name: `Hueco libre · 15:00–19:00 · Ocupar con ${dentist.fullName}` })
       .click();
 
     const panel = page.getByTestId('fill-opening-panel');

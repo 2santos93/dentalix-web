@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { test, expect, type Page } from './support/test';
-import { accessTokenOf, registerAndLogin, SESSION_COOKIE, sessionCookie } from './support/auth';
+import { test, expect, watchCspViolations, type Page } from './support/test';
+import { accessTokenOf, loginAs, registerAndLogin, SESSION_COOKIE, sessionCookie } from './support/auth';
+import { E2E_BROWSER_LOCALE } from './support/regional';
 import { registerClinicViaApi } from './support/api';
 import { API_URL, tenantOrigin } from './support/urls';
 import { ageRefreshRotation, E2E_DATABASE_URL } from './support/db';
@@ -168,6 +169,39 @@ test('recargar con el /auth/refresh en vuelo no cierra la sesión (la API rotó,
   // Y la sesión sigue renovando con normalidad.
   await page.reload();
   await expect(page.getByRole('heading', { level: 1, name: 'Agenda' })).toBeVisible({ timeout: 15_000 });
+});
+
+// DX-117 (FE-020): la guarda de sesión vive una sola vez en el layout de
+// `(app)` (`RequireSession`). Un navegador sin cookie que abra pantallas
+// protegidas, por URL, acaba en /login de la clínica. El login no tiene
+// parámetro de vuelta (ninguna página lo pasaba): al entrar va a /patients.
+test('sin sesión, abrir pantallas protegidas por URL lleva a /login; al entrar, a Pacientes', async ({
+  page,
+  browser,
+}) => {
+  const clinic = newClinic('guard');
+  await registerClinicViaApi(page.request, clinic);
+  const origin = tenantOrigin(clinic.subdomain);
+
+  // Contexto nuevo: sin cookie de sesión de ninguna clínica.
+  const context = await browser.newContext({ locale: E2E_BROWSER_LOCALE });
+  const csp = watchCspViolations(context);
+  const fresh = await context.newPage();
+  for (const path of ['/patients', '/agenda', '/settings/sedes', '/caja/cartera?tab=saldo-a-favor']) {
+    await fresh.goto(`${origin}${path}`);
+    await expect(fresh, `${path} sin sesión`).toHaveURL(`${origin}/login`, { timeout: 10_000 });
+    await expect(fresh.getByRole('button', { name: 'Iniciar sesión' })).toBeVisible();
+  }
+
+  await loginAs(fresh, origin, clinic.email, clinic.password);
+  await expect(fresh).toHaveURL(`${origin}/patients`, { timeout: 10_000 });
+  await expect(fresh.getByRole('heading', { name: 'Pacientes' })).toBeVisible({ timeout: 15_000 });
+  // Con sesión, la pantalla protegida se abre (el esqueleto no se queda).
+  await fresh.goto(`${origin}/agenda`);
+  await expect(fresh.getByRole('heading', { level: 1, name: 'Agenda' })).toBeVisible({ timeout: 15_000 });
+  await expect(fresh.getByTestId('session-skeleton')).toHaveCount(0);
+  csp.expectNone();
+  await context.close();
 });
 
 test('la sesión de una clínica no sirve en otra (cookie por host y refresh validado por clínica)', async ({

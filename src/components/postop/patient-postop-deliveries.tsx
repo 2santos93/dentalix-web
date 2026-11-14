@@ -9,13 +9,15 @@ import {
   type PostOpChannel,
   type PostOpDeliverySummary,
 } from '@/lib/postop/postop-api';
-import { formatDate, formatDateTime } from '@/lib/format/date';
+import { useSedeStamp, type SedePainters } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { AsyncSection } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
   empty: 'Todavía no se han entregado indicaciones',
@@ -34,7 +36,12 @@ const copy = {
     EMAIL: 'Email',
     WHATSAPP_LINK: 'WhatsApp',
   } satisfies Record<PostOpChannel, string>,
+  // DX-250: la historia clínica no afirma un email que no salió.
+  emailNotSent: 'Email · no enviado',
+  emailQueued: 'Email · en cola',
   opened: 'Abierto',
+  // La fecha va en texto visible, no solo en un `title` (no se ve en el móvil).
+  openedOn: (when: string) => `Abierto el ${when}`,
   openedAt: (when: string) => `El paciente abrió el enlace el ${when}`,
   print: 'Ver e imprimir',
   printHint: (title: string) => `${title} (se abre en otra pestaña)`,
@@ -54,13 +61,22 @@ function ListSkeleton() {
   );
 }
 
-function OpenedBadge({ at }: { at: string | null }) {
+function OpenedBadge({ at, stamp }: { at: string | null; stamp: SedePainters }) {
   if (!at) return null;
+  // Sin formato de sede no hay fecha que pintar (no se anuncia «—»): solo «Abierto».
+  const when = stamp.maybe.dateTime(at);
   return (
-    <Badge variant="success" title={copy.openedAt(formatDateTime(at))}>
-      {copy.opened}
+    <Badge variant="success" title={when ? copy.openedAt(when) : undefined}>
+      {when ? copy.openedOn(when) : copy.opened}
     </Badge>
   );
+}
+
+/** El canal tal como se lee: un email que no salió lo dice. */
+function channelText(d: PostOpDeliverySummary): string {
+  if (d.channel === 'EMAIL' && d.emailStatus === 'NOT_SENT') return copy.emailNotSent;
+  if (d.channel === 'EMAIL' && d.emailStatus === 'QUEUED') return copy.emailQueued;
+  return copy.channel[d.channel];
 }
 
 /**
@@ -74,6 +90,7 @@ export function PatientPostOpDeliveries({ token, patientId }: PatientPostOpDeliv
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const stamp = useSedeStamp(token);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,11 +117,11 @@ export function PatientPostOpDeliveries({ token, patientId }: PatientPostOpDeliv
   function printLink(delivery: PostOpDeliverySummary) {
     return (
       <Button asChild variant="secondary" size="sm" className="w-full sm:w-auto">
-        <a href={postOpPrintHref(patientId, delivery.id)} target="_blank" rel="noopener">
+        <ExternalLink href={postOpPrintHref(patientId, delivery.id)}>
           <Printer aria-hidden />
           {copy.print}
           <span className="sr-only"> · {copy.printHint(delivery.templateTitle)}</span>
-        </a>
+        </ExternalLink>
       </Button>
     );
   }
@@ -116,7 +133,9 @@ export function PatientPostOpDeliveries({ token, patientId }: PatientPostOpDeliv
       id: 'date',
       header: copy.colDate,
       mobile: 'trailing',
-      cell: (d) => <span className="t-data">{formatDate(d.deliveredAt)}</span>,
+      cellClassName: 't-data',
+      cell: (d) => stamp.date(d.deliveredAt),
+      mobileCell: (d) => stamp.maybe.date(d.deliveredAt),
     },
     {
       id: 'instructions',
@@ -135,14 +154,14 @@ export function PatientPostOpDeliveries({ token, patientId }: PatientPostOpDeliv
       header: copy.colChannel,
       cell: (d) => (
         <span className="flex flex-wrap items-center gap-2">
-          <span>{copy.channel[d.channel]}</span>
-          <OpenedBadge at={d.firstOpenedAt} />
+          <span>{channelText(d)}</span>
+          <OpenedBadge at={d.firstOpenedAt} stamp={stamp} />
         </span>
       ),
       // En la tarjeta, la versión va con el canal (en la tabla, bajo el título).
       mobileCell: (d) => (
         <>
-          <span>{version(d)}</span> · {copy.channel[d.channel]} <OpenedBadge at={d.firstOpenedAt} />
+          <span>{version(d)}</span> · {channelText(d)} <OpenedBadge at={d.firstOpenedAt} stamp={stamp} />
         </>
       ),
     },
@@ -162,27 +181,30 @@ export function PatientPostOpDeliveries({ token, patientId }: PatientPostOpDeliv
   ];
 
   return (
-    <AsyncSection
-      loading={loading}
-      error={error}
-      onRetry={() => setReloadKey((k) => k + 1)}
-      skeleton={<ListSkeleton />}
-    >
-      {/* Vacío compacto: es un bloque dentro de la historia clínica, no la página. */}
-      <DataList
-        label={copy.tableLabel}
-        rows={deliveries}
-        columns={columns}
-        getRowKey={(d) => d.id}
-        empty={
-          <EmptyState
-            size="inline"
-            title={copy.empty}
-            description={copy.emptyHint}
-            icon={<ClipboardList aria-hidden />}
-          />
-        }
-      />
-    </AsyncSection>
+    <>
+      <SedeStampNote stamp={stamp} />
+      <AsyncSection
+        loading={loading}
+        error={error}
+        onRetry={() => setReloadKey((k) => k + 1)}
+        skeleton={<ListSkeleton />}
+      >
+        {/* Vacío compacto: es un bloque dentro de la historia clínica, no la página. */}
+        <DataList
+          label={copy.tableLabel}
+          rows={deliveries}
+          columns={columns}
+          getRowKey={(d) => d.id}
+          empty={
+            <EmptyState
+              size="inline"
+              title={copy.empty}
+              description={copy.emptyHint}
+              icon={<ClipboardList aria-hidden />}
+            />
+          }
+        />
+      </AsyncSection>
+    </>
   );
 }

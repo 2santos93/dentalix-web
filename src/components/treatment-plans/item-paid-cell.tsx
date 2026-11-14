@@ -2,6 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { TableCell } from '@/components/ui/table';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeMoney } from '@/lib/format/sede-number';
+import { allocationCopy } from '@/lib/payments/allocation-copy';
 import type { PlanItemBalance } from '@/lib/payments/payments-api';
 
 export const itemPaidCopy = {
@@ -49,8 +50,30 @@ export function ItemBillableValue({ item, currency, fmt }: ItemFigureProps) {
   return item.billable === 0 ? <NotBillable /> : <>{sedeMoney(item.billable, currency, fmt)}</>;
 }
 
+/**
+ * DX-399-quater-bis: de lo cobrado, lo que cubre el saldo recibido por
+ * traspaso de otro plan. La API lo omite si es 0, y entonces no se pinta nada:
+ * sin traspasos, la fila queda igual.
+ */
+function TransfersInPart({ item, currency, fmt }: ItemFigureProps) {
+  const part = item.paidByTransfersIn ?? 0;
+  if (item.billable === 0 || part <= 0) return null;
+  return (
+    <span className="t-caption block text-muted tabular-nums">
+      {allocationCopy.paidByTransfersIn(sedeMoney(part, currency, fmt))}
+    </span>
+  );
+}
+
 export function ItemPaidValue({ item, currency, fmt }: ItemFigureProps) {
-  return item.billable === 0 ? <NotBillable /> : <>{sedeMoney(item.paid, currency, fmt)}</>;
+  return item.billable === 0 ? (
+    <NotBillable />
+  ) : (
+    <>
+      {sedeMoney(item.paid, currency, fmt)}
+      <TransfersInPart item={item} currency={currency} fmt={fmt} />
+    </>
+  );
 }
 
 export function ItemPendingValue({ item, currency, fmt }: ItemFigureProps) {
@@ -101,15 +124,21 @@ export function ItemPaidLine({ item, currency, fmt }: Omit<ItemFigureProps, 'ite
   }
   if (item.balance === 0) {
     return (
-      <p className="flex flex-wrap items-center gap-2 text-sm text-muted tabular-nums">
-        <span>{itemPaidCopy.linePaid(sedeMoney(item.paid, currency, fmt))}</span>
-        <FullyPaid />
-      </p>
+      <>
+        <p className="flex flex-wrap items-center gap-2 text-sm text-muted tabular-nums">
+          <span>{itemPaidCopy.linePaid(sedeMoney(item.paid, currency, fmt))}</span>
+          <FullyPaid />
+        </p>
+        <TransfersInPart item={item} currency={currency} fmt={fmt} />
+      </>
     );
   }
   return (
-    <p className="text-sm text-muted tabular-nums">
-      {itemPaidCopy.line(sedeMoney(item.paid, currency, fmt), sedeMoney(item.balance, currency, fmt))}
-    </p>
+    <>
+      <p className="text-sm text-muted tabular-nums">
+        {itemPaidCopy.line(sedeMoney(item.paid, currency, fmt), sedeMoney(item.balance, currency, fmt))}
+      </p>
+      <TransfersInPart item={item} currency={currency} fmt={fmt} />
+    </>
   );
 }

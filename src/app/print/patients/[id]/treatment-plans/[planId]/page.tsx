@@ -55,6 +55,7 @@ export default function PlanQuotePrintPage() {
       planId={params.planId}
       backHref={`/patients/${encodeURIComponent(params.id)}?tab=${tab}`}
       allowed={canPrintPlanQuote(role)}
+      canReadPlan={access['treatment-plans']}
     />
   );
 }

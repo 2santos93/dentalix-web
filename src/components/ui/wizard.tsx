@@ -23,6 +23,8 @@ interface WizardProps {
   current: number;
   onStepChange: (i: number) => void;
   children: React.ReactNode;
+  /** Los botones de paso no responden (p. ej. mientras se envía el último paso). */
+  disabled?: boolean;
 }
 
 /**
@@ -36,7 +38,7 @@ interface WizardProps {
  * (`role="progressbar"` with the same text as its value), because five labels
  * never fit 390px without hyphenating.
  */
-export function Wizard({ steps, current, onStepChange, children }: WizardProps) {
+export function Wizard({ steps, current, onStepChange, children, disabled = false }: WizardProps) {
   const active = steps[current];
   const stepOf = copy.stepOf(current + 1, steps.length);
   return (
@@ -75,10 +77,11 @@ export function Wizard({ steps, current, onStepChange, children }: WizardProps) 
             >
               <button
                 type="button"
+                disabled={disabled}
                 onClick={() => onStepChange(i)}
                 title={step.label}
                 className={cn(
-                  'flex w-full min-w-0 flex-col items-start gap-1 border-b-2 pb-2 text-left text-sm font-medium transition-colors pointer-coarse:min-h-11',
+                  'flex w-full min-w-0 flex-col items-start gap-1 border-b-2 pb-2 text-left text-sm font-medium transition-colors pointer-coarse:min-h-11 disabled:cursor-not-allowed',
                   isActive && 'border-primary text-primary-text',
                   isDone && !isActive && 'border-border-input text-ink',
                   !isActive && !isDone && 'border-border text-muted',

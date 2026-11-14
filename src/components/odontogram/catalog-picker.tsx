@@ -34,6 +34,11 @@ interface CatalogPickerProps {
    * PROCEDURE, where the tag would repeat on every row and say nothing.
    */
   showKind?: boolean;
+  /**
+   * DX-502-ter: el precio de catálogo de cada fila, ya con su moneda (`null` = sin precio o sin
+   * moneda conocida: la fila no lo muestra, nunca un importe sin moneda).
+   */
+  priceLabel?: (item: DentalCatalogItem) => string | null;
 }
 
 /**
@@ -59,6 +64,7 @@ export function CatalogPicker({
   legend,
   filterPlaceholder = copy.defaultFilterPlaceholder,
   showKind = true,
+  priceLabel,
 }: CatalogPickerProps) {
   const [query, setQuery] = useState('');
 
@@ -116,6 +122,11 @@ export function CatalogPicker({
                     style={{ backgroundColor: item.color }}
                   />
                   <span className="min-w-0 flex-1 truncate">{item.labelEs}</span>
+                  {priceLabel?.(item) ? (
+                    <span className="t-label shrink-0 tabular-nums text-muted" data-testid="catalog-picker-price">
+                      {priceLabel(item)}
+                    </span>
+                  ) : null}
                   {showKind ? (
                     <span className="t-label shrink-0 text-muted">{copy.kindLabels[item.kind]}</span>
                   ) : null}

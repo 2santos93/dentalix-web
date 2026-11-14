@@ -7,7 +7,8 @@ import {
   type ToothSurface,
   type ToothTimelineEntry,
 } from '@/lib/odontogram/odontogram-api';
-import { formatDate } from '@/lib/format/date';
+import { civilDateInZone } from '@/lib/format/date';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { ORIGIN_LABELS, recordOrigin } from '@/lib/odontogram/origin';
 import { SectionError } from '@/components/errors/section-error';
 import { Badge } from '@/components/ui/badge';
@@ -70,18 +71,16 @@ interface ToothTimelineProps {
   onVoided?: () => void;
 }
 
-/** Día civil local (YYYY-MM-DD) de un instante, para compararlo con `asOf`. */
-function localDay(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-/** El historial tal como estaba al final del día `asOf`. */
-function asOfView(records: ToothTimelineEntry[], asOf: string): ToothTimelineEntry[] {
+/**
+ * El historial tal como estaba al final del día `asOf`. El día de cada registro
+ * es el de la sede (`civilDateInZone`), no el del navegador (DX-354b, E9): un
+ * registro de las 22:30 en Caracas es del 4 aunque en UTC o en Tokio ya sea el 5.
+ */
+function asOfView(records: ToothTimelineEntry[], asOf: string, timeZone: string): ToothTimelineEntry[] {
+  const dayOf = (iso: string) => civilDateInZone(iso, timeZone) ?? '';
   return records
-    .filter((r) => localDay(r.recordedAt) <= asOf)
-    .map((r) => (r.void && localDay(r.void.recordedAt) > asOf ? { ...r, void: null } : r));
+    .filter((r) => dayOf(r.recordedAt) <= asOf)
+    .map((r) => (r.void && dayOf(r.void.recordedAt) > asOf ? { ...r, void: null } : r));
 }
 
 function surfacesLabel(record: ToothRecord): string {
@@ -110,6 +109,9 @@ export function ToothTimeline({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // DX-354b: las fechas y el día de la carta son los de la sede de la pantalla (su aviso único lo da el odontograma).
+  const stamp = useSedeStamp(token);
+  const timeZone = stamp.clock?.timeZone ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -133,7 +135,8 @@ export function ToothTimeline({
     };
   }, [token, patientId, toothNumber, refreshKey, reloadKey]);
 
-  if (loading) {
+  // Sin la zona de la sede no se sabe a qué día pertenece cada registro: la carta a una fecha espera a tenerla.
+  if (loading || (asOf && timeZone === null)) {
     return (
       <p role="status" className="text-sm text-muted">
         {copy.loading}
@@ -145,12 +148,12 @@ export function ToothTimeline({
     return <SectionError description={loadError} onRetry={() => setReloadKey((k) => k + 1)} />;
   }
 
-  const visible = asOf ? asOfView(records, asOf) : records;
+  const visible = asOf && timeZone ? asOfView(records, asOf, timeZone) : records;
 
   if (visible.length === 0) {
     return (
       <p role="status" className="text-sm text-muted">
-        {asOf ? copy.emptyAsOf(formatDate(`${asOf}T12:00:00`)) : copy.empty}
+        {asOf ? copy.emptyAsOf(stamp.civilDate(asOf)) : copy.empty}
       </p>
     );
   }
@@ -174,7 +177,8 @@ export function ToothTimeline({
         {visible.map((record) => {
           const catalogEntry = record.catalogItemId ? catalogById?.get(record.catalogItemId) : undefined;
           const label = catalogEntry?.labelEs ?? record.kind;
-          const date = formatDate(record.recordedAt);
+          const date = stamp.date(record.recordedAt);
+          const maybeDate = stamp.maybe.date(record.recordedAt);
           const origin = recordOrigin(record);
           const isVoided = Boolean(record.void);
           const showVoid = !readOnly && !isVoided && (canVoid?.(record) ?? false);
@@ -219,7 +223,7 @@ export function ToothTimeline({
                 {record.void ? (
                   <p className="text-xs text-ink">
                     <span className="font-medium">
-                      {copy.voidedBy(record.void.performedByName, formatDate(record.void.recordedAt))}:
+                      {copy.voidedBy(record.void.performedByName, stamp.date(record.void.recordedAt))}:
                     </span>{' '}
                     «{record.void.reason}»
                   </p>
@@ -231,8 +235,8 @@ export function ToothTimeline({
                       variant="destructive-ghost"
                       size="sm"
                       className="-ml-2"
-                      aria-label={copy.voidActionFor(label, date)}
-                      onClick={() => setVoiding({ id: record.id, label: copy.recordLabel(label, date) })}
+                      aria-label={maybeDate ? copy.voidActionFor(label, maybeDate) : copy.voidAction + ' ' + label}
+                      onClick={() => setVoiding({ id: record.id, label: maybeDate ? copy.recordLabel(label, maybeDate) : label })}
                     >
                       {copy.voidAction}
                     </Button>

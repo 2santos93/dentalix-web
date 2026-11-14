@@ -1,7 +1,8 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { CalendarClock, ChevronDown, FileText, HandCoins, Lock, Printer, Wallet } from 'lucide-react';
+import { notifySuccess } from '@/components/errors/notify';
+import { CalendarClock, ChevronDown, FileText, HandCoins, Lock, Printer, ReceiptText, Wallet } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import {
   accountStatementPrintHref,
@@ -17,16 +18,21 @@ import {
   methodLabel,
   movementMediumName,
   movementReferenceLabel,
+  movementInvoiceLabel,
   movementDestination,
   openingAsOfLabel,
   openingNoteFor,
   planNamer,
+  shownSummaryRows,
   statementCopy,
   voidedDetail,
 } from '@/lib/account-statement/presentation';
 import { planQuotePrintHref } from '@/lib/treatment-plans/plan-quote-api';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate } from '@/lib/format/date';
+import { sedeMoney } from '@/lib/format/sede-number';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { readyClock, useSedeClock } from '@/lib/locations/sede-clock';
+import { useSedeStamp, type SedeStamp } from '@/lib/locations/sede-stamp';
+import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Badge } from '@/components/ui/badge';
@@ -45,20 +51,34 @@ import {
 } from '@/components/ui/table';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
+import { PaymentAllocationDetailDialog } from '@/components/payments/payment-allocation-detail-dialog';
+import { paymentProofViewerCopy, usePaymentProofViewer } from '@/components/payments/payment-proof-viewer';
 import {
   useVoidPayment,
   voidPaymentSubject,
   type VoidPaymentTarget,
 } from '@/components/payments/use-void-payment';
+import { SplitPaymentBadge, splitPaymentLabel } from '@/components/payments/split-payment-badge';
 import { RecordPaymentModal } from '@/components/payments/record-payment-modal';
+import { ReceiptsSummaryDialog } from '@/components/payments/receipts-summary-dialog';
+import { receiptsSummaryCopy } from '@/components/payments/receipts-summary-copy';
 import { StatementPaymentPlanModal } from './statement-payment-plan-modal';
 import { PlanItemsBalance } from './plan-items-balance';
 import { canRecordPayments } from '@/lib/payments/billable-plans-api';
+import { RateProviderNotice } from '@/components/payments/rate-provider-notice';
+import { WithoutRateNotice } from '@/components/payments/without-rate-notice';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { cn } from '@/lib/utils';
 import { CreditBalanceSection } from '@/components/patient-credit/credit-balance-section';
 import { CreditRefundDialog } from '@/components/patient-credit/credit-refund-dialog';
-import { canMoveCredit, type CreditRefund } from '@/lib/patient-credit/patient-credit-api';
+import {
+  RECEPTION_CAP_ZERO_MESSAGE,
+  canMoveCredit,
+  getCreditPolicy,
+  type CreditRefund,
+} from '@/lib/patient-credit/patient-credit-api';
+import { CREDIT_MOVEMENTS_HEADING_ID, CreditMovementsSection } from '@/components/patient-credit/credit-movements-section';
+import { ExternalLink } from '@/components/shared/external-link';
 
 // Copy como constantes (i18n-ready), igual que el resto de vistas.
 const copy = {
@@ -108,8 +128,11 @@ const copy = {
   colActions: 'Acciones',
   voidAction: 'Anular',
   receiptAction: 'Recibo',
+  // DX-399: a qué ítems del plan se imputó el abono y con qué regla (solo lectura).
+  allocationAction: 'Ver imputación',
   // El «⋯» de cada movimiento: «Acciones de abono de 150,00 USD del 15/10/2026».
   rowLabel: (amount: string, date: string) => `abono de ${amount} del ${date}`,
+  rowLabelBare: 'abono',
   colDue: 'Vencimiento',
   colInstallment: 'Cuota',
   colOutstanding: 'Pendiente',
@@ -153,30 +176,70 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
   // Anular (DX-057): «Anular» solo en movimientos con `canVoid` (lo calcula la
   // API para quien consulta); tras anular se recarga todo el estado de cuenta,
   // porque cambian el abonado, el saldo y las cuotas.
-  const voiding = useVoidPayment(token, () => {
-    setReloadKey((k) => k + 1);
-    onChanged?.();
-  });
+  // DX-354: el importe y el día del aviso, con el formato de la sede de la pantalla.
+  const sedeFmt = readyFormat(useSedeFormat(token));
+  const voiding = useVoidPayment(
+    token,
+    () => {
+      setReloadKey((k) => k + 1);
+      onChanged?.();
+    },
+    sedeFmt,
+  );
   // Cobrar (DX-067): recepción registra abonos y planes de cuotas aquí, sin
   // entrar al plan de tratamiento (clínico). Tras cada uno se recarga todo.
   const canCharge = canRecordPayments(getTokenRole(token));
   const [chargeModal, setChargeModal] = useState<'payment' | 'payment-plan' | null>(null);
-  const [chargeNotice, setChargeNotice] = useState<string | null>(null);
+  // DX-401: recibo resumen de un periodo (mismos roles que cobrar).
+  const [summaryOpen, setSummaryOpen] = useState(false);
   // Recibo de caja (DX-136) de cualquier movimiento, también de los anulados
   // (sale marcado «ANULADO»).
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
+  const [allocationPaymentId, setAllocationPaymentId] = useState<string | null>(null);
+  // DX-389: «Ver comprobante» del abono (ADMIN y recepción).
+  const proofViewer = usePaymentProofViewer(token);
   // Saldo a favor (DX-253): traspaso y devolución (con su comprobante).
   const canCredit = canMoveCredit(getTokenRole(token));
-  const [issuedRefund, setIssuedRefund] = useState<CreditRefund | null>(null);
+  // `reprint`: el comprobante viene del historial (DX-432), no de una devolución recién hecha.
+  const [issuedRefund, setIssuedRefund] = useState<{ refund: CreditRefund; reprint: boolean } | null>(null);
+  // DX-432: recepción con el tope de la clínica en 0 no puede mover saldo; se le dice antes del 403.
+  // Si el tope no se lee, no se bloquea nada: la API sigue siendo la autoridad.
+  const [receptionCapZero, setReceptionCapZero] = useState(false);
+  const role = getTokenRole(token);
+  useEffect(() => {
+    if (role !== 'RECEPTION') return;
+    let cancelled = false;
+    getCreditPolicy(token)
+      .then((policy) => {
+        if (!cancelled) setReceptionCapZero(policy.receptionMaxAmount === 0);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [token, role]);
+  // DX-432: tras un traspaso correcto el foco vuelve al historial cuando la recarga termina
+  // (la fila de donde salió la acción ya no existe).
+  const focusHistoryAfterLoad = React.useRef(false);
+  function focusHistory(): boolean {
+    const heading = document.getElementById(CREDIT_MOVEMENTS_HEADING_ID);
+    heading?.focus();
+    return heading !== null;
+  }
+  function transferred(notice: string) {
+    focusHistoryAfterLoad.current = true;
+    charged(notice);
+  }
 
   function openCharge(kind: 'payment' | 'payment-plan') {
-    setChargeNotice(null);
     setChargeModal(kind);
   }
 
-  function charged(notice: string) {
+  function charged(notice: string, opts?: { persistent?: boolean }) {
     setChargeModal(null);
-    setChargeNotice(notice);
+    // DX-075: el éxito sale como aviso (sonner), a la vista a 390 y 1440 px;
+    // antes era una línea al pie del estado de cuenta, fuera de pantalla.
+    notifySuccess(notice, opts);
     setReloadKey((k) => k + 1);
     onChanged?.();
   }
@@ -205,6 +268,11 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
     };
   }, [token, patientId, reloadKey]);
 
+  useEffect(() => {
+    if (loading || !data || !focusHistoryAfterLoad.current) return;
+    if (focusHistory()) focusHistoryAfterLoad.current = false;
+  }, [loading, data]);
+
   const empty = data ? isEmptyStatement(data) : false;
   const showPrint = !loading && !error && data !== null && !empty;
   // Cobrar no depende de que haya movimientos (un paciente nuevo con su primer
@@ -213,7 +281,7 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
   // UX v2 (critique-core §12): «Registrar abono» es la primaria solo cuando
   // hay algo que cobrar; sin saldo pendiente queda secundaria (un anticipo es
   // posible, pero no es la acción que la pantalla propone).
-  const owes = data?.summary.some((row) => row.balance > 0) ?? false;
+  const owes = data?.summary.some((row) => row.convertedBalance > 0) ?? false;
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-4">
@@ -236,7 +304,7 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
                 <Button
                   type="button"
                   variant={owes ? 'default' : 'secondary'}
-                  className="w-full sm:w-auto"
+                  className="w-full max-sm:min-h-11 sm:w-auto"
                   onClick={() => openCharge('payment')}
                 >
                   <HandCoins aria-hidden />
@@ -245,21 +313,30 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
                 <Button
                   type="button"
                   variant="secondary"
-                  className="w-full sm:w-auto"
+                  className="w-full max-sm:min-h-11 sm:w-auto"
                   onClick={() => openCharge('payment-plan')}
                 >
                   <CalendarClock aria-hidden />
                   {copy.paymentPlan}
                 </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full max-sm:min-h-11 sm:w-auto"
+                  onClick={() => setSummaryOpen(true)}
+                >
+                  <ReceiptText aria-hidden />
+                  {receiptsSummaryCopy.trigger}
+                </Button>
               </>
             ) : null}
             {showPrint ? (
-              <Button asChild variant="secondary" className="w-full sm:w-auto">
-                <a href={accountStatementPrintHref(patientId)} target="_blank" rel="noopener">
+              <Button asChild variant="secondary" className="w-full max-sm:min-h-11 sm:w-auto">
+                <ExternalLink href={accountStatementPrintHref(patientId)}>
                   <Printer aria-hidden />
                   {copy.print}
                   <span className="sr-only"> {copy.printHint}</span>
-                </a>
+                </ExternalLink>
               </Button>
             ) : null}
           </div>
@@ -290,11 +367,16 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
               statement={data}
               onVoid={voiding.request}
               onReceipt={setReceiptPaymentId}
+              onViewAllocation={setAllocationPaymentId}
+              onViewProof={canCharge ? proofViewer.open : undefined}
               canCredit={canCredit}
-              onTransferred={charged}
+              onRetry={() => setReloadKey((k) => k + 1)}
+              actBlockedReason={receptionCapZero ? RECEPTION_CAP_ZERO_MESSAGE : null}
+              onOpenReceipt={(refund) => setIssuedRefund({ refund, reprint: true })}
+              patientId={patientId}
+              onTransferred={transferred}
               onRefunded={(refund) => {
-                setIssuedRefund(refund);
-                setChargeNotice(null);
+                setIssuedRefund({ refund, reprint: false });
                 setReloadKey((k) => k + 1);
                 onChanged?.();
               }}
@@ -303,13 +385,10 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
         </AsyncSection>
       )}
 
-      {/* Avisos de la última anulación y del último cobro: fuera de
+      {/* Aviso de la última anulación (el del cobro es un toast): fuera de
           AsyncSection para que la recarga no los borre. */}
       <p role="status" className={voiding.notice ? 'text-sm text-success-text' : 'sr-only'}>
         {voiding.notice}
-      </p>
-      <p role="status" className={chargeNotice ? 'text-sm text-success-text' : 'sr-only'}>
-        {chargeNotice}
       </p>
 
       {showCharge ? (
@@ -329,19 +408,45 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
             patientId={patientId}
             onCreated={charged}
           />
+          <ReceiptsSummaryDialog
+            open={summaryOpen}
+            onOpenChange={setSummaryOpen}
+            token={token}
+            patientId={patientId}
+          />
         </>
       ) : null}
 
       <CreditRefundDialog
-        refund={issuedRefund}
+        token={token}
+        refund={issuedRefund?.refund ?? null}
+        reprint={issuedRefund?.reprint ?? false}
         onOpenChange={(open) => {
           if (!open) setIssuedRefund(null);
         }}
+        onCloseAutoFocus={(event) => {
+          // Un comprobante recién emitido: su origen (el «⋯» del saldo) ya no está; el foco va al
+          // historial, donde la devolución acaba de aparecer. Una reimpresión vuelve a su fila.
+          if (issuedRefund?.reprint !== false) return;
+          event.preventDefault();
+          if (!focusHistory()) focusHistoryAfterLoad.current = true;
+        }}
       />
+
+      <PaymentAllocationDetailDialog
+        token={token}
+        paymentId={allocationPaymentId}
+        onOpenChange={(open) => {
+          if (!open) setAllocationPaymentId(null);
+        }}
+      />
+
+      {proofViewer.dialog}
 
       <PaymentReceiptDialog
         token={token}
         paymentId={receiptPaymentId}
+        hasProof={data?.movements.find((m) => m.id === receiptPaymentId)?.hasProof ?? false}
         onOpenChange={(open) => {
           if (!open) setReceiptPaymentId(null);
         }}
@@ -359,19 +464,28 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
         error={voiding.error}
         // Pinta el aviso de la ventana de recepción; la regla la aplica la API.
         restrictedToOwnToday={getTokenRole(token) !== 'ADMIN'}
-        subject={voiding.target ? voidPaymentSubject(voiding.target) : undefined}
+        subject={voiding.target ? voidPaymentSubject(voiding.target, sedeFmt) : undefined}
         splitLines={voiding.target?.splitLines ?? undefined}
       />
     </section>
   );
 }
 
+/** Un importe con el formato de la sede y el código ISO de su moneda (DX-522). */
+type Money = (amount: number, code: string) => string;
+
 function StatementBody({
   token,
   statement,
   onVoid,
   onReceipt,
+  onViewAllocation,
+  onViewProof,
   canCredit,
+  actBlockedReason,
+  patientId,
+  onOpenReceipt,
+  onRetry,
   onTransferred,
   onRefunded,
 }: {
@@ -380,18 +494,51 @@ function StatementBody({
   onVoid: (target: VoidPaymentTarget) => void;
   /** Abre el recibo de caja del abono (DX-136). */
   onReceipt: (paymentId: string) => void;
+  /** DX-399: abre «Imputación del abono» (solo lectura). */
+  onViewAllocation: (paymentId: string) => void;
+  /** DX-389: abre el comprobante del cobro (solo ADMIN y recepción, y si el abono lo tiene). */
+  onViewProof?: (paymentId: string) => void;
   /** DX-253: ADMIN y recepción ven «Aplicar a otro plan» y «Devolver». */
   canCredit: boolean;
+  /** DX-432: por qué las acciones del saldo a favor no se pueden ahora (tope de recepción en 0). */
+  actBlockedReason: string | null;
+  patientId: string;
+  /** DX-432: reimprime el comprobante de una devolución del historial. */
+  onOpenReceipt: (refund: CreditRefund) => void;
+  /** DX-472: vuelve a pedir el estado de cuenta. */
+  onRetry: () => void;
   onTransferred: (notice: string) => void;
   onRefunded: (refund: CreditRefund) => void;
 }) {
-  const planName = planNamer(statement.plans);
+  // DX-522: importes con el formato de la sede y el código ISO; cargando, «—».
+  const fmt = readyFormat(useSedeFormat(token));
+  // DX-354: las fechas de «Plan del …» y de corte, con la zona y el formato de la sede.
+  const clock = readyClock(useSedeClock(token));
+  const planName = planNamer(statement.plans, clock);
+  const money: Money = (amount, code) => sedeMoney(amount, code, fmt);
+  // DX-354b: los días civiles (cuotas, abonos) con el formato de la sede; el abono trae la suya, la cuota no.
+  const stamp = useSedeStamp(
+    token,
+    statement.movements.map((m) => m.location.id),
+  );
+  const summary = shownSummaryRows(statement.summary);
   return (
     <div className="flex flex-col gap-8">
-      {statement.summary.length > 0 ? (
+      <SedeStampNote stamp={stamp} />
+      {statement.rateProviderTimedOut ? (
+        <RateProviderNotice
+          paymentsCount={statement.plans.reduce((n, p) => n + p.paymentsWithoutRate.length, 0)}
+          onRetry={onRetry}
+        />
+      ) : (
+        // DX-472: lo no contado no se ve en las cifras; el aviso lo enseña aquí.
+        <WithoutRateNotice token={token} payments={statement.plans.flatMap((p) => p.paymentsWithoutRate)} />
+      )}
+
+      {summary.length > 0 ? (
         <div className="flex flex-col gap-3">
-          {statement.summary.map((row) => (
-            <CurrencySummary key={row.currency} row={row} />
+          {summary.map((row) => (
+            <CurrencySummary key={row.currency} row={row} money={money} stamp={stamp} />
           ))}
         </div>
       ) : null}
@@ -401,9 +548,15 @@ function StatementBody({
         statement={statement}
         planName={planName}
         canAct={canCredit}
+        actBlockedReason={actBlockedReason}
         onTransferred={onTransferred}
         onRefunded={onRefunded}
       />
+
+      {/* DX-432: el historial del saldo a favor, aunque hoy sea 0. Solo quien mueve saldo lo ve. */}
+      {canCredit ? (
+        <CreditMovementsSection token={token} patientId={patientId} planName={planName} onOpenReceipt={onOpenReceipt} />
+      ) : null}
 
       {statement.openingBalances.length > 0 ? (
         <SubSection title={statementCopy.openingHeading}>
@@ -414,14 +567,14 @@ function StatementBody({
             getRowKey={(o) => o.id}
             columns={[
               { id: 'concept', header: statementCopy.colConcept, cell: (o) => <span className="break-words">{o.concept}</span> },
-              { id: 'asOf', header: statementCopy.colAsOf, cell: (o) => <span className="tabular-nums">{openingAsOfLabel(o)}</span> },
-              { id: 'amount', header: copy.colAmount, numeric: true, cell: (o) => formatCurrency(o.amount, o.currency) },
-              { id: 'paid', header: statementCopy.colOpeningPaid, numeric: true, cell: (o) => formatCurrency(o.paid, o.currency) },
+              { id: 'asOf', header: statementCopy.colAsOf, cell: (o) => <span className="tabular-nums">{openingAsOfLabel(o, clock)}</span> },
+              { id: 'amount', header: copy.colAmount, numeric: true, cell: (o) => money(o.amount, o.currency) },
+              { id: 'paid', header: statementCopy.colOpeningPaid, numeric: true, cell: (o) => money(o.paid, o.currency) },
               {
                 id: 'pending',
                 header: statementCopy.colOpeningPending,
                 numeric: true,
-                cell: (o) => <span className="font-medium">{formatCurrency(o.pending, o.currency)}</span>,
+                cell: (o) => <span className="font-medium">{money(o.pending, o.currency)}</span>,
               },
             ]}
           />
@@ -459,6 +612,7 @@ function StatementBody({
                   <PlanRows
                     key={plan.id}
                     token={token}
+                    money={money}
                     plan={plan}
                     planName={planName(plan.id)}
                     quoteHref={planQuotePrintHref(statement.patient.id, plan.id)}
@@ -480,7 +634,7 @@ function StatementBody({
             rows={statement.installments}
             getRowKey={(inst) => `${inst.paymentPlanId}-${inst.kind}-${inst.sequence ?? 0}`}
             columns={[
-              { id: 'due', header: copy.colDue, cell: (inst) => <span className="tabular-nums">{formatCivilDate(inst.dueDate)}</span> },
+              { id: 'due', header: copy.colDue, cell: (inst) => <span className="tabular-nums">{stamp.civilDate(inst.dueDate)}</span> },
               {
                 id: 'installment',
                 header: copy.colInstallment,
@@ -493,12 +647,12 @@ function StatementBody({
                 cellClassName: 'whitespace-nowrap',
                 cell: (inst) => <span className="text-muted">{planName(inst.treatmentPlanId)}</span>,
               },
-              { id: 'amount', header: copy.colAmount, numeric: true, cell: (inst) => formatCurrency(inst.amount, inst.currency) },
+              { id: 'amount', header: copy.colAmount, numeric: true, cell: (inst) => money(inst.amount, inst.currency) },
               {
                 id: 'outstanding',
                 header: copy.colOutstanding,
                 numeric: true,
-                cell: (inst) => <span className="font-medium">{formatCurrency(inst.outstanding, inst.currency)}</span>,
+                cell: (inst) => <span className="font-medium">{money(inst.outstanding, inst.currency)}</span>,
               },
               {
                 id: 'status',
@@ -518,13 +672,17 @@ function StatementBody({
             label={copy.movementsTable}
             rows={statement.movements}
             getRowKey={(m) => m.id}
-            getRowLabel={(m) => copy.rowLabel(formatCurrency(m.amount, m.currency), formatCivilDate(m.paidOn))}
+            getRowLabel={(m) => {
+              // Una etiqueta que se anuncia nunca lleva «—» (DESIGN.md): sin formato, solo «abono».
+              const day = stamp.maybe.civilDate(m.paidOn, m.location.id);
+              return day && fmt ? copy.rowLabel(money(m.amount, m.currency), day) : copy.rowLabelBare;
+            }}
             columns={[
               {
                 id: 'date',
                 header: copy.colDate,
                 mobile: 'primary',
-                cell: (m) => <span className={cn('tabular-nums', m.voided && 'text-muted')}>{formatCivilDate(m.paidOn)}</span>,
+                cell: (m) => <span className={cn('tabular-nums', m.voided && 'text-muted')}>{stamp.civilDate(m.paidOn, m.location.id)}</span>,
               },
               {
                 id: 'destination',
@@ -559,10 +717,24 @@ function StatementBody({
                         {movementReferenceLabel(m)}
                       </span>
                     ) : null}
+                    {/* DX-414: las líneas de un cobro dividido, juntas por su recibo único. */}
+                    <SplitPaymentBadge splitLines={m.splitLines} receiptNumber={m.receiptNumber} />
+                    {/* DX-515: la factura fiscal emitida fuera. */}
+                    {movementInvoiceLabel(m) ? (
+                      <span className="t-caption mt-1 block break-all font-mono text-muted">
+                        <span className="sr-only"> · </span>
+                        {movementInvoiceLabel(m)}
+                      </span>
+                    ) : null}
                   </>
                 ),
                 mobileCell: (m) =>
-                  [m.method ? movementMediumName(m) : methodLabel(null), movementReferenceLabel(m)]
+                  [
+                    m.method ? movementMediumName(m) : methodLabel(null),
+                    movementReferenceLabel(m),
+                    movementInvoiceLabel(m),
+                    splitPaymentLabel(m),
+                  ]
                     .filter(Boolean)
                     .join(' · '),
               },
@@ -576,7 +748,7 @@ function StatementBody({
                   <span className="inline-flex flex-wrap items-center justify-end gap-2">
                     {m.voided ? <Badge variant="neutral">{statementCopy.voided}</Badge> : null}
                     <span className={cn('font-medium', m.voided ? 'text-muted line-through' : 'text-ink')}>
-                      {formatCurrency(m.amount, m.currency)}
+                      {money(m.amount, m.currency)}
                     </span>
                   </span>
                 ),
@@ -584,19 +756,28 @@ function StatementBody({
                 // en la 1 recortaba la fecha.
                 mobileCell: (m) => (
                   <span className={cn('font-medium', m.voided ? 'text-muted line-through' : 'text-ink')}>
-                    {formatCurrency(m.amount, m.currency)}
+                    {money(m.amount, m.currency)}
                   </span>
                 ),
               },
             ]}
             rowActions={(m) => [
               { label: copy.receiptAction, onSelect: () => onReceipt(m.id) },
+              // Un abono a un plan que no está anulado: el de un saldo migrado no se imputa a ítems.
+              ...(m.treatmentPlanId && !m.voided
+                ? [{ label: copy.allocationAction, onSelect: () => onViewAllocation(m.id) }]
+                : []),
+              ...(onViewProof && m.hasProof
+                ? [{ label: paymentProofViewerCopy.action, onSelect: () => onViewProof(m.id) }]
+                : []),
               ...(m.canVoid
                 ? [
                     {
                       label: copy.voidAction,
                       destructive: true,
                       separatorBefore: true,
+                      // DX-432: un abono de referencia de una devolución no se anula: se explica.
+                      ...(m.voidBlockedReason ? { disabledReason: m.voidBlockedReason } : {}),
                       onSelect: () =>
                         onVoid({
                           id: m.id,
@@ -636,11 +817,13 @@ const PLAN_COLUMNS = 7;
  */
 function PlanRows({
   token,
+  money,
   plan,
   planName,
   quoteHref,
 }: {
   token: string;
+  money: Money;
   plan: AccountStatementPlan;
   planName: string;
   quoteHref: string;
@@ -669,13 +852,13 @@ function PlanRows({
           </span>
         </TableCell>
         <TableCell className="text-right tabular-nums" data-label={copy.colBudgeted}>
-          {formatCurrency(plan.budgeted, plan.currency)}
+          {money(plan.budgeted, plan.currency)}
         </TableCell>
         <TableCell className="text-right tabular-nums" data-label={copy.colPaid}>
-          {formatCurrency(plan.paid, plan.currency)}
+          {money(plan.paid, plan.currency)}
           {plan.paidOtherCurrencies.map((o) => (
             <span key={o.currency} className="t-caption block text-muted">
-              + {formatCurrency(o.amount, o.currency)}
+              {statementCopy.handedOver(money(o.amount, o.currency))}
             </span>
           ))}
         </TableCell>
@@ -683,7 +866,7 @@ function PlanRows({
           className="text-right font-medium tabular-nums"
           data-label={copy.colBalance}
         >
-          {formatCurrency(plan.balance, plan.currency)}
+          {money(plan.balance, plan.currency)}
         </TableCell>
         {/* Sin `data-label`: en la tarjeta móvil, «Por ítem» encima de «Ver
             por ítem» repetiría lo mismo. */}
@@ -706,16 +889,14 @@ function PlanRows({
           </Button>
         </TableCell>
         <TableCell className="text-right" data-label={copy.colQuote}>
-          <a
+          <ExternalLink
             href={quoteHref}
-            target="_blank"
-            rel="noopener"
-            className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:min-h-0"
+            className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text sm:min-h-0"
           >
             <FileText aria-hidden className="size-4" />
             {copy.quoteLink}
             <span className="sr-only">{copy.quoteLinkSuffix(planName)}</span>
-          </a>
+          </ExternalLink>
         </TableCell>
       </TableRow>
       <TableRow id={detailId} hidden={!open} className="bg-canvas hover:bg-canvas">
@@ -755,9 +936,9 @@ function SubSection({ title, children }: { title: string; children: React.ReactN
  * columnas hasta `lg`, cuatro desde ahí; una moneda por bloque, a todo el ancho. Lo vencido es lo único que se
  * tiñe, y solo cuando hay algo vencido.
  */
-function CurrencySummary({ row }: { row: AccountStatementSummary }) {
+function CurrencySummary({ row, money, stamp }: { row: AccountStatementSummary; money: Money; stamp: SedeStamp }) {
   const hasOverdue = row.overdueCount > 0;
-  const inFavor = row.balance < 0;
+  const inFavor = row.convertedBalance < 0;
   return (
     <section
       aria-label={copy.summaryLabel(row.currency)}
@@ -772,8 +953,8 @@ function CurrencySummary({ row }: { row: AccountStatementSummary }) {
             <span>{copy.nextInstallment}</span>{' '}
             <span className="font-medium text-ink tabular-nums">
               {copy.nextInstallmentValue(
-                formatCivilDate(row.nextInstallment.dueDate),
-                formatCurrency(row.nextInstallment.amount, row.currency),
+                stamp.civilDate(row.nextInstallment.dueDate),
+                money(row.nextInstallment.amount, row.currency),
               )}
             </span>
           </p>
@@ -781,13 +962,13 @@ function CurrencySummary({ row }: { row: AccountStatementSummary }) {
       </div>
       <dl className="grid grid-cols-2 lg:grid-cols-4">
         <Figure label={copy.budgeted} testId="budgeted">
-          {formatCurrency(row.budgeted, row.currency)}
+          {money(row.budgeted, row.currency)}
         </Figure>
         <Figure label={copy.paid} testId="paid">
-          {formatCurrency(row.paid, row.currency)}
+          {money(row.convertedPaid, row.currency)}
         </Figure>
         <Figure label={copy.balance} testId="balance" emphasis>
-          {formatCurrency(Math.abs(row.balance), row.currency)}
+          {money(Math.abs(row.convertedBalance), row.currency)}
           {inFavor ? (
             <span className="t-caption ml-1 font-normal text-success-text">{statementCopy.inFavor}</span>
           ) : null}
@@ -799,7 +980,7 @@ function CurrencySummary({ row }: { row: AccountStatementSummary }) {
         >
           {hasOverdue ? (
             <>
-              {formatCurrency(row.overdueAmount, row.currency)}
+              {money(row.overdueAmount, row.currency)}
               <span className="t-caption block font-normal">
                 {statementCopy.overdueCount(row.overdueCount)}
               </span>
@@ -816,7 +997,7 @@ function CurrencySummary({ row }: { row: AccountStatementSummary }) {
         >
           {statementCopy.openingIncluded}{' '}
           <span className="font-medium tabular-nums text-ink">
-            {formatCurrency(row.openingPending, row.currency)}
+            {money(row.openingPending, row.currency)}
           </span>
         </p>
       ) : null}

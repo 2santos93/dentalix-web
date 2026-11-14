@@ -1,11 +1,11 @@
 'use client';
-import { useSessionLocations } from '@/lib/locations/session-locations';
-import { useEffect, useState } from 'react';
+import { useLocations } from '@/lib/session/session-store';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
-import type { ClinicLocation } from '@/lib/locations/locations-api';
 import {
   getActiveLocationId,
+  onLocationChange,
   setActiveLocationId,
 } from '@/lib/locations/location-store';
 import { cn } from '@/lib/utils';
@@ -18,21 +18,7 @@ const copy = {
   // DX-089: un miembro acotado a varias sedes ve la vista conjunta de LAS SUYAS,
   // no la de la clínica entera.
   mine: 'Mis sedes',
-  // Rótulos cortos del botón del teléfono (el nombre entero va en el nombre accesible).
-  allShort: 'Todas',
-  mineShort: 'Mías',
 };
-
-/**
- * Rótulo corto de una sede para el botón del teléfono: sin el genérico «Sede»
- * delante («Sede Norte» → «Norte») y solo la primera palabra; el CSS lo
- * recorta si aun así no cabe. Nunca vacío: si todo era genérico, el nombre.
- */
-export function shortSedeLabel(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  const meaningful = words.filter((w) => !/^(sede|sucursal|cl[ií]nica)$/i.test(w));
-  return (meaningful[0] ?? words[0] ?? name).replace(/[,.;:]$/, '');
-}
 
 /** Marca de los desplegables del selector de sede (`data-location-switcher`, en todas sus variantes). */
 const SWITCHER_ATTR = 'data-location-switcher';
@@ -75,9 +61,8 @@ export function focusLocationSwitcher(): boolean {
  * - `variant="inline"`: en línea, con el nombre entero hasta 12rem.
  * - `variant="compact"`: selector con nombre, hasta 8.5rem.
  * - `variant="phone"`: barra superior del teléfono (K2): pastilla de 44px con
- *   el pin y un rótulo corto («Norte», «Todas»); nombre accesible «Sede: …»
- *   con el nombre entero. Abre el mismo desplegable nativo. Deja el ancho a la
- *   marca de la clínica, que antes se cortaba junto al selector.
+ *   el pin y el nombre ENTERO a dos líneas (DX-523); nombre accesible «Sede: …».
+ *   Abre el mismo desplegable nativo.
  *
  * Con sedes acotadas (claim `loc` del token, DX-089) solo se ofrecen las
  * permitidas y nunca «Todas las sedes»: con varias, la opción vacía pasa a ser
@@ -94,8 +79,12 @@ export function LocationSwitcher({
   variant?: 'inline' | 'block' | 'rail' | 'compact' | 'phone';
 }) {
   const token = useAuthStore((s) => s.accessToken);
-  const requestLocations = useSessionLocations(token);
-  const [locations, setLocations] = useState<ClinicLocation[]>([]);
+  // FE-031: la lista sale de la caché de la sesión. Las copias del selector
+  // (barra lateral y barra del teléfono) comparten una lectura, renovar el
+  // token no la repite y cambiar de sede (aquí, en otra pestaña o porque el
+  // cliente HTTP la soltó, SEC-014) la invalida y la relee sola.
+  const sessionLocations = useLocations();
+  const data = sessionLocations.status === 'ready' ? sessionLocations.data : null;
   const [active, setActive] = useState<string | null>(null);
   // `null` = sin restricción. Se lee del token: cambia justo al renovarlo, que
   // es cuando la API empieza a aplicar un cambio de sedes.
@@ -103,75 +92,65 @@ export function LocationSwitcher({
   const restricted = allowed !== null;
   const allowedKey = allowed?.join(',') ?? null;
 
+  // La API ya filtra `GET /locations` para un miembro acotado; filtrar
+  // también aquí por el claim evita ofrecer una sede que daría 403 si
+  // las dos fuentes no van a la par (p. ej. lista cacheada).
+  //
+  // Si la lista no carga, simplemente no se ofrece el selector. No merece un
+  // error en pantalla — la app sigue funcionando en modo consolidado, que es
+  // el comportamiento por defecto.
+  const locations = useMemo(() => {
+    if (!data) return [];
+    const permitidas = allowedKey === null ? null : allowedKey.split(',');
+    return data.filter((l) => l.isActive && (permitidas === null || permitidas.includes(l.id)));
+  }, [data, allowedKey]);
+
   // Rehidratar la sede elegida: localStorage solo existe en el cliente, así
   // que no puede leerse como estado inicial sin romper la hidratación. La
   // lectura va dentro de una función, como el resto de vistas del proyecto.
+  // Otra pestaña o el cliente HTTP pueden cambiarla: se muestra al momento.
   useEffect(() => {
     function hydrate() {
       setActive(getActiveLocationId());
     }
     hydrate();
+    return onLocationChange(hydrate);
   }, []);
 
   useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    async function load() {
-      try {
-        const data = await requestLocations();
-        if (cancelled) return;
-        // La API ya filtra `GET /locations` para un miembro acotado; filtrar
-        // también aquí por el claim evita ofrecer una sede que daría 403 si
-        // las dos fuentes no van a la par (p. ej. lista cacheada).
-        const permitidas = allowedKey === null ? null : allowedKey.split(',');
-        const usables = data.filter(
-          (l) => l.isActive && (permitidas === null || permitidas.includes(l.id)),
-        );
-        setLocations(usables);
-
-        // Reconciliar la sede guardada contra las que existen DE VERDAD.
-        //
-        // La elección vive en localStorage y sobrevive a la sede: si se borra
-        // o se desactiva —o si se reseedea la base y cambian los ids— queda un
-        // id huérfano que `api/client.ts` sigue mandando como `X-Location-Id`
-        // en CADA petición, y el backend contesta 400 "Unknown location for
-        // this clinic" a todas. La app entera queda inutilizable hasta que
-        // alguien limpia localStorage a mano, sin nada en pantalla que explique
-        // por qué. Soltarla aquí devuelve al usuario a la vista consolidada,
-        // que es el comportamiento por defecto y siempre es válido.
-        const guardada = getActiveLocationId();
-        const guardadaValida = guardada !== null && usables.some((l) => l.id === guardada);
-        if (permitidas !== null && usables.length > 0) {
-          // Acotado: una sede no permitida no se suelta a «todas» (no existe
-          // para él) sino a la primera de las suyas; y con una sola, esa queda
-          // siempre elegida.
-          const siguiente =
-            usables.length === 1
-              ? usables[0].id
-              : guardada === null || guardadaValida
-                ? guardada
-                : usables[0].id;
-          if (siguiente !== guardada) setActiveLocationId(siguiente);
-          setActive(siguiente);
-        } else if (guardada && !guardadaValida) {
-          setActiveLocationId(null);
-          setActive(null);
-        }
-      } catch {
-        // Best-effort: si falla, simplemente no se ofrece el selector. No
-        // merece un error en pantalla — la app sigue funcionando en modo
-        // consolidado, que es el comportamiento por defecto.
-        //
-        // Y NO se descarta la sede guardada: un fallo de red no es prueba de
-        // que haya desaparecido, y tirarla aquí sacaría al usuario de su sede
-        // cada vez que la petición falle.
-      }
+    // Sin lista (cargando o fallida) NO se descarta la sede guardada: un fallo
+    // de red no es prueba de que haya desaparecido, y tirarla aquí sacaría al
+    // usuario de su sede cada vez que la petición falle.
+    if (!data) return;
+    const permitidas = allowedKey === null ? null : allowedKey.split(',');
+    // Reconciliar la sede guardada contra las que existen DE VERDAD.
+    //
+    // La elección vive en localStorage y sobrevive a la sede: si se borra
+    // o se desactiva —o si se reseedea la base y cambian los ids— queda un
+    // id huérfano que `api/client.ts` sigue mandando como `X-Location-Id`
+    // en CADA petición, y el backend contesta 400 "Unknown location for
+    // this clinic" a todas. La app entera queda inutilizable hasta que
+    // alguien limpia localStorage a mano, sin nada en pantalla que explique
+    // por qué. Soltarla aquí devuelve al usuario a la vista consolidada,
+    // que es el comportamiento por defecto y siempre es válido.
+    const guardada = getActiveLocationId();
+    const guardadaValida = guardada !== null && locations.some((l) => l.id === guardada);
+    if (permitidas !== null && locations.length > 0) {
+      // Acotado: una sede no permitida no se suelta a «todas» (no existe
+      // para él) sino a la primera de las suyas; y con una sola, esa queda
+      // siempre elegida.
+      const siguiente =
+        locations.length === 1
+          ? locations[0].id
+          : guardada === null || guardadaValida
+            ? guardada
+            : locations[0].id;
+      if (siguiente !== guardada) setActiveLocationId(siguiente);
+    } else if (guardada && !guardadaValida) {
+      setActiveLocationId(null);
     }
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [token, allowedKey, requestLocations]);
+    // `setActiveLocationId` avisa por `onLocationChange`: `active` se pone al día arriba.
+  }, [data, locations, allowedKey]);
 
   // Sin ninguna sede sí se esconde: un selector vacío no ofrece nada. Con una
   // o más, se muestra (ver la nota de arriba).
@@ -218,19 +197,16 @@ export function LocationSwitcher({
   if (variant === 'phone') {
     const activeName = locations.find((l) => l.id === active)?.name;
     const fullName = activeName ?? emptyLabel ?? copy.all;
-    const short = activeName
-      ? shortSedeLabel(activeName)
-      : emptyLabel === copy.mine
-        ? copy.mineShort
-        : copy.allShort;
     return (
       <span
         title={`${copy.label}: ${fullName}`}
-        className="relative inline-flex h-11 max-w-[6.5rem] shrink-0 items-center gap-1 rounded-lg px-2 text-muted transition-colors hover:bg-surface-sunken hover:text-ink has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary-text"
+        className="relative inline-flex h-11 min-w-0 flex-1 items-center gap-1 rounded-lg px-2 text-muted transition-colors hover:bg-surface-sunken hover:text-ink has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary-text"
       >
         <MapPin aria-hidden className="size-4 shrink-0" />
-        <span aria-hidden className="min-w-0 truncate text-[0.8125rem] font-medium text-ink">
-          {short}
+        {/* Nombre ENTERO a dos líneas (el táctil no tiene hover para un
+            tooltip); la barra mantiene sus 44px de alto. */}
+        <span aria-hidden className="line-clamp-2 min-w-0 flex-1 break-words text-xs font-medium leading-tight text-ink">
+          {fullName}
         </span>
         <ChevronDown aria-hidden className="size-3.5 shrink-0" />
         {/* El select nativo, invisible, cubre la pastilla entera: el

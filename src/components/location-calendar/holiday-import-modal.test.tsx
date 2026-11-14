@@ -115,6 +115,23 @@ describe('HolidayImportModal (DX-316, spec §7.2)', () => {
     expect(screen.getByRole('button', { name: copy.choose })).toHaveFocus();
   });
 
+  it('TST-060: mientras se lee el archivo el foco no cae en <body>: va al «Leyendo…» y, al terminar, a «Elegir otro archivo»', async () => {
+    const held = deferred<HolidayImportResult>();
+    mockedPreview.mockReturnValue(held.promise);
+    renderModal();
+    const chooser = screen.getByRole('button', { name: copy.choose });
+    chooser.focus();
+    fireEvent.change(fileInput(), { target: { files: [csv()] } });
+    // «Elegir archivo» pasa a cargando (deshabilitado): el foco no se queda en él.
+    const reading = await screen.findByText(copy.reading);
+    expect(reading).toHaveFocus();
+    expect(reading).toHaveAttribute('tabindex', '-1');
+    expect(document.body).not.toHaveFocus();
+    await act(async () => held.resolve(twelveNew));
+    expect(await screen.findByTestId('holiday-import-summary')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: copy.chooseOther })).toHaveFocus();
+  });
+
   it('choosing a file calls preview and shows «12 nuevos · 0 ya existían · 0 con errores»', async () => {
     const user = setupUser();
     mockedPreview.mockResolvedValue(twelveNew);

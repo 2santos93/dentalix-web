@@ -8,7 +8,8 @@ import { create } from 'zustand';
  * recupera con `bootstrapSession()` (`client.ts`).
  *
  * `_hasHydrated`: el arranque de sesión ya terminó, con o sin sesión. Hasta
- * entonces las páginas muestran «Verificando sesión…» en vez de mandar a /login.
+ * entonces `RequireSession` (y las imprimibles) muestran «Verificando sesión…»
+ * en vez de mandar a /login.
  */
 interface AuthState {
   accessToken: string | null;

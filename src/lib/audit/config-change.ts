@@ -1,8 +1,13 @@
 import type { AuditEvent } from "@/lib/audit/audit-api";
 import { payerTypeLabel } from "@/components/payers/payer-labels";
+import { CLINIC_LANGUAGE_LABEL, languageName } from "@/lib/patients/patient-languages";
 import { MOVEMENT_TYPE_LABELS } from "@/components/inventory/movement-format";
 import type { RegionalFormat } from "@/lib/format/regional-format";
 import { sedeNumber } from "@/lib/format/sede-number";
+import {
+  PAYMENT_ADJUSTMENT_CALCULATION_LABELS as ADJUSTMENT_CALCULATION_LABELS,
+  PAYMENT_ADJUSTMENT_TYPE_LABELS as ADJUSTMENT_TYPE_LABELS,
+} from "@/lib/payments/payment-adjustments";
 
 type AuditMetadata = AuditEvent["metadata"];
 type ConfigSide = NonNullable<
@@ -58,6 +63,46 @@ const FIELD_LABELS: Record<string, string> = {
   generalText: "Casilla «Datos personales»",
   sensitiveHealthText: "Casilla «Datos sensibles de salud»",
   marketingText: "Casilla «Comunicaciones comerciales»",
+  // DX-515: recibo no fiscal.
+  receiptTitle: "Título del recibo",
+  receiptLegendOverride: "Leyenda propia de la sede",
+  receiptLegend: "Leyenda del recibo",
+  externalInvoiceNumber: "Nº de factura externa",
+  // DX-516: ajustes por medio de pago.
+  adjustmentLabel: "Ajuste",
+  adjustmentType: "Tipo de ajuste",
+  calculation: "Cálculo",
+  percent: "Porcentaje",
+  fixedAmount: "Importe fijo",
+  fixedCurrency: "Moneda del importe fijo",
+  // DX-330: plazo de conservación de la historia clínica.
+  clinicalRecordRetentionYears: "Plazo de conservación de la historia clínica",
+  // DX-448: oferta de hueco por enlace.
+  expiryLeadMinutes: "Caducidad del enlace de la oferta de hueco",
+  minLeadMinutes: "Antelación mínima para ofrecer un hueco",
+  // DX-384: hasta cuántos días vale la última tasa manual registrada.
+  manualRateMaxAgeDays: "Días de validez de la última tasa manual",
+  // DX-517: «VES=Bs.», una moneda por elemento.
+  currencyTexts: "Texto de las monedas",
+  // DX-502-bis: moneda del catálogo de precios de la clínica.
+  catalogCurrency: "Moneda del catálogo",
+  // DX-019: datos de la clínica.
+  legalName: "Razón social",
+  taxId: "Identificador fiscal",
+  taxIdLabel: "Nombre del identificador fiscal",
+  fiscalAddress: "Dirección fiscal",
+  contactEmail: "Email de contacto",
+  contactPhone: "Teléfono de contacto",
+  primaryColor: "Color de la marca",
+  logo: "Logo",
+  // DX-015-bis: tipos de recall (los disparadores van en su propio evento).
+  defaultIntervalMonths: "Intervalo por defecto",
+  sortOrder: "Orden",
+  exclusionGroup: "Grupo de exclusión",
+  catalogItemIds: "Procedimientos que lo reinician",
+  // DX-497: idiomas de los pacientes (Ajustes) e idioma de un paciente (ficha).
+  patientLanguages: "Idiomas de los pacientes",
+  preferredLanguage: "Idioma de los mensajes",
 };
 const FIELD_ORDER = Object.keys(FIELD_LABELS);
 
@@ -65,7 +110,22 @@ const FIELD_ORDER = Object.keys(FIELD_LABELS);
 const FIELD_UNITS: Record<string, string> = {
   durationMinutes: "min",
   leadHours: "h",
+  clinicalRecordRetentionYears: "años",
+  manualRateMaxAgeDays: "días",
+  expiryLeadMinutes: "min antes del hueco",
+  minLeadMinutes: "min",
+  defaultIntervalMonths: "meses",
 };
+
+/** Lo que dice un `null` que no es «sin valor» (DX-448: el de la instalación). */
+const NULL_LABELS: Record<string, string> = {
+  expiryLeadMinutes: "Por defecto",
+  // DX-497: sin preferencia, el paciente recibe el idioma de la clínica.
+  preferredLanguage: CLINIC_LANGUAGE_LABEL,
+};
+
+/** DX-497: campos cuyo valor es una etiqueta de idioma (BCP 47). */
+const LANGUAGE_FIELDS = new Set(["patientLanguages", "preferredLanguage"]);
 
 const DOMAIN_STATUS_LABELS: Record<string, string> = {
   PENDING: "Pendiente",
@@ -80,7 +140,7 @@ const HOUR_CYCLE_LABELS: Record<string, string> = {
 
 /** Eventos de configuración de DX-360 (también los que solo traen `changedFields`). */
 const CONFIG_REASON =
-  /^(LOCATION_CREATED|DOMAIN_REGISTERED|PRIVACY_POLICY_PUBLISHED|REMINDER_SETTINGS_UPDATED|INVENTORY_MOVEMENT_RECORDED|(APPOINTMENT_TYPE|PAYER|CONSENT_TEMPLATE|PRESCRIPTION_TEMPLATE|INVENTORY_ITEM)_(CREATED|UPDATED|DELETED))$/;
+  /^(LOCATION_CREATED|DOMAIN_REGISTERED|PRIVACY_POLICY_PUBLISHED|REMINDER_SETTINGS_UPDATED|INVENTORY_MOVEMENT_RECORDED|RECALL_TYPE_TRIGGERS_UPDATED|(APPOINTMENT_TYPE|RECALL_TYPE|PAYER|CONSENT_TEMPLATE|PRESCRIPTION_TEMPLATE|INVENTORY_ITEM)_(CREATED|UPDATED|DELETED))$/;
 
 const NONE = "—";
 
@@ -109,7 +169,12 @@ function scalar(
       payerTypeLabel(value)
     );
   if (field === "status") return DOMAIN_STATUS_LABELS[value] ?? value;
+  if (LANGUAGE_FIELDS.has(field)) return languageName(value);
   if (field === "hourCycle") return HOUR_CYCLE_LABELS[value] ?? value;
+  if (field === "adjustmentType")
+    return ADJUSTMENT_TYPE_LABELS[value as keyof typeof ADJUSTMENT_TYPE_LABELS] ?? value;
+  if (field === "calculation")
+    return ADJUSTMENT_CALCULATION_LABELS[value as keyof typeof ADJUSTMENT_CALCULATION_LABELS] ?? value;
   // El hash entero (64 hex) no se lee y desbordaría la tarjeta: basta el inicio.
   if (field === "contentHash" && value.length > 12)
     return `${value.slice(0, 12)}…`;
@@ -122,6 +187,7 @@ function bare(
   value: ConfigValue | undefined,
   fmt: RegionalFormat | null,
 ): string | null {
+  if (value === null && NULL_LABELS[field]) return NULL_LABELS[field];
   if (value === null || value === undefined) return null;
   if (typeof value === "boolean") return value ? "Sí" : "No";
   if (Array.isArray(value))
@@ -133,6 +199,7 @@ function bare(
 
 function withUnit(field: string, text: string | null): string {
   if (text === null) return NONE;
+  if (text === NULL_LABELS[field]) return text;
   const unit = FIELD_UNITS[field];
   return unit ? `${text} ${unit}` : text;
 }

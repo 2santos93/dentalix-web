@@ -1,10 +1,19 @@
+import { taxIdLine } from '@/lib/clinic/clinic-settings-api';
 import { cn } from '@/lib/utils';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate, formatDate, formatDateTime } from '@/lib/format/date';
+import { documentFormat, NO_DOCUMENT_FORMAT } from '@/lib/format/document-format';
+import { moneyWithCode } from '@/lib/format/sede-number';
+import { NO_CURRENCY_TEXTS, type CurrencyTexts } from '@/lib/format/currency-text';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
-import { paymentRateCopy, ratePairLabel } from '@/lib/payments/payment-rate';
+import { paymentRateCopy, ratePairLabel, rateDayLabel } from '@/lib/payments/payment-rate';
 import type { PaymentReceipt, ReceiptPrintFormat } from '@/lib/payments/payment-receipts-api';
+import {
+  PAYMENT_ADJUSTMENT_TYPE_LABELS,
+  adjustmentBasisText,
+  collectedAmount,
+  signedAdjustmentAmount,
+  type PaymentAdjustmentLine,
+} from '@/lib/payments/payment-adjustments';
 
 // Copy en español (i18n-ready), como el resto de documentos imprimibles.
 const copy = {
@@ -16,9 +25,9 @@ const copy = {
   // Un «sin serie» no tuvo emisión: lo que se conserva es el alta del abono.
   registeredAt: 'Abono registrado el',
   fiscalPending: 'Datos fiscales pendientes',
-  // Excepción con nombre de la guarda de DX-327 hasta DX-019, que dará a la
-  // clínica el nombre de su identificación fiscal.
-  taxId: (value: string) => `Id. fiscal ${value}`,
+  // DX-019: con el nombre que la clínica da a su identificador (congelado en
+  // la foto); sin él, el genérico «Id. fiscal».
+  taxId: (value: string, label?: string | null) => taxIdLine(value, label),
   location: (name: string, address: string | null) => (address ? `${name} · ${address}` : name),
   voidedStamp: 'ANULADO',
   voidedDetail: (when: string, reason: string) => `Anulado el ${when}. Motivo: ${reason}`,
@@ -32,10 +41,9 @@ const copy = {
   paidOn: 'Fecha del abono',
   concept: 'Concepto',
   // DX-262: abono contra el saldo migrado (sin plan).
-  openingLabel: (opening: { concept: string; asOfDate: string } | null) =>
-    opening
-      ? `Saldo migrado · ${opening.concept} · corte ${formatCivilDate(opening.asOfDate)}`
-      : 'Saldo migrado',
+  // DX-521: la fecha de corte llega ya con el formato del recibo.
+  openingLabel: (opening: { concept: string; asOfDate: string } | null, asOfDate: string) =>
+    opening ? `Saldo migrado · ${opening.concept} · corte ${asOfDate}` : 'Saldo migrado',
   planLabel: (date: string, optionLabel: string | null) =>
     `Abono al plan de tratamiento del ${date}${optionLabel ? ` · ${optionLabel}` : ''}`,
   balanceAfter: 'Saldo del plan tras este abono',
@@ -54,8 +62,82 @@ const copy = {
   splitEquivalent: (amount: string) => `equivale a ${amount}`,
   splitWithoutRate: 'sin tasa de su día',
   cashier: 'Recibió',
+  // DX-516: ajustes por medio de pago congelados en el abono.
+  adjustments: 'Ajustes por medio de pago',
+  collected: 'Total cobrado',
   signature: 'Firma y sello',
 };
+
+/** Lo que el documento del recibo necesita para pintar fechas e importes. */
+export interface ReceiptFormatting {
+  /** `false` si la sede del recibo no tiene formato: todo sale «—» (DX-354). */
+  available: boolean;
+  /** Un instante (fecha y hora) o `—` si falta o no es una fecha. */
+  dateTime(value: string | null | undefined): string;
+  /** La fecha de un instante. */
+  date(value: string | null | undefined): string;
+  /** Un día civil `YYYY-MM-DD`, sin zona. */
+  civilDate(value: string | null | undefined): string;
+  money(amount: number, currency: string): string;
+}
+
+const NO_VALUE = NO_DOCUMENT_FORMAT;
+
+function instant(value: string | null | undefined): Date | null {
+  if (value === null || value === undefined || value === '') return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * DX-521: el formato del recibo de caja. Con la región de su sede (`regional`
+ * de la API: la congelada al emitir, o la de hoy en un recibo anterior), las
+ * fechas salen en la zona de la sede y los importes con el código ISO (o el
+ * texto de la foto) en el orden de su locale. DX-354: sin región, o con un
+ * locale o una zona que este navegador no soporta, fechas e importes salen «—»
+ * (y quien imprime muestra el aviso de la sede): nunca otro formato.
+ *
+ * `texts`: los textos de moneda CONGELADOS en la foto del recibo, nunca los de
+ * hoy de la clínica (DX-517).
+ */
+export function receiptFormatting(
+  regional: PaymentReceipt['regional'] | undefined,
+  texts: CurrencyTexts,
+): ReceiptFormatting {
+  const format = documentFormat(regional);
+  if (!format) {
+    return {
+      available: false,
+      dateTime: () => NO_VALUE,
+      date: () => NO_VALUE,
+      civilDate: () => NO_VALUE,
+      money: () => NO_VALUE,
+    };
+  }
+  const { fmt, timeZone } = format;
+  return {
+    available: true,
+    dateTime: (value) => {
+      const d = instant(value);
+      return d ? fmt.dateTime(d, timeZone) : NO_VALUE;
+    },
+    date: (value) => {
+      const d = instant(value);
+      return d ? fmt.date(d, timeZone) : NO_VALUE;
+    },
+    civilDate: (value) => {
+      if (!value) return NO_VALUE;
+      // Un día mal formado no rompe el documento: «—».
+      try {
+        return fmt.civilDate(value.slice(0, 10));
+      } catch (error) {
+        if (error instanceof RangeError) return NO_VALUE;
+        throw error;
+      }
+    },
+    money: (amount, currency) => moneyWithCode(amount, currency, fmt, texts),
+  };
+}
 
 interface PaymentReceiptDocumentProps {
   receipt: PaymentReceipt;
@@ -76,6 +158,14 @@ interface PaymentReceiptDocumentProps {
 export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceiptDocumentProps) {
   const { snapshot } = receipt;
   const { clinic, location, patient, payment, plan, planBalance, cashier } = snapshot;
+  // DX-517: con el texto de cada moneda CONGELADO al emitir (ninguno en un
+  // recibo anterior o de una clínica sin textos), nunca con el de hoy: el
+  // recibo se reimprime igual.
+  const currencyTexts = snapshot.currencyTexts ?? NO_CURRENCY_TEXTS;
+  // DX-521: fechas en la zona de la sede e importes con su locale y el código
+  // ISO de la moneda (o el texto de la foto). DX-354: sin región, o con una que
+  // este navegador no soporta, «—» (nunca el formato de antes).
+  const { money, dateTime, date, civilDate } = receiptFormatting(receipt.regional, currencyTexts);
   const narrow = format === '80mm';
   // DX-376: la tasa congelada del abono (DX-375), no la del día: reimprimir da
   // la misma. Un abono anterior aún sin congelar (LEGACY) no imprime tasa.
@@ -113,7 +203,7 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
           ) : (
             <p className="mt-1 text-xs text-[#4b5563]">
               {clinic.legalName}
-              {clinic.taxId ? ` · ${copy.taxId(clinic.taxId)}` : null}
+              {clinic.taxId ? ` · ${copy.taxId(clinic.taxId, clinic.taxIdLabel)}` : null}
               {clinic.address ? (
                 <>
                   <br />
@@ -126,7 +216,8 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
         </div>
         <div className={cn(!narrow && 'sm:text-right')}>
           <h1 id="receipt-title" className="text-xl font-semibold tracking-tight">
-            {copy.title}
+            {/* DX-515: el título que la clínica tenía al emitir (de la foto). */}
+            {snapshot.title ?? copy.title}
           </h1>
           <p className="text-lg font-semibold tabular-nums">{copy.number(receipt.reference)}</p>
           {receipt.legacy ? (
@@ -139,10 +230,21 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
           ) : null}
           <p className="mt-1 text-xs text-[#4b5563]">
             {receipt.legacy ? copy.registeredAt : copy.issuedAt}{' '}
-            <span className="tabular-nums">{formatDateTime(receipt.issuedAt)}</span>
+            <span className="tabular-nums">{dateTime(receipt.issuedAt)}</span>
           </p>
         </div>
       </header>
+
+      {/* DX-515: la leyenda que la clínica o la sede tenía al emitir (de la
+          foto): sin ella no se pinta nada y el recibo queda como antes. */}
+      {snapshot.legend ? (
+        <p
+          data-testid="receipt-legend"
+          className="mt-4 break-words border border-[#111827] px-3 py-2 text-center text-xs font-semibold"
+        >
+          {snapshot.legend}
+        </p>
+      ) : null}
 
       {receipt.voided ? (
         <div
@@ -152,7 +254,7 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
         >
           <p className="text-2xl font-bold tracking-[0.3em]">{copy.voidedStamp}</p>
           <p className="text-sm font-medium">
-            {copy.voidedDetail(formatDateTime(receipt.voidedAt), receipt.voidReason ?? '')}
+            {copy.voidedDetail(dateTime(receipt.voidedAt), receipt.voidReason ?? '')}
           </p>
         </div>
       ) : null}
@@ -167,7 +269,7 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
           </Field>
         ) : null}
         {split ? (
-          <SplitFields split={split} narrow={narrow} voided={receipt.voided} />
+          <SplitFields split={split} narrow={narrow} voided={receipt.voided} money={money} />
         ) : (
           <>
             <Field label={copy.amount}>
@@ -178,13 +280,23 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
                   receipt.voided && 'line-through',
                 )}
               >
-                {formatCurrency(payment.amount, payment.currency)}
+                {money(payment.amount, payment.currency)}
               </span>
             </Field>
+            {payment.adjustments?.length ? (
+              <ReceiptAdjustments
+                lines={payment.adjustments}
+                amount={payment.amount}
+                currency={payment.currency}
+                narrow={narrow}
+                voided={receipt.voided}
+                money={money}
+              />
+            ) : null}
             {frozen ? (
               <Field label={copy.equivalent(frozen.rate.currency)}>
                 <span className={cn('font-semibold tabular-nums', receipt.voided && 'line-through')}>
-                  {formatCurrency(frozen.equivalent, frozen.rate.currency)}
+                  {money(frozen.equivalent, frozen.rate.currency)}
                 </span>
               </Field>
             ) : null}
@@ -194,9 +306,9 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
                 <dd className="break-words tabular-nums">
                   {frozen
                     ? copy.rateApplied(
-                        ratePairLabel(payment.currency, frozen.rate, (amount, currency) => formatCurrency(amount, currency)),
+                        ratePairLabel(payment.currency, frozen.rate, money),
                         paymentRateCopy.source[frozen.rate.source],
-                        formatCivilDate(frozen.rate.date),
+                        rateDayLabel(frozen.rate.date, payment.paidOn, civilDate),
                       )
                     : copy.rateMissing}
                 </dd>
@@ -213,17 +325,20 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
           </>
         )}
         <Field label={copy.paidOn}>
-          <span className="tabular-nums">{formatCivilDate(payment.paidOn)}</span>
+          <span className="tabular-nums">{civilDate(payment.paidOn)}</span>
         </Field>
         <Field label={copy.concept}>
           {plan
-            ? copy.planLabel(formatDate(plan.createdAt), plan.optionLabel)
-            : copy.openingLabel(snapshot.openingBalance ?? null)}
+            ? copy.planLabel(date(plan.createdAt), plan.optionLabel)
+            : copy.openingLabel(
+                snapshot.openingBalance ?? null,
+                civilDate(snapshot.openingBalance?.asOfDate),
+              )}
         </Field>
         <Field label={plan ? copy.balanceAfter : copy.openingBalanceAfter}>
           <span className="tabular-nums">
             {planBalance
-              ? formatCurrency(planBalance.balance, planBalance.currency)
+              ? money(planBalance.balance, planBalance.currency)
               : copy.balanceUnavailable}
           </span>
         </Field>
@@ -252,17 +367,20 @@ function SplitFields({
   split,
   narrow,
   voided,
+  money,
 }: {
   split: NonNullable<PaymentReceipt['split']>;
   narrow: boolean;
   voided: boolean;
+  /** El formato de importes del recibo (con los textos de moneda de su foto). */
+  money: (amount: number, currency: string) => string;
 }) {
   return (
     <>
       <Field label={copy.splitTotal(split.total.currency)}>
         {split.total.amount !== null ? (
           <span className={cn('font-semibold tabular-nums', narrow ? 'text-base' : 'text-lg', voided && 'line-through')}>
-            {formatCurrency(split.total.amount, split.total.currency)}
+            {money(split.total.amount, split.total.currency)}
           </span>
         ) : (
           <span className="text-xs text-[#4b5563]">{copy.splitTotalMissing}</span>
@@ -284,20 +402,90 @@ function SplitFields({
                   ) : null}
                 </span>
                 <span className={cn('text-right tabular-nums', voided && 'line-through')}>
-                  <span className="font-semibold">{formatCurrency(line.amount, line.currency)}</span>
+                  <span className="font-semibold">{money(line.amount, line.currency)}</span>
                   {line.currency !== split.total.currency ? (
                     <span className="block text-xs text-[#4b5563]">
                       {line.equivalentAmount !== null
-                        ? copy.splitEquivalent(formatCurrency(line.equivalentAmount, split.total.currency))
+                        ? copy.splitEquivalent(money(line.equivalentAmount, split.total.currency))
                         : copy.splitWithoutRate}
                     </span>
                   ) : null}
                 </span>
+                {line.adjustments?.length ? (
+                  <AdjustmentList lines={line.adjustments} amount={line.amount} currency={line.currency} voided={voided} money={money} />
+                ) : null}
               </li>
             ))}
           </ol>
         </dd>
       </div>
     </>
+  );
+}
+
+/**
+ * DX-516: los ajustes por medio de pago del abono, cada uno con su etiqueta,
+ * su tipo, su base y su importe (el impuesto queda separado del precio), y lo
+ * cobrado. El «Valor» de arriba es lo que se acreditó al plan.
+ */
+function ReceiptAdjustments({
+  lines,
+  amount,
+  currency,
+  narrow,
+  voided,
+  money,
+}: {
+  lines: PaymentAdjustmentLine[];
+  amount: number;
+  currency: string;
+  narrow: boolean;
+  voided: boolean;
+  money: (amount: number, currency: string) => string;
+}) {
+  return (
+    <div data-testid="receipt-adjustments" className={cn('min-w-0', !narrow && 'sm:col-span-2')}>
+      <dt className="text-xs font-medium uppercase tracking-wide text-[#6b7280]">{copy.adjustments}</dt>
+      <dd>
+        <AdjustmentList lines={lines} amount={amount} currency={currency} voided={voided} money={money} />
+      </dd>
+    </div>
+  );
+}
+
+function AdjustmentList({
+  lines,
+  amount,
+  currency,
+  voided,
+  money,
+}: {
+  lines: PaymentAdjustmentLine[];
+  amount: number;
+  currency: string;
+  voided: boolean;
+  money: (amount: number, currency: string) => string;
+}) {
+  return (
+    <ul className="mt-1 flex w-full flex-col gap-0.5 text-xs">
+      {lines.map((line, index) => (
+        <li key={`${line.label}-${index}`} className="flex flex-wrap items-baseline justify-between gap-x-3">
+          <span className="min-w-0 break-words">
+            {line.label}
+            <span className="text-[#4b5563]">
+              {' '}
+              · {PAYMENT_ADJUSTMENT_TYPE_LABELS[line.type]} · {adjustmentBasisText(line, money)}
+            </span>
+          </span>
+          <span className={cn('tabular-nums', voided && 'line-through')}>{signedAdjustmentAmount(line, money)}</span>
+        </li>
+      ))}
+      <li className="flex flex-wrap items-baseline justify-between gap-x-3 border-t border-[#e5e7eb] pt-0.5 font-semibold">
+        <span>{copy.collected}</span>
+        <span className={cn('tabular-nums', voided && 'line-through')}>
+          {money(collectedAmount(amount, lines), currency)}
+        </span>
+      </li>
+    </ul>
   );
 }

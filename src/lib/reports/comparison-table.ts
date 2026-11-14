@@ -23,13 +23,51 @@ export function metricValues(row: ComparisonRow, key: KpiKey): (Metric & Partial
   return [value];
 }
 
+/** Indicadores de dinero (una lista de valores por moneda). */
+const MONEY_KEYS: KpiKey[] = ['production', 'collected', 'collectionRate', 'averageTicket'];
+
 /**
- * Moneda con la que se ordena una columna de dinero: la primera del total
- * (las monedas no se mezclan, así que se compara la misma en todas las filas).
+ * Monedas entre las que la persona puede elegir (DX-526): las del total de la
+ * clínica, sin repetir y en el orden en que la API las trae. La API no da
+ * tasas de cambio, así que no hay «la de mayor importe convertido»: el
+ * defecto es la primera.
  */
-export function sortCurrency(report: LocationsComparison, key: KpiKey): string | null {
+export function comparisonCurrencies(report: LocationsComparison): string[] {
+  const seen = new Set<string>();
+  for (const key of MONEY_KEYS) {
+    const value: Metric | CurrencyMetric[] = report.total.metrics[key];
+    if (!Array.isArray(value)) continue;
+    for (const m of value) if (m.currency) seen.add(m.currency);
+  }
+  return [...seen];
+}
+
+/**
+ * Moneda con la que se ordena una columna de dinero: la elegida si el total la
+ * tiene en esa columna; si no, la primera del total (las monedas no se mezclan,
+ * así que se compara la misma en todas las filas).
+ */
+export function sortCurrency(report: LocationsComparison, key: KpiKey, chosen?: string | null): string | null {
   const value: Metric | CurrencyMetric[] = report.total.metrics[key];
-  return Array.isArray(value) ? (value[0]?.currency ?? null) : null;
+  if (!Array.isArray(value)) return null;
+  if (chosen && value.some((m) => m.currency === chosen)) return chosen;
+  return value[0]?.currency ?? null;
+}
+
+/**
+ * El importe de cada sede en la moneda. Sin cobros en esa moneda (no hay línea,
+ * es null o es 0) es `null`: la pantalla lo dice con palabras y el gráfico no
+ * lo pinta; nunca un «0,00» que parezca un dato.
+ */
+export function locationAmounts(
+  report: LocationsComparison,
+  key: KpiKey,
+  currency: string,
+): { row: ComparisonRow; value: number | null }[] {
+  return report.locations.map((row) => {
+    const value = valueFor(row, key, currency);
+    return { row, value: value === null || value === 0 ? null : value };
+  });
 }
 
 function valueFor(row: ComparisonRow, key: KpiKey, currency: string | null): number | null {
@@ -44,7 +82,11 @@ function valueFor(row: ComparisonRow, key: KpiKey, currency: string | null): num
  * (null) van siempre al final; empates, por nombre. El «Total clínica» no
  * entra: va siempre abajo.
  */
-export function sortRows(report: LocationsComparison, sort: SortState | null): ComparisonRow[] {
+export function sortRows(
+  report: LocationsComparison,
+  sort: SortState | null,
+  chosenCurrency?: string | null,
+): ComparisonRow[] {
   if (sort === null) return report.locations;
   const factor = sort.direction === 'ascending' ? 1 : -1;
   const byName = (a: ComparisonRow, b: ComparisonRow) => a.name.localeCompare(b.name, 'es');
@@ -52,7 +94,7 @@ export function sortRows(report: LocationsComparison, sort: SortState | null): C
     return [...report.locations].sort((a, b) => factor * byName(a, b));
   }
   const key = sort.key;
-  const currency = sortCurrency(report, key);
+  const currency = sortCurrency(report, key, chosenCurrency);
   return [...report.locations].sort((a, b) => {
     const x = valueFor(a, key, currency);
     const y = valueFor(b, key, currency);

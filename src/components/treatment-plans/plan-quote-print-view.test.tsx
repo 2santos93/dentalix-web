@@ -1,16 +1,25 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PlanQuotePrintView } from './plan-quote-print-view';
-import { getPlanQuote } from '@/lib/treatment-plans/plan-quote-api';
+import { getPlanQuote, issuePlanQuote } from '@/lib/treatment-plans/plan-quote-api';
 import { ApiError } from '@/lib/api/client';
 import { planQuoteFixture } from './plan-quote-fixture';
 import { getExchangeRates } from '@/lib/exchange/exchange-api';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
+import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
+import { getPlan, type TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
+import { SIGNED_ACCEPTANCE } from './plan-quote-fixture';
 
 jest.mock('../../lib/treatment-plans/plan-quote-api', () => ({
   ...jest.requireActual('../../lib/treatment-plans/plan-quote-api'),
   getPlanQuote: jest.fn(),
+  issuePlanQuote: jest.fn(),
+}));
+
+jest.mock('../../lib/treatment-plans/treatment-plans-api', () => ({
+  ...jest.requireActual('../../lib/treatment-plans/treatment-plans-api'),
+  getPlan: jest.fn(),
 }));
 
 jest.mock('../../lib/exchange/exchange-api', () => ({
@@ -18,7 +27,7 @@ jest.mock('../../lib/exchange/exchange-api', () => ({
 }));
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([
-    { code: 'COP', name: 'Peso', symbol: '$' },
+    { code: 'VES', name: 'Bolívar', symbol: 'Bs.' },
     { code: 'USD', name: 'Dólar', symbol: 'US$' },
   ]),
 }));
@@ -26,7 +35,10 @@ jest.mock('../../lib/locations/locations-api', () => ({
   listLocations: jest.fn(),
 }));
 
-const mockedGet = getPlanQuote as jest.MockedFunction<typeof getPlanQuote>;
+// DX-379: la vista de impresión pide el presupuesto con POST …/quote/issue
+// (la primera impresión fija la validez); el GET queda para ver y aceptar.
+const mockedIssue = issuePlanQuote as jest.MockedFunction<typeof issuePlanQuote>;
+const mockedPlainGet = jest.mocked(getPlanQuote);
 const mockedRates = getExchangeRates as jest.MockedFunction<typeof getExchangeRates>;
 
 function renderView(props: Partial<React.ComponentProps<typeof PlanQuotePrintView>> = {}) {
@@ -44,17 +56,71 @@ function renderView(props: Partial<React.ComponentProps<typeof PlanQuotePrintVie
 describe('PlanQuotePrintView (DX-012)', () => {
   const print = jest.fn();
   beforeEach(() => {
-    mockedGet.mockReset();
+    mockedIssue.mockReset();
+    mockedPlainGet.mockReset();
     print.mockReset();
     window.print = print;
-    jest.mocked(listLocations).mockResolvedValue([clinicLocation()]);
+    jest.mocked(listLocations).mockResolvedValue([clinicLocation({ currency: 'VES' })]);
     mockedRates.mockReset();
+    jest.mocked(getPlan).mockReset().mockResolvedValue({ splitFromPlanId: null } as TreatmentPlan);
+  });
+
+  describe('DX-417: el presupuesto pendiente de una aceptación parcial', () => {
+    it('lleva «Resto de la aceptación parcial del …» con el día de la aceptación del original, antes de imprimir', async () => {
+      mockedIssue.mockResolvedValue(planQuoteFixture({ planStatus: 'PRESENTED' }));
+      jest.mocked(getPlan).mockImplementation(async (_t, id) =>
+        (id === 'plan-1'
+          ? { id: 'plan-1', splitFromPlanId: 'plan-0' }
+          : { id: 'plan-0', acceptedAt: '2026-10-20T15:00:00.000Z' }) as TreatmentPlan,
+      );
+      renderView({ canReadPlan: true });
+      expect(await screen.findByTestId('quote-partial-rest')).toHaveTextContent(
+        'Resto de la aceptación parcial del 20/10/2026',
+      );
+      expect(getPlan).toHaveBeenCalledWith('tok', 'plan-0');
+      expect(print).toHaveBeenCalledTimes(1);
+    });
+
+    it('M-6: un rol que no lee el plan (recepción) no lo pide (nada de 403) y se imprime igual', async () => {
+      mockedIssue.mockResolvedValue(planQuoteFixture({ planStatus: 'PRESENTED' }));
+      renderView({ canReadPlan: false });
+      expect(await screen.findByTestId('quote-header')).toBeInTheDocument();
+      await waitFor(() => expect(print).toHaveBeenCalledTimes(1));
+      expect(getPlan).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('quote-partial-rest')).not.toBeInTheDocument();
+    });
+
+    it('M-6: el original no se puede leer: «Resto de una aceptación parcial», sin fecha', async () => {
+      mockedIssue.mockResolvedValue(planQuoteFixture({ planStatus: 'PRESENTED' }));
+      jest.mocked(getPlan).mockImplementation(async (_t, id) => {
+        if (id === 'plan-1') return { id: 'plan-1', splitFromPlanId: 'plan-0' } as TreatmentPlan;
+        throw new ApiError(404, 'No');
+      });
+      renderView({ canReadPlan: true });
+      expect(await screen.findByTestId('quote-partial-rest')).toHaveTextContent(/^Resto de una aceptación parcial$/);
+    });
+
+    it('un pendiente ya firmado no busca el original ni lleva la línea', async () => {
+      mockedIssue.mockResolvedValue(planQuoteFixture({ planStatus: 'ACCEPTED', acceptance: SIGNED_ACCEPTANCE }));
+      jest.mocked(getPlan).mockResolvedValue({ id: 'plan-1', splitFromPlanId: 'plan-0' } as TreatmentPlan);
+      renderView({ canReadPlan: true });
+      expect(await screen.findByTestId('quote-header')).toBeInTheDocument();
+      expect(getPlan).not.toHaveBeenCalledWith('tok', 'plan-0');
+      expect(screen.queryByTestId('quote-partial-rest')).not.toBeInTheDocument();
+    });
   });
 
   describe('DX-376: segunda moneda opcional', () => {
     it('sin elegir no pide tasas; al elegir una pinta su total con la tasa de hoy en la sede', async () => {
-      mockedGet.mockResolvedValue(planQuoteFixture());
-      mockedRates.mockResolvedValue({ base: 'USD', source: 'AUTOMATIC', rates: { COP: 4000 } });
+      mockedIssue.mockResolvedValue(planQuoteFixture());
+      mockedRates.mockImplementation((_token, date) =>
+        Promise.resolve({
+          base: 'USD',
+          source: 'AUTOMATIC',
+          rates: { VES: 4000 },
+          rateDate: date,
+        }),
+      );
       renderView();
       await screen.findByTestId('quote-header');
       expect(mockedRates).not.toHaveBeenCalled();
@@ -62,27 +128,37 @@ describe('PlanQuotePrintView (DX-012)', () => {
       await screen.findByRole('option', { name: /Dólar/ });
       await userEvent.selectOptions(select, 'USD');
       const total = await screen.findByTestId('quote-second-total');
-      expect((total.textContent ?? '').replace(/\s/g, ' ')).toContain('825,00 USD');
+      expect((total.textContent ?? '').replace(/\s/g, ' ')).toContain('USD 825,00');
       expect(mockedRates).toHaveBeenCalledWith('tok', expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/));
       expect(screen.getByTestId('quote-second-currency')).toHaveTextContent(/automática/);
     });
 
     it('sin tasa de hoy lo dice y no imprime la segunda moneda', async () => {
-      mockedGet.mockResolvedValue(planQuoteFixture());
-      mockedRates.mockResolvedValue({ base: 'USD', source: 'MANUAL', rates: {} });
+      mockedIssue.mockResolvedValue(planQuoteFixture());
+      mockedRates.mockImplementation((_token, date) =>
+        Promise.resolve({
+          base: 'USD',
+          source: 'MANUAL',
+          rates: {},
+          rateDate: date,
+        }),
+      );
       renderView();
       await screen.findByTestId('quote-header');
       await screen.findByRole('option', { name: /Dólar/ });
       await userEvent.selectOptions(screen.getByLabelText('Segunda moneda (opcional)'), 'USD');
-      expect(await screen.findByText(/no hay tasa de COP para hoy/i)).toBeInTheDocument();
+      expect(await screen.findByText(/no hay tasa de VES para hoy/i)).toBeInTheDocument();
       expect(screen.queryByTestId('quote-second-total')).not.toBeInTheDocument();
     });
 
     it('si falla la consulta lo dice con reintento', async () => {
-      mockedGet.mockResolvedValue(planQuoteFixture());
-      mockedRates
-        .mockRejectedValueOnce(new Error('red'))
-        .mockResolvedValueOnce({ base: 'USD', source: 'AUTOMATIC', rates: { COP: 4000 } });
+      mockedIssue.mockResolvedValue(planQuoteFixture());
+      mockedRates.mockRejectedValueOnce(new Error('red')).mockResolvedValueOnce({
+        base: 'USD',
+        source: 'AUTOMATIC',
+        rates: { VES: 4000 },
+        rateDate: '2026-10-30',
+      });
       renderView();
       await screen.findByTestId('quote-header');
       await screen.findByRole('option', { name: /Dólar/ });
@@ -92,7 +168,7 @@ describe('PlanQuotePrintView (DX-012)', () => {
     });
 
     it('sin la zona de la sede no se queda «consultando» para siempre: lo dice con reintento', async () => {
-      mockedGet.mockResolvedValue(planQuoteFixture());
+      mockedIssue.mockResolvedValue(planQuoteFixture());
       jest.mocked(listLocations).mockRejectedValue(new Error('red'));
       renderView();
       await screen.findByTestId('quote-header');
@@ -105,13 +181,20 @@ describe('PlanQuotePrintView (DX-012)', () => {
   });
 
   it('muestra la carga, pinta el documento y abre el diálogo de impresión una vez', async () => {
-    mockedGet.mockResolvedValue(planQuoteFixture());
+    mockedIssue.mockResolvedValue(planQuoteFixture());
     renderView();
     expect(screen.getByRole('status')).toHaveTextContent('Preparando el presupuesto…');
     expect(await screen.findByTestId('quote-header')).toBeInTheDocument();
-    expect(mockedGet).toHaveBeenCalledWith('tok', 'p1', 'plan-1');
+    expect(mockedIssue).toHaveBeenCalledWith('tok', 'p1', 'plan-1');
+    // DX-379: imprimir fija la validez (POST issue), no el GET de solo lectura.
+    expect(mockedPlainGet).not.toHaveBeenCalled();
     expect(print).toHaveBeenCalledTimes(1);
+    // DX-118: en la pestaña el título es neutro; el del documento, solo al imprimir.
+    expect(document.title).toBe('Presupuesto');
+    window.dispatchEvent(new Event('beforeprint'));
     expect(document.title).toBe('Presupuesto · Ana Pérez');
+    window.dispatchEvent(new Event('afterprint'));
+    expect(document.title).toBe('Presupuesto');
     const back = screen.getByRole('link', { name: /Volver/ });
     expect(back).toHaveAttribute('href', '/patients/p1?tab=treatment-plans');
     await userEvent.click(screen.getByRole('button', { name: 'Imprimir o guardar como PDF' }));
@@ -119,17 +202,17 @@ describe('PlanQuotePrintView (DX-012)', () => {
   });
 
   it('un fallo de red es un error de sección con reintento', async () => {
-    mockedGet.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(planQuoteFixture());
+    mockedIssue.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(planQuoteFixture());
     renderView();
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('No pudimos cargar el presupuesto.');
     await userEvent.click(screen.getByRole('button', { name: /reintentar|intentar de nuevo/i }));
     expect(await screen.findByTestId('quote-header')).toBeInTheDocument();
-    expect(mockedGet).toHaveBeenCalledTimes(2);
+    expect(mockedIssue).toHaveBeenCalledTimes(2);
   });
 
   it('404: aviso sin reintento (reintentar no lo arregla)', async () => {
-    mockedGet.mockRejectedValue(new ApiError(404, 'Plan de tratamiento no encontrado'));
+    mockedIssue.mockRejectedValue(new ApiError(404, 'Plan de tratamiento no encontrado'));
     renderView();
     expect(await screen.findByText('No encontramos este presupuesto.')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -137,7 +220,7 @@ describe('PlanQuotePrintView (DX-012)', () => {
   });
 
   it('403 de la API: aviso de acceso', async () => {
-    mockedGet.mockRejectedValue(new ApiError(403, 'Insufficient role'));
+    mockedIssue.mockRejectedValue(new ApiError(403, 'Insufficient role'));
     renderView();
     expect(await screen.findByText('Tu rol no tiene acceso a este presupuesto.')).toBeInTheDocument();
   });
@@ -145,67 +228,78 @@ describe('PlanQuotePrintView (DX-012)', () => {
   it('sin permiso no pide nada', () => {
     renderView({ allowed: false });
     expect(screen.getByText('Tu rol no tiene acceso a este presupuesto.')).toBeInTheDocument();
-    expect(mockedGet).not.toHaveBeenCalled();
+    expect(mockedIssue).not.toHaveBeenCalled();
   });
 
   it('si el presupuesto es de otro paciente no se imprime bajo esta ficha', async () => {
-    mockedGet.mockResolvedValue(planQuoteFixture({ patientId: 'otro' }));
+    mockedIssue.mockResolvedValue(planQuoteFixture({ patientId: 'otro' }));
     renderView();
     expect(await screen.findByText('No encontramos este presupuesto.')).toBeInTheDocument();
     await waitFor(() => expect(print).not.toHaveBeenCalled());
   });
 
-  describe('DX-489: el precio de lista en la moneda del catálogo', () => {
+  describe('DX-489/DX-502: el precio de lista en la moneda del catálogo', () => {
+    // DX-502: la moneda llega con cada ítem del presupuesto (la congelada al
+    // darlo de alta), no se deduce de las sedes.
     const eurQuote = () =>
       planQuoteFixture({
         currency: 'EUR',
-        items: [{ ...planQuoteFixture().items[0], unitPrice: 100.55, discount: 0, subtotal: 100.55, listPrice: 80000, agreementName: 'Plan Oro' }],
+        items: [
+          {
+            ...planQuoteFixture().items[0],
+            unitPrice: 100.55,
+            discount: 0,
+            subtotal: 100.55,
+            listPrice: 80000,
+            agreementName: 'Plan Oro',
+            listPriceCurrency: 'VES',
+          },
+        ],
         totals: [{ currency: 'EUR', gross: 100.55, discount: 0, net: 100.55, agreementSaving: 79899.45 }],
       });
     const flat = (el: HTMLElement) => (el.textContent ?? '').replace(/\s/g, ' ');
 
-    it('plan en EUR, sedes en COP: lo que se imprime lleva el precio de lista en COP y sin ahorro', async () => {
-      mockedGet.mockResolvedValue(eurQuote());
+    it('plan en EUR con el catálogo en VES: lo que se imprime lleva el precio de lista en VES y sin ahorro', async () => {
+      mockedIssue.mockResolvedValue(eurQuote());
       renderView();
       const table = await screen.findByRole('table', { name: 'Procedimientos del presupuesto' });
-      expect(flat(table)).toContain('Precio de lista 80.000,00 COP');
-      expect(flat(table)).not.toContain('80.000,00 EUR');
+      expect(flat(table)).toContain('Precio de lista VES 80.000,00');
+      expect(flat(table)).not.toContain('EUR 80.000,00');
+      expect(screen.getByTestId('quote-list-price-note')).toHaveTextContent(
+        'El precio de lista es el del catálogo de la clínica, en VES: es de referencia y no se convierte a EUR.',
+      );
       expect(screen.queryByText('Ahorro por convenio')).not.toBeInTheDocument();
       expect(print).toHaveBeenCalledTimes(1);
     });
 
-    it('no abre el diálogo de impresión hasta saber la moneda del catálogo', async () => {
-      let resolveLocations!: (value: ReturnType<typeof clinicLocation>[]) => void;
-      jest.mocked(listLocations).mockReturnValue(new Promise((resolve) => (resolveLocations = resolve)));
-      mockedGet.mockResolvedValue(eurQuote());
-      renderView();
-      await waitFor(() => expect(mockedGet).toHaveBeenCalled());
-      expect(screen.queryByTestId('quote-header')).not.toBeInTheDocument();
-      expect(print).not.toHaveBeenCalled();
-      resolveLocations([clinicLocation()]);
-      expect(await screen.findByTestId('quote-header')).toBeInTheDocument();
-      expect(print).toHaveBeenCalledTimes(1);
-    });
-
-    it('si las sedes no cargan: cifra sin moneda y nota, aviso con Reintentar y sin abrir el diálogo solo', async () => {
+    it('no depende de las sedes: aunque no carguen o estén en otra moneda, imprime la moneda del presupuesto', async () => {
       jest.mocked(listLocations).mockRejectedValue(new Error('red'));
-      mockedGet.mockResolvedValue(eurQuote());
+      mockedIssue.mockResolvedValue(eurQuote());
       renderView();
       const table = await screen.findByRole('table', { name: 'Procedimientos del presupuesto' });
-      expect(flat(table)).toMatch(/Precio de lista 80\.000,00(?! (EUR|COP))/);
-      expect(screen.getByTestId('quote-list-price-note')).toHaveTextContent(/puede estar en otra moneda/);
-      expect(screen.getByTestId('quote-locations-error')).toHaveTextContent(/moneda de la sede/);
-      expect(print).not.toHaveBeenCalled();
-      // Reintentar: con las sedes ya leídas, el precio de lista sale en COP y se imprime.
-      jest.mocked(listLocations).mockResolvedValue([clinicLocation()]);
-      fireEvent.click(within(screen.getByTestId('quote-locations-error')).getByRole('button', { name: 'Reintentar' }));
-      await waitFor(() =>
-        expect(flat(screen.getByRole('table', { name: 'Procedimientos del presupuesto' }))).toContain(
-          'Precio de lista 80.000,00 COP',
-        ),
-      );
+      expect(flat(table)).toContain('Precio de lista VES 80.000,00');
       expect(screen.queryByTestId('quote-locations-error')).not.toBeInTheDocument();
       expect(print).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('DX-354: el formato de la sede del presupuesto', () => {
+    it('usa la sede del presupuesto, no la activa; sin ella «—», el aviso fuera del papel y Reintentar lo vuelve a leer', async () => {
+      mockedIssue.mockResolvedValueOnce(planQuoteFixture({ regional: null }));
+      mockedIssue.mockResolvedValueOnce(
+        planQuoteFixture({ regional: { timeZone: 'America/New_York', locale: 'en-US', hourCycle: 'h12' } }),
+      );
+      renderView();
+      const header = await screen.findByTestId('quote-header');
+      expect(header).toHaveTextContent('—');
+      expect(header.textContent).not.toMatch(/\d{2}\/\d{2}\/\d{4}/);
+      const note = screen.getByText(SEDE_LOCALE_ERROR).closest('[role="status"]');
+      expect(note?.closest('.print\\:hidden')).not.toBeNull();
+      expect(print).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: /imprimir/i })).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+      await waitFor(() => expect(screen.getByTestId('quote-header')).toHaveTextContent('10/16/2026'));
+      expect(screen.queryByText(SEDE_LOCALE_ERROR)).not.toBeInTheDocument();
     });
   });
 });

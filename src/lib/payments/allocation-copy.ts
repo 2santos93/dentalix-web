@@ -18,4 +18,28 @@ export const allocationCopy = {
     n === 1
       ? '1 abono todavía sin convertir a la moneda del plan: no se imputa a ítems.'
       : `${n} abonos todavía sin convertir a la moneda del plan: no se imputan a ítems.`,
+  // DX-399: la regla con que se imputó un abono y lo que queda sin imputar.
+  ruleAuto: 'Automática (más antiguo primero)',
+  ruleAutoHelp: 'Se reparte sola: primero lo realizado y del abono más antiguo al más reciente.',
+  ruleManual: 'Manual',
+  ruleManualHelp: 'Un administrador fijó a qué ítems va; el reparto automático no lo toca.',
+  onAccount: 'A cuenta',
+  onAccountHelp: 'Todavía no cubre ningún ítem del plan.',
+  // DX-399-quater-bis: el saldo que el plan recibió por traspaso de otro plan
+  // del paciente. Cubre lo que los abonos no cubren, después de ellos; lo que
+  // no cubre ningún ítem sigue a cuenta del plan, aparte de «Sin imputar».
+  paidByTransfersIn: (amount: string) => `De ello, ${amount} por traspaso de otro plan`,
+  transfersInOnAccount: 'Saldo recibido por traspaso, a cuenta',
+  transfersInOnAccountHelp: 'Llegó de otro plan del paciente y todavía no cubre ningún ítem.',
+  // «Ver imputación» e «Imputar abono»: el `free` no lo resta, porque los
+  // abonos van primero; imputar ahí desplaza lo recibido.
+  byTransfer: (amount: string) => `${amount} por traspaso`,
+  byTransferNote: 'Si imputas este abono aquí, ese saldo vuelve a quedar a cuenta del plan.',
 };
+
+/** La regla de una imputación: `manual` es el abono fijado a mano por un ADMIN (DX-051). */
+export function allocationRule(manual: boolean): { label: string; help: string } {
+  return manual
+    ? { label: allocationCopy.ruleManual, help: allocationCopy.ruleManualHelp }
+    : { label: allocationCopy.ruleAuto, help: allocationCopy.ruleAutoHelp };
+}

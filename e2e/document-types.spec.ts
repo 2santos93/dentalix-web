@@ -46,8 +46,8 @@ let receptionEmail: string;
 let templateTitle: string;
 
 // Mismo formateador que la app (`formatCurrency`, locale `es`): solo la cifra.
-const cop = new Intl.NumberFormat('es', { style: 'currency', currency: 'COP', currencyDisplay: 'code' });
-const figure = (amount: number) => cop.format(amount).split(/\s/)[0];
+const usd = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD', currencyDisplay: 'code' });
+const figure = (amount: number) => usd.format(amount).split(/\s/)[0];
 
 /**
  * La captura `${name}-${width}-${scheme}.png` a 1440 y 390 px, en claro y
@@ -94,14 +94,14 @@ async function createPatient(
   return patient.id;
 }
 
-/** Un plan en COP y un abono en efectivo del ADMIN: deja un recibo numerado. */
+/** Un plan en USD y un abono en efectivo del ADMIN: deja un recibo numerado. */
 async function payOnce(request: APIRequestContext, patientId: string, amount: number): Promise<void> {
   const plan = await apiPost<{ id: string }>(request, admin, `/patients/${patientId}/treatment-plans`, {
-    currency: 'COP',
+    currency: 'USD',
   });
   await apiPost(request, admin, `/treatment-plans/${plan.id}/payments`, {
     amount,
-    currency: 'COP',
+    currency: 'USD',
     paidAt: new Date().toISOString(),
     method: 'CASH',
   });

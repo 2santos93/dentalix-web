@@ -1,7 +1,6 @@
 import * as React from 'react';
-import { formatCivilDate, formatDateTime } from '@/lib/format/date';
+import { documentTexts, type DocumentFormat } from '@/lib/format/document-format';
 import { formatImplantSize, type ImplantCard } from '@/lib/implants/implants-api';
-import type { RegionalFormat } from '@/lib/format/regional-format';
 
 const copy = {
   title: 'Tarjeta de implante',
@@ -39,11 +38,14 @@ const copy = {
  * componente con fabricante, REF y lote. Sin diagnóstico ni notas clínicas.
  */
 /**
- * `fmt`: el formato de la sede de la pantalla (hasta G1-C, la tarjeta no trae
- * la suya); sin él, las medidas salen «—».
+ * `format`: el formato de la sede de la tarjeta (`documentFormat(card.regional)`,
+ * DX-354), no el de la pantalla activa: las fechas, las horas y las medidas
+ * salen con el mismo. Sin él, «—».
  */
-export function ImplantCardDocument({ card, fmt }: { card: ImplantCard; fmt: RegionalFormat | null }) {
+export function ImplantCardDocument({ card, format }: { card: ImplantCard; format: DocumentFormat | null }) {
   const location = card.locations[0];
+  const doc = documentTexts(format);
+  const fmt = format?.fmt ?? null;
   return (
     <article className="implant-card-print-root flex min-w-0 flex-col gap-5 bg-white p-6 text-ink sm:p-8 print:p-0">
       <header className="flex flex-col gap-1 border-b border-border pb-3">
@@ -63,7 +65,7 @@ export function ImplantCardDocument({ card, fmt }: { card: ImplantCard; fmt: Reg
             {card.patientBirthDate ? (
               <>
                 <dt className="text-muted">{copy.birthDate}</dt>
-                <dd className="tabular-nums">{formatCivilDate(card.patientBirthDate)}</dd>
+                <dd className="tabular-nums">{doc.civilDate(card.patientBirthDate)}</dd>
               </>
             ) : null}
           </dl>
@@ -89,7 +91,7 @@ export function ImplantCardDocument({ card, fmt }: { card: ImplantCard; fmt: Reg
               </>
             ) : null}
             <dt className="text-muted">{copy.placedOn}</dt>
-            <dd className="tabular-nums">{formatCivilDate(card.placedOn)}</dd>
+            <dd className="tabular-nums">{doc.civilDate(card.placedOn)}</dd>
             <dt className="text-muted">{copy.professional}</dt>
             <dd>{card.professionals.join(', ')}</dd>
           </dl>
@@ -153,7 +155,7 @@ export function ImplantCardDocument({ card, fmt }: { card: ImplantCard; fmt: Reg
                   ) : null}
                 </dl>
                 {item.voided && item.voidedAt ? (
-                  <p className="text-xs text-ink">{copy.voidedNote(formatDateTime(item.voidedAt))}</p>
+                  <p className="text-xs text-ink">{copy.voidedNote(doc.dateTime(item.voidedAt))}</p>
                 ) : null}
               </li>
             );
@@ -162,7 +164,7 @@ export function ImplantCardDocument({ card, fmt }: { card: ImplantCard; fmt: Reg
       </section>
 
       <footer className="flex flex-col gap-1 border-t border-border pt-3 text-xs text-muted">
-        <p>{card.deliveredAt ? copy.delivered(formatDateTime(card.deliveredAt)) : copy.notDelivered}</p>
+        <p>{card.deliveredAt ? copy.delivered(doc.dateTime(card.deliveredAt)) : copy.notDelivered}</p>
         <p>{copy.keep}</p>
       </footer>
     </article>

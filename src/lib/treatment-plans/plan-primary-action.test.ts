@@ -71,4 +71,11 @@ describe('planPrimaryAction (D2: una primaria por vista, según el estado)', () 
     expect(planPrimaryAction(facts({ status: 'REJECTED' }))).toBeNull();
     expect(planPrimaryAction(facts({ status: 'CANCELLED', canBill: true, balance: 100 }))).toBeNull();
   });
+
+  it('DX-379 B: un borrador o presentado vencido que el rol recotiza → «Actualizar precios»', () => {
+    expect(planPrimaryAction(facts({ status: 'PRESENTED', expiredRepriceable: true }))).toBe('reprice');
+    expect(planPrimaryAction(facts({ status: 'DRAFT', expiredRepriceable: true }))).toBe('reprice');
+    expect(planPrimaryAction(facts({ status: 'PRESENTED', expiredRepriceable: false }))).toBe('accept');
+    expect(planPrimaryAction(facts({ status: 'ACCEPTED', expiredRepriceable: true }))).toBe('accept');
+  });
 });

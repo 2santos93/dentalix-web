@@ -1,4 +1,4 @@
-import { formatDate } from '@/lib/format/date';
+import type { SedePainters } from '@/lib/locations/sede-stamp';
 import type { PatientCoverage } from '@/lib/patients/coverages-api';
 import { isExternalPayer } from '@/lib/payers/payer-type';
 import type { PayerType } from '@/lib/payers/payers-api';
@@ -56,12 +56,14 @@ export interface CoverageVerificationBadge {
 
 /**
  * Insignia «Verificada» / «Sin verificar» de una cobertura de un pagador
- * externo; `null` con uno interno (OTHER), donde no aplica.
+ * externo; `null` con uno interno (OTHER), donde no aplica. La fecha, con el
+ * pintor de la sede de la pantalla (DX-354b); sin formato, «—» dentro de la frase.
  */
 export function coverageVerificationBadge(
   c: Pick<PatientCoverage, 'verifiedAt' | 'verifiedByName'> & {
     payer: Pick<PatientCoverage['payer'], 'type'>;
   },
+  stamp: Pick<SedePainters, 'date'>,
 ): CoverageVerificationBadge | null {
   if (!requiresMemberNumber(c.payer.type)) return null;
   if (!c.verifiedAt) {
@@ -70,6 +72,6 @@ export function coverageVerificationBadge(
   return {
     label: memberNumberCopy.verified,
     variant: 'success',
-    detail: memberNumberCopy.verifiedBy(c.verifiedByName, formatDate(c.verifiedAt)),
+    detail: memberNumberCopy.verifiedBy(c.verifiedByName, stamp.date(c.verifiedAt)),
   };
 }

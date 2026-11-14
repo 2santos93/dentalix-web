@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Lock, X } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
@@ -28,30 +28,39 @@ import {
   staffDetail,
   locationNameMap,
   type LocationNames,
+  appointmentMoveDetail,
+  staffNameMap,
+  type StaffNames,
   cashSessionDetail,
   sedationDetail,
   chairDetail,
+  recallViaDetail,
   scheduleChangeDetail,
   cancellationDetail,
   healthRegistrationDetail,
   clinicSettingsDetail,
+  receiptDetail,
+  receiptsSummaryPeriodDetail,
   exchangeRateBackupDetail,
+  exchangeRateDetail,
+  paymentAllocationDetail,
   locationCalendarDetail,
   patientFlowDetail,
   importBatchDetail,
   planItemAttributionDetail,
   anamnesisDetail,
   signatureRequestDetail,
+  treatmentPlanAcceptanceDetail,
 } from '@/lib/audit/audit-labels';
 import { configChangeItems, type ConfigChangeItem } from '@/lib/audit/config-change';
 import { auditTime, auditZoneHint, type AuditSedeTime, type AuditTime } from '@/lib/audit/audit-time';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
-import { screenLocation, sedeClockFor, type SedeClockError } from '@/lib/locations/sede-clock';
+import { screenLocation, sedeClockFor, type AgendaClock, type SedeClock, type SedeClockError } from '@/lib/locations/sede-clock';
 import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
 import { useLocationsState } from '@/lib/locations/use-locations-state';
 import { isValidRange, MAX_RANGE_DAYS } from '@/lib/payments/cash-period';
 import { isCivilDay } from '@/lib/time/civil-day';
-import { wallInstant } from '@/lib/time/wall-clock';
+import { addCivilDays, wallInstant } from '@/lib/time/wall-clock';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -73,6 +82,8 @@ const copy = {
   filtersLabel: 'Filtros de la auditoría',
   actorLabel: 'Usuario',
   actorAll: 'Todos los usuarios',
+  // SEC-043-bis: el usuario del enlace ya no está en el personal.
+  actorInactive: 'Persona ya no activa',
   actorUnavailable: 'Usuarios no disponibles',
   actionLabel: 'Acción',
   actionAll: 'Todas las acciones',
@@ -114,7 +125,7 @@ const copy = {
 
 const PAGE_SIZE = 50;
 
-interface Filters {
+export interface Filters {
   actorUserId: string;
   action: AuditAction | '';
   resourceType: AuditResourceType | '';
@@ -129,6 +140,33 @@ const NO_FILTERS: Filters = {
   from: '',
   to: '',
 };
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * SEC-043-bis: filtros de partida desde la URL (`?actorUserId=&resourceType=
+ * &from=&to=`), para enlazar desde otra pantalla a «estos eventos». Lo que no
+ * se reconoce se ignora: nunca se pide a la API un filtro inválido.
+ */
+export function auditFiltersFromSearch(params: { get(name: string): string | null }): Partial<Filters> {
+  const out: Partial<Filters> = {};
+  const actor = params.get('actorUserId');
+  if (actor && UUID.test(actor)) out.actorUserId = actor;
+  const resource = params.get('resourceType');
+  if (resource && (AUDIT_RESOURCE_OPTIONS as string[]).includes(resource)) {
+    out.resourceType = resource as AuditResourceType;
+  }
+  const from = params.get('from');
+  const to = params.get('to');
+  if (from && isCivilDay(from)) out.from = from;
+  if (to && isCivilDay(to)) out.to = to;
+  // Un rango más largo del que admite la API se recorta por el principio
+  // (lo más reciente es lo que se busca) en vez de abrir con un error.
+  if (out.from && out.to && out.from <= out.to && !isValidRange({ from: out.from, to: out.to })) {
+    out.from = addCivilDays(out.to, -(MAX_RANGE_DAYS - 1));
+  }
+  return out;
+}
 
 const MINUTES_PER_DAY = 24 * 60;
 
@@ -160,6 +198,8 @@ interface AuditLogViewProps {
    */
   patientId?: string;
   onClearPatient?: () => void;
+  /** SEC-043-bis: filtros con los que se abre (de la URL). */
+  initialFilters?: Partial<Filters>;
 }
 
 /**
@@ -180,9 +220,9 @@ interface AuditLogViewProps {
  * «Falta un dato de la sede» con su reintento, nunca otra zona ni otro
  * formato (G1-B).
  */
-export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewProps) {
+export function AuditLogView({ token, patientId, onClearPatient, initialFilters }: AuditLogViewProps) {
   const locked = Boolean(patientId) && !onClearPatient;
-  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  const [filters, setFilters] = useState<Filters>(() => ({ ...NO_FILTERS, ...initialFilters }));
   // Pila de cursores: el último es la página que se ve; `null` = la primera.
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   // El reloj de la pantalla. Hasta tenerlo no se pide nada: sin él no hay
@@ -205,6 +245,10 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
   // DX-359: nombres de las sedes para los accesos del personal (`staffAccess`
   // solo trae ids) y para la hora de la sede de cada evento.
   const locationNames = useMemo(() => (locations ? locationNameMap(locations) : null), [locations]);
+  // DX-133-bis: el personal, una sola vez, para el filtro de usuario y para
+  // nombrar al profesional de una cita movida (la metadata solo trae ids).
+  const staff = useStaff(token);
+  const staffNames = useMemo(() => (staff.members ? staffNameMap(staff.members) : null), [staff.members]);
   // El desfase de hoy en el aviso de la zona; cada fila dice el suyo.
   const [now] = useState(() => new Date());
   const [data, setData] = useState<AuditEventsPage | null>(null);
@@ -305,7 +349,7 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
     ? items.map((event) => ({
         event,
         time: auditTime(event, clock, locationNames),
-        detail: eventDetail(event, locationNames),
+        detail: eventDetail(event, locationNames, clock, staffNames),
         change: configChangeItems(event.metadata, clock.fmt),
       }))
     : [];
@@ -319,7 +363,7 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
         className="grid min-w-0 grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-end"
       >
         <ActorFilter
-          token={token}
+          staff={staff}
           id={actorId}
           value={filters.actorUserId}
           onChange={(actorUserId) => changeFilters({ actorUserId })}
@@ -402,7 +446,7 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
               onClick={onClearPatient}
               aria-label={copy.clearPatient}
               title={copy.clearPatient}
-              className="flex size-6 items-center justify-center rounded-full text-muted hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary pointer-coarse:size-10"
+              className="flex size-6 items-center justify-center rounded-full text-muted hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text pointer-coarse:size-10"
             >
               <X aria-hidden className="size-3.5" />
             </button>
@@ -511,8 +555,14 @@ function ConfigChangeValue({ item }: { item: ConfigChangeItem }) {
   );
 }
 
-function eventDetail(event: AuditEvent, locationNames: LocationNames | null): string | null {
+function eventDetail(
+  event: AuditEvent,
+  locationNames: LocationNames | null,
+  clock: AgendaClock | null,
+  staffNames: StaffNames | null = null,
+): string | null {
   return (
+    appointmentMoveDetail(event.metadata, moveClock(event, clock), staffNames) ??
     communicationDetail(event.metadata) ??
     confirmationLinkDetail(event.metadata) ??
     implantSearchDetail(event.metadata) ??
@@ -521,17 +571,23 @@ function eventDetail(event: AuditEvent, locationNames: LocationNames | null): st
     cashSessionDetail(event.metadata) ??
     sedationDetail(event.metadata) ??
     chairDetail(event.metadata) ??
-    scheduleChangeDetail(event.metadata) ??
+    scheduleChangeDetail(event.metadata, clock?.fmt ?? null) ??
     cancellationDetail(event.metadata) ??
     patientFlowDetail(event.metadata) ??
-    planItemAttributionDetail(event.metadata) ??
+    recallViaDetail(event.metadata) ??
+    planItemAttributionDetail(event.metadata, clock) ??
     importBatchDetail(event.metadata) ??
     healthRegistrationDetail(event.metadata) ??
     clinicSettingsDetail(event.metadata) ??
     locationCalendarDetail(event.metadata) ??
+    receiptDetail(event.metadata) ??
     exchangeRateBackupDetail(event.metadata) ??
+    exchangeRateDetail(event.metadata, clock?.fmt ?? null) ??
+    receiptsSummaryPeriodDetail(event.metadata, clock?.fmt ?? null) ??
+    paymentAllocationDetail(event.metadata, clock?.fmt ?? null) ??
     anamnesisDetail(event.metadata) ??
-    signatureRequestDetail(event.metadata)
+    signatureRequestDetail(event.metadata) ??
+    treatmentPlanAcceptanceDetail(event.metadata)
   );
 }
 
@@ -550,7 +606,7 @@ function PatientLink({ event }: { event: AuditEvent }) {
   return (
     <Link
       href={`/patients/${event.patient.id}`}
-      className="font-medium text-ink underline-offset-4 hover:text-primary-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      className="font-medium text-ink underline-offset-4 hover:text-primary-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
     >
       {event.patient.fullName}
     </Link>
@@ -663,32 +719,24 @@ function auditColumns(showPatient: boolean): DataListColumn<AuditRowData>[] {
   return columns.filter((c): c is DataListColumn<AuditRowData> => c !== null);
 }
 
-/**
- * Filtro de usuario con el personal de la clínica (`GET /staff`). Si no carga,
- * escalón 2 de la escalera de errores: el control se sustituye en su sitio por
- * un `FieldError` con reintento; el resto de la pantalla sigue funcionando.
- */
-function ActorFilter({
-  token,
-  id,
-  value,
-  onChange,
-}: {
-  token: string;
-  id: string;
-  value: string;
-  onChange: (actorUserId: string) => void;
-}) {
-  const [staff, setStaff] = useState<StaffMember[] | null>(null);
+interface StaffState {
+  members: StaffMember[] | null;
+  failed: boolean;
+  retry: () => void;
+}
+
+/** El personal de la clínica (`GET /staff`), por nombre; `failed` si no cargó. */
+function useStaff(token: string): StaffState {
+  const [members, setMembers] = useState<StaffMember[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     listStaff(token)
-      .then((members) => {
+      .then((list) => {
         if (cancelled) return;
-        setStaff([...members].sort((a, b) => a.fullName.localeCompare(b.fullName, 'es')));
+        setMembers([...list].sort((a, b) => a.fullName.localeCompare(b.fullName, 'es')));
         setFailed(false);
       })
       .catch(() => {
@@ -699,10 +747,40 @@ function ActorFilter({
     };
   }, [token, attempt]);
 
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
+  return { members, failed, retry };
+}
+
+/**
+ * La hora de una cita movida va con el reloj de la sede de la cita (la del
+ * evento); un evento sin sede, con el de la pantalla. Una sede sin reloj
+ * conocido da null: «—», nunca otro formato (DX-354).
+ */
+function moveClock(event: AuditEvent, clock: AgendaClock | null): SedeClock | null {
+  if (!clock) return null;
+  return event.locationId ? clock.of(event.locationId) : clock;
+}
+
+/**
+ * Filtro de usuario con el personal de la clínica (`GET /staff`). Si no carga,
+ * escalón 2 de la escalera de errores: el control se sustituye en su sitio por
+ * un `FieldError` con reintento; el resto de la pantalla sigue funcionando.
+ */
+function ActorFilter({
+  staff: { members: staff, failed, retry },
+  id,
+  value,
+  onChange,
+}: {
+  staff: StaffState;
+  id: string;
+  value: string;
+  onChange: (actorUserId: string) => void;
+}) {
   return (
     <FormField htmlFor={id} label={copy.actorLabel} className="col-span-2 min-w-0 sm:w-52">
       {failed ? (
-        <FieldError label={copy.actorUnavailable} retryId={id} onRetry={() => setAttempt((n) => n + 1)} />
+        <FieldError label={copy.actorUnavailable} retryId={id} onRetry={retry} />
       ) : (
         <NativeSelect id={id} value={value} onChange={(e) => onChange(e.target.value)} disabled={staff === null}>
           <option value="">{copy.actorAll}</option>
@@ -711,6 +789,11 @@ function ActorFilter({
               {member.fullName}
             </option>
           ))}
+          {/* SEC-043-bis: un enlace con alguien que ya no está en el personal
+              no deja el filtro vacío: se ve qué se está filtrando. */}
+          {value && staff && !staff.some((m) => m.userId === value) ? (
+            <option value={value}>{copy.actorInactive}</option>
+          ) : null}
         </NativeSelect>
       )}
     </FormField>

@@ -2,15 +2,19 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { hasUnsavedChanges, requestNavigation } from '@/components/settings/unsaved-changes';
-import { CalendarPlus, CornerDownLeft, Search, UserPlus, UserRound } from 'lucide-react';
+import { Cake, CalendarPlus, CornerDownLeft, ListTodo, Phone, PhoneCall, Search, UserPlus, UserRound } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
 import { visibleSettingsSections } from '@/components/settings/settings-sections';
 import type { ClinicRole } from '@/lib/me/me-api';
+import { Button } from '@/components/ui/button';
+import { InlineError } from '@/components/errors/inline-error';
 import { cn } from '@/lib/utils';
 import { NEW_APPOINTMENT_EVENT, NEW_APPOINTMENT_PARAM } from '@/lib/ui/new-appointment';
+import { canManageRecall } from '@/lib/recall/presentation';
+import { canReviewMajority, COMING_OF_AGE_HREF } from '@/lib/patients/majority-review-api';
 import { canSee, ALL_NAV_ITEMS } from './nav-config';
 import { useCloseOnBack } from './use-shell-media';
 
@@ -21,15 +25,25 @@ const copy = {
   placeholder: 'Buscar pacientes, secciones o acciones…',
   patients: 'Pacientes',
   goTo: 'Ir a',
+  recall: 'Recall',
+  recallHint: 'Pacientes por llamar: control vencido y sin cita',
+  comingOfAge: 'Cumplen la mayoría de edad',
+  comingOfAgeHint: 'Revisar a quién van los avisos de quien deja de ser menor',
   actions: 'Acciones',
   searching: 'Buscando pacientes…',
   searchFailed: 'No se pudo buscar pacientes. Revisa la conexión e inténtalo de nuevo.',
+  retry: 'Reintentar',
   minChars: 'Escribe al menos 2 letras para buscar pacientes.',
   noResults: (q: string) => `Nada coincide con «${q}».`,
   newAppointment: 'Nueva cita',
   newPatient: 'Nuevo paciente',
+  caller: '¿Quién llama?',
   noDocument: 'Sin documento',
   settingsHint: 'Ajustes',
+  // DX-503: «Mi día» es el bloque «Pendientes» de Inicio (sin entrada propia
+  // en la barra: el presupuesto de 900 px no la admite, DESIGN.md → Navigation).
+  myDay: 'Mi día',
+  myDayHint: 'Pendientes de Inicio',
 };
 
 const PATIENT_LIMIT = 6;
@@ -64,17 +78,21 @@ export function CommandPalette({
   onOpenChange,
   token,
   role,
+  onOpenCaller,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   token: string | null;
   role: ClinicRole | null;
+  /** DX-224: abre «¿Quién llama?» (en el raíl no hay botón; Alt+Mayús+Q también). */
+  onOpenCaller?: () => void;
 }) {
   const router = useRouter();
   const [query, setQuery] = React.useState('');
   const debounced = useDebouncedValue(query.trim(), DEBOUNCE_MS);
   const [patients, setPatients] = React.useState<Patient[]>([]);
   const [patientState, setPatientState] = React.useState<'idle' | 'loading' | 'error'>('idle');
+  const [searchAttempt, setSearchAttempt] = React.useState(0);
   const [active, setActive] = React.useState(0);
   const listId = React.useId();
   const listRef = React.useRef<HTMLUListElement>(null);
@@ -115,7 +133,7 @@ export function CommandPalette({
     return () => {
       cancelled = true;
     };
-  }, [open, token, debounced, searchable]);
+  }, [open, token, debounced, searchable, searchAttempt]);
 
   const go = React.useCallback(
     (href: string) => {
@@ -155,6 +173,39 @@ export function CommandPalette({
       if (!matches(label, item.tabLabel)) continue;
       result.push({ id: `nav-${item.href}`, group: 'goto', label, icon: item.icon, run: () => go(item.href) });
     }
+    if (q && role && matches(copy.myDay, copy.myDayHint)) {
+      result.push({
+        id: 'nav-my-day',
+        group: 'goto',
+        label: copy.myDay,
+        hint: copy.myDayHint,
+        icon: ListTodo,
+        run: () => go('/dashboard#pendientes'),
+      });
+    }
+    // DX-015: la lista de recall no gasta entrada en la barra (presupuesto de
+    // 900 px, DESIGN.md → Navigation): se llega desde «Mi día» y desde aquí.
+    if (q && canManageRecall(role) && matches(copy.recall, copy.recallHint)) {
+      result.push({
+        id: 'nav-recall',
+        group: 'goto',
+        label: copy.recall,
+        hint: copy.recallHint,
+        icon: PhoneCall,
+        run: () => go('/recall'),
+      });
+    }
+    // DX-342: tampoco gasta entrada en la barra; se llega desde Pacientes y desde aquí.
+    if (q && canReviewMajority(role) && matches(copy.comingOfAge, copy.comingOfAgeHint)) {
+      result.push({
+        id: 'nav-coming-of-age',
+        group: 'goto',
+        label: copy.comingOfAge,
+        hint: copy.comingOfAgeHint,
+        icon: Cake,
+        run: () => go(COMING_OF_AGE_HREF),
+      });
+    }
     // Las pantallas de Ajustes solo al escribir: sin texto, la lista es corta.
     if (q) {
       for (const section of visibleSettingsSections(role)) {
@@ -188,10 +239,25 @@ export function CommandPalette({
         },
       },
       { id: 'action-new-patient', group: 'actions', label: copy.newPatient, icon: UserPlus, run: () => go('/patients/new') },
+      ...(onOpenCaller
+        ? [
+            {
+              id: 'action-caller',
+              group: 'actions' as const,
+              label: copy.caller,
+              icon: Phone,
+              run: () => {
+                skipBack();
+                onOpenChange(false);
+                onOpenCaller();
+              },
+            },
+          ]
+        : []),
     ];
     for (const a of actions) if (matches(a.label)) result.push(a);
     return result;
-  }, [query, searchable, patients, role, go, onOpenChange, skipBack]);
+  }, [query, searchable, patients, role, go, onOpenChange, skipBack, onOpenCaller]);
 
   const activeIndex = options.length === 0 ? -1 : Math.min(active, options.length - 1);
   const activeOption = activeIndex >= 0 ? options[activeIndex] : undefined;
@@ -242,7 +308,7 @@ export function CommandPalette({
   let status: string | null = null;
   if (trimmed.length === 1) status = copy.minChars;
   else if (trimmed.length >= 2 && patientState === 'loading') status = copy.searching;
-  else if (trimmed.length >= 2 && patientState === 'error') status = copy.searchFailed;
+  const searchError = trimmed.length >= 2 && patientState === 'error';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -280,6 +346,14 @@ export function CommandPalette({
           />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          {searchError && (
+            <div className="flex flex-col items-start gap-2 px-3 py-2">
+              <InlineError>{copy.searchFailed}</InlineError>
+              <Button type="button" variant="secondary" size="sm" onClick={() => setSearchAttempt((n) => n + 1)}>
+                {copy.retry}
+              </Button>
+            </div>
+          )}
           {status && (
             <p role="status" className="px-3 py-2 text-sm text-muted">
               {status}
@@ -328,7 +402,7 @@ export function CommandPalette({
               );
             })}
           </ul>
-          {options.length === 0 && !status && (
+          {options.length === 0 && !status && !searchError && (
             <p role="status" className="px-3 py-6 text-center text-sm text-muted">
               {copy.noResults(trimmed)}
             </p>

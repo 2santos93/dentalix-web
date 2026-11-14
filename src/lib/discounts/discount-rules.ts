@@ -6,6 +6,7 @@ import {
   unitCents,
   unitsToAmount,
 } from '@/lib/money/line-rounding';
+import { amountCents, centsToAmount } from '@/lib/money/round';
 
 /**
  * Reglas de descuento de la clínica en la web (DX-204). Son un AVISO antes de
@@ -52,7 +53,7 @@ export function roleCapMessage(maxPercent: number): string {
 }
 
 function cents(amount: number): bigint {
-  return BigInt(Math.round(amount * 100));
+  return BigInt(amountCents(amount));
 }
 
 /** Aviso del formulario del ítem y prefijo de los errores de la API (SEC-041). */
@@ -88,10 +89,60 @@ export function effectiveDiscount(
   const catalogCents = catalogPrice == null ? null : cents(catalogPrice);
   const reduction = catalogCents !== null && catalogCents > priceCents ? catalogCents - priceCents : BigInt(0);
   return {
-    listPrice: Number(priceCents + reduction) / 100,
-    priceReduction: Number(reduction) / 100,
-    total: Number(reduction + cents(discount)) / 100,
+    listPrice: centsToAmount(Number(priceCents + reduction)),
+    priceReduction: centsToAmount(Number(reduction)),
+    total: centsToAmount(Number(reduction + cents(discount))),
   };
+}
+
+/**
+ * DX-513: ¿la referencia de la rebaja (`catalogPrice`, el precio resuelto) está
+ * en otra moneda CONOCIDA? Si salió de una lista (de la sede o del convenio),
+ * no: la API solo toma listas en la moneda del plan. Si salió del catálogo (o
+ * de un % sobre él, o es anterior a DX-105), está en la moneda del catálogo
+ * (`catalogCurrency`, DX-502): otra moneda solo si se sabe y es distinta. Sin
+ * saberla (NULL) cuenta como hoy (decisión de producto). Espejo de
+ * `referenceInOtherCurrency` de la API (`effective-discount.ts`).
+ */
+export function referenceInOtherCurrency(
+  source: string | null | undefined,
+  catalogCurrency: string | null | undefined,
+  planCurrency: string,
+): boolean {
+  if (source === 'PRICE_LIST' || source === 'AGREEMENT_PRICE_LIST') return false;
+  return catalogCurrency != null && catalogCurrency !== planCurrency;
+}
+
+/**
+ * DX-513: la referencia con la que se mide la rebaja de precio, o `null`. En
+ * otra moneda conocida, bajar de ella no es un descuento: ni pide motivo ni
+ * consume el tope; solo cuenta el descuento del ítem.
+ */
+export function discountReference(
+  item: { catalogPrice: number | null | undefined; catalogCurrency?: string | null; priceSource?: string | null },
+  planCurrency: string,
+): number | null {
+  if (item.catalogPrice == null) return null;
+  return referenceInOtherCurrency(item.priceSource, item.catalogCurrency, planCurrency) ? null : item.catalogPrice;
+}
+
+/**
+ * DX-513-bis: la referencia con la que se mide la rebaja, en la moneda del
+ * plan. Con foto (`referencePriceInPlan`, congelada al escribir el ítem con la
+ * tasa de ese día), la foto; sin ella (ítem anterior), DX-513 tal cual. Espejo
+ * de `referenceInPlan` de la API (`reference-in-plan.ts`).
+ */
+export function referenceInPlan(
+  item: {
+    catalogPrice: number | null | undefined;
+    catalogCurrency?: string | null;
+    priceSource?: string | null;
+    referencePriceInPlan?: number | null;
+  },
+  planCurrency: string,
+): number | null {
+  if (item.referencePriceInPlan != null) return item.referencePriceInPlan;
+  return discountReference(item, planCurrency);
 }
 
 /** Texto cuando la prestación no admite descuentos (DX-105). */

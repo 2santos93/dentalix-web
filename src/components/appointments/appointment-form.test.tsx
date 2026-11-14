@@ -87,6 +87,7 @@ const mockedListTypes = listAppointmentTypes as jest.MockedFunction<typeof listA
 const endodoncia = {
   id: 'type-endo',
   tenantId: 't1',
+  patientCode: '1090',
   name: 'Endodoncia',
   durationMinutes: 90,
   color: '#7C3AED',
@@ -106,6 +107,7 @@ const patientsPage = {
     {
       id: 'pat-1',
       tenantId: 't1',
+      patientCode: '1109',
       firstName: 'María',
       lastName: 'López',
       docType: 'NATIONAL_ID' as const,
@@ -125,6 +127,7 @@ const patientsPage = {
     {
       id: 'pat-2',
       tenantId: 't1',
+      patientCode: '1128',
       firstName: 'Carlos',
       lastName: 'Pérez',
       docType: 'NATIONAL_ID' as const,
@@ -148,6 +151,7 @@ const patientsPage = {
 const newPatient = {
   id: 'pat-new',
   tenantId: 't1',
+  patientCode: '1151',
   firstName: 'Sofía',
   lastName: 'Ramírez',
   docType: 'NATIONAL_ID' as const,
@@ -166,6 +170,7 @@ const newPatient = {
 const createdAppointment = {
   id: 'apt-1',
   tenantId: 't1',
+  patientCode: '1169',
   patientId: 'pat-1',
   patientFirstName: null,
   patientLastName: null,
@@ -266,7 +271,7 @@ describe('AppointmentForm', () => {
       validityMonths: 12,
       anamnesisExpiresOn: '2027-01-01',
   today: '2026-10-20',
-  timeZone: 'America/Bogota',
+  timeZone: 'America/Caracas',
       lastReview: null,
     });
   });
@@ -313,6 +318,28 @@ describe('AppointmentForm', () => {
       expect(mockedListTypes).toHaveBeenCalledWith('tok');
     });
 
+    // DX-015-bis (D21): el tipo del tipo de recall, como si se eligiera a mano.
+    it('prellena el tipo por defecto si está activo, con su hora de fin', async () => {
+      render(
+        <AppointmentForm
+          token="tok"
+          onCreated={jest.fn()}
+          defaultDate={FUTURE_DATE}
+          defaultStartTime="09:00"
+          defaultAppointmentTypeId="type-endo"
+        />,
+      );
+      await screen.findByRole('option', { name: 'Endodoncia · 90 min' });
+      await waitFor(() => expect(screen.getByLabelText(/tipo de cita/i)).toHaveValue('type-endo'));
+      expect(readTime(/hora de fin/i)).toBe('10:30');
+    });
+
+    it('ignora el tipo por defecto si ya no está entre los activos', async () => {
+      render(<AppointmentForm token="tok" onCreated={jest.fn()} defaultAppointmentTypeId="type-retirado" />);
+      await screen.findByRole('option', { name: 'Endodoncia · 90 min' });
+      expect(screen.getByLabelText(/tipo de cita/i)).toHaveValue('');
+    });
+
     it('prefija el profesional desde la columna', async () => {
       render(<AppointmentForm token="tok" onCreated={jest.fn()} defaultProviderId="staff-2" />);
       await screen.findByRole('option', { name: /dr\. luis gómez/i });
@@ -341,6 +368,41 @@ describe('AppointmentForm', () => {
     expect(await screen.findByRole('option', { name: /carlos pérez/i })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /maría lópez/i })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /dr\. luis gómez/i })).toBeInTheDocument();
+  });
+
+  // DX-118 (FE-035): combobox de verdad — flechas, Enter, aria-activedescendant
+  // y un `status` con el número de resultados; las opciones son hijas directas
+  // del listbox (sin botones dentro).
+  it('elige un paciente solo con teclado: flechas y Enter; la lista es un combobox válido', async () => {
+    const user = userEvent.setup();
+    await renderFormAndWaitForLoad();
+    const search = screen.getByLabelText(/^paciente$/i);
+    expect(search).toHaveAttribute('role', 'combobox');
+    expect(search).toHaveAttribute('aria-expanded', 'false');
+    await user.type(search, 'pérez');
+    const listbox = await screen.findByRole('listbox', { name: 'Pacientes encontrados' });
+    expect(search).toHaveAttribute('aria-expanded', 'true');
+    expect(search).toHaveAttribute('aria-controls', listbox.id);
+    const options = within(listbox).getAllByRole('option');
+    expect(Array.from(listbox.children).every((li) => li.getAttribute('role') === 'option')).toBe(true);
+    expect(within(listbox).queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.getByRole('status', { name: '' })).toHaveTextContent(`${options.length} pacientes`);
+    expect(search).not.toHaveAttribute('aria-activedescendant');
+
+    await user.keyboard('{ArrowDown}');
+    expect(search).toHaveAttribute('aria-activedescendant', options[0].id);
+    expect(options[0]).toHaveAttribute('aria-selected', 'true');
+    await user.keyboard('{ArrowDown}');
+    expect(search).toHaveAttribute('aria-activedescendant', options[1].id);
+    await user.keyboard('{ArrowUp}');
+    expect(search).toHaveAttribute('aria-activedescendant', options[0].id);
+    const chosenName = options[0].querySelector('span')?.textContent ?? '';
+    await user.keyboard('{Enter}');
+    // Elegido: la ficha del paciente con «Cambiar», sin lista ni envío del formulario.
+    expect(screen.getByRole('button', { name: 'Cambiar' })).toBeInTheDocument();
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(screen.getByText(chosenName)).toBeInTheDocument();
+    expect(mockedCreateAppointment).not.toHaveBeenCalled();
   });
 
   it('loads the initial patient options from the server with a bounded pageSize (no query yet)', async () => {
@@ -404,7 +466,7 @@ describe('AppointmentForm', () => {
       validityMonths: 12,
       anamnesisExpiresOn: '2027-01-01',
   today: '2026-10-20',
-  timeZone: 'America/Bogota',
+  timeZone: 'America/Caracas',
       lastReview: null,
     });
     const user = userEvent.setup();
@@ -426,7 +488,7 @@ describe('AppointmentForm', () => {
       validityMonths: 12,
       anamnesisExpiresOn: null,
       today: '2026-10-20',
-      timeZone: 'America/Bogota',
+      timeZone: 'America/Caracas',
       lastReview: null,
     });
     const user = userEvent.setup();
@@ -470,7 +532,7 @@ describe('AppointmentForm', () => {
     function hoursForFutureDate() {
       const weekday = new Date(`${FUTURE_DATE}T00:00:00`).getDay();
       return {
-        timezone: 'America/Bogota',
+        timezone: 'America/Caracas',
         ranges: [{ weekday, startMinute: 9 * 60, endMinute: 13 * 60 }],
       };
     }
@@ -483,6 +545,18 @@ describe('AppointmentForm', () => {
       await typeDate(user, /^fecha$/i, FUTURE_DATE);
 
       expect(await screen.findByText(/horario de ese día: 09:00–13:00/i)).toBeInTheDocument();
+    });
+
+    it('DX-116: con el horario caído lo dice y sigue dejando guardar', async () => {
+      mockedGetSchedule.mockRejectedValue(new Error('500'));
+      const user = userEvent.setup();
+      await renderFormAndWaitForLoad();
+
+      expect(await screen.findByText(/no pudimos leer el horario/i)).toHaveAttribute('role', 'status');
+      await fillValidForm(user);
+      await user.click(screen.getByRole('button', { name: /agendar|guardar/i }));
+
+      await waitFor(() => expect(mockedCreateAppointment).toHaveBeenCalled());
     });
 
     it('bloquea el submit fuera del horario, diciendo cuándo SÍ se atiende', async () => {
@@ -525,7 +599,7 @@ describe('AppointmentForm', () => {
       // Horario que solo abre OTRO día que el de FUTURE_DATE.
       const weekday = new Date(`${FUTURE_DATE}T00:00:00`).getDay();
       mockedGetSchedule.mockResolvedValue({
-        timezone: 'America/Bogota',
+        timezone: 'America/Caracas',
         ranges: [{ weekday: (weekday + 1) % 7, startMinute: 540, endMinute: 780 }],
       });
       const user = userEvent.setup();
@@ -960,6 +1034,7 @@ describe('AppointmentForm con el reloj de la sede (DX-378)', () => {
   describe('sillón', () => {
     const chairBase = {
       tenantId: 't1',
+      patientCode: '2010',
       locationId: 'loc-1',
       active: true,
       createdAt: '2026-01-01T00:00:00.000Z',

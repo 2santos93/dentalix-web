@@ -1,6 +1,6 @@
 import * as React from 'react';
 import type { PostOpDeliveryDocument } from '@/lib/postop/postop-api';
-import { formatDate } from '@/lib/format/date';
+import { documentTexts, type DocumentFormat } from '@/lib/format/document-format';
 import { ClinicLogo } from '@/components/brand/clinic-brand';
 
 const copy = {
@@ -11,6 +11,8 @@ const copy = {
 
 interface PostOpDocumentProps {
   delivery: PostOpDeliveryDocument;
+  /** El formato de la sede de la entrega (`documentFormat`); `null` → «—» en la fecha. */
+  format: DocumentFormat | null;
 }
 
 /**
@@ -22,8 +24,9 @@ interface PostOpDocumentProps {
  * Misma excepción de fidelidad de impresión que el consentimiento: papel
  * blanco y tinta oscura explícitos, también en modo oscuro.
  */
-export function PostOpDocument({ delivery }: PostOpDocumentProps) {
+export function PostOpDocument({ delivery, format }: PostOpDocumentProps) {
   const { clinic } = delivery;
+  const doc = documentTexts(format);
 
   return (
     <article className="postop-print-root mx-auto w-full max-w-[210mm] bg-white px-4 py-6 text-[#111827] sm:px-10 sm:py-10 print:max-w-none print:p-0">
@@ -57,7 +60,7 @@ export function PostOpDocument({ delivery }: PostOpDocumentProps) {
           {copy.footer(
             delivery.templateCode,
             delivery.templateVersion,
-            formatDate(delivery.deliveredAt),
+            doc.date(delivery.deliveredAt),
             delivery.deliveredByName,
           )}
         </p>

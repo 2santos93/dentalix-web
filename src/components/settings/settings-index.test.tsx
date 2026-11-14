@@ -1,3 +1,5 @@
+import { auditRenderedControls } from '@/lib/test/rendered-a11y';
+import { SETTINGS_SECTIONS } from './settings-sections';
 import { render, screen, within } from '@testing-library/react';
 import { SettingsIndex, splitSettingsColumns } from './settings-index';
 import { visibleSettingsSections } from './settings-sections';
@@ -9,7 +11,7 @@ function tokenForRole(role: string): string {
 }
 
 describe('SettingsIndex (DX-282)', () => {
-  it('ADMIN: siete secciones y las 26 pantallas como enlaces', () => {
+  it('ADMIN: siete secciones y las 34 pantallas como enlaces', () => {
     render(<SettingsIndex token={tokenForRole('ADMIN')} />);
 
     const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
@@ -22,9 +24,9 @@ describe('SettingsIndex (DX-282)', () => {
       'Datos y seguridad',
       'Herramientas y registros',
     ]);
-    expect(screen.getAllByRole('link')).toHaveLength(26);
+    expect(screen.getAllByRole('link')).toHaveLength(34);
     expect(
-      within(screen.getByRole('list', { name: 'Tu cuenta' })).getByRole('link', { name: 'Mi perfil' }),
+      within(screen.getByRole('list', { name: 'Tu cuenta' })).getByRole('link', { name: /^Mi perfil Tu nombre/ }),
     ).toHaveAttribute('href', '/settings/profile');
 
     // Cada sección es una lista con nombre: el lector de pantalla dice dónde está.
@@ -49,19 +51,38 @@ describe('SettingsIndex (DX-282)', () => {
     render(<SettingsIndex token={tokenForRole(role)} />);
 
     const links = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
-    expect(links).toEqual(['/settings/profile', '/settings/sedes', '/settings/horarios', '/settings/privacidad']);
-    expect(screen.queryByRole('heading', { name: 'Cobro' })).not.toBeInTheDocument();
+    // DX-379: de Cobro solo «Presupuestos» (la validez la leen todos).
+    expect(links).toEqual([
+      '/settings/profile',
+      '/settings/sedes',
+      '/settings/horarios',
+      '/settings/presupuestos',
+      '/settings/privacidad',
+    ]);
+    expect(
+      within(screen.getByRole('list', { name: 'Cobro' }))
+        .getAllByRole('link')
+        .map((link) => link.getAttribute('href')),
+    ).toEqual(['/settings/presupuestos']);
     expect(screen.queryByRole('heading', { name: 'Historia clínica' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Consentimientos/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Accesos de soporte/ })).not.toBeInTheDocument();
   });
 
-  it('cada entrada lleva una línea que dice para qué sirve', () => {
+  it('cada entrada incluye título y apoyo visible en el nombre, con límite de palabra real', () => {
     render(<SettingsIndex token={tokenForRole('ADMIN')} />);
-    // El nombre es la etiqueta; la línea de apoyo va como descripción, para que
-    // la lista de enlaces de un lector de pantalla no lea frases enteras.
-    const link = screen.getByRole('link', { name: 'Caja' });
-    expect(link).toHaveAccessibleDescription('Cómo se abre y se cierra la caja por turno.');
+    for (const { entries } of SETTINGS_SECTIONS) for (const { label, description } of entries) {
+      const link = screen.getByRole('link', { name: `${label} ${description}` });
+      expect(link.textContent).toBe(`${label} ${description}`);
+    }
+  });
+
+  it('las entradas reales pasan axe con su CSS a ancho móvil y escritorio', () => {
+    const view = render(<SettingsIndex token={tokenForRole('ADMIN')} />);
+    auditRenderedControls([390, 1440].flatMap(width => ['light', 'dark'].map(theme => ({
+      html: `<div class="${theme}" style="width:${width}px">${view.container.innerHTML}</div>`, selector: 'a',
+      viewport: { width, height: 900 },
+    }))));
   });
 });
 
@@ -71,7 +92,13 @@ describe('splitSettingsColumns', () => {
     const [left, right] = splitSettingsColumns(sections);
     expect([...left, ...right]).toEqual(sections);
     const rows = (column: typeof sections) => column.reduce((n, s) => n + s.entries.length + 1.5, 0);
-    expect(Math.abs(rows(left) - rows(right))).toBeLessThanOrEqual(8);
+    // Las secciones no se parten ni se reordenan: el corte elegido es el
+    // mejor de los posibles (sin tolerancia a mano que subir cuando crece una
+    // sección).
+    const total = rows(sections);
+    const cuts = Array.from({ length: sections.length + 1 }, (_, i) => rows(sections.slice(0, i)));
+    const best = Math.min(...cuts.map((leftRows) => Math.abs(total - 2 * leftRows)));
+    expect(Math.abs(rows(left) - rows(right))).toBe(best);
     expect(left.length).toBeGreaterThan(0);
     expect(right.length).toBeGreaterThan(0);
   });

@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuthStore } from "@/lib/auth/auth-store";
 import { UnscheduledPlansView } from "@/components/treatment-plans/unscheduled-plans-view";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,33 +15,30 @@ import { PageHeader } from "@/components/shared/page-header";
 // (UX v2: antes las pestañas iban encima del H1). Un rol sin acceso que llegue
 // por URL ve el aviso de la propia vista (la API responde 403).
 const copy = {
-  checkingSession: "Verificando sesión…",
   title: "Presupuestos por seguir",
   description:
     "Presupuestos que esperan la respuesta del paciente o su cita: llámalo o escríbele antes de que se enfríen.",
   tabsLabel: "Seguimiento de presupuestos",
 };
 
+/** `useSearchParams` exige un límite de Suspense. */
 export default function PresupuestosPage() {
+  return (
+    <Suspense fallback={null}>
+      <PresupuestosRoute />
+    </Suspense>
+  );
+}
+
+function PresupuestosRoute() {
   const router = useRouter();
-  const [tab, setTab] = useState("presented");
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // DX-283: la pestaña va en la URL (`?tab=aceptado`), para enlazarla y volver a ella.
+  const tab = searchParams.get("tab") === "aceptado" ? "accepted" : "presented";
+  const setTab = (next: string) =>
+    router.replace(next === "accepted" ? `${pathname}?tab=aceptado` : pathname, { scroll: false });
   const accessToken = useAuthStore((s) => s.accessToken);
-  const hasHydrated = useAuthStore((s) => s._hasHydrated);
-
-  useEffect(() => {
-    if (!hasHydrated) return;
-    if (!accessToken) {
-      router.replace("/login");
-    }
-  }, [accessToken, router, hasHydrated]);
-
-  if (!hasHydrated) {
-    return (
-      <p role="status" className="text-sm text-muted">
-        {copy.checkingSession}
-      </p>
-    );
-  }
 
   if (!accessToken) {
     return null;

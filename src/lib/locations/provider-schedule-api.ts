@@ -8,13 +8,7 @@ export type ProviderSchedule = components['schemas']['ProviderScheduleDto'];
 export type ProviderLocationSchedule = components['schemas']['ProviderLocationScheduleDto'];
 export type ReplaceProviderScheduleInput = components['schemas']['ReplaceProviderScheduleDto'];
 export type ProviderOverride = components['schemas']['ProviderOverrideDto'];
-/**
- * La API documenta `note` sin `type: String` y el generador lo deja como
- * objeto vacío: se corrige aquí (es texto de hasta 200 caracteres o null).
- */
-export type SetProviderOverrideInput = Omit<components['schemas']['SetProviderOverrideDto'], 'note'> & {
-  note?: string | null;
-};
+export type SetProviderOverrideInput = components['schemas']['SetProviderOverrideDto'];
 export type SetProviderOverrideResult = components['schemas']['SetProviderOverrideResultDto'];
 export type Roster = components['schemas']['RosterDto'];
 export type RosterProvider = components['schemas']['RosterProviderDto'];

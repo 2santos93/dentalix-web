@@ -10,7 +10,7 @@ import {
 } from '@/lib/expenses/expenses-api';
 import { EXPENSE_RECEIPT_ACCEPT, EXPENSE_RECEIPT_RULES } from '@/lib/expenses/presentation';
 import type { SingleFileUploadRequest } from '@/lib/files/upload-single-file';
-import { formatCurrency } from '@/lib/format/currency';
+import { sedeMoney } from '@/lib/format/sede-number';
 import { collapseSpaces } from '@/lib/format/text';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
@@ -76,6 +76,7 @@ export function CashOutflowModal({
   onCreated,
 }: CashOutflowModalProps) {
   const categories = useExpenseCategories(token, open);
+  const money = (amount: number, code: string) => sedeMoney(amount, code, fmt);
   const [category, setCategory] = useState('');
   const [supplier, setSupplier] = useState('');
   const [description, setDescription] = useState('');
@@ -120,7 +121,7 @@ export function CashOutflowModal({
     setSubmitting(true);
     try {
       const created = await createCashOutflow(token, body, idempotencyKey, locationId);
-      onCreated(created, cashOutflowCopy.created(formatCurrency(amount, currency)));
+      onCreated(created, cashOutflowCopy.created(sedeMoney(amount, currency, fmt)));
       onOpenChange(false);
     } catch (err) {
       // La clave no cambia: reintentar esta misma salida no la duplica. Los
@@ -184,6 +185,7 @@ export function CashOutflowModal({
       <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
         <FormField htmlFor="outflow-amount" label={expenseFieldsCopy.amount} error={errors.amount}>
           <MoneyInput
+            money={money}
             id="outflow-amount"
             currency={currency}
             requirePositive

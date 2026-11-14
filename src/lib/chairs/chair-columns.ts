@@ -41,6 +41,27 @@ export function chairColumns(
   ];
 }
 
+/**
+ * DX-492: los sillones activos sin una cita a esta hora. Como la EXCLUDE de la
+ * API, cualquier estado menos cancelada ocupa (el servidor tiene la última
+ * palabra: 409 con el nombre del sillón).
+ */
+export function freeChairs(
+  chairs: readonly Chair[],
+  appointments: readonly { chairId?: string | null; status: string; start: string; end: string }[],
+  now: Date,
+): Chair[] {
+  const at = now.getTime();
+  const occupied = new Set(
+    appointments
+      .filter(
+        (a) => a.status !== 'CANCELLED' && new Date(a.start).getTime() <= at && at < new Date(a.end).getTime(),
+      )
+      .map((a) => a.chairId),
+  );
+  return chairs.filter((c) => c.active && !occupied.has(c.id));
+}
+
 /** La columna de una cita en la vista por sillón. */
 export function chairColumnOf(appointment: { chairId?: string | null }): string {
   return appointment.chairId ?? NO_CHAIR_COLUMN;
@@ -59,6 +80,31 @@ export function proposeProvider(
   if (currentProviderId !== '') return currentProviderId;
   const proposed = chair?.defaultProviderId ?? null;
   return proposed !== null && staffIds.includes(proposed) ? proposed : currentProviderId;
+}
+
+/**
+ * DX-479: al MOVER una cita a un sillón, el profesional no cambia solo. Si el
+ * sillón destino tiene otro profesional por defecto (y sigue en el personal),
+ * se OFRECE asignarlo; quien mueve decide, y «Mantener» es lo de siempre.
+ * Devuelve el profesional a ofrecer, o `null` si no hay nada que ofrecer.
+ */
+export function offeredProvider(
+  currentProviderId: string,
+  chair: Pick<Chair, 'defaultProviderId'> | null,
+  staffIds: readonly string[],
+): string | null {
+  const proposed = chair?.defaultProviderId ?? null;
+  if (proposed === null || proposed === currentProviderId) return null;
+  return staffIds.includes(proposed) ? proposed : null;
+}
+
+/**
+ * DX-479: en la vista por sillón solo se arrastra lo que está por atender.
+ * Una completada, ausente o cancelada no se mueve de sillón ni de hora desde
+ * la rejilla (el detalle y «Mover a…» siguen sus propias reglas).
+ */
+export function canDragByChair(status: string): boolean {
+  return status === 'SCHEDULED' || status === 'CONFIRMED';
 }
 
 /** Sube (`-1`) o baja (`+1`) un sillón un puesto; en los bordes no cambia. */
