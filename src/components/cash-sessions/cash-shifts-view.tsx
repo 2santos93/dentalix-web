@@ -32,6 +32,7 @@ import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
 import { getTokenRole } from '@/lib/auth/token-role';
+import { canManagePayments, canRegisterPayments, hasPermission, useEffectivePermissions } from '@/lib/auth/permissions';
 import { PageHeader } from '@/components/shared/page-header';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -113,7 +114,14 @@ interface CashShiftsViewProps {
  * por separado: si la lista falla, la caja actual sigue a mano.
  */
 export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
-  const isAdmin = getTokenRole(token) === 'ADMIN';
+  const role = getTokenRole(token);
+  const permissions = useEffectivePermissions();
+  // DX-090: abrir, cerrar y cobrar, los roles de cobro o PAYMENT_REGISTER; la
+  // salida de caja (un gasto) sigue siendo de los roles de cobro. Con
+  // FINANCIAL_REPORTS_VIEW la lista trae los turnos de todos (la API).
+  const canOperate = canRegisterPayments(role, permissions);
+  const canOutflow = canManagePayments(role);
+  const seesAll = role === 'ADMIN' || hasPermission(permissions, 'FINANCIAL_REPORTS_VIEW');
   const [locationKey, setLocationKey] = useState(0);
   const [current, setCurrent] = useState<CurrentCashSession | null>(null);
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
@@ -242,8 +250,9 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
           </div>
         ) : currentError ? (
           <SectionError description={currentError} onRetry={() => setCurrentKey((k) => k + 1)} />
-        ) : current ? (
+        ) : current && canOperate ? (
           <CurrentSessionCard
+            canOutflow={canOutflow}
             current={current}
             sedeName={sedeName}
             stamp={stamp}
@@ -272,7 +281,7 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
           <SectionHeader
             titleId="cash-shifts-title"
             title={copy.listTitle}
-            description={isAdmin ? copy.scopeAdmin : copy.scopeOwn}
+            description={seesAll ? copy.scopeAdmin : copy.scopeOwn}
             actions={
               <NativeSelect
                 aria-label={copy.statusLabel}
@@ -472,8 +481,11 @@ function CurrentSessionCard({
   onOpen,
   onClose,
   onOutflow,
+  canOutflow,
 }: {
   current: CurrentCashSession;
+  /** DX-090: la salida de caja es un gasto: solo los roles de cobro, no el permiso extra. */
+  canOutflow: boolean;
   sedeName: string;
   /** El pintor de la pantalla: hora e importes de la caja con el formato de SU sede (sin él, «—»). */
   stamp: SedeStamp;
@@ -515,7 +527,7 @@ function CurrentSessionCard({
               <Button asChild variant="ghost">
                 <Link href={cashSessionHref(session.id)}>{copy.viewShift}</Link>
               </Button>
-              {currencyMissing ? null : (
+              {currencyMissing || !canOutflow ? null : (
                 <Button type="button" variant="secondary" onClick={onOutflow}>
                   {copy.outflow}
                 </Button>

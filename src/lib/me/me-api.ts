@@ -1,4 +1,5 @@
 import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
+import type { components } from '@/lib/api/schema';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { prepareAvatarFile } from './avatar-resize';
 
@@ -19,6 +20,12 @@ export interface MyProfile {
   avatarUrl: string | null;
   emailVerifiedAt: string | null;
   memberships: MyProfileMembership[];
+  /**
+   * DX-090: lo que puede hacer en la clínica de la sesión (permisos de serie
+   * del rol más los extra concedidos). Opcional: un `PATCH /me` o un mock
+   * antiguo no lo traen; ausente cuenta como ninguno.
+   */
+  effectivePermissions?: components['schemas']['ExtraPermission'][];
 }
 
 export function getMe(token: string): Promise<MyProfile> {

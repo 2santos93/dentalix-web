@@ -152,6 +152,11 @@ export interface StaffMemberDetail extends StaffMember {
    * `null` = sin bloqueo.
    */
   loginBlockedUntil: components['schemas']['StaffMemberDetailDto']['loginBlockedUntil'];
+  /**
+   * DX-090: permisos extra concedidos sobre su rol. Opcional: una API anterior
+   * no lo trae; ausente cuenta como ninguno.
+   */
+  extraPermissions?: components['schemas']['StaffMemberDetailDto']['extraPermissions'];
 }
 
 /**
@@ -213,6 +218,30 @@ export async function replaceStaffLocations(
   return apiFetch<StaffLocations>(`/staff/${userId}/locations`, {
     method: 'PUT',
     body: { locationIds },
+    token,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Permisos extra del miembro (DX-090, solo ADMIN)
+// ---------------------------------------------------------------------------
+
+/** Respuesta de `PUT /staff/:userId/permissions`: los concedidos y los efectivos. */
+export type StaffPermissions = components['schemas']['StaffPermissionsDto'];
+
+/**
+ * `PUT /staff/:userId/permissions` — sustituye la lista COMPLETA de permisos
+ * extra (`[]` = ninguno). 403 sobre los propios, 409 si el miembro es ADMIN,
+ * 404 si no es miembro activo. Rige en la siguiente petición del miembro.
+ */
+export async function replaceStaffPermissions(
+  token: string,
+  userId: string,
+  permissions: components['schemas']['ExtraPermission'][],
+): Promise<StaffPermissions> {
+  return apiFetch<StaffPermissions>(`/staff/${userId}/permissions`, {
+    method: 'PUT',
+    body: { permissions },
     token,
   });
 }

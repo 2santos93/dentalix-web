@@ -34,7 +34,7 @@ import { recallNoticeFor } from '@/lib/recall/recall-notice';
 import { activeSedeCurrency } from '@/lib/locations/location-settings';
 import { paymentLocationHint } from '@/lib/payments/payment-location';
 import { getTokenAllowedLocationIds, getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
-import { canRecordPayments } from '@/lib/payments/billable-plans-api';
+import { canManagePayments, canRegisterPayments, useEffectivePermissions } from '@/lib/auth/permissions';
 import { optionGroupOf, patchableStatuses } from '@/lib/treatment-plans/plan-options';
 import { useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
@@ -148,7 +148,12 @@ export function TreatmentPlansTab({
   // DX-051: saldo y abonos solo para los roles de cobro (los mismos
   // PAYMENT_ROLES que la API). DENTIST y ASSISTANT no ven datos de pago: ni se
   // piden (serían 403 y un toast en cada acción) ni se pinta su sección.
-  const canSeeBilling = canRecordPayments(getTokenRole(token));
+  // DX-090: también la asistente con PAYMENT_REGISTER (`effectivePermissions`
+  // de `GET /me`): registra abonos y ve los del plan, pero anular, la factura
+  // externa y el plan de cuotas siguen siendo de los roles de cobro.
+  const permissions = useEffectivePermissions();
+  const canSeeBilling = canRegisterPayments(getTokenRole(token), permissions);
+  const canManageBilling = canManagePayments(getTokenRole(token));
   // Plans list + catalog (loaded together).
   const [plans, setPlans] = useState<TreatmentPlan[]>([]);
   const [catalogItems, setCatalogItems] = useState<DentalCatalogItem[]>([]);
@@ -1147,19 +1152,23 @@ export function TreatmentPlansTab({
                   onRecorded={refreshBalanceAndPayments}
                   payments={payments}
                   voidingPaymentId={voidingPaymentId}
-                  onVoid={openVoidConfirm}
+                  onVoid={canManageBilling ? openVoidConfirm : undefined}
                   onReceipt={setReceiptPaymentId}
                   manualPaymentIds={manualPaymentIds}
                   onAllocate={role === 'ADMIN' && billable ? openAllocation : undefined}
                   onViewAllocation={role === 'ADMIN' ? setViewAllocationPaymentId : undefined}
                   onViewProof={canSeeBilling ? (p) => proofViewer.open(p.id) : undefined}
-                  onExternalInvoice={(p) =>
-                    setInvoiceTarget({
-                      paymentId: p.id,
-                      subject: paymentRowLabel(p, sedeFmt),
-                      externalInvoiceNumber: p.externalInvoiceNumber,
-                    })
+                  onExternalInvoice={
+                    canManageBilling
+                      ? (p) =>
+                          setInvoiceTarget({
+                            paymentId: p.id,
+                            subject: paymentRowLabel(p, sedeFmt),
+                            externalInvoiceNumber: p.externalInvoiceNumber,
+                          })
+                      : undefined
                   }
+                  showPaymentPlan={canManageBilling}
                   paymentPlanRefreshSignal={paymentPlanRefreshSignal}
                 />
               ) : null}

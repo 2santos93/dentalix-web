@@ -17,6 +17,7 @@ import {
   Settings,
 } from 'lucide-react';
 import type { ClinicRole } from '@/lib/me/me-api';
+import type { ExtraPermission } from '@/lib/auth/permissions';
 import { CLOSING_QUEUE_HREF } from '@/lib/appointments/closing-queue-api';
 
 export const ANAMNESIS_HREF = '/anamnesis-por-revisar';
@@ -40,6 +41,12 @@ export interface NavItem {
    * enseñar un enlace que acabaría en 403, la frontera la pone la API.
    */
   roles?: readonly ClinicRole[];
+  /**
+   * DX-090: además de `roles`, quien tenga alguno de estos permisos (de serie
+   * o concedidos, `effectivePermissions` de `GET /me`). Copia el
+   * `@AllowPermissions(...)` del endpoint que alimenta la pantalla.
+   */
+  permissions?: readonly ExtraPermission[];
 }
 
 export interface NavGroup {
@@ -88,8 +95,15 @@ const ANAMNESIS: NavItem = {
   icon: ClipboardCheck,
   roles: ['ADMIN', 'DENTIST', 'ASSISTANT'],
 };
-// Dato financiero: mismos roles que PAYMENT_ROLES en la API.
-const CASH: NavItem = { href: '/caja', label: 'Caja', icon: Wallet, roles: ['ADMIN', 'RECEPTION'] };
+// Dato financiero: mismos roles que PAYMENT_ROLES en la API. DX-090: también
+// quien cobra con PAYMENT_REGISTER y quien la lee con FINANCIAL_REPORTS_VIEW.
+const CASH: NavItem = {
+  href: '/caja',
+  label: 'Caja',
+  icon: Wallet,
+  roles: ['ADMIN', 'RECEPTION'],
+  permissions: ['PAYMENT_REGISTER', 'FINANCIAL_REPORTS_VIEW'],
+};
 // Cartera por antigüedad (DX-145): RECEIVABLES_ROLES. Vive bajo /caja.
 const RECEIVABLES: NavItem = {
   href: '/caja/cartera',
@@ -109,11 +123,13 @@ const DISCOUNTS: NavItem = {
 // Reportes (DX-014): «Comparar sedes» (REPORT_ROLES), «Producción por
 // procedimiento» (PRODUCTION_REPORT_ROLES, DX-423: el odontólogo ve la suya) y
 // «Cobrado sin imputar» (UNALLOCATED_PAYMENTS_ROLES, DX-399: recepción solo ve esa).
+// DX-090: con FINANCIAL_REPORTS_VIEW, los financieros (como ADMIN, en lectura).
 const REPORTS: NavItem = {
   href: '/reportes',
   label: 'Reportes',
   icon: ChartColumn,
   roles: ['ADMIN', 'DENTIST', 'RECEPTION'],
+  permissions: ['FINANCIAL_REPORTS_VIEW'],
 };
 // CATALOG_READ_ROLES: recepción no registra clínico.
 const CATALOG: NavItem = {
@@ -145,14 +161,26 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 
 export const ALL_NAV_ITEMS: readonly NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
 
-/** ¿Ve `role` la entrada? Sin rol resuelto (`null`) solo las de todos. */
-export function canSee(item: NavItem, role: ClinicRole | null): boolean {
-  return !item.roles || (role !== null && item.roles.includes(role));
+/**
+ * ¿Ve `role` la entrada? Sin rol resuelto (`null`) solo las de todos. DX-090:
+ * con rol, también si tiene alguno de los `permissions` de la entrada.
+ */
+export function canSee(
+  item: NavItem,
+  role: ClinicRole | null,
+  permissions: readonly ExtraPermission[] = [],
+): boolean {
+  if (!item.roles) return true;
+  if (role === null) return false;
+  return item.roles.includes(role) || (item.permissions?.some((p) => permissions.includes(p)) ?? false);
 }
 
 /** Los grupos con lo que `role` puede abrir; un grupo vacío desaparece. */
-export function visibleNavGroups(role: ClinicRole | null): NavGroup[] {
-  return NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => canSee(i, role)) })).filter(
+export function visibleNavGroups(
+  role: ClinicRole | null,
+  permissions: readonly ExtraPermission[] = [],
+): NavGroup[] {
+  return NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => canSee(i, role, permissions)) })).filter(
     (g) => g.items.length > 0,
   );
 }
@@ -171,13 +199,18 @@ const TAB_PREFERENCES: Record<ClinicRole, string[]> = {
   // `/catalog` explícito: desde DX-423 el odontólogo también ve Reportes, que
   // va antes en el orden del menú y le quitaría la pestaña al catálogo.
   DENTIST: ['/dashboard', '/agenda', '/patients', ANAMNESIS_HREF, '/presupuestos', '/inventory', '/catalog'],
-  ASSISTANT: ['/dashboard', '/agenda', '/patients', ANAMNESIS_HREF, '/presupuestos', '/inventory'],
+  // DX-090: la asistente que cobra (PAYMENT_REGISTER) tiene la Caja a mano;
+  // sin el permiso no la ve y entra la anamnesis.
+  ASSISTANT: ['/dashboard', '/agenda', '/patients', '/caja', ANAMNESIS_HREF, '/presupuestos', '/inventory'],
 };
 
 export const TAB_COUNT = 4;
 
-export function bottomTabsFor(role: ClinicRole | null): NavItem[] {
-  const visible = ALL_NAV_ITEMS.filter((i) => canSee(i, role) && i.href !== SETTINGS.href);
+export function bottomTabsFor(
+  role: ClinicRole | null,
+  permissions: readonly ExtraPermission[] = [],
+): NavItem[] {
+  const visible = ALL_NAV_ITEMS.filter((i) => canSee(i, role, permissions) && i.href !== SETTINGS.href);
   const prefs = role ? TAB_PREFERENCES[role] : ['/dashboard', '/agenda', '/patients'];
   const picked: NavItem[] = [];
   for (const href of prefs) {

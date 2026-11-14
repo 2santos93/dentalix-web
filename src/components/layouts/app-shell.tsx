@@ -29,6 +29,7 @@ import {
   visibleNavGroups,
   type NavGroup,
 } from './nav-config';
+import { useEffectivePermissions } from '@/lib/auth/permissions';
 import { CommandPalette, ShortcutHint } from './command-palette';
 import { MoreSheet } from './more-sheet';
 import { CallerLookupDialog } from '@/components/caller-lookup/caller-lookup-dialog';
@@ -93,9 +94,12 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
     }
     hydrate();
   }, [accessToken]);
-  const groups = visibleNavGroups(role);
+  // DX-090: los permisos extra (`GET /me`) suman entradas (Caja, Reportes).
+  // Llegan tras `/me`: hasta entonces, solo lo del rol.
+  const permissions = useEffectivePermissions();
+  const groups = visibleNavGroups(role, permissions);
   const nav = groups.flatMap((g) => g.items);
-  const tabs = bottomTabsFor(role);
+  const tabs = bottomTabsFor(role, permissions);
 
   // DX-200: «Te esperan N» del odontólogo — sus pacientes en espera en la sede
   // activa, con el mismo sondeo que el panel «En clínica». Sin sede, nada.

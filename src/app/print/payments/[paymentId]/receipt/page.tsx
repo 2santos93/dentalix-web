@@ -5,6 +5,8 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { useSessionBootstrap } from '@/lib/auth/use-session-bootstrap';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canRecordPayments } from '@/lib/payments/billable-plans-api';
+import { canRegisterPayments } from '@/lib/auth/permissions';
+import { useMe } from '@/lib/session/session-store';
 import { PaymentReceiptPrintView } from '@/components/payments/payment-receipt-print-view';
 
 const copy = {
@@ -35,6 +37,7 @@ function PaymentReceiptPrintRoute() {
   const accessToken = useAuthStore((s) => s.accessToken);
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
   useSessionBootstrap();
+  const me = useMe();
 
   useEffect(() => {
     if (hasHydrated && !accessToken) router.replace('/login');
@@ -50,12 +53,21 @@ function PaymentReceiptPrintRoute() {
   if (!accessToken) return null;
 
   // Un rol sin permiso de cobro (enlace compartido) ve el aviso sin pedir nada.
+  // DX-090: la asistente con PAYMENT_REGISTER imprime el recibo de lo que cobra;
+  // mientras `GET /me` no responde, se espera en vez de enseñar el aviso.
+  if (!canRecordPayments(getTokenRole(accessToken)) && me.status === 'loading') {
+    return (
+      <p role="status" className="px-4 py-8 text-center text-sm text-muted">
+        {copy.checkingSession}
+      </p>
+    );
+  }
   return (
     <PaymentReceiptPrintView
       token={accessToken}
       paymentId={params.paymentId}
       format={searchParams.get('formato') === '80mm' ? '80mm' : 'a4'}
-      allowed={canRecordPayments(getTokenRole(accessToken))}
+      allowed={canRegisterPayments(getTokenRole(accessToken), me.status === 'ready' ? me.data.effectivePermissions : [])}
     />
   );
 }

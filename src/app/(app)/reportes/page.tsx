@@ -4,6 +4,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { PageHeader } from '@/components/shared/page-header';
 import { getTokenRole } from '@/lib/auth/token-role';
+import { useEffectivePermissions } from '@/lib/auth/permissions';
 import { LocationsComparisonView } from '@/components/reports/locations-comparison-view';
 import { ProductionByProcedureView } from '@/components/reports/production-by-procedure-view';
 import { RecoveredSlotsView } from '@/components/reports/recovered-slots-view';
@@ -47,7 +48,9 @@ function ReportesRoute() {
   const searchParams = useSearchParams();
   const accessToken = useAuthStore((s) => s.accessToken);
   const role = getTokenRole(accessToken);
-  const tabs = reportTabsFor(role);
+  // DX-090: FINANCIAL_REPORTS_VIEW suma las pestañas financieras.
+  const permissions = useEffectivePermissions();
+  const tabs = reportTabsFor(role, permissions);
   const tab = resolveReportTab(searchParams.get('tab'), tabs);
 
   if (!accessToken) {

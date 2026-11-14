@@ -40,7 +40,8 @@ function PaymentFrozenRate({ payment, fmt }: { payment: Payment; fmt: RegionalFo
 interface PlanPaymentsListProps {
   payments: Payment[];
   voidingPaymentId: string | null;
-  onVoid: (paymentId: string) => void;
+  /** DX-090: sin él no se ofrece «Anular» (quien cobra con PAYMENT_REGISTER no anula). */
+  onVoid?: (paymentId: string) => void;
   /** Abre el recibo de caja del abono (DX-136). */
   onReceipt: (paymentId: string) => void;
   /** Plan rechazado o cancelado (DX-109): el vacío no invita a registrar un abono. */
@@ -222,13 +223,15 @@ export function PlanPaymentsList({
         onSelect: () => onAllocate(p.id),
       });
     }
-    actions.push({
-      label: voiding ? copy.voidingPayment : copy.voidPaymentAction,
-      onSelect: () => onVoid(p.id),
-      disabled: voiding,
-      destructive: true,
-      separatorBefore: true,
-    });
+    if (onVoid) {
+      actions.push({
+        label: voiding ? copy.voidingPayment : copy.voidPaymentAction,
+        onSelect: () => onVoid(p.id),
+        disabled: voiding,
+        destructive: true,
+        separatorBefore: true,
+      });
+    }
     return actions;
   }
 

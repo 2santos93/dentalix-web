@@ -10,6 +10,22 @@ describe('pestañas de Reportes por rol (DX-423, DX-399)', () => {
     expect(reportTabsFor(null).map((t) => t.key)).toEqual(['comparar-sedes']);
   });
 
+  it('DX-090: FINANCIAL_REPORTS_VIEW suma las financieras (comparar, rentabilidad, sin imputar); PAYMENT_REGISTER no', () => {
+    expect(reportTabsFor('ASSISTANT', ['FINANCIAL_REPORTS_VIEW']).map((t) => t.key)).toEqual([
+      'comparar-sedes',
+      'rentabilidad',
+      'sin-imputar',
+    ]);
+    expect(reportTabsFor('DENTIST', ['FINANCIAL_REPORTS_VIEW']).map((t) => t.key)).toEqual([
+      'comparar-sedes',
+      'rentabilidad',
+      'produccion',
+      'sin-imputar',
+    ]);
+    expect(reportTabsFor('ASSISTANT', ['PAYMENT_REGISTER']).map((t) => t.key)).toEqual(['comparar-sedes']);
+    expect(reportTabsFor(null, ['FINANCIAL_REPORTS_VIEW']).map((t) => t.key)).toEqual(['comparar-sedes']);
+  });
+
   it('`?tab=` fuera de las del rol cae en su primera', () => {
     expect(resolveReportTab('comparar-sedes', reportTabsFor('DENTIST'))).toBe('produccion');
     expect(resolveReportTab('produccion', reportTabsFor('ADMIN'))).toBe('produccion');
