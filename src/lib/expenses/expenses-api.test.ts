@@ -57,24 +57,24 @@ describe('expenses-api', () => {
   it('lista y exporta con los filtros en la query, sin los vacíos', async () => {
     const spy = mockFetch({ items: [], total: 0, page: 1, pageSize: 20 });
     await listExpenses('tok', { from: '2026-10-01', to: '2026-10-24', status: 'OPEN', overdue: true, query: '', page: 2 });
-    await downloadExpensesCsv('tok', { from: '2026-10-01', to: '2026-10-24', category: 'Arriendo', locationId: 'loc-2' });
+    await downloadExpensesCsv('tok', { from: '2026-10-01', to: '2026-10-24', category: 'Alquiler', locationId: 'loc-2' });
     expect(call(spy, 0).path).toMatch(/\/expenses$/);
     expect(call(spy, 0).search).toBe('?from=2026-10-01&to=2026-10-24&status=OPEN&overdue=true&page=2');
     expect(call(spy, 1).path).toMatch(/\/expenses\.csv$/);
-    expect(call(spy, 1).search).toBe('?from=2026-10-01&to=2026-10-24&category=Arriendo&locationId=loc-2');
+    expect(call(spy, 1).search).toBe('?from=2026-10-01&to=2026-10-24&category=Alquiler&locationId=loc-2');
   });
 
   it('alta y pago con Idempotency-Key; edición y anulaciones con su cuerpo', async () => {
     const spy = mockFetch({});
     await getExpense('tok', 'exp 1');
-    await createExpense('tok', { category: 'Arriendo', amount: 10, currency: 'USD', invoiceDate: '2026-10-01' }, 'key-1');
+    await createExpense('tok', { category: 'Alquiler', amount: 10, currency: 'USD', invoiceDate: '2026-10-01' }, 'key-1');
     await updateExpense('tok', 'exp-1', { supplier: null });
     await voidExpense('tok', 'exp-1', 'Factura duplicada');
     await addExpensePayment('tok', 'exp-1', { amount: 5, method: 'CASH', fromCashSession: true }, 'key-2');
     await voidExpensePayment('tok', 'exp-1', 'pay-1', 'Pago equivocado');
 
     expect(call(spy, 0).path).toMatch(/\/expenses\/exp%201$/);
-    expect(call(spy, 1)).toMatchObject({ method: 'POST', body: { category: 'Arriendo', amount: 10 } });
+    expect(call(spy, 1)).toMatchObject({ method: 'POST', body: { category: 'Alquiler', amount: 10 } });
     expect(call(spy, 1).headers['Idempotency-Key']).toBe('key-1');
     expect(call(spy, 2)).toMatchObject({ method: 'PATCH', body: { supplier: null } });
     expect(call(spy, 3)).toMatchObject({ method: 'POST', body: { reason: 'Factura duplicada' } });

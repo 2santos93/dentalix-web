@@ -9,6 +9,7 @@ import { ProductionByProcedureView } from '@/components/reports/production-by-pr
 import { RecoveredSlotsView } from '@/components/reports/recovered-slots-view';
 import { ChairOccupancyView } from '@/components/reports/chair-occupancy-view';
 import { PatientLinksView } from '@/components/reports/patient-links-view';
+import { ProfitabilityView } from '@/components/reports/profitability-view';
 import { UnallocatedPaymentsView } from '@/components/reports/unallocated-payments-view';
 import {
   ReportsTabs,
@@ -26,7 +27,7 @@ import {
 // propia vista (la API responde 403): la frontera es el servidor.
 const copy = {
   title: 'Reportes',
-  description: 'Cómo van tus sedes: producción, cobros, citas y ocupación, y qué procedimientos sostienen la clínica.',
+  description: 'Cómo van tus sedes: producción, cobros, rentabilidad, citas y ocupación, y qué procedimientos sostienen la clínica.',
   descriptionOwn: 'Tu producción: qué procedimientos realizaste y a qué honorario frente al de catálogo.',
   descriptionCollections: 'Los abonos con algo sin imputar a ítems del plan: cuánto está imputado y cuánto queda a cuenta, descontado lo ya devuelto o traspasado.',
 };
@@ -70,6 +71,8 @@ function ReportesRoute() {
       <ChairOccupancyView token={accessToken} isAdmin={role === 'ADMIN'} />
     ) : tab === 'enlaces-paciente' ? (
       <PatientLinksView token={accessToken} />
+    ) : tab === 'rentabilidad' ? (
+      <ProfitabilityView token={accessToken} />
     ) : tab === 'sin-imputar' ? (
       <UnallocatedPaymentsView token={accessToken} />
     ) : (

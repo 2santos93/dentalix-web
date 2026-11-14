@@ -176,6 +176,10 @@ describe('server-entry.cjs en un proceso (DX-458)', () => {
     const slow = get(web.port, '/slow?ms=2000');
     await waitFor('petición lenta en vuelo', () => web.output().includes('SLOW_STARTED'));
     web.child.kill('SIGTERM');
+    // `kill` solo envía la señal: sin esperar a que el proceso la atienda, la
+    // petición de salud podía llegar antes y dar 200 (DX-458-bis, intermitente
+    // en CI).
+    await waitFor('SIGTERM atendido', () => web.output().includes('[apagado] SIGTERM: /api/health da 503'));
 
     // Drenando: sigue atendiendo, pero la salud da 503 y no reutiliza conexiones.
     const draining = await get(web.port, '/health');
