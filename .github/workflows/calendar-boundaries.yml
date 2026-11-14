@@ -54,6 +54,49 @@ jobs:
           cache: npm
 
       - run: npm ci
+      # DX-297: parte del Jest resuelve colores y axe en Chromium real; como en
+      # ci.yml, los navegadores se cachean por la versión exacta de
+      # @playwright/test y el SO, y la instalación reintenta hasta 3 veces.
+      - name: Versión de Playwright y SO (clave de la caché de navegadores)
+        id: playwright-version
+        timeout-minutes: 1
+        run: |
+          version="$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test']?.version ?? ''")"
+          if ! [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            echo "::error title=Versión de Playwright::package-lock.json no tiene node_modules/@playwright/test con una versión exacta (es «${version}»)"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "os=$(. /etc/os-release && echo "${ID}-${VERSION_ID}")-$(uname -m)" >> "$GITHUB_OUTPUT"
+      - name: Navegadores de Playwright (restaurar la caché)
+        id: playwright-cache
+        timeout-minutes: 2
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ steps.playwright-version.outputs.os }}-${{ steps.playwright-version.outputs.version }}
+      - name: Instalar Chromium para las pruebas de contraste
+        timeout-minutes: 10
+        env:
+          BROWSERS_CACHED: ${{ steps.playwright-cache.outputs.cache-hit }}
+        run: |
+          echo 'Acquire::Retries "3";' | sudo tee /etc/apt/apt.conf.d/80-dentalix-retries >/dev/null
+          if [[ "${BROWSERS_CACHED}" == "true" ]]; then
+            install=(install-deps chromium)
+          else
+            install=(install --with-deps chromium)
+          fi
+          for attempt in 1 2 3; do
+            if npx playwright "${install[@]}"; then
+              exit 0
+            fi
+            if [[ "${attempt}" -lt 3 ]]; then
+              echo "::warning title=Chromium de Playwright::intento ${attempt} de 3 fallido (playwright ${install[*]}); reintento"
+              sleep $((attempt * 15))
+            fi
+          done
+          echo "::error title=Chromium de Playwright::playwright ${install[*]} falló en 3 intentos"
+          exit 1
       - name: Jest con FAKE_NOW=${{ matrix.boundary }}
         env:
           FAKE_NOW: ${{ matrix.boundary }}
