@@ -187,6 +187,8 @@ describe('PatientRecallSection (DX-015)', () => {
     expect(await screen.findByText('Elige el canal del contacto.')).toBeInTheDocument();
     expect(mockedContact).not.toHaveBeenCalled();
     await userEvent.selectOptions(screen.getByLabelText('Canal'), 'CALL');
+    // D23: en la ficha no hay desde dónde agendar: sin «Agendó».
+    expect(within(screen.getByLabelText('Resultado')).queryByRole('option', { name: 'Agendó' })).not.toBeInTheDocument();
     await userEvent.selectOptions(screen.getByLabelText('Resultado'), 'NO_ANSWER');
     await userEvent.click(screen.getByRole('button', { name: 'Guardar contacto' }));
     await waitFor(() => expect(mockedContact).toHaveBeenCalledWith('tok', 'r1', { channel: 'CALL', outcome: 'NO_ANSWER' }));

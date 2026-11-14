@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { test, expect } from './support/test';
-import { registerClinicViaApi, type ApiSession } from './support/api';
+import { apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
 import { dataList, dataListRows, rowAction } from './support/data-list';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
@@ -12,6 +12,8 @@ import { API_URL, tenantOrigin } from './support/urls';
  * Control y Mantenimiento periodontal), el ADMIN crea un tipo, le pone un
  * procedimiento que lo reinicia y lo hace excluyente con Control, que no tenía
  * grupo: la pantalla crea uno para los dos. La API lo confirma.
+ * DX-015-bis-4 (D20): enlaza Higiene con el tipo de cita «Limpieza» desde el
+ * modal; la lista lo enseña y la API lo guarda.
  */
 const suffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase();
 const password = 'Password123!';
@@ -19,6 +21,8 @@ const password = 'Password123!';
 let origin: string;
 let admin: { fullName: string; email: string };
 const NEW_TYPE = 'Retención de ortodoncia';
+const APPOINTMENT_TYPE = 'Limpieza';
+let appointmentTypeId: string;
 
 let session: ApiSession;
 
@@ -27,6 +31,7 @@ interface ApiRecallType {
   name: string;
   defaultIntervalMonths: number;
   exclusionGroup: string | null;
+  appointmentTypeId: string | null;
   triggerCatalogItemIds: string[];
 }
 
@@ -44,6 +49,12 @@ test.beforeAll(async ({ request }, testInfo) => {
     email: admin.email,
     password,
   });
+  // Una clínica nueva no trae tipos de cita (no hay globales).
+  ({ id: appointmentTypeId } = await apiPost<{ id: string }>(request, session, '/appointment-types', {
+    name: APPOINTMENT_TYPE,
+    durationMinutes: 40,
+    color: '#0E7490',
+  }));
 });
 
 test('crear un tipo con disparador y excluyente con Control', async ({ page, request }) => {
@@ -119,6 +130,22 @@ test('crear un tipo con disparador y excluyente con Control', async ({ page, req
   await expect(edit.getByLabel('Excluyente con')).toHaveValue(control!.id);
   await edit.getByRole('button', { name: 'Cancelar' }).click();
   await expect(edit).toBeHidden();
+
+  // D20: «Tipo de cita al agendar» de Higiene, en el mismo PATCH del tipo.
+  await rowAction(page, hygiene, 'Editar');
+  const hygieneEdit = page.getByRole('dialog', { name: 'Editar tipo de recall' });
+  const apptSelect = hygieneEdit.getByLabel('Tipo de cita al agendar');
+  await expect(apptSelect).toBeEnabled();
+  await expect(apptSelect).toHaveValue('');
+  await apptSelect.selectOption({ label: APPOINTMENT_TYPE });
+  await shot(page, 'recall-settings-appointment-type', 1440);
+  await hygieneEdit.getByRole('button', { name: 'Guardar cambios' }).click();
+  await expect(hygieneEdit).toBeHidden();
+  await expect(hygiene).toContainText(APPOINTMENT_TYPE);
+  const linkedRes = await request.get(`${API_URL}/recall-types`, { headers: session.headers });
+  const linked = (await linkedRes.json()) as ApiRecallType[];
+  expect(linked.find((t) => t.name === 'Higiene')!.appointmentTypeId).toBe(appointmentTypeId);
+  expect(linked.find((t) => t.name === 'Control')!.appointmentTypeId).toBeNull();
 
   // A 390 px la lista no desborda.
   await page.setViewportSize({ width: 390, height: 844 });

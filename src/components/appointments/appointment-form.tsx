@@ -57,6 +57,7 @@ import { InlineError } from '@/components/errors/inline-error';
 import { ApiError } from '@/lib/api/api-error';
 import { useProviderDay } from '@/components/appointments/use-provider-day';
 import { fitsRanges } from '@/lib/locations/provider-schedule';
+import { prefillAppointmentTypeId } from '@/lib/recall/recall-appointment-type';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { endSentence } from '@/lib/format/text';
 import { controlHeight, fieldClass } from '@/lib/ui/field-class';
@@ -183,6 +184,12 @@ interface AppointmentFormProps {
   defaultProviderId?: string;
   /** DX-211: pre-selecciona el sillón (p. ej. «Nueva cita» de su columna). */
   defaultChairId?: string;
+  /**
+   * DX-015-bis (D21): pre-selecciona el tipo de cita (p. ej. el del tipo de
+   * recall). Solo si está entre los activos que carga el formulario; tiene el
+   * mismo efecto que elegirlo a mano (duración y hora de fin).
+   */
+  defaultAppointmentTypeId?: string | null;
 }
 
 /**
@@ -213,6 +220,7 @@ export function AppointmentForm({
   defaultEndTime,
   defaultProviderId,
   defaultChairId,
+  defaultAppointmentTypeId,
   defaultPatient,
   defaultReason,
   planItemIds,
@@ -463,6 +471,14 @@ export function AppointmentForm({
     setAppointmentTypeId(id);
     const end = endFor(startTime, types.find((t) => t.id === id) ?? null);
     if (end) setEndTime(end);
+  }
+
+  // D21: el tipo por defecto se aplica una vez, al llegar los tipos activos.
+  const [typePrefilled, setTypePrefilled] = useState(false);
+  if (!typePrefilled && defaultAppointmentTypeId && types.length > 0) {
+    setTypePrefilled(true);
+    const prefill = prefillAppointmentTypeId(defaultAppointmentTypeId, types);
+    if (prefill) handleTypeChange(prefill);
   }
 
   function handleStartTimeChange(value: string) {
