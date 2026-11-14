@@ -13,9 +13,12 @@ jest.mock('../../../../lib/auth/auth-store', () => ({
   useAuthStore: (select: (s: object) => unknown) => select({ accessToken: 'tok', _hasHydrated: true }),
 }));
 jest.mock('../../../../components/expenses/expenses-view', () => ({
-  ExpensesView: ({ tabs }: { tabs?: { nav: React.ReactNode } }) => (
+  ExpensesView: ({ tabs, onShowPayables }: { tabs?: { nav: React.ReactNode }; onShowPayables?: () => void }) => (
     <div>
       vista de gastos
+      <button type="button" onClick={onShowPayables}>
+        Ver por proveedor
+      </button>
       {tabs?.nav}
     </div>
   ),
@@ -24,6 +27,15 @@ jest.mock('../../../../components/expenses/expenses-summary-view', () => ({
   ExpensesSummaryView: ({ tabs }: { tabs?: { nav: React.ReactNode } }) => (
     <div>
       vista de resumen
+      {tabs?.nav}
+    </div>
+  ),
+}));
+
+jest.mock('../../../../components/expenses/expenses-payables-view', () => ({
+  ExpensesPayablesView: ({ tabs }: { tabs?: { nav: React.ReactNode } }) => (
+    <div>
+      vista por proveedor
       {tabs?.nav}
     </div>
   ),
@@ -48,6 +60,18 @@ describe('/caja/gastos (DX-274)', () => {
     expect(screen.getByRole('tab', { name: 'Resumen' })).toHaveAttribute('aria-selected', 'true');
   });
 
+  it('DX-411: ?tab=proveedores enseña las cuentas por pagar; el aviso de la lista lleva a ellas', async () => {
+    mockSearch = 'tab=proveedores';
+    const view = render(<GastosPage />);
+    expect(screen.getByText('vista por proveedor')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Por proveedor' })).toHaveAttribute('aria-selected', 'true');
+    mockSearch = '';
+    view.rerender(<GastosPage />);
+    const user = setupUser();
+    await user.click(screen.getByRole('button', { name: 'Ver por proveedor' }));
+    expect(mockReplace).toHaveBeenCalledWith('/caja/gastos?tab=proveedores', { scroll: false });
+  });
+
   it('cambiar de pestaña reescribe la URL sin navegar', async () => {
     const user = setupUser();
     render(<GastosPage />);
@@ -59,13 +83,13 @@ describe('/caja/gastos (DX-274)', () => {
     const user = setupUser();
     const view = render(<GastosPage />);
     screen.getByRole('tab', { name: 'Gastos' }).focus();
-    await user.keyboard('{ArrowRight}{Enter}');
+    await user.keyboard('{ArrowRight}{ArrowRight}{Enter}');
     expect(mockReplace).toHaveBeenCalledWith('/caja/gastos?tab=resumen', { scroll: false });
     mockSearch = 'tab=resumen';
     view.rerender(<GastosPage />);
     expect(screen.getByText('vista de resumen')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Resumen' })).toHaveFocus();
-    await user.keyboard('{ArrowLeft} ');
+    await user.keyboard('{ArrowLeft}{ArrowLeft} ');
     expect(mockReplace).toHaveBeenLastCalledWith('/caja/gastos', { scroll: false });
     mockSearch = '';
     view.rerender(<GastosPage />);

@@ -4,6 +4,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { ExpensesView } from '@/components/expenses/expenses-view';
 import { ExpensesSummaryView } from '@/components/expenses/expenses-summary-view';
+import { ExpensesPayablesView } from '@/components/expenses/expenses-payables-view';
 import {
   ExpensesTabs,
   expensesPanelId,
@@ -15,7 +16,7 @@ import {
 // Gastos de la sede (DX-274). Vive junto a la cartera y los descuentos (bajo
 // /caja) con el mismo guard de sesión; un rol sin acceso que llegue por URL ve
 // el aviso de la propia vista (la API responde 403 en español). La pestaña
-// («Gastos» o «Resumen») viaja en `?tab=resumen`, como la Caja.
+// («Gastos», «Por proveedor» o «Resumen») viaja en `?tab=`, como la Caja.
 /** `useSearchParams` exige un límite de Suspense (como la Caja). */
 export default function GastosPage() {
   return (
@@ -56,7 +57,7 @@ function GastosRoute() {
     if (focused?.getAttribute('role') === 'tab' && focused.id.startsWith('expenses-tab-')) {
       pendingFocus.current = { tab: next, trigger: focused };
     }
-    router.replace(next === 'resumen' ? `${pathname}?tab=resumen` : pathname, {
+    router.replace(next === 'gastos' ? pathname : `${pathname}?tab=${next}`, {
       scroll: false,
     });
   }
@@ -66,9 +67,7 @@ function GastosRoute() {
     tabId: expensesTabId(tab),
   };
 
-  return tab === 'resumen' ? (
-    <ExpensesSummaryView token={accessToken} tabs={tabs} />
-  ) : (
-    <ExpensesView token={accessToken} tabs={tabs} />
-  );
+  if (tab === 'resumen') return <ExpensesSummaryView token={accessToken} tabs={tabs} />;
+  if (tab === 'proveedores') return <ExpensesPayablesView token={accessToken} tabs={tabs} />;
+  return <ExpensesView token={accessToken} tabs={tabs} onShowPayables={() => changeTab('proveedores')} />;
 }
