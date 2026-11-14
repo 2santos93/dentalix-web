@@ -5085,6 +5085,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/expenses/payables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cuentas por pagar por proveedor y moneda (DX-411)
+         * @description Gastos abiertos (no anulados, con lo pagado en pagos vivos por debajo del importe) agrupados por proveedor normalizado (sin espacios de más, mayúsculas ni tildes; sin proveedor = su propio grupo) y moneda. Pendiente, vencido (vencimiento < hoy), vence en 7 días (hoy … hoy + 6) y en 30 días (hoy … hoy + 29), con el día civil de la sede de cada gasto; sin vencimiento cuenta solo en el pendiente. Filtros: `locationId`, `currency`. Respeta las sedes permitidas del usuario.
+         */
+        get: operations["ExpensesController_payablesOf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expenses/payables.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cuentas por pagar por proveedor en CSV (mismas filas) */
+        get: operations["ExpensesController_payablesCsv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expenses/payables/expenses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Gastos abiertos de un proveedor en una moneda (DX-411)
+         * @description Por vencimiento (sin vencimiento al final), hasta 500, con `total`. `supplierKey` es la de la fila del agregado; vacía = sin proveedor.
+         */
+        get: operations["ExpensesController_payableExpenses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/expenses": {
         parameters: {
             query?: never;
@@ -19089,6 +19146,61 @@ export interface components {
             /** @description Por mes, sede y moneda; las monedas nunca se mezclan. */
             rows: components["schemas"]["ExpenseSummaryRowDto"][];
         };
+        PayableSupplierRowDto: {
+            /** @description Gastos abiertos (pendientes o parciales). */
+            openCount: number;
+            /** @description Importe − pagos vivos de los gastos abiertos. */
+            pending: number;
+            overdueCount: number;
+            /** @description Pendiente con vencimiento anterior a hoy en su sede. */
+            overdue: number;
+            dueIn7DaysCount: number;
+            /** @description Pendiente que vence entre hoy y hoy + 6 días (su sede). */
+            dueIn7Days: number;
+            dueIn30DaysCount: number;
+            /** @description Pendiente que vence entre hoy y hoy + 29 días (incluye el de 7 días). */
+            dueIn30Days: number;
+            noDueDateCount: number;
+            /** @description Pendiente sin vencimiento: nunca vencido ni en 7/30 días. */
+            noDueDate: number;
+            /** @description Proveedor normalizado (sin espacios de más, mayúsculas ni tildes); vacío = sin proveedor. Va a `GET /expenses/payables/expenses`. */
+            supplierKey: string;
+            /** @description Grafía del gasto abierto más reciente del grupo; null = sin proveedor. */
+            supplier: string | null;
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /**
+             * Format: date
+             * @description Vencimiento más antiguo de sus gastos abiertos.
+             */
+            oldestDueDate: string | null;
+        };
+        PayableCurrencyTotalDto: {
+            /** @description Gastos abiertos (pendientes o parciales). */
+            openCount: number;
+            /** @description Importe − pagos vivos de los gastos abiertos. */
+            pending: number;
+            overdueCount: number;
+            /** @description Pendiente con vencimiento anterior a hoy en su sede. */
+            overdue: number;
+            dueIn7DaysCount: number;
+            /** @description Pendiente que vence entre hoy y hoy + 6 días (su sede). */
+            dueIn7Days: number;
+            dueIn30DaysCount: number;
+            /** @description Pendiente que vence entre hoy y hoy + 29 días (incluye el de 7 días). */
+            dueIn30Days: number;
+            noDueDateCount: number;
+            /** @description Pendiente sin vencimiento: nunca vencido ni en 7/30 días. */
+            noDueDate: number;
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+        };
+        ExpensePayablesDto: {
+            /** @description Una fila por proveedor × moneda; el vencimiento más antiguo primero. */
+            rows: components["schemas"]["PayableSupplierRowDto"][];
+            /** @description Totales por moneda; las monedas nunca se suman. */
+            totals: components["schemas"]["PayableCurrencyTotalDto"][];
+        };
         ExpenseAttachmentDto: {
             /** @example factura-luz.pdf */
             name: string;
@@ -19145,6 +19257,15 @@ export interface components {
             voidedById: string | null;
             voidedByName: string | null;
             voidReason: string | null;
+        };
+        PayableExpensesDto: {
+            supplierKey: string;
+            supplier: string | null;
+            currency: string;
+            /** @description Gastos abiertos por vencimiento (sin vencimiento al final); hasta 500. */
+            items: components["schemas"]["ExpenseDto"][];
+            /** @description Gastos abiertos del grupo, sin el tope. */
+            total: number;
         };
         ExpensePageDto: {
             items: components["schemas"]["ExpenseDto"][];
@@ -36476,6 +36597,129 @@ export interface operations {
                 };
             };
             /** @description Periodo no válido o de más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpensesController_payablesOf: {
+        parameters: {
+            query?: {
+                locationId?: string;
+                /** @description Código ISO 4217 de 3 letras; sin él, todas las monedas. */
+                currency?: string;
+            };
+            header?: {
+                /** @description Sede activa. Sin ella, todas las sedes que el usuario ve. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpensePayablesDto"];
+                };
+            };
+            /** @description Sede o moneda no válidas */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpensesController_payablesCsv: {
+        parameters: {
+            query?: {
+                locationId?: string;
+                /** @description Código ISO 4217 de 3 letras; sin él, todas las monedas. */
+                currency?: string;
+            };
+            header?: {
+                /** @description Sede activa. Sin ella, todas las sedes que el usuario ve. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Sede o moneda no válidas */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpensesController_payableExpenses: {
+        parameters: {
+            query: {
+                /** @description La `supplierKey` de una fila de `GET /expenses/payables` (proveedor sin mayúsculas ni tildes); vacía = gastos sin proveedor. */
+                supplierKey: string;
+                /** @description Código ISO 4217 de 3 letras. */
+                currency: string;
+                locationId?: string;
+            };
+            header?: {
+                /** @description Sede activa. Sin ella, todas las sedes que el usuario ve. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayableExpensesDto"];
+                };
+            };
+            /** @description Proveedor, sede o moneda no válidos */
             400: {
                 headers: {
                     [name: string]: unknown;

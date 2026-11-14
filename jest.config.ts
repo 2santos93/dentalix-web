@@ -23,6 +23,9 @@ const config: Config = {
   // compartido que arreglar: el límite era demasiado justo. Un test colgado de
   // verdad sigue fallando, a los 20 s.
   testTimeout: 20_000,
+  // DX-495: FAKE_NOW fija la hora de arranque del reloj (job «fronteras de
+  // calendario» de la CI); sin la variable no hace nada.
+  setupFiles: ['<rootDir>/jest.calendar-clock.ts'],
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   // Playwright e2e specs live in ./e2e and run via `npm run test:e2e`, not jest.
   // `.claude/worktrees/` son worktrees de git ANIDADOS dentro del repo (el flujo
