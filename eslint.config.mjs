@@ -1,6 +1,8 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import jestPlugin from "eslint-plugin-jest";
+import playwrightPlugin from "eslint-plugin-playwright";
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -35,6 +37,22 @@ const eslintConfig = defineConfig([
             "No muestres `ApiError.message`: usa apiErrorMessage() de @/lib/api/error-message, que da el texto en español.",
         },
       ],
+    },
+  },
+  // DX-071: un `.only` olvidado deja la suite en verde corriendo solo ese test.
+  // Error, no aviso: jest en los tests unitarios y Playwright en e2e/.
+  {
+    files: ["**/*.test.{ts,tsx,js,mjs}"],
+    plugins: { jest: jestPlugin },
+    rules: {
+      "jest/no-focused-tests": "error",
+    },
+  },
+  {
+    files: ["e2e/**/*.ts"],
+    plugins: { playwright: playwrightPlugin },
+    rules: {
+      "playwright/no-focused-test": "error",
     },
   },
   // Override default ignores of eslint-config-next.
