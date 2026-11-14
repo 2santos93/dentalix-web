@@ -142,7 +142,7 @@ for (const viewport of [
       await expect(page.getByRole('tab', { name: 'Por proveedor' })).toHaveAttribute('aria-selected', 'true');
 
       // La fila del proveedor: una sola para las dos grafías, en su moneda.
-      await page.getByLabel('Moneda').selectOption(DEMO_CURRENCY);
+      await page.getByRole('combobox', { name: /^Moneda/ }).selectOption(DEMO_CURRENCY);
       const listing = page.getByRole(narrow ? 'list' : 'table', { name: /^Cuentas por pagar por proveedor/ });
       const row = listing.getByRole('button', { name: new RegExp(supplier, 'i') });
       await expect(row).toHaveCount(1, { timeout: 15_000 });
