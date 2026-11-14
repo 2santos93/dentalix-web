@@ -14,6 +14,7 @@ import {
   probingTone,
   sitesForRow,
   toSavePayload,
+  withAbsentTeeth,
   type CellRef,
 } from './perio-grid';
 import type { PerioExamDetail } from './perio-api';
@@ -116,45 +117,117 @@ describe('applyKey (captura rápida)', () => {
   });
 });
 
-describe('moveFocus', () => {
-  const rows: CellRef['row'][] = ['buccal', 'lingual'];
+describe('moveFocus (DX-403: recorrido en S)', () => {
+  const at = (arch: CellRef['arch'], row: CellRef['row'], index: number): CellRef => ({
+    arch,
+    row,
+    measure: 'probing',
+    index,
+  });
+  const name = (ref: CellRef | null) => {
+    if (!ref) return null;
+    const cell = cellsInRow(ref.arch, ref.row)[ref.index];
+    return `${cell.toothFdi} ${cell.site}`;
+  };
+
   it('avanza al siguiente sitio y salta de diente', () => {
-    const from: CellRef = {
-      arch: 'upper',
-      row: 'buccal',
-      measure: 'probing',
-      index: 2,
-    };
-    expect(moveFocus(from, 'next', rows)).toEqual({ ...from, index: 3 });
+    expect(moveFocus(at('upper', 'buccal', 2), 'next')).toEqual(at('upper', 'buccal', 3));
   });
-  it('al final de la fila pasa a la siguiente fila', () => {
-    const from: CellRef = {
-      arch: 'upper',
-      row: 'buccal',
-      measure: 'probing',
-      index: 47,
-    };
-    expect(moveFocus(from, 'next', rows)).toEqual({
-      ...from,
-      row: 'lingual',
-      index: 0,
-    });
+
+  it('el recorrido completo: 18→28 vest., 28→18 palatino, 48→38 lingual, 38→48 vest.', () => {
+    const visited: string[] = [];
+    let ref: CellRef | null = at('upper', 'buccal', 0);
+    while (ref) {
+      visited.push(name(ref)!);
+      ref = moveFocus(ref, 'next');
+    }
+    expect(visited).toHaveLength(192);
+    expect(new Set(visited).size).toBe(192);
+    // Cambio de cara en el 28: del 28 vestibular distal al 28 palatino distal.
+    expect(visited.slice(45, 51)).toEqual(['28 MB', '28 B', '28 DB', '28 DL', '28 L', '28 ML']);
+    // Cambio de arcada: del 18 palatino al 48 lingual.
+    expect(visited.slice(93, 99)).toEqual(['18 ML', '18 L', '18 DL', '48 DL', '48 L', '48 ML']);
+    // Cambio de cara en el 38: del 38 lingual al 38 vestibular.
+    expect(visited.slice(141, 147)).toEqual(['38 ML', '38 L', '38 DL', '38 DB', '38 B', '38 MB']);
+    expect(visited[191]).toBe('48 DB');
   });
-  it('flechas: izquierda/derecha en la fila, arriba/abajo cambian de fila', () => {
-    const from: CellRef = {
-      arch: 'upper',
-      row: 'lingual',
-      measure: 'probing',
-      index: 0,
-    };
-    expect(moveFocus(from, 'prev', rows)).toEqual({
-      ...from,
-      row: 'buccal',
-      index: 47,
+
+  it('tras el 28 vestibular va al 28 palatino, no al 18 (el fallo de antes)', () => {
+    expect(name(moveFocus(at('upper', 'buccal', 47), 'next'))).toBe('28 DL');
+  });
+
+  it('`prev` deshace el recorrido, también entre arcadas; los extremos no tienen a dónde ir', () => {
+    expect(name(moveFocus(at('lower', 'lingual', 0), 'prev'))).toBe('18 DL');
+    expect(moveFocus(at('upper', 'buccal', 0), 'prev')).toBeNull();
+    expect(moveFocus(at('lower', 'buccal', 0), 'next')).toBeNull();
+  });
+
+  it('conserva la medida (la recesión sigue el mismo recorrido)', () => {
+    const from: CellRef = { ...at('upper', 'buccal', 47), measure: 'recession' };
+    expect(moveFocus(from, 'next')).toEqual({ ...at('upper', 'lingual', 47), measure: 'recession' });
+  });
+
+  it('salta los dientes omitidos, también al cambiar de arcada', () => {
+    const skipped = new Set([18, 48]);
+    const isSkipped = (fdi: number) => skipped.has(fdi);
+    // Del 17 palatino (último antes del 18) al 47 lingual.
+    expect(name(moveFocus(at('upper', 'lingual', 3), 'next', isSkipped))).toBe('47 DL');
+    // Arriba, del 17 vestibular hacia atrás no queda nada: el 18 está omitido.
+    expect(moveFocus(at('upper', 'buccal', 3), 'prev', isSkipped)).toBeNull();
+  });
+
+  it('flechas: izquierda/derecha en la fila en pantalla, sin saltar de fila', () => {
+    const from = at('upper', 'lingual', 10);
+    expect(moveFocus(from, 'right')).toEqual(at('upper', 'lingual', 11));
+    expect(moveFocus(from, 'left')).toEqual(at('upper', 'lingual', 9));
+    expect(moveFocus(at('upper', 'buccal', 47), 'right')).toBeNull();
+    expect(moveFocus(at('upper', 'buccal', 0), 'left')).toBeNull();
+    // Los omitidos se cruzan.
+    expect(moveFocus(at('upper', 'buccal', 3), 'left', (f) => f === 18)).toBeNull();
+    expect(moveFocus(at('upper', 'buccal', 6), 'left', (f) => f === 17)).toEqual(at('upper', 'buccal', 2));
+  });
+
+  it('flechas: arriba/abajo en la misma columna, cruzando de arcada', () => {
+    const from = at('upper', 'lingual', 0);
+    expect(moveFocus(from, 'up')).toEqual(at('upper', 'buccal', 0));
+    expect(moveFocus(from, 'down')).toEqual(at('lower', 'buccal', 0));
+    expect(moveFocus(at('lower', 'buccal', 0), 'down')).toEqual(at('lower', 'lingual', 0));
+    expect(moveFocus(at('lower', 'lingual', 0), 'down')).toBeNull();
+    expect(moveFocus(at('upper', 'buccal', 0), 'up')).toBeNull();
+  });
+});
+
+describe('withAbsentTeeth (DX-403)', () => {
+  it('omite por defecto los ausentes de los que el examen no dice nada', () => {
+    const draft = emptyDraft();
+    const { draft: shown, implied } = withAbsentTeeth(draft, new Set([28, 18]));
+    expect(implied).toEqual([18, 28]);
+    expect(shown.teeth.get(18)).toEqual({ mobility: null, skipped: true });
+    // El borrador original no se toca.
+    expect(draft.teeth.size).toBe(0);
+  });
+
+  it('respeta «Incluir el 18» (fila con skipped: false) y los dientes ya sondados', () => {
+    const draft = emptyDraft();
+    draft.teeth.set(18, { mobility: null, skipped: false });
+    draft.sites.set('28:B', {
+      probingMm: 3,
+      recessionMm: null,
+      furcation: null,
+      bleeding: false,
+      suppuration: false,
+      plaque: false,
+      calculus: false,
     });
-    expect(moveFocus(from, 'up', rows)).toEqual({ ...from, row: 'buccal' });
-    expect(moveFocus({ ...from, row: 'buccal' }, 'down', rows)).toEqual(from);
-    expect(moveFocus(from, 'down', rows)).toBeNull();
+    const result = withAbsentTeeth(draft, new Set([18, 28, 38]));
+    expect(result.implied).toEqual([38]);
+    expect(result.draft.teeth.get(18)?.skipped).toBe(false);
+    expect(result.draft.teeth.get(28)).toBeUndefined();
+  });
+
+  it('sin ausentes devuelve el mismo borrador', () => {
+    const draft = emptyDraft();
+    expect(withAbsentTeeth(draft, new Set()).draft).toBe(draft);
   });
 });
 

@@ -17,6 +17,11 @@ jest.mock('../../lib/perio/perio-api', () => ({
 
 // DX-354b: la sede de la suite es de-DE, y los días de los exámenes salen con su formato («04.10.2026»).
 const DE = regionalFormat({ locale: 'de-DE', hourCycle: 'h23' });
+// DX-403: el editor lee los ausentes del odontograma; aquí, ninguno.
+jest.mock('../../lib/perio/absent-teeth', () => ({
+  ...jest.requireActual('../../lib/perio/absent-teeth'),
+  loadAbsentTeeth: jest.fn(() => Promise.resolve(new Set())),
+}));
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 

@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Save, Trash2 } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { 
@@ -20,6 +20,7 @@ import {
   emptyDraft,
   siteKey,
   toSavePayload,
+  withAbsentTeeth,
   type DraftIndices,
   type PerioDraft,
   type SiteValues,
@@ -33,7 +34,10 @@ import { InlineError } from '@/components/errors/inline-error';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PerioChart } from './perio-chart';
+import { PerioChart, createPerioKeyboard } from './perio-chart';
+import { PerioKeyboardHelp } from './perio-keyboard-help';
+import { loadAbsentTeeth } from '@/lib/perio/absent-teeth';
+import { notifyError } from '@/components/errors/notify';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { readyFormat, type SedeFormatState } from '@/lib/locations/use-sede-format';
 import { perioPercent } from '@/lib/perio/perio-percent';
@@ -70,7 +74,10 @@ const copy = {
   leaveConfirm: 'Salir sin guardar',
   compare: (date: string) => `Comparar con el examen anterior (${date})`,
   noPrevious: 'No hay un examen anterior para comparar.',
-  help: 'Escribe un dígito y el cursor salta al sitio siguiente. Flechas para moverte. «+» y un dígito para 10–19 mm; «-» y un dígito para recesión negativa. En una celda de sondaje, B marca sangrado, S supuración y P placa. Haz clic en el número de un diente para omitirlo.',
+  absentNote: (teeth: string) =>
+    `Omitidos por estar ausentes en el odontograma: ${teeth}. Pulsa el número del diente para incluirlo.`,
+  absentError:
+    'No pudimos leer los dientes ausentes del odontograma: omítelos a mano o reintenta.',
   indicesHeading: 'Índices',
   indicesPrevious: 'Anterior',
   bop: 'Sangrado (BOP)',
@@ -154,9 +161,20 @@ export function PerioExamEditor({
   const [comparing, setComparing] = useState(false);
   const [previousExam, setPreviousExam] = useState<PerioExamDetail | null>(null);
   const [previousError, setPreviousError] = useState<string | null>(null);
+  const [absentTeeth, setAbsentTeeth] = useState<ReadonlySet<number>>(() => new Set());
+  const [absentKey, setAbsentKey] = useState(0);
+  // Las dos arcadas comparten el teclado: el recorrido en S pasa de una a otra.
+  const keyboard = useRef(createPerioKeyboard());
 
-  const dirty = dirtySites.size > 0 || dirtyTeeth.size > 0;
   const readOnly = exam?.status === 'FINAL';
+  // DX-403: en un borrador, los ausentes del odontograma salen omitidos por
+  // defecto (sin fila propia en el examen); se guardan con el próximo guardado.
+  const absentDefaults = useMemo(
+    () => (readOnly ? { draft, implied: [] } : withAbsentTeeth(draft, absentTeeth)),
+    [draft, absentTeeth, readOnly],
+  );
+  const shownDraft = absentDefaults.draft;
+  const dirty = dirtySites.size > 0 || dirtyTeeth.size > 0;
   // Mientras una escritura está en vuelo la rejilla no admite cambios: la
   // respuesta reemplaza el borrador y lo tecleado entretanto se perdería.
   const busy = saving || finalizing || deleting;
@@ -189,6 +207,27 @@ export function PerioExamEditor({
       cancelled = true;
     };
   }, [token, patientId, examId, reloadKey, adopt]);
+
+  // DX-403: los ausentes solo hacen falta para editar (un examen final es lo que se guardó).
+  const draftExamId = exam?.id;
+  const examIsDraft = exam?.status === 'DRAFT';
+  useEffect(() => {
+    if (!draftExamId || !examIsDraft) return;
+    let cancelled = false;
+    loadAbsentTeeth(token, patientId)
+      .then((teeth) => {
+        if (!cancelled) setAbsentTeeth(teeth);
+      })
+      .catch(() => {
+        // Rung 3: la rejilla sigue siendo correcta; solo falta el atajo.
+        if (!cancelled) {
+          notifyError(copy.absentError, { onRetry: () => setAbsentKey((k) => k + 1) });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, patientId, draftExamId, examIsDraft, absentKey]);
 
   // El examen anterior solo se pide al activar la comparación.
   useEffect(() => {
@@ -264,7 +303,8 @@ export function PerioExamEditor({
 
   /** Guarda lo pendiente; `false` si falló (el error queda a la vista). */
   async function save(): Promise<boolean> {
-    if (!dirty) return true;
+    const implied = absentDefaults.implied;
+    if (!dirty && implied.length === 0) return true;
     setSaving(true);
     setActionError(null);
     try {
@@ -272,7 +312,7 @@ export function PerioExamEditor({
         token,
         patientId,
         examId,
-        toSavePayload(draft, dirtySites, dirtyTeeth),
+        toSavePayload(shownDraft, dirtySites, new Set([...dirtyTeeth, ...implied])),
       );
       adopt(detail);
       setSavedNotice(true);
@@ -333,7 +373,10 @@ export function PerioExamEditor({
     else onBack();
   }
 
-  const indices = useMemo(() => computeDraftIndices(draft), [draft]);
+  const indices = useMemo(() => computeDraftIndices(shownDraft), [shownDraft]);
+  const absentSkipped = [...absentTeeth]
+    .filter((fdi) => shownDraft.teeth.get(fdi)?.skipped)
+    .sort((a, b) => a - b);
 
   const previousProbing = useMemo(() => {
     if (!comparing || !previousExam) return null;
@@ -417,7 +460,7 @@ export function PerioExamEditor({
                 {copy.readOnly}
               </p>
             ) : (
-              <p className="max-w-[90ch] text-xs text-muted">{copy.help}</p>
+              <PerioKeyboardHelp />
             )}
 
             <div aria-live="polite" className="text-sm">
@@ -462,21 +505,29 @@ export function PerioExamEditor({
               fmt={readyFormat(sedeFormat)}
             />
 
+            {!readOnly && absentSkipped.length > 0 ? (
+              <p className="text-sm text-muted">{copy.absentNote(listTeeth(absentSkipped))}</p>
+            ) : null}
+
             <PerioChart
               arch="upper"
-              draft={draft}
+              draft={shownDraft}
               readOnly={readOnly || busy}
               onSiteChange={changeSite}
               onToothChange={changeTooth}
               previousProbing={previousProbing}
+              keyboard={keyboard}
+              absentTeeth={absentTeeth}
             />
             <PerioChart
               arch="lower"
-              draft={draft}
+              draft={shownDraft}
               readOnly={readOnly || busy}
               onSiteChange={changeSite}
               onToothChange={changeTooth}
               previousProbing={previousProbing}
+              keyboard={keyboard}
+              absentTeeth={absentTeeth}
             />
             <p className="text-xs text-muted">{copy.convention}</p>
           </div>
@@ -516,6 +567,12 @@ export function PerioExamEditor({
       />
     </div>
   );
+}
+
+/** «18», «18 y 28», «18, 28 y 48». */
+function listTeeth(teeth: readonly number[]): string {
+  if (teeth.length <= 1) return teeth.join('');
+  return `${teeth.slice(0, -1).join(', ')} y ${teeth[teeth.length - 1]}`;
 }
 
 const INDEX_ROWS: {

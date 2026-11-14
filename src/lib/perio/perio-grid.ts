@@ -124,31 +124,106 @@ export interface CellRef {
 
 const ROW_LENGTH = 48;
 
-export type FocusMove = 'next' | 'prev' | 'up' | 'down';
+/**
+ * `next`/`prev`: paso del recorrido en S (autoavance tras un dígito).
+ * `left`/`right`: la celda vecina EN PANTALLA dentro de la misma fila.
+ * `up`/`down`: misma columna en la fila de arriba o de abajo, cruzando de
+ * arcada (vestibular sup. → palatino sup. → vestibular inf. → lingual inf.).
+ */
+export type FocusMove = 'next' | 'prev' | 'left' | 'right' | 'up' | 'down';
+
+interface PathLeg {
+  arch: PerioArch;
+  row: PerioRow;
+  /** +1 = de izquierda a derecha en pantalla (índice creciente); -1 = al revés. */
+  dir: 1 | -1;
+}
 
 /**
- * Siguiente celda: `next`/`prev` recorren la fila y pasan a la siguiente
- * (o anterior) de `rows`; `up`/`down` cambian de fila en la misma columna.
- * `null` si no hay a dónde ir.
+ * Recorrido en S fijo del sondaje (DX-403), el clásico de periodoncia, sin
+ * levantar la sonda al cambiar de cara ni de arcada:
+ *
+ *   1. Superior vestibular, 18 → 28 (izquierda a derecha en pantalla).
+ *   2. Superior palatino,   28 → 18 (vuelve de derecha a izquierda).
+ *   3. Inferior lingual,    48 → 38 (del 18 se baja al 48, de izquierda a derecha).
+ *   4. Inferior vestibular, 38 → 48 (vuelve de derecha a izquierda).
+ *
+ * Dentro de cada diente los sitios van en el orden en que se ven (distal y
+ * mesial según el lado, ver `sitesForRow`). Sondaje y recesión siguen el mismo
+ * recorrido, cada uno en su fila de medida. Los dientes omitidos se saltan.
+ */
+export const S_PATH: readonly PathLeg[] = [
+  { arch: 'upper', row: 'buccal', dir: 1 },
+  { arch: 'upper', row: 'lingual', dir: -1 },
+  { arch: 'lower', row: 'lingual', dir: 1 },
+  { arch: 'lower', row: 'buccal', dir: -1 },
+];
+
+/** Filas de arriba abajo tal como se ven las dos arcadas, para ↑ y ↓. */
+const VISUAL_ROWS: readonly { arch: PerioArch; row: PerioRow }[] = [
+  { arch: 'upper', row: 'buccal' },
+  { arch: 'upper', row: 'lingual' },
+  { arch: 'lower', row: 'buccal' },
+  { arch: 'lower', row: 'lingual' },
+];
+
+const PATH_LENGTH = S_PATH.length * ROW_LENGTH;
+
+/** Posición 0..191 de una celda en el recorrido en S. */
+export function pathPosition(ref: CellRef): number {
+  const leg = S_PATH.findIndex((l) => l.arch === ref.arch && l.row === ref.row);
+  const offset = S_PATH[leg].dir === 1 ? ref.index : ROW_LENGTH - 1 - ref.index;
+  return leg * ROW_LENGTH + offset;
+}
+
+function cellAtPosition(position: number, measure: PerioMeasure): CellRef {
+  const leg = S_PATH[Math.floor(position / ROW_LENGTH)];
+  const offset = position % ROW_LENGTH;
+  const index = leg.dir === 1 ? offset : ROW_LENGTH - 1 - offset;
+  return { arch: leg.arch, row: leg.row, measure, index };
+}
+
+/** El diente de una celda. */
+export function toothOfCell(ref: CellRef): number {
+  return cellsInRow(ref.arch, ref.row)[ref.index].toothFdi;
+}
+
+function oneStep(from: CellRef, move: FocusMove): CellRef | null {
+  switch (move) {
+    case 'next':
+    case 'prev': {
+      const position = pathPosition(from) + (move === 'next' ? 1 : -1);
+      if (position < 0 || position >= PATH_LENGTH) return null;
+      return cellAtPosition(position, from.measure);
+    }
+    case 'right':
+      return from.index < ROW_LENGTH - 1 ? { ...from, index: from.index + 1 } : null;
+    case 'left':
+      return from.index > 0 ? { ...from, index: from.index - 1 } : null;
+    case 'up':
+    case 'down': {
+      const at = VISUAL_ROWS.findIndex((r) => r.arch === from.arch && r.row === from.row);
+      const to = VISUAL_ROWS[at + (move === 'down' ? 1 : -1)];
+      return to ? { ...from, ...to } : null;
+    }
+  }
+}
+
+/**
+ * Siguiente celda para `move`, o `null` si no hay a dónde ir. En el recorrido
+ * (`next`/`prev`) y en la fila (`left`/`right`) se saltan las celdas de los
+ * dientes para los que `isSkipped` dice que sí (omitidos/ausentes); ↑ y ↓
+ * conservan la columna aunque caiga en un omitido.
  */
 export function moveFocus(
   from: CellRef,
   move: FocusMove,
-  rows: readonly PerioRow[],
+  isSkipped: (toothFdi: number) => boolean = () => false,
 ): CellRef | null {
-  const rowIndex = rows.indexOf(from.row);
-  switch (move) {
-    case 'next':
-      if (from.index < ROW_LENGTH - 1) return { ...from, index: from.index + 1 };
-      return rowIndex < rows.length - 1 ? { ...from, row: rows[rowIndex + 1], index: 0 } : null;
-    case 'prev':
-      if (from.index > 0) return { ...from, index: from.index - 1 };
-      return rowIndex > 0 ? { ...from, row: rows[rowIndex - 1], index: ROW_LENGTH - 1 } : null;
-    case 'up':
-      return rowIndex > 0 ? { ...from, row: rows[rowIndex - 1] } : null;
-    case 'down':
-      return rowIndex < rows.length - 1 ? { ...from, row: rows[rowIndex + 1] } : null;
-  }
+  let next = oneStep(from, move);
+  if (move === 'up' || move === 'down') return next;
+  while (next && isSkipped(toothOfCell(next))) next = oneStep(next, move);
+  return next;
 }
 
 export interface SiteValues {
@@ -280,4 +355,45 @@ export function probingTrend(
   if (current < previous) return 'better';
   if (current > previous) return 'worse';
   return 'same';
+}
+
+function siteHasData(s: SiteValues): boolean {
+  return (
+    s.probingMm !== null ||
+    s.recessionMm !== null ||
+    s.furcation !== null ||
+    s.bleeding ||
+    s.suppuration ||
+    s.plaque ||
+    s.calculus
+  );
+}
+
+export interface AbsentDefaults {
+  /** El borrador con los ausentes omitidos. */
+  draft: PerioDraft;
+  /** Dientes omitidos aquí, aún sin guardar: viajan con el próximo guardado. */
+  implied: number[];
+}
+
+/**
+ * DX-403: los dientes ausentes en el odontograma se omiten por defecto. Solo
+ * se toca un diente del que el examen no dice nada todavía (sin fila de
+ * diente y sin ningún dato en sus sitios): si alguien lo incluyó u omitió a
+ * mano, o ya lo sondó, manda lo del examen. Así «Incluir diente 18» se
+ * respeta, porque deja una fila con `skipped: false`.
+ */
+export function withAbsentTeeth(draft: PerioDraft, absent: ReadonlySet<number>): AbsentDefaults {
+  const implied: number[] = [];
+  for (const fdi of [...absent].sort((a, b) => a - b)) {
+    if (draft.teeth.has(fdi)) continue;
+    const touched = [...draft.sites].some(
+      ([key, values]) => Number(key.split(':')[0]) === fdi && siteHasData(values),
+    );
+    if (!touched) implied.push(fdi);
+  }
+  if (implied.length === 0) return { draft, implied };
+  const teeth = new Map(draft.teeth);
+  for (const fdi of implied) teeth.set(fdi, { ...EMPTY_TOOTH, skipped: true });
+  return { draft: { sites: draft.sites, teeth }, implied };
 }

@@ -15,6 +15,7 @@ import { regionalFormat } from '@/lib/format/regional-format';
 import { testStamp } from '@/lib/test/stamp';
 import { clinicLocation } from '@/lib/test/locations';
 import type { SedeFormatState } from '@/lib/locations/use-sede-format';
+import { loadAbsentTeeth } from '@/lib/perio/absent-teeth';
 
 jest.mock('../../lib/perio/perio-api', () => ({
   ...jest.requireActual('../../lib/perio/perio-api'),
@@ -23,6 +24,13 @@ jest.mock('../../lib/perio/perio-api', () => ({
   finalizePerioExam: jest.fn(),
   deletePerioExam: jest.fn(),
 }));
+
+// DX-403: los ausentes del odontograma; por defecto, ninguno.
+jest.mock('../../lib/perio/absent-teeth', () => ({
+  ...jest.requireActual('../../lib/perio/absent-teeth'),
+  loadAbsentTeeth: jest.fn(),
+}));
+const mockedAbsent = loadAbsentTeeth as jest.MockedFunction<typeof loadAbsentTeeth>;
 
 // La rejilla tiene ~1000 controles: una sola consulta `findByRole` sobre ella
 // cuesta ~0,8 s en jsdom, casi el 1 s por defecto de los `findBy*`. Con la CPU
@@ -118,6 +126,7 @@ describe('PerioExamEditor', () => {
     mockedSave.mockReset();
     mockedFinalize.mockReset();
     mockedDelete.mockReset();
+    mockedAbsent.mockReset().mockResolvedValue(new Set());
   });
 
   it('mientras se guarda la rejilla queda bloqueada: lo tecleado no se pierde en silencio', async () => {
@@ -409,5 +418,180 @@ describe('PerioExamEditor', () => {
     } finally {
       useAuthStore.setState({ accessToken: null });
     }
+  });
+
+  describe('DX-403: recorrido en S, marcas y ausentes', () => {
+    it('recorrido en S: del 28 vestibular al 28 palatino, y del 18 palatino al 48 lingual', async () => {
+      const user = setupUser();
+      mockedGet.mockResolvedValue(exam());
+      renderEditor();
+      const upper = await screen.findByRole('table', { name: 'Arcada superior' });
+      const lower = screen.getByRole('table', { name: 'Arcada inferior' });
+      await user.click(within(upper).getByRole('textbox', { name: 'Sondaje 28 MB' }));
+      await user.keyboard('12345');
+      expect(within(upper).getByRole('textbox', { name: 'Sondaje 28 MB' })).toHaveValue('1');
+      expect(within(upper).getByRole('textbox', { name: 'Sondaje 28 B' })).toHaveValue('2');
+      expect(within(upper).getByRole('textbox', { name: 'Sondaje 28 DB' })).toHaveValue('3');
+      // Cambio de cara sin saltar al 18: sigue por el 28 palatino, de distal a mesial.
+      expect(within(upper).getByRole('textbox', { name: 'Sondaje 28 DP' })).toHaveValue('4');
+      expect(within(upper).getByRole('textbox', { name: 'Sondaje 28 P' })).toHaveValue('5');
+      expect(within(upper).getByRole('textbox', { name: 'Sondaje 28 MP' })).toHaveFocus();
+      expect(within(upper).getByRole('textbox', { name: 'Sondaje 18 MP' })).toHaveValue('');
+      // Cambio de arcada: del último sitio palatino del 18 al 48 lingual.
+      await user.click(within(upper).getByRole('textbox', { name: 'Sondaje 18 DP' }));
+      await user.keyboard('6');
+      expect(within(lower).getByRole('textbox', { name: 'Sondaje 48 DL' })).toHaveFocus();
+      // Y al final de la lingual inferior, el 38 vestibular.
+      await user.click(within(lower).getByRole('textbox', { name: 'Sondaje 38 DL' }));
+      await user.keyboard('2');
+      expect(within(lower).getByRole('textbox', { name: 'Sondaje 38 DB' })).toHaveFocus();
+    });
+
+    it('B, S, P o C justo tras un dígito marcan el sitio recién sondeado, no el siguiente', async () => {
+      const user = setupUser();
+      mockedGet.mockResolvedValue(exam());
+      renderEditor();
+      const upper = await screen.findByRole('table', { name: 'Arcada superior' });
+      await user.click(within(upper).getByRole('textbox', { name: 'Sondaje 16 DB' }));
+      await user.keyboard('5bc');
+      expect(within(upper).getByRole('textbox', { name: 'Sondaje 16 B' })).toHaveFocus();
+      expect(within(upper).getByRole('button', { name: 'Sangrado 16 DB' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      expect(within(upper).getByRole('button', { name: 'Cálculo 16 DB' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      expect(within(upper).getByRole('button', { name: 'Sangrado 16 B' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+      // Otro dígito: ahora la marca va al 16 B.
+      await user.keyboard('3s');
+      expect(within(upper).getByRole('button', { name: 'Supuración 16 B' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      expect(within(upper).getByRole('button', { name: 'Supuración 16 DB' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+    });
+
+    it('tras moverse con flechas, la tecla marca la celda en la que se está', async () => {
+      const user = setupUser();
+      mockedGet.mockResolvedValue(exam({ sites: [site(16, 'MB', 4)] }));
+      renderEditor();
+      const upper = await screen.findByRole('table', { name: 'Arcada superior' });
+      await user.click(within(upper).getByRole('textbox', { name: 'Sondaje 16 B' }));
+      await user.keyboard('2');
+      // El dígito llevó el foco al 16 MB (relleno); con → y ← se vuelve a él.
+      await user.keyboard('{ArrowRight}{ArrowLeft}p');
+      expect(within(upper).getByRole('textbox', { name: 'Sondaje 16 MB' })).toHaveFocus();
+      expect(within(upper).getByRole('button', { name: 'Placa 16 MB' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      expect(within(upper).getByRole('button', { name: 'Placa 16 B' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+    });
+
+    it('los ausentes del odontograma salen omitidos, el autoavance los salta y se pueden incluir', async () => {
+      const user = setupUser();
+      mockedAbsent.mockResolvedValue(new Set([18]));
+      mockedGet.mockResolvedValue(exam());
+      mockedSave.mockResolvedValue(exam());
+      renderEditor();
+      const upper = await screen.findByRole('table', { name: 'Arcada superior' });
+      const lower = screen.getByRole('table', { name: 'Arcada inferior' });
+      const include = await within(upper).findByRole('button', { name: 'Incluir diente 18' });
+      expect(include).toHaveAttribute('aria-pressed', 'true');
+      expect(include).toHaveAttribute('title', 'Incluir diente 18 (ausente en el odontograma)');
+      expect(screen.getByText(/Omitidos por estar ausentes en el odontograma: 18\./)).toBeInTheDocument();
+      // Omitido por defecto no es «cambio sin guardar».
+      expect(screen.queryByText('Tienes cambios sin guardar.')).not.toBeInTheDocument();
+      // Del 17 palatino el recorrido baja al 48 sin pasar por el 18.
+      await user.click(within(upper).getByRole('textbox', { name: 'Sondaje 17 MP' }));
+      await user.keyboard('323');
+      expect(within(lower).getByRole('textbox', { name: 'Sondaje 48 DL' })).toHaveFocus();
+      expect(within(upper).getByRole('textbox', { name: 'Sondaje 18 MP' })).toHaveValue('');
+      // Al guardar, la omisión por defecto viaja con lo tocado.
+      await user.click(screen.getByRole('button', { name: 'Guardar' }));
+      expect(mockedSave.mock.calls[0][3].teeth).toEqual([
+        { toothFdi: 18, mobility: null, skipped: true },
+      ]);
+    });
+
+    it('«Incluir el 18» deshace la omisión por defecto y se guarda como incluido', async () => {
+      const user = setupUser();
+      mockedAbsent.mockResolvedValue(new Set([18]));
+      mockedGet.mockResolvedValue(exam());
+      mockedSave.mockResolvedValue(exam());
+      renderEditor();
+      const upper = await screen.findByRole('table', { name: 'Arcada superior' });
+      await user.click(await within(upper).findByRole('button', { name: 'Incluir diente 18' }));
+      expect(within(upper).getByRole('button', { name: 'Omitir diente 18' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+      expect(screen.queryByText(/Omitidos por estar ausentes/)).not.toBeInTheDocument();
+      // Del 17 palatino ahora sí pasa por el 18.
+      await user.click(within(upper).getByRole('textbox', { name: 'Sondaje 17 DP' }));
+      await user.keyboard('3');
+      expect(within(upper).getByRole('textbox', { name: 'Sondaje 18 MP' })).toHaveFocus();
+      await user.click(screen.getByRole('button', { name: 'Guardar' }));
+      expect(mockedSave.mock.calls[0][3].teeth).toEqual([
+        { toothFdi: 18, mobility: null, skipped: false },
+      ]);
+    });
+
+    it('un diente ya guardado como incluido no se omite aunque falte en el odontograma', async () => {
+      mockedAbsent.mockResolvedValue(new Set([18]));
+      mockedGet.mockResolvedValue(exam({ teeth: [{ toothFdi: 18, mobility: null, skipped: false }] }));
+      renderEditor();
+      const upper = await screen.findByRole('table', { name: 'Arcada superior' });
+      expect(within(upper).getByRole('button', { name: 'Omitir diente 18' })).toBeInTheDocument();
+    });
+
+    it('si no se pueden leer los ausentes, la rejilla sigue igual (aviso con reintento)', async () => {
+      mockedAbsent.mockRejectedValueOnce(new ApiError(500, 'boom'));
+      mockedGet.mockResolvedValue(exam());
+      renderEditor();
+      const upper = await screen.findByRole('table', { name: 'Arcada superior' });
+      expect(within(upper).getByRole('button', { name: 'Omitir diente 18' })).toBeInTheDocument();
+      expect(mockedAbsent).toHaveBeenCalledWith('tok', 'p1');
+    });
+
+    it('un examen final no consulta el odontograma', async () => {
+      mockedGet.mockResolvedValue(exam({ status: 'FINAL', finalizedAt: '2026-10-16T16:00:00.000Z' }));
+      renderEditor();
+      await screen.findByRole('table', { name: 'Arcada superior' });
+      expect(mockedAbsent).not.toHaveBeenCalled();
+    });
+
+    it('la ayuda de teclado lista todas las teclas', async () => {
+      mockedGet.mockResolvedValue(exam());
+      renderEditor();
+      const help = await screen.findByRole('region', { name: 'Teclado' });
+      for (const label of [
+        'Dígitos del 0 al 9',
+        'Más y un dígito',
+        'Menos y un dígito',
+        'Retroceso o Suprimir',
+        'B',
+        'S',
+        'P',
+        'C',
+        'Flechas izquierda y derecha',
+        'Flechas arriba y abajo',
+      ]) {
+        expect(within(help).getByText(label, { selector: '.sr-only' })).toBeInTheDocument();
+      }
+      expect(help).toHaveTextContent('Cálculo.');
+      expect(help).toHaveTextContent(/Recorrido en S: vestibular superior del 18 al 28/);
+    });
   });
 });

@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useState, type KeyboardEvent, type RefObject } from 'react';
 import { cn } from '@/lib/utils';
 import { NativeSelect } from '@/components/ui/native-select';
 import type { PerioSite } from '@/lib/perio/perio-api';
@@ -14,6 +14,7 @@ import {
   lingualLabel,
   moveFocus,
   probingTone,
+  toothOfCell,
   probingTrend,
   siteKey,
   siteShortLabel,
@@ -40,11 +41,13 @@ const copy = {
   bleeding: 'Sangrado',
   suppuration: 'Supuración',
   plaque: 'Placa',
+  calculus: 'Cálculo',
   furcation: 'Furca',
   mobility: 'Movilidad',
   tooth: 'Diente',
   skip: (fdi: number) => `Omitir diente ${fdi}`,
   restore: (fdi: number) => `Incluir diente ${fdi}`,
+  absentHint: (fdi: number) => `Incluir diente ${fdi} (ausente en el odontograma)`,
   cell: (measure: string, fdi: number, site: string) => `${measure} ${fdi} ${site}`,
   trend: {
     better: 'mejora',
@@ -53,30 +56,64 @@ const copy = {
   },
 };
 
-/** Filas en orden de captura: vestibular y luego palatino/lingual. */
+/** Filas en el orden en que se pintan: vestibular y luego palatino/lingual. */
 const ROWS: readonly PerioRow[] = ['buccal', 'lingual'];
 
-type FlagKey = 'bleeding' | 'suppuration' | 'plaque';
+type FlagKey = 'bleeding' | 'suppuration' | 'plaque' | 'calculus';
 
 const FLAG_ROWS: { key: FlagKey; label: string; dot: string }[] = [
   { key: 'bleeding', label: copy.bleeding, dot: 'bg-danger' },
   { key: 'suppuration', label: copy.suppuration, dot: 'bg-warning' },
   { key: 'plaque', label: copy.plaque, dot: 'bg-primary' },
+  { key: 'calculus', label: copy.calculus, dot: 'bg-ink' },
 ];
 
-/** Atajos de teclado en una celda de sondaje: marcan el sitio sin moverse. */
+/**
+ * Atajos en una celda de sondaje: marcan (o desmarcan) un sitio sin mover el
+ * foco. Justo tras un dígito, el sitio RECIÉN sondeado (el foco ya saltó al
+ * siguiente); si no, el de la celda enfocada (DX-403).
+ */
 const FLAG_SHORTCUTS: Record<string, FlagKey> = {
   b: 'bleeding',
   s: 'suppuration',
   p: 'plaque',
+  c: 'calculus',
 };
 
 const ARROWS: Record<string, FocusMove> = {
-  ArrowRight: 'next',
-  ArrowLeft: 'prev',
+  ArrowRight: 'right',
+  ArrowLeft: 'left',
   ArrowUp: 'up',
   ArrowDown: 'down',
 };
+
+/**
+ * Estado de teclado COMPARTIDO por las dos arcadas (el recorrido en S pasa de
+ * una a otra): las celdas por id y el último sondaje hecho con un dígito.
+ */
+interface LastProbe {
+  /** Sitio recién sondeado con un dígito. */
+  probed: CellRef;
+  /** Celda a la que saltó el foco tras ese dígito. */
+  landedId: string;
+}
+
+export interface PerioKeyboard {
+  inputs: Map<string, HTMLInputElement>;
+  lastProbe: () => LastProbe | null;
+  setLastProbe: (probe: LastProbe | null) => void;
+}
+
+export function createPerioKeyboard(): PerioKeyboard {
+  let last: LastProbe | null = null;
+  return {
+    inputs: new Map(),
+    lastProbe: () => last,
+    setLastProbe: (probe) => {
+      last = probe;
+    },
+  };
+}
 
 interface PerioChartProps {
   arch: PerioArch;
@@ -86,6 +123,10 @@ interface PerioChartProps {
   onToothChange: (toothFdi: number, patch: Partial<ToothValues>) => void;
   /** Sondaje del examen anterior por `siteKey`, o `null` si no se compara. */
   previousProbing: Map<string, number | null> | null;
+  /** Compartido con la otra arcada (ver `PerioKeyboard`). */
+  keyboard: RefObject<PerioKeyboard>;
+  /** Dientes ausentes en el odontograma (solo para explicar por qué están omitidos). */
+  absentTeeth: ReadonlySet<number>;
 }
 
 function cellId(ref: CellRef): string {
@@ -105,10 +146,11 @@ export function PerioChart({
   onSiteChange,
   onToothChange,
   previousProbing,
+  keyboard,
+  absentTeeth,
 }: PerioChartProps) {
   const teeth = ARCH_TEETH[arch];
   const upper = arch === 'upper';
-  const inputs = useRef(new Map<string, HTMLInputElement>());
   const [pending, setPending] = useState<{
     id: string;
     prefix: PendingPrefix;
@@ -118,40 +160,54 @@ export function PerioChart({
   const tooth = (fdi: number) => draft.teeth.get(fdi) ?? EMPTY_TOOTH;
 
   function isSkippedCell(ref: CellRef): boolean {
-    return tooth(cellsInRow(arch, ref.row)[ref.index].toothFdi).skipped;
+    return tooth(toothOfCell(ref)).skipped;
   }
 
-  /** Mueve el foco saltando los dientes omitidos (no se sondan). */
-  function moveTo(from: CellRef, move: FocusMove) {
-    let next = moveFocus(from, move, ROWS);
-    while (next && isSkippedCell(next) && (move === 'next' || move === 'prev')) {
-      next = moveFocus(next, move, ROWS);
-    }
-    if (!next) return;
-    const el = inputs.current.get(cellId(next));
+  /** Destino de `move` saltando los dientes omitidos (no se sondan). */
+  function targetOf(from: CellRef, move: FocusMove): CellRef | null {
+    return moveFocus(from, move, (fdi) => tooth(fdi).skipped);
+  }
+
+  function focusCell(ref: CellRef) {
+    const el = keyboard.current.inputs.get(cellId(ref));
     el?.focus();
     el?.select();
   }
 
+  function toggleFlag(ref: CellRef, flag: FlagKey) {
+    const cell = cellsInRow(ref.arch, ref.row)[ref.index];
+    const values = site(cell.toothFdi, cell.site);
+    onSiteChange(cell.toothFdi, cell.site, { [flag]: !values[flag] });
+  }
+
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>, ref: CellRef) {
+    const kb = keyboard.current;
+    const id = cellId(ref);
+    const flag = FLAG_SHORTCUTS[event.key.toLowerCase()];
+    // Solo B/S/P/C conservan «lo último sondeado»: así «5 b s» marca el mismo sitio.
+    const last = kb.lastProbe();
+    const probe = last?.landedId === id ? last.probed : null;
+    if (!flag) kb.setLastProbe(null);
     const move = ARROWS[event.key];
     if (move) {
       event.preventDefault();
-      moveTo(ref, move);
+      const next = targetOf(ref, move);
+      if (next) focusCell(next);
       return;
     }
-    if (readOnly || isSkippedCell(ref) || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (readOnly || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (flag && ref.measure === 'probing') {
+      const target = probe ?? ref;
+      if (isSkippedCell(target)) return;
+      event.preventDefault();
+      toggleFlag(target, flag);
+      return;
+    }
+    if (isSkippedCell(ref)) return;
     const cells = cellsInRow(arch, ref.row);
     const target = cells[ref.index];
     const values = site(target.toothFdi, target.site);
-    const flag = FLAG_SHORTCUTS[event.key.toLowerCase()];
-    if (flag && ref.measure === 'probing') {
-      event.preventDefault();
-      onSiteChange(target.toothFdi, target.site, { [flag]: !values[flag] });
-      return;
-    }
     const field = ref.measure === 'probing' ? 'probingMm' : 'recessionMm';
-    const id = cellId(ref);
     const prefix = pending?.id === id ? pending.prefix : '';
     const result = applyKey(event.key, values[field], prefix);
     if (!result) return;
@@ -162,7 +218,12 @@ export function PerioChart({
     if (result.value !== values[field]) {
       onSiteChange(target.toothFdi, target.site, { [field]: result.value });
     }
-    if (result.advance) moveTo(ref, 'next');
+    if (result.advance) {
+      // Al final del recorrido el foco se queda: «b» marca este mismo sitio.
+      const landed = targetOf(ref, 'next') ?? ref;
+      kb.setLastProbe({ probed: ref, landedId: cellId(landed) });
+      if (landed !== ref) focusCell(landed);
+    }
   }
 
   /** Teclados virtuales (móvil) no siempre emiten keydown: se acepta el texto. */
@@ -202,8 +263,8 @@ export function PerioChart({
             <td key={id} className={cn(siteCell(index), skipped && skippedCell)}>
               <input
                 ref={(el) => {
-                  if (el) inputs.current.set(id, el);
-                  else inputs.current.delete(id);
+                  if (el) keyboard.current.inputs.set(id, el);
+                  else keyboard.current.inputs.delete(id);
                 }}
                 type="text"
                 inputMode="numeric"
@@ -221,7 +282,13 @@ export function PerioChart({
                 onKeyDown={(e) => handleKeyDown(e, ref)}
                 onChange={(e) => handleChange(e.target.value, ref)}
                 onFocus={(e) => e.target.select()}
-                onBlur={() => setPending((p) => (p?.id === id ? null : p))}
+                onBlur={() => {
+                  setPending((p) => (p?.id === id ? null : p));
+                  // Al irse de la celda a la que saltó el dígito, «b» ya no apunta atrás.
+                  if (keyboard.current.lastProbe()?.landedId === id) {
+                    keyboard.current.setLastProbe(null);
+                  }
+                }}
                 className={cn(
                   'h-7 w-6 rounded-sm bg-transparent text-center text-xs tabular-nums text-ink',
                   'focus:bg-primary-subtle focus:outline-none focus:ring-2 focus:ring-primary-text',
@@ -437,13 +504,20 @@ export function PerioChart({
             </th>
             {teeth.map((fdi) => {
               const t = tooth(fdi);
+              const absentSkipped = t.skipped && absentTeeth.has(fdi);
               return (
                 <th key={`h-${fdi}`} scope="col" colSpan={3} className={cn(toothCell, 'py-1')}>
                   <button
                     type="button"
                     aria-pressed={t.skipped}
                     aria-label={t.skipped ? copy.restore(fdi) : copy.skip(fdi)}
-                    title={t.skipped ? copy.restore(fdi) : copy.skip(fdi)}
+                    title={
+                      absentSkipped
+                        ? copy.absentHint(fdi)
+                        : t.skipped
+                          ? copy.restore(fdi)
+                          : copy.skip(fdi)
+                    }
                     disabled={readOnly}
                     onClick={() => onToothChange(fdi, { skipped: !t.skipped })}
                     className={cn(
