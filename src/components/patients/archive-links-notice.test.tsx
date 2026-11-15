@@ -20,6 +20,8 @@ function links(overrides: Partial<LivePublicLinks> = {}): LivePublicLinks {
     signedPdfCopies: 0,
     anamnesis: 0,
     prescriptionCopies: 0,
+    // DX-306 (API): las copias de justificantes y certificados.
+    certificateCopies: 0,
     ...overrides,
   };
   return {
@@ -30,7 +32,8 @@ function links(overrides: Partial<LivePublicLinks> = {}): LivePublicLinks {
       base.budgetSignatures +
       base.signedPdfCopies +
       base.anamnesis +
-      base.prescriptionCopies,
+      base.prescriptionCopies +
+      base.certificateCopies,
   };
 }
 

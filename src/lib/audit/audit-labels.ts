@@ -60,6 +60,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   CONSENT: 'Consentimiento',
   DATA_CONSENT: 'Autorización de datos',
   PRESCRIPTION: 'Receta',
+  // DX-306 (API en main): justificantes de asistencia y certificados de reposo.
+  PATIENT_CERTIFICATE: 'Justificante o certificado',
   TREATMENT_PLAN: 'Plan de tratamiento',
   TREATMENT_PLAN_ITEM: 'Ítem del plan',
   PAYMENT: 'Abono',

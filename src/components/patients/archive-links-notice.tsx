@@ -27,6 +27,9 @@ export const archiveLinksCopy = {
       plural(n, 'copia de un documento firmado', 'copias de documentos firmados'),
     anamnesis: (n: number) => plural(n, 'cuestionario de salud', 'cuestionarios de salud'),
     prescriptionCopies: (n: number) => plural(n, 'copia de una receta', 'copias de recetas'),
+    // DX-306 (API en main): copias de justificantes y certificados enviadas al paciente.
+    certificateCopies: (n: number) =>
+      plural(n, 'copia de un justificante o certificado', 'copias de justificantes o certificados'),
   } satisfies Record<Kind, (n: number) => string>,
 };
 
