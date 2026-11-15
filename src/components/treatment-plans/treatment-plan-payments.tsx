@@ -50,6 +50,7 @@ export function PlanBillingSection({
   onViewProof,
   onExternalInvoice,
   paymentPlanRefreshSignal,
+  showPaymentPlan = true,
 }: {
   token: string;
   planDetail: TreatmentPlan;
@@ -71,14 +72,17 @@ export function PlanBillingSection({
   onRecorded: () => Promise<void>;
   payments: Payment[];
   voidingPaymentId: string | null;
-  onVoid: (paymentId: string) => void;
+  /** DX-090: sin él (quien cobra con PAYMENT_REGISTER) no se ofrece «Anular». */
+  onVoid?: (paymentId: string) => void;
   onReceipt: (paymentId: string) => void;
   manualPaymentIds: ReadonlySet<string> | undefined;
   onAllocate?: (paymentId: string) => void;
   onViewAllocation?: (paymentId: string) => void;
   onViewProof?: (payment: Payment) => void;
-  onExternalInvoice: (payment: Payment) => void;
+  onExternalInvoice?: (payment: Payment) => void;
   paymentPlanRefreshSignal: number;
+  /** DX-090: el plan de cuotas, solo los roles de cobro (la API no lo abre al permiso). */
+  showPaymentPlan?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-4 border-t border-border-subtle pt-6">
@@ -169,18 +173,20 @@ export function PlanBillingSection({
             />
           </Disclosure>
 
-          <div className="border-t border-border-subtle pt-6">
-            <PaymentPlanSection
-              token={token}
-              planId={selectedPlanId}
-              planCurrency={planBalance.planCurrency}
-              billable={planBalance.billable}
-              canCreate={billable}
-              refreshSignal={paymentPlanRefreshSignal}
-              fmt={sedeFmt}
-              onRetryBalance={onRetryBalance}
-            />
-          </div>
+          {showPaymentPlan ? (
+            <div className="border-t border-border-subtle pt-6">
+              <PaymentPlanSection
+                token={token}
+                planId={selectedPlanId}
+                planCurrency={planBalance.planCurrency}
+                billable={planBalance.billable}
+                canCreate={billable}
+                refreshSignal={paymentPlanRefreshSignal}
+                fmt={sedeFmt}
+                onRetryBalance={onRetryBalance}
+              />
+            </div>
+          ) : null}
         </>
       )}
     </div>

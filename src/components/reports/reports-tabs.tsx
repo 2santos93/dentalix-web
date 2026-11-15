@@ -1,5 +1,6 @@
 'use client';
 import type { ClinicRole } from '@/lib/me/me-api';
+import type { ExtraPermission } from '@/lib/auth/permissions';
 import { TabBar } from '@/components/ui/tabs';
 
 /**
@@ -12,29 +13,49 @@ import { TabBar } from '@/components/ui/tabs';
  * flechas mueven el foco y Enter/Espacio (o el clic) eligen.
  */
 export const REPORT_TABS = [
-  { key: 'comparar-sedes', label: 'Comparar sedes', roles: ['ADMIN'] },
+  // DX-090: las financieras también con FINANCIAL_REPORTS_VIEW (`@AllowPermissions` en la API).
+  { key: 'comparar-sedes', label: 'Comparar sedes', roles: ['ADMIN'], permissions: ['FINANCIAL_REPORTS_VIEW'] },
   // DX-410: ingresos − gastos por sede en base Caja o Devengo; administración (PROFITABILITY_REPORT_ROLES).
-  { key: 'rentabilidad', label: 'Rentabilidad', roles: ['ADMIN'] },
+  { key: 'rentabilidad', label: 'Rentabilidad', roles: ['ADMIN'], permissions: ['FINANCIAL_REPORTS_VIEW'] },
   { key: 'produccion', label: 'Producción por procedimiento', roles: ['ADMIN', 'DENTIST'] },
   // DX-399: lo cobrado que aún no cubre ningún ítem; los roles de cobro (UNALLOCATED_PAYMENTS_ROLES).
-  { key: 'sin-imputar', label: 'Cobrado sin imputar', roles: ['ADMIN', 'RECEPTION'] },
+  {
+    key: 'sin-imputar',
+    label: 'Cobrado sin imputar',
+    roles: ['ADMIN', 'RECEPTION'],
+    permissions: ['FINANCIAL_REPORTS_VIEW'],
+  },
   // DX-436: los huecos que dejan las cancelaciones y cuántos se recuperan; administración (las restringidas, solo sus sedes).
   { key: 'huecos-recuperados', label: 'Huecos recuperados', roles: ['ADMIN'] },
   // DX-481: minutos abiertos, reservados y atendidos de cada sillón; administración (REPORT_ROLES).
   { key: 'ocupacion-sillones', label: 'Ocupación por sillón', roles: ['ADMIN'] },
   // DX-424: enviados, abiertos y completados de los enlaces al paciente; administración (REPORT_ROLES).
   { key: 'enlaces-paciente', label: 'Enlaces del paciente', roles: ['ADMIN'] },
-] as const satisfies readonly { key: string; label: string; roles: readonly ClinicRole[] }[];
+] as const satisfies readonly {
+  key: string;
+  label: string;
+  roles: readonly ClinicRole[];
+  permissions?: readonly ExtraPermission[];
+}[];
 
 export type ReportTabKey = (typeof REPORT_TABS)[number]['key'];
 export type ReportTab = (typeof REPORT_TABS)[number];
 
 /**
- * Las pestañas que el rol puede abrir (copian los `@Roles` de la API). Un rol
+ * Las pestañas que el rol puede abrir (copian los `@Roles` de la API y, DX-090,
+ * sus `@AllowPermissions`: `permissions` son los efectivos de `GET /me`). Un rol
  * sin ninguna ve la primera, cuyo 403 enseña el aviso de la propia vista.
  */
-export function reportTabsFor(role: ClinicRole | null): readonly ReportTab[] {
-  const tabs = REPORT_TABS.filter((tab) => role !== null && (tab.roles as readonly ClinicRole[]).includes(role));
+export function reportTabsFor(
+  role: ClinicRole | null,
+  permissions: readonly ExtraPermission[] = [],
+): readonly ReportTab[] {
+  const tabs = REPORT_TABS.filter(
+    (tab) =>
+      role !== null &&
+      ((tab.roles as readonly ClinicRole[]).includes(role) ||
+        ('permissions' in tab && (tab.permissions as readonly ExtraPermission[]).some((p) => permissions.includes(p)))),
+  );
   return tabs.length > 0 ? tabs : [REPORT_TABS[0]];
 }
 

@@ -16,6 +16,7 @@ import { NEW_APPOINTMENT_EVENT, NEW_APPOINTMENT_PARAM } from '@/lib/ui/new-appoi
 import { canManageRecall } from '@/lib/recall/presentation';
 import { canReviewMajority, COMING_OF_AGE_HREF } from '@/lib/patients/majority-review-api';
 import { canSee, ALL_NAV_ITEMS } from './nav-config';
+import { useEffectivePermissions } from '@/lib/auth/permissions';
 import { useCloseOnBack } from './use-shell-media';
 
 
@@ -88,6 +89,8 @@ export function CommandPalette({
   onOpenCaller?: () => void;
 }) {
   const router = useRouter();
+  // DX-090: «Ir a» ofrece también lo que abren los permisos extra.
+  const permissions = useEffectivePermissions();
   const [query, setQuery] = React.useState('');
   const debounced = useDebouncedValue(query.trim(), DEBOUNCE_MS);
   const [patients, setPatients] = React.useState<Patient[]>([]);
@@ -168,7 +171,7 @@ export function CommandPalette({
       }
     }
     for (const item of ALL_NAV_ITEMS) {
-      if (!canSee(item, role)) continue;
+      if (!canSee(item, role, permissions)) continue;
       const label = item.fullLabel ?? item.label;
       if (!matches(label, item.tabLabel)) continue;
       result.push({ id: `nav-${item.href}`, group: 'goto', label, icon: item.icon, run: () => go(item.href) });
@@ -257,7 +260,7 @@ export function CommandPalette({
     ];
     for (const a of actions) if (matches(a.label)) result.push(a);
     return result;
-  }, [query, searchable, patients, role, go, onOpenChange, skipBack, onOpenCaller]);
+  }, [query, searchable, patients, role, permissions, go, onOpenChange, skipBack, onOpenCaller]);
 
   const activeIndex = options.length === 0 ? -1 : Math.min(active, options.length - 1);
   const activeOption = activeIndex >= 0 ? options[activeIndex] : undefined;

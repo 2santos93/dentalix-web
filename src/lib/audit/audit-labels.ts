@@ -328,7 +328,20 @@ const STAFF_REASONS: Record<string, string> = {
   MFA_RESET_REFUSED: 'Restablecimiento de la verificación rechazado (sin cambios)',
   // PUT /staff/:userId/locations (anterior a DX-359): sin antes ni después.
   LOCATIONS_CHANGED: 'Sedes del miembro cambiadas',
+  // DX-090: PUT /staff/:userId/permissions, con el antes y el después.
+  PERMISSIONS_CHANGED: 'Permisos extra del miembro cambiados',
 };
+
+/** DX-090: los permisos extra por su nombre; uno que esta web no conoce no se pinta en crudo. */
+const EXTRA_PERMISSION_LABELS: Record<string, string> = {
+  PAYMENT_REGISTER: 'registrar abonos y operar su caja',
+  FINANCIAL_REPORTS_VIEW: 'ver reportes financieros y la caja',
+};
+
+function extraPermissionsLabel(permissions: readonly string[] | undefined): string {
+  if (!permissions || permissions.length === 0) return 'ninguno';
+  return permissions.map((p) => EXTRA_PERMISSION_LABELS[p] ?? 'permiso no reconocido').join(', ');
+}
 
 type StaffAccessSide = NonNullable<NonNullable<AuditMetadata['staffAccess']>['after']>;
 
@@ -383,6 +396,7 @@ const STAFF_ACCESS_FIELDS: {
     label: 'Especialidad',
     value: (s) => (s.professionalSpecialty ? `«${s.professionalSpecialty}»` : 'sin especialidad'),
   },
+  { key: 'extraPermissions', label: 'Permisos extra', value: (s) => extraPermissionsLabel(s.extraPermissions) },
 ];
 
 /**
