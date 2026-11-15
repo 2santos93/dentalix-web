@@ -16,7 +16,6 @@ import { PatientDataPanel } from '@/components/patients/patient-data-panel';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 import { PatientRecordHeader } from '@/components/patients/patient-record-header';
 import { ImagingExportDialog, imagingExportMenuAction } from '@/components/patients/imaging-export-dialog';
-import { ClinicalRecordCopiesSection } from '@/components/patients/clinical-record-copies-section';
 import {
   PatientRetentionDialogs,
   PatientRetentionSection,
@@ -55,6 +54,7 @@ import {
   AuditLogView,
   ClinicalAlertBanner,
   ClinicalEntriesList,
+  ClinicalRecordCopiesSection,
   DataConsentsTab,
   FamilyAccountStatementSection,
   OdontogramTab,

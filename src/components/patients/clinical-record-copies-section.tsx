@@ -15,13 +15,20 @@ import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { AsyncSection } from '@/components/shared/async-section';
 import { Button } from '@/components/ui/button';
 import { SectionHeader } from '@/components/ui/section-header';
-import { ClinicalRecordCopyDialog, clinicalRecordCopyCopy } from './clinical-record-copy-dialog';
+import dynamic from 'next/dynamic';
+
+// El diálogo (calendario de rango, formulario) llega en su propio trozo al
+// abrirlo; cerrado no pinta nada.
+const ClinicalRecordCopyDialog = dynamic(
+  () => import('./clinical-record-copy-dialog').then((m) => m.ClinicalRecordCopyDialog),
+  { ssr: false },
+);
 
 // Copy as constants (i18n-ready).
 const copy = {
   heading: 'Copias de la historia clínica',
   description: 'Cada copia generada queda aquí, con su período y a quién se entregó.',
-  action: clinicalRecordCopyCopy.action,
+  action: 'Copia de la historia clínica',
   loadError: 'No pudimos cargar las copias generadas.',
   emptyTitle: 'Aún no se ha generado ninguna copia',
   emptyDescription:
@@ -134,13 +141,15 @@ export function ClinicalRecordCopiesSection({ token, patientId }: ClinicalRecord
           })}
         </ul>
       </AsyncSection>
-      <ClinicalRecordCopyDialog
+      {open ? (
+        <ClinicalRecordCopyDialog
         open={open}
         onOpenChange={setOpen}
         token={token}
         patientId={patientId}
         onGenerated={() => setReloadKey((k) => k + 1)}
-      />
+        />
+      ) : null}
     </section>
   );
 }
