@@ -131,7 +131,8 @@ for (const viewport of [
       const asst = await newPage(browser, viewport);
       await login(asst.page, origin, ASSISTANT_EMAIL);
       await asst.page.goto(planTab);
-      await expect(asst.page.getByText(`Corona DX090 ${tag}`).first()).toBeVisible({ timeout: 20_000 });
+      // El detalle del plan cargó (en el móvil los ítems van plegados).
+      await expect(asst.page.getByRole('heading', { name: 'Detalle del plan' })).toBeVisible({ timeout: 20_000 });
       await expect(asst.page.getByRole('button', { name: 'Registrar abono', exact: true })).toHaveCount(0);
       await expect(cashLinks(asst.page)).toHaveCount(0);
       await expectNoHorizontalScroll(asst.page);
