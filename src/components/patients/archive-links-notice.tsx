@@ -26,6 +26,7 @@ export const archiveLinksCopy = {
     signedPdfCopies: (n: number) =>
       plural(n, 'copia de un documento firmado', 'copias de documentos firmados'),
     anamnesis: (n: number) => plural(n, 'cuestionario de salud', 'cuestionarios de salud'),
+    prescriptionCopies: (n: number) => plural(n, 'copia de una receta', 'copias de recetas'),
   } satisfies Record<Kind, (n: number) => string>,
 };
 
@@ -44,7 +45,7 @@ interface ArchiveLinksNoticeProps {
 /**
  * DX-461: dentro del diálogo de archivar, cuántos enlaces enviados al
  * paciente (oferta de hueco, firma y presupuesto a distancia, copia del PDF,
- * cuestionario de salud) dejarán de servir. Se cuenta al abrir; si falla, el
+ * cuestionario de salud, copia de una receta —DX-468—) dejarán de servir. Se cuenta al abrir; si falla, el
  * aviso se sustituye en su sitio por un error con reintento (escalón 2): el
  * diálogo sigue sirviendo y la API anula igual al archivar.
  */

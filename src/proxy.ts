@@ -58,7 +58,8 @@ function proxyToApi(req: NextRequest): NextResponse {
  * (`/hueco/<token>`), cuyo token de un solo uso reserva una cita. DX-443: y
  * para la copia del PDF firmado (`/copia/<token>`), de un solo uso. DX-467: y
  * para la verificación de una receta (`/receta/<código>`): sin caché, anularla
- * se ve en la carga siguiente, y sin indexar.
+ * se ve en la carga siguiente, y sin indexar. DX-468: también la copia de la
+ * receta para el paciente (`/receta/copia/<token>`), con la receta entera.
  */
 export const HEALTH_FORM_HEADERS: Record<string, string> = {
   'Referrer-Policy': 'no-referrer',

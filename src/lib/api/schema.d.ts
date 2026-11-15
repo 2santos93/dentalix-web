@@ -6666,6 +6666,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/prescriptions/{id}/patient-copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enviar al paciente una copia de la receta
+         * @description Crea un enlace caducable (30 días por defecto; se guarda solo el hash del token) a una copia informativa de la receta EMITIDA; el enlace anterior de la receta deja de servir en la misma transacción. `EMAIL`: lo envía el outbox (DX-088) en el idioma del paciente (DX-497), sin nada clínico. `WHATSAPP`: devuelve el enlace y el texto (clínica y enlace, sin nada clínico) para que la web abra wa.me. Un menor la recibe por su responsable registrado que recibe avisos. Auditado como SEND de PRESCRIPTION, reason PRESCRIPTION_COPY_SENT.
+         */
+        post: operations["PrescriptionsController_sendPatientCopy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/prescription-templates": {
         parameters: {
             query?: never;
@@ -6710,6 +6730,26 @@ export interface paths {
          * @description Válida, anulada (solo el día) o «no se puede verificar» si el hash no casa con el contenido. Nada clínico. Cada consulta de una receta encontrada queda en la auditoría de la clínica como VIEW de PRESCRIPTION, origen PUBLIC_LINK, reason PRESCRIPTION_VERIFIED o PRESCRIPTION_INTEGRITY_MISMATCH. Admite el código agrupado con guiones y en minúsculas.
          */
         get: operations["PublicPrescriptionVerificationController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/prescription-copies/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * El paciente abre la copia de su receta
+         * @description Copia INFORMATIVA (no la receta electrónica oficial). Con el enlace vivo: la receta emitida con su código de verificación (DX-467) y el pie de la clínica; si se anuló después del envío, solo «anulada» y el día, sin receta. Cada apertura queda en la auditoría de la clínica como VIEW de PRESCRIPTION, origen PUBLIC_LINK, reason PRESCRIPTION_COPY_OPENED.
+         */
+        get: operations["PublicPrescriptionCopiesController_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9177,6 +9217,8 @@ export interface components {
             signedPdfCopies: number;
             /** @description Cuestionarios de salud (anamnesis) sin responder (DX-099) */
             anamnesis: number;
+            /** @description Enlaces de la copia de una receta enviados al paciente y sin caducar (DX-468) */
+            prescriptionCopies: number;
             /** @description Suma de todos los tipos */
             total: number;
         };
@@ -21970,6 +22012,11 @@ export interface components {
              * @example 30
              */
             validityDays: number;
+            /**
+             * @description DX-468: pie de la copia de la receta que se envía al paciente. null o vacío = el de plataforma. Ausente en el PUT = no cambia.
+             * @example Copia para el paciente. Para retirar el medicamento presente la receta impresa y firmada.
+             */
+            patientCopyFooter?: string | null;
         };
         /** @enum {string} */
         PrescriptionHourCycle: "h12" | "h23";
@@ -22067,6 +22114,44 @@ export interface components {
             /** @example Dosis equivocada */
             reason: string;
         };
+        /**
+         * @description `EMAIL`: la API lo envía por el outbox. `WHATSAPP`: la API devuelve el enlace y el texto para que la web abra wa.me.
+         * @enum {string}
+         */
+        PrescriptionCopyChannel: "EMAIL" | "WHATSAPP";
+        SendPrescriptionCopyDto: {
+            /** @description `EMAIL`: la API lo envía por el outbox. `WHATSAPP`: la API devuelve el enlace y el texto para que la web abra wa.me. */
+            channel: components["schemas"]["PrescriptionCopyChannel"];
+        };
+        /**
+         * @description `RESPONSIBLE`: el paciente es menor y va a su responsable.
+         * @enum {string}
+         */
+        PrescriptionCopyRecipientKind: "PATIENT" | "RESPONSIBLE";
+        PrescriptionCopyWhatsAppDto: {
+            /** @description E.164 sin «+», para https://wa.me/<número> */
+            phone: string;
+            /** @description Mensaje prellenado: saludo, clínica, caducidad y enlace; nada clínico. En el idioma del paciente si hay catálogo (DX-497). */
+            text: string;
+            /** @description Enlace público. El token solo viaja en esta respuesta: la API guarda su hash. */
+            url: string;
+        };
+        PrescriptionCopySentDto: {
+            /** @description `EMAIL`: la API lo envía por el outbox. `WHATSAPP`: la API devuelve el enlace y el texto para que la web abra wa.me. */
+            channel: components["schemas"]["PrescriptionCopyChannel"];
+            /** Format: date-time */
+            sentAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /**
+             * @description A quién va, enmascarado («ma***@…», «••• 4567»).
+             * @example ma***@correo.com
+             */
+            destinationMasked: string;
+            /** @description `RESPONSIBLE`: el paciente es menor y va a su responsable. */
+            recipientKind: components["schemas"]["PrescriptionCopyRecipientKind"];
+            whatsapp: components["schemas"]["PrescriptionCopyWhatsAppDto"] | null;
+        };
         PrescriptionTemplateItemDto: {
             activeIngredient: string;
             brandName: string | null;
@@ -22145,6 +22230,35 @@ export interface components {
              * @description Reloj de la sede (lo pide el formateador regional de la web junto al locale).
              * @example h12
              */
+            hourCycle: components["schemas"]["PrescriptionHourCycle"] | null;
+        };
+        /**
+         * @description `AVAILABLE`: la receta emitida (`prescription`) y el pie. `VOIDED`: «Esta receta fue anulada» (solo el día, nada que descargar). `UNVERIFIABLE`: la huella no casa con el contenido; no se muestra. Inventado, de otra clínica, invalidado o del paciente archivado: 404. Caducado: 410 `PRESCRIPTION_COPY_LINK_EXPIRED`.
+         * @enum {string}
+         */
+        PublicPrescriptionCopyStatus: "AVAILABLE" | "VOIDED" | "UNVERIFIABLE";
+        PublicPrescriptionCopyClinicDto: {
+            name: string;
+            primaryColor: string | null;
+            logoUrl: string | null;
+        };
+        PublicPrescriptionCopyDto: {
+            /** @description `AVAILABLE`: la receta emitida (`prescription`) y el pie. `VOIDED`: «Esta receta fue anulada» (solo el día, nada que descargar). `UNVERIFIABLE`: la huella no casa con el contenido; no se muestra. Inventado, de otra clínica, invalidado o del paciente archivado: 404. Caducado: 410 `PRESCRIPTION_COPY_LINK_EXPIRED`. */
+            status: components["schemas"]["PublicPrescriptionCopyStatus"];
+            clinic: components["schemas"]["PublicPrescriptionCopyClinicDto"] | null;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @description Pie de la copia (el de la clínica o el de plataforma). Solo con `AVAILABLE`. */
+            footer: string | null;
+            /** @description La receta tal como se imprime, sin las notas internas de seguridad ni los datos de una anulación. Solo con `AVAILABLE`. */
+            prescription: components["schemas"]["PrescriptionDocumentDto"] | null;
+            /**
+             * @description Día civil de la anulación en la zona de la sede; solo con `VOIDED` (null si la sede no tiene zona).
+             * @example 2026-11-20
+             */
+            voidedOn: string | null;
+            /** @description Locale de la sede para escribir las fechas (DX-354). */
+            locale: string | null;
             hourCycle: components["schemas"]["PrescriptionHourCycle"] | null;
         };
         PatientImplantDto: {
@@ -41168,6 +41282,73 @@ export interface operations {
             };
         };
     };
+    PrescriptionsController_sendPatientCopy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendPrescriptionCopyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrescriptionCopySentDto"];
+                };
+            };
+            /** @description Canal inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso clínico, o la sede de la receta no está permitida al usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Receta no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La receta está anulada, el paciente está archivado, la sede no tiene zona o formato, o no se pudo armar el enlace de la clínica */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sin a quién enviarla por ese canal: sin email o sin teléfono para WhatsApp, baja de los envíos, o un menor sin responsable con ese contacto */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tope de emails a esta persona o de la clínica */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PrescriptionTemplatesController_list: {
         parameters: {
             query?: never;
@@ -41345,6 +41526,52 @@ export interface operations {
                 content?: never;
             };
             /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicPrescriptionCopiesController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicPrescriptionCopyDto"];
+                };
+            };
+            /** @description Token mal formado, inexistente, de otra clínica, invalidado al reenviar o del paciente archivado (el mismo 404 genérico). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace caducó (`PRESCRIPTION_COPY_LINK_EXPIRED`): hay que pedir otro a la clínica. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiadas peticiones
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
             429: {
                 headers: {
                     [name: string]: unknown;
