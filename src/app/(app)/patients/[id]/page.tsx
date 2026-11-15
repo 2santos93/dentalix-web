@@ -64,6 +64,7 @@ import {
   PatientImplantsTab,
   PatientPostOpDeliveries,
   PatientPrescriptionsTab,
+  PatientCertificatesTab,
   PerioTab,
   TreatmentPlansTab,
 } from '@/components/patients/patient-lazy-tabs';
@@ -83,6 +84,7 @@ const copy = {
   tabConsents: 'Consentimientos',
   tabPerio: 'Periodontograma',
   tabPrescriptions: 'Recetas',
+  tabCertificates: 'Certificados',
   tabImplants: 'Implantes',
   tabDocuments: 'Documentos',
   tabAccessLog: 'Accesos',
@@ -426,6 +428,7 @@ function PatientDetailView() {
               consentsLabel={access.consents ? copy.tabConsents : undefined}
               perioLabel={access.perio ? copy.tabPerio : undefined}
               prescriptionsLabel={access.prescriptions ? copy.tabPrescriptions : undefined}
+              certificatesLabel={access.certificates ? copy.tabCertificates : undefined}
               implantsLabel={access.implants ? copy.tabImplants : undefined}
               documentsLabel={access.documents ? copy.tabDocuments : undefined}
               accessLogLabel={access['access-log'] ? copy.tabAccessLog : undefined}
@@ -684,6 +687,12 @@ function PatientDetailView() {
           {access.prescriptions ? (
             <TabPanel tab="prescriptions" activeTab={activeTab} register={registerPanel}>
               <PatientPrescriptionsTab token={accessToken} patientId={patientId} />
+            </TabPanel>
+          ) : null}
+          {/* DX-306: justificantes de asistencia y certificados de reposo. */}
+          {access.certificates ? (
+            <TabPanel tab="certificates" activeTab={activeTab} register={registerPanel}>
+              <PatientCertificatesTab token={accessToken} patientId={patientId} />
             </TabPanel>
           ) : null}
           {/* DX-191: implantes por diente y tarjeta imprimible. `registerTooth`

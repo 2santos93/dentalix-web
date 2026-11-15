@@ -84,6 +84,10 @@ export const PatientPrescriptionsTab = dynamic(
   () => import('@/components/prescriptions/patient-prescriptions-tab').then((m) => m.PatientPrescriptionsTab),
   { ssr: false, loading: () => <SectionSkeleton /> },
 );
+export const PatientCertificatesTab = dynamic(
+  () => import('@/components/certificates/patient-certificates-tab').then((m) => m.PatientCertificatesTab),
+  { ssr: false, loading: () => <SectionSkeleton /> },
+);
 export const PatientImplantsTab = dynamic(
   () => import('@/components/implants/patient-implants-tab').then((m) => m.PatientImplantsTab),
   { ssr: false, loading: () => <SectionSkeleton /> },

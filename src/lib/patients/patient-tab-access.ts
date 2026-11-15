@@ -24,6 +24,8 @@ export type PatientTabAccess = Record<PatientDetailTabKey, boolean>;
  * - Consentimientos: los cuatro roles (DX-243: recepción envía a firmar a
  *   distancia y ve el estado; los documentos firmados, solo `CLINICAL_ROLES`,
  *   que la pestaña decide por dentro).
+ * - Certificados (DX-306): los cuatro roles (el justificante lo emite
+ *   cualquiera; el reposo, DENTIST o ADMIN, lo decide la pestaña).
  * - Autorizaciones (DX-037), Implantes (DX-191), Documentos (DX-151) y
  *   Datos: los cuatro roles.
  * - Accesos (auditoría de la ficha, DX-009): `AUDIT_READ_ROLES` (solo ADMIN).
@@ -42,6 +44,7 @@ export function patientTabAccess(role: ClinicRole | null): PatientTabAccess {
     consents: role !== null,
     perio: canUsePerio(role),
     prescriptions: canUsePrescriptions(role),
+    certificates: role !== null,
     implants: canReadImplants(role),
     documents: role !== null,
     'data-consents': role !== null,
