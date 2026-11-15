@@ -12,7 +12,14 @@ import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { telHref } from '@/lib/receivables/presentation';
-import { offlineOwnerOf, readOfflineAgenda, type OfflineAgenda, type OfflineAgendaAppointment } from '@/lib/offline/offline-agenda';
+import {
+  offlineCopyStatus,
+  offlineOwnerOf,
+  readOfflineAgenda,
+  type OfflineAgenda,
+  type OfflineAgendaAppointment,
+} from '@/lib/offline/offline-agenda';
+import { OfflineCopyWiped, PinUnlockForm } from './offline-copy';
 
 export const offlineAgendaCopy = {
   notice: (time: string) => `Sin conexión · datos de las ${time}`,
@@ -39,8 +46,9 @@ export const offlineAgendaCopy = {
   medicalAlert: 'Alerta médica: sí',
   callLabel: (name: string, phone: string) => `Llamar a ${name} · ${phone}`,
   missingTitle: 'Sin conexión',
+  lockedBody: 'La copia de la agenda guardada en este equipo está cifrada. Ábrela con el PIN que elegiste al activarla.',
   missingBody:
-    'No hay una copia de la agenda guardada en este equipo (o ya caducó: se guarda 48 horas). Cuando vuelva la conexión, la agenda se carga sola.',
+    'No hay una copia de la agenda guardada en este equipo (no se activó, se quitó o ya caducó: se guarda 48 horas). Cuando vuelva la conexión, la agenda se carga sola.',
   retry: 'Comprobar de nuevo',
   loading: 'Abriendo la copia guardada…',
 };
@@ -48,6 +56,8 @@ export const offlineAgendaCopy = {
 type Loaded =
   | { status: 'loading' }
   | { status: 'missing' }
+  | { status: 'locked' }
+  | { status: 'wiped' }
   | { status: 'ready'; agenda: OfflineAgenda; savedAt: number; clock: SedeClock };
 
 /**
@@ -63,9 +73,18 @@ export function OfflineAgendaView({ token }: { token: string | null }) {
 
   useEffect(() => {
     let cancelled = false;
-    void readOfflineAgenda({ owner: offlineOwnerOf(token)?.owner ?? null, activeLocationId: getActiveLocationId() }).then(
+    const load = async () => {
+      // Sin la clave en esta pestaña (equipo reiniciado, pestaña nueva) se pide
+      // el PIN: sin él no se enseña nada.
+      const status = await offlineCopyStatus(token);
+      if (status === 'locked') return { status: 'locked' } as const;
+      if (status === 'off') return null;
+      return readOfflineAgenda({ owner: offlineOwnerOf(token)?.owner ?? null, activeLocationId: getActiveLocationId() });
+    };
+    void load().then(
       (stored) => {
         if (cancelled) return;
+        if (stored && 'status' in stored) return setLoaded(stored);
         const clock = stored
           ? locationClock({
               timeZone: stored.payload.timeZone,
@@ -92,6 +111,17 @@ export function OfflineAgendaView({ token }: { token: string | null }) {
       </p>
     );
   }
+  if (loaded.status === 'locked') {
+    return (
+      <div data-testid="offline-locked" className="flex flex-col gap-4">
+        <Callout tone="warning" icon={WifiOff} title={offlineAgendaCopy.missingTitle}>
+          <p>{offlineAgendaCopy.lockedBody}</p>
+        </Callout>
+        <PinUnlockForm onUnlocked={() => setAttempt((n) => n + 1)} onWiped={() => setLoaded({ status: 'wiped' })} />
+      </div>
+    );
+  }
+  if (loaded.status === 'wiped') return <OfflineCopyWiped />;
   if (loaded.status === 'missing') {
     return (
       <SectionError

@@ -4,9 +4,14 @@ import { OfflineAgendaView, offlineAgendaCopy } from './offline-agenda';
 import type { OfflineAgenda } from '../../lib/offline/offline-agenda';
 
 const mockRead = jest.fn();
+const mockStatus = jest.fn();
+const mockUnlock = jest.fn();
 jest.mock('../../lib/offline/offline-agenda', () => ({
   readOfflineAgenda: (...args: unknown[]) => mockRead(...args),
+  offlineCopyStatus: (...args: unknown[]) => mockStatus(...args),
+  unlockOfflineCopy: (...args: unknown[]) => mockUnlock(...args),
   offlineOwnerOf: () => null,
+  onOfflineCopyChange: () => () => undefined,
 }));
 
 // Caracas (UTC−4): «hoy» es el sábado 15 de noviembre de 2026.
@@ -52,6 +57,8 @@ describe('OfflineAgendaView (DX-405)', () => {
   beforeEach(() => {
     jest.useFakeTimers({ now: NOW, doNotFake: ['queueMicrotask', 'nextTick', 'setImmediate'] });
     mockRead.mockReset();
+    mockStatus.mockReset().mockResolvedValue('ready');
+    mockUnlock.mockReset();
   });
   afterEach(() => jest.useRealTimers());
 
@@ -106,5 +113,39 @@ describe('OfflineAgendaView (DX-405)', () => {
     expect(await screen.findByText(offlineAgendaCopy.missingBody)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: offlineAgendaCopy.retry }));
     expect(await screen.findByText('María Pérez')).toBeInTheDocument();
+  });
+
+  describe('sin la clave en la pestaña (equipo reiniciado): PIN', () => {
+    it('pide el PIN y no enseña nada; con el PIN malo dice los intentos; con el bueno, la agenda', async () => {
+      mockStatus.mockResolvedValueOnce('locked').mockResolvedValue('ready');
+      mockRead.mockResolvedValue({ scope: {}, savedAt: NOW.getTime(), payload: AGENDA });
+      mockUnlock.mockResolvedValueOnce({ ok: false, remaining: 4 }).mockResolvedValueOnce({ ok: true });
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      render(<OfflineAgendaView token={null} />);
+      const pin = await screen.findByLabelText('PIN (4 a 6 dígitos)');
+      expect(screen.queryByText('María Pérez')).not.toBeInTheDocument();
+      expect(mockRead).not.toHaveBeenCalled();
+
+      await user.type(pin, '1111');
+      await user.click(screen.getByRole('button', { name: 'Abrir' }));
+      expect(await screen.findByText(/PIN incorrecto\. Te quedan 4 intentos/)).toBeInTheDocument();
+      expect(screen.queryByText('María Pérez')).not.toBeInTheDocument();
+
+      await user.type(screen.getByLabelText('PIN (4 a 6 dígitos)'), '2468');
+      await user.click(screen.getByRole('button', { name: 'Abrir' }));
+      expect(await screen.findByText('María Pérez')).toBeInTheDocument();
+      expect(mockUnlock).toHaveBeenLastCalledWith('2468');
+    });
+
+    it('al agotar los intentos: «Por seguridad se borró la copia sin conexión»', async () => {
+      mockStatus.mockResolvedValue('locked');
+      mockUnlock.mockResolvedValue({ ok: false, wiped: true });
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      render(<OfflineAgendaView token={null} />);
+      await user.type(await screen.findByLabelText('PIN (4 a 6 dígitos)'), '0000');
+      await user.click(screen.getByRole('button', { name: 'Abrir' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('Por seguridad se borró la copia sin conexión');
+      expect(screen.queryByText('María Pérez')).not.toBeInTheDocument();
+    });
   });
 });

@@ -1,10 +1,10 @@
 /**
- * Almacén clave-valor mínimo de la copia sin conexión (DX-405): la tabla
- * `agenda`, con la agenda CIFRADA. La clave no vive aquí sino en la pestaña
- * (`sessionStorage`, ver `encrypted-agenda-store.ts`). En el navegador es
- * IndexedDB; en los tests, memoria.
+ * Almacén clave-valor mínimo de la copia sin conexión (DX-405): `agenda` (la
+ * agenda CIFRADA) y `vault` (la clave de datos ENVUELTA con el PIN, su salt,
+ * sus iteraciones y el contador de fallos; nunca una clave usable, ver
+ * `offline-vault.ts`). En el navegador es IndexedDB; en los tests, memoria.
  */
-export type OfflineTable = 'agenda';
+export type OfflineTable = 'agenda' | 'vault';
 
 export interface OfflineKv {
   get<T>(table: OfflineTable, key: string): Promise<T | undefined>;
@@ -16,8 +16,8 @@ export interface OfflineKv {
 }
 
 const DB_NAME = 'dentalix-offline';
-const DB_VERSION = 1;
-const TABLES: readonly OfflineTable[] = ['agenda'];
+const DB_VERSION = 2;
+const TABLES: readonly OfflineTable[] = ['agenda', 'vault'];
 
 function request<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -67,7 +67,7 @@ export function indexedDbKv(): OfflineKv | null {
 
 /** En memoria (tests). */
 export function memoryKv(): OfflineKv & { tables: Record<OfflineTable, Map<string, unknown>> } {
-  const tables: Record<OfflineTable, Map<string, unknown>> = { agenda: new Map() };
+  const tables: Record<OfflineTable, Map<string, unknown>> = { agenda: new Map(), vault: new Map() };
   return {
     tables,
     get: async <T>(table: OfflineTable, key: string) => tables[table].get(key) as T | undefined,

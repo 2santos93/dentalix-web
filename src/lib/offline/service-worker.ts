@@ -3,7 +3,7 @@
  * cosas: guardar los estáticos de Next (`/_next/static/*`, con hash: no
  * cambian) y la página `/agenda` (red primero, la guardada sin red), para que
  * la agenda abra sin conexión. Nunca toca `/api/*`: los datos de la agenda van
- * cifrados aparte (`encrypted-agenda-store.ts`), no en la caché HTTP.
+ * cifrados aparte (`offline-vault.ts`), no en la caché HTTP.
  *
  * Solo se registra en producción (`next build` + `next start`, lo que corre la
  * E2E de la CI): con `next dev` guardaría trozos de desarrollo que cambian en

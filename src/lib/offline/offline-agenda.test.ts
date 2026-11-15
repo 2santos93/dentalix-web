@@ -1,14 +1,14 @@
 import { webcrypto } from 'node:crypto';
 import { TextDecoder, TextEncoder } from 'node:util';
-import { createEncryptedAgendaStore, memoryKeyHolder } from './encrypted-agenda-store';
+import { createOfflineVault } from './offline-vault';
 import { memoryKv } from './offline-kv';
 import {
+  enableOfflineCopy,
   forgetOfflineSession,
   markOfflineSession,
   offlineSessionOwner,
-  readOfflineAgenda,
-  resetOfflineAgendaStoreForTests,
-  setOfflineAgendaStoreForTests,
+  resetOfflineAgendaForTests,
+  setOfflineVaultForTests,
   syncOfflineAgenda,
   type OfflineAgenda,
 } from './offline-agenda';
@@ -31,49 +31,47 @@ function jwt(claims: Record<string, unknown>): string {
 const TOKEN = jwt({ sub: 'user-1', tenantId: 'tenant-1', role: 'RECEPTION' });
 const AGENDA = { locationId: 'sede-1', appointments: [] } as unknown as OfflineAgenda;
 
-function memoryStore() {
+function useMemoryVault() {
   const kv = memoryKv();
-  const keys = memoryKeyHolder(subtle);
-  const store = createEncryptedAgendaStore<OfflineAgenda>({
-    kv,
-    keys,
-    subtle,
-    random,
-    canCreateKey: (owner) => offlineSessionOwner() === owner,
-  });
-  setOfflineAgendaStoreForTests(store);
-  return { kv, keys };
+  setOfflineVaultForTests(
+    createOfflineVault<OfflineAgenda>({
+      kv,
+      tab: window.sessionStorage,
+      subtle,
+      random,
+      iterations: 1000,
+      hasSession: (owner: string) => offlineSessionOwner() === owner,
+    }),
+  );
+  return kv;
 }
 
-describe('copia sin conexión: sesión de la pestaña y época (DX-405)', () => {
+describe('copia sin conexión: sesión, PIN y época (DX-405)', () => {
   beforeEach(() => {
-    resetOfflineAgendaStoreForTests();
+    resetOfflineAgendaForTests();
     window.sessionStorage.clear();
     mockApiFetch.mockReset();
   });
 
-  it('con la marca de sesión de la pestaña guarda y se lee', async () => {
-    const { kv } = memoryStore();
+  it('sin activar (sin PIN) no pide ni guarda nada', async () => {
+    const kv = useMemoryVault();
     markOfflineSession(TOKEN);
-    mockApiFetch.mockResolvedValue(AGENDA);
-    expect(await syncOfflineAgenda(TOKEN, 'sede-1')).toBe(true);
-    expect(kv.tables.agenda.size).toBe(1);
-    expect((await readOfflineAgenda({}))?.payload).toEqual(AGENDA);
-  });
-
-  it('sin la marca (otra pestaña, navegador nuevo) ni pide ni guarda ni enseña', async () => {
-    const { kv, keys } = memoryStore();
-    mockApiFetch.mockResolvedValue(AGENDA);
     expect(await syncOfflineAgenda(TOKEN, 'sede-1')).toBe(false);
     expect(mockApiFetch).not.toHaveBeenCalled();
     expect(kv.tables.agenda.size).toBe(0);
-    expect(keys.record).toBeUndefined();
-    expect(await readOfflineAgenda({})).toBeNull();
+  });
+
+  it('activada con PIN y con sesión: guarda', async () => {
+    const kv = useMemoryVault();
+    expect(await enableOfflineCopy(TOKEN, '2468')).toBe(true);
+    mockApiFetch.mockResolvedValue(AGENDA);
+    expect(await syncOfflineAgenda(TOKEN, 'sede-1')).toBe(true);
+    expect(kv.tables.agenda.size).toBe(1);
   });
 
   it('carrera: cerrar sesión entre la petición y el guardado no deja nada guardado', async () => {
-    const { kv, keys } = memoryStore();
-    markOfflineSession(TOKEN);
+    const kv = useMemoryVault();
+    await enableOfflineCopy(TOKEN, '2468');
     let answer!: (value: OfflineAgenda) => void;
     mockApiFetch.mockReturnValue(
       new Promise<OfflineAgenda>((resolve) => {
@@ -81,19 +79,19 @@ describe('copia sin conexión: sesión de la pestaña y época (DX-405)', () => 
       }),
     );
     const syncing = syncOfflineAgenda(TOKEN, 'sede-1');
-    // La petición está en vuelo: se cierra sesión.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(mockApiFetch).toHaveBeenCalled();
     await forgetOfflineSession();
-    expect(offlineSessionOwner()).toBeNull();
-    // Llega la respuesta tarde.
     answer(AGENDA);
     expect(await syncing).toBe(false);
     expect(kv.tables.agenda.size).toBe(0);
-    expect(keys.record).toBeUndefined();
+    expect(kv.tables.vault.size).toBe(0);
+    expect(offlineSessionOwner()).toBeNull();
   });
 
-  it('carrera aunque la marca se vuelva a poner (nuevo login en la pestaña): la época antigua no escribe', async () => {
-    const { kv } = memoryStore();
-    markOfflineSession(TOKEN);
+  it('carrera aunque se vuelva a activar en la pestaña: la época antigua no escribe', async () => {
+    const kv = useMemoryVault();
+    await enableOfflineCopy(TOKEN, '2468');
     let answer!: (value: OfflineAgenda) => void;
     mockApiFetch.mockReturnValueOnce(
       new Promise<OfflineAgenda>((resolve) => {
@@ -101,8 +99,9 @@ describe('copia sin conexión: sesión de la pestaña y época (DX-405)', () => 
       }),
     );
     const syncing = syncOfflineAgenda(TOKEN, 'sede-1');
+    await new Promise((r) => setTimeout(r, 0));
     await forgetOfflineSession();
-    markOfflineSession(TOKEN);
+    await enableOfflineCopy(TOKEN, '1357');
     answer(AGENDA);
     expect(await syncing).toBe(false);
     expect(kv.tables.agenda.size).toBe(0);

@@ -3,6 +3,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { AgendaView } from '@/components/appointments/agenda-view';
 import { OfflineAgendaView } from '@/components/appointments/offline-agenda';
 import { useOfflineAgendaSync } from '@/components/appointments/use-offline-agenda-sync';
+import { OfflineCopyControl } from '@/components/appointments/offline-copy';
 import { PageHeader } from '@/components/shared/page-header';
 import { ClosingQueueLink } from '@/components/appointments/closing-queue-link';
 import { useOffline } from '@/lib/offline/connectivity';
@@ -42,6 +43,8 @@ export default function AgendaPage() {
         description={copy.description}
         meta={<ClosingQueueLink token={accessToken} />}
       />
+      {/* DX-405: activar (con PIN), desbloquear o quitar la copia sin conexión. */}
+      <OfflineCopyControl token={accessToken} />
       <AgendaView token={accessToken} />
     </>
   );
