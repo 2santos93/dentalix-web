@@ -17,7 +17,7 @@ import {
   unlockOfflineCopy,
   type VaultStatus,
 } from '@/lib/offline/offline-agenda';
-import { isValidPin } from '@/lib/offline/offline-vault';
+import { isTrivialPin, isValidPin } from '@/lib/offline/offline-vault';
 
 export const offlineCopyText = {
   offerTitle: '¿Ver la agenda sin conexión?',
@@ -38,6 +38,7 @@ export const offlineCopyText = {
   save: 'Guardar PIN',
   pinInvalid: 'El PIN son 4 a 6 dígitos, solo números.',
   pinMismatch: 'Los dos PIN no coinciden.',
+  pinTrivial: 'Ese PIN es fácil de adivinar (números repetidos, seguidos o alternos, como 1111, 1234 o 1212). Elige otro.',
   setupFailed: 'No se pudo activar la copia sin conexión. Intenta de nuevo.',
   unlockTitle: 'Abre la agenda sin conexión',
   unlockBody: 'Escribe el PIN de la copia sin conexión de este equipo.',
@@ -109,6 +110,7 @@ export function PinSetupDialog({
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!isValidPin(pin)) return setErrors({ pin: offlineCopyText.pinInvalid });
+    if (isTrivialPin(pin)) return setErrors({ pin: offlineCopyText.pinTrivial });
     if (repeat !== pin) return setErrors({ repeat: offlineCopyText.pinMismatch });
     setBusy(true);
     const ok = await enableOfflineCopy(token, pin);

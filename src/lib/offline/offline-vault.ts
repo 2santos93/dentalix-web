@@ -23,10 +23,24 @@ import type { OfflineKv } from './offline-kv';
  * - **Época.** `save()` recibe `isCurrent()`: si se cerró la sesión mientras
  *   llegaban los datos, no escribe (se comprueba dentro de la fila).
  * - **48 h.** La agenda caduca a las 48 h de guardarse.
+ *
+ * MODELO DE AMENAZA (compromiso elegido por el dueño): el PIN corto es el
+ * único secreto de la copia en reposo. Frena al curioso del equipo compartido
+ * (otra persona de la clínica en la misma recepción): sin el PIN no ve nada,
+ * los PIN triviales no se aceptan y el 5.º fallo seguido —contado en el disco
+ * y bajo un lock entre pestañas— borra la copia. NO frena a quien copie el
+ * perfil del navegador y tenga tiempo: fuera del navegador puede probar las
+ * 10⁴–10⁶ combinaciones contra la clave envuelta sin tope de intentos (horas o
+ * días de CPU con 600 000 iteraciones). Por eso la copia lleva solo los datos
+ * del PDF de contingencia (sin historia clínica), caduca a las 48 h y se borra
+ * al cerrar sesión o con un 401.
  */
 
 export const OFFLINE_AGENDA_MAX_AGE_MS = 48 * 60 * 60 * 1000;
-/** OWASP Password Storage Cheat Sheet (2023): PBKDF2-HMAC-SHA256, 600 000 iteraciones. */
+/**
+ * OWASP Password Storage Cheat Sheet (2023): PBKDF2-HMAC-SHA256, 600 000
+ * iteraciones (por encima del mínimo de 310 000 que pidió la revisión).
+ */
 export const PBKDF2_ITERATIONS = 600_000;
 export const MAX_PIN_ATTEMPTS = 5;
 export const PIN_PATTERN = /^\d{4,6}$/;
@@ -88,6 +102,24 @@ export interface OfflineVaultDeps {
   iterations?: number;
   /** Hay sesión con token para `owner` en esta pestaña: sin ella no se activa ni se guarda. */
   hasSession?: (owner: string) => boolean;
+  /** Exclusión entre pestañas para el contador de intentos (por defecto, Web Locks). */
+  lock?: <R>(fn: () => Promise<R>) => Promise<R>;
+}
+
+export const VAULT_LOCK = 'dentalix-offline-vault';
+
+// Sin Web Locks (navegadores viejos, tests): un candado del contexto JS.
+let localLock: Promise<unknown> = Promise.resolve();
+function contextLock<R>(fn: () => Promise<R>): Promise<R> {
+  const next = localLock.then(fn, fn);
+  localLock = next.catch(() => undefined);
+  return next;
+}
+
+/** `navigator.locks` (exclusivo entre las pestañas del origen) o, sin él, el del contexto. */
+export function browserVaultLock<R>(fn: () => Promise<R>): Promise<R> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  return locks ? (locks.request(VAULT_LOCK, fn) as Promise<R>) : contextLock(fn);
 }
 
 const TAB_KEY = 'dentalix.offline.key';
@@ -106,6 +138,21 @@ export function isValidPin(pin: string): boolean {
   return PIN_PATTERN.test(pin);
 }
 
+/**
+ * PIN trivial: todos iguales (0000, 111111), escalera (1234, 9876, 012345) o
+ * dos dígitos alternos (1212, 252525). Son los primeros que prueba cualquiera
+ * en la pantalla: no se aceptan al fijarlo.
+ */
+export function isTrivialPin(pin: string): boolean {
+  if (!isValidPin(pin)) return false;
+  const d = [...pin].map(Number);
+  const steps = d.slice(1).map((x, i) => x - d[i]);
+  if (steps.every((s) => s === 0)) return true;
+  if (steps.every((s) => s === 1) || steps.every((s) => s === -1)) return true;
+  if (d.every((x, i) => x === d[i % 2])) return true;
+  return false;
+}
+
 export function createOfflineVault<T>(deps: OfflineVaultDeps) {
   const { kv, tab } = deps;
   const subtle = deps.subtle ?? globalThis.crypto.subtle;
@@ -113,6 +160,7 @@ export function createOfflineVault<T>(deps: OfflineVaultDeps) {
   const now = deps.now ?? Date.now;
   const iterations = deps.iterations ?? PBKDF2_ITERATIONS;
   const hasSession = deps.hasSession ?? (() => true);
+  const withVaultLock = deps.lock ?? browserVaultLock;
 
   let memory: { owner: string; key: CryptoKey } | null = null;
 
@@ -199,7 +247,7 @@ export function createOfflineVault<T>(deps: OfflineVaultDeps) {
      */
     enable(owner: string, pin: string, opts: { isCurrent?: () => boolean } = {}): Promise<boolean> {
       const isCurrent = opts.isCurrent ?? (() => true);
-      if (!isValidPin(pin)) return Promise.resolve(false);
+      if (!isValidPin(pin) || isTrivialPin(pin)) return Promise.resolve(false);
       return serial(async () => {
         if (!isCurrent() || !hasSession(owner)) return false;
         const raw = random(new Uint8Array(32));
@@ -222,33 +270,44 @@ export function createOfflineVault<T>(deps: OfflineVaultDeps) {
 
     /** Desenvuelve la clave con el PIN (sin red tras reiniciar, o en otra pestaña). */
     unlock(pin: string): Promise<UnlockResult> {
-      return serial(async () => {
-        const v = await vault();
-        if (!v) return { ok: false, wiped: true } as const;
-        try {
-          if (!isValidPin(pin)) throw new Error('pin');
-          const kek = await wrappingKey(pin, v.salt, v.iterations);
-          const raw = new Uint8Array(
-            await subtle.decrypt(
-              { name: 'AES-GCM', iv: v.iv as BufferSource, additionalData: enc(v.owner) as BufferSource },
-              kek,
-              v.wrapped,
-            ),
-          );
-          await rememberTab(v.owner, raw);
-          raw.fill(0);
-          if (v.failures) await kv.put<VaultRecord>('vault', VAULT_ID, { ...v, failures: 0 });
-          return { ok: true } as const;
-        } catch {
-          const failures = v.failures + 1;
-          if (failures >= MAX_PIN_ATTEMPTS) {
+      // Entre pestañas: el leer-incrementar-escribir del contador y el intento
+      // van bajo el MISMO lock del navegador (Web Locks), así dos pestañas
+      // probando a la vez cuentan dos fallos, no uno.
+      return serial(() =>
+        withVaultLock(async () => {
+          const v = await vault();
+          if (!v) return { ok: false, wiped: true } as const;
+          if (v.failures >= MAX_PIN_ATTEMPTS) {
             await wipeAll();
             return { ok: false, wiped: true } as const;
           }
+          // El intento cuenta ANTES de probar el PIN: si la pestaña se cierra a
+          // mitad del descifrado, el fallo ya está apuntado.
+          const failures = v.failures + 1;
           await kv.put<VaultRecord>('vault', VAULT_ID, { ...v, failures });
-          return { ok: false, remaining: MAX_PIN_ATTEMPTS - failures } as const;
-        }
-      });
+          try {
+            if (!isValidPin(pin)) throw new Error('pin');
+            const kek = await wrappingKey(pin, v.salt, v.iterations);
+            const raw = new Uint8Array(
+              await subtle.decrypt(
+                { name: 'AES-GCM', iv: v.iv as BufferSource, additionalData: enc(v.owner) as BufferSource },
+                kek,
+                v.wrapped,
+              ),
+            );
+            await rememberTab(v.owner, raw);
+            raw.fill(0);
+            await kv.put<VaultRecord>('vault', VAULT_ID, { ...v, failures: 0 });
+            return { ok: true } as const;
+          } catch {
+            if (failures >= MAX_PIN_ATTEMPTS) {
+              await wipeAll();
+              return { ok: false, wiped: true } as const;
+            }
+            return { ok: false, remaining: MAX_PIN_ATTEMPTS - failures } as const;
+          }
+        }),
+      );
     },
 
     /** Cifra y guarda la agenda. `false` si no hay clave en la pestaña, sin sesión o con la sesión ya cerrada. */

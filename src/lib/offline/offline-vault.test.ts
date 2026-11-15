@@ -4,6 +4,7 @@
 import { webcrypto } from 'node:crypto';
 import {
   createOfflineVault,
+  isTrivialPin,
   MAX_PIN_ATTEMPTS,
   OFFLINE_AGENDA_MAX_AGE_MS,
   PBKDF2_ITERATIONS,
@@ -56,7 +57,8 @@ function setup(opts: { hasSession?: (owner: string) => boolean } = {}) {
 }
 
 describe('copia sin conexión con PIN (DX-405)', () => {
-  it('PBKDF2 con las iteraciones de OWASP (≥ 600 000) y 5 intentos', () => {
+  it('PBKDF2 con las iteraciones de OWASP (≥ 600 000; la revisión pide ≥ 310 000) y 5 intentos', () => {
+    expect(PBKDF2_ITERATIONS).toBeGreaterThanOrEqual(310_000);
     expect(PBKDF2_ITERATIONS).toBeGreaterThanOrEqual(600_000);
     expect(MAX_PIN_ATTEMPTS).toBe(5);
   });
@@ -200,5 +202,31 @@ describe('copia sin conexión con PIN (DX-405)', () => {
     expect(tab.length).toBe(0);
     expect(kv.tables.vault.size + kv.tables.agenda.size).toBe(0);
     expect(await vault.status()).toBe('off');
+  });
+
+  it('PIN triviales: se rechazan al activar', async () => {
+    for (const pin of ['0000', '1111', '999999', '1234', '4321', '012345', '987654', '1212', '252525']) {
+      expect(isTrivialPin(pin)).toBe(true);
+    }
+    for (const pin of ['2468', '1357', '4071', '903215', '1123']) expect(isTrivialPin(pin)).toBe(false);
+    const { kv, make } = setup();
+    expect(await make().enable(OWNER, '1234')).toBe(false);
+    expect(kv.tables.vault.size).toBe(0);
+  });
+
+  it('el fallo cuenta antes de descifrar: dos pestañas con PIN malo a la vez cuentan 2', async () => {
+    const { kv, make } = setup();
+    await make().enable(OWNER, PIN);
+    const [a, b] = await Promise.all([make(fakeStorage()).unlock('1357'), make(fakeStorage()).unlock('8642')]);
+    expect((kv.tables.vault.get('key') as { failures: number }).failures).toBe(2);
+    expect([a, b]).toEqual(expect.arrayContaining([{ ok: false, remaining: 4 }, { ok: false, remaining: 3 }]));
+  });
+
+  it('con el lock no se cuela ninguno: cinco pestañas a la vez agotan los intentos y borran', async () => {
+    const { kv, make } = setup();
+    await make().enable(OWNER, PIN);
+    const results = await Promise.all(['1357', '8642', '1470', '2581', '3692'].map((p) => make(fakeStorage()).unlock(p)));
+    expect(results.filter((r) => 'wiped' in r)).toHaveLength(1);
+    expect(kv.tables.vault.size).toBe(0);
   });
 });

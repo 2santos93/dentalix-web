@@ -33,20 +33,29 @@ describe('OfflineCopyControl (DX-405)', () => {
     const dialog = await screen.findByRole('dialog', { name: offlineCopyText.setupTitle });
     expect(dialog).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText(offlineCopyText.pin), '12');
+    await user.type(screen.getByLabelText(offlineCopyText.pin), '24');
     await user.click(screen.getByRole('button', { name: offlineCopyText.save }));
     expect(await screen.findByText(offlineCopyText.pinInvalid)).toBeInTheDocument();
     expect(mockEnable).not.toHaveBeenCalled();
 
-    await user.type(screen.getByLabelText(offlineCopyText.pin), '34');
+    await user.clear(screen.getByLabelText(offlineCopyText.pin));
+    await user.type(screen.getByLabelText(offlineCopyText.pin), '1234');
+    await user.type(screen.getByLabelText(offlineCopyText.pinRepeat), '1234');
+    await user.click(screen.getByRole('button', { name: offlineCopyText.save }));
+    expect(await screen.findByText(offlineCopyText.pinTrivial)).toBeInTheDocument();
+    expect(mockEnable).not.toHaveBeenCalled();
+
+    await user.clear(screen.getByLabelText(offlineCopyText.pin));
+    await user.type(screen.getByLabelText(offlineCopyText.pin), '2468');
+    await user.clear(screen.getByLabelText(offlineCopyText.pinRepeat));
     await user.type(screen.getByLabelText(offlineCopyText.pinRepeat), '9999');
     await user.click(screen.getByRole('button', { name: offlineCopyText.save }));
     expect(await screen.findByText(offlineCopyText.pinMismatch)).toBeInTheDocument();
 
     await user.clear(screen.getByLabelText(offlineCopyText.pinRepeat));
-    await user.type(screen.getByLabelText(offlineCopyText.pinRepeat), '1234');
+    await user.type(screen.getByLabelText(offlineCopyText.pinRepeat), '2468');
     await user.click(screen.getByRole('button', { name: offlineCopyText.save }));
-    expect(mockEnable).toHaveBeenCalledWith('tok', '1234');
+    expect(mockEnable).toHaveBeenCalledWith('tok', '2468');
   });
 
   it('«Ahora no» no la vuelve a ofrecer, pero deja activarla', async () => {
