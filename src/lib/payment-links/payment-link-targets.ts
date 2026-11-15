@@ -15,8 +15,8 @@ export interface PaymentLinkTargetOption {
 
 export const planTargetKey = (planId: string) => `plan:${planId}`;
 
-// Un plan rechazado o cancelado no se cobra (la API da 409).
-const NOT_CHARGEABLE = new Set(['DRAFT', 'REJECTED', 'CANCELLED']);
+// Como en la API (DX-109), solo un plan rechazado o cancelado no se cobra (409); un borrador con ítems aceptados sí.
+const NOT_CHARGEABLE = new Set(['REJECTED', 'CANCELLED']);
 
 /**
  * DX-569 (D2): los destinos del enlace de pago, sacados del estado de cuenta.

@@ -39,4 +39,18 @@ describe('paymentLinkTargets (DX-569)', () => {
     ]);
     expect(targets[1].label).toBe('Saldo migrado · Ortodoncia');
   });
+
+  it('un borrador con saldo se cobra, como en la API (DX-109); el rechazado no', () => {
+    const base = accountStatementFixture();
+    const plan = base.plans.find((p) => p.id === 'plan-1')!;
+    const statement = {
+      ...base,
+      installments: [],
+      plans: [
+        { ...plan, id: 'draft', status: 'DRAFT' as const },
+        { ...plan, id: 'rejected', status: 'REJECTED' as const },
+      ],
+    };
+    expect(paymentLinkTargets(statement, name, opening).map((t) => t.key)).toEqual(['plan:draft']);
+  });
 });
