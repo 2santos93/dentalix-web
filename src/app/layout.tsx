@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/components/theme/theme-provider";
 import { BrandingProvider } from "@/components/brand/branding-context";
 import { CurrencyTextsSync } from "@/components/brand/currency-texts-sync";
 import { Toaster } from "@/components/errors/toaster";
+import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
 import { brandingForRequest } from "@/lib/branding";
 import { accentStyleSheet } from "@/lib/color/accent";
 import "./globals.css";
@@ -18,10 +19,22 @@ const inter = Inter({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  title: "Dentalix",
-  description: "Plataforma de gestión odontológica",
-};
+// DX-405: app instalable por clínica — el manifest lo enlaza Next solo
+// (`app/manifest.ts`, de la marca del host); aquí el icono de iOS
+// (`/pwa-icon/180`) y el modo app en iOS con el nombre de la clínica.
+export async function generateMetadata(): Promise<Metadata> {
+  const branding = await brandingForRequest((await headers()).get("host"));
+  return {
+    title: "Dentalix",
+    description: "Plataforma de gestión odontológica",
+    icons: { apple: "/pwa-icon/180" },
+    appleWebApp: {
+      capable: true,
+      title: branding.name ?? "Dentalix",
+      statusBarStyle: "default",
+    },
+  };
+}
 
 // A4: `viewport-fit=cover` hace que `env(safe-area-inset-*)` resuelva (barra
 // inferior del móvil sobre el indicador de inicio de iOS). El color de la barra
@@ -86,6 +99,7 @@ export default async function RootLayout({
             </CurrencyTextsSync>
           </BrandingProvider>
           <Toaster />
+          <ServiceWorkerRegistrar />
         </ThemeProvider>
       </body>
     </html>

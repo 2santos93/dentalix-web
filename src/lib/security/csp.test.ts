@@ -27,6 +27,12 @@ describe('buildCsp', () => {
     expect(d.get('script-src')).toContain("'unsafe-eval'");
   });
 
+  it('DX-405: el manifest de la clínica y el service worker, solo del propio origen', () => {
+    const d = directives(buildCsp({ ...base, isDev: false }));
+    expect(d.get('manifest-src')).toEqual(["'self'"]);
+    expect(d.get('worker-src')).toEqual(["'self'"]);
+  });
+
   it('cierra lo demás: object-src, base-uri, frame-ancestors, form-action y default-src', () => {
     const d = directives(buildCsp({ ...base, isDev: false }));
     expect(d.get('default-src')).toEqual(["'self'"]);

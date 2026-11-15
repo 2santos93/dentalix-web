@@ -1,5 +1,5 @@
 import type { NextConfig } from "next";
-import { securityHeaderRules } from "./src/lib/security/security-headers";
+import { SERVICE_WORKER_HEADER_RULE, securityHeaderRules } from "./src/lib/security/security-headers";
 import { API_PROXY_MAX_BODY_BYTES } from "./src/lib/api/api-base";
 
 const nextConfig: NextConfig = {
@@ -26,7 +26,8 @@ const nextConfig: NextConfig = {
   // Cabeceras de seguridad en todas las rutas (anti-clickjacking, nosniff,
   // referrer y permissions) — DX-061. Ver `security-headers.ts`.
   async headers() {
-    return securityHeaderRules();
+    // DX-405: más la del service worker (sin caché HTTP).
+    return [...securityHeaderRules(), SERVICE_WORKER_HEADER_RULE];
   },
   // El navegador llama a la API por el MISMO origen (`/api/v1` en el host de la
   // clínica) y Next lo reenvía a la API: así la cookie HttpOnly del refresh es

@@ -1,5 +1,6 @@
 import { apiFetchOrNull, withSessionLock } from '@/lib/api/client';
 import { announceLogout } from './session-channel';
+import { forgetOfflineSession } from '@/lib/offline/offline-agenda';
 
 /**
  * Cierra la sesión en el servidor: la API revoca el refresh token de la cookie
@@ -17,5 +18,8 @@ export async function logout(): Promise<void> {
     // best-effort: ignorar cualquier fallo de red/servidor
   } finally {
     announceLogout();
+    // DX-405: cerrar sesión borra la clave y la copia cifrada de la agenda (y
+    // la página guardada por el service worker), haya red o no.
+    await forgetOfflineSession();
   }
 }

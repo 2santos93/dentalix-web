@@ -18,6 +18,10 @@
  *   pinta la URL firmada (imagen o PDF) del bucket, o de la API con el
  *   almacenamiento en disco. Sin `frame-src`, un `<iframe>` caería en
  *   `default-src 'self'` y el PDF no cargaría.
+ * - `manifest-src 'self'` y `worker-src 'self'` (DX-405): el manifest de la
+ *   clínica y el service worker (`/sw.js`) son del mismo origen. Sin
+ *   `worker-src`, el registro caería en `script-src`, donde `'strict-dynamic'`
+ *   anula `'self'` y el navegador lo bloquearía.
  */
 export interface CspOptions {
   nonce: string;
@@ -37,6 +41,8 @@ export function buildCsp({ nonce, isDev, apiOrigin, filesOrigin = apiOrigin }: C
     ['frame-src', ["'self'", filesOrigin]],
     ['font-src', ["'self'"]],
     ['connect-src', ["'self'", filesOrigin]],
+    ['manifest-src', ["'self'"]],
+    ['worker-src', ["'self'"]],
     ['object-src', ["'none'"]],
     ['base-uri', ["'self'"]],
     ['form-action', ["'self'"]],

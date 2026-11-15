@@ -21,3 +21,15 @@ export const SECURITY_HEADERS: { key: string; value: string }[] = [
 export function securityHeaderRules(): { source: string; headers: typeof SECURITY_HEADERS }[] {
   return [{ source: '/:path*', headers: SECURITY_HEADERS }];
 }
+
+/**
+ * DX-405: el service worker (`public/sw.js`) se revisa en cada carga, nunca
+ * desde una caché HTTP: una versión arreglada llega en la visita siguiente.
+ */
+export const SERVICE_WORKER_HEADER_RULE = {
+  source: '/sw.js',
+  headers: [
+    { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+    { key: 'Content-Type', value: 'application/javascript; charset=utf-8' },
+  ],
+};
