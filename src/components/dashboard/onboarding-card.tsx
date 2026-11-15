@@ -236,7 +236,7 @@ function StepRow({ step }: { step: OnboardingStep }) {
       data-done={step.done ? 'true' : 'false'}
     >
       {step.done ? (
-        <CheckCircle2 aria-hidden className="size-5 shrink-0 text-success" />
+        <CheckCircle2 aria-hidden className="size-5 shrink-0 text-success-text" />
       ) : (
         <Circle aria-hidden className="size-5 shrink-0 text-faint" />
       )}
