@@ -1082,5 +1082,14 @@ describe('apiFetch — sede desactivada (SEC-014)', () => {
     const unknown = new ApiError(400, 'Unknown location for this clinic');
     expect(isStaleLocationError(unknown, 'sede-oeste', 'T')).toBe(true);
     expect(isInactiveLocationError(unknown, 'sede-oeste')).toBe(false);
+    // DX-111: la API nueva lo dice en español y con código.
+    for (const code of ['LOCATION_UNKNOWN', 'LOCATION_INVALID']) {
+      const byCode = new ApiError(400, 'La sede elegida no existe en esta clínica. Vuelve a elegir la sede.', {
+        code,
+      });
+      expect(isStaleLocationError(byCode, 'sede-oeste', 'T')).toBe(true);
+    }
+    const other = new ApiError(400, 'La sede elegida no existe.', { code: 'VALIDATION_FAILED' });
+    expect(isStaleLocationError(other, 'sede-oeste', 'T')).toBe(false);
   });
 });
