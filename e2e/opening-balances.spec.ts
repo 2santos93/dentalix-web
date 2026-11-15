@@ -127,6 +127,7 @@ for (const viewport of [
 
     // Confirmar.
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: 'Continuar sin citas' }).click();
     await expect(page.getByText(/También se crearán 2 saldos migrados/)).toBeVisible();
     await page.getByRole('button', { name: 'Importar 1 paciente' }).click();
     // El avance de ESTE lote, no el «Importado» de otro lote del historial.

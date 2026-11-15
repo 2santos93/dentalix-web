@@ -116,6 +116,7 @@ for (const viewport of [
       `numero_documento;importe;moneda;fecha_antiguedad;concepto\n${doc};100.000;VES;;Cartera anterior\n`,
     );
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: 'Continuar sin citas' }).click();
     await page.getByRole('button', { name: 'Importar 1 paciente' }).click();
     await expect(page.getByText('Saldos migrados: 1 de 1')).toBeVisible({ timeout: 30_000 });
 
@@ -131,7 +132,7 @@ for (const viewport of [
     await expect(result).not.toContainText('No hay filas que importar');
     if (viewport.width < 1024) {
       await expect(result).toContainText(
-        'No hay pacientes nuevos: puedes importar solo sus saldos en el paso siguiente.',
+        'No hay pacientes nuevos: puedes importar solo sus saldos o sus citas en los pasos siguientes.',
       );
     }
     await result.getByRole('button', { name: 'Continuar' }).click();
@@ -154,6 +155,7 @@ for (const viewport of [
     await expect(balanceIssues).toContainText('Ya tenía saldo migrado');
     await expectNoHorizontalScroll(page);
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByRole('button', { name: 'Continuar sin citas' }).click();
     const confirmOnlyBalances = page.getByRole('button', { name: 'Importar 1 saldo migrado' });
     await expect(confirmOnlyBalances).toBeVisible();
     await shoot(page, `dx262-solo-saldos-${viewport.name}`);

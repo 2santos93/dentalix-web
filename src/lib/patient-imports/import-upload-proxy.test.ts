@@ -142,6 +142,27 @@ describe('forwardImportUpload (DX-107 × DX-259)', () => {
     expect(received[0].url).toBe(`/api/v1/patient-imports/${id}/balances`);
   });
 
+  it('la hoja de citas (DX-263) va a POST /patient-imports/:id/appointments', async () => {
+    const id = '0b6f1c1e-2a3b-4c5d-8e9f-001122334455';
+    const res = await forwardImportUpload(
+      uploadRequest(`http://demo.dentalix.app/api/import-upload/appointments/${id}`, SESSION),
+      { appointmentsOf: id },
+      { apiUrl },
+    );
+    expect(res.status).toBe(200);
+    expect(received[0].url).toBe(`/api/v1/patient-imports/${id}/appointments`);
+  });
+
+  it('hoja de citas con un id que no es un UUID: 400 sin llamar a la API', async () => {
+    const res = await forwardImportUpload(
+      uploadRequest('http://demo.dentalix.app/api/import-upload/appointments/x', SESSION),
+      { appointmentsOf: '../../auth/login' },
+      { apiUrl },
+    );
+    expect(res.status).toBe(400);
+    expect(received).toHaveLength(0);
+  });
+
   it('hoja de saldos con un id que no es un UUID: 400 en español sin llamar a la API', async () => {
     const res = await forwardImportUpload(
       uploadRequest('http://demo.dentalix.app/api/import-upload/balances/x', SESSION),

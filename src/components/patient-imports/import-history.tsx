@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { Download, History, Undo2 } from 'lucide-react';
+import { BellRing, Download, History, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { RowActions, type RowAction } from '@/components/shared/row-actions';
@@ -12,9 +12,11 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { 
   downloadErrorsCsv,
+  enableAppointmentReminders,
   isInProgress,
   errorsFileName,
   listImports,
+  undoAppointments,
   undoBalances,
   undoImport,
   type ImportBatch
@@ -42,10 +44,10 @@ export const historyCopy = {
   meta: (date: string, author: string | null) => `${date}${author ? ` · ${author}` : ''}`,
   counts: (created: string, updated: string, rejected: string) =>
     `${created} creados · ${updated} actualizados · ${rejected} duplicados o con error`,
-  undone: (created: string, filled: string, balances: string | null) =>
+  undone: (created: string, filled: string, balances: string | null, appointments: string | null = null) =>
     `Deshecho: ${created} pacientes retirados, ${filled} fichas revertidas${
       balances ? `, ${balances} saldos migrados retirados` : ''
-    }`,
+    }${appointments ? `, ${appointments} citas retiradas` : ''}`,
   report: 'Descargar informe de errores',
   actionsFor: (name: string) => `Acciones de ${name}`,
   reportFor: (name: string) => `Descargar el informe de errores de ${name}`,
@@ -53,10 +55,12 @@ export const historyCopy = {
   undo: 'Deshacer lote',
   undoFor: (name: string) => `Deshacer el lote ${name}`,
   undoTitle: 'Deshacer este lote',
-  undoDescription: (created: string, balances: string | null) =>
+  undoDescription: (created: string, balances: string | null, appointments: string | null = null) =>
     `Se retirarán los ${created} pacientes que creó este lote y se vaciarán los campos que rellenó (si nadie los cambió después)${
       balances ? `; se retirarán también sus ${balances} saldos migrados` : ''
-    }. No se puede si alguno ya tiene citas, historia clínica, planes o pagos, o si un saldo migrado tiene abonos.`,
+    }${
+      appointments ? `; y sus ${appointments} citas importadas que siguen programadas (las confirmadas o atendidas se quedan)` : ''
+    }. No se puede si alguno ya tiene otras citas, historia clínica, planes o pagos, o si un saldo migrado tiene abonos.`,
   undoConfirm: 'Deshacer lote',
   // DX-294: mientras responde la API (unos segundos con lotes grandes).
   undoConfirming: 'Deshaciendo…',
@@ -76,6 +80,25 @@ export const historyCopy = {
     `Retirando ${balances} saldos migrados. Puede tardar unos segundos; no cierres esta ventana.`,
   undoBalancesError: 'No se pudieron retirar los saldos migrados.',
   undoBalancesDone: 'Saldos migrados retirados.',
+  // DX-263: citas importadas.
+  appointments: (n: number, shown: string, reminders: boolean) =>
+    `${shown} ${n === 1 ? 'cita importada programada' : 'citas importadas programadas'} · ${
+      reminders ? 'recordatorios activados' : 'sin recordatorios automáticos'
+    }`,
+  appointmentsFailed: (n: number, shown: string) =>
+    `${shown} ${n === 1 ? 'cita no se creó' : 'citas no se crearon'} al importar: algo cambió en la agenda. Revisa el informe de la hoja de citas.`,
+  undoAppointments: 'Retirar citas importadas',
+  undoAppointmentsTitle: 'Retirar las citas importadas',
+  undoAppointmentsDescription: (live: string) =>
+    `Se retirarán de la agenda sus ${live} citas importadas que siguen programadas; las confirmadas, atendidas o canceladas se quedan y los pacientes no se tocan.`,
+  undoAppointmentsConfirm: 'Retirar citas',
+  undoAppointmentsConfirming: 'Retirando…',
+  undoAppointmentsWorking: (live: string) => `Retirando ${live} citas. Puede tardar unos segundos; no cierres esta ventana.`,
+  undoAppointmentsError: 'No se pudieron retirar las citas importadas.',
+  undoAppointmentsDone: 'Citas importadas retiradas.',
+  enableReminders: 'Activar recordatorios de sus citas',
+  enableRemindersDone: 'Recordatorios activados: sus citas importadas los recibirán como las demás.',
+  enableRemindersError: 'No se pudieron activar los recordatorios.',
   ambiguous: (n: number, shown: string) =>
     `${shown} ${n === 1 ? 'saldo no se creó' : 'saldos no se crearon'}: su documento es de varios pacientes.`,
 };
@@ -111,7 +134,8 @@ export function ImportHistory({
   const pollToast = React.useRef<string | null>(null);
   const [undoing, setUndoing] = React.useState<ImportBatch | null>(null);
   // DX-262: deshacer el lote entero o retirar solo sus saldos migrados.
-  const [undoMode, setUndoMode] = React.useState<'batch' | 'balances'>('batch');
+  // DX-263: o retirar solo sus citas importadas.
+  const [undoMode, setUndoMode] = React.useState<'batch' | 'balances' | 'appointments'>('batch');
   const [undoBusy, setUndoBusy] = React.useState(false);
   const [undoError, setUndoError] = React.useState<string | null>(null);
 
@@ -190,16 +214,36 @@ export function ImportHistory({
     if (!undoing) return;
     setUndoBusy(true);
     setUndoError(null);
-    const balancesOnly = undoMode === 'balances';
+    const run = {
+      batch: { call: undoImport, done: historyCopy.undoDone, error: historyCopy.undoError },
+      balances: { call: undoBalances, done: historyCopy.undoBalancesDone, error: historyCopy.undoBalancesError },
+      appointments: {
+        call: undoAppointments,
+        done: historyCopy.undoAppointmentsDone,
+        error: historyCopy.undoAppointmentsError,
+      },
+    }[undoMode];
     try {
-      const updated = balancesOnly ? await undoBalances(token, undoing.id) : await undoImport(token, undoing.id);
+      const updated = await run.call(token, undoing.id);
       setItems((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
       setUndoing(null);
-      toast.success(balancesOnly ? historyCopy.undoBalancesDone : historyCopy.undoDone);
+      toast.success(run.done);
     } catch (err) {
-      setUndoError(apiErrorMessage(err, balancesOnly ? historyCopy.undoBalancesError : historyCopy.undoError));
+      setUndoError(apiErrorMessage(err, run.error));
     } finally {
       setUndoBusy(false);
+    }
+  }
+
+  async function enableReminders(batch: ImportBatch) {
+    try {
+      const updated = await enableAppointmentReminders(token, batch.id);
+      setItems((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+      toast.success(historyCopy.enableRemindersDone);
+    } catch (err) {
+      notifyError(apiErrorMessage(err, historyCopy.enableRemindersError), {
+        onRetry: () => void enableReminders(batch),
+      });
     }
   }
 
@@ -208,12 +252,35 @@ export function ImportHistory({
       ...(b.reportAvailable && b.totals.errorRows + b.totals.duplicateRows > 0
         ? [{ label: historyCopy.report, icon: <Download aria-hidden />, onSelect: () => void report(b) }]
         : []),
+      ...(b.appointments && b.appointments.live > 0 && !b.appointments.remindersEnabledAt && !isInProgress(b.status) && b.status !== 'UNDONE'
+        ? [
+            {
+              label: historyCopy.enableReminders,
+              icon: <BellRing aria-hidden />,
+              onSelect: () => void enableReminders(b),
+            },
+          ]
+        : []),
+      ...(b.appointments?.canUndo
+        ? [
+            {
+              label: historyCopy.undoAppointments,
+              icon: <Undo2 aria-hidden />,
+              separatorBefore: true,
+              onSelect: () => {
+                setUndoError(null);
+                setUndoMode('appointments');
+                setUndoing(b);
+              },
+            },
+          ]
+        : []),
       ...(b.balances?.canUndo
         ? [
             {
               label: historyCopy.undoBalances,
               icon: <Undo2 aria-hidden />,
-              separatorBefore: true,
+              separatorBefore: !b.appointments?.canUndo,
               onSelect: () => {
                 setUndoError(null);
                 setUndoMode('balances');
@@ -228,7 +295,7 @@ export function ImportHistory({
               label: historyCopy.undo,
               icon: <Undo2 aria-hidden />,
               destructive: true,
-              separatorBefore: !b.balances?.canUndo,
+              separatorBefore: !b.balances?.canUndo && !b.appointments?.canUndo,
               onSelect: () => {
                 setUndoError(null);
                 setUndoMode('batch');
@@ -278,12 +345,23 @@ export function ImportHistory({
               {b.balances && b.balances.progress.ambiguous > 0 ? (
                 <p className="text-warning-text">{historyCopy.ambiguous(b.balances.progress.ambiguous, n(b.balances.progress.ambiguous))}</p>
               ) : null}
+              {b.appointments && b.status !== 'UNDONE' && !isInProgress(b.status) && b.appointments.live > 0 ? (
+                <p className="tabular-nums text-muted">
+                  {historyCopy.appointments(b.appointments.live, n(b.appointments.live), b.appointments.remindersEnabledAt !== null)}
+                </p>
+              ) : null}
+              {b.appointments && b.appointments.progress.failed > 0 ? (
+                <p className="text-warning-text">
+                  {historyCopy.appointmentsFailed(b.appointments.progress.failed, n(b.appointments.progress.failed))}
+                </p>
+              ) : null}
               <p className="tabular-nums text-ink">
                 {b.status === 'UNDONE'
                   ? historyCopy.undone(
                       n(b.undoneCreated ?? 0),
                       n(b.undoneFilled ?? 0),
                       b.balances?.undoneCount ? n(b.balances.undoneCount) : null,
+                      b.appointments?.undoneCount ? n(b.appointments.undoneCount) : null,
                     )
                   : isInProgress(b.status)
                     ? historyCopy.progress(n(b.progress.processedRows), n(b.progress.preparedRows))
@@ -307,19 +385,40 @@ export function ImportHistory({
           // pierde el resultado ni se lanza otro deshacer del mismo lote.
           if (!open && !undoBusy) setUndoing(null);
         }}
-        title={undoMode === 'balances' ? historyCopy.undoBalancesTitle : historyCopy.undoTitle}
+        title={
+          undoMode === 'balances'
+            ? historyCopy.undoBalancesTitle
+            : undoMode === 'appointments'
+              ? historyCopy.undoAppointmentsTitle
+              : historyCopy.undoTitle
+        }
         description={
           undoing
             ? undoMode === 'balances'
               ? historyCopy.undoBalancesDescription(n(importedBalances(undoing)))
-              : historyCopy.undoDescription(
-                  n(undoing.progress.createdCount),
-                  importedBalances(undoing) > 0 ? n(importedBalances(undoing)) : null,
-                )
+              : undoMode === 'appointments'
+                ? historyCopy.undoAppointmentsDescription(n(undoing.appointments?.live ?? 0))
+                : historyCopy.undoDescription(
+                    n(undoing.progress.createdCount),
+                    importedBalances(undoing) > 0 ? n(importedBalances(undoing)) : null,
+                    (undoing.appointments?.live ?? 0) > 0 ? n(undoing.appointments?.live ?? 0) : null,
+                  )
             : undefined
         }
-        confirmLabel={undoMode === 'balances' ? historyCopy.undoBalancesConfirm : historyCopy.undoConfirm}
-        confirmingLabel={undoMode === 'balances' ? historyCopy.undoBalancesConfirming : historyCopy.undoConfirming}
+        confirmLabel={
+          undoMode === 'balances'
+            ? historyCopy.undoBalancesConfirm
+            : undoMode === 'appointments'
+              ? historyCopy.undoAppointmentsConfirm
+              : historyCopy.undoConfirm
+        }
+        confirmingLabel={
+          undoMode === 'balances'
+            ? historyCopy.undoBalancesConfirming
+            : undoMode === 'appointments'
+              ? historyCopy.undoAppointmentsConfirming
+              : historyCopy.undoConfirming
+        }
         onConfirm={() => void confirmUndo()}
         confirming={undoBusy}
         error={undoError}
@@ -329,7 +428,9 @@ export function ImportHistory({
           {undoBusy && undoing
             ? undoMode === 'balances'
               ? historyCopy.undoBalancesWorking(n(importedBalances(undoing)))
-              : historyCopy.undoWorking(n(undoing.progress.createdCount))
+              : undoMode === 'appointments'
+                ? historyCopy.undoAppointmentsWorking(n(undoing.appointments?.live ?? 0))
+                : historyCopy.undoWorking(n(undoing.progress.createdCount))
             : null}
         </p>
       </ConfirmDialog>
