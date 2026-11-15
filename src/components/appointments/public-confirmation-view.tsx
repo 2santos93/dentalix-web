@@ -33,6 +33,7 @@ import { Callout } from '@/components/ui/callout';
 import { MissingValue } from '@/components/ui/missing-value';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineError } from '@/components/errors/inline-error';
 import { ClinicBrand } from '@/components/brand/clinic-brand';
 import { ExternalLink } from '@/components/shared/external-link';
@@ -343,6 +344,9 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
   const [ackError, setAckError] = useState(false);
   const ackRef = useRef<HTMLInputElement>(null);
   const ackId = useId();
+  // DX-046: «Cancelar cita» pide un segundo paso («¿Seguro?») antes de enviarse.
+  const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+  const doneHeadingRef = useRef<HTMLHeadingElement>(null);
   // DX-437: «Avisarme si se libera un hueco antes».
   const [earlierPending, setEarlierPending] = useState(false);
   const [earlierNotice, setEarlierNotice] = useState<string | null>(null);
@@ -401,6 +405,23 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
     } finally {
       setPending(null);
     }
+  }
+
+  /** Abre el «¿Seguro?»; si falta aceptar la política tardía, primero eso. */
+  function requestCancel() {
+    if (state.kind !== 'ready') return;
+    const mustAcknowledge = state.data.isLate && state.data.cancellationPolicy !== null;
+    if (mustAcknowledge && !acknowledged) {
+      setAckError(true);
+      ackRef.current?.focus();
+      return;
+    }
+    setConfirmCancelOpen(true);
+  }
+
+  async function confirmCancel() {
+    await handleRespond('cancel');
+    setConfirmCancelOpen(false);
   }
 
   async function handleEarlierChange(wantsEarlier: boolean, window: EarlierWindow) {
@@ -513,7 +534,12 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
             {state.data.status === 'RESPONDED' && (
               <section aria-labelledby="confirmation-done" className="flex flex-col gap-4">
                 <div role="status" className="rounded-xl border border-border bg-surface px-4 py-4">
-                  <h2 id="confirmation-done" className="t-title text-ink">
+                  <h2
+                    id="confirmation-done"
+                    ref={doneHeadingRef}
+                    tabIndex={-1}
+                    className="t-title text-ink focus-visible:outline-none"
+                  >
                     {t.respondedTitle}
                   </h2>
                   {state.data.response && (
@@ -600,9 +626,8 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                       size="lg"
                       variant="outline"
                       className="h-12 w-full"
-                      loading={pending === 'cancel'}
                       disabled={pending !== null}
-                      onClick={() => void handleRespond('cancel')}
+                      onClick={requestCancel}
                     >
                       <CalendarX aria-hidden /> {t.cancel}
                     </Button>
@@ -613,6 +638,28 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
             )}
           </>
         )}
+        <ConfirmDialog
+          open={confirmCancelOpen}
+          onOpenChange={(open) => {
+            // Con la cancelación en vuelo el diálogo no se cierra (ni con Escape).
+            if (!open && pending === 'cancel') return;
+            setConfirmCancelOpen(open);
+          }}
+          title={t.cancelConfirmTitle}
+          description={t.cancelConfirmMessage}
+          confirmLabel={t.cancelConfirmYes}
+          cancelLabel={t.cancelConfirmBack}
+          closeLabel={t.close}
+          confirming={pending === 'cancel'}
+          onConfirm={() => void confirmCancel()}
+          onCloseAutoFocus={(event) => {
+            // Cancelada, el botón ya no está: el foco va al resultado.
+            if (doneHeadingRef.current) {
+              event.preventDefault();
+              doneHeadingRef.current.focus();
+            }
+          }}
+        />
       </main>
     </div>
   );

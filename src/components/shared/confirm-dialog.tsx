@@ -36,6 +36,10 @@ interface ConfirmDialogProps {
   onCloseAutoFocus?: (event: Event) => void;
   /** Contenido extra entre la descripción y el error (p. ej. un aviso). */
   children?: React.ReactNode;
+  /** Nombre accesible de la «X» (por defecto «Cerrar»). */
+  closeLabel?: string;
+  /** Pantalla completa bajo 640 px (ver `DialogContent`). */
+  fullScreenOnMobile?: boolean;
 }
 
 /**
@@ -56,10 +60,17 @@ export function ConfirmDialog({
   error,
   onCloseAutoFocus,
   children,
+  closeLabel,
+  fullScreenOnMobile,
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md" onCloseAutoFocus={onCloseAutoFocus}>
+      <DialogContent
+        className="max-w-md"
+        onCloseAutoFocus={onCloseAutoFocus}
+        closeLabel={closeLabel}
+        fullScreenOnMobile={fullScreenOnMobile}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}

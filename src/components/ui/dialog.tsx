@@ -40,8 +40,10 @@ const DialogContent = React.forwardRef<
      * modal centrado como siempre.
      */
     fullScreenOnMobile?: boolean;
+    /** Nombre accesible de la «X» (las páginas públicas en otro idioma pasan el suyo). */
+    closeLabel?: string;
   }
->(({ className, children, onOpenAutoFocus, onCloseAutoFocus, onEscapeKeyDown, onInteractOutside, closeDisabled = false, fullScreenOnMobile = false, ...props }, ref) => {
+>(({ className, children, onOpenAutoFocus, onCloseAutoFocus, onEscapeKeyDown, onInteractOutside, closeDisabled = false, fullScreenOnMobile = false, closeLabel = 'Cerrar', ...props }, ref) => {
   // Los diálogos de la app se abren con `open` y sin `DialogTrigger`, así que
   // Radix no sabe a dónde devolver el foco al cerrar y lo deja en <body>. Se
   // recuerda el elemento que tenía el foco al abrir y se le devuelve al cerrar
@@ -94,7 +96,7 @@ const DialogContent = React.forwardRef<
           )}
         >
           <X className="size-4" />
-          <span className="sr-only">Cerrar</span>
+          <span className="sr-only">{closeLabel}</span>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>

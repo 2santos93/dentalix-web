@@ -4,7 +4,8 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { act, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readDate, readTime, typeDate, typeTime } from './date-segments-for-tests';
-import { AgendaView } from './agenda-view';
+import { AGENDA_REFRESH_MS, AgendaView } from './agenda-view';
+import { currentlyOffline } from '@/lib/offline/connectivity';
 import { Toaster } from '@/components/errors/toaster';
 import { toast } from 'sonner';
 import { ApiError } from '@/lib/api/client';
@@ -73,6 +74,13 @@ jest.mock('../../lib/appointments/appointments-api', () => ({
 jest.mock('../errors/notify', () => {
   const actual = jest.requireActual('../errors/notify');
   return { ...actual, notifyError: jest.fn(actual.notifyError) };
+});
+// DX-046: en jsdom las peticiones reales sin mock fallan por red y marcan
+// «sin conexión»; la relectura de fondo lo consulta, así que se controla aquí
+// (por defecto, el comportamiento real).
+jest.mock('../../lib/offline/connectivity', () => {
+  const actual = jest.requireActual('../../lib/offline/connectivity');
+  return { ...actual, currentlyOffline: jest.fn(actual.currentlyOffline) };
 });
 // DX-211: sillones de la sede activa (por defecto, ninguno).
 jest.mock('../../lib/chairs/chairs-api', () => ({
@@ -2205,3 +2213,141 @@ describe('AgendaView con el reloj de la sede (DX-378)', () => {
   });
 });
 
+
+describe('DX-046: la agenda relee de fondo (respuesta del paciente por el enlace)', () => {
+  let hidden = false;
+  const hiddenDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'hidden');
+  function returnToTab() {
+    hidden = true;
+    document.dispatchEvent(new Event('visibilitychange'));
+    hidden = false;
+    document.dispatchEvent(new Event('visibilitychange'));
+  }
+
+  beforeAll(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+  });
+  afterAll(() => {
+    delete (document as { hidden?: boolean }).hidden;
+    if (hiddenDescriptor) Object.defineProperty(Document.prototype, 'hidden', hiddenDescriptor);
+  });
+  beforeEach(() => {
+    hidden = false;
+    (currentlyOffline as jest.Mock).mockReturnValue(false);
+    mockedListAppointments.mockReset();
+    mockedListStaff.mockReset();
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListPatients.mockReset();
+    mockedListPatients.mockResolvedValue(patientsPage);
+    (getAppointmentReminders as jest.Mock).mockResolvedValue({ enabled: true, leadHours: [48, 2], items: [] });
+  });
+  afterEach(() => {
+    const actual = jest.requireActual('../../lib/offline/connectivity');
+    (currentlyOffline as jest.Mock).mockImplementation(actual.currentlyOffline);
+  });
+
+  async function openDayList(user: ReturnType<typeof userEvent.setup>) {
+    await renderAgenda(<AgendaView token="tok" />);
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await user.click(screen.getByRole('button', { name: /^lista$/i }));
+    const table = await screen.findByRole('table', { name: /agenda del día/i });
+    await waitFor(() => expect(within(table).getByRole('combobox')).toHaveTextContent('Agendada'));
+    return table;
+  }
+
+  it('al volver a la pestaña relee y muestra «Confirmada» sin estado de carga ni remontar la tabla', async () => {
+    let server: (typeof apt1)[] = [apt1];
+    mockedListAppointments.mockImplementation(() => Promise.resolve(server));
+    const user = userEvent.setup();
+    const table = await openDayList(user);
+    const calls = mockedListAppointments.mock.calls.length;
+
+    // El paciente confirmó por el enlace.
+    server = [{ ...apt1, status: 'CONFIRMED' }];
+    act(() => returnToTab());
+
+    await waitFor(() => expect(within(table).getByRole('combobox')).toHaveTextContent('Confirmada'));
+    expect(mockedListAppointments).toHaveBeenCalledTimes(calls + 1);
+    // Con los mismos filtros que la vista.
+    expect(mockedListAppointments.mock.calls.at(-1)).toEqual(mockedListAppointments.mock.calls.at(-2));
+    expect(screen.getByRole('table', { name: /agenda del día/i })).toBe(table);
+    expect(screen.queryByText(/actualizando/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/cargando agenda/i)).not.toBeInTheDocument();
+  });
+
+  it('cada AGENDA_REFRESH_MS con la pestaña visible, y nada con la pestaña oculta', async () => {
+    let server: (typeof apt1)[] = [apt1];
+    mockedListAppointments.mockImplementation(() => Promise.resolve(server));
+    const user = userEvent.setup();
+    const intervals: Array<{ fn: () => void; ms: number | undefined }> = [];
+    const realSetInterval = window.setInterval;
+    const spy = jest.spyOn(window, 'setInterval').mockImplementation(((fn: () => void, ms?: number) => {
+      intervals.push({ fn, ms });
+      return realSetInterval(() => {}, 1_000_000);
+    }) as typeof window.setInterval);
+    try {
+      const table = await openDayList(user);
+      const tick = intervals.filter((i) => i.ms === AGENDA_REFRESH_MS).at(-1);
+      expect(tick).toBeDefined();
+      const calls = mockedListAppointments.mock.calls.length;
+
+      hidden = true;
+      act(() => tick!.fn());
+      expect(mockedListAppointments).toHaveBeenCalledTimes(calls);
+
+      hidden = false;
+      server = [{ ...apt1, status: 'CANCELLED' }];
+      act(() => tick!.fn());
+      await waitFor(() => expect(mockedListAppointments).toHaveBeenCalledTimes(calls + 1));
+      await waitFor(() => expect(within(table).getByRole('combobox')).toHaveTextContent('Cancelada'));
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('con un modal abierto no relee; al cerrarlo, relee lo que se saltó', async () => {
+    let server: (typeof apt1)[] = [apt1];
+    mockedListAppointments.mockImplementation(() => Promise.resolve(server));
+    const user = userEvent.setup();
+    const table = await openDayList(user);
+
+    await user.click(screen.getByRole('button', { name: /nueva cita/i }));
+    const form = await screen.findByRole('form', { name: /agendar cita/i });
+    const calls = mockedListAppointments.mock.calls.length;
+    server = [{ ...apt1, status: 'CONFIRMED' }];
+    act(() => returnToTab());
+    // Nada se pide ni cambia debajo del formulario.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mockedListAppointments).toHaveBeenCalledTimes(calls);
+    expect(form).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('form', { name: /agendar cita/i })).not.toBeInTheDocument());
+    await waitFor(() => expect(within(table).getByRole('combobox')).toHaveTextContent('Confirmada'));
+    expect(mockedListAppointments).toHaveBeenCalledTimes(calls + 1);
+  });
+
+  it('sin conexión no relee (el aviso «Sin conexión» no recibe fallos de más)', async () => {
+    mockedListAppointments.mockResolvedValue([apt1]);
+    const user = userEvent.setup();
+    await openDayList(user);
+    const calls = mockedListAppointments.mock.calls.length;
+    (currentlyOffline as jest.Mock).mockReturnValue(true);
+    act(() => returnToTab());
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mockedListAppointments).toHaveBeenCalledTimes(calls);
+  });
+
+  it('un fallo de la relectura de fondo no avisa ni tapa la agenda', async () => {
+    mockedListAppointments.mockResolvedValue([apt1]);
+    const user = userEvent.setup();
+    const table = await openDayList(user);
+    (notifyError as jest.Mock).mockClear();
+    mockedListAppointments.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
+    act(() => returnToTab());
+    await new Promise((r) => setTimeout(r, 50));
+    expect(notifyError).not.toHaveBeenCalled();
+    expect(screen.getByRole('table', { name: /agenda del día/i })).toBe(table);
+    expect(within(table).getByRole('combobox')).toHaveTextContent('Agendada');
+  });
+});
