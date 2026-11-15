@@ -30,6 +30,7 @@ export const publicCertificateCopyCopy = {
   restDays: (days: number, from: string, until: string) =>
     `${days === 1 ? '1 día' : `${days} días`} de reposo, del ${from} al ${until}.`,
   diagnosis: 'Diagnóstico',
+  diagnosisOmitted: 'Consta en el certificado emitido; por privacidad no se incluye en esta copia.',
   professional: 'Profesional',
   location: 'Sede',
   issued: 'Emitido el',
@@ -98,7 +99,10 @@ function CertificateBody({
           {copy.restDays(certificate.restDays, paint.civil(certificate.restStartDate), paint.civil(certificate.restEndDate))}
         </DescriptionItem>
       ) : null}
-      {certificate.diagnosis ? <DescriptionItem label={copy.diagnosis}>{certificate.diagnosis}</DescriptionItem> : null}
+      {/* La copia pública nunca lleva el diagnóstico (dato de salud): solo avisa de que existe. */}
+      {certificate.diagnosisOmitted ? (
+        <DescriptionItem label={copy.diagnosis}>{copy.diagnosisOmitted}</DescriptionItem>
+      ) : null}
       <DescriptionItem label={copy.professional}>{professional}</DescriptionItem>
       <DescriptionItem label={copy.location}>{snapshot.location.name}</DescriptionItem>
       <DescriptionItem label={copy.issued} numeric>

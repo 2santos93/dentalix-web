@@ -36,6 +36,7 @@ const BASE: PublicCertificateCopy = {
     restStartDate: null,
     restEndDate: null,
     diagnosis: null,
+    diagnosisOmitted: false,
     snapshot: cert.snapshot,
   },
 };
@@ -67,7 +68,7 @@ describe('PublicCertificateCopyView (DX-306)', () => {
     );
   });
 
-  it('reposo: días con desde/hasta, horas programadas y el diagnóstico solo si viene', async () => {
+  it('reposo: días con desde/hasta, horas programadas y el diagnóstico nunca (solo el aviso de que se omite)', async () => {
     get.mockResolvedValue({
       ...BASE,
       certificate: {
@@ -77,14 +78,15 @@ describe('PublicCertificateCopyView (DX-306)', () => {
         restDays: 3,
         restStartDate: '2026-11-16',
         restEndDate: '2026-11-18',
-        diagnosis: 'Exodoncia del 38',
+        diagnosis: null,
+        diagnosisOmitted: true,
       },
     });
     render(<PublicCertificateCopyView token={TOKEN} />);
     expect(await screen.findByRole('heading', { level: 1, name: 'Certificado de reposo nº 000123' })).toBeInTheDocument();
     expect(screen.getByText('3 días de reposo, del 16/11/2026 al 18/11/2026.')).toBeInTheDocument();
     expect(screen.getByText(copy.scheduled)).toBeInTheDocument();
-    expect(screen.getByText('Exodoncia del 38')).toBeInTheDocument();
+    expect(screen.getByText(copy.diagnosisOmitted)).toBeInTheDocument();
   });
 
   it('anulado después del envío: «Este certificado fue anulado», sin contenido ni descarga', async () => {

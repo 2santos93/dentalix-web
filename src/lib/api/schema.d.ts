@@ -22555,8 +22555,10 @@ export interface components {
             restDays: number | null;
             restStartDate: string | null;
             restEndDate: string | null;
-            /** @description Solo en un reposo cuya clínica imprime el diagnóstico. */
+            /** @description Siempre null: la copia pública no lleva el diagnóstico (ver `diagnosisOmitted`). */
             diagnosis: string | null;
+            /** @description El reposo lleva diagnóstico en el certificado emitido, omitido en esta copia. */
+            diagnosisOmitted: boolean;
             snapshot: components["schemas"]["CertificateSnapshotDto"];
         };
         PublicCertificateCopyDto: {
