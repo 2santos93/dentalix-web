@@ -4810,6 +4810,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/locations/{locationId}/contingency-agenda/offline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Agenda de hoy y mañana de la sede en datos, para la copia sin conexión (DX-405)
+         * @description Las citas de HOY y MAÑANA de la sede (días civiles en su zona IANA), sin canceladas ni inasistencias, con los datos del PDF de contingencia (hora, gabinete, profesional, paciente, teléfono, tipo, estado y «alerta médica» como sí/no). Nunca notas, motivo ni historia clínica. La web la guarda cifrada (AES-GCM) en el navegador y la borra al cerrar sesión, al cambiar de sede y a las 48 h. Los cuatro roles de la agenda. Auditado: EXPORT · LOCATION · CONTINGENCY_AGENDA_OFFLINE_SYNCED.
+         */
+        get: operations["ContingencyAgendaController_offline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/locations/{locationId}/contingency-agenda/nightly": {
         parameters: {
             query?: never;
@@ -18927,6 +18947,67 @@ export interface components {
             reasonCode: components["schemas"]["ClosingDismissalReason"];
             /** Format: date-time */
             createdAt: string;
+        };
+        /**
+         * @description Estado de la cita (confirmación y flujo). Nunca CANCELLED ni NO_SHOW: no salen.
+         * @enum {string}
+         */
+        OfflineAgendaAppointmentStatus: "SCHEDULED" | "CONFIRMED" | "ARRIVED" | "IN_CHAIR" | "READY_FOR_CHECKOUT" | "COMPLETED";
+        OfflineAgendaAppointmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** @description Estado de la cita (confirmación y flujo). Nunca CANCELLED ni NO_SHOW: no salen. */
+            status: components["schemas"]["OfflineAgendaAppointmentStatus"];
+            /** @description Gabinete (sillón) de la cita; null sin sillón. */
+            chairName: string | null;
+            /** @description Profesional; null si no se pudo leer. */
+            professionalName: string | null;
+            /** @example María Pérez */
+            patientName: string;
+            /** @description Teléfono del paciente en formato internacional (región de la sede) o el texto guardado; null sin teléfono. */
+            phone: string | null;
+            appointmentTypeName: string | null;
+            /** @description El paciente tiene una alerta médica o requiere premedicación: solo sí/no, sin el detalle (ver la ficha). */
+            medicalAlert: boolean;
+        };
+        OfflineAgendaDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sede Principal */
+            locationName: string;
+            /**
+             * @description Zona IANA de la sede.
+             * @example America/Caracas
+             */
+            timeZone: string;
+            /**
+             * @description Locale de la sede.
+             * @example es-VE
+             */
+            locale: string;
+            /**
+             * @description Reloj de la sede.
+             * @enum {string}
+             */
+            hourCycle: "h12" | "h23";
+            /**
+             * @description Hoy y mañana (YYYY-MM-DD) en la zona de la sede.
+             * @example [
+             *       "2026-11-15",
+             *       "2026-11-16"
+             *     ]
+             */
+            days: string[];
+            /**
+             * Format: date-time
+             * @description Cuándo se leyeron los datos (UTC).
+             */
+            generatedAt: string;
+            appointments: components["schemas"]["OfflineAgendaAppointmentDto"][];
         };
         ContingencyNightlyInfoDto: {
             /** @description Hay una copia nocturna guardada para la sede. */
@@ -36531,6 +36612,56 @@ export interface operations {
                 content?: never;
             };
             /** @description Solo la administración y recepción descargan la agenda de contingencia. / sede fuera de las permitidas al usuario (DX-089, code LOCATION_NOT_ALLOWED) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sede no existe en esta clínica (otra clínica, retirada o desactivada) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sede no tiene zona horaria válida (LOCATION_TIMEZONE_REQUIRED) o formato regional y reloj (LOCATION_LOCALE_REQUIRED) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ContingencyAgendaController_offline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Sede de la clínica. */
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfflineAgendaDto"];
+                };
+            };
+            /** @description locationId no es un uuid */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no tiene acceso a la agenda. / sede fuera de las permitidas al usuario (DX-089, code LOCATION_NOT_ALLOWED) */
             403: {
                 headers: {
                     [name: string]: unknown;
