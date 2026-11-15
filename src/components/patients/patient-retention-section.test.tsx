@@ -116,6 +116,7 @@ const NO_LINKS = {
   budgetSignatures: 0,
   signedPdfCopies: 0,
   anamnesis: 0,
+  prescriptionCopies: 0,
   total: 0,
 };
 

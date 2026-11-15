@@ -22,6 +22,7 @@ const API_SETTINGS: PrescriptionSettings = {
   printQuantityInWords: true,
   requireClinicalRecordNumber: false,
   validityDays: 30,
+  patientCopyFooter: null,
 };
 
 async function renderLoaded(settings: PrescriptionSettings = API_SETTINGS) {
@@ -91,9 +92,14 @@ describe('PrescriptionSettingsForm (DX-324)', () => {
     expect(mockedSave).not.toHaveBeenCalled();
   });
 
-  it('saves exactly { printQuantityInWords, requireClinicalRecordNumber, validityDays } and announces «Ajustes de la receta guardados.»', async () => {
+  it('saves exactly { printQuantityInWords, requireClinicalRecordNumber, validityDays, patientCopyFooter } and announces «Ajustes de la receta guardados.»', async () => {
     const user = await renderLoaded();
-    const saved = { printQuantityInWords: false, requireClinicalRecordNumber: true, validityDays: 10 };
+    const saved = {
+      printQuantityInWords: false,
+      requireClinicalRecordNumber: true,
+      validityDays: 10,
+      patientCopyFooter: null,
+    };
     mockedSave.mockResolvedValue(saved);
     await user.click(screen.getByRole('checkbox', { name: 'Cantidad en letras' }));
     await user.click(screen.getByRole('checkbox', { name: 'Exigir el nº de historia clínica' }));
@@ -102,6 +108,7 @@ describe('PrescriptionSettingsForm (DX-324)', () => {
     await user.click(save());
     await waitFor(() => expect(mockedSave).toHaveBeenCalledWith('tok', saved));
     expect(Object.keys(mockedSave.mock.calls[0][1]).sort()).toEqual([
+      'patientCopyFooter',
       'printQuantityInWords',
       'requireClinicalRecordNumber',
       'validityDays',
@@ -250,5 +257,33 @@ describe('PrescriptionSettingsForm (DX-324)', () => {
     await user.click(screen.getByRole('button', { name: 'Descartar' }));
     expect(screen.getByRole('heading', { name: 'Ajustes de la receta' })).toHaveFocus();
     noSaveBar();
+  });
+
+  it('DX-468: el pie de la copia para el paciente se guarda recortado; vacío vuelve al de plataforma (null)', async () => {
+    const user = await renderLoaded({ ...API_SETTINGS, patientCopyFooter: 'Texto anterior' });
+    const footer = () => screen.getByRole('textbox', { name: 'Pie de la copia para el paciente' });
+    expect(footer()).toHaveValue('Texto anterior');
+    mockedSave.mockResolvedValue({ ...API_SETTINGS, patientCopyFooter: 'Solo informativa.' });
+    await user.clear(footer());
+    await user.type(footer(), '  Solo informativa.  ');
+    await user.click(save());
+    await waitFor(() =>
+      expect(mockedSave).toHaveBeenCalledWith('tok', { ...API_SETTINGS, patientCopyFooter: 'Solo informativa.' }),
+    );
+    mockedSave.mockResolvedValue({ ...API_SETTINGS, patientCopyFooter: null });
+    await user.clear(footer());
+    await user.click(save());
+    await waitFor(() => expect(mockedSave).toHaveBeenLastCalledWith('tok', { ...API_SETTINGS, patientCopyFooter: null }));
+  });
+
+  it('DX-468: un pie de más de 300 caracteres no se envía y lo dice junto al campo', async () => {
+    const user = await renderLoaded();
+    const footer = screen.getByRole('textbox', { name: 'Pie de la copia para el paciente' });
+    await user.click(footer);
+    await user.paste('x'.repeat(301));
+    await user.click(save());
+    expect(await screen.findByText('El pie tiene que tener como mucho 300 caracteres.')).toBeInTheDocument();
+    expect(footer).toHaveFocus();
+    expect(mockedSave).not.toHaveBeenCalled();
   });
 });

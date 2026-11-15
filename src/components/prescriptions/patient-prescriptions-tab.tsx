@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { Pill, Plus, Printer } from 'lucide-react';
+import { Pill, Plus, Printer, Send } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import {
@@ -23,6 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { NewPrescriptionModal } from './new-prescription-modal';
 import { VoidPrescriptionModal } from './void-prescription-modal';
+import { SendPrescriptionCopyModal } from './send-prescription-copy-modal';
 import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
@@ -51,6 +52,8 @@ const copy = {
   // Sin formato de sede no se anuncia «—»: el texto accesible omite la fecha.
   printHint: (when: string | null) => (when ? `receta del ${when} (se abre en otra pestaña)` : '(se abre en otra pestaña)'),
   void: 'Anular',
+  sendCopy: 'Enviar al paciente',
+  sendCopyHint: (when: string | null) => (when ? `copia de la receta del ${when}` : 'copia de la receta'),
   rowLabel: (when: string | null) => (when ? `receta del ${when}` : 'receta'),
   medication: (rx: Prescription['items'][number]) =>
     `${rx.activeIngredient} ${rx.concentration} · ${rx.totalQuantity} ${rx.quantityUnit}`,
@@ -75,7 +78,8 @@ function TabSkeleton() {
  * Pestaña «Recetas» de la ficha (DX-013), solo para roles clínicos. Lista las
  * recetas (las anuladas, tachadas con quién, cuándo y por qué), abre la vista
  * imprimible A4 en otra pestaña y, para quien prescribe, «Nueva receta» y
- * «Anular». No hay editar ni borrar: la receta emitida es inmutable.
+ * «Anular». DX-468: «Enviar al paciente» una copia de la receta emitida. No hay
+ * editar ni borrar: la receta emitida es inmutable.
  */
 export function PatientPrescriptionsTab({ token, patientId }: PatientPrescriptionsTabProps) {
   const role = getTokenRole(token);
@@ -88,6 +92,7 @@ export function PatientPrescriptionsTab({ token, patientId }: PatientPrescriptio
   const [newOpen, setNewOpen] = useState(false);
   const [modalKey, setModalKey] = useState(0);
   const [voiding, setVoiding] = useState<Prescription | null>(null);
+  const [sendingCopy, setSendingCopy] = useState<Prescription | null>(null);
   // Cada receta se pinta con el reloj de SU sede (`locationId`), no con el de la pantalla (DX-354b).
   const stamp = useSedeStamp(
     token,
@@ -174,13 +179,23 @@ export function PatientPrescriptionsTab({ token, patientId }: PatientPrescriptio
 
   function printLink(rx: Prescription) {
     return (
-      <Button asChild variant="secondary" size="sm">
-        <ExternalLink href={prescriptionPrintHref(patientId, rx.id)}>
-          <Printer aria-hidden />
-          {copy.print}
-          <span className="sr-only"> · {copy.printHint(stamp.maybe.dateTime(rx.issuedAt, rx.locationId))}</span>
-        </ExternalLink>
-      </Button>
+      <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+        <Button asChild variant="secondary" size="sm">
+          <ExternalLink href={prescriptionPrintHref(patientId, rx.id)}>
+            <Printer aria-hidden />
+            {copy.print}
+            <span className="sr-only"> · {copy.printHint(stamp.maybe.dateTime(rx.issuedAt, rx.locationId))}</span>
+          </ExternalLink>
+        </Button>
+        {/* DX-468: solo una receta emitida se envía; anulada, no. */}
+        {rx.status === 'ISSUED' ? (
+          <Button type="button" variant="secondary" size="sm" onClick={() => setSendingCopy(rx)}>
+            <Send aria-hidden />
+            {copy.sendCopy}
+            <span className="sr-only"> · {copy.sendCopyHint(stamp.maybe.dateTime(rx.issuedAt, rx.locationId))}</span>
+          </Button>
+        ) : null}
+      </div>
     );
   }
 
@@ -217,7 +232,7 @@ export function PatientPrescriptionsTab({ token, patientId }: PatientPrescriptio
     {
       id: 'document',
       header: <span className="sr-only">{copy.colDocument}</span>,
-      mobileCell: (rx) => <span className="mt-2 block">{printLink(rx)}</span>,
+      mobileCell: (rx) => <div className="mt-2">{printLink(rx)}</div>,
       cell: printLink,
       align: 'end',
       cellClassName: 'align-top',
@@ -274,6 +289,18 @@ export function PatientPrescriptionsTab({ token, patientId }: PatientPrescriptio
           token={token}
           patientId={patientId}
           onIssued={(rx) => setPrescriptions((prev) => [rx, ...prev])}
+        />
+      ) : null}
+      {sendingCopy ? (
+        <SendPrescriptionCopyModal
+          key={sendingCopy.id}
+          open
+          onOpenChange={(open) => {
+            if (!open) setSendingCopy(null);
+          }}
+          token={token}
+          prescriptionId={sendingCopy.id}
+          formatDate={(iso) => stamp.date(iso, sendingCopy.locationId)}
         />
       ) : null}
       {voiding ? (

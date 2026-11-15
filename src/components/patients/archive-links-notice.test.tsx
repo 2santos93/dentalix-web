@@ -19,6 +19,7 @@ function links(overrides: Partial<LivePublicLinks> = {}): LivePublicLinks {
     budgetSignatures: 0,
     signedPdfCopies: 0,
     anamnesis: 0,
+    prescriptionCopies: 0,
     ...overrides,
   };
   return {
@@ -28,7 +29,8 @@ function links(overrides: Partial<LivePublicLinks> = {}): LivePublicLinks {
       base.consentSignatures +
       base.budgetSignatures +
       base.signedPdfCopies +
-      base.anamnesis,
+      base.anamnesis +
+      base.prescriptionCopies,
   };
 }
 
@@ -43,16 +45,17 @@ test('mientras cuenta, lo anuncia como estado', async () => {
 
 test('avisa cuántos enlaces se anularán y de qué tipo', async () => {
   mockedCount.mockResolvedValue(
-    links({ slotOffers: 1, budgetSignatures: 2, signedPdfCopies: 1, anamnesis: 2 }),
+    links({ slotOffers: 1, budgetSignatures: 2, signedPdfCopies: 1, anamnesis: 2, prescriptionCopies: 2 }),
   );
   render(<ArchiveLinksNotice token="tok" patientId="p1" />);
-  expect(await screen.findByText('Se anularán 6 enlaces enviados')).toBeInTheDocument();
+  expect(await screen.findByText('Se anularán 8 enlaces enviados')).toBeInTheDocument();
   const list = screen.getByRole('list', { name: 'Enlaces que se anularán' });
   expect(within(list).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
     '1 oferta de hueco',
     '2 presupuestos por aceptar',
     '1 copia de un documento firmado',
     '2 cuestionarios de salud',
+    '2 copias de recetas',
   ]);
   expect(screen.getByText(archiveLinksCopy.explanation)).toBeInTheDocument();
 });
