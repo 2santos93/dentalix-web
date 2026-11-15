@@ -14,6 +14,7 @@ import {
   Repeat,
   Stethoscope,
   Coins,
+  FileBadge,
   FileClock,
   Clock,
   FileSignature,
@@ -37,6 +38,7 @@ import {
 } from 'lucide-react';
 import type { ClinicRole } from '@/lib/me/me-api';
 import { canManagePatientLanguages } from '@/lib/patients/patient-languages';
+import { canManageCertificateSettings } from '@/lib/certificates/certificates-api';
 import { canManageConsentTemplates } from '@/lib/consents/consents-api';
 import { canManagePrescriptionSettings } from '@/lib/prescriptions/prescriptions-api';
 import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
@@ -334,6 +336,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Plantillas y datos que imprime la receta.',
         icon: Pill,
         visible: canManagePrescriptionSettings,
+      },
+      // DX-306.
+      {
+        href: '/settings/certificados',
+        label: 'Certificados',
+        description: 'Días de reposo y diagnóstico en los certificados del paciente.',
+        icon: FileBadge,
+        visible: canManageCertificateSettings,
       },
       // DX-222.
       {

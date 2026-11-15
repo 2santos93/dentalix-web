@@ -6738,6 +6738,128 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/certificates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Certificados del paciente (más reciente primero, con anulados)
+         * @description El diagnóstico de un reposo solo sale para los roles clínicos y quien lo emitió; recepción recibe `diagnosis: null` y `hasDiagnosis`.
+         */
+        get: operations["PatientCertificatesController_list"];
+        put?: never;
+        /**
+         * Emitir un justificante de asistencia o un certificado de reposo
+         * @description De una cita ATENDIDA de una sede permitida. Guarda la foto de paciente, profesional, sede y clínica, el número de la sede y archiva el PDF en los documentos del paciente (REPORT). Justificante: horas reales de llegada y salida o, sin ellas, las programadas. Reposo: DENTIST o ADMIN con registro profesional, días entre 1 y el máximo de la clínica, inicio no anterior a la atención, diagnóstico solo si la clínica lo imprime. Auditado: CREATE · PATIENT_CERTIFICATE · CERTIFICATE_ISSUED (sin diagnóstico).
+         */
+        post: operations["PatientCertificatesController_issue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/certificates/appointments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Citas atendidas del paciente que admiten certificado
+         * @description Las 30 más recientes en COMPLETED de las sedes permitidas al usuario, con los tipos que ya tienen un certificado vigente.
+         */
+        get: operations["PatientCertificatesController_appointments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/certificates/{id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * PDF del certificado (generado ahora desde su foto)
+         * @description Fechas y horas en la zona, el locale y el reloj de la sede. Un anulado sale con «ANULADO». Auditado: PRINT · PATIENT_CERTIFICATE.
+         */
+        get: operations["PatientCertificatesController_pdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/certificates/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Anular un certificado con motivo
+         * @description Quien lo emitió o un ADMIN. No se borra: queda anulado, el PDF archivado se anula en la ficha y se archiva el PDF con «ANULADO». Auditado: VOID · PATIENT_CERTIFICATE · CERTIFICATE_VOIDED.
+         */
+        post: operations["PatientCertificatesController_void"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificates/issuer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Qué certificados puede emitir el usuario y su registro profesional */
+        get: operations["CertificateSettingsController_issuer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificates/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ajustes de los certificados de la clínica */
+        get: operations["CertificateSettingsController_get"];
+        /**
+         * Cambia los ajustes de los certificados; queda en la auditoría
+         * @description Máximo de días de reposo (1–365) y si el reposo imprime el diagnóstico. Aplica a la siguiente emisión. Si nada cambia, 200 sin evento (UPDATE · CLINIC_SETTINGS · CERTIFICATE_SETTINGS).
+         */
+        put: operations["CertificateSettingsController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/implants": {
         parameters: {
             query?: never;
@@ -7520,7 +7642,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -22179,6 +22301,144 @@ export interface components {
             /** @description Locale de la sede para escribir las fechas (DX-354). */
             locale: string | null;
             hourCycle: components["schemas"]["PrescriptionHourCycle"] | null;
+        };
+        /** @enum {string} */
+        PatientCertificateKind: "ATTENDANCE" | "REST";
+        CertificatePatientSnapshotDto: {
+            name: string;
+            document: string | null;
+        };
+        CertificateProfessionalSnapshotDto: {
+            name: string;
+            license: string | null;
+            specialty: string | null;
+        };
+        CertificateLocationSnapshotDto: {
+            name: string;
+            address: string | null;
+            healthRegistrationNumber: string | null;
+            /** @example America/Caracas */
+            timeZone: string;
+            /** @example es-VE */
+            locale: string;
+            /** @enum {string} */
+            hourCycle: "h12" | "h23";
+        };
+        CertificateClinicSnapshotDto: {
+            name: string;
+            legalName: string | null;
+            taxIdLabel: string | null;
+            taxId: string | null;
+        };
+        CertificateSnapshotDto: {
+            patient: components["schemas"]["CertificatePatientSnapshotDto"];
+            professional: components["schemas"]["CertificateProfessionalSnapshotDto"];
+            location: components["schemas"]["CertificateLocationSnapshotDto"];
+            clinic: components["schemas"]["CertificateClinicSnapshotDto"];
+        };
+        PatientCertificateDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            appointmentId: string;
+            /** Format: uuid */
+            locationId: string;
+            kind: components["schemas"]["PatientCertificateKind"];
+            /** @description Correlativo de la sede. */
+            number: number;
+            /** @example 000123 */
+            numberLabel: string;
+            /** Format: date-time */
+            issuedAt: string;
+            /** Format: uuid */
+            issuedById: string;
+            issuedByName: string | null;
+            /** Format: date-time */
+            attendedFrom: string;
+            /** Format: date-time */
+            attendedUntil: string;
+            /**
+             * @description ACTUAL = llegada y salida reales; SCHEDULED = horas programadas de la cita.
+             * @enum {string}
+             */
+            timesSource: "ACTUAL" | "SCHEDULED";
+            restDays: number | null;
+            /** @example 2026-11-16 */
+            restStartDate: string | null;
+            /** @example 2026-11-18 */
+            restEndDate: string | null;
+            /** @description Solo en el reposo y solo para los roles clínicos o quien lo emitió (recepción recibe null). */
+            diagnosis: string | null;
+            /** @description El reposo lleva diagnóstico impreso (aunque este usuario no lo vea). */
+            hasDiagnosis: boolean;
+            snapshot: components["schemas"]["CertificateSnapshotDto"];
+            /** Format: uuid */
+            documentId: string | null;
+            /** Format: date-time */
+            voidedAt: string | null;
+            voidedByName: string | null;
+            voidReason: string | null;
+            /** Format: uuid */
+            voidedDocumentId: string | null;
+        };
+        EligibleAppointmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            providerName: string | null;
+            /** @description Tipos con un certificado vigente (sin anular) de esta cita. */
+            liveKinds: components["schemas"]["PatientCertificateKind"][];
+        };
+        IssueCertificateDto: {
+            /** @description ATTENDANCE = justificante de asistencia (sin datos clínicos); REST = certificado de reposo. */
+            kind: components["schemas"]["PatientCertificateKind"];
+            /**
+             * Format: uuid
+             * @description Cita ATENDIDA (COMPLETED) del paciente.
+             */
+            appointmentId: string;
+            /**
+             * @description Solo REST: días de reposo, entre 1 y el máximo de la clínica (GET /certificates/settings).
+             * @example 3
+             */
+            restDays?: number;
+            /**
+             * @description Solo REST: primer día de reposo (AAAA-MM-DD), no anterior al día de la atención en la sede ni más de 30 días después. Sin él, el día de la atención.
+             * @example 2026-11-16
+             */
+            restStartDate?: string;
+            /** @description Solo REST y solo si la clínica imprime el diagnóstico (restPrintDiagnosis). Dato de salud: nunca va a la auditoría. */
+            diagnosis?: string | null;
+        };
+        VoidCertificateDto: {
+            /** @example Fecha equivocada */
+            reason: string;
+        };
+        CertificateIssuerDto: {
+            canIssueAttendance: boolean;
+            canIssueRest: boolean;
+            /** @description Registro profesional del usuario en esta clínica; el reposo lo exige. */
+            professionalLicense: string | null;
+        };
+        CertificateSettingsDto: {
+            /**
+             * @description Máximo de días de un certificado de reposo.
+             * @example 30
+             */
+            restMaxDays: number;
+            /**
+             * @description El certificado de reposo imprime el diagnóstico (y solo entonces se recoge). El justificante nunca lo lleva.
+             * @example false
+             */
+            restPrintDiagnosis: boolean;
         };
         PatientImplantDto: {
             /** Format: uuid */
@@ -41442,6 +41702,281 @@ export interface operations {
              *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
              */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCertificatesController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientCertificateDto"][];
+                };
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCertificatesController_issue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueCertificateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientCertificateDto"];
+                };
+            };
+            /** @description Cuerpo inválido, o reposo con algo que falta o sobra (mensaje en español que dice qué: registro profesional, días, fecha de inicio, diagnóstico) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reposo pedido por un rol que no lo emite, o la sede de la cita no está permitida (LOCATION_NOT_ALLOWED) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o cita no encontrados (o de otro paciente o clínica) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La cita no está atendida, ya hay uno vigente de ese tipo para la cita, o la sede no tiene zona o formato regional */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCertificatesController_appointments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EligibleAppointmentDto"][];
+                };
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCertificatesController_pdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El PDF (inline). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Sede no permitida, o un reposo con diagnóstico pedido por recepción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o certificado no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCertificatesController_void: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidCertificateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientCertificateDto"];
+                };
+            };
+            /** @description Motivo vacío o demasiado largo */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No lo emitió ni es ADMIN, o la sede no está permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o certificado no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya está anulado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CertificateSettingsController_issuer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateIssuerDto"];
+                };
+            };
+        };
+    };
+    CertificateSettingsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateSettingsDto"];
+                };
+            };
+        };
+    };
+    CertificateSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CertificateSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateSettingsDto"];
+                };
+            };
+            /** @description Días fuera de 1–365 o sí/no inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar los ajustes de los certificados. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
