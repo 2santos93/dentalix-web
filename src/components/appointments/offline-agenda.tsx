@@ -193,19 +193,9 @@ function OfflineDay({
     {
       id: 'phone',
       header: offlineAgendaCopy.colPhone,
-      cell: (a) =>
-        a.phone ? (
-          <a
-            href={telHref(a.phone)}
-            className="whitespace-nowrap tabular-nums text-primary-text underline-offset-2 hover:underline"
-            aria-label={offlineAgendaCopy.callLabel(a.patientName, a.phone)}
-          >
-            {a.phone}
-          </a>
-        ) : (
-          <span className="text-muted">{offlineAgendaCopy.noPhone}</span>
-        ),
-      mobileCell: (a) => a.phone,
+      cell: (a) => (a.phone ? <PhoneLink name={a.patientName} phone={a.phone} /> : <span className="text-muted">{offlineAgendaCopy.noPhone}</span>),
+      // En el teléfono también se llama con un toque: es lo que se hace sin sistema.
+      mobileCell: (a) => (a.phone ? <PhoneLink name={a.patientName} phone={a.phone} /> : null),
     },
     {
       id: 'chair',
@@ -251,5 +241,18 @@ function OfflineDay({
         />
       )}
     </section>
+  );
+}
+
+/** «Llamar» con un toque (tel:): sin sistema, lo que se hace es llamar al paciente. */
+function PhoneLink({ name, phone }: { name: string; phone: string }) {
+  return (
+    <a
+      href={telHref(phone)}
+      className="inline-flex items-center whitespace-nowrap tabular-nums text-primary-text underline-offset-2 hover:underline pointer-coarse:min-h-11"
+      aria-label={offlineAgendaCopy.callLabel(name, phone)}
+    >
+      {phone}
+    </a>
   );
 }

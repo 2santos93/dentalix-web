@@ -43,9 +43,18 @@ function startProbe(): void {
   if (probe || typeof window === 'undefined') return;
   probe = setInterval(() => {
     if (browserOffline) return;
-    fetch(PROBE_URL, { cache: 'no-store', credentials: 'omit' })
-      .then(() => reportNetworkSuccess())
-      .catch(() => undefined);
+    // Sin `fetch` (entornos sin red, como jsdom) no hay sonda: se espera al
+    // evento `online` o a la próxima respuesta de la API.
+    if (typeof globalThis.fetch !== 'function') return stopProbe();
+    try {
+      globalThis
+        .fetch(PROBE_URL, { cache: 'no-store', credentials: 'omit' })
+        .then(() => reportNetworkSuccess())
+        .catch(() => undefined);
+    } catch {
+      // URL relativa sin documento (jsdom sin origen): sin sonda.
+      stopProbe();
+    }
   }, PROBE_MS);
 }
 
