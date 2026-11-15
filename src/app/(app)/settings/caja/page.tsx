@@ -5,7 +5,7 @@ import { canManageCashSessions } from '@/lib/cash-sessions/cash-sessions-api';
 import { SettingsPage, SettingsSection } from '@/components/settings/settings-page';
 import { CashSettingsForm } from '@/components/cash-sessions/cash-settings-form';
 import { PaymentMethodsManager } from '@/components/payment-methods/payment-methods-manager';
-import { canManagePaymentMethods } from '@/lib/payments/payment-methods-api';
+import { canManagePaymentMethods, canReadPaymentMethods } from '@/lib/payments/payment-methods-api';
 import { ReceiptSettingsForm } from '@/components/payments/receipt-settings-form';
 import { CreditPolicyForm } from '@/components/patient-credit/credit-policy-form';
 import { canManageCreditPolicy } from '@/lib/patient-credit/patient-credit-api';
@@ -31,7 +31,11 @@ export default function CashSettingsPage() {
         <CashSettingsForm token={accessToken} allowed={canManageCashSessions(getTokenRole(accessToken))} />
       </SettingsSection>
       {/* DX-377: catálogo de medios de pago de la clínica. */}
-      <PaymentMethodsManager token={accessToken} allowed={canManagePaymentMethods(getTokenRole(accessToken))} />
+      <PaymentMethodsManager
+        token={accessToken}
+        allowed={canReadPaymentMethods(getTokenRole(accessToken))}
+        canEdit={canManagePaymentMethods(getTokenRole(accessToken))}
+      />
       {/* DX-515: título y leyenda del recibo de caja (solo ADMIN). */}
       {canManageReceiptSettings(getTokenRole(accessToken)) ? <ReceiptSettingsForm token={accessToken} /> : null}
       {/* DX-432: tope de recepción del saldo a favor (solo ADMIN). */}

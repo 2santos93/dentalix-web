@@ -4,6 +4,7 @@ import {
   createPaymentAdjustment,
   createPaymentMethod,
   listPaymentMethods,
+  listPaymentMethodInstructions,
   updatePaymentAdjustment,
   updatePaymentMethod,
   type ClinicPaymentMethod,
@@ -18,6 +19,10 @@ jest.mock('../../lib/payments/payment-methods-api', () => ({
   updatePaymentMethod: jest.fn(),
   createPaymentAdjustment: jest.fn(),
   updatePaymentAdjustment: jest.fn(),
+  listPaymentMethodInstructions: jest.fn(),
+}));
+jest.mock('../../lib/locations/use-locations-state', () => ({
+  useLocationsState: () => ({ status: 'ready', locations: [], activeLocationId: null, retry: jest.fn() }),
 }));
 jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 
@@ -26,6 +31,7 @@ const mockedCreate = createPaymentMethod as jest.MockedFunction<typeof createPay
 const mockedUpdate = updatePaymentMethod as jest.MockedFunction<typeof updatePaymentMethod>;
 const mockedCreateAdjustment = createPaymentAdjustment as jest.MockedFunction<typeof createPaymentAdjustment>;
 const mockedUpdateAdjustment = updatePaymentAdjustment as jest.MockedFunction<typeof updatePaymentAdjustment>;
+const mockedInstructions = listPaymentMethodInstructions as jest.MockedFunction<typeof listPaymentMethodInstructions>;
 
 const cash: ClinicPaymentMethod = {
   id: 'pm-cash',
@@ -45,6 +51,7 @@ describe('PaymentMethodsManager (DX-377)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedList.mockResolvedValue([cash]);
+    mockedInstructions.mockResolvedValue([]);
   });
 
   it('solo ADMIN: otro rol ve el aviso y no se pide nada', () => {
@@ -97,6 +104,7 @@ describe('PaymentMethodsManager (DX-377)', () => {
         kind: 'DIGITAL',
         requiresReference: true,
         proofPolicy: 'NONE' as const,
+        allowInPaymentLink: false,
       }),
     );
     expect((await screen.findAllByText('Pago móvil')).length).toBeGreaterThan(0);
@@ -142,6 +150,38 @@ describe('PaymentMethodsManager (DX-377)', () => {
     await waitFor(() =>
       expect(mockedUpdate).toHaveBeenCalledWith('tok', 'pm-cash', expect.objectContaining({ proofPolicy: 'REQUIRED' })),
     );
+  });
+
+  it('DX-569: «Permitir en el enlace de pago» se ve en la lista y se guarda al editar', async () => {
+    const user = setupUser();
+    mockedUpdate.mockResolvedValue({ ...cash, allowInPaymentLink: true });
+    render(<PaymentMethodsManager token="tok" allowed />);
+    const table = await screen.findByRole('table', { name: 'Medios de pago' });
+    expect(within(table).getByRole('columnheader', { name: 'Enlace de pago' })).toBeInTheDocument();
+    const row = within(table).getAllByText('Efectivo')[0].closest('tr') as HTMLElement;
+    expect(within(row).getByText('No')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Acciones de Efectivo' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Editar' }));
+    const dialog = await screen.findByRole('dialog');
+    const allow = within(dialog).getByRole('checkbox', { name: 'Permitir en el enlace de pago' });
+    expect(allow).not.toBeChecked();
+    await user.click(allow);
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith('tok', 'pm-cash', expect.objectContaining({ allowInPaymentLink: true })),
+    );
+    // Permitido y sin datos para pagar: el aviso de que no saldrá en el enlace.
+    expect(await screen.findByText('«Efectivo»: no se mostrará en el enlace hasta que tenga datos para pagar.')).toBeInTheDocument();
+    expect(within(table).getByText('Permitido')).toBeInTheDocument();
+  });
+
+  it('DX-569: sin permiso de escritura (recepción) se ven los medios, sin crear ni editar', async () => {
+    render(<PaymentMethodsManager token="tok" allowed canEdit={false} />);
+    await screen.findByRole('table', { name: 'Medios de pago' });
+    expect(screen.queryByRole('button', { name: 'Nuevo medio' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Acciones de Efectivo' })).not.toBeInTheDocument();
+    expect(await screen.findByText('Solo administración los cambia.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Añadir datos para pagar' })).not.toBeInTheDocument();
   });
 
   it('desactiva un medio', async () => {
