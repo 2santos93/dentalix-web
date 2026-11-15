@@ -1,5 +1,5 @@
 import nextConfig from '../../../next.config';
-import { SECURITY_HEADERS, securityHeaderRules } from './security-headers';
+import { SECURITY_HEADERS, SERVICE_WORKER_HEADER_RULE, securityHeaderRules } from './security-headers';
 
 function asRecord(headers: { key: string; value: string }[]) {
   return Object.fromEntries(headers.map((h) => [h.key, h.value]));
@@ -26,7 +26,12 @@ describe('cabeceras de seguridad de la web (DX-061)', () => {
   it('next.config las expone en headers() y desactiva x-powered-by', async () => {
     expect(nextConfig.poweredByHeader).toBe(false);
     expect(typeof nextConfig.headers).toBe('function');
-    await expect(nextConfig.headers!()).resolves.toEqual(securityHeaderRules());
+    await expect(nextConfig.headers!()).resolves.toEqual([...securityHeaderRules(), SERVICE_WORKER_HEADER_RULE]);
+  });
+
+  it('DX-405: el service worker sin caché HTTP', () => {
+    expect(SERVICE_WORKER_HEADER_RULE.source).toBe('/sw.js');
+    expect(asRecord(SERVICE_WORKER_HEADER_RULE.headers)['Cache-Control']).toContain('no-cache');
   });
 
   it('DX-083: /api/v1/* NO se reescribe en next.config (se fijaría al compilar) sino en proxy.ts, y el build es standalone', () => {

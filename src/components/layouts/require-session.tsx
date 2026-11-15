@@ -2,6 +2,8 @@
 import { useEffect, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
+import { useOffline } from '@/lib/offline/connectivity';
+import { isOfflineCapable, useSessionReconnect } from '@/lib/offline/offline-session';
 
 export const requireSessionCopy = {
   checkingSession: 'Verificando sesión…',
@@ -39,22 +41,31 @@ export function isSessionless(pathname: string | null): boolean {
  * - Las páginas conservan sus avisos por rol (403, `RouteRoleGate`): esto solo
  *   mira si HAY sesión. Y es experiencia, no seguridad: quien autoriza es la API.
  *
+ * - DX-405: sin conexión y sin token (se recargó sin red), las pantallas con
+ *   copia sin conexión (`/agenda`) se pintan igual: la sesión no está muerta,
+ *   solo no se pudo renovar. Al volver la red se renueva (`reconnecting`,
+ *   esqueleto mientras tanto); si la API la da por muerta, a /login.
+ *
  * Las páginas siguen leyendo el token del store; su `if (!accessToken) return
- * null` queda solo para el tipo (aquí dentro nunca es `null`).
+ * null` queda solo para el tipo (aquí dentro nunca es `null`), salvo las que
+ * tienen copia sin conexión.
  */
 export function RequireSession({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const accessToken = useAuthStore((s) => s.accessToken);
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
+  const offline = useOffline();
+  const reconnecting = useSessionReconnect();
   const open = isSessionless(pathname);
+  const offlineCopy = offline && hasHydrated && !accessToken && isOfflineCapable(pathname);
 
   useEffect(() => {
-    if (open || !hasHydrated || accessToken) return;
+    if (open || offlineCopy || reconnecting || !hasHydrated || accessToken) return;
     router.replace('/login');
-  }, [open, hasHydrated, accessToken, router]);
+  }, [open, offlineCopy, reconnecting, hasHydrated, accessToken, router]);
 
-  if (open || (hasHydrated && accessToken)) return <>{children}</>;
+  if (open || offlineCopy || (hasHydrated && accessToken)) return <>{children}</>;
   // Verificando, o ya camino de /login: el mismo esqueleto (sin parpadeo).
   return <SessionSkeleton />;
 }

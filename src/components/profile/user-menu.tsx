@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import { ChevronUp, LogOut, Moon, Settings, UserRound } from 'lucide-react';
 import { useTheme } from 'next-themes';
+import { forgetOfflineSession } from '@/lib/offline/offline-agenda';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { logout } from '@/lib/auth/auth-api';
 import type { ClinicRole, MyProfile } from '@/lib/me/me-api';
@@ -66,6 +67,9 @@ export function useLogout(): { loggingOut: boolean; logout: () => Promise<void> 
     useAuthStore.getState().clear();
     // FE-031: el perfil y las sedes de esta sesión no sobreviven al logout.
     clearSessionStore();
+    // DX-405: ni la copia cifrada de la agenda ni su clave (aunque la API no
+    // contestara a tiempo al logout).
+    await forgetOfflineSession();
     router.push('/login');
   }, [router]);
   return { loggingOut, logout: doLogout };

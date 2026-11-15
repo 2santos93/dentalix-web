@@ -6,6 +6,7 @@ import {
 } from '@/lib/locations/location-store';
 import { apiBaseUrl } from './api-base';
 import { ApiError, NetworkError, type ExistingPatientRef, type AffectedAppointmentsRef } from './api-error';
+import { reportNetworkFailure, reportNetworkSuccess } from '@/lib/offline/connectivity';
 import { parseRetryAfter } from './error-message';
 
 export { ApiError, NetworkError };
@@ -193,6 +194,8 @@ async function refreshUnderLock(hasLocks: boolean): Promise<string | null> {
       }
     }
     useAuthStore.getState().clear();
+    // DX-405: sesión muerta → fuera la copia cifrada de la agenda y su clave.
+    void import('@/lib/offline/offline-agenda').then((m) => m.forgetOfflineSession()).catch(() => undefined);
     return null;
   }
 }
@@ -367,10 +370,15 @@ function parseExistingPatient(value: unknown): ExistingPatientRef | null {
  */
 async function fetchOrNetworkError(url: string, init: RequestInit): Promise<Response> {
   try {
-    return await fetch(url, init);
+    const res = await fetch(url, init);
+    // DX-405: la API contestó, hay red (cierra el «Sin conexión» por caída de internet).
+    reportNetworkSuccess();
+    return res;
   } catch (err) {
     const name = err instanceof Error || err instanceof DOMException ? err.name : null;
     if (name === 'AbortError' || name === 'TimeoutError') throw err;
+    // DX-405: wifi sin internet — la agenda pasa a su copia sin conexión.
+    reportNetworkFailure();
     throw new NetworkError(err);
   }
 }
