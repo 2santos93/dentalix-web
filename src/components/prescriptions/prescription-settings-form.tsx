@@ -15,9 +15,13 @@ import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { SaveBar, useSettingsDraft } from '@/components/settings/save-bar';
 import { SettingRows } from '@/components/settings/settings-page';
 import { cn } from '@/lib/utils';
+
+/** DX-468: tope del pie de la copia (mismo que la API). */
+export const PRESCRIPTION_COPY_FOOTER_MAX = 300;
 
 const copy = {
   wordsTitle: 'Cantidad en letras',
@@ -27,6 +31,10 @@ const copy = {
     'No se emite la receta si el paciente no tiene documento registrado; la receta lo imprime como nº de historia clínica.',
   validityLabel: 'Validez (días)',
   validityHint: 'Desde la fecha de inicio. Una clínica nueva empieza con 30 días.',
+  footerLabel: 'Pie de la copia para el paciente',
+  footerHint:
+    'Lo lleva la copia que se envía al paciente por WhatsApp o email. Vacío: «Copia para el paciente. Para retirar el medicamento presente la receta impresa y firmada».',
+  footerTooLong: `El pie tiene que tener como mucho ${PRESCRIPTION_COPY_FOOTER_MAX} caracteres.`,
   save: 'Guardar',
   saved: 'Ajustes de la receta guardados.',
   loadError: 'No pudimos cargar los ajustes de la receta.',
@@ -55,28 +63,37 @@ interface PrescriptionSettingsDraft {
   words: boolean;
   record: boolean;
   validity: string;
+  /** DX-468: pie de la copia para el paciente; vacío = el de plataforma. */
+  footer: string;
 }
 
-const EMPTY_DRAFT: PrescriptionSettingsDraft = { words: false, record: false, validity: '' };
+const EMPTY_DRAFT: PrescriptionSettingsDraft = { words: false, record: false, validity: '', footer: '' };
 
 function toDraft(settings: PrescriptionSettings): PrescriptionSettingsDraft {
   return {
     words: settings.printQuantityInWords,
     record: settings.requireClinicalRecordNumber,
     validity: String(settings.validityDays),
+    footer: settings.patientCopyFooter ?? '',
   };
 }
 
 /** «30» y « 30 » son el mismo valor: espacios alrededor no son un cambio. */
 function sameDraft(a: PrescriptionSettingsDraft, b: PrescriptionSettingsDraft): boolean {
-  return a.words === b.words && a.record === b.record && a.validity.trim() === b.validity.trim();
+  return (
+    a.words === b.words &&
+    a.record === b.record &&
+    a.validity.trim() === b.validity.trim() &&
+    a.footer.trim() === b.footer.trim()
+  );
 }
 
 /**
  * Ajustes → Recetas (DX-324): los datos que imprime la receta en todas las
  * sedes de la clínica. Una clínica nueva empieza sin cantidad en letras, sin
  * exigir el nº de historia clínica y con 30 días de validez. Solo ADMIN: la
- * página decide el permiso y no monta esto sin él.
+ * página decide el permiso y no monta esto sin él. DX-468: y el pie de la copia
+ * de la receta que se envía al paciente.
  */
 export function PrescriptionSettingsForm({ token }: { token: string }) {
   const [settings, setSettings] = useState<PrescriptionSettings | null>(null);
@@ -84,7 +101,8 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
   // Borrador frente a lo guardado: la barra «Cambios sin guardar» solo aparece
   // con cambios, y salir con cambios pregunta (DESIGN.md → Settings pages).
   const { draft, update, dirty, discard, commit } = useSettingsDraft(saved, sameDraft);
-  const { words, record, validity } = draft;
+  const { words, record, validity, footer } = draft;
+  const [footerError, setFooterError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -97,6 +115,9 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
   const validityId = `${id}-validity`;
   const validityRef = useRef<HTMLInputElement>(null);
   const validityHintId = `${validityId}-hint`;
+  const footerId = `${id}-footer`;
+  const footerHintId = `${footerId}-hint`;
+  const footerRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -153,12 +174,19 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
       return;
     }
     setValidityError(null);
+    if (footer.trim().length > PRESCRIPTION_COPY_FOOTER_MAX) {
+      setFooterError(copy.footerTooLong);
+      footerRef.current?.focus();
+      return;
+    }
+    setFooterError(null);
     setSaving(true);
     try {
       const next = await savePrescriptionSettings(token, {
         printQuantityInWords: words,
         requireClinicalRecordNumber: record,
         validityDays,
+        patientCopyFooter: footer.trim() === '' ? null : footer.trim(),
       });
       commit(toDraft(next));
       setSettings(next);
@@ -218,6 +246,30 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
             />
           </FormField>
         </div>
+        <div className="px-4 py-4 sm:px-6">
+          <FormField
+            htmlFor={footerId}
+            label={copy.footerLabel}
+            hint={copy.footerHint}
+            hintId={footerHintId}
+            error={footerError}
+          >
+            <Textarea
+              ref={footerRef}
+              id={footerId}
+              rows={2}
+              value={footer}
+              disabled={saving}
+              maxLength={PRESCRIPTION_COPY_FOOTER_MAX + 50}
+              aria-invalid={footerError ? true : undefined}
+              aria-describedby={footerError ? fieldErrorId(footerId) : footerHintId}
+              onChange={(e) => {
+                edit({ footer: e.target.value });
+                setFooterError(null);
+              }}
+            />
+          </FormField>
+        </div>
       </SettingRows>
       {/* DX-546 · FE-110: tras guardar, la SaveBar lleva aquí el foco (`savedFocusTo`). */}
       <p
@@ -242,6 +294,7 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
         onDiscard={() => {
           discard();
           setValidityError(null);
+          setFooterError(null);
           setSaveError(null);
         }}
       />
