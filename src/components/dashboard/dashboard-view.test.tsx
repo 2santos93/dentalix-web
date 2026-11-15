@@ -58,6 +58,8 @@ jest.mock('./inicio-api', () => ({
 jest.mock('../locations/regional-review-notice', () => ({ RegionalReviewNotice: () => null }));
 jest.mock('../payments/rate-backlog-notice', () => ({ RateBacklogNotice: () => null }));
 jest.mock('../clinic-settings/clinic-fiscal-notice', () => ({ ClinicFiscalNotice: () => null }));
+// DX-020: la tarjeta de puesta en marcha tiene su propio test (onboarding-card.test.tsx).
+jest.mock('./onboarding-card', () => ({ OnboardingCard: () => null }));
 
 const m = {
   getDashboard: jest.mocked(getDashboard),

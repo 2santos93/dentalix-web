@@ -8037,6 +8037,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/onboarding/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pasos de la puesta en marcha (DX-020)
+         * @description Cinco pasos obligatorios y uno opcional, calculados con los datos de la clínica (nada se marca a mano), y si la tarjeta está descartada.
+         */
+        get: operations["OnboardingController_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/onboarding/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Descarta la tarjeta de puesta en marcha (DX-020)
+         * @description Idempotente: un segundo descarte conserva la primera fecha. Devuelve el estado ya descartado.
+         */
+        post: operations["OnboardingController_dismiss"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -24635,6 +24675,37 @@ export interface components {
             report: components["schemas"]["PaymentReportDto"];
             /** @description Se encoló el aviso al email del paciente (sin el motivo). */
             patientNotified: boolean;
+        };
+        /**
+         * @description BUSINESS_HOURS: horario de alguna sede guardado por la clínica (el sembrado no cuenta). APPOINTMENT_TYPES: algún tipo de cita activo. CATALOG_PRICES: algún precio en el catálogo o en una lista de precios. STAFF: alguna invitación no revocada o algún miembro además del que creó la clínica. FIRST_APPOINTMENT: alguna cita. PATIENT_IMPORT (opcional): alguna importación de pacientes terminada.
+         * @enum {string}
+         */
+        OnboardingStepKey: "BUSINESS_HOURS" | "APPOINTMENT_TYPES" | "CATALOG_PRICES" | "STAFF" | "FIRST_APPOINTMENT" | "PATIENT_IMPORT";
+        OnboardingStepDto: {
+            /** @description BUSINESS_HOURS: horario de alguna sede guardado por la clínica (el sembrado no cuenta). APPOINTMENT_TYPES: algún tipo de cita activo. CATALOG_PRICES: algún precio en el catálogo o en una lista de precios. STAFF: alguna invitación no revocada o algún miembro además del que creó la clínica. FIRST_APPOINTMENT: alguna cita. PATIENT_IMPORT (opcional): alguna importación de pacientes terminada. */
+            key: components["schemas"]["OnboardingStepKey"];
+            /** @description Calculado con los datos; nunca se marca a mano. */
+            done: boolean;
+            /** @description true = no cuenta para «listo». */
+            optional: boolean;
+        };
+        OnboardingStatusDto: {
+            /**
+             * Format: date-time
+             * @description Cuándo se descartó la tarjeta; null = se muestra.
+             */
+            dismissedAt: string | null;
+            /** @description Los 5 obligatorios en orden y, al final, el opcional. */
+            steps: components["schemas"]["OnboardingStepDto"][];
+            /**
+             * @description Pasos obligatorios hechos.
+             * @example 2
+             */
+            completedCount: number;
+            /** @example 5 */
+            requiredCount: number;
+            /** @description Los pasos obligatorios están todos hechos. */
+            allDone: boolean;
         };
     };
     responses: never;
@@ -46195,6 +46266,58 @@ export interface operations {
             };
             /** @description `code: PAYMENT_REPORT_NOT_PENDING`: ya confirmado o rechazado */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OnboardingController_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingStatusDto"];
+                };
+            };
+            /** @description Solo administración ve la puesta en marcha de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OnboardingController_dismiss: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingStatusDto"];
+                };
+            };
+            /** @description Solo administración ve la puesta en marcha de la clínica. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

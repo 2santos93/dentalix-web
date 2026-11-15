@@ -18,6 +18,7 @@ import { EquipmentMaintenanceSection } from './equipment-maintenance-section';
 import { LowStockSection } from './dashboard-sections';
 import { canSeeBlock, INICIO_DESCRIPTION, INICIO_DESCRIPTION_FALLBACK } from './inicio-roles';
 import { MyProductionSection } from './my-production-section';
+import { OnboardingCard } from './onboarding-card';
 import { PendingSection } from './pending-section';
 import { PeriodResultsSection } from './period-results-section';
 import { TodaySection } from './today-section';
@@ -134,6 +135,8 @@ export function DashboardView({ token }: DashboardViewProps) {
     <>
       {header}
       <div className="flex flex-col gap-10">
+        {/* DX-020: «Pon en marcha tu clínica» (solo ADMIN, con su propia carga). */}
+        <OnboardingCard token={token} />
         {/* Avisos D5 (G1 §7) y DX-380: se pintan solos y solo para ADMIN. */}
         <RegionalReviewNotice token={token} />
         <RateBacklogNotice token={token} />
