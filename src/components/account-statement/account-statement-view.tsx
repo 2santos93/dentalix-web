@@ -1,8 +1,9 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { notifySuccess } from '@/components/errors/notify';
-import { CalendarClock, ChevronDown, FileText, HandCoins, Lock, Printer, ReceiptText, Wallet } from 'lucide-react';
+import { CalendarClock, ChevronDown, FileText, HandCoins, Link2, Lock, Printer, ReceiptText, Wallet } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import {
   accountStatementPrintHref,
@@ -79,6 +80,13 @@ import {
 } from '@/lib/patient-credit/patient-credit-api';
 import { CREDIT_MOVEMENTS_HEADING_ID, CreditMovementsSection } from '@/components/patient-credit/credit-movements-section';
 import { ExternalLink } from '@/components/shared/external-link';
+import { paymentLinkTargets, planTargetKey } from '@/lib/payment-links/payment-link-targets';
+
+// DX-569: el modal del enlace de pago se carga al abrirlo (la ficha va justa de presupuesto).
+const SendPaymentLinkModal = dynamic(
+  () => import('@/components/payment-links/send-payment-link-modal').then((m) => m.SendPaymentLinkModal),
+  { ssr: false },
+);
 
 // Copy como constantes (i18n-ready), igual que el resto de vistas.
 const copy = {
@@ -90,6 +98,8 @@ const copy = {
   addressee: (name: string) => `Sale a nombre de su responsable: ${name}.`,
   recordPayment: 'Registrar abono',
   paymentPlan: 'Plan de cuotas',
+  // DX-569: el paciente reporta su pago desde un enlace.
+  sendPaymentLink: 'Enviar enlace de pago',
   printHint: '(se abre en otra pestaña)',
   summaryLabel: (currency: string) => `Resumen en ${currency}`,
   budgeted: 'Presupuestado',
@@ -190,6 +200,11 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
   // entrar al plan de tratamiento (clínico). Tras cada uno se recarga todo.
   const canCharge = canRecordPayments(getTokenRole(token));
   const [chargeModal, setChargeModal] = useState<'payment' | 'payment-plan' | null>(null);
+  // DX-569: «Enviar enlace de pago» (estado de cuenta o una cuota); `key` por apertura.
+  const [linkModal, setLinkModal] = useState<{ open: boolean; key: number; initial: { key: string; amount: number } | null }>(
+    { open: false, key: 0, initial: null },
+  );
+  const statementClock = readyClock(useSedeClock(token));
   // DX-401: recibo resumen de un periodo (mismos roles que cobrar).
   const [summaryOpen, setSummaryOpen] = useState(false);
   // Recibo de caja (DX-136) de cualquier movimiento, también de los anulados
@@ -282,6 +297,12 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
   // hay algo que cobrar; sin saldo pendiente queda secundaria (un anticipo es
   // posible, pero no es la acción que la pantalla propone).
   const owes = data?.summary.some((row) => row.convertedBalance > 0) ?? false;
+  const linkTargets = data
+    ? paymentLinkTargets(data, planNamer(data.plans, statementClock), statementCopy.openingMovement)
+    : [];
+  function openLink(initial: { key: string; amount: number } | null) {
+    setLinkModal((prev) => ({ open: true, key: prev.key + 1, initial }));
+  }
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-4">
@@ -319,6 +340,17 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
                   <CalendarClock aria-hidden />
                   {copy.paymentPlan}
                 </Button>
+                {linkTargets.length > 0 ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="w-full max-sm:min-h-11 sm:w-auto"
+                    onClick={() => openLink(null)}
+                  >
+                    <Link2 aria-hidden />
+                    {copy.sendPaymentLink}
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   variant="secondary"
@@ -369,6 +401,12 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
               onReceipt={setReceiptPaymentId}
               onViewAllocation={setAllocationPaymentId}
               onViewProof={canCharge ? proofViewer.open : undefined}
+              onSendLink={
+                canCharge
+                  ? (planId, amount) => openLink({ key: planTargetKey(planId), amount })
+                  : undefined
+              }
+              linkTargetKeys={linkTargets.map((t) => t.key)}
               canCredit={canCredit}
               onRetry={() => setReloadKey((k) => k + 1)}
               actBlockedReason={receptionCapZero ? RECEPTION_CAP_ZERO_MESSAGE : null}
@@ -408,6 +446,17 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
             patientId={patientId}
             onCreated={charged}
           />
+          {linkModal.key > 0 ? (
+            <SendPaymentLinkModal
+              key={linkModal.key}
+              open={linkModal.open}
+              onOpenChange={(open) => setLinkModal((prev) => ({ ...prev, open }))}
+              token={token}
+              patientId={patientId}
+              targets={linkTargets}
+              initial={linkModal.initial}
+            />
+          ) : null}
           <ReceiptsSummaryDialog
             open={summaryOpen}
             onOpenChange={setSummaryOpen}
@@ -481,6 +530,8 @@ function StatementBody({
   onReceipt,
   onViewAllocation,
   onViewProof,
+  onSendLink,
+  linkTargetKeys,
   canCredit,
   actBlockedReason,
   patientId,
@@ -498,6 +549,10 @@ function StatementBody({
   onViewAllocation: (paymentId: string) => void;
   /** DX-389: abre el comprobante del cobro (solo ADMIN y recepción, y si el abono lo tiene). */
   onViewProof?: (paymentId: string) => void;
+  /** DX-569: «Enviar enlace de pago» desde una cuota con algo pendiente (quien cobra). */
+  onSendLink?: (treatmentPlanId: string, amount: number) => void;
+  /** Destinos que se pueden cobrar por enlace (`plan:<id>`). */
+  linkTargetKeys: string[];
   /** DX-253: ADMIN y recepción ven «Aplicar a otro plan» y «Devolver». */
   canCredit: boolean;
   /** DX-432: por qué las acciones del saldo a favor no se pueden ahora (tope de recepción en 0). */
@@ -633,6 +688,21 @@ function StatementBody({
             phone="scroll"
             rows={statement.installments}
             getRowKey={(inst) => `${inst.paymentPlanId}-${inst.kind}-${inst.sequence ?? 0}`}
+            getRowLabel={(inst) => `${installmentLabel(inst)} · ${stamp.maybe.civilDate(inst.dueDate) ?? planName(inst.treatmentPlanId)}`}
+            rowActions={
+              onSendLink
+                ? (inst) =>
+                    inst.outstanding > 0 && linkTargetKeys.includes(planTargetKey(inst.treatmentPlanId))
+                      ? [
+                          {
+                            label: copy.sendPaymentLink,
+                            icon: <Link2 aria-hidden />,
+                            onSelect: () => onSendLink(inst.treatmentPlanId, inst.outstanding),
+                          },
+                        ]
+                      : []
+                : undefined
+            }
             columns={[
               { id: 'due', header: copy.colDue, cell: (inst) => <span className="tabular-nums">{stamp.civilDate(inst.dueDate)}</span> },
               {

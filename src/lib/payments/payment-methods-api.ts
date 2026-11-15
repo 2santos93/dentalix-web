@@ -1,4 +1,4 @@
-import { apiFetch } from '@/lib/api/client';
+import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 
@@ -139,12 +139,13 @@ export function savePaymentMethodInstructions(
   });
 }
 
-export function deletePaymentMethodInstructions(
+export async function deletePaymentMethodInstructions(
   token: string,
   paymentMethodId: string,
   instructionId: string,
 ): Promise<void> {
-  return apiFetch<void>(`/payment-methods/${paymentMethodId}/instructions/${instructionId}`, {
+  // 204 sin cuerpo.
+  await apiFetchOrNull<null>(`/payment-methods/${paymentMethodId}/instructions/${instructionId}`, {
     method: 'DELETE',
     token,
   });
