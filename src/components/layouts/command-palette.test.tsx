@@ -100,3 +100,24 @@ describe('CommandPalette: «¿Quién llama?» (DX-224)', () => {
     expect(screen.queryByRole('option', { name: /¿Quién llama\?/ })).not.toBeInTheDocument();
   });
 });
+
+describe('CommandPalette: «Posibles duplicados» (DX-266)', () => {
+  beforeEach(() => {
+    jest.mocked(listPatients).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 5 } as never);
+  });
+
+  it('ADMIN lo encuentra al escribir y lleva a la lista', async () => {
+    const user = userEvent.setup();
+    render(<CommandPalette open onOpenChange={() => {}} token="t" role="ADMIN" />);
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'duplica' } });
+    await user.click(await screen.findByRole('option', { name: /Posibles duplicados/ }));
+    expect(push).toHaveBeenCalledWith('/patients/duplicados');
+  });
+
+  it('otro rol no lo ve', async () => {
+    render(<CommandPalette open onOpenChange={() => {}} token="t" role="RECEPTION" />);
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'duplica' } });
+    await waitFor(() => expect(jest.mocked(listPatients)).toHaveBeenCalled());
+    expect(screen.queryByRole('option', { name: /Posibles duplicados/ })).not.toBeInTheDocument();
+  });
+});

@@ -71,6 +71,11 @@ export class ApiError extends Error {
   public readonly existingPatient: ExistingPatientRef | null;
   /** DX-267: el 409 de un horario que deja citas fuera: cuántas y una muestra. */
   public readonly affectedAppointments: AffectedAppointmentsRef | null;
+  /**
+   * DX-266: en el 404 `PATIENT_MERGED` de `GET /patients/:id`, el paciente que
+   * se conservó en la fusión (la ficha antigua lleva a él).
+   */
+  public readonly mergedIntoId: string | null;
 
   constructor(
     public readonly status: number,
@@ -87,6 +92,7 @@ export class ApiError extends Error {
       existingPatientId?: string | null;
       existingPatient?: ExistingPatientRef | null;
       affectedAppointments?: AffectedAppointmentsRef | null;
+      mergedIntoId?: string | null;
     } = {},
   ) {
     super(message);
@@ -102,6 +108,7 @@ export class ApiError extends Error {
     this.existingPatientId = details.existingPatientId ?? null;
     this.existingPatient = details.existingPatient ?? null;
     this.affectedAppointments = details.affectedAppointments ?? null;
+    this.mergedIntoId = details.mergedIntoId ?? null;
   }
 }
 

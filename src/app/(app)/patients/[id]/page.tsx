@@ -4,6 +4,8 @@ import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigat
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getPatient, replacePatientKeepingDerived, type Patient } from '@/lib/patients/patients-api';
+import { mergedPatientCopy, mergedPatientHref } from '@/lib/patients/merged-patient';
+import { toast } from 'sonner';
 import { AnamnesisReviewLine } from '@/components/clinical/anamnesis-review-line';
 import { usePatientMedicalAlerts } from '@/components/clinical/use-patient-medical-alerts';
 import { usePatientAttendance } from '@/components/patients/use-patient-attendance';
@@ -126,6 +128,10 @@ function PatientDetailView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  // DX-266: el paciente (este id) se fusionó y se está abriendo la ficha del
+  // conservado. Por id: al llegar a la otra ficha el componente sigue montado.
+  const [mergedFrom, setMergedFrom] = useState<string | null>(null);
+  const redirecting = mergedFrom === patientId;
   const [editing, setEditing] = useState(false);
   // Menú «⋯» de la cabecera: modales de retención (ADMIN) y «Enviar anamnesis».
   const [retentionDialog, setRetentionDialog] = useState<RetentionDialog | null>(null);
@@ -270,6 +276,15 @@ function PatientDetailView() {
         setError(null);
       } catch (err) {
         if (cancelled) return;
+        // DX-266: la ficha de un paciente absorbido por una fusión lleva a la
+        // del que se conservó (replace: Atrás no vuelve a la ficha retirada).
+        const merged = mergedPatientHref(err, window.location.search);
+        if (merged) {
+          setMergedFrom(patientId);
+          toast.info(mergedPatientCopy.redirected);
+          router.replace(merged);
+          return;
+        }
         setError(
           apiErrorMessage(err, { fallback: copy.genericError, byStatus: { 404: copy.notFound } }),
         );
@@ -282,7 +297,7 @@ function PatientDetailView() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, patientId, retryCount]);
+  }, [accessToken, patientId, retryCount, router]);
 
   const role = getTokenRole(accessToken);
   const isAdmin = role === 'ADMIN';
@@ -389,11 +404,11 @@ function PatientDetailView() {
         fmt={sedeFormat}
       />
 
-      {loading ? (
+      {loading || redirecting ? (
         // El texto ya se ve en el título de la cabecera; aquí solo queda el
         // anuncio para lectores de pantalla, que un `<h1>` no hace por sí solo.
         <p role="status" className="sr-only">
-          {copy.loading}
+          {redirecting ? mergedPatientCopy.redirecting : copy.loading}
         </p>
       ) : error ? (
         <SectionError

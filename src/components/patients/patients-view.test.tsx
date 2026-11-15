@@ -228,4 +228,20 @@ describe('PatientsView', () => {
     else expect(link).not.toBeInTheDocument();
     mockRole = null;
   });
+
+  it.each([
+    ['ADMIN', true],
+    ['RECEPTION', false],
+    ['DENTIST', false],
+    ['ASSISTANT', false],
+  ])('DX-266: %s ve el enlace a «Posibles duplicados»: %s', async (role, visible) => {
+    mockRole = role;
+    mockedList.mockResolvedValue(page([maria]));
+    render(<PatientsView token="tok" />);
+    await screen.findByText('María López');
+    const link = screen.queryByRole('link', { name: 'Posibles duplicados' });
+    if (visible) expect(link).toHaveAttribute('href', '/patients/duplicados');
+    else expect(link).not.toBeInTheDocument();
+    mockRole = null;
+  });
 });
