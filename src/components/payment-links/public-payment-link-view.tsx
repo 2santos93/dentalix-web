@@ -324,24 +324,31 @@ function HowToPay({ methods }: { methods: PublicPaymentMethod[] }) {
             className="flex flex-col rounded-xl border border-border bg-surface px-4 py-3"
           >
             <h3 className="py-1 text-base font-semibold text-ink">{method.name}</h3>
+            {/* En un <dl> cada grupo solo lleva <dt> y <dd>: el «Copiar» va dentro del <dd>. */}
             <dl className="flex flex-col divide-y divide-border-subtle">
               {fields.map(({ field, value }) => (
-                <div key={field} className="flex items-center gap-3 py-2">
-                  <div className="min-w-0 flex-1">
-                    <dt className="t-caption text-muted">{PAYMENT_INSTRUCTION_LABELS[field]}</dt>
-                    <dd className={field === 'note' ? 'whitespace-pre-line text-sm text-ink' : 'break-words text-base text-ink tabular-nums'}>
-                      {value}
-                    </dd>
-                  </div>
-                  {field === 'note' ? null : (
-                    <CopyButton
-                      value={value}
-                      label={copy.copyLabel(PAYMENT_INSTRUCTION_LABELS[field], method.name)}
-                      onCopied={(ok) =>
-                        setAnnounce(ok ? copy.copiedAnnounce(PAYMENT_INSTRUCTION_LABELS[field]) : copy.copyFailed)
+                <div key={field} className="flex flex-col gap-0.5 py-2">
+                  <dt className="t-caption text-muted">{PAYMENT_INSTRUCTION_LABELS[field]}</dt>
+                  <dd className="flex items-center gap-3">
+                    <span
+                      className={
+                        field === 'note'
+                          ? 'min-w-0 flex-1 whitespace-pre-line text-sm text-ink'
+                          : 'min-w-0 flex-1 break-words text-base text-ink tabular-nums'
                       }
-                    />
-                  )}
+                    >
+                      {value}
+                    </span>
+                    {field === 'note' ? null : (
+                      <CopyButton
+                        value={value}
+                        label={copy.copyLabel(PAYMENT_INSTRUCTION_LABELS[field], method.name)}
+                        onCopied={(ok) =>
+                          setAnnounce(ok ? copy.copiedAnnounce(PAYMENT_INSTRUCTION_LABELS[field]) : copy.copyFailed)
+                        }
+                      />
+                    )}
+                  </dd>
                 </div>
               ))}
             </dl>

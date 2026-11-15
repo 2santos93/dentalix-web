@@ -134,7 +134,7 @@ test.describe('enlace de pago (DX-569)', () => {
     await instructions.getByRole('button', { name: 'Añadir datos para pagar' }).click();
     const data = admin.getByRole('dialog', { name: 'Añadir datos para pagar' });
     await data.getByLabel('Medio de pago').selectOption({ label: methodName });
-    await data.getByLabel('Para').selectOption({ label: 'Toda la clínica' });
+    await data.getByLabel('Para', { exact: true }).selectOption({ label: 'Toda la clínica' });
     await data.getByLabel('Titular').fill('Clínica Demo C.A.');
     await data.getByLabel('Teléfono').fill('0414-5550101');
     await data.getByRole('button', { name: 'Guardar datos' }).click();

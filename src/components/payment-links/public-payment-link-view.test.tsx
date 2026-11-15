@@ -134,6 +134,11 @@ describe('PublicPaymentLinkView (DX-569)', () => {
     expect(within(mobile).getByText('Identificación del titular')).toBeInTheDocument();
     expect(within(mobile).getByText('Indica tu nombre en el concepto.')).toBeInTheDocument();
     expect(within(mobile).getAllByRole('button', { name: /^Copiar/ })).toHaveLength(4);
+    // axe `dlitem`/`only-dlitems`: cada grupo del <dl> solo lleva <dt> y <dd>.
+    for (const group of Array.from(mobile.querySelectorAll('dl > *'))) {
+      expect(group.tagName).toBe('DIV');
+      expect(Array.from(group.children).map((c) => c.tagName)).toEqual(['DT', 'DD']);
+    }
     await user.click(within(mobile).getByRole('button', { name: 'Copiar teléfono de Pago móvil' }));
     expect(writeText).toHaveBeenCalledWith('0414-5550101');
     expect(await screen.findByText('Teléfono copiado.')).toBeInTheDocument();
