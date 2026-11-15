@@ -206,6 +206,25 @@ const cashSession = {
 } satisfies Presentations<Schemas['CashSessionStatus'] | 'REOPENED'>;
 
 /**
+ * DX-569: enlace de pago enviado al paciente. Vigente hasta que reporta (lo
+ * usa), vence a los 7 días o se anula (otro enlace del mismo destino, o el
+ * archivado).
+ */
+const paymentLink = {
+  LIVE: s('success', 'Vigente'),
+  USED: s('info', 'Reportado'),
+  EXPIRED: s('danger', 'Vencido'),
+  REVOKED: s('neutral', 'Anulado'),
+} satisfies Presentations<Schemas['PatientPaymentLinkDto']['status']>;
+
+/** DX-569: el pago que reporta el paciente espera a que la caja lo confirme o lo rechace. */
+const paymentReport = {
+  PENDING: s('warning', 'Por confirmar'),
+  CONFIRMED: s('success', 'Confirmado'),
+  REJECTED: s('danger', 'Rechazado'),
+} satisfies Presentations<Schemas['PaymentReportStatus']>;
+
+/**
  * Los métodos de pago NO son estados: son categorías. Todos neutros (sin
  * punto); el icono, si hace falta, distingue. Efectivo en verde y tarjeta en el
  * acento hacían que dos valores categóricos se leyeran como «bien» y «elegido».
@@ -365,6 +384,8 @@ export const STATUS_PRESENTATION = {
   paymentPromise,
   recall,
   cashSession,
+  paymentLink,
+  paymentReport,
   paymentMethod,
   coverage,
   agreement,

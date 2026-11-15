@@ -21,6 +21,7 @@ function links(overrides: Partial<LivePublicLinks> = {}): LivePublicLinks {
     anamnesis: 0,
     prescriptionCopies: 0,
     certificateCopies: 0,
+    paymentLinks: 0,
     ...overrides,
   };
   return {
@@ -32,7 +33,8 @@ function links(overrides: Partial<LivePublicLinks> = {}): LivePublicLinks {
       base.signedPdfCopies +
       base.anamnesis +
       base.prescriptionCopies +
-      base.certificateCopies,
+      base.certificateCopies +
+      base.paymentLinks,
   };
 }
 
@@ -82,6 +84,17 @@ test('DX-306: una copia de un certificado, en singular', async () => {
   render(<ArchiveLinksNotice token="tok" patientId="p1" />);
   expect(await screen.findByText('Se anulará 1 enlace enviado')).toBeInTheDocument();
   expect(screen.getByText('1 copia de un certificado')).toBeInTheDocument();
+});
+
+test('DX-569: los enlaces de pago vivos también se anulan', async () => {
+  mockedCount.mockResolvedValue(links({ paymentLinks: 2, anamnesis: 1 }));
+  render(<ArchiveLinksNotice token="tok" patientId="p1" />);
+  expect(await screen.findByText('Se anularán 3 enlaces enviados')).toBeInTheDocument();
+  const list = screen.getByRole('list', { name: 'Enlaces que se anularán' });
+  expect(within(list).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+    '1 cuestionario de salud',
+    '2 enlaces de pago',
+  ]);
 });
 
 test('sin enlaces vivos lo dice en una línea, sin aviso', async () => {

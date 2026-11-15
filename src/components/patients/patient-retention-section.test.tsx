@@ -118,6 +118,7 @@ const NO_LINKS = {
   anamnesis: 0,
   prescriptionCopies: 0,
   certificateCopies: 0,
+  paymentLinks: 0,
   total: 0,
 };
 

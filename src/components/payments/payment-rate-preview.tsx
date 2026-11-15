@@ -192,9 +192,13 @@ function PreviewBody({
             <dd className="font-semibold tabular-nums">{money(Math.abs(after), planCurrency)}</dd>
           </div>
         ) : planBalance === 'loading' ? (
-          <div className="min-w-0 flex items-center">
-            <Loader2 aria-hidden className="size-4 animate-spin text-muted" />
-            <span className="sr-only">{copy.pendingLoading}</span>
+          // Un grupo de <dl> solo lleva <dt> y <dd> (axe `dlitem`/`only-dlitems`).
+          <div className="min-w-0">
+            <dt className="text-muted">{copy.pendingAfter}</dt>
+            <dd className="flex items-center">
+              <Loader2 aria-hidden className="size-4 animate-spin text-muted" />
+              <span className="sr-only">{copy.pendingLoading}</span>
+            </dd>
           </div>
         ) : null}
       </dl>

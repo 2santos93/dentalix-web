@@ -69,6 +69,11 @@ jest.mock('../../lib/payments/payment-receipts-api', () => ({
   ...jest.requireActual('../../lib/payments/payment-receipts-api'),
   getPaymentReceipt: jest.fn(),
 }));
+jest.mock('../../lib/payment-links/payment-links-api', () => ({
+  ...jest.requireActual('../../lib/payment-links/payment-links-api'),
+  listPatientPaymentLinks: jest.fn().mockResolvedValue([]),
+  createPaymentLink: jest.fn(),
+}));
 jest.mock('../../lib/account-statement/account-statement-api', () => ({
   ...jest.requireActual('../../lib/account-statement/account-statement-api'),
   getAccountStatement: jest.fn(),
@@ -423,6 +428,49 @@ describe('anular una forma de pago de un cobro dividido (revisión DX-390)', () 
     await user.click(within(dialog).getByRole('button', { name: /anular abono/i }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(await screen.findByText(/^Cobro anulado: 3 formas de pago y su recibo · /)).toBeInTheDocument();
+  });
+});
+
+describe('enviar enlace de pago (DX-569)', () => {
+  it('recepción lo abre desde el estado de cuenta, precargado con la próxima cuota del plan', async () => {
+    mockedGet.mockResolvedValue(accountStatementFixture());
+    const user = userEvent.setup();
+    render(<AccountStatementView token={tokenForRole('RECEPTION')} patientId="pat-1" />);
+    await screen.findByRole('region', { name: /resumen en VES/i });
+    await user.click(screen.getByRole('button', { name: 'Enviar enlace de pago' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Enviar enlace de pago' });
+    // El plan cancelado no se cobra: solo el aceptado.
+    expect(within(within(dialog).getByLabelText('Qué paga')).getAllByRole('option')).toHaveLength(1);
+    expect(within(dialog).getByLabelText('Importe que se pide')).toHaveValue('250000');
+    expect(within(dialog).getByText(/Precargado con la próxima cuota/)).toBeInTheDocument();
+  });
+
+  it('cada cuota con algo pendiente lo ofrece en su «⋯»; la pagada no', async () => {
+    mockedGet.mockResolvedValue(accountStatementFixture());
+    const user = userEvent.setup();
+    render(<AccountStatementView token={tokenForRole('ADMIN')} patientId="pat-1" />);
+    const table = await screen.findByRole('table', { name: 'Calendario de cuotas' });
+    const triggers = within(table).getAllByRole('button', { name: /^Acciones de/ });
+    // La inicial pagada no tiene acciones: sin «⋯».
+    expect(triggers).toHaveLength(2);
+    await user.click(triggers[1]);
+    await user.click(await screen.findByRole('menuitem', { name: 'Enviar enlace de pago' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Enviar enlace de pago' });
+    expect(within(dialog).getByLabelText('Importe que se pide')).toHaveValue('250000');
+  });
+
+  it.each(['DENTIST', 'ASSISTANT'])('%s no lo ve', async (role) => {
+    mockedGet.mockResolvedValue(accountStatementFixture());
+    render(<AccountStatementView token={tokenForRole(role)} patientId="pat-1" />);
+    await screen.findByRole('region', { name: /resumen en VES/i });
+    expect(screen.queryByRole('button', { name: 'Enviar enlace de pago' })).not.toBeInTheDocument();
+  });
+
+  it('sin saldo que cobrar no se ofrece', async () => {
+    mockedGet.mockResolvedValue(emptyAccountStatementFixture());
+    render(<AccountStatementView token={tokenForRole('RECEPTION')} patientId="pat-1" />);
+    await screen.findByText(/sin movimientos financieros/i);
+    expect(screen.queryByRole('button', { name: 'Enviar enlace de pago' })).not.toBeInTheDocument();
   });
 });
 
