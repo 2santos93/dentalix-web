@@ -1,5 +1,6 @@
 import { apiFetch } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
+import type { ClinicRole } from '@/lib/me/me-api';
 
 /**
  * Anestesia local en la evolución (DX-307). El SERVIDOR calcula los mg, el
@@ -151,4 +152,32 @@ export function formatEpinephrineMg(value: number): string {
  */
 export function minAgeLabel(product: Pick<AnestheticProduct, 'minAgeYears'>): string | null {
   return product.minAgeYears === null ? null : `desde ${product.minAgeYears} años`;
+}
+
+export type CreateAnestheticInput = components['schemas']['CreateAnestheticProductDto'];
+export type UpdateAnestheticInput = components['schemas']['UpdateAnestheticProductDto'];
+
+/**
+ * DX-408: el catálogo lo crea, edita y desactiva solo ADMIN
+ * (`ANESTHETIC_CATALOG_WRITE_ROLES` de la API); leerlo, quien registra.
+ */
+export function canManageAnestheticCatalog(role: ClinicRole | null): boolean {
+  return role === 'ADMIN';
+}
+
+/** Alta en el catálogo (ADMIN, auditada como CREATE de ANESTHETIC_PRODUCT). */
+export function createAnesthetic(token: string, input: CreateAnestheticInput): Promise<AnestheticProduct> {
+  return apiFetch<AnestheticProduct>('/anesthetics', { method: 'POST', body: input, token });
+}
+
+/**
+ * Edición o desactivación (`active: false`; no hay borrado). Lo ya registrado
+ * no cambia: cada anestesia copió los valores del catálogo.
+ */
+export function updateAnesthetic(
+  token: string,
+  id: string,
+  patch: UpdateAnestheticInput,
+): Promise<AnestheticProduct> {
+  return apiFetch<AnestheticProduct>(`/anesthetics/${id}`, { method: 'PATCH', body: patch, token });
 }

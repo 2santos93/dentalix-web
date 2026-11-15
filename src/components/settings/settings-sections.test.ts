@@ -30,10 +30,10 @@ describe('Índice de Ajustes (DX-282)', () => {
     ]);
   });
 
-  it('ADMIN ve las 35 pantallas de ajustes (Mi perfil incluido), cada una una sola vez', () => {
+  it('ADMIN ve las 36 pantallas de ajustes (Mi perfil incluido), cada una una sola vez', () => {
     const hrefs = hrefsFor('ADMIN');
-    expect(hrefs).toHaveLength(35);
-    expect(new Set(hrefs).size).toBe(35);
+    expect(hrefs).toHaveLength(36);
+    expect(new Set(hrefs).size).toBe(36);
   });
 
   it('la entrada de Historia clínica dice también el plazo de conservación (DX-330)', () => {
