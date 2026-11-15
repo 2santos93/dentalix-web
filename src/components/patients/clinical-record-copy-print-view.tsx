@@ -34,9 +34,20 @@ const copy = {
   of: ' de ',
 };
 
-/** Texto seguro dentro de una cadena CSS `"…"` (sin saltos ni comillas sin escapar). */
-function cssString(value: string): string {
-  return `"${value.replace(/[\\"]/g, (c) => `\\${c}`).replace(/[\r\n]+/g, ' ')}"`;
+/**
+ * Texto seguro dentro de una cadena CSS `"…"` de un `<style>`: todo lo que no
+ * sea una letra (también con tilde), una cifra o un espacio sale como escape
+ * hexadecimal CSS (`\3c `). Así comillas, barras, `<`, `/` y los caracteres
+ * de control de un nombre nunca cierran la cadena, la regla ni el elemento.
+ */
+const SAFE_CSS_CHAR = /^[A-Za-z0-9\p{L} ]$/u;
+
+export function cssString(value: string): string {
+  let out = '';
+  for (const ch of value) {
+    out += SAFE_CSS_CHAR.test(ch) ? ch : `\\${ch.codePointAt(0)!.toString(16)} `;
+  }
+  return `"${out}"`;
 }
 
 interface ClinicalRecordCopyPrintViewProps {

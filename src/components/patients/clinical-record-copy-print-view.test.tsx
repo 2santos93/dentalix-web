@@ -1,5 +1,5 @@
 import { render, screen, within } from '@testing-library/react';
-import { ClinicalRecordCopyPrintView } from './clinical-record-copy-print-view';
+import { ClinicalRecordCopyPrintView, cssString } from './clinical-record-copy-print-view';
 import { getClinicalRecordCopyDocument } from '@/lib/patients/clinical-record-copies-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
@@ -43,7 +43,7 @@ describe('ClinicalRecordCopyPrintView (DX-456)', () => {
     expect(screen.queryByTestId('copy-section-CONSENTS')).not.toBeInTheDocument();
     // Cabecera de hoja y «Página X de Y» con el nombre (no un id).
     const style = screen.getByTestId('copy-page-style').textContent ?? '';
-    expect(style).toContain('Mariela Rondón · Copia de la historia clínica');
+    expect(style).toContain('Mariela Rondón \\b7  Copia de la historia clínica');
     expect(style).toContain('counter(pages)');
     expect(screen.getByRole('link', { name: /volver a la ficha/i })).toHaveAttribute('href', '/patients/p1?tab=clinical-history');
   });
@@ -84,5 +84,27 @@ describe('ClinicalRecordCopyPrintView (DX-456)', () => {
     );
     render(<ClinicalRecordCopyPrintView token="tok" patientId="p1" copyId="c1" />);
     expect(await screen.findByTestId('copy-generated')).toHaveTextContent(/^—$/);
+  });
+
+  it('cssString escapa en hexadecimal todo lo que no es letra, cifra o espacio', () => {
+    expect(cssString('María José Pérez Núñez 2')).toBe('"María José Pérez Núñez 2"');
+    expect(cssString('a"b')).toBe('"a\\22 b"');
+    expect(cssString('a\\b')).toBe('"a\\5c b"');
+    expect(cssString('a\fb')).toBe('"a\\c b"');
+    expect(cssString('a\nb')).toBe('"a\\a b"');
+    const hostile = cssString('</style><script>alert(1)</script>');
+    expect(hostile.slice(1, -1)).not.toMatch(/[<>/"()]/);
+    expect(hostile).toBe(
+      '"\\3c \\2f style\\3e \\3c script\\3e alert\\28 1\\29 \\3c \\2f script\\3e "',
+    );
+  });
+
+  it('un nombre hostil no cierra el <style> ni inyecta nada', async () => {
+    const doc = makeCopyDocument();
+    mockedGet.mockResolvedValue({ ...doc, patient: { ...doc.patient, name: 'Ana</style><script>x()</script>' } });
+    render(<ClinicalRecordCopyPrintView token="tok" patientId="p1" copyId="c1" />);
+    const style = await screen.findByTestId('copy-page-style');
+    expect(style.textContent).not.toContain('</style>');
+    expect(document.querySelectorAll('script')).toHaveLength(0);
   });
 });
