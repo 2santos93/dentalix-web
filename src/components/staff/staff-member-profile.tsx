@@ -31,6 +31,7 @@ import { notifyError } from '@/components/errors/notify';
 import { ScheduleBlockDialog } from '@/components/appointments/schedule-block-dialog';
 import { StaffLocationsCard } from '@/components/staff/staff-locations-card';
 import { StaffMfaReset } from '@/components/staff/staff-mfa-reset';
+import { StaffPermissionsSection } from '@/components/staff/staff-permissions-section';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import {
   blocksOwnAgendaOnly,
@@ -455,6 +456,18 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
             {/* DX-089: sedes del miembro; la API solo deja verlas y cambiarlas al ADMIN. */}
             {viewerRole === 'ADMIN' ? (
               <StaffLocationsCard token={token} userId={userId} memberRole={member.role} />
+            ) : null}
+
+            {/* DX-090: permisos extra (cobrar, ver reportes). Solo ADMIN, solo
+                miembros activos y nunca sobre sí mismo (la API lo rechaza). */}
+            {viewerRole === 'ADMIN' && member.status === 'ACTIVE' && viewerId !== userId ? (
+              <StaffPermissionsSection
+                key={member.role}
+                token={token}
+                userId={userId}
+                memberRole={member.role}
+                initial={member.extraPermissions ?? []}
+              />
             ) : null}
 
             <section aria-labelledby="profile-access-title" className={DATA_SECTION_CLASS}>

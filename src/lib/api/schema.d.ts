@@ -2403,6 +2403,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/staff/{userId}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Concede o retira permisos extra a un miembro
+         * @description Sustituye la lista completa. PAYMENT_REGISTER: registrar abonos y operar su turno de caja como recepción (abrir, cerrar, cobrar), sin anular. FINANCIAL_REPORTS_VIEW: ver los reportes financieros y la caja en lectura. Rige en su siguiente petición. Queda en la auditoría (PERMISSIONS_CHANGED).
+         */
+        put: operations["StaffController_replacePermissions"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/locations/schedule": {
         parameters: {
             query?: never;
@@ -7649,12 +7669,19 @@ export interface components {
             before: components["schemas"]["AuditHealthRegistrationSideDto"];
             after: components["schemas"]["AuditHealthRegistrationSideDto"];
         };
+        /**
+         * @description DX-090: permisos extra concedidos (PERMISSIONS_CHANGED).
+         * @enum {string}
+         */
+        ExtraPermission: "PAYMENT_REGISTER" | "FINANCIAL_REPORTS_VIEW";
         AuditStaffAccessSideDto: {
             role?: components["schemas"]["ClinicRole"];
             /** @description Sedes permitidas; `null` = todas. */
             locationIds?: string[] | null;
             professionalLicense?: string | null;
             professionalSpecialty?: string | null;
+            /** @description DX-090: permisos extra concedidos (PERMISSIONS_CHANGED). */
+            extraPermissions?: components["schemas"]["ExtraPermission"][];
         };
         AuditStaffAccessChangeDto: {
             before?: components["schemas"]["AuditStaffAccessSideDto"];
@@ -8154,6 +8181,8 @@ export interface components {
             avatarUrl: string | null;
             emailVerifiedAt: string | null;
             memberships: components["schemas"]["MyProfileMembershipDto"][];
+            /** @description DX-090: lo que puede hacer en la clínica de la sesión: los permisos de serie de su rol más los extra concedidos. Solo decide qué pinta la web; la frontera es cada ruta. */
+            effectivePermissions: components["schemas"]["ExtraPermission"][];
         };
         UpdateNameDto: {
             /** @example Ana Gómez */
@@ -12661,6 +12690,8 @@ export interface components {
             status: "ACTIVE" | "INACTIVE";
             /** @description Sedes activas en las que puede trabajar (DX-089). null = todas (sin restricción) */
             locationIds: string[] | null;
+            /** @description DX-090: permisos extra concedidos sobre su rol (vacío = ninguno). Se cambian con PUT /staff/:userId/permissions. */
+            extraPermissions: components["schemas"]["ExtraPermission"][];
             /**
              * Format: date-time
              * @description DX-048: hasta cuándo no puede iniciar sesión por intentos fallidos (null = sin bloqueo). Siempre null para un miembro desactivado (DX-213). Se quita con POST /staff/:userId/login-unlock.
@@ -12698,6 +12729,31 @@ export interface components {
              *     ]
              */
             locationIds: string[];
+        };
+        ReplaceStaffPermissionsDto: {
+            /**
+             * @description La lista COMPLETA de permisos extra (sustituye a la anterior). [] = ninguno. PAYMENT_REGISTER: registrar abonos y operar su turno de caja, sin anular. FINANCIAL_REPORTS_VIEW: ver los reportes financieros y la caja en lectura. Los duplicados se ignoran.
+             * @example [
+             *       "PAYMENT_REGISTER"
+             *     ]
+             */
+            permissions: components["schemas"]["ExtraPermission"][];
+        };
+        StaffPermissionsDto: {
+            /**
+             * @description Permisos extra concedidos al miembro, en el orden del catálogo
+             * @example [
+             *       "PAYMENT_REGISTER"
+             *     ]
+             */
+            extraPermissions: components["schemas"]["ExtraPermission"][];
+            /**
+             * @description Lo que puede hacer en total: los de serie de su rol más los extra
+             * @example [
+             *       "PAYMENT_REGISTER"
+             *     ]
+             */
+            effectivePermissions: components["schemas"]["ExtraPermission"][];
         };
         ScheduleRangeDto: {
             /** @description 0=domingo .. 6=sábado */
@@ -29533,6 +29589,59 @@ export interface operations {
                 content?: never;
             };
             /** @description El ADMIN siempre tiene todas las sedes y no se puede restringir. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    StaffController_replacePermissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceStaffPermissionsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffPermissionsDto"];
+                };
+            };
+            /** @description Algún permiso no existe en el catálogo, o hay más de dos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN, y nunca sobre sus propios permisos */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es miembro activo de esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Es ADMIN: ya tiene todos los permisos */
             409: {
                 headers: {
                     [name: string]: unknown;

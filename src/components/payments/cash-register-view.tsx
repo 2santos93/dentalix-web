@@ -56,6 +56,7 @@ import {
   type ExternalInvoiceTarget,
 } from '@/components/payments/external-invoice-modal';
 import { getTokenAllowedLocationIds, getTokenRole } from '@/lib/auth/token-role';
+import { canManagePayments, canRegisterPayments, useEffectivePermissions } from '@/lib/auth/permissions';
 import { cn } from '@/lib/utils';
 
 // Copy como constantes (i18n-ready), igual que el resto de vistas.
@@ -201,6 +202,13 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
   // atajos muestran `SedeConfigError` (el rango personalizado no la necesita).
   const zone = useSedeTimeZone(token);
   const timeZone = readyTimeZone(zone);
+  // DX-090: quien solo la LEE (FINANCIAL_REPORTS_VIEW) no ve recibo ni comprobante;
+  // quien cobra con PAYMENT_REGISTER, sí, pero no la factura externa. Con un rol
+  // que no se pudo leer del token decide la API, como antes.
+  const permissions = useEffectivePermissions();
+  const viewerRole = getTokenRole(token);
+  const canCharge = viewerRole === null || canRegisterPayments(viewerRole, permissions);
+  const canManage = viewerRole === null || canManagePayments(viewerRole);
   // DX-354b (DX-517-bis): cada abono con la fecha, la hora y el importe de SU sede (`payment.location.id`),
   // también con «Todas las sedes»; el resumen y el rango, con la sede de la pantalla. Cargando, «—».
   const [period, setPeriod] = useState<PeriodChoice>('today');
@@ -630,24 +638,30 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                 getRowKey={(payment) => payment.id}
                 getRowLabel={(payment) => copy.rowLabel(payment.patient.fullName)}
                 rowActions={(payment) => [
-                  { label: copy.receiptAction, onSelect: () => setReceiptPaymentId(payment.id) },
-                  ...(payment.hasProof
+                  // DX-090: recibo y comprobante, quien cobra; la factura externa, los
+                  // roles de cobro. Con solo FINANCIAL_REPORTS_VIEW la caja es de lectura.
+                  ...(canCharge ? [{ label: copy.receiptAction, onSelect: () => setReceiptPaymentId(payment.id) }] : []),
+                  ...(canCharge && payment.hasProof
                     ? [{ label: paymentProofViewerCopy.action, onSelect: () => proofViewer.open(payment.id) }]
                     : []),
-                  {
-                    label: externalInvoiceCopy.action,
-                    onSelect: () =>
-                      setInvoiceTarget({
-                        paymentId: payment.id,
-                        subject: copy.invoiceSubject(
-                          payment.patient.fullName,
-                          payment.amount !== null && payment.currency !== null
-                            ? stamp.money(payment.amount, payment.currency, payment.location.id)
-                            : stamp.civilDate(payment.paidOn, payment.location.id),
-                        ),
-                        externalInvoiceNumber: payment.externalInvoiceNumber,
-                      }),
-                  },
+                  ...(canManage
+                    ? [
+                        {
+                          label: externalInvoiceCopy.action,
+                          onSelect: () =>
+                            setInvoiceTarget({
+                              paymentId: payment.id,
+                              subject: copy.invoiceSubject(
+                                payment.patient.fullName,
+                                payment.amount !== null && payment.currency !== null
+                                  ? stamp.money(payment.amount, payment.currency, payment.location.id)
+                                  : stamp.civilDate(payment.paidOn, payment.location.id),
+                              ),
+                              externalInvoiceNumber: payment.externalInvoiceNumber,
+                            }),
+                        },
+                      ]
+                    : []),
                   ...(payment.canVoid
                     ? [
                         {

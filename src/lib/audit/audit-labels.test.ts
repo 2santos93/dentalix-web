@@ -567,6 +567,7 @@ describe('staffDetail (DX-359)', () => {
     ['OWN_NAME_CHANGED', 'Cambió su propio nombre'],
     ['SESSIONS_REVOKED', 'Cambió su contraseña y cerró sus demás sesiones'],
     ['LOCATIONS_CHANGED', 'Sedes del miembro cambiadas'],
+    ['PERMISSIONS_CHANGED', 'Permisos extra del miembro cambiados'],
   ])('%s → %s', (reason, label) => {
     expect(staffDetail({ reason })).toBe(label);
   });
@@ -854,6 +855,22 @@ describe('staffDetail › cambio de sedes del miembro (DX-381)', () => {
 
   it('un evento anterior, sin antes ni después, sigue diciendo solo el motivo', () => {
     expect(staffDetail({ reason: 'LOCATIONS_CHANGED' }, names)).toBe('Sedes del miembro cambiadas');
+  });
+});
+
+describe('staffDetail de PERMISSIONS_CHANGED (DX-090)', () => {
+  it('antes → después con el nombre de cada permiso', () => {
+    expect(
+      staffDetail({
+        reason: 'PERMISSIONS_CHANGED',
+        staffAccess: {
+          before: { extraPermissions: [] },
+          after: { extraPermissions: ['PAYMENT_REGISTER', 'FINANCIAL_REPORTS_VIEW'] },
+        },
+      }),
+    ).toBe(
+      'Permisos extra del miembro cambiados · Permisos extra: ninguno → registrar abonos y operar su caja, ver reportes financieros y la caja',
+    );
   });
 });
 
