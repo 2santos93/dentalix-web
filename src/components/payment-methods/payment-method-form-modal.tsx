@@ -36,6 +36,10 @@ export const paymentMethodFormCopy = {
   proofPolicy: 'Pide comprobante',
   proofPolicyHint:
     'La captura del pago móvil o de la transferencia que se guarda con el abono. Opcional la admite; Obligatorio no deja registrar el abono sin ella. Solo la ven administración y recepción.',
+  // DX-569: el paciente lo ve en su enlace de pago (si tiene datos para pagar).
+  allowInPaymentLink: 'Permitir en el enlace de pago',
+  allowInPaymentLinkHint:
+    'El paciente podrá reportar su pago con este medio desde el enlace que le envíes. Solo se muestra si tiene datos para pagar.',
   create: 'Crear medio',
   save: 'Guardar cambios',
   invalidName: 'Escribe un nombre (hasta 60 caracteres).',
@@ -68,6 +72,7 @@ export function PaymentMethodFormModal({
   const [kind, setKind] = useState<PaymentMethodKind>(method?.kind ?? 'DIGITAL');
   const [requiresReference, setRequiresReference] = useState(method?.requiresReference ?? true);
   const [proofPolicy, setProofPolicy] = useState<PaymentProofPolicy>(method?.proofPolicy ?? 'NONE');
+  const [allowInPaymentLink, setAllowInPaymentLink] = useState(method?.allowInPaymentLink ?? false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -88,7 +93,7 @@ export function PaymentMethodFormModal({
     }
     setSubmitting(true);
     try {
-      const input = { name: trimmed, kind, requiresReference, proofPolicy };
+      const input = { name: trimmed, kind, requiresReference, proofPolicy, allowInPaymentLink };
       const saved = editing
         ? await updatePaymentMethod(token, method.id, input)
         : await createPaymentMethod(token, input);
@@ -172,6 +177,13 @@ export function PaymentMethodFormModal({
           ))}
         </NativeSelect>
       </FormField>
+      <Checkbox
+        id="pm-allow-in-payment-link"
+        checked={allowInPaymentLink}
+        onChange={(e) => setAllowInPaymentLink(e.target.checked)}
+        label={copy.allowInPaymentLink}
+        description={copy.allowInPaymentLinkHint}
+      />
     </FormModal>
   );
 }

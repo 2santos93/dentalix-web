@@ -25,6 +25,7 @@ import { PaymentAdjustmentFormModal } from './payment-adjustment-form-modal';
 import { PAYMENT_ADJUSTMENT_TYPE_LABELS, adjustmentCalculationText } from '@/lib/payments/payment-adjustments';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
+import { PaymentInstructionsSection } from './payment-instructions-section';
 
 export const paymentMethodsCopy = {
   title: 'Medios de pago',
@@ -69,6 +70,10 @@ export const paymentMethodsCopy = {
   colAdjustmentMethod: 'Medio',
   colAdjustmentType: 'Tipo',
   colAdjustmentCalculation: 'Cálculo',
+  // DX-569: «Permitir en el enlace de pago».
+  colPaymentLink: 'Enlace de pago',
+  paymentLinkAllowed: 'Permitido',
+  paymentLinkNo: 'No',
   adjustmentToggleError: (label: string) => `No pudimos cambiar el estado de «${label}».`,
 };
 
@@ -77,15 +82,17 @@ const copy = paymentMethodsCopy;
 
 interface PaymentMethodsManagerProps {
   token: string;
-  /** Solo ADMIN (la API exige el rol para escribir). */
+  /** Quien cobra puede verlos (PAYMENT_ROLES); sin acceso, el aviso. */
   allowed: boolean;
+  /** Solo ADMIN escribe (la API exige el rol); sin él, se ven y no se editan. */
+  canEdit?: boolean;
 }
 
 /**
  * Catálogo de medios de pago en Ajustes › Caja (DX-377): crear, editar y
  * activar o desactivar. No se borran: los abonos anteriores los conservan.
  */
-export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerProps) {
+export function PaymentMethodsManager({ token, allowed, canEdit = true }: PaymentMethodsManagerProps) {
   const stamp = useSedeStamp(token);
   const [methods, setMethods] = useState<ClinicPaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
@@ -282,6 +289,12 @@ export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerP
         ),
     },
     {
+      id: 'payment-link',
+      header: copy.colPaymentLink,
+      cell: (m) =>
+        m.allowInPaymentLink ? copy.paymentLinkAllowed : <span className="text-muted">{copy.paymentLinkNo}</span>,
+    },
+    {
       id: 'adjustments',
       header: copy.colAdjustments,
       cell: (m) => {
@@ -310,10 +323,12 @@ export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerP
           {loading || error ? '' : copy.count(methods.length)}
         </p>
         {/* Secundaria: los medios son un catálogo de apoyo dentro de Ajustes › Caja. */}
-        <Button type="button" variant="secondary" onClick={() => openModal(null)} className="w-full max-sm:min-h-11 sm:w-auto">
-          <Plus aria-hidden />
-          {copy.newMethod}
-        </Button>
+        {canEdit ? (
+          <Button type="button" variant="secondary" onClick={() => openModal(null)} className="w-full max-sm:min-h-11 sm:w-auto">
+            <Plus aria-hidden />
+            {copy.newMethod}
+          </Button>
+        ) : null}
       </div>
 
       <AsyncSection
@@ -331,11 +346,12 @@ export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerP
           columns={columns}
           getRowKey={(m) => m.id}
           getRowLabel={(m) => m.name}
-          onRowClick={(m) => openModal(m)}
-          rowActions={rowActions}
+          onRowClick={canEdit ? (m) => openModal(m) : undefined}
+          rowActions={canEdit ? rowActions : undefined}
         />
       </AsyncSection>
 
+      {canEdit ? (
       <PaymentMethodFormModal
         key={modalKey}
         open={modalOpen}
@@ -344,12 +360,17 @@ export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerP
         method={editing}
         onSaved={upsert}
       />
+      ) : null}
     </SettingsSection>
+
+    {/* DX-569: los datos para pagar que ve el paciente en su enlace de pago. */}
+    {loading || error ? null : <PaymentInstructionsSection token={token} methods={methods} canEdit={canEdit} />}
 
     {/* DX-516: impuestos, recargos y descuentos por medio de pago (ninguno por
         defecto). Si los medios no cargan, el error y su reintento ya están arriba. */}
     {error ? null : (
     <SettingsSection id="payment-adjustments-title" title={copy.adjustmentsTitle} description={copy.adjustmentsDescription}>
+      {canEdit ? (
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
         <Button
           type="button"
@@ -362,6 +383,7 @@ export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerP
           {copy.newAdjustment}
         </Button>
       </div>
+      ) : null}
       <SedeStampNote stamp={stamp} />
       <AsyncSection
         loading={loading}
@@ -377,8 +399,8 @@ export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerP
           columns={adjustmentColumns}
           getRowKey={(r) => r.adjustment.id}
           getRowLabel={(r) => `${r.adjustment.label} · ${r.method.name}`}
-          onRowClick={(r) => openAdjustment(r)}
-          rowActions={adjustmentActions}
+          onRowClick={canEdit ? (r) => openAdjustment(r) : undefined}
+          rowActions={canEdit ? adjustmentActions : undefined}
         />
       </AsyncSection>
       <PaymentAdjustmentFormModal

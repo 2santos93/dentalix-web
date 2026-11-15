@@ -2871,6 +2871,50 @@ export interface paths {
         patch: operations["PaymentMethodsController_changeAdjustment"];
         trace?: never;
     };
+    "/api/v1/payment-methods/{id}/instructions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Datos para pagar del medio (la clínica y cada sede)
+         * @description DX-569. La fila sin sede rige en toda la clínica; la de una sede gana en esa sede.
+         */
+        get: operations["PaymentMethodsController_instructions"];
+        /**
+         * Guarda los datos para pagar del medio en una sede o en la clínica
+         * @description DX-569. Sustituye la fila de ese ámbito (sin `locationId`, la de toda la clínica): un campo ausente o en blanco queda vacío y al menos uno tiene que llevar texto. Para una sede hace falta acceso a ella (403 LOCATION_NOT_ALLOWED). Auditado como PAYMENT_METHOD (solo qué campos cambiaron, nunca sus valores).
+         */
+        put: operations["PaymentMethodsController_saveMethodInstructions"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payment-methods/{id}/instructions/{instructionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Quita los datos para pagar de una sede (o los de la clínica)
+         * @description DX-569. Sin los de la sede, en ella rigen los de la clínica. Auditado como PAYMENT_METHOD.
+         */
+        delete: operations["PaymentMethodsController_removeMethodInstructions"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/waitlist": {
         parameters: {
             query?: never;
@@ -7775,6 +7819,224 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{id}/payment-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Enlaces de pago del paciente con su estado
+         * @description DX-569. Los 100 más recientes. Estado derivado: LIVE, USED (ya tiene reporte), EXPIRED o REVOKED. Sin URL: el token no se guarda.
+         */
+        get: operations["PatientPaymentLinksController_list"];
+        put?: never;
+        /**
+         * Crea (y envía) el enlace de pago de un plan o un saldo migrado
+         * @description DX-569. El enlace vale 7 días y cobra UN destino: un plan cobrable o un saldo migrado del paciente, en su moneda y con la sede del plan. Crear otro anula el vivo del mismo destino. La URL (con el token) solo viene en esta respuesta. Canal EMAIL: plantilla `payment-link` por el outbox; WHATSAPP: `whatsapp` con el número y el texto para wa.me, sin importes ni tratamientos; sin canal: solo la URL. Auditado como CREATE de PAYMENT_LINK.
+         */
+        post: operations["PatientPaymentLinksController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/payment-links/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * El paciente abre su enlace de pago
+         * @description DX-569 (D4). Marca y nombre de la clínica, nombre de pila del paciente, concepto genérico («Saldo pendiente» o «Cuota del plan de pagos», sin tratamientos), el importe pedido y su equivalente en las otras monedas de la clínica con la tasa de hoy YA guardada (nunca se pide al proveedor; sin ella, `equivalents` vacío y `equivalentsUnavailable`), y los medios permitidos con sus datos para pagar. Nada clínico.
+         */
+        get: operations["PublicPaymentLinksController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/payment-links/{token}/opened": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * La página avisa de que el paciente la abrió
+         * @description Solo la primera vez (`openedAt`); las siguientes no cambian nada. Sin auditoría.
+         */
+        post: operations["PublicPaymentLinksController_opened"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/payment-links/{token}/proof-upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Autorización para subir el comprobante del pago
+         * @description DX-569 (D6). La misma subida directa del abono: POST prefirmado de pocos minutos para UN fichero (JPG, PNG, WebP o PDF de 1 B a 10 MB; el HEIC se convierte en el navegador) con el SHA-256 declarado. Como mucho 3 autorizaciones por enlace; una petición que no vale no gasta ninguna.
+         */
+        post: operations["PublicPaymentLinksController_proofUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/payment-links/{token}/proof-upload/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Comprueba el comprobante subido y lo prepara para el reporte
+         * @description DX-569 (D6). Tipo por contenido, tamaño y huella, como el del abono. Queda como el comprobante del enlace (`proofUploadId` en el reporte); uno anterior se descarta.
+         */
+        post: operations["PublicPaymentLinksController_proofComplete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/payment-links/{token}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * El paciente reporta su pago (una sola vez por enlace)
+         * @description DX-569 (D5). Medio (uno de los ofrecidos), moneda (de la clínica), importe, referencia (si el medio la pide), día del pago (desde el día del enlace menos 2 hasta hoy en la sede), comprobante (si el medio lo exige) y nota. Un solo reporte por enlace: el segundo, también a la vez, recibe 410. Nace PENDING en la bandeja «Pagos por confirmar». Auditado como CREATE de PAYMENT_REPORT, actor público, origen PUBLIC_LINK.
+         */
+        post: operations["PublicPaymentLinksController_report"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payment-reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pagos reportados por los pacientes
+         * @description DX-569 (D9). Los pendientes del más antiguo al más reciente; los decididos, lo último primero. Sede: `locationId` (403 si no está permitida) o, sin ella, la de la cabecera o las permitidas, como Caja.
+         */
+        get: operations["PaymentReportsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payment-reports/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pagos reportados pendientes de confirmar (la cola de «Mi día») */
+        get: operations["PaymentReportsController_count"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payment-reports/{id}/proof-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** URL firmada (5 min) para ver el comprobante del reporte */
+        get: operations["PaymentReportsController_proofUrl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payment-reports/{id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirma el pago reportado: registra el abono
+         * @description DX-569 (D7). Con los casos de uso de Caja (`Idempotency-Key` = id del reporte, la caja de quien confirma, el comprobante del reporte como el del abono, la tasa del día del pago reportado) y el reporte CONFIRMED con su abono en la MISMA transacción. Correcciones opcionales (lo que llegó de verdad): importe, moneda, medio, referencia y día; `rateOverride` + `rateOverrideReason` fija la tasa. Ya confirmado (o dos confirmaciones a la vez): el mismo abono, nunca dos.
+         */
+        post: operations["PaymentReportsController_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payment-reports/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rechaza el pago reportado (no toca el saldo)
+         * @description DX-569 (D8). Queda REJECTED con el motivo interno. Si el paciente tiene email se le avisa con la plantilla `payment-report-rejected`, que NO lleva el motivo («La clínica no pudo confirmar tu pago; te contactará»). Para reportar otro hace falta un enlace nuevo.
+         */
+        post: operations["PaymentReportsController_reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -7782,7 +8044,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -9463,6 +9725,8 @@ export interface components {
             prescriptionCopies: number;
             /** @description Enlaces de la copia de un certificado enviados al paciente y sin caducar (DX-306) */
             certificateCopies: number;
+            /** @description Enlaces de pago sin reporte (DX-569) */
+            paymentLinks: number;
             /** @description Suma de todos los tipos */
             total: number;
         };
@@ -13851,6 +14115,8 @@ export interface components {
             requiresReference: boolean;
             /** @description DX-389 «Pide comprobante»: NONE no lo admite, OPTIONAL lo admite y REQUIRED lo exige al registrar el abono. */
             proofPolicy: components["schemas"]["PaymentProofPolicy"];
+            /** @description DX-569 «Permitir en el enlace de pago»: el paciente lo ve en su enlace si además está activo y tiene datos para pagar en la sede del enlace (o de toda la clínica). */
+            allowInPaymentLink: boolean;
             /** @description Medio inicial equivalente a este método antiguo; null si lo creó la clínica. */
             legacyMethod: components["schemas"]["PaymentMethod"] | null;
             /** @description DX-516: sus ajustes (activos o no; hasta 5 activos). Vacío por defecto. */
@@ -13870,6 +14136,8 @@ export interface components {
             requiresReference?: boolean;
             /** @description Sin indicarlo, NONE (no pide comprobante). */
             proofPolicy?: components["schemas"]["PaymentProofPolicy"];
+            /** @description DX-569: «Permitir en el enlace de pago». Sin indicarlo, no se ofrece. */
+            allowInPaymentLink?: boolean;
         };
         UpdatePaymentMethodDto: {
             /** @example Pago móvil */
@@ -13881,6 +14149,8 @@ export interface components {
             requiresReference?: boolean;
             /** @description Sin indicarlo, NONE (no pide comprobante). */
             proofPolicy?: components["schemas"]["PaymentProofPolicy"];
+            /** @description DX-569: «Permitir en el enlace de pago». Sin indicarlo, no se ofrece. */
+            allowInPaymentLink?: boolean;
         };
         CreatePaymentAdjustmentDto: {
             type: components["schemas"]["PaymentAdjustmentType"];
@@ -13909,6 +14179,50 @@ export interface components {
             fixedCurrency?: string | null;
             /** @description Sin indicarlo, activo. */
             active?: boolean;
+        };
+        PaymentMethodInstructionDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            paymentMethodId: string;
+            /**
+             * Format: uuid
+             * @description Sede de estos datos; null = toda la clínica. Los de una sede ganan a los de la clínica.
+             */
+            locationId: string | null;
+            holderName: string | null;
+            /** @description Identificación del titular (sin tipo de documento). */
+            holderId: string | null;
+            /** @description Banco o entidad. */
+            bankName: string | null;
+            accountNumber: string | null;
+            phone: string | null;
+            email: string | null;
+            /** @description Nota libre para el paciente (admite saltos de línea). */
+            note: string | null;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        SavePaymentMethodInstructionsDto: {
+            /**
+             * Format: uuid
+             * @description Sede de estos datos; ausente o null = toda la clínica. Hace falta acceso a la sede.
+             */
+            locationId?: string | null;
+            /** @description Titular. */
+            holderName?: string | null;
+            /** @description Identificación del titular. */
+            holderId?: string | null;
+            /** @description Banco o entidad. */
+            bankName?: string | null;
+            /** @description Número de cuenta. */
+            accountNumber?: string | null;
+            /** @description Teléfono. */
+            phone?: string | null;
+            /** @description Correo. */
+            email?: string | null;
+            /** @description Nota para el paciente. */
+            note?: string | null;
         };
         /** @enum {string} */
         WaitlistStatus: "OPEN" | "SCHEDULED" | "DISMISSED";
@@ -23985,7 +24299,7 @@ export interface components {
             catalogItemIds: string[];
         };
         /** @enum {string} */
-        WorkQueueKey: "CLOSING_QUEUE" | "ANAMNESIS_REVIEW" | "QUOTE_FOLLOW_UP" | "ACCEPTED_UNSCHEDULED" | "WAITLIST" | "RECALL" | "RECEIVABLES" | "LOW_STOCK";
+        WorkQueueKey: "CLOSING_QUEUE" | "PAYMENT_REPORTS" | "ANAMNESIS_REVIEW" | "QUOTE_FOLLOW_UP" | "ACCEPTED_UNSCHEDULED" | "WAITLIST" | "RECALL" | "RECEIVABLES" | "LOW_STOCK";
         WorkQueueOverdueDto: {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
@@ -24009,6 +24323,318 @@ export interface components {
             generatedAt: string;
             /** @description Las listas del rol en la sede activa (sin cabecera, las sedes permitidas), en el orden de la bandeja */
             items: components["schemas"]["WorkQueueItemDto"][];
+        };
+        PaymentLinkTargetDto: {
+            /**
+             * Format: uuid
+             * @description Plan cobrable del paciente. Exactamente uno de los dos.
+             */
+            treatmentPlanId?: string;
+            /**
+             * Format: uuid
+             * @description Saldo migrado del paciente. Exactamente uno de los dos.
+             */
+            openingBalanceId?: string;
+        };
+        CreatePaymentLinkDto: {
+            target: components["schemas"]["PaymentLinkTargetDto"];
+            /**
+             * @description Importe pedido, en la moneda del destino (la web lo prellena con la próxima cuota o con el saldo).
+             * @example 40
+             */
+            amount: number;
+            /** @description Moneda del destino (ISO 4217). Si llega, tiene que ser la suya: 400 si no. */
+            currency?: string;
+            /**
+             * @description EMAIL: lo envía por el outbox (plantilla `payment-link`; 422 sin email, 429 con el tope). WHATSAPP: devuelve `whatsapp` para wa.me (422 sin teléfono válido). Sin canal: solo la URL para copiarla.
+             * @enum {string|null}
+             */
+            channel?: "EMAIL" | "WHATSAPP" | null;
+        };
+        PaymentLinkWhatsAppDto: {
+            /** @description Dígitos para wa.me (sin +). */
+            phone: string;
+            /** @description Texto del mensaje: saludo, clínica y enlace. Sin importes. */
+            text: string;
+        };
+        CreatedPaymentLinkDto: {
+            /** Format: uuid */
+            id: string;
+            /** @description URL pública con el token. Solo viene en esta respuesta: el token no se guarda. */
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+            amount: number;
+            currency: string;
+            /**
+             * @description INSTALLMENT «Cuota del plan de pagos» (el plan tiene uno activo) o BALANCE «Saldo pendiente».
+             * @enum {string}
+             */
+            concept: "INSTALLMENT" | "BALANCE";
+            /** @enum {string|null} */
+            channel: "EMAIL" | "WHATSAPP" | null;
+            /** @description EMAIL: el destino enmascarado (an***@dominio). */
+            emailSentTo: string | null;
+            whatsapp: components["schemas"]["PaymentLinkWhatsAppDto"] | null;
+            /** @description Enlaces anteriores del mismo destino que se anularon. */
+            revokedPrevious: number;
+        };
+        /** @enum {string} */
+        PaymentReportStatus: "PENDING" | "CONFIRMED" | "REJECTED";
+        PaymentLinkReportRefDto: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["PaymentReportStatus"];
+        };
+        PatientPaymentLinkDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            treatmentPlanId: string | null;
+            /** Format: uuid */
+            openingBalanceId: string | null;
+            /** Format: uuid */
+            locationId: string;
+            amount: number;
+            currency: string;
+            /**
+             * @description INSTALLMENT «Cuota del plan de pagos» (el plan tiene uno activo) o BALANCE «Saldo pendiente».
+             * @enum {string}
+             */
+            concept: "INSTALLMENT" | "BALANCE";
+            /** @enum {string|null} */
+            channel: "EMAIL" | "WHATSAPP" | null;
+            /**
+             * @description Derivado: USED (ya tiene reporte), REVOKED (otro enlace del mismo destino o el archivado), EXPIRED o LIVE.
+             * @enum {string}
+             */
+            status: "LIVE" | "USED" | "EXPIRED" | "REVOKED";
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            createdById: string;
+            /** Format: date-time */
+            openedAt: string | null;
+            /** Format: date-time */
+            usedAt: string | null;
+            /** Format: date-time */
+            revokedAt: string | null;
+            report: components["schemas"]["PaymentLinkReportRefDto"] | null;
+        };
+        PublicClinicDto: {
+            name: string;
+            primaryColor: string;
+            logoUrl: string | null;
+        };
+        PublicAmountDto: {
+            currency: string;
+            amount: number;
+        };
+        PublicPaymentInstructionsDto: {
+            holderName: string | null;
+            holderId: string | null;
+            bankName: string | null;
+            accountNumber: string | null;
+            phone: string | null;
+            email: string | null;
+            note: string | null;
+        };
+        PublicPaymentMethodDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            requiresReference: boolean;
+            proofPolicy: components["schemas"]["PaymentProofPolicy"];
+            instructions: components["schemas"]["PublicPaymentInstructionsDto"];
+        };
+        PublicStagedProofDto: {
+            /** Format: uuid */
+            uploadId: string;
+            name: string;
+            mime: string;
+            size: number;
+        };
+        PublicPaymentLinkDto: {
+            /** @enum {string} */
+            status: "LIVE";
+            clinic: components["schemas"]["PublicClinicDto"] | null;
+            /** @description Solo el nombre de pila. */
+            patientFirstName: string | null;
+            /** @description DX-354: zona, locale y reloj de la sede del enlace, para pintar el importe, las equivalencias, `rateDate`, `expiresAt` y los límites de la fecha. null si a la sede le falta algo: la página pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
+            /**
+             * @description INSTALLMENT «Cuota del plan de pagos» (el plan tiene uno activo) o BALANCE «Saldo pendiente».
+             * @enum {string}
+             */
+            concept: "INSTALLMENT" | "BALANCE";
+            /** @description Concepto genérico, sin nombres de tratamiento. */
+            conceptLabel: string;
+            amount: number;
+            currency: string;
+            /** @description El importe en las otras monedas de la clínica con la tasa de hoy YA guardada; vacío sin tasa. */
+            equivalents: components["schemas"]["PublicAmountDto"][];
+            rateDate: string | null;
+            /** @description Hay otras monedas y no tasa de hoy: «Consulta el importe en otra moneda con la clínica». */
+            equivalentsUnavailable: boolean;
+            /** @description Monedas en que se puede reportar el pago. */
+            currencies: string[];
+            methods: components["schemas"]["PublicPaymentMethodDto"][];
+            /** Format: date-time */
+            expiresAt: string;
+            /** @description Primer día admitido para la fecha del pago. */
+            paidOnMin: string;
+            /** @description Hoy en la sede: último día admitido. */
+            paidOnMax: string;
+            stagedProof: components["schemas"]["PublicStagedProofDto"] | null;
+            /** @description Subidas de comprobante que quedan (de 3). */
+            proofUploadsLeft: number;
+        };
+        CompletePaymentLinkProofDto: {
+            /**
+             * Format: uuid
+             * @description El `uploadId` de la autorización.
+             */
+            uploadId: string;
+        };
+        SubmitPaymentReportDto: {
+            /**
+             * Format: uuid
+             * @description Uno de los medios que ofrece el enlace.
+             */
+            paymentMethodId: string;
+            /** @description Una de las monedas que cobra la clínica. */
+            currency: string;
+            amount: number;
+            /** @description Obligatoria si el medio la pide. */
+            reference?: string | null;
+            /**
+             * @description Día del pago: desde el día del enlace menos 2 hasta hoy, en la sede.
+             * @example 2026-11-14
+             */
+            paidOn: string;
+            /**
+             * Format: uuid
+             * @description El comprobante subido y completado con este enlace; obligatorio si el medio lo exige.
+             */
+            proofUploadId?: string | null;
+            note?: string | null;
+        };
+        PaymentReportedDto: {
+            /** @enum {string} */
+            status: "REPORTED";
+            message: string;
+        };
+        PaymentReportProofDto: {
+            name: string;
+            mime: string;
+            size: number;
+        };
+        PaymentReportLinkDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            treatmentPlanId: string | null;
+            /** Format: uuid */
+            openingBalanceId: string | null;
+            /** @description Lo que se pidió. */
+            amount: number;
+            currency: string;
+            /**
+             * @description INSTALLMENT «Cuota del plan de pagos» (el plan tiene uno activo) o BALANCE «Saldo pendiente».
+             * @enum {string}
+             */
+            concept: "INSTALLMENT" | "BALANCE";
+            /** Format: date-time */
+            createdAt: string;
+        };
+        PaymentReportDto: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["PaymentReportStatus"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            patientId: string;
+            patientName: string;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: uuid */
+            paymentMethodId: string;
+            paymentMethodName: string;
+            amount: number;
+            currency: string;
+            reference: string | null;
+            /** @description Día civil del pago (AAAA-MM-DD). */
+            paidOn: string;
+            note: string | null;
+            /** @description Metadatos del comprobante; se ve con GET /payment-reports/:id/proof-url. */
+            proof: components["schemas"]["PaymentReportProofDto"] | null;
+            /** Format: uuid */
+            paymentId: string | null;
+            /** @description Motivo interno del rechazo (nunca se envía al paciente). */
+            rejectReason: string | null;
+            /** Format: uuid */
+            decidedById: string | null;
+            /** Format: date-time */
+            decidedAt: string | null;
+            link: components["schemas"]["PaymentReportLinkDto"];
+        };
+        PaymentReportsPageDto: {
+            items: components["schemas"]["PaymentReportDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        PaymentReportsCountDto: {
+            pending: number;
+        };
+        PaymentReportProofUrlDto: {
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+            mime: string;
+            name: string;
+        };
+        ConfirmPaymentReportDto: {
+            /** @description Corrección: lo que llegó de verdad. */
+            amount?: number;
+            /** @description Corrección de la moneda. */
+            currency?: string;
+            /**
+             * Format: uuid
+             * @description Corrección del medio (de la clínica y activo).
+             */
+            paymentMethodId?: string;
+            /** @description Corrección de la referencia; null o vacío la quita. */
+            reference?: string | null;
+            /**
+             * @description Corrección del día del pago (AAAA-MM-DD); la tasa es la de ese día.
+             * @example 2026-11-14
+             */
+            paidOn?: string;
+            /** @description Tasa que fija recepción: unidades de la moneda que no es USD por 1 USD (una de las dos tiene que ser USD). Exige `rateOverrideReason`. */
+            rateOverride?: number;
+            rateOverrideReason?: string;
+            /** @description Motivo para confirmar una referencia repetida (409 PAYMENT_REFERENCE_DUPLICATE sin él). */
+            duplicateReferenceReason?: string;
+        };
+        ConfirmedPaymentReportDto: {
+            /** Format: uuid */
+            reportId: string;
+            /** @enum {string} */
+            status: "CONFIRMED";
+            payment: components["schemas"]["PaymentDto"];
+        };
+        RejectPaymentReportDto: {
+            /** @description Motivo interno (no se envía al paciente). */
+            reason: string;
+        };
+        RejectedPaymentReportDto: {
+            report: components["schemas"]["PaymentReportDto"];
+            /** @description Se encoló el aviso al email del paciente (sin el motivo). */
+            patientNotified: boolean;
         };
     };
     responses: never;
@@ -32056,6 +32682,122 @@ export interface operations {
             };
             /** @description Etiqueta repetida en el medio o tope de ajustes activos */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentMethodsController_instructions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodInstructionDto"][];
+                };
+            };
+            /** @description Rol sin acceso a pagos */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Medio no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentMethodsController_saveMethodInstructions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavePaymentMethodInstructionsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodInstructionDto"];
+                };
+            };
+            /** @description Ningún dato con texto, un campo demasiado largo o con saltos de línea, o una sede que no es de la clínica */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN, o sede no permitida al usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Medio no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentMethodsController_removeMethodInstructions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                instructionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Quitados */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN, o sede no permitida al usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Medio o datos no encontrados */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -44891,6 +45633,568 @@ export interface operations {
             };
             /** @description Una clave de lista desconocida */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientPaymentLinksController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description El paciente */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientPaymentLinkDto"][];
+                };
+            };
+            /** @description Rol sin acceso a pagos */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientPaymentLinksController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description El paciente */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePaymentLinkDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedPaymentLinkDto"];
+                };
+            };
+            /** @description Sin destino o con los dos, moneda distinta de la del destino, importe no válido, o el host de la petición no sirve para armar el enlace */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pagos */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente, plan o saldo migrado no encontrados (o de otro paciente) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El plan está rechazado o cancelado (no admite abonos), o el paciente está archivado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description EMAIL sin email del paciente, o WHATSAPP sin un teléfono válido */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tope de emails del outbox */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicPaymentLinksController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicPaymentLinkDto"];
+                };
+            };
+            /** @description Token desconocido, mal formado, caducado, anulado, de un paciente archivado o de otra clínica (el mismo 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace ya se usó: `{ code: PAYMENT_LINK_USED, status: "REPORTED" }` («Ya recibimos tu reporte»). */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicPaymentLinksController_opened: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Apertura registrada (idempotente). */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token desconocido, mal formado, caducado, anulado, de un paciente archivado o de otra clínica (el mismo 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace ya se usó: `{ code: PAYMENT_LINK_USED, status: "REPORTED" }` («Ya recibimos tu reporte»). */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicPaymentLinksController_proofUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePaymentProofUploadDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentProofUploadDto"];
+                };
+            };
+            /** @description Tamaño, huella o tipo declarado no válidos, o archivo vacío */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token desconocido, mal formado, caducado, anulado, de un paciente archivado o de otra clínica (el mismo 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya se autorizaron 3 subidas con este enlace (`code: PAYMENT_LINK_PROOF_UPLOADS_EXHAUSTED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace ya se usó: `{ code: PAYMENT_LINK_USED, status: "REPORTED" }` («Ya recibimos tu reporte»). */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicPaymentLinksController_proofComplete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompletePaymentLinkProofDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicStagedProofDto"];
+                };
+            };
+            /** @description El contenido no es JPG, PNG, WebP ni PDF, no coincide con lo declarado o cambió (`code: PAYMENT_PROOF_REJECTED`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token desconocido, mal formado, caducado, anulado, de un paciente archivado o de otra clínica (el mismo 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace ya se usó: `{ code: PAYMENT_LINK_USED, status: "REPORTED" }` («Ya recibimos tu reporte»). */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicPaymentLinksController_report: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitPaymentReportDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentReportedDto"];
+                };
+            };
+            /** @description Medio no ofrecido, moneda que la clínica no cobra, referencia que falta o es larga, fecha fuera de la ventana, comprobante que falta, sobra o no se subió por este enlace, o nota larga */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token desconocido, mal formado, caducado, anulado, de un paciente archivado o de otra clínica (el mismo 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace ya se usó: `{ code: PAYMENT_LINK_USED, status: "REPORTED" }` («Ya recibimos tu reporte»). */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentReportsController_list: {
+        parameters: {
+            query?: {
+                /** @description Sin indicarlo, todos. */
+                status?: components["schemas"]["PaymentReportStatus"];
+                page?: number;
+                pageSize?: number;
+                /** @description Sede del enlace (la del plan). Sin ella, la de la cabecera o las permitidas, como Caja. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentReportsPageDto"];
+                };
+            };
+            /** @description Rol sin acceso a pagos, o sede no permitida al usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentReportsController_count: {
+        parameters: {
+            query?: {
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentReportsCountDto"];
+                };
+            };
+            /** @description Rol sin acceso a pagos, o sede no permitida al usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentReportsController_proofUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentReportProofUrlDto"];
+                };
+            };
+            /** @description Rol sin acceso a pagos, o sede no permitida al usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reporte no encontrado en esta clínica o sin comprobante */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentReportsController_confirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmPaymentReportDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmedPaymentReportDto"];
+                };
+            };
+            /** @description Corrección no válida (medio de otra clínica o desactivado, referencia que el medio pide, día posterior a hoy), `rateOverride` sin motivo o con dos monedas que no son USD, o importe por encima de lo pendiente de un saldo migrado */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pagos, o sede no permitida al usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reporte no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code: PAYMENT_REPORT_NOT_PENDING` (ya rechazado), `code: PAYMENT_REFERENCE_DUPLICATE` (se repite con `duplicateReferenceReason`), el plan ya no admite abonos o la clínica exige caja abierta para el efectivo */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sede no tiene formato regional configurado */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentReportsController_reject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RejectPaymentReportDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RejectedPaymentReportDto"];
+                };
+            };
+            /** @description Motivo vacío o de más de 280 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pagos, o sede no permitida al usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reporte no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code: PAYMENT_REPORT_NOT_PENDING`: ya confirmado o rechazado */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

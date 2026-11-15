@@ -1,4 +1,4 @@
-import { apiFetch } from '@/lib/api/client';
+import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 
@@ -104,6 +104,49 @@ export async function updatePaymentAdjustment(
   return apiFetch<PaymentMethodAdjustment>(`/payment-methods/${paymentMethodId}/adjustments/${adjustmentId}`, {
     method: 'PATCH',
     body: input,
+    token,
+  });
+}
+
+// DX-569: «Permitir en el enlace de pago» y los datos para pagar de cada medio.
+// Ver lo que hay lo puede quien cobra (PAYMENT_ROLES); escribir, solo ADMIN.
+export type PaymentMethodInstruction = components['schemas']['PaymentMethodInstructionDto'];
+export type SavePaymentMethodInstructionInput = components['schemas']['SavePaymentMethodInstructionsDto'];
+
+/** Ver los medios y sus datos para pagar: los roles que cobran (PAYMENT_ROLES). */
+export function canReadPaymentMethods(role: ClinicRole | null): boolean {
+  return role === 'ADMIN' || role === 'RECEPTION';
+}
+
+/** `GET /payment-methods/:id/instructions`: los de toda la clínica y los de cada sede. */
+export function listPaymentMethodInstructions(
+  token: string,
+  paymentMethodId: string,
+): Promise<PaymentMethodInstruction[]> {
+  return apiFetch<PaymentMethodInstruction[]>(`/payment-methods/${paymentMethodId}/instructions`, { token });
+}
+
+/** `PUT /payment-methods/:id/instructions`: sustituye los datos de ese ámbito (clínica o sede). */
+export function savePaymentMethodInstructions(
+  token: string,
+  paymentMethodId: string,
+  input: SavePaymentMethodInstructionInput,
+): Promise<PaymentMethodInstruction> {
+  return apiFetch<PaymentMethodInstruction>(`/payment-methods/${paymentMethodId}/instructions`, {
+    method: 'PUT',
+    body: input,
+    token,
+  });
+}
+
+export async function deletePaymentMethodInstructions(
+  token: string,
+  paymentMethodId: string,
+  instructionId: string,
+): Promise<void> {
+  // 204 sin cuerpo.
+  await apiFetchOrNull<null>(`/payment-methods/${paymentMethodId}/instructions/${instructionId}`, {
+    method: 'DELETE',
     token,
   });
 }

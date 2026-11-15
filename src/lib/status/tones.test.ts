@@ -41,6 +41,13 @@ describe('vocabulario de estados (tones.ts)', () => {
     }
   });
 
+  it('DX-569: enlace de pago y pago reportado', () => {
+    expect(statusTones('paymentLink')).toEqual({ LIVE: 'success', USED: 'info', EXPIRED: 'danger', REVOKED: 'neutral' });
+    expect(statusLabels('paymentLink')).toEqual({ LIVE: 'Vigente', USED: 'Reportado', EXPIRED: 'Vencido', REVOKED: 'Anulado' });
+    expect(statusTones('paymentReport')).toEqual({ PENDING: 'warning', CONFIRMED: 'success', REJECTED: 'danger' });
+    expect(statusLabel('paymentReport', 'PENDING')).toBe('Por confirmar');
+  });
+
   it('los métodos de pago son categorías neutras, no estados', () => {
     expect(Object.values(statusTones('paymentMethod'))).toEqual(['neutral', 'neutral', 'neutral', 'neutral']);
   });
