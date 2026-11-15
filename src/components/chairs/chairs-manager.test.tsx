@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { ChairsManager } from './chairs-manager';
 import {
+  countChairUpcomingAppointments,
   createChair,
   listChairs,
   reorderChairs,
@@ -8,7 +9,6 @@ import {
   type Chair,
 } from '@/lib/chairs/chairs-api';
 import { listStaff } from '@/lib/appointments/staff-api';
-import { listAppointments } from '@/lib/appointments/appointments-api';
 import { updateChair } from '@/lib/chairs/chairs-api';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { ApiError } from '@/lib/api/client';
@@ -21,14 +21,11 @@ jest.mock('../../lib/chairs/chairs-api', () => ({
   updateChair: jest.fn(),
   setChairActive: jest.fn(),
   reorderChairs: jest.fn(),
+  countChairUpcomingAppointments: jest.fn(),
 }));
 jest.mock('../../lib/appointments/staff-api', () => ({
   ...jest.requireActual('../../lib/appointments/staff-api'),
   listStaff: jest.fn(),
-}));
-jest.mock('../../lib/appointments/appointments-api', () => ({
-  ...jest.requireActual('../../lib/appointments/appointments-api'),
-  listAppointments: jest.fn(),
 }));
 jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 
@@ -37,7 +34,7 @@ const mockedCreate = createChair as jest.MockedFunction<typeof createChair>;
 const mockedActive = setChairActive as jest.MockedFunction<typeof setChairActive>;
 const mockedReorder = reorderChairs as jest.MockedFunction<typeof reorderChairs>;
 const mockedStaff = listStaff as jest.MockedFunction<typeof listStaff>;
-const mockedAppointments = listAppointments as jest.MockedFunction<typeof listAppointments>;
+const mockedUpcoming = countChairUpcomingAppointments as jest.MockedFunction<typeof countChairUpcomingAppointments>;
 const mockedUpdateChair = updateChair as jest.MockedFunction<typeof updateChair>;
 
 const norte = { id: 'norte', name: 'Sede Norte' } as ClinicLocation;
@@ -149,19 +146,12 @@ describe('ChairsManager (DX-211)', () => {
     await user.click(screen.getByRole('button', { name: 'Acciones de Sillón 1' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Bajar' }));
     await waitFor(() => expect(mockedReorder).toHaveBeenCalledWith('tok', 'norte', ['c2', 'c1']));
-    mockedAppointments.mockResolvedValue([
-      { id: 'a1', status: 'SCHEDULED' },
-      { id: 'a2', status: 'CONFIRMED' },
-      { id: 'a3', status: 'CANCELLED' },
-    ] as Awaited<ReturnType<typeof listAppointments>>);
+    mockedUpcoming.mockResolvedValue(2);
     await user.click(screen.getByRole('button', { name: 'Acciones de Sillón 1' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Desactivar' }));
     // Revisión B5: pide confirmación y dice cuántas citas futuras tiene.
     expect(await screen.findByText('Tiene 2 citas futuras: las conserva y se verán con «(inactivo)».')).toBeInTheDocument();
-    expect(mockedAppointments).toHaveBeenCalledWith(
-      'tok',
-      expect.objectContaining({ locationId: 'norte', chairIds: ['c1'] }),
-    );
+    expect(mockedUpcoming).toHaveBeenCalledWith('tok', 'c1');
     expect(mockedActive).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Desactivar sillón' }));
     await waitFor(() => expect(mockedActive).toHaveBeenCalledWith('tok', 'c1', false));

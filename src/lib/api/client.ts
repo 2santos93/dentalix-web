@@ -13,11 +13,11 @@ export { ApiError, NetworkError };
 
 const REFRESH_PATH = '/auth/refresh';
 
-// Mensaje EXACTO con el que el backend rechaza una sede que no es del tenant
-// (`tenant-context.interceptor.ts`). Se compara sin distinguir mayúsculas y por
-// inclusión para sobrevivir a un retoque de redacción, pero sigue siendo un
-// acoplamiento a la respuesta del backend: si allí cambia el texto, aquí deja de
-// autocurarse (los tests de `client.test.ts` lo fijan por si acaso).
+// DX-111: códigos estables del 400 con el que la API rechaza la sede de
+// `X-Location-Id`: no es de esta clínica (o se borró) o no es un id. Antes solo
+// había el texto en inglés «Unknown location for this clinic», que se sigue
+// reconociendo mientras haya una API anterior desplegada.
+const LOCATION_STALE_CODES = new Set(['LOCATION_UNKNOWN', 'LOCATION_INVALID']);
 const UNKNOWN_LOCATION = 'unknown location';
 
 // DX-089: código estable del 403 con el que la API rechaza una sede que el
@@ -65,7 +65,13 @@ export function isStaleLocationError(
   token: string | null | undefined,
 ): boolean {
   if (!sentLocationId) return false;
-  if (error.status === 400 && error.message.toLowerCase().includes(UNKNOWN_LOCATION)) return true;
+  if (
+    error.status === 400 &&
+    ((error.code !== null && LOCATION_STALE_CODES.has(error.code)) ||
+      error.message.toLowerCase().includes(UNKNOWN_LOCATION))
+  ) {
+    return true;
+  }
   if (isInactiveLocationError(error, sentLocationId)) return true;
   if (error.status !== 403 || error.code !== LOCATION_NOT_ALLOWED) return false;
   const allowedBySentToken = getTokenAllowedLocationIds(token);

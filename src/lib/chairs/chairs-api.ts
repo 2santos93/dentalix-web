@@ -49,6 +49,16 @@ export async function setChairActive(token: string, id: string, active: boolean)
   });
 }
 
+/**
+ * DX-111: citas futuras que conserva el sillón (sin canceladas ni
+ * inasistencias), para el aviso antes de desactivarlo. Antes se contaban con
+ * `GET /appointments` de 5 años, que la API ya no admite (tope de 62 días).
+ */
+export async function countChairUpcomingAppointments(token: string, id: string): Promise<number> {
+  const res = await apiFetch<{ count: number }>(`/chairs/${id}/upcoming-appointments`, { token });
+  return res.count;
+}
+
 /** El orden de las columnas: TODOS los sillones de la sede, cada uno una vez. */
 export async function reorderChairs(
   token: string,

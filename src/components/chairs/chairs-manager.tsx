@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, Armchair, Eye, EyeOff, Lock, Pencil, Plus } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
+  countChairUpcomingAppointments,
   listChairs,
   reorderChairs,
   setChairActive,
@@ -11,7 +12,6 @@ import {
 } from '@/lib/chairs/chairs-api';
 import { moveChairInOrder } from '@/lib/chairs/chair-columns';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
-import { listAppointments } from '@/lib/appointments/appointments-api';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { AsyncSection } from '@/components/shared/async-section';
@@ -174,21 +174,12 @@ export function ChairsManager({ token, allowed, locations, initialLocationId }: 
     }
   }
 
-  /** Citas vivas y no canceladas del sillón desde ahora (horizonte de 5 años). */
+  /** Citas vivas del sillón desde ahora, sin canceladas ni inasistencias (DX-111: lo cuenta la API). */
   function askDeactivate(chair: Chair) {
     setDeactivating(chair);
     setFutureCount(null);
-    const from = new Date();
-    const to = new Date(from.getTime() + 5 * 366 * 24 * 3600_000);
-    listAppointments(token, {
-      from: from.toISOString(),
-      to: to.toISOString(),
-      locationId: chair.locationId,
-      chairIds: [chair.id],
-    })
-      .then((rows) =>
-        setFutureCount(rows.filter((a) => a.status !== 'CANCELLED' && a.status !== 'NO_SHOW').length),
-      )
+    countChairUpcomingAppointments(token, chair.id)
+      .then((count) => setFutureCount(count))
       .catch(() => setFutureCount('error'));
   }
 

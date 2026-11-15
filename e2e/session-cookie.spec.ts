@@ -119,8 +119,11 @@ test('recargar mantiene la sesión; cerrar sesión borra la cookie y el refresh 
     },
   );
   expect(reuseByCookie.status()).toBe(401);
-  // 401 por refresh revocado, no porque la cookie no llegara a la API.
-  expect(await reuseByCookie.text()).not.toContain('Missing refresh token');
+  // 401 por refresh revocado, no porque la cookie no llegara a la API
+  // (DX-111: ese 401 dice «Falta la sesión…»; antes, «Missing refresh token»).
+  const reuseBody = await reuseByCookie.text();
+  expect(reuseBody).not.toContain('Missing refresh token');
+  expect(reuseBody).not.toContain('Falta la sesión');
 
   // Y sin cookie, volver a una pantalla de la app manda a /login.
   await page.goto(`${origin}/patients`);
