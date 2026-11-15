@@ -31,6 +31,11 @@ export const ClinicalEntriesList = dynamic(
   () => import('@/components/patients/clinical-entries-list').then((m) => m.ClinicalEntriesList),
   { ssr: false, loading: () => <SectionSkeleton /> },
 );
+// DX-456: la copia de la historia clínica (listado y, al abrirlo, su diálogo).
+export const ClinicalRecordCopiesSection = dynamic(
+  () => import('@/components/patients/clinical-record-copies-section').then((m) => m.ClinicalRecordCopiesSection),
+  { ssr: false, loading: () => <SectionSkeleton /> },
+);
 export const PatientPostOpDeliveries = dynamic(
   () => import('@/components/postop/patient-postop-deliveries').then((m) => m.PatientPostOpDeliveries),
   { ssr: false, loading: () => <SectionSkeleton /> },

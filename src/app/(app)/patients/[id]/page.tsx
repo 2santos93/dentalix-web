@@ -54,6 +54,7 @@ import {
   AuditLogView,
   ClinicalAlertBanner,
   ClinicalEntriesList,
+  ClinicalRecordCopiesSection,
   DataConsentsTab,
   FamilyAccountStatementSection,
   OdontogramTab,
@@ -578,6 +579,8 @@ function PatientDetailView() {
                 headingId={ANAMNESIS_HEADING_ID}
                 onSaved={medicalAlerts.reload}
               />
+              {/* DX-456: copia de la historia clínica por período y secciones. */}
+              <ClinicalRecordCopiesSection token={accessToken} patientId={patientId} />
             </TabPanel>
           ) : null}
 
