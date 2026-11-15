@@ -240,7 +240,7 @@ function ReadyContent({
   onSubmitted: () => void;
   onGone: (kind: 'invalid' | 'reported') => void;
 }) {
-  const format = documentFormat(data.regional ?? null);
+  const format = documentFormat(data.regional);
   const texts = documentTexts(format);
   const equivalents = data.equivalents.map((e) => texts.amount(e.amount, e.currency));
 

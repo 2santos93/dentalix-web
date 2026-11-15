@@ -24164,6 +24164,8 @@ export interface components {
             clinic: components["schemas"]["PublicClinicDto"] | null;
             /** @description Solo el nombre de pila. */
             patientFirstName: string | null;
+            /** @description DX-354: zona, locale y reloj de la sede del enlace, para pintar el importe, las equivalencias, `rateDate`, `expiresAt` y los límites de la fecha. null si a la sede le falta algo: la página pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
             /**
              * @description INSTALLMENT «Cuota del plan de pagos» (el plan tiene uno activo) o BALANCE «Saldo pendiente».
              * @enum {string}

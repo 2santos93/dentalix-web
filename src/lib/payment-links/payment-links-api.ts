@@ -15,12 +15,10 @@ export type PaymentLinkStatus = PatientPaymentLink['status'];
 export type PaymentLinkConcept = PatientPaymentLink['concept'];
 
 /**
- * La página pública. `regional` (la sede del enlace) se lee como opcional: sin
- * él, los importes y las fechas salen «—» (DX-354), nunca otro formato.
+ * La página pública. `regional` es la sede del enlace: sin su formato, los
+ * importes y las fechas salen «—» (DX-354), nunca otro formato.
  */
-export type PublicPaymentLink = Schemas['PublicPaymentLinkDto'] & {
-  regional?: Schemas['DocumentRegionalDto'] | null;
-};
+export type PublicPaymentLink = Schemas['PublicPaymentLinkDto'];
 export type PublicPaymentMethod = Schemas['PublicPaymentMethodDto'];
 export type SubmitPaymentReportInput = Schemas['SubmitPaymentReportDto'];
 export type PublicStagedProof = Schemas['PublicStagedProofDto'];

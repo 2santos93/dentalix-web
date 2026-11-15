@@ -117,6 +117,13 @@ describe('PublicPaymentLinkView (DX-569)', () => {
     expect(screen.queryByTestId('payment-equivalents')).not.toBeInTheDocument();
   });
 
+  it('sin formato de la sede: el importe sale «—» y se remite a la clínica, nunca otro formato', async () => {
+    mockedGet.mockResolvedValue(fixture({ regional: null }));
+    render(<PublicPaymentLinkView linkToken="tok" />);
+    expect(await screen.findByTestId('payment-amount')).toHaveTextContent('—');
+    expect(screen.getByText(copy.noFormat)).toBeInTheDocument();
+  });
+
   it('cada dato para pagar con su «Copiar» (la nota se lee, no se copia)', async () => {
     const user = userEvent.setup();
     const writeText = jest.fn().mockResolvedValue(undefined);
