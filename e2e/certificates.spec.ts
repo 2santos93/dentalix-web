@@ -150,7 +150,7 @@ test('certificados: justificante emitido, impreso y anulado a 1440 y 390; reposo
   // --- 2. Certificado de reposo (ADMIN con registro profesional) ---
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${session.origin}/patients/${patient.id}?tab=certificates`);
-  await panel.getByRole('button', { name: 'Certificado de reposo' }).click({ timeout: 15_000 });
+  await panel.getByRole('button', { name: 'Certificado de reposo', exact: true }).click({ timeout: 15_000 });
   const restDialog = page.getByRole('dialog', { name: 'Certificado de reposo' });
   await expect(restDialog.getByRole('radiogroup', { name: 'Cita atendida' }).getByRole('radio').first()).toBeChecked({
     timeout: 15_000,
@@ -208,7 +208,7 @@ test('certificados: justificante emitido, impreso y anulado a 1440 y 390; reposo
   const ritaPanel = rita.locator('#tabpanel-certificates');
   await expect(ritaPanel.getByRole('button', { name: 'Emitir justificante' })).toBeVisible({ timeout: 15_000 });
   await expect(ritaPanel.getByText(/3 días de reposo del/)).toBeVisible();
-  await expect(ritaPanel.getByRole('button', { name: 'Certificado de reposo' })).toHaveCount(0);
+  await expect(ritaPanel.getByRole('button', { name: 'Certificado de reposo', exact: true })).toHaveCount(0);
   await expectNoHorizontalScroll(rita);
   await shoot(rita, 'recepcion-movil');
   await context.close();
