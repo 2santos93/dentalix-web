@@ -121,10 +121,10 @@ test.describe('enlace de pago (DX-569)', () => {
     const methods = admin.getByRole('region', { name: 'Medios de pago' });
     await methods.getByRole('button', { name: 'Nuevo medio' }).click();
     const form = admin.getByRole('dialog', { name: 'Nuevo medio de pago' });
-    await form.getByLabel('Nombre').fill(methodName);
-    await form.getByLabel('Pide referencia').uncheck();
-    await form.getByLabel('Pide comprobante').selectOption({ label: 'Opcional' });
-    await form.getByLabel('Permitir en el enlace de pago').check();
+    await form.getByLabel('Nombre', { exact: true }).fill(methodName);
+    await form.getByLabel('Pide referencia', { exact: true }).uncheck();
+    await form.getByLabel('Pide comprobante', { exact: true }).selectOption({ label: 'Opcional' });
+    await form.getByLabel('Permitir en el enlace de pago', { exact: true }).check();
     await form.getByRole('button', { name: 'Crear medio' }).click();
     await expect(form).toBeHidden({ timeout: 10_000 });
     const instructions = admin.getByRole('region', { name: 'Datos para pagar' });
@@ -133,10 +133,10 @@ test.describe('enlace de pago (DX-569)', () => {
     });
     await instructions.getByRole('button', { name: 'Añadir datos para pagar' }).click();
     const data = admin.getByRole('dialog', { name: 'Añadir datos para pagar' });
-    await data.getByLabel('Medio de pago').selectOption({ label: methodName });
+    await data.getByLabel('Medio de pago', { exact: true }).selectOption({ label: methodName });
     await data.getByLabel('Para', { exact: true }).selectOption({ label: 'Toda la clínica' });
-    await data.getByLabel('Titular').fill('Clínica Demo C.A.');
-    await data.getByLabel('Teléfono').fill('0414-5550101');
+    await data.getByLabel('Titular', { exact: true }).fill('Clínica Demo C.A.');
+    await data.getByLabel('Teléfono', { exact: true }).fill('0414-5550101');
     await data.getByRole('button', { name: 'Guardar datos' }).click();
     await expect(data).toBeHidden({ timeout: 10_000 });
     await expect(instructions.getByText(`«${methodName}»: no se mostrará`)).toBeHidden();
@@ -152,10 +152,10 @@ test.describe('enlace de pago (DX-569)', () => {
     const panel = page.locator('#tabpanel-account-statement');
     await panel.getByRole('button', { name: 'Enviar enlace de pago' }).click();
     const modal = page.getByRole('dialog', { name: 'Enviar enlace de pago' });
-    await expect(modal.getByLabel('Importe que se pide')).toHaveValue('900');
+    await expect(modal.getByLabel('Importe que se pide', { exact: true })).toHaveValue('900');
     await modal.getByRole('radio', { name: 'Solo copiar el enlace' }).check();
     await modal.getByRole('button', { name: 'Crear enlace' }).click();
-    const url = await modal.getByLabel('Enlace de pago').inputValue({ timeout: 15_000 });
+    const url = await modal.getByLabel('Enlace de pago', { exact: true }).inputValue({ timeout: 15_000 });
     expect(url).toMatch(/\/pago\/[A-Za-z0-9_-]+$/);
     await expect(modal.getByRole('region', { name: 'Enlaces enviados' }).getByText('Vigente')).toBeVisible();
     await expectDialogInsideViewport(page, modal);
@@ -172,7 +172,7 @@ test.describe('enlace de pago (DX-569)', () => {
     await expect(how.getByRole('button', { name: `Copiar teléfono de ${methodName}` })).toBeVisible();
     await expectNoHorizontalScroll(patient);
     await patient.getByRole('radio', { name: methodName }).check();
-    await patient.getByLabel('Referencia del pago (opcional)').fill(`REF${tag}`);
+    await patient.getByLabel('Referencia del pago (opcional)', { exact: true }).fill(`REF${tag}`);
     await patient.getByLabel(/Comprobante \(opcional\)/).setInputFiles({
       name: 'captura.png',
       mimeType: 'image/png',
@@ -198,8 +198,8 @@ test.describe('enlace de pago (DX-569)', () => {
     await expect(row.getByText(`REF${tag}`)).toBeVisible();
     await rowAction(page, row, 'Confirmar');
     const confirm = page.getByRole('dialog', { name: 'Confirmar pago reportado' });
-    await expect(confirm.getByLabel('Importe recibido')).toHaveValue('900');
-    await expect(confirm.getByLabel('Método')).toHaveValue(/.+/);
+    await expect(confirm.getByLabel('Importe recibido', { exact: true })).toHaveValue('900');
+    await expect(confirm.getByLabel('Método', { exact: true })).toHaveValue(/.+/);
     await expectDialogInsideViewport(page, confirm);
     await confirm.getByRole('button', { name: 'Confirmar pago' }).click();
     await expect(page.getByRole('dialog', { name: 'Recibo de caja' })).toBeVisible({ timeout: 15_000 });
@@ -241,7 +241,7 @@ test.describe('enlace de pago (DX-569)', () => {
     const row = dataListRows(inbox).filter({ hasText: `Rechazo${tag}` });
     await rowAction(page, row, 'Rechazar');
     const dialog = page.getByRole('dialog', { name: '¿Rechazar este pago reportado?' });
-    await dialog.getByLabel('Motivo (interno)').fill('No llegó a la cuenta');
+    await dialog.getByLabel('Motivo (interno)', { exact: true }).fill('No llegó a la cuenta');
     await dialog.getByRole('button', { name: 'Rechazar pago' }).click();
     await expect(dialog).toBeHidden({ timeout: 15_000 });
     await expect(dataListRows(inbox).filter({ hasText: `Rechazo${tag}` })).toHaveCount(0);
