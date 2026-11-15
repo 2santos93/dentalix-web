@@ -8,7 +8,9 @@ import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import {
   PAYMENT_LINK_CONCEPT_LABELS,
+  OPENING_BALANCE_CURRENCY_FIXED,
   PAYMENT_REPORT_NOT_PENDING,
+  RATE_OVERRIDE_NOT_FOR_OPENING_BALANCE,
   confirmPaymentReport,
   type ConfirmPaymentReportInput,
   type ConfirmedPaymentReport,
@@ -118,7 +120,13 @@ export function ConfirmPaymentReportModal({
   const [overrideOn, setOverrideOn] = useState(false);
   const [rateText, setRateText] = useState('');
   const [rateReason, setRateReason] = useState('');
-  const [errors, setErrors] = useState<{ amount?: string; paidOn?: string; rate?: string; rateReason?: string }>({});
+  const [errors, setErrors] = useState<{
+    amount?: string;
+    currency?: string;
+    paidOn?: string;
+    rate?: string;
+    rateReason?: string;
+  }>({});
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -191,6 +199,17 @@ export function ConfirmPaymentReportModal({
       if (fields.catchDuplicate(err)) return;
       if (err instanceof ApiError && err.code === PAYMENT_REPORT_NOT_PENDING) {
         onStale();
+        return;
+      }
+      // Un saldo migrado se abona en su moneda y sin tasa: se vuelve a ella y el aviso va en el campo.
+      if (
+        err instanceof ApiError &&
+        (err.code === OPENING_BALANCE_CURRENCY_FIXED || err.code === RATE_OVERRIDE_NOT_FOR_OPENING_BALANCE)
+      ) {
+        setCurrency(linkCurrency);
+        setOverrideOn(false);
+        setErrors((p) => ({ ...p, currency: apiErrorMessage(err, copy.genericError) }));
+        document.getElementById('cr-currency')?.focus();
         return;
       }
       setError(apiErrorMessage(err, copy.genericError));
@@ -266,15 +285,22 @@ export function ConfirmPaymentReportModal({
             }}
           />
         </FormField>
-        <FormField htmlFor="cr-currency" label={copy.currencyLabel} hint={isOpening ? copy.currencyLocked : undefined}>
+        <FormField
+          htmlFor="cr-currency"
+          label={copy.currencyLabel}
+          hint={isOpening ? copy.currencyLocked : undefined}
+          error={errors.currency ?? null}
+        >
           <CurrencySelect
             id="cr-currency"
             token={token}
             value={currency}
             disabled={isOpening || submitting}
+            invalid={!!errors.currency}
             onChange={(code) => {
               setCurrency(code);
               setOverrideOn(false);
+              setErrors((p) => ({ ...p, currency: undefined }));
             }}
           />
         </FormField>

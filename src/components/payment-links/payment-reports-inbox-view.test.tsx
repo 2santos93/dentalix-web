@@ -258,6 +258,27 @@ describe('PaymentReportsInboxView (DX-569)', () => {
     expect(within(dialog).queryByRole('checkbox', { name: /Corregir la tasa/ })).not.toBeInTheDocument();
   });
 
+  it('saldo migrado: el 422 de moneda fija vuelve a su moneda y lo dice junto al campo', async () => {
+    const user = userEvent.setup();
+    mockedList.mockResolvedValue(
+      page([report({ link: { ...report().link, treatmentPlanId: null, openingBalanceId: 'ob-1', concept: 'BALANCE' } })]),
+    );
+    mockedConfirm.mockRejectedValue(
+      new ApiError(422, 'Un saldo migrado se abona en su moneda: no se puede corregir la moneda.', {
+        code: 'OPENING_BALANCE_CURRENCY_FIXED',
+      }),
+    );
+    render(<PaymentReportsInboxView token="tok" />);
+    await openRowAction(user, 'Confirmar');
+    const dialog = await screen.findByRole('dialog', { name: 'Confirmar pago reportado' });
+    await waitFor(() => expect(within(dialog).getByLabelText('Método')).toHaveValue('pm-mobile'));
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar pago' }));
+    expect(
+      await within(dialog).findByText('Un saldo migrado se abona en su moneda: no se puede corregir la moneda.'),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Moneda')).toHaveValue('USD');
+  });
+
   it('ya decidido por otra persona (409): cierra, avisa y recarga', async () => {
     const user = userEvent.setup();
     mockedConfirm.mockRejectedValue(new ApiError(409, 'Ya no está pendiente.', { code: 'PAYMENT_REPORT_NOT_PENDING' }));

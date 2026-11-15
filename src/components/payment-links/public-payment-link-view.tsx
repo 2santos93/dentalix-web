@@ -8,6 +8,7 @@ import {
   completePublicProofUpload,
   getPublicPaymentLink,
   markPublicPaymentLinkOpened,
+  PAYMENT_REPORT_CURRENCY_NOT_ACCEPTED,
   requestPublicProofUpload,
   submitPaymentReport,
   type PublicPaymentLink,
@@ -505,6 +506,12 @@ function ReportForm({
     } catch (err) {
       if (err instanceof ApiError && err.status === 410) return onGone('reported');
       if (err instanceof ApiError && err.status === 404) return onGone('invalid');
+      // La moneda no se admite: el mensaje va junto al campo, con el foco en él.
+      if (err instanceof ApiError && err.code === PAYMENT_REPORT_CURRENCY_NOT_ACCEPTED) {
+        setErrors((prev) => ({ ...prev, currency: apiErrorMessage(err, copy.errCurrency) }));
+        document.getElementById(id('currency'))?.focus();
+        return;
+      }
       setSubmitError(apiErrorMessage(err, { fallback: copy.submitError, network: copy.network }));
       summaryRef.current?.focus();
     } finally {

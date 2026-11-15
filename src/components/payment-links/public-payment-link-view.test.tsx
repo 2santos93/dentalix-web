@@ -250,6 +250,25 @@ describe('PublicPaymentLinkView (DX-569)', () => {
     expect(await screen.findByRole('heading', { level: 1, name: copy.reportedTitle })).toBeInTheDocument();
   });
 
+  it('saldo migrado: una sola moneda, sin equivalencias ni aviso de otra moneda; un 422 de moneda va al campo', async () => {
+    const user = userEvent.setup();
+    mockedGet.mockResolvedValue(
+      fixture({ concept: 'BALANCE', conceptLabel: 'Saldo pendiente', currencies: ['USD'], equivalents: [], rateDate: null, equivalentsUnavailable: false }),
+    );
+    mockedSubmit.mockRejectedValueOnce(
+      new ApiError(422, 'Este saldo solo se puede pagar en su moneda.', { code: 'PAYMENT_REPORT_CURRENCY_NOT_ACCEPTED' }),
+    );
+    render(<PublicPaymentLinkView linkToken="tok" />);
+    await screen.findByRole('heading', { level: 1, name: 'Reporta tu pago' });
+    expect(screen.queryByText(copy.equivalentsUnavailable)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('payment-equivalents')).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText('Moneda')).getAllByRole('option')).toHaveLength(1);
+    await user.click(screen.getByRole('radio', { name: 'Transferencia' }));
+    await user.click(screen.getByRole('button', { name: 'Enviar reporte' }));
+    await waitFor(() => expect(screen.getByLabelText('Moneda')).toHaveFocus());
+    expect(screen.getByLabelText('Moneda')).toHaveAccessibleDescription('Este saldo solo se puede pagar en su moneda.');
+  });
+
   it('nada clínico en la página', async () => {
     mockedGet.mockResolvedValue(fixture());
     const { container } = render(<PublicPaymentLinkView linkToken="tok" />);

@@ -35,6 +35,11 @@ export type PaymentReportProofUrl = Schemas['PaymentReportProofUrlDto'];
 export const PAYMENT_LINK_USED = 'PAYMENT_LINK_USED';
 export const PAYMENT_REPORT_NOT_PENDING = 'PAYMENT_REPORT_NOT_PENDING';
 export const PAYMENT_LINK_PROOF_UPLOADS_EXHAUSTED = 'PAYMENT_LINK_PROOF_UPLOADS_EXHAUSTED';
+/** 422 del reporte público: la moneda no la cobra la clínica (o el saldo migrado solo admite la suya). */
+export const PAYMENT_REPORT_CURRENCY_NOT_ACCEPTED = 'PAYMENT_REPORT_CURRENCY_NOT_ACCEPTED';
+/** 422 al confirmar el pago de un saldo migrado: ni otra moneda ni tasa corregida. */
+export const OPENING_BALANCE_CURRENCY_FIXED = 'OPENING_BALANCE_CURRENCY_FIXED';
+export const RATE_OVERRIDE_NOT_FOR_OPENING_BALANCE = 'RATE_OVERRIDE_NOT_FOR_OPENING_BALANCE';
 
 /** Concepto genérico (sin tratamientos), como lo nombra la API. */
 export const PAYMENT_LINK_CONCEPT_LABELS: Record<PaymentLinkConcept, string> = {
