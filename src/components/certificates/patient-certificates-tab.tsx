@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { BedDouble, FileCheck2, Plus, Printer } from 'lucide-react';
+import { BedDouble, FileCheck2, MessageCircle, Plus, Printer } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import {
@@ -26,6 +26,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { cn } from '@/lib/utils';
 import { IssueCertificateModal } from './issue-certificate-modal';
 import { VoidCertificateModal } from './void-certificate-modal';
+import { SendCertificateCopyModal } from './send-certificate-copy-modal';
 
 export const patientCertificatesCopy = {
   heading: 'Certificados',
@@ -54,8 +55,10 @@ export const patientCertificatesCopy = {
   print: 'Imprimir',
   printHint: (label: string, number: string) => `${label} nº ${number} (se abre en otra pestaña)`,
   printError: 'No pudimos abrir el PDF del certificado.',
-  noPrintDiagnosis: 'Lleva diagnóstico: lo imprime odontología o administración.',
+  noPrintDiagnosis: 'Lleva diagnóstico: lo imprimen y envían odontología o administración.',
   void: 'Anular',
+  sendCopy: 'Enviar por WhatsApp',
+  sendCopyHint: (label: string, number: string) => `copia de ${label} nº ${number}`,
   rowLabel: (label: string, number: string) => `${label} nº ${number}`,
 };
 
@@ -95,6 +98,7 @@ export function PatientCertificatesTab({ token, patientId }: PatientCertificates
   const [issuing, setIssuing] = useState<{ kind: CertificateKind; key: number } | null>(null);
   const [voiding, setVoiding] = useState<PatientCertificate | null>(null);
   const [printingId, setPrintingId] = useState<string | null>(null);
+  const [sendingCopy, setSendingCopy] = useState<PatientCertificate | null>(null);
   const stamp = useSedeStamp(
     token,
     certificates.map((c) => c.locationId),
@@ -227,19 +231,35 @@ export function PatientCertificatesTab({ token, patientId }: PatientCertificates
     const label = CERTIFICATE_KIND_LABELS[cert.kind];
     const busy = printingId === cert.id;
     return (
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        className="max-sm:min-h-11"
-        disabled={busy}
-        aria-busy={busy || undefined}
-        onClick={() => void print(cert)}
-      >
-        <Printer aria-hidden />
-        {copy.print}
-        <span className="sr-only"> · {copy.printHint(label, cert.numberLabel)}</span>
-      </Button>
+      <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="max-sm:min-h-11"
+          disabled={busy}
+          aria-busy={busy || undefined}
+          onClick={() => void print(cert)}
+        >
+          <Printer aria-hidden />
+          {copy.print}
+          <span className="sr-only"> · {copy.printHint(label, cert.numberLabel)}</span>
+        </Button>
+        {/* Solo uno vigente se envía; anulado, no. */}
+        {cert.voidedAt === null ? (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="max-sm:min-h-11"
+            onClick={() => setSendingCopy(cert)}
+          >
+            <MessageCircle aria-hidden />
+            {copy.sendCopy}
+            <span className="sr-only"> · {copy.sendCopyHint(label, cert.numberLabel)}</span>
+          </Button>
+        ) : null}
+      </div>
     );
   }
 
@@ -334,6 +354,21 @@ export function PatientCertificatesTab({ token, patientId }: PatientCertificates
           patientId={patientId}
           kind={issuing.kind}
           onIssued={(cert) => setCertificates((prev) => [cert, ...prev.filter((c) => c.id !== cert.id)])}
+        />
+      ) : null}
+      {sendingCopy ? (
+        <SendCertificateCopyModal
+          key={sendingCopy.id}
+          open
+          onOpenChange={(open) => {
+            if (!open) setSendingCopy(null);
+          }}
+          token={token}
+          patientId={patientId}
+          certificateId={sendingCopy.id}
+          kindLabel={CERTIFICATE_KIND_LABELS[sendingCopy.kind]}
+          numberLabel={sendingCopy.numberLabel}
+          formatDate={(iso) => stamp.date(iso, sendingCopy.locationId)}
         />
       ) : null}
       {voiding ? (

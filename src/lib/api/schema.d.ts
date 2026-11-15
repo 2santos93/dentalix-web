@@ -6822,6 +6822,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/certificates/{id}/patient-copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enviar por WhatsApp una copia del certificado al paciente
+         * @description Crea un enlace caducable (30 días por defecto; se guarda solo el hash del token) a la copia de un certificado VIGENTE; el enlace anterior deja de servir en la misma transacción. Devuelve el número, el enlace y el texto (clínica y enlace, nada clínico) para que la web abra wa.me. Un menor la recibe por su responsable que recibe avisos. Auditado: SEND · PATIENT_CERTIFICATE · CERTIFICATE_COPY_SENT.
+         */
+        post: operations["PatientCertificatesController_sendPatientCopy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/certificates/issuer": {
         parameters: {
             query?: never;
@@ -6853,6 +6873,46 @@ export interface paths {
          * @description Máximo de días de reposo (1–365) y si el reposo imprime el diagnóstico. Aplica a la siguiente emisión. Si nada cambia, 200 sin evento (UPDATE · CLINIC_SETTINGS · CERTIFICATE_SETTINGS).
          */
         put: operations["CertificateSettingsController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/certificate-copies/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * El paciente abre la copia de su certificado
+         * @description Con el enlace vivo: el certificado tal como se imprime (fechas con la zona y el formato de la sede). Si se anuló después del envío, solo «anulado» y el día. Cada apertura queda en la auditoría de la clínica como VIEW de PATIENT_CERTIFICATE, origen PUBLIC_LINK, reason CERTIFICATE_COPY_OPENED.
+         */
+        get: operations["PublicCertificateCopiesController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/certificate-copies/{token}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * El paciente descarga el PDF de su certificado
+         * @description Solo de un certificado vigente. Queda en la auditoría como EXPORT de PATIENT_CERTIFICATE, origen PUBLIC_LINK, reason CERTIFICATE_COPY_DOWNLOADED.
+         */
+        get: operations["PublicCertificateCopiesController_pdf"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -9321,6 +9381,8 @@ export interface components {
             anamnesis: number;
             /** @description Enlaces de la copia de una receta enviados al paciente y sin caducar (DX-468) */
             prescriptionCopies: number;
+            /** @description Enlaces de la copia de un certificado enviados al paciente y sin caducar (DX-306) */
+            certificateCopies: number;
             /** @description Suma de todos los tipos */
             total: number;
         };
@@ -22422,6 +22484,31 @@ export interface components {
             /** @example Fecha equivocada */
             reason: string;
         };
+        CertificateWhatsAppDto: {
+            /**
+             * @description Dígitos E.164 sin «+» para wa.me.
+             * @example 584121234567
+             */
+            phone: string;
+            /** @description Mensaje prellenado: clínica y enlace, nada clínico. */
+            text: string;
+            /** @description Enlace personal de la copia (solo aquí: la API guarda su hash). */
+            url: string;
+        };
+        CertificateCopySentDto: {
+            /** Format: date-time */
+            sentAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @example ••• 4567 */
+            destinationMasked: string;
+            /**
+             * @description RESPONSIBLE = va al responsable de un menor.
+             * @enum {string}
+             */
+            recipientKind: "PATIENT" | "RESPONSIBLE";
+            whatsapp: components["schemas"]["CertificateWhatsAppDto"];
+        };
         CertificateIssuerDto: {
             canIssueAttendance: boolean;
             canIssueRest: boolean;
@@ -22439,6 +22526,53 @@ export interface components {
              * @example false
              */
             restPrintDiagnosis: boolean;
+        };
+        PublicCertificateClinicDto: {
+            name: string;
+            primaryColor: string | null;
+            logoUrl: string | null;
+        };
+        PublicCertificateFormatDto: {
+            /** @example America/Caracas */
+            timeZone: string;
+            /** @example es-VE */
+            locale: string;
+            /** @enum {string} */
+            hourCycle: "h12" | "h23";
+        };
+        PublicCertificateDto: {
+            kind: components["schemas"]["PatientCertificateKind"];
+            /** @example 000123 */
+            numberLabel: string;
+            /** Format: date-time */
+            issuedAt: string;
+            /** Format: date-time */
+            attendedFrom: string;
+            /** Format: date-time */
+            attendedUntil: string;
+            /** @enum {string} */
+            timesSource: "ACTUAL" | "SCHEDULED";
+            restDays: number | null;
+            restStartDate: string | null;
+            restEndDate: string | null;
+            /** @description Solo en un reposo cuya clínica imprime el diagnóstico. */
+            diagnosis: string | null;
+            snapshot: components["schemas"]["CertificateSnapshotDto"];
+        };
+        PublicCertificateCopyDto: {
+            /**
+             * @description AVAILABLE = el certificado y su descarga; VOIDED = anulado después del envío: sin contenido ni descarga.
+             * @enum {string}
+             */
+            status: "AVAILABLE" | "VOIDED";
+            clinic: components["schemas"]["PublicCertificateClinicDto"] | null;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            voidedAt: string | null;
+            /** @description Zona, locale y reloj de la sede (para pintar las fechas). */
+            format: components["schemas"]["PublicCertificateFormatDto"];
+            certificate: components["schemas"]["PublicCertificateDto"] | null;
         };
         PatientImplantDto: {
             /** Format: uuid */
@@ -41909,6 +42043,56 @@ export interface operations {
             };
         };
     };
+    PatientCertificatesController_sendPatientCopy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateCopySentDto"];
+                };
+            };
+            /** @description La sede no está permitida, o un reposo con diagnóstico enviado por recepción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o certificado no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El certificado está anulado, el paciente está archivado, la sede no tiene zona o formato, o no se pudo armar el enlace de la clínica */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sin a quién enviarlo: sin teléfono para WhatsApp, baja de los envíos, o un menor sin responsable con teléfono */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     CertificateSettingsController_issuer: {
         parameters: {
             query?: never;
@@ -41977,6 +42161,106 @@ export interface operations {
             };
             /** @description Solo un administrador puede cambiar los ajustes de los certificados. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicCertificateCopiesController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicCertificateCopyDto"];
+                };
+            };
+            /** @description Token mal formado, inexistente, de otra clínica, invalidado al reenviar o del paciente archivado (el mismo 404 genérico). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace caducó (`CERTIFICATE_COPY_LINK_EXPIRED`): hay que pedir otro a la clínica. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiadas peticiones
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicCertificateCopiesController_pdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El PDF (attachment). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Token mal formado, inexistente, de otra clínica, invalidado al reenviar o del paciente archivado (el mismo 404 genérico). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El certificado fue anulado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace caducó (`CERTIFICATE_COPY_LINK_EXPIRED`): hay que pedir otro a la clínica. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiadas peticiones
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

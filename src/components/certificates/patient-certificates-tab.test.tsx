@@ -109,7 +109,9 @@ describe('PatientCertificatesTab (DX-306)', () => {
     expect(rest).toHaveTextContent('por Dra. Andreina Salazar');
     expect(rest).toHaveTextContent('Vigente');
     expect(within(rest).getByRole('button', { name: /^Imprimir/ })).toBeInTheDocument();
+    expect(within(rest).getByRole('button', { name: /^Enviar por WhatsApp/ })).toBeInTheDocument();
     expect(voided).toHaveTextContent('Anulado');
+    expect(within(voided).queryByRole('button', { name: /^Enviar por WhatsApp/ })).not.toBeInTheDocument();
     expect(voided).toHaveTextContent(/por Ana Titular\. Motivo: Fecha equivocada/);
     expect(within(voided).queryByRole('button', { name: /^Acciones de/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /editar|borrar|eliminar/i })).not.toBeInTheDocument();
@@ -123,7 +125,8 @@ describe('PatientCertificatesTab (DX-306)', () => {
     render(<PatientCertificatesTab token={RECEPTION} patientId="p1" />);
     const table = await screen.findByRole('table', { name: 'Certificados del paciente' });
     expect(within(table).queryByRole('button', { name: /^Imprimir/ })).not.toBeInTheDocument();
-    expect(table).toHaveTextContent('Lleva diagnóstico: lo imprime odontología o administración.');
+    expect(within(table).queryByRole('button', { name: /^Enviar por WhatsApp/ })).not.toBeInTheDocument();
+    expect(table).toHaveTextContent('Lleva diagnóstico: lo imprimen y envían odontología o administración.');
   });
 
   it('«Imprimir» abre el PDF; si falla, un aviso con reintento (escalón 3)', async () => {
@@ -188,5 +191,15 @@ describe('PatientCertificatesTab (DX-306)', () => {
     await user.type(within(dialog).getByLabelText('Motivo de la anulación'), 'Duplicado');
     await user.click(within(dialog).getByRole('button', { name: 'Anular certificado' }));
     expect(await within(dialog).findByText('Este certificado ya está anulado.')).toBeInTheDocument();
+  });
+
+  it('«Enviar por WhatsApp» abre el diálogo de la copia de ESE certificado', async () => {
+    const user = setupUser();
+    mockedList.mockResolvedValue([makeCertificate()]);
+    render(<PatientCertificatesTab token={DENTIST} patientId="p1" />);
+    const table = await screen.findByRole('table', { name: 'Certificados del paciente' });
+    await user.click(within(table).getByRole('button', { name: /^Enviar por WhatsApp/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Enviar por WhatsApp' });
+    expect(dialog).toHaveTextContent('Justificante de asistencia nº 000123');
   });
 });

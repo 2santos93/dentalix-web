@@ -19,7 +19,9 @@ import { API_URL } from './support/urls';
  *      dentro del viewport.
  *   2. A 1440 px: «Certificado de reposo» (ADMIN con registro profesional), 3
  *      días desde el día de la atención → la lista dice «3 días de reposo».
- *   3. A 390 px, recepción: ve la lista y «Emitir justificante», no el reposo.
+ *   3. «Enviar por WhatsApp» el reposo vigente: «Abrir WhatsApp» hacia wa.me y
+ *      el enlace; el paciente lo abre sin sesión a 1440 y 390 y ve el tipo y el nº.
+ *   4. A 390 px, recepción: ve la lista y «Emitir justificante», no el reposo.
  *
  * La cita se siembra por la API y acaba COMPLETED (la API solo certifica citas
  * atendidas). Con E2E_QA_DIR definido guarda capturas.
@@ -81,6 +83,7 @@ test('certificados: justificante emitido, impreso y anulado a 1440 y 390; reposo
     docNumber: `V${suffix}`.slice(0, 12),
     sex: 'F',
     birthDate: '1985-06-20',
+    phone: '+58 412 1234567',
   });
   const day = sedeWeekdayFromToday(2);
   const appointment = await apiPost<{ id: string }>(request, session, '/appointments', {
@@ -156,7 +159,38 @@ test('certificados: justificante emitido, impreso y anulado a 1440 y 390; reposo
   await restDialog.getByRole('button', { name: 'Cerrar' }).last().click();
   await expect(panel.getByText(/3 días de reposo del/)).toBeVisible();
 
-  // --- 3. Recepción, en el teléfono: lista y justificante, sin reposo ---
+  // --- 3. «Enviar por WhatsApp» el reposo vigente y abrir la copia sin sesión ---
+  await panel.getByRole('button', { name: /^Enviar por WhatsApp/ }).click();
+  const sendDialog = page.getByRole('dialog', { name: 'Enviar por WhatsApp' });
+  await expect(sendDialog).toBeVisible();
+  await expectDialogInsideViewport(page, sendDialog);
+  await sendDialog.getByRole('button', { name: 'Crear enlace' }).click();
+  await expect(sendDialog.getByText('Enlace listo para ••• 4567')).toBeVisible({ timeout: 15_000 });
+  const wa = sendDialog.getByRole('link', { name: /Abrir WhatsApp/ });
+  expect((await wa.getAttribute('href')) ?? '').toMatch(/^https:\/\/wa\.me\/584121234567\?text=/);
+  const copyUrl = await sendDialog.getByLabel('Enlace del certificado').inputValue();
+  expect(copyUrl).toMatch(new RegExp(`^${session.origin}/certificado/copia/[A-Za-z0-9_-]+$`));
+  await shoot(page, 'whatsapp-escritorio');
+  await sendDialog.getByRole('button', { name: 'Cerrar' }).last().click();
+  await expect(sendDialog).toBeHidden();
+
+  const visitor = await browser.newContext({ timezoneId: SEDE_TZ, locale: E2E_BROWSER_LOCALE });
+  const pub = await visitor.newPage();
+  for (const viewport of VIEWPORTS) {
+    await pub.setViewportSize({ width: viewport.width, height: viewport.height });
+    const res = await pub.goto(copyUrl);
+    expect(res?.headers()['x-robots-tag']).toBe('noindex, nofollow');
+    await expect(pub.getByRole('heading', { level: 1, name: /^Certificado de reposo nº \d{6}$/ })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(pub.getByText(/3 días de reposo, del .+ al .+\./)).toBeVisible();
+    await expect(pub.getByRole('link', { name: 'Descargar PDF' })).toBeVisible();
+    await expectNoHorizontalScroll(pub);
+    await shoot(pub, `copia-${viewport.name}`);
+  }
+  await visitor.close();
+
+  // --- 4. Recepción, en el teléfono: lista y justificante, sin reposo ---
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
     timezoneId: SEDE_TZ,

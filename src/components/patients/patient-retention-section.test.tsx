@@ -117,6 +117,7 @@ const NO_LINKS = {
   signedPdfCopies: 0,
   anamnesis: 0,
   prescriptionCopies: 0,
+  certificateCopies: 0,
   total: 0,
 };
 

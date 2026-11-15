@@ -20,6 +20,7 @@ function links(overrides: Partial<LivePublicLinks> = {}): LivePublicLinks {
     signedPdfCopies: 0,
     anamnesis: 0,
     prescriptionCopies: 0,
+    certificateCopies: 0,
     ...overrides,
   };
   return {
@@ -30,7 +31,8 @@ function links(overrides: Partial<LivePublicLinks> = {}): LivePublicLinks {
       base.budgetSignatures +
       base.signedPdfCopies +
       base.anamnesis +
-      base.prescriptionCopies,
+      base.prescriptionCopies +
+      base.certificateCopies,
   };
 }
 
@@ -45,10 +47,17 @@ test('mientras cuenta, lo anuncia como estado', async () => {
 
 test('avisa cuántos enlaces se anularán y de qué tipo', async () => {
   mockedCount.mockResolvedValue(
-    links({ slotOffers: 1, budgetSignatures: 2, signedPdfCopies: 1, anamnesis: 2, prescriptionCopies: 2 }),
+    links({
+      slotOffers: 1,
+      budgetSignatures: 2,
+      signedPdfCopies: 1,
+      anamnesis: 2,
+      prescriptionCopies: 2,
+      certificateCopies: 3,
+    }),
   );
   render(<ArchiveLinksNotice token="tok" patientId="p1" />);
-  expect(await screen.findByText('Se anularán 8 enlaces enviados')).toBeInTheDocument();
+  expect(await screen.findByText('Se anularán 11 enlaces enviados')).toBeInTheDocument();
   const list = screen.getByRole('list', { name: 'Enlaces que se anularán' });
   expect(within(list).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
     '1 oferta de hueco',
@@ -56,6 +65,7 @@ test('avisa cuántos enlaces se anularán y de qué tipo', async () => {
     '1 copia de un documento firmado',
     '2 cuestionarios de salud',
     '2 copias de recetas',
+    '3 copias de certificados',
   ]);
   expect(screen.getByText(archiveLinksCopy.explanation)).toBeInTheDocument();
 });
@@ -65,6 +75,13 @@ test('singular: «Se anulará 1 enlace enviado»', async () => {
   render(<ArchiveLinksNotice token="tok" patientId="p1" />);
   expect(await screen.findByText('Se anulará 1 enlace enviado')).toBeInTheDocument();
   expect(screen.getByText('1 consentimiento por firmar')).toBeInTheDocument();
+});
+
+test('DX-306: una copia de un certificado, en singular', async () => {
+  mockedCount.mockResolvedValue(links({ certificateCopies: 1 }));
+  render(<ArchiveLinksNotice token="tok" patientId="p1" />);
+  expect(await screen.findByText('Se anulará 1 enlace enviado')).toBeInTheDocument();
+  expect(screen.getByText('1 copia de un certificado')).toBeInTheDocument();
 });
 
 test('sin enlaces vivos lo dice en una línea, sin aviso', async () => {
