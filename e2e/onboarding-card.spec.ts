@@ -1,10 +1,10 @@
 import { test, expect, type Page } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
-import { registerClinicViaApi } from './support/api';
+import { apiPost, registerClinicViaApi } from './support/api';
 import { loginAs } from './support/auth';
-import { expectNoHorizontalScroll } from './support/layout';
-import { tenantOrigin } from './support/urls';
+import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
+import { API_URL, tenantOrigin } from './support/urls';
 
 /**
  * e2e (DX-020): la tarjeta «Pon en marcha tu clínica» de Inicio.
@@ -69,7 +69,10 @@ for (const viewport of VIEWPORTS) {
       'href',
       '/settings/importar-pacientes',
     );
-    if (viewport.width === 390) await expectNoHorizontalScroll(page);
+    if (viewport.width === 390) {
+      await expectNoHorizontalScroll(page);
+      await expectNoHorizontalScrollIn(page);
+    }
     await shoot(page, 'onboarding-pendiente', viewport.width);
 
     // El paso enlaza a su pantalla; crear el tipo lo marca solo.
@@ -87,7 +90,10 @@ for (const viewport of VIEWPORTS) {
     await expect(card.getByTestId('inicio-onboarding-progress')).toHaveText('1 de 5 hechos', { timeout: 20_000 });
     await expect(card.getByTestId('inicio-onboarding-step-APPOINTMENT_TYPES')).toHaveAttribute('data-done', 'true');
     await expect(card.getByTestId('inicio-onboarding-step-BUSINESS_HOURS')).toHaveAttribute('data-done', 'false');
-    if (viewport.width === 390) await expectNoHorizontalScroll(page);
+    if (viewport.width === 390) {
+      await expectNoHorizontalScroll(page);
+      await expectNoHorizontalScrollIn(page);
+    }
     await shoot(page, 'onboarding-un-paso', viewport.width);
 
     // Descartar la esconde, también al recargar.
@@ -100,3 +106,81 @@ for (const viewport of VIEWPORTS) {
     await expect(page.getByTestId('inicio-onboarding')).toHaveCount(0);
   });
 }
+
+/**
+ * Con los cinco pasos hechos (por la API), «Tu clínica está lista» con el
+ * enlace al paso opcional y «Cerrar». A 390 px, ni el documento ni <main>
+ * se desplazan en horizontal (la frase del opcional envuelve).
+ */
+test('con los cinco pasos hechos: «Tu clínica está lista», sin scroll horizontal a 390 px', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(150_000);
+  const suffix = `${runSuffix}ready`;
+  const subdomain = `onboard-${suffix}`.slice(0, 30);
+  const origin = tenantOrigin(subdomain);
+  const email = `admin.onboard.${suffix}@example.com`;
+  const session = await registerClinicViaApi(request, {
+    subdomain,
+    clinicName: `Clínica Lista ${suffix}`,
+    fullName: 'Ana Lista',
+    email,
+    password,
+  });
+  // 1. Horario guardado (sin restricción, para que la cita no dependa del día).
+  const schedule = await request.put(`${API_URL}/locations/schedule`, { headers: session.headers, data: { ranges: [] } });
+  expect(schedule.ok(), `PUT /locations/schedule falló: ${await schedule.text()}`).toBeTruthy();
+  // 2. Tipo de cita. 3. Un precio en el catálogo. 4. Una invitación.
+  await apiPost(request, session, '/appointment-types', { name: 'Control', durationMinutes: 30, color: '#0E7490' });
+  await apiPost(request, session, '/catalog/items', {
+    code: `dx020-${suffix}`.slice(0, 30),
+    kind: 'PROCEDURE',
+    labelEs: 'Limpieza dental',
+    color: '#3366CC',
+    defaultPrice: 40,
+  });
+  await apiPost(request, session, '/staff/invitations', {
+    fullName: 'Luis Invitado',
+    email: `luis.onboard.${suffix}@example.com`,
+    role: 'DENTIST',
+  });
+  // 5. La primera cita.
+  const patient = await apiPost<{ id: string }>(request, session, '/patients', {
+    firstName: 'María',
+    lastName: `Lista${suffix}`.slice(0, 40),
+    docType: 'NATIONAL_ID',
+    docNumber: `V${suffix}`.slice(0, 20),
+    sex: 'F',
+  });
+  const staff = (await (await request.get(`${API_URL}/staff`, { headers: session.headers })).json()) as {
+    userId: string;
+    fullName: string;
+  }[];
+  const providerId = staff.find((m) => m.fullName === 'Ana Lista')!.userId;
+  const day = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  await apiPost(request, session, '/appointments', {
+    patientId: patient.id,
+    providerId,
+    start: `${day}T14:00:00.000Z`,
+    end: `${day}T14:30:00.000Z`,
+  });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loginAs(page, origin, email, password);
+  await page.goto(`${origin}/dashboard`);
+  const card = page.getByTestId('inicio-onboarding');
+  await expect(card.getByRole('heading', { name: 'Tu clínica está lista' })).toBeVisible({ timeout: 20_000 });
+  await expect(card.getByRole('link', { name: 'Si traes pacientes de otro sistema, impórtalos' })).toHaveAttribute(
+    'href',
+    '/settings/importar-pacientes',
+  );
+  await expectNoHorizontalScroll(page);
+  await expectNoHorizontalScrollIn(page);
+  await shoot(page, 'onboarding-lista', 390);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await shoot(page, 'onboarding-lista', 1440);
+
+  await card.getByRole('button', { name: 'Cerrar' }).click();
+  await expect(card).toHaveCount(0);
+});

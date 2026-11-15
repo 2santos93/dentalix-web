@@ -19,7 +19,6 @@ import { SectionError } from '@/components/errors/section-error';
 import { Button } from '@/components/ui/button';
 import { SectionHeader } from '@/components/ui/section-header';
 import { Skeleton } from '@/components/ui/skeleton';
-import { sectionLinkClass } from './today-section';
 import { useLoad } from './use-load';
 
 interface StepCopy {
@@ -158,6 +157,9 @@ export function OnboardingCard({ token }: { token: string }) {
   );
 }
 
+const readyLinkClass =
+  'max-w-full self-start break-words rounded-sm text-sm font-medium text-primary-text hover:underline max-md:inline-flex max-md:min-h-11 max-md:items-center';
+
 const cardClass = 'flex flex-col gap-4 rounded-xl border border-border bg-surface px-4 py-4 sm:px-6 sm:py-5';
 
 interface CardProps {
@@ -285,7 +287,8 @@ function ReadyCard({ status, dismissing, onDismiss }: CardProps) {
           </h2>
           <p className="max-w-[68ch] text-sm text-muted">{copy.readyDescription}</p>
           {importStep && !importStep.done ? (
-            <Link href={copy.steps.PATIENT_IMPORT.href} className={`${sectionLinkClass} self-start`}>
+            // Envuelve (sin `whitespace-nowrap`): a 390 px la frase no cabe en una línea.
+            <Link href={copy.steps.PATIENT_IMPORT.href} className={readyLinkClass}>
               {copy.readyImport}
             </Link>
           ) : null}
