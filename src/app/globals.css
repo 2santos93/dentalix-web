@@ -451,6 +451,56 @@
 }
 
 /*
+ * Print CSS de la copia de la historia clínica (DX-456, /print/patients/[id]/
+ * clinical-record-copies/[copyId]). Página con nombre en `html` (ninguna caja
+ * posterior abre una hoja en blanco) y SIN `size`: sale en el papel de la
+ * impresora, A4 o Carta; el documento usa el ancho útil de los dos. Cada
+ * registro (`.copy-block`) y la cabecera no se parten entre hojas, y el título
+ * de una sección no se queda solo al pie. La vista pone en `@top-left` el
+ * nombre del paciente y en `@bottom-right` «Página X de Y».
+ */
+@page clinical-record {
+  margin: 18mm 14mm 18mm;
+  @bottom-right {
+    content: 'Página ' counter(page) ' de ' counter(pages);
+    font-size: 8pt;
+    color: #4b5563;
+  }
+  @top-left {
+    font-size: 8pt;
+    color: #4b5563;
+  }
+}
+/* El papel es blanco con tinta oscura SIEMPRE, también con el tema oscuro. */
+.clinical-record-print-root {
+  color-scheme: light;
+}
+@media print {
+  html:has(.clinical-record-print-page) {
+    page: clinical-record;
+  }
+  .clinical-record-print-root,
+  .clinical-record-print-root * {
+    visibility: visible !important;
+  }
+  .clinical-record-print-root {
+    font-size: 10pt;
+  }
+  .clinical-record-print-root .copy-header,
+  .clinical-record-print-root .copy-block {
+    break-inside: avoid;
+  }
+  .clinical-record-print-root .copy-section-title {
+    break-after: avoid;
+  }
+  .clinical-record-print-root p,
+  .clinical-record-print-root li {
+    orphans: 3;
+    widows: 3;
+  }
+}
+
+/*
  * Print CSS de la tarjeta de implante (DX-191, /print/patients/[id]/
  * implant-card). Página con nombre en `html` (ninguna caja posterior abre una
  * hoja en blanco) y SIN `size`: sale en el papel de la impresora, A4 o carta;

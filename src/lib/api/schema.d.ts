@@ -6940,6 +6940,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/clinical-record-copies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Generaciones anteriores de la copia (más reciente primero)
+         * @description Período, secciones, quién la generó, en qué sede y «entregado a». Sin contenido clínico.
+         */
+        get: operations["ClinicalRecordCopiesController_list"];
+        put?: never;
+        /**
+         * Generar una copia de la historia clínica
+         * @description Período desde/hasta (inclusivos, días civiles de la sede de la petición) y secciones. Deja la generación y un evento EXPORT; devuelve el resumen. El documento se lee con `GET …/:id/document`.
+         */
+        post: operations["ClinicalRecordCopiesController_generate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-record-copies/{copyId}/document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documento de una copia generada (vista imprimible)
+         * @description Cabecera (clínica, sede, paciente) y las secciones elegidas con lo que cae en el período y estaba registrado al generarla: reimprimir da el mismo documento. Evoluciones con sus adendas en orden; las anuladas no salen, como en la ficha. Sin ids internos. Auditado: PRINT · PATIENT.
+         */
+        get: operations["ClinicalRecordCopiesController_document"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/implants": {
         parameters: {
             query?: never;
@@ -22656,6 +22700,240 @@ export interface components {
             /** @description Zona, locale y reloj de la sede (para pintar las fechas). */
             format: components["schemas"]["PublicCertificateFormatDto"];
             certificate: components["schemas"]["PublicCertificateDto"] | null;
+        };
+        /** @enum {string} */
+        ClinicalRecordCopySection: "EVOLUTIONS" | "DIAGNOSES" | "ANAMNESIS" | "ODONTOGRAM" | "ANESTHESIA_SEDATION" | "CONSENTS" | "PRESCRIPTIONS" | "APPOINTMENTS";
+        ClinicalRecordCopyAuthorDto: {
+            /** Format: uuid */
+            id: string;
+            name: string | null;
+        };
+        ClinicalRecordCopyLocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        ClinicalRecordCopySummaryDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example 2026-01-01 */
+            from: string;
+            /** @example 2026-03-31 */
+            to: string;
+            sections: components["schemas"]["ClinicalRecordCopySection"][];
+            deliveredTo: string | null;
+            /** Format: date-time */
+            generatedAt: string;
+            generatedBy: components["schemas"]["ClinicalRecordCopyAuthorDto"];
+            location: components["schemas"]["ClinicalRecordCopyLocationDto"];
+        };
+        CreateClinicalRecordCopyDto: {
+            /**
+             * @description Primer día (inclusive), día civil de la sede.
+             * @example 2026-01-01
+             */
+            from: string;
+            /**
+             * @description Último día (inclusive), día civil de la sede.
+             * @example 2026-03-31
+             */
+            to: string;
+            sections: components["schemas"]["ClinicalRecordCopySection"][];
+            /**
+             * @description A quién se entrega (opcional, una línea). Queda en la generación; nunca en la auditoría.
+             * @example Ana Pérez (madre)
+             */
+            deliveredTo?: string | null;
+        };
+        CopyClinicDto: {
+            name: string;
+            legalName: string | null;
+            taxIdLabel: string | null;
+            taxId: string | null;
+        };
+        CopyLocationDto: {
+            name: string;
+            address: string | null;
+            /** @example America/Caracas */
+            timeZone: string;
+            /** @example es-VE */
+            locale: string | null;
+            /** @example h12 */
+            hourCycle: string | null;
+        };
+        CopyPatientDto: {
+            name: string;
+            patientCode: number;
+            document: string | null;
+            /** @example 1990-05-14 */
+            birthDate: string | null;
+        };
+        CopyDiagnosisDto: {
+            icd10Code: string;
+            label: string;
+            kind: components["schemas"]["ClinicalDiagnosisKind"];
+            toothFdi: string | null;
+        };
+        CopyAddendumDto: {
+            /** Format: date-time */
+            createdAt: string;
+            authorName: string | null;
+            reason: string;
+            text: string;
+        };
+        CopyEvolutionDto: {
+            /** Format: date-time */
+            entryDate: string;
+            authorName: string | null;
+            authorLicense: string | null;
+            locationName: string | null;
+            /** Format: date-time */
+            appointmentStart: string | null;
+            reason: string | null;
+            notes: string;
+            diagnoses: components["schemas"]["CopyDiagnosisDto"][];
+            addenda: components["schemas"]["CopyAddendumDto"][];
+        };
+        CopyDiagnosisLineDto: {
+            icd10Code: string;
+            label: string;
+            kind: components["schemas"]["ClinicalDiagnosisKind"];
+            toothFdi: string | null;
+            /** Format: date-time */
+            entryDate: string;
+            authorName: string | null;
+        };
+        CopyAnamnesisDto: {
+            version: number;
+            /** Format: date-time */
+            recordedAt: string;
+            authorName: string | null;
+            /** @enum {string} */
+            source: "STAFF" | "PATIENT_FORM";
+            allergies: components["schemas"]["AllergyDto"][];
+            conditions: components["schemas"]["ConditionDto"][];
+            medications: components["schemas"]["MedicationDto"][];
+            surgeries: components["schemas"]["SurgeryDto"][];
+            habits: components["schemas"]["HabitsDto"] | null;
+            pregnancy: components["schemas"]["AnamnesisAnswerStatus"] | null;
+            dentalHistory: components["schemas"]["DentalHistoryDto"] | null;
+            vitalSigns: components["schemas"]["VitalSignsDto"] | null;
+            familyHistory: string | null;
+            notes: string | null;
+        };
+        /** @enum {string} */
+        CatalogKind: "DIAGNOSIS" | "PROCEDURE";
+        /** @enum {string} */
+        ToothRecordStatus: "PLANNED" | "COMPLETED";
+        /** @enum {string} */
+        ToothRecordOrigin: "THIS_CLINIC" | "PRE_EXISTING" | "OTHER_PROVIDER";
+        CopyToothRecordDto: {
+            toothNumber: string;
+            /** Format: date-time */
+            recordedAt: string;
+            kind: components["schemas"]["CatalogKind"];
+            label: string | null;
+            surfaces: components["schemas"]["ToothSurface"][];
+            status: components["schemas"]["ToothRecordStatus"];
+            origin: components["schemas"]["ToothRecordOrigin"];
+            notes: string | null;
+            authorName: string | null;
+        };
+        CopyAnesthesiaDto: {
+            /** Format: date-time */
+            administeredAt: string;
+            anestheticName: string;
+            activeIngredient: string;
+            concentrationPct: number;
+            vasoconstrictor: string | null;
+            carpules: number;
+            doseMg: number;
+            technique: components["schemas"]["AnesthesiaTechnique"];
+            site: string | null;
+            lot: string | null;
+            authorName: string | null;
+            locationName: string | null;
+        };
+        CopySedationAgentDto: {
+            /** Format: date-time */
+            administeredAt: string;
+            kind: components["schemas"]["SedationAgentKind"];
+            drugName: string | null;
+            dose: number | null;
+            doseUnit: components["schemas"]["SedationDoseUnit"] | null;
+            route: components["schemas"]["SedationRoute"];
+            n2oPercent: number | null;
+        };
+        CopySedationDto: {
+            /** Format: date-time */
+            assessedAt: string;
+            grade: components["schemas"]["SedationGrade"];
+            asaClass: components["schemas"]["AsaClass"] | null;
+            authorName: string | null;
+            locationName: string | null;
+            agents: components["schemas"]["CopySedationAgentDto"][];
+            /** Format: date-time */
+            dischargedAt: string | null;
+        };
+        CopyConsentDto: {
+            title: string;
+            /** Format: date-time */
+            signedAt: string;
+            signerType: components["schemas"]["ConsentSignerType"];
+            signerName: string;
+            professionalName: string;
+            complete: boolean;
+        };
+        CopyPrescriptionItemDto: {
+            activeIngredient: string;
+            brandName: string | null;
+            concentration: string;
+            pharmaceuticalForm: string;
+            route: string;
+            dose: string;
+            frequency: string;
+            durationDays: number;
+            instructions: string | null;
+        };
+        CopyPrescriptionDto: {
+            /** Format: date-time */
+            issuedAt: string;
+            professionalName: string;
+            locationName: string;
+            status: components["schemas"]["PrescriptionStatus"];
+            notes: string | null;
+            items: components["schemas"]["CopyPrescriptionItemDto"][];
+        };
+        CopyAppointmentDto: {
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            status: components["schemas"]["AppointmentStatus"];
+            providerName: string | null;
+            locationName: string | null;
+            typeName: string | null;
+            reason: string | null;
+        };
+        CopyContentDto: {
+            evolutions?: components["schemas"]["CopyEvolutionDto"][];
+            diagnoses?: components["schemas"]["CopyDiagnosisLineDto"][];
+            anamnesis?: components["schemas"]["CopyAnamnesisDto"][];
+            odontogram?: components["schemas"]["CopyToothRecordDto"][];
+            anesthesia?: components["schemas"]["CopyAnesthesiaDto"][];
+            sedation?: components["schemas"]["CopySedationDto"][];
+            consents?: components["schemas"]["CopyConsentDto"][];
+            prescriptions?: components["schemas"]["CopyPrescriptionDto"][];
+            appointments?: components["schemas"]["CopyAppointmentDto"][];
+        };
+        ClinicalRecordCopyDocumentDto: {
+            copy: components["schemas"]["ClinicalRecordCopySummaryDto"];
+            clinic: components["schemas"]["CopyClinicDto"];
+            location: components["schemas"]["CopyLocationDto"];
+            patient: components["schemas"]["CopyPatientDto"];
+            content: components["schemas"]["CopyContentDto"];
+            /** @description Ninguna sección elegida trae registros en el período. */
+            empty: boolean;
         };
         PatientImplantDto: {
             /** Format: uuid */
@@ -42394,6 +42672,137 @@ export interface operations {
              *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
              */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicalRecordCopiesController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalRecordCopySummaryDto"][];
+                };
+            };
+            /** @description Solo el personal clínico (odontología, asistencia y administración) puede generar la copia de la historia clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicalRecordCopiesController_generate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateClinicalRecordCopyDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalRecordCopySummaryDto"];
+                };
+            };
+            /** @description Período inválido o que empieza después de hoy, sin secciones, secciones desconocidas o repetidas, o «entregado a» de más de 120 caracteres o con saltos de línea */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo el personal clínico (odontología, asistencia y administración) puede generar la copia de la historia clínica. O la sede de la petición no está permitida (LOCATION_NOT_ALLOWED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sede no tiene zona horaria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicalRecordCopiesController_document: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                copyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalRecordCopyDocumentDto"];
+                };
+            };
+            /** @description Solo el personal clínico (odontología, asistencia y administración) puede generar la copia de la historia clínica. O la copia es de una sede no permitida (LOCATION_NOT_ALLOWED). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o copia no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sede no tiene zona horaria */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

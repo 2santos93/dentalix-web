@@ -16,6 +16,7 @@ import { PatientDataPanel } from '@/components/patients/patient-data-panel';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 import { PatientRecordHeader } from '@/components/patients/patient-record-header';
 import { ImagingExportDialog, imagingExportMenuAction } from '@/components/patients/imaging-export-dialog';
+import { ClinicalRecordCopiesSection } from '@/components/patients/clinical-record-copies-section';
 import {
   PatientRetentionDialogs,
   PatientRetentionSection,
@@ -578,6 +579,8 @@ function PatientDetailView() {
                 headingId={ANAMNESIS_HEADING_ID}
                 onSaved={medicalAlerts.reload}
               />
+              {/* DX-456: copia de la historia clínica por período y secciones. */}
+              <ClinicalRecordCopiesSection token={accessToken} patientId={patientId} />
             </TabPanel>
           ) : null}
 
