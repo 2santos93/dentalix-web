@@ -18,6 +18,7 @@ import {
 } from "@/lib/patient-imports/patient-imports-api";
 import { saveCsv } from "@/lib/files/save-csv";
 import { ImportIssuesTable } from "./import-issues-table";
+import { UploadStatus } from "./patient-import-wizard";
 import type { RegionalFormat } from "@/lib/format/regional-format";
 import { sedeNumber } from "@/lib/format/sede-number";
 
@@ -33,8 +34,6 @@ export const appointmentsCopy = {
   other: "Subir otra hoja",
   template: "Descargar plantilla de citas",
   templateError: "No se pudo descargar la plantilla de citas.",
-  uploading: (fraction: number) =>
-    `Subiendo la hoja… ${Math.round(fraction * 100)} %`,
   validating:
     "Revisando cada cita contra la agenda… no se guarda ninguna cita todavía.",
   uploadProgress: "Subida de la hoja de citas",
@@ -159,9 +158,6 @@ export function AppointmentsStep({
     }
   }
 
-  const sending = uploaded !== null && uploaded < 1;
-  const percent = Math.round((uploaded ?? 0) * 100);
-
   return (
     <section
       aria-labelledby={headingId}
@@ -210,30 +206,7 @@ export function AppointmentsStep({
           {appointmentsCopy.template}
         </Button>
       </div>
-      {busy ? (
-        <div className="flex flex-col gap-2">
-          <p role="status" className="text-sm text-muted">
-            {sending
-              ? appointmentsCopy.uploading(uploaded)
-              : appointmentsCopy.validating}
-          </p>
-          {sending ? (
-            <div
-              role="progressbar"
-              aria-label={appointmentsCopy.uploadProgress}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={percent}
-              className="h-2 w-full max-w-sm overflow-hidden rounded-full bg-surface-sunken"
-            >
-              <div
-                className="h-full rounded-full bg-primary transition-[width] duration-200 motion-reduce:transition-none"
-                style={{ width: `${percent}%` }}
-              />
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+      {busy ? <UploadStatus uploaded={uploaded} done={appointmentsCopy.validating} /> : null}
       {error ? <InlineError variant="summary">{error}</InlineError> : null}
 
       {sheet ? (

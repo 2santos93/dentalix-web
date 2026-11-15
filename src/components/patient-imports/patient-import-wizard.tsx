@@ -146,7 +146,7 @@ interface PatientImportWizardProps {
  * Mientras sube el archivo (DX-107 × DX-259: hasta 5 MB), el porcentaje y su
  * barra; subido, `done` («Leyendo…», «Validando…») mientras la API trabaja.
  */
-function UploadStatus({ uploaded, done }: { uploaded: number | null; done: string }) {
+export function UploadStatus({ uploaded, done }: { uploaded: number | null; done: string }) {
   const sending = uploaded !== null && uploaded < 1;
   const percent = Math.round((uploaded ?? 0) * 100);
   return (
