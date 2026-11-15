@@ -142,6 +142,8 @@ async function cancelLate(page: Page, token: string) {
   await page.goto(`${origin}/confirmar/${token}`);
   await page.getByRole('checkbox', { name: /acepto la política de cancelación/ }).check();
   await page.getByRole('button', { name: 'Cancelar cita' }).click();
+  // DX-046: el paso «¿Seguro?».
+  await page.getByRole('dialog').getByRole('button', { name: 'Sí, cancelar' }).click();
   await expect(page.getByText(/Cancelaste la cita/)).toBeVisible({ timeout: 10_000 });
 }
 
@@ -172,6 +174,8 @@ async function flow(page: Page, request: Parameters<typeof apiPost>[0], width: n
   await expect(box).toBeFocused();
   await box.check();
   await page.getByRole('button', { name: 'Cancelar cita' }).click();
+  // DX-046: el paso «¿Seguro?».
+  await page.getByRole('dialog').getByRole('button', { name: 'Sí, cancelar' }).click();
   await expect(page.getByText(/Cancelaste la cita/)).toBeVisible({ timeout: 10_000 });
 
   // --- ADMIN: agenda → detalle → «Generar cargo».

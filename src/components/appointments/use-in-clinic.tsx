@@ -7,6 +7,7 @@ import { IN_CLINIC_POLL_MS, getInClinic, onInClinicChanged, type InClinicView } 
 import { notifyError } from '@/components/errors/notify';
 import { ApiError } from '@/lib/api/api-error';
 import { LOCATION_LOCALE_REQUIRED } from '@/lib/locations/use-sede-format';
+import { startVisibleRefresh } from '@/lib/hooks/use-visible-refresh';
 
 export const IN_CLINIC_LOAD_ERROR = 'No pudimos cargar quién está en la clínica.';
 export const IN_CLINIC_REFRESH_ERROR = 'No pudimos actualizar el panel «En clínica».';
@@ -119,18 +120,18 @@ function useInClinicSource(token: string | null, { reloadKey = 0, enabled = true
     }
     refreshRef.current = () => { void load(true); };
     void load();
-    const timer = window.setInterval(() => { if (!document.hidden) void load(); }, IN_CLINIC_POLL_MS);
-    const onVisible = () => {
-      if (!document.hidden && Date.now() - lastLoadedAt > IN_CLINIC_STALE_MS) void load();
-    };
-    document.addEventListener('visibilitychange', onVisible);
+    // DX-046: el mismo patrón que la agenda (pestaña visible y con conexión).
+    const stopRefresh = startVisibleRefresh(() => { void load(); }, {
+      intervalMs: IN_CLINIC_POLL_MS,
+      staleMs: IN_CLINIC_STALE_MS,
+      lastLoadedAt: () => lastLoadedAt,
+    });
     const unsubscribe = followChanges ? onInClinicChanged(() => { void load(true); }) : () => {};
     return () => {
       cancelled = true;
       setResult(null);
       refreshRef.current = () => {};
-      window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', onVisible);
+      stopRefresh();
       unsubscribe();
     };
   }, [token, enabled, key, activeLocationId, reloadKey, silent, followChanges, reload, requestLocations]);

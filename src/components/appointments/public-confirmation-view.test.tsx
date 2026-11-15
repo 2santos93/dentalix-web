@@ -201,6 +201,8 @@ describe('PublicConfirmationView', () => {
 
     render(<PublicConfirmationView confirmationToken="tok-1" />);
     fireEvent.click(await screen.findByRole('button', { name: label }));
+    // DX-046: cancelar pasa por «¿Seguro?».
+    if (action === 'cancel') fireEvent.click(await screen.findByRole('button', { name: 'Sí, cancelar' }));
 
     await waitFor(() =>
       expect(respond).toHaveBeenCalledWith('tok-1', action, {
@@ -210,6 +212,92 @@ describe('PublicConfirmationView', () => {
     );
     expect(await screen.findByText(done)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument();
+  });
+
+  describe('DX-046: «¿Seguro que quieres cancelar la cita?»', () => {
+    it('«Cancelar cita» abre el paso de confirmación con el foco dentro y no envía nada', async () => {
+      get.mockResolvedValueOnce(view());
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Cancelar cita' }));
+      const dialog = await screen.findByRole('dialog', { name: '¿Seguro que quieres cancelar la cita?' });
+      expect(dialog).toHaveTextContent(/recibirá tu cancelación/i);
+      await waitFor(() => expect(dialog).toContainElement(document.activeElement as HTMLElement));
+      // El primer foco es «Volver», la opción que no destruye nada.
+      expect(screen.getByRole('button', { name: 'Volver' })).toHaveFocus();
+      expect(respond).not.toHaveBeenCalled();
+    });
+
+    it('«Volver» cierra sin cancelar y devuelve el foco a «Cancelar cita»', async () => {
+      get.mockResolvedValueOnce(view());
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      const cancel = await screen.findByRole('button', { name: 'Cancelar cita' });
+      cancel.focus();
+      fireEvent.click(cancel);
+      fireEvent.click(await screen.findByRole('button', { name: 'Volver' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(respond).not.toHaveBeenCalled();
+      await waitFor(() => expect(cancel).toHaveFocus());
+    });
+
+    it('Escape cierra sin cancelar', async () => {
+      get.mockResolvedValueOnce(view());
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Cancelar cita' }));
+      const dialog = await screen.findByRole('dialog');
+      fireEvent.keyDown(dialog, { key: 'Escape' });
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(respond).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Cancelar cita' })).toBeInTheDocument();
+    });
+
+    it('«Sí, cancelar» envía cancel una vez, cierra y lleva el foco al resultado', async () => {
+      get.mockResolvedValueOnce(view());
+      respond.mockResolvedValueOnce(
+        view({ status: 'RESPONDED', response: 'cancel', respondedAt: '2026-10-19T10:00:00.000Z' }),
+      );
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Cancelar cita' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Sí, cancelar' }));
+      expect(await screen.findByText(/cancelaste la cita/i)).toBeInTheDocument();
+      expect(respond).toHaveBeenCalledTimes(1);
+      expect(respond).toHaveBeenCalledWith('tok-1', 'cancel', { policyVersionId: null, acknowledgePolicy: undefined });
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await waitFor(() => expect(screen.getByRole('heading', { name: 'Ya respondiste' })).toHaveFocus());
+    });
+
+    it('si falla, el diálogo se cierra y el error queda junto a los botones', async () => {
+      get.mockResolvedValueOnce(view());
+      respond.mockRejectedValueOnce(new Error('boom'));
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Cancelar cita' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Sí, cancelar' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(screen.getByRole('button', { name: 'Cancelar cita' })).toBeEnabled();
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+    });
+
+    it('tarde sin aceptar la política: no abre el paso, marca la casilla', async () => {
+      get.mockResolvedValueOnce(
+        view({
+          isLate: true,
+          cancellationPolicy: { policyVersionId: 'pol-1', noticeHours: 24, text: 'Avísanos con tiempo.', suggestedFee: null, currency: 'USD' },
+        }),
+      );
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Cancelar cita' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      await waitFor(() => expect(screen.getByRole('checkbox', { name: /acepto la política/i })).toHaveFocus());
+    });
+
+    it('en inglés, el paso va en inglés (también la «X»)', async () => {
+      get.mockResolvedValueOnce(view({ language: 'en' }));
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Cancel appointment' }));
+      expect(await screen.findByRole('dialog', { name: 'Are you sure you want to cancel the appointment?' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Yes, cancel' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Go back' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+    });
   });
 
   it('enlace ya respondido: muestra la respuesta dada y ningún botón', async () => {
@@ -279,6 +367,7 @@ describe('PublicConfirmationView', () => {
     render(<PublicConfirmationView confirmationToken="tok-1" />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Cancelar cita' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Sí, cancelar' }));
 
     expect(await screen.findByRole('heading', { name: /enlace ya no es válido/i })).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
@@ -326,6 +415,7 @@ describe('PublicConfirmationView', () => {
       render(<PublicConfirmationView confirmationToken="tok-1" />);
       fireEvent.click(await screen.findByRole('checkbox', { name: /acepto la política/i }));
       fireEvent.click(screen.getByRole('button', { name: 'Cancelar cita' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Sí, cancelar' }));
       await waitFor(() =>
         expect(respond).toHaveBeenCalledWith('tok-1', 'cancel', {
           policyVersionId: 'pol-1',

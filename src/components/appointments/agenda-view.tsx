@@ -96,6 +96,7 @@ import {
 } from '@/lib/appointments/opening-candidates';
 import { useMediaQuery } from '@/lib/hooks/use-media-query';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { useVisibleRefresh } from '@/lib/hooks/use-visible-refresh';
 import {
   STATUS_LABELS,
   patientLabel,
@@ -157,6 +158,9 @@ import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { Skeleton } from '@/components/ui/skeleton';
 import { isCivilDay } from '@/lib/time/civil-day';
 import { addCivilDays, civilWeekStart, wallDay, wallDayRange, wallWeekRange } from '@/lib/time/wall-clock';
+
+/** DX-046: cada cuánto se relee la agenda de fondo con la pestaña visible. */
+export const AGENDA_REFRESH_MS = 60_000;
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -879,6 +883,116 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
     setInClinicReloadKey((k) => k + 1);
     void refreshAppointmentsInPlaceRef.current();
   });
+
+  // DX-046: la respuesta del paciente por el enlace (confirmó o canceló) llega
+  // sin recargar: relectura de fondo cada minuto con la pestaña visible y al
+  // volver a ella. Sin estado de carga (nada parpadea) y sin pisar lo que se
+  // está haciendo: con un modal abierto, un arrastre o una escritura en vuelo
+  // se espera, y al terminar se relee lo que se saltó.
+  const draggingRef = useRef(false);
+  const editing =
+    showForm ||
+    detailAppointment !== null ||
+    evolutionFor !== null ||
+    movingAppointment !== null ||
+    moveCollision !== null ||
+    chairProviderOffer !== null ||
+    movePendingId !== null ||
+    updatingId !== null ||
+    completedExit !== null ||
+    cancelling !== null ||
+    showBlockDialog ||
+    showWalkIn ||
+    showContingency ||
+    removingBlock !== null ||
+    fillSlot !== null ||
+    keepOverbooked !== null ||
+    flow.pendingId !== null;
+  const appointmentsQuery = JSON.stringify([
+    viewMode,
+    selectedDate,
+    timeZone,
+    chairMode,
+    columnsMode ? columnsKey : null,
+    chairMode || columnsMode ? null : providerId,
+  ]);
+  const backgroundBlocked =
+    appointmentsLoading || appointmentsRefreshing || appointmentsLoadError !== null || waitingForStaff ||
+    (columnsMode && !chairMode && columnsKey === '');
+  // `epoch` sube en cada render con la agenda ocupada (carga, refresco en el
+  // sitio, edición o arrastre): una respuesta de fondo pedida antes no pisa
+  // lo que esos caminos ya escribieron.
+  const backgroundState = useRef({ editing, query: appointmentsQuery, blocked: true, missed: false, epoch: 0 });
+  const backgroundInFlight = useRef(false);
+  function refreshAppointmentsInBackground() {
+    const state = backgroundState.current;
+    if (!token || state.blocked || backgroundInFlight.current) return;
+    if (state.editing || draggingRef.current) {
+      state.missed = true;
+      return;
+    }
+    const query = state.query;
+    const epoch = state.epoch;
+    const { from, to } = rangeFor(viewMode, selectedDate, timeZone);
+    backgroundInFlight.current = true;
+    listAppointments(token, {
+      from,
+      to,
+      ...(chairMode
+        ? {}
+        : columnsMode
+          ? { providerIds: columnsKey.split(',') }
+          : { providerId: providerId || undefined }),
+    })
+      .then((data) => {
+        const now = backgroundState.current;
+        // Mientras volvía, cambió la vista o empezó una edición: se descarta
+        // (la próxima vuelta trae lo bueno).
+        if (now.query !== query || now.blocked || now.epoch !== epoch) {
+          if (now.editing || draggingRef.current) now.missed = true;
+          return;
+        }
+        if (now.editing || draggingRef.current) {
+          now.missed = true;
+          return;
+        }
+        setAppointments((prev) => (JSON.stringify(prev) === JSON.stringify(data) ? prev : data));
+      })
+      .catch(() => {
+        // De fondo y en silencio: la próxima vuelta lo reintenta. Un fallo de
+        // red ya pasa la agenda a «Sin conexión» (DX-405) desde el cliente.
+      })
+      .finally(() => {
+        backgroundInFlight.current = false;
+      });
+  }
+  useVisibleRefresh(refreshAppointmentsInBackground, {
+    enabled: Boolean(token),
+    intervalMs: AGENDA_REFRESH_MS,
+  });
+  const refreshAppointmentsInBackgroundRef = useRef(refreshAppointmentsInBackground);
+  useEffect(() => {
+    const state = backgroundState.current;
+    state.editing = editing;
+    state.query = appointmentsQuery;
+    state.blocked = backgroundBlocked;
+    if (editing || backgroundBlocked) state.epoch += 1;
+    refreshAppointmentsInBackgroundRef.current = refreshAppointmentsInBackground;
+  });
+  useEffect(() => {
+    if (editing || !backgroundState.current.missed) return;
+    backgroundState.current.missed = false;
+    refreshAppointmentsInBackgroundRef.current();
+  }, [editing]);
+  function handleDragActiveChange(active: boolean) {
+    draggingRef.current = active;
+    backgroundState.current.epoch += 1;
+    if (!active && backgroundState.current.missed && !backgroundState.current.editing) {
+      backgroundState.current.missed = false;
+      // Tras soltar viene la escritura (`movePendingId`): se relee al acabar.
+      window.setTimeout(() => refreshAppointmentsInBackgroundRef.current(), 0);
+    }
+  }
 
   /** DX-492: «Mover a…» desde «En clínica»: la agenda de al lado también cambia. */
   function handleInClinicMoved() {
@@ -1664,6 +1778,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 onMoveRequest={requestMove}
                 renderFlowAction={(a) => renderFlowActions(a, '', true)}
                 onDrop={(a, target) => void handleDrop(a, target)}
+                onDragActiveChange={handleDragActiveChange}
                 onNewAppointment={handleNewFromChair}
                 pendingId={movePendingId}
                 blocks={blocks}
@@ -1693,6 +1808,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 onMoveRequest={requestMove}
                 renderFlowAction={(a) => renderFlowActions(a, '', true)}
                 onDrop={(a, target) => void handleDrop(a, target)}
+                onDragActiveChange={handleDragActiveChange}
                 onNewAppointment={handleNewFromColumn}
                 pendingId={movePendingId}
                 blocks={blocks}

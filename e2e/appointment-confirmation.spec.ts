@@ -316,6 +316,7 @@ test('DX-469: «Añadir a mi calendario» en el enlace: .ics de la cita y Google
 
   // Cancelada desde el enlace: la página deja de ofrecerlo; el .ics la marca CANCELLED.
   await patientPage.getByRole('button', { name: 'Cancelar cita' }).click();
+  await patientPage.getByRole('dialog').getByRole('button', { name: 'Sí, cancelar' }).click();
   await expect(patientPage.getByText('Ya respondiste')).toBeVisible({ timeout: 10_000 });
   await expect(patientPage.getByTestId('public-calendar-links')).toHaveCount(0);
   const cancelled = await patientPage.request.get(new URL(href, link.url).toString());
