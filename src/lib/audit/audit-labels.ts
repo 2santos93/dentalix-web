@@ -154,6 +154,10 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   PRESCRIPTION_TEMPLATE: 'Plantilla de receta',
   INVENTORY_ITEM: 'Artículo de inventario',
   INVENTORY_MOVEMENT: 'Movimiento de inventario',
+  // DX-569: el enlace de pago (crear, enviar, anular) y el pago que reporta el
+  // paciente desde él (reporte, confirmar, rechazar, ver el comprobante).
+  PAYMENT_LINK: 'Enlace de pago',
+  PAYMENT_REPORT: 'Pago reportado',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];

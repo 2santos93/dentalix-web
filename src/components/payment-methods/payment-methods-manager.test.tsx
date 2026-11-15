@@ -34,6 +34,7 @@ const cash: ClinicPaymentMethod = {
   active: true,
   requiresReference: false,
   proofPolicy: 'NONE' as const,
+  allowInPaymentLink: false,
   legacyMethod: 'CASH',
   adjustments: [],
   createdAt: '2026-10-01T00:00:00.000Z',

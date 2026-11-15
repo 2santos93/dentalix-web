@@ -21,6 +21,8 @@ import type { ExtraPermission } from '@/lib/auth/permissions';
 import { CLOSING_QUEUE_HREF } from '@/lib/appointments/closing-queue-api';
 
 export const ANAMNESIS_HREF = '/anamnesis-por-revisar';
+/** DX-569: la bandeja «Pagos por confirmar» es una pestaña de la Caja. */
+export const PAYMENT_REPORTS_HREF = '/caja?tab=por-confirmar';
 export { CLOSING_QUEUE_HREF };
 
 export interface NavItem {
