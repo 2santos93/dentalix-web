@@ -2,7 +2,7 @@
 import { useEffect } from 'react';
 import { useLocationsState } from '@/lib/locations/use-locations-state';
 import { screenLocation } from '@/lib/locations/sede-clock';
-import { syncOfflineAgenda } from '@/lib/offline/offline-agenda';
+import { markOfflineSession, syncOfflineAgenda } from '@/lib/offline/offline-agenda';
 import { warmOfflinePages } from '@/lib/offline/service-worker';
 
 /** Cada cuánto se renueva la copia mientras la agenda está abierta. */
@@ -27,9 +27,11 @@ export function useOfflineAgendaSync(token: string | null, enabled: boolean): vo
     const sync = () => {
       if (cancelled || Date.now() - last < 30_000) return;
       last = Date.now();
+      // Con token, esta pestaña tiene sesión (lo marca también el arranque).
+      markOfflineSession(token);
       syncOfflineAgenda(token, locationId)
-        .then(() => {
-          if (!cancelled) void warmOfflinePages();
+        .then((saved) => {
+          if (saved && !cancelled) void warmOfflinePages();
         })
         .catch(() => {
           // Sin copia nueva: se queda la anterior (o ninguna). Ver arriba.

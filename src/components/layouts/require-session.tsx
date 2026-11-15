@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { useOffline } from '@/lib/offline/connectivity';
 import { isOfflineCapable, useSessionReconnect } from '@/lib/offline/offline-session';
+import { offlineSessionOwner } from '@/lib/offline/offline-agenda';
 
 export const requireSessionCopy = {
   checkingSession: 'Verificando sesión…',
@@ -42,8 +43,9 @@ export function isSessionless(pathname: string | null): boolean {
  *   mira si HAY sesión. Y es experiencia, no seguridad: quien autoriza es la API.
  *
  * - DX-405: sin conexión y sin token (se recargó sin red), las pantallas con
- *   copia sin conexión (`/agenda`) se pintan igual: la sesión no está muerta,
- *   solo no se pudo renovar. Al volver la red se renueva (`reconnecting`,
+ *   copia sin conexión (`/agenda`) se pintan igual SI esta pestaña tuvo sesión
+ *   (marca en sessionStorage): la sesión no está muerta, solo no se pudo
+ *   renovar. Otra pestaña o el navegador abierto de nuevo van a /login. Al volver la red se renueva (`reconnecting`,
  *   esqueleto mientras tanto); si la API la da por muerta, a /login.
  *
  * Las páginas siguen leyendo el token del store; su `if (!accessToken) return
@@ -58,7 +60,10 @@ export function RequireSession({ children }: { children: ReactNode }) {
   const offline = useOffline();
   const reconnecting = useSessionReconnect();
   const open = isSessionless(pathname);
-  const offlineCopy = offline && hasHydrated && !accessToken && isOfflineCapable(pathname);
+  // Solo si ESTA pestaña tuvo sesión con token (marca en sessionStorage): un
+  // navegador abierto de nuevo sin red no enseña nada.
+  const offlineCopy =
+    offline && hasHydrated && !accessToken && isOfflineCapable(pathname) && offlineSessionOwner() !== null;
 
   useEffect(() => {
     if (open || offlineCopy || reconnecting || !hasHydrated || accessToken) return;

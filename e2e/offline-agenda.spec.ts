@@ -19,7 +19,8 @@ import { API_URL, tenantOrigin } from './support/urls';
  *    de las HH:MM», la cita de mañana con su teléfono y «Nueva cita» inactivo
  *    con su motivo. Al volver la red el aviso se va y vuelve la agenda de
  *    siempre.
- * 2. 390 px: lo mismo y, además, RECARGAR sin red. Eso necesita el service
+ * 2. 390 px: lo mismo y, además, RECARGAR sin red (en la misma pestaña; otra
+ *    pestaña sin la sesión no ve nada). Eso necesita el service
  *    worker (`public/sw.js`), que solo se registra en producción: la E2E de la
  *    CI corre `next build` + `next start` (ver `.github/workflows/e2e.yml` y
  *    `scripts/e2e-ci.sh`), así que allí es obligatorio. En local con `next dev`
@@ -173,37 +174,51 @@ test('390 px: sin red y RECARGANDO la página, la copia se abre; al volver la re
   await expectNoHorizontalScroll(page);
   await page.screenshot({ path: `${QA_DIR}/dx405-recarga-sin-conexion-390.png`, fullPage: true });
 
+  // Otra pestaña (sin la sesión de ésta: su sessionStorage está vacía), como
+  // quien abre el navegador de nuevo sin red: no enseña la copia.
+  const other = await context.newPage();
+  await other.setViewportSize({ width: 390, height: 844 });
+  await other.goto(`${origin}/agenda`).catch(() => undefined);
+  await other.waitForTimeout(2_000);
+  await expect(other.getByTestId('offline-agenda')).toHaveCount(0);
+  await expect(other.getByText(`${patient.firstName} ${patient.lastName}`)).toHaveCount(0);
+  await other.close();
+
   // Vuelve la red: renueva la sesión con la cookie y monta la agenda de siempre.
   await context.setOffline(false);
   await expectBackOnline(page);
 });
 
-test('cerrar sesión borra la copia cifrada y su clave del navegador', async ({ page }) => {
+test('cerrar sesión borra la copia cifrada, su clave y la marca de la pestaña', async ({ page }) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 1440, height: 900 });
   await loginAs(page, origin, reception.email, password);
   await openAgendaAndSync(page);
+  // [clave en sessionStorage, marca de sesión de la pestaña, agenda cifrada en IndexedDB]
   const counts = () =>
     page.evaluate(
       () =>
         new Promise<number[]>((resolve, reject) => {
+          const tab = [
+            sessionStorage.getItem('dentalix.offline.key') ? 1 : 0,
+            sessionStorage.getItem('dentalix.offline.session') ? 1 : 0,
+          ];
           const req = indexedDB.open('dentalix-offline');
           req.onerror = () => reject(req.error);
           req.onsuccess = () => {
             const db = req.result;
-            if (!db.objectStoreNames.contains('keys')) return resolve([0, 0]);
-            const tx = db.transaction(['keys', 'agenda'], 'readonly');
-            const k = tx.objectStore('keys').count();
+            if (!db.objectStoreNames.contains('agenda')) return resolve([...tab, 0]);
+            const tx = db.transaction('agenda', 'readonly');
             const a = tx.objectStore('agenda').count();
-            tx.oncomplete = () => resolve([k.result, a.result]);
+            tx.oncomplete = () => resolve([...tab, a.result]);
             tx.onerror = () => reject(tx.error);
           };
         }),
     );
-  await expect.poll(counts).toEqual([1, 1]);
+  await expect.poll(counts).toEqual([1, 1, 1]);
 
   await page.getByRole('button', { name: new RegExp(reception.fullName, 'i') }).first().click();
   await page.getByRole('menuitem', { name: /cerrar sesión/i }).click();
   await expect(page).toHaveURL(`${origin}/login`, { timeout: 10_000 });
-  await expect.poll(counts).toEqual([0, 0]);
+  await expect.poll(counts).toEqual([0, 0, 0]);
 });

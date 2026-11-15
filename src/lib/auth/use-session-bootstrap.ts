@@ -5,7 +5,7 @@ import { useAuthStore } from './auth-store';
 import { onLogoutElsewhere } from './session-channel';
 import { clearSessionStore } from '@/lib/session/session-store';
 import { onLocationChange } from '@/lib/locations/location-store';
-import { forgetOfflineAgendaData, forgetOfflineSession } from '@/lib/offline/offline-agenda';
+import { forgetOfflineAgendaData, forgetOfflineSession, markOfflineSession } from '@/lib/offline/offline-agenda';
 
 /**
  * Recupera la sesión al cargar una pantalla que la necesita (DX-062): pide un
@@ -19,6 +19,12 @@ import { forgetOfflineAgendaData, forgetOfflineSession } from '@/lib/offline/off
 export function useSessionBootstrap(): void {
   useEffect(() => {
     void bootstrapSession();
+    // DX-405: la pestaña con token queda marcada como «con sesión» (en
+    // sessionStorage): solo así puede guardar y enseñar la copia sin conexión.
+    // El arranque CON red sin sesión válida (401 del refresh) la borra en
+    // `client.ts`; un fallo de red no, porque es justo cuando hace falta.
+    markOfflineSession(useAuthStore.getState().accessToken);
+    const stopMark = useAuthStore.subscribe((state) => markOfflineSession(state.accessToken));
     // DX-405: la copia sin conexión de la agenda es de UNA sede: cambiar de
     // sede (aquí o en otra pestaña) la borra; la agenda guarda la nueva.
     const stopLocation = onLocationChange(() => void forgetOfflineAgendaData());
@@ -29,6 +35,7 @@ export function useSessionBootstrap(): void {
       void forgetOfflineSession();
     });
     return () => {
+      stopMark();
       stopLocation();
       stopLogout();
     };

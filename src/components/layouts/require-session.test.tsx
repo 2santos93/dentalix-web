@@ -91,7 +91,12 @@ describe('RequireSession (FE-020, DX-117)', () => {
   });
 
   describe('sin conexión (DX-405)', () => {
+    beforeEach(() => {
+      // La pestaña tuvo sesión con token (lo marca el arranque de sesión).
+      window.sessionStorage.setItem('dentalix.offline.session', 'user-1|tenant-1');
+    });
     afterEach(() => {
+      window.sessionStorage.clear();
       Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: true });
       resetConnectivityForTests();
       mockRefresh.mockReset();
@@ -104,6 +109,16 @@ describe('RequireSession (FE-020, DX-117)', () => {
       renderGuard();
       expect(screen.getByRole('heading', { name: 'Pacientes' })).toBeInTheDocument();
       expect(replace).not.toHaveBeenCalled();
+    });
+
+    it('sin red en una pestaña que nunca tuvo sesión (navegador abierto de nuevo): a /login', () => {
+      window.sessionStorage.clear();
+      mockPathname = '/agenda';
+      setOnline(false);
+      useAuthStore.setState({ accessToken: null, _hasHydrated: true });
+      renderGuard();
+      expect(screen.queryByRole('heading', { name: 'Pacientes' })).not.toBeInTheDocument();
+      expect(replace).toHaveBeenCalledWith('/login');
     });
 
     it('sin red en otra pantalla: a /login como siempre (solo la agenda tiene copia)', () => {

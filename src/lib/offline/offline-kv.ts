@@ -1,21 +1,23 @@
 /**
- * Almacén clave-valor mínimo de la copia sin conexión (DX-405). Dos «tablas»:
- * `keys` (la clave AES de la sesión, un `CryptoKey` NO extraíble) y `agenda`
- * (la agenda cifrada). En el navegador es IndexedDB, que guarda un `CryptoKey`
- * tal cual (clonado estructurado) sin exponer sus bytes; en los tests, memoria.
+ * Almacén clave-valor mínimo de la copia sin conexión (DX-405): la tabla
+ * `agenda`, con la agenda CIFRADA. La clave no vive aquí sino en la pestaña
+ * (`sessionStorage`, ver `encrypted-agenda-store.ts`). En el navegador es
+ * IndexedDB; en los tests, memoria.
  */
-export type OfflineTable = 'keys' | 'agenda';
+export type OfflineTable = 'agenda';
 
 export interface OfflineKv {
   get<T>(table: OfflineTable, key: string): Promise<T | undefined>;
   put<T>(table: OfflineTable, key: string, value: T): Promise<void>;
   delete(table: OfflineTable, key: string): Promise<void>;
   clear(table: OfflineTable): Promise<void>;
+  /** Todas las claves de la tabla (para purgar copias caducadas). */
+  keys(table: OfflineTable): Promise<string[]>;
 }
 
 const DB_NAME = 'dentalix-offline';
 const DB_VERSION = 1;
-const TABLES: readonly OfflineTable[] = ['keys', 'agenda'];
+const TABLES: readonly OfflineTable[] = ['agenda'];
 
 function request<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -59,12 +61,13 @@ export function indexedDbKv(): OfflineKv | null {
     clear: async (table) => {
       await run(table, 'readwrite', (s) => s.clear());
     },
+    keys: async (table) => (await run(table, 'readonly', (s) => s.getAllKeys())).map(String),
   };
 }
 
 /** En memoria (tests). */
 export function memoryKv(): OfflineKv & { tables: Record<OfflineTable, Map<string, unknown>> } {
-  const tables: Record<OfflineTable, Map<string, unknown>> = { keys: new Map(), agenda: new Map() };
+  const tables: Record<OfflineTable, Map<string, unknown>> = { agenda: new Map() };
   return {
     tables,
     get: async <T>(table: OfflineTable, key: string) => tables[table].get(key) as T | undefined,
@@ -77,5 +80,6 @@ export function memoryKv(): OfflineKv & { tables: Record<OfflineTable, Map<strin
     clear: async (table) => {
       tables[table].clear();
     },
+    keys: async (table) => [...tables[table].keys()],
   };
 }

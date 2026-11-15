@@ -1,7 +1,12 @@
 import { apiFetch } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import { readJwtClaims } from '@/lib/auth/jwt-claims';
-import { createEncryptedAgendaStore, type EncryptedAgendaStore, type ReadExpectations } from './encrypted-agenda-store';
+import {
+  createEncryptedAgendaStore,
+  sessionStorageKeyHolder,
+  type EncryptedAgendaStore,
+  type ReadExpectations,
+} from './encrypted-agenda-store';
 import { indexedDbKv } from './offline-kv';
 import { forgetOfflinePages } from './service-worker';
 
@@ -21,28 +26,97 @@ export function offlineOwnerOf(token: string | null | undefined): { owner: strin
   return { owner: `${claims.sub}|${claims.tenantId}`, tenantId: claims.tenantId };
 }
 
+// ── Marca de sesión de la pestaña ───────────────────────────────────────────
+// La pone `markOfflineSession` cuando la pestaña tiene un access token y la
+// quita el cierre de sesión. Vive en `sessionStorage`: la recarga de ESTA
+// pestaña la conserva (también sin red); otra pestaña, o el navegador abierto
+// de nuevo, no la tienen. Sin ella ni se enseña la copia sin conexión ni se
+// genera una clave.
+const SESSION_MARK = 'dentalix.offline.session';
+const SESSION_KEY = 'dentalix.offline.key';
+
+function tabStorage(): Storage | null {
+  try {
+    return typeof window === 'undefined' ? null : window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+/** Esta pestaña tiene sesión (token) para el dueño de `token`. */
+export function markOfflineSession(token: string | null | undefined): void {
+  const who = offlineOwnerOf(token);
+  if (!who) return;
+  try {
+    tabStorage()?.setItem(SESSION_MARK, who.owner);
+  } catch {
+    // Sin almacenamiento de pestaña: sin copia sin conexión.
+  }
+}
+
+/** Dueño de la sesión de esta pestaña, o `null` si no la hubo (o se cerró). */
+export function offlineSessionOwner(): string | null {
+  try {
+    return tabStorage()?.getItem(SESSION_MARK) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function clearSessionMark(): void {
+  try {
+    tabStorage()?.removeItem(SESSION_MARK);
+  } catch {
+    // Nada que borrar.
+  }
+}
+
+// ── Época ───────────────────────────────────────────────────────────────────
+// Sube con cada cierre de sesión: un guardado cuya petición salió antes no
+// escribe después del borrado.
+let epoch = 0;
+
+export function offlineEpoch(): number {
+  return epoch;
+}
+
 let store: EncryptedAgendaStore<OfflineAgenda> | null | undefined;
 
 function agendaStore(): EncryptedAgendaStore<OfflineAgenda> | null {
   if (store !== undefined) return store;
-  const kv = typeof window === 'undefined' || !globalThis.crypto?.subtle ? null : indexedDbKv();
-  store = kv ? createEncryptedAgendaStore<OfflineAgenda>({ kv }) : null;
+  const subtle = globalThis.crypto?.subtle;
+  const tab = tabStorage();
+  const kv = typeof window === 'undefined' || !subtle || !tab ? null : indexedDbKv();
+  store =
+    kv && subtle && tab
+      ? createEncryptedAgendaStore<OfflineAgenda>({
+          kv,
+          keys: sessionStorageKeyHolder(tab, subtle, SESSION_KEY),
+          canCreateKey: (owner) => offlineSessionOwner() === owner,
+        })
+      : null;
   return store;
 }
 
-/** Pide la agenda de la sede y la guarda cifrada. Lanza si la API falla. */
-export async function syncOfflineAgenda(token: string, locationId: string): Promise<void> {
+/**
+ * Pide la agenda de la sede y la guarda cifrada. `false` si no se guardó (sin
+ * sesión en la pestaña, o se cerró mientras llegaba). Lanza si la API falla.
+ */
+export async function syncOfflineAgenda(token: string, locationId: string): Promise<boolean> {
   const s = agendaStore();
   const who = offlineOwnerOf(token);
-  if (!s || !who) return;
+  if (!s || !who || offlineSessionOwner() !== who.owner) return false;
+  const startedAt = epoch;
   const agenda = await fetchOfflineAgenda(token, locationId);
-  await s.save({ ...who, locationId: agenda.locationId }, agenda);
+  return s.save({ ...who, locationId: agenda.locationId }, agenda, {
+    isCurrent: () => epoch === startedAt && offlineSessionOwner() === who.owner,
+  });
 }
 
-/** La copia guardada (descifrada) o `null`. */
+/** La copia guardada (descifrada) o `null`. Sin sesión en la pestaña, nunca. */
 export async function readOfflineAgenda(expect: ReadExpectations) {
   const s = agendaStore();
-  if (!s) return null;
+  if (!s || !offlineSessionOwner()) return null;
   try {
     return await s.read(expect);
   } catch {
@@ -61,9 +135,13 @@ export async function forgetOfflineAgendaData(): Promise<void> {
 
 /**
  * Al cerrar la sesión (aquí, en otra pestaña o porque la API la dio por
- * muerta): la clave, la agenda y las páginas guardadas por el service worker.
+ * muerta) o al arrancar con red sin sesión: la marca, la clave, la agenda y
+ * las páginas guardadas por el service worker. Sube la época ANTES de borrar,
+ * así un guardado en vuelo ya no escribe.
  */
 export async function forgetOfflineSession(): Promise<void> {
+  epoch += 1;
+  clearSessionMark();
   try {
     await agendaStore()?.wipe();
   } catch {
@@ -72,7 +150,16 @@ export async function forgetOfflineSession(): Promise<void> {
   await forgetOfflinePages();
 }
 
+/** Solo tests: un almacén con dependencias propias. */
+export function setOfflineAgendaStoreForTests(
+  next: EncryptedAgendaStore<OfflineAgenda> | null | undefined,
+): void {
+  store = next;
+}
+
 /** Solo tests. */
 export function resetOfflineAgendaStoreForTests(): void {
   store = undefined;
+  epoch = 0;
 }
+
