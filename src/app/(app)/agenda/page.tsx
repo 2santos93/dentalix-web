@@ -42,9 +42,9 @@ export default function AgendaPage() {
         title={copy.title}
         description={copy.description}
         meta={<ClosingQueueLink token={accessToken} />}
+        // DX-405: activar (con PIN), desbloquear o quitar la copia sin conexión.
+        actions={<OfflineCopyControl token={accessToken} />}
       />
-      {/* DX-405: activar (con PIN), desbloquear o quitar la copia sin conexión. */}
-      <OfflineCopyControl token={accessToken} />
       <AgendaView token={accessToken} />
     </>
   );

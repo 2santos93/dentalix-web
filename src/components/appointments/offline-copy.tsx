@@ -20,13 +20,12 @@ import {
 import { isValidPin } from '@/lib/offline/offline-vault';
 
 export const offlineCopyText = {
-  offerTitle: 'Ver la agenda sin conexión',
-  offerBody:
-    'Guarda en este equipo, cifrada, la agenda de hoy y mañana para verla si se va internet o la luz. Se abre con un PIN que eliges ahora.',
+  offerTitle: '¿Ver la agenda sin conexión?',
+  offerShort: 'Se guarda cifrada en este equipo y se abre con un PIN, por si se va internet o la luz.',
   activate: 'Activar con PIN',
   notNow: 'Ahora no',
   activeLine: 'Copia sin conexión activa en este equipo.',
-  lockedLine: 'Copia sin conexión bloqueada en esta pestaña: desbloquéala con tu PIN para mantenerla al día.',
+  lockedLine: 'Copia sin conexión bloqueada en esta pestaña.',
   offLine: 'Sin copia sin conexión en este equipo.',
   unlock: 'Desbloquear',
   remove: 'Quitar copia sin conexión',
@@ -246,29 +245,34 @@ export function OfflineCopyControl({ token }: { token: string }) {
 
   if (status === null) return null;
 
+  // Va en la ranura de acciones de la cabecera (a la derecha en escritorio):
+  // compacto, para no empujar la rejilla de la agenda.
   return (
-    <div data-testid="offline-copy-control" data-status={status} className="mb-4 flex flex-col gap-3">
+    <div
+      data-testid="offline-copy-control"
+      data-status={status}
+      className="flex max-w-sm flex-col gap-1.5 text-xs text-muted sm:items-end sm:text-right"
+    >
       {wiped ? <OfflineCopyWiped /> : null}
       {status === 'off' && !declined ? (
-        <Callout
-          tone="info"
-          icon={KeyRound}
-          title={offlineCopyText.offerTitle}
-          action={
-            <span className="flex flex-wrap gap-2">
-              <Button size="sm" onClick={() => setSetupOpen(true)}>
-                {offlineCopyText.activate}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={decline}>
-                {offlineCopyText.notNow}
-              </Button>
+        <>
+          <p className="flex items-center gap-1.5">
+            <KeyRound aria-hidden className="size-3.5 shrink-0" />
+            <span>
+              <span className="font-medium text-ink">{offlineCopyText.offerTitle}.</span> {offlineCopyText.offerShort}
             </span>
-          }
-        >
-          <p>{offlineCopyText.offerBody}</p>
-        </Callout>
+          </p>
+          <span className="flex flex-wrap gap-2">
+            <Button size="sm" variant="secondary" onClick={() => setSetupOpen(true)}>
+              {offlineCopyText.activate}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={decline}>
+              {offlineCopyText.notNow}
+            </Button>
+          </span>
+        </>
       ) : (
-        <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted">
+        <p className="flex flex-wrap items-center gap-x-2 sm:justify-end">
           <KeyRound aria-hidden className="size-3.5" />
           <span>
             {status === 'ready'
