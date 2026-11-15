@@ -2659,6 +2659,22 @@ export interface paths {
         patch: operations["ChairsController_update"];
         trace?: never;
     };
+    "/api/v1/chairs/{id}/upcoming-appointments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ChairsController_upcomingAppointments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chairs/{id}/deactivate": {
         parameters: {
             query?: never;
@@ -13469,6 +13485,10 @@ export interface components {
              * @description null quita el profesional por defecto.
              */
             defaultProviderId?: string | null;
+        };
+        ChairUpcomingAppointmentsDto: {
+            /** @description Citas vivas del sillón desde ahora, sin las canceladas ni las inasistencias. */
+            count: number;
         };
         /** @enum {string} */
         EquipmentCategory: "AUTOCLAVE" | "DENTAL_UNIT" | "XRAY" | "COMPRESSOR" | "CURING_LIGHT" | "ULTRASONIC_SCALER" | "OTHER";
@@ -26541,7 +26561,7 @@ export interface operations {
                     "application/json": components["schemas"]["ConvertResponseDto"];
                 };
             };
-            /** @description Fecha que no existe o fuera de 2000-01-01..2100-12-31 (el mensaje de validación de `date`, o `EXCHANGE_RATE_DATE_INVALID`), un día posterior a hoy en las sedes de la clínica (`EXCHANGE_RATE_DATE_FUTURE`, con `today`) o un día sin tasa guardada anterior a la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. También: moneda sin tasa ese día, «unsupported currency» con el proveedor; con tasa manual, código EXCHANGE_RATE_MISSING y el mensaje en español. */
+            /** @description Fecha que no existe o fuera de 2000-01-01..2100-12-31 (el mensaje de validación de `date`, o `EXCHANGE_RATE_DATE_INVALID`), un día posterior a hoy en las sedes de la clínica (`EXCHANGE_RATE_DATE_FUTURE`, con `today`) o un día sin tasa guardada anterior a la ventana de la clínica (`EXCHANGE_RATE_DATE_OUT_OF_RANGE`, con `first` y `today`); nunca se llama al proveedor. También: moneda sin tasa ese día, código EXCHANGE_RATE_UNSUPPORTED con el proveedor y EXCHANGE_RATE_MISSING con tasa manual, los dos con el mensaje en español. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -29491,7 +29511,7 @@ export interface operations {
                     "application/json": components["schemas"]["AppointmentListItemDto"][];
                 };
             };
-            /** @description Más de 12 profesionales o alguno ajeno a la clínica; DX-211: más de 12 sillones, alguno de otra sede o clínica, o `chairIds` sin sede */
+            /** @description Más de 12 profesionales o alguno ajeno a la clínica; DX-211: más de 12 sillones, alguno de otra sede o clínica, o `chairIds` sin sede; DX-111: rango de más de 62 días (`APPOINTMENT_RANGE_TOO_WIDE`, con `maxDays`) o `to` anterior a `from` (`APPOINTMENT_RANGE_INVERTED`) */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -31312,6 +31332,42 @@ export interface operations {
             };
             /** @description Ya existe un sillón con ese nombre en la sede */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChairsController_upcomingAppointments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description DX-111: cuántas citas futuras conserva el sillón (el aviso antes de desactivarlo). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChairUpcomingAppointmentsDto"];
+                };
+            };
+            /** @description Solo administración gestiona los sillones. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sillón no encontrado en esta clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -33236,6 +33292,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                id: string;
                 itemId: string;
             };
             cookie?: never;
@@ -33244,6 +33301,13 @@ export interface operations {
         responses: {
             /** @description Item soft-deleted (deletedAt set) */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ítem inexistente, de otra clínica o de otro plan (DX-111: el ítem debe ser del plan `:id`) */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -33266,6 +33330,7 @@ export interface operations {
                 "X-Location-Id"?: string;
             };
             path: {
+                id: string;
                 itemId: string;
             };
             cookie?: never;
@@ -33298,7 +33363,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Ítem inexistente o de otra clínica; DX-050: `performedById` que no es miembro activo de esta clínica (otra clínica o desactivado) */
+            /** @description Ítem inexistente, de otra clínica o de otro plan (DX-111: el ítem debe ser del plan `:id`); DX-050: `performedById` que no es miembro activo de esta clínica (otra clínica o desactivado) */
             404: {
                 headers: {
                     [name: string]: unknown;
