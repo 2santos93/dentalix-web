@@ -70,6 +70,7 @@ import { ConfirmationLinkPanel } from '@/components/appointments/confirmation-li
 import { CancellationFeePanel } from '@/components/appointments/cancellation-fee-panel';
 import { AppointmentRemindersPanel } from '@/components/reminders/appointment-reminders-panel';
 import { AppointmentPostOpPanel } from '@/components/postop/appointment-postop-panel';
+import { AppointmentCertificateAction } from '@/components/certificates/appointment-certificate-action';
 import { AnamnesisLinkPanel } from '@/components/anamnesis/anamnesis-link-panel';
 import { canDeliverPostOp, postOpPanelMode } from '@/lib/postop/postop-api';
 import { NewEvolutionModal } from '@/components/clinical-notes/new-evolution-modal';
@@ -1999,6 +2000,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                     {copy.registerEvolution}
                   </Button>
                 ) : null}
+                <AppointmentCertificateAction key={`cert-${liveDetailAppointment.id}`} token={token} appointment={liveDetailAppointment} />
                 {/* DX-291: «Generar cargo» y «Condonar» en una inasistencia o
                     una cancelación tardía (ADMIN y RECEPTION; el servidor
                     dice si este usuario puede decidir). */}

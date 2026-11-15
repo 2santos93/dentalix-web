@@ -60,8 +60,6 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   CONSENT: 'Consentimiento',
   DATA_CONSENT: 'Autorización de datos',
   PRESCRIPTION: 'Receta',
-  // DX-306 (API en main): justificantes de asistencia y certificados de reposo.
-  PATIENT_CERTIFICATE: 'Justificante o certificado',
   TREATMENT_PLAN: 'Plan de tratamiento',
   TREATMENT_PLAN_ITEM: 'Ítem del plan',
   PAYMENT: 'Abono',
@@ -92,6 +90,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   RECALL_CONTACT: 'Contacto de recall',
   // DX-015-bis (D14): Ajustes › Recall (crear, editar, retirar, disparadores).
   RECALL_TYPE: 'Tipo de recall',
+  // DX-306: justificante de asistencia y certificado de reposo.
+  PATIENT_CERTIFICATE: 'Certificado',
   // DX-204: topes de descuento por rol y umbral del motivo.
   DISCOUNT_POLICY: 'Política de descuentos',
   // DX-210: oferta de un hueco libre a un candidato.

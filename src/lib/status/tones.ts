@@ -152,6 +152,13 @@ const prescription = {
   VOIDED: s('neutral', 'Anulada'),
 } satisfies Presentations<Schemas['PrescriptionStatus']>;
 
+// DX-306: el certificado no tiene estado en la API; vigente = sin `voidedAt`.
+const certificate = {
+  LIVE: s('success', 'Vigente'),
+  // Anulado = documento inmutable retirado, no un error.
+  VOIDED: s('neutral', 'Anulado'),
+} satisfies Presentations<'LIVE' | 'VOIDED'>;
+
 // ── Anamnesis y consentimientos ─────────────────────────────────────────────
 
 const anamnesisSubmission = {
@@ -350,6 +357,7 @@ export const STATUS_PRESENTATION = {
   clinicalRecord,
   perioExam,
   prescription,
+  certificate,
   anamnesisSubmission,
   dataConsent,
   installment,
