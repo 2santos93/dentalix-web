@@ -1,9 +1,13 @@
 'use client';
-import { Suspense } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { CashRegisterView } from '@/components/payments/cash-register-view';
 import { CashShiftsView } from '@/components/cash-sessions/cash-shifts-view';
+import { PaymentReportsInboxView } from '@/components/payment-links/payment-reports-inbox-view';
+import { canHandlePaymentLinks, countPendingPaymentReports } from '@/lib/payment-links/payment-links-api';
+import { getTokenRole } from '@/lib/auth/token-role';
+import { onLocationChange } from '@/lib/locations/location-store';
 import {
   CashTabs,
   cashPanelId,
@@ -31,7 +35,11 @@ function CajaRoute() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const accessToken = useAuthStore((s) => s.accessToken);
-  const tab = resolveCashTab(searchParams.get('tab'));
+  // DX-569: «Por confirmar» solo para quien cobra (PAYMENT_ROLES); otro rol cae en «Abonos».
+  const showReports = canHandlePaymentLinks(getTokenRole(accessToken ?? ''));
+  const requested = resolveCashTab(searchParams.get('tab'));
+  const tab = requested === 'por-confirmar' && !showReports ? 'abonos' : requested;
+  const pendingReports = usePendingReportsCount(showReports ? accessToken : null);
 
   if (!accessToken) {
     return null;
@@ -39,17 +47,48 @@ function CajaRoute() {
 
   // Reescribe la pestaña SIN navegar (una sola entrada de historial).
   function changeTab(next: CashTabKey) {
-    router.replace(next === 'turnos' ? `${pathname}?tab=turnos` : pathname, { scroll: false });
+    router.replace(next === 'abonos' ? pathname : `${pathname}?tab=${next}`, { scroll: false });
   }
   const tabs = {
-    nav: <CashTabs active={tab} onChange={changeTab} />,
+    nav: (
+      <CashTabs active={tab} onChange={changeTab} showReports={showReports} pendingReports={pendingReports.count} />
+    ),
     panelId: cashPanelId(tab),
     tabId: cashTabId(tab),
   };
 
   return tab === 'turnos' ? (
     <CashShiftsView token={accessToken} tabs={tabs} />
+  ) : tab === 'por-confirmar' ? (
+    <PaymentReportsInboxView token={accessToken} tabs={tabs} onChanged={pendingReports.reload} />
   ) : (
     <CashRegisterView token={accessToken} tabs={tabs} />
   );
+}
+
+/**
+ * El contador de la pestaña «Por confirmar» (`GET /payment-reports/count`), en
+ * la sede activa: se relee al cambiar de sede y tras confirmar o rechazar. Si
+ * falla, la pestaña va sin número (la bandeja dice lo suyo al abrirla).
+ */
+function usePendingReportsCount(token: string | null): { count: number | null; reload: () => void } {
+  const [attempt, setAttempt] = useState(0);
+  const [result, setResult] = useState<{ key: string; count: number | null } | null>(null);
+  const key = `${token ?? ''}|${attempt}`;
+  useEffect(() => onLocationChange(() => setAttempt((n) => n + 1)), []);
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    countPendingPaymentReports(token)
+      .then((res) => {
+        if (!cancelled) setResult({ key, count: res.pending });
+      })
+      .catch(() => {
+        if (!cancelled) setResult({ key, count: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, key]);
+  return { count: token && result?.key === key ? result.count : null, reload: () => setAttempt((n) => n + 1) };
 }

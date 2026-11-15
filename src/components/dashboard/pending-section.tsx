@@ -5,7 +5,7 @@ import { CheckCircle2, ChevronDown, ChevronRight, RotateCw } from 'lucide-react'
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { moneyWithCode } from '@/lib/format/sede-number';
-import { ANAMNESIS_HREF } from '@/components/layouts/nav-config';
+import { ANAMNESIS_HREF, PAYMENT_REPORTS_HREF } from '@/components/layouts/nav-config';
 import { getCurrentCashSession, type CurrentCashSession } from '@/lib/cash-sessions/cash-sessions-api';
 import type { WorkQueueItem, WorkQueueKey } from '@/lib/work-queues/work-queues-api';
 import { useWorkQueuesView } from '@/components/work-queues/work-queues-context';
@@ -42,6 +42,7 @@ export const pendingCopy = {
   cashNeedsSede: 'Elige una sede',
   cashPayments: (n: string, one: boolean) => (one ? `${n} cobro` : `${n} cobros`),
   lowStock: { label: 'Bajo stock', hint: 'Insumos en su mínimo o por debajo' },
+  paymentReports: { label: 'Pagos por confirmar', hint: 'Reportados por los pacientes desde su enlace de pago' },
   // DX-503: las listas a 0 se pliegan; todas a 0, estado vacío.
   allClearTitle: 'Todo al día',
   allClearDescription: 'Ninguna de tus listas espera una acción ahora mismo.',
@@ -88,6 +89,8 @@ function queueRow(key: WorkQueueKey, role: ClinicRole): QueueRow {
       return { id: 'receivables', ...copy.receivables, href: '/caja/cartera' };
     case 'LOW_STOCK':
       return { id: 'low-stock', ...copy.lowStock, href: '/inventory' };
+    case 'PAYMENT_REPORTS':
+      return { id: 'payment-reports', ...copy.paymentReports, href: PAYMENT_REPORTS_HREF };
   }
 }
 

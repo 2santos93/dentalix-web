@@ -76,9 +76,19 @@ const m = {
 
 /** Lo que devuelve la API por rol (WORK_QUEUE_ROLES): la API reparte, la web pinta. */
 const QUEUES_BY_ROLE: Record<string, WorkQueueKey[]> = {
-  ADMIN: ['CLOSING_QUEUE', 'ANAMNESIS_REVIEW', 'QUOTE_FOLLOW_UP', 'ACCEPTED_UNSCHEDULED', 'WAITLIST', 'RECALL', 'RECEIVABLES', 'LOW_STOCK'],
+  ADMIN: [
+    'CLOSING_QUEUE',
+    'PAYMENT_REPORTS',
+    'ANAMNESIS_REVIEW',
+    'QUOTE_FOLLOW_UP',
+    'ACCEPTED_UNSCHEDULED',
+    'WAITLIST',
+    'RECALL',
+    'RECEIVABLES',
+    'LOW_STOCK',
+  ],
   DENTIST: ['CLOSING_QUEUE', 'ANAMNESIS_REVIEW'],
-  RECEPTION: ['CLOSING_QUEUE', 'QUOTE_FOLLOW_UP', 'ACCEPTED_UNSCHEDULED', 'WAITLIST', 'RECALL', 'RECEIVABLES'],
+  RECEPTION: ['CLOSING_QUEUE', 'PAYMENT_REPORTS', 'QUOTE_FOLLOW_UP', 'ACCEPTED_UNSCHEDULED', 'WAITLIST', 'RECALL', 'RECEIVABLES'],
   ASSISTANT: ['ANAMNESIS_REVIEW', 'LOW_STOCK'],
 };
 const QUEUE_ITEMS: Record<WorkQueueKey, WorkQueueItem> = {
@@ -90,6 +100,7 @@ const QUEUE_ITEMS: Record<WorkQueueKey, WorkQueueItem> = {
   RECALL: { key: 'RECALL', status: 'OK', count: 3 },
   RECEIVABLES: { key: 'RECEIVABLES', status: 'OK', count: 2, overdue: [{ currency: 'VES', amount: 780000 }] },
   LOW_STOCK: { key: 'LOW_STOCK', status: 'OK', count: 4 },
+  PAYMENT_REPORTS: { key: 'PAYMENT_REPORTS', status: 'OK', count: 2 },
 };
 function queuesFor(
   token: string,
@@ -377,6 +388,8 @@ describe('Inicio · ADMIN', () => {
     expect(await pendingValue('anamnesis')).toHaveTextContent('5');
     expect(await pendingValue('low-stock')).toHaveTextContent('4');
     expect(await pendingValue('receivables')).toHaveTextContent('2 pacientes');
+    // DX-569: los pagos reportados por enlace, con su número y a la bandeja de Caja.
+    expect(await pendingValue('payment-reports')).toHaveTextContent('2');
     expect(screen.getByTestId('pending-receivables')).toHaveTextContent(/Vencido: .*780\.000,00/);
     // Sin sede activa no hay «mi caja»: se pide elegir una, sin llamar.
     expect(await pendingValue('cash')).toHaveTextContent('Elige una sede');
@@ -384,6 +397,10 @@ describe('Inicio · ADMIN', () => {
     const pending = screen.getByRole('region', { name: 'Pendientes' });
     expect(within(pending).getByRole('link', { name: 'Presupuestos por seguir' })).toHaveAttribute('href', '/presupuestos');
     expect(within(pending).getByRole('link', { name: 'Cartera con saldo' })).toHaveAttribute('href', '/caja/cartera');
+    expect(within(pending).getByRole('link', { name: 'Pagos por confirmar' })).toHaveAttribute(
+      'href',
+      '/caja?tab=por-confirmar',
+    );
     expect(within(pending).getByRole('link', { name: 'Pendiente de cerrar' })).toHaveAttribute(
       'href',
       '/agenda/pendiente-de-cerrar',
@@ -468,7 +485,7 @@ describe('Inicio · ADMIN', () => {
     }));
     render(<DashboardView token={tokenForRole('ADMIN')} />);
     expect(await screen.findByText('Todo al día')).toBeInTheDocument();
-    expect(screen.getByTestId('pending-folded-toggle')).toHaveTextContent('Al día: 8 listas');
+    expect(screen.getByTestId('pending-folded-toggle')).toHaveTextContent('Al día: 9 listas');
     expect(screen.queryByRole('list', { name: 'Pendientes' })).not.toBeInTheDocument();
   });
 

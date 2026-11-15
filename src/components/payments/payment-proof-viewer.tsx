@@ -2,7 +2,8 @@
 import * as React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { getPaymentProofUrl, isImageProof, type PaymentProofUrl } from '@/lib/payments/payment-proof-api';
+import { getPaymentProofUrl, isImageProof } from '@/lib/payments/payment-proof-api';
+import { getPaymentReportProofUrl } from '@/lib/payment-links/payment-links-api';
 import { SectionError } from '@/components/errors/section-error';
 import { SignedFileViewerDialog } from '@/components/shared/signed-file-viewer-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -18,10 +19,14 @@ export const paymentProofViewerCopy = {
 };
 const copy = paymentProofViewerCopy;
 
+/** Lo que el visor necesita de la URL firmada (la del abono o, DX-569, la de un pago reportado). */
+type ProofUrl = { url: string; name: string; mime: string };
+
 interface PaymentProofViewerDialogProps {
-  token: string;
-  paymentId: string;
+  /** Pide una URL firmada nueva (cada una queda auditada). Estable con su `key`. */
+  fetchUrl: () => Promise<ProofUrl>;
   onClose: () => void;
+  description?: string;
 }
 
 /**
@@ -30,16 +35,18 @@ interface PaymentProofViewerDialogProps {
  * antes de pintar) y la reutiliza para el primer pintado; «Abrir en otra
  * pestaña» pide una nueva. El padre lo monta con `key` por apertura.
  */
-function PaymentProofViewerDialog({ token, paymentId, onClose }: PaymentProofViewerDialogProps) {
-  const [first, setFirst] = useState<PaymentProofUrl | null>(null);
+function PaymentProofViewerDialog({ fetchUrl, onClose, description = copy.description }: PaymentProofViewerDialogProps) {
+  const [first, setFirst] = useState<ProofUrl | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   // La URL ya pedida: el visor la consume en su primera carga (una sola consulta auditada).
-  const prefetched = useRef<PaymentProofUrl | null>(null);
+  const prefetched = useRef<ProofUrl | null>(null);
+  // El primer fetcher (el padre monta el visor con `key` por apertura).
+  const [fetcher] = useState(() => fetchUrl);
 
   useEffect(() => {
     let cancelled = false;
-    getPaymentProofUrl(token, paymentId, 'inline')
+    fetcher()
       .then((res) => {
         if (cancelled) return;
         prefetched.current = res;
@@ -52,7 +59,7 @@ function PaymentProofViewerDialog({ token, paymentId, onClose }: PaymentProofVie
     return () => {
       cancelled = true;
     };
-  }, [token, paymentId, reloadKey]);
+  }, [fetcher, reloadKey]);
 
   const loadUrl = useCallback(async () => {
     const ready = prefetched.current;
@@ -60,8 +67,8 @@ function PaymentProofViewerDialog({ token, paymentId, onClose }: PaymentProofVie
       prefetched.current = null;
       return ready;
     }
-    return getPaymentProofUrl(token, paymentId, 'inline');
-  }, [token, paymentId]);
+    return fetcher();
+  }, [fetcher]);
 
   if (first) {
     return (
@@ -69,7 +76,7 @@ function PaymentProofViewerDialog({ token, paymentId, onClose }: PaymentProofVie
         open
         onOpenChange={(next) => !next && onClose()}
         name={first.name}
-        description={copy.description}
+        description={description}
         image={isImageProof(first.mime)}
         loadUrl={loadUrl}
       />
@@ -80,7 +87,7 @@ function PaymentProofViewerDialog({ token, paymentId, onClose }: PaymentProofVie
       <DialogContent className="max-w-4xl">
         <DialogHeader className="min-w-0 pr-8">
           <DialogTitle>{copy.title}</DialogTitle>
-          <DialogDescription>{copy.description}</DialogDescription>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         {error ? (
           <SectionError
@@ -115,10 +122,33 @@ export function usePaymentProofViewer(token: string): {
   const dialog = target ? (
     <PaymentProofViewerDialog
       key={target.seq}
-      token={token}
-      paymentId={target.paymentId}
+      fetchUrl={() => getPaymentProofUrl(token, target.paymentId, 'inline')}
       onClose={() => setTarget(null)}
     />
   ) : null;
   return { open, dialog };
 }
+
+/**
+ * DX-569: el comprobante de un pago que reportó el paciente desde su enlace
+ * (`GET /payment-reports/:id/proof-url`, auditado como consulta).
+ */
+export function useReportProofViewer(token: string): {
+  open: (reportId: string) => void;
+  dialog: React.ReactNode;
+} {
+  const [target, setTarget] = useState<{ reportId: string; seq: number } | null>(null);
+  const open = useCallback((reportId: string) => setTarget((t) => ({ reportId, seq: (t?.seq ?? 0) + 1 })), []);
+  const dialog = target ? (
+    <PaymentProofViewerDialog
+      key={target.seq}
+      fetchUrl={() => getPaymentReportProofUrl(token, target.reportId)}
+      description={reportProofDescription}
+      onClose={() => setTarget(null)}
+    />
+  ) : null;
+  return { open, dialog };
+}
+
+const reportProofDescription =
+  'El comprobante que envió el paciente con su reporte. La URL es de vida corta y cada consulta queda auditada.';

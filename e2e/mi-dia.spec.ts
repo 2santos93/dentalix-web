@@ -68,6 +68,8 @@ test('ADMIN: los números son los de la API, lo que está a 0 se pliega y cada f
   const body = (await api.json()) as { items: { key: string; count: number }[] };
   expect(body.items.map((i) => i.key)).toEqual([
     'CLOSING_QUEUE',
+    // DX-569: los pagos que reportan los pacientes, justo detrás del cierre.
+    'PAYMENT_REPORTS',
     'ANAMNESIS_REVIEW',
     'QUOTE_FOLLOW_UP',
     'ACCEPTED_UNSCHEDULED',
@@ -77,16 +79,17 @@ test('ADMIN: los números son los de la API, lo que está a 0 se pliega y cada f
     'LOW_STOCK',
   ]);
   const zero = body.items.filter((i) => i.count === 0).length;
-  expect(zero).toBe(6);
+  expect(zero).toBe(7);
 
   // Las listas a 0, plegadas; se despliegan con el teclado.
-  const toggle = pending.getByRole('button', { name: /Al día: 6 listas/ });
+  const toggle = pending.getByRole('button', { name: /Al día: 7 listas/ });
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(pending.getByTestId('pending-follow-up')).toBeHidden();
   await toggle.focus();
   await page.keyboard.press('Enter');
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await expect(pending.getByTestId('pending-follow-up-value')).toHaveText('Al día');
+  await expect(pending.getByTestId('pending-payment-reports-value')).toHaveText('Al día');
 
   // Cada fila abre su lista.
   await pending.getByRole('link', { name: 'Bajo stock' }).click();
@@ -136,6 +139,7 @@ test('RECEPTION: solo sus listas (sin anamnesis ni bajo stock)', async ({ page }
   const pending = await openInicio(page, reception.email);
   await expect(pending.getByTestId('pending-waitlist-value')).toHaveText('2');
   await expect(pending.getByTestId('pending-follow-up')).toHaveCount(1);
+  await expect(pending.getByTestId('pending-payment-reports')).toHaveCount(1);
   await expect(pending.getByTestId('pending-low-stock')).toHaveCount(0);
   await expect(pending.getByTestId('pending-anamnesis')).toHaveCount(0);
 });
