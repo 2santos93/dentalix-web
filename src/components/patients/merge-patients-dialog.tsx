@@ -9,6 +9,7 @@ import { documentText, documentTypeName, type ClinicDocumentTypeNames } from '@/
 import { CLINIC_LANGUAGE_LABEL, languageName } from '@/lib/patients/patient-languages';
 import {
   countLines,
+  effectiveChoices,
   getMergePreview,
   groupDiffers,
   MERGE_BLOCKER_COPY,
@@ -44,13 +45,13 @@ export const mergeDialogCopy = {
   loading: 'Preparando la comparación…',
   loadError: 'No pudimos preparar la comparación de las dos fichas.',
   differentTitle: 'Datos que no coinciden',
-  differentHint: 'Por defecto se queda el dato de la ficha que se conserva.',
+  differentHint:
+    'Por defecto se queda el dato de la ficha que se conserva; si esa ficha no lo tiene, el de la que se absorbe.',
   noDifferences: 'Las dos fichas tienen los mismos datos personales.',
   sameTitle: 'Coinciden',
   fromKept: 'De la ficha que se conserva',
   fromAbsorbed: 'De la ficha que se absorbe',
   empty: 'Sin dato',
-  cityDiffers: 'Ciudad distinta',
   movesTitle: (name: string) => `Pasa a la ficha de ${name}`,
   movesListLabel: 'Lo que se mueve',
   movesNone: 'La ficha que se absorbe no tiene citas, historia clínica ni pagos: solo se juntan los datos.',
@@ -94,7 +95,12 @@ const joined = (parts: (string | null | undefined)[]) => {
 };
 
 /** Cómo se lee el valor de un grupo en una ficha; `null` = sin dato. */
-export function groupDisplay(group: MergeFieldGroup, f: MergeFieldValues, ctx: DisplayContext): string | null {
+export function groupDisplay(
+  group: MergeFieldGroup,
+  f: MergeFieldValues,
+  ctx: DisplayContext,
+  cityName: string | null = null,
+): string | null {
   switch (group) {
     case 'firstName':
       return f.firstName || null;
@@ -111,7 +117,7 @@ export function groupDisplay(group: MergeFieldGroup, f: MergeFieldValues, ctx: D
     case 'email':
       return f.email;
     case 'address':
-      return joined([f.address, countryName(f.countryCode)]);
+      return joined([f.address, cityName, countryName(f.countryCode)]);
     case 'maritalStatus':
       return f.maritalStatus;
     case 'occupation':
@@ -216,11 +222,13 @@ export function MergePatientsDialog({
     setSubmitting(true);
     setError(null);
     try {
-      const fields = mergeFieldsBody(choices);
+      // Lo propuesto sin tocar también viaja: p. ej. el correo que solo tenía la absorbida.
+      const chosen = effectiveChoices(preview.kept.fields, preview.absorbed.fields, choices);
+      const fields = mergeFieldsBody(chosen);
       const result = await mergePatients(token, { keptId, absorbedId, ...(fields ? { fields } : {}) });
       const keptName = fullName({
-        firstName: choices.firstName === 'ABSORBED' ? preview.absorbed.fields.firstName : preview.kept.fields.firstName,
-        lastName: choices.lastName === 'ABSORBED' ? preview.absorbed.fields.lastName : preview.kept.fields.lastName,
+        firstName: chosen.firstName === 'ABSORBED' ? preview.absorbed.fields.firstName : preview.kept.fields.firstName,
+        lastName: chosen.lastName === 'ABSORBED' ? preview.absorbed.fields.lastName : preview.kept.fields.lastName,
       });
       onMerged(result, keptName);
     } catch (err) {
@@ -344,9 +352,11 @@ function PreviewBody({
 }: PreviewBodyProps) {
   const kept = preview.kept.fields;
   const absorbed = preview.absorbed.fields;
+  const chosen = effectiveChoices(kept, absorbed, choices);
   const different = MERGE_FIELD_GROUPS.filter((g) => groupDiffers(g.columns, kept, absorbed));
   const same = MERGE_FIELD_GROUPS.filter(
-    (g) => !groupDiffers(g.columns, kept, absorbed) && groupDisplay(g.group, kept, ctx) !== null,
+    (g) =>
+      !groupDiffers(g.columns, kept, absorbed) && groupDisplay(g.group, kept, ctx, preview.kept.cityName) !== null,
   );
   const moves = countLines(preview.absorbed);
   const links = preview.absorbedLiveLinks;
@@ -376,19 +386,14 @@ function PreviewBody({
           <p className="text-sm text-muted">{copy.noDifferences}</p>
         ) : (
           different.map(({ group, label }) => {
-            let keptText = groupDisplay(group, kept, ctx);
-            let absorbedText = groupDisplay(group, absorbed, ctx);
-            // La ciudad no tiene nombre en la comparación: si es lo único distinto, se dice.
-            if (group === 'address' && keptText === absorbedText && kept.cityId !== absorbed.cityId) {
-              keptText = joined([keptText, copy.cityDiffers]);
-              absorbedText = joined([absorbedText, copy.cityDiffers]);
-            }
+            const keptText = groupDisplay(group, kept, ctx, preview.kept.cityName);
+            const absorbedText = groupDisplay(group, absorbed, ctx, preview.absorbed.cityName);
             return (
               <RadioGroup
                 key={group}
                 id={`merge-field-${group}`}
                 legend={label}
-                value={choices[group] ?? 'KEPT'}
+                value={chosen[group] ?? 'KEPT'}
                 onValueChange={(v) => onChoose(group, v as MergeFieldSource)}
                 disabled={disabled}
                 optionsClassName="grid gap-2 sm:grid-cols-2"

@@ -14389,6 +14389,8 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             lastAttentionAt: string | null;
+            /** @description Nombre de la ciudad de `fields.cityId`, para enseñarla. */
+            cityName: string | null;
             fields: components["schemas"]["MergeFieldValuesDto"];
             /** @description Cuánto tiene de cada cosa (lo que pasará al conservado). */
             counts: components["schemas"]["MergeCategoryCountDto"][];

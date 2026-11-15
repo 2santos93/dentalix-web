@@ -75,6 +75,7 @@ export function mergeSide(over: Partial<MergeSide> = {}): MergeSide {
     patientCode: '1001',
     createdAt: '2025-03-10T14:00:00.000Z',
     lastAttentionAt: null,
+    cityName: null,
     fields: mergeFields(),
     counts: [],
     ...over,

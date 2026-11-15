@@ -2,7 +2,9 @@ import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import {
   canManageDuplicates,
   countLines,
+  defaultSource,
   dismissDuplicate,
+  effectiveChoices,
   getMergePreview,
   groupDiffers,
   listDuplicates,
@@ -107,5 +109,35 @@ describe('patient-merge-api (DX-266)', () => {
       ],
     } as MergeSide;
     expect(countLines(side)).toEqual(['3 citas', '1 receta']);
+  });
+
+  it('propone la absorbida solo cuando el conservado no tiene el dato del grupo', () => {
+    const cols = (g: string) => MERGE_FIELD_GROUPS.find((x) => x.group === g)!.columns;
+    const email = cols('email');
+    expect(defaultSource('email', email, mergeFields(), mergeFields({ email: 'a@correo.com.ve' }))).toBe('ABSORBED');
+    expect(defaultSource('email', email, mergeFields({ email: '' }), mergeFields({ email: 'a@correo.com.ve' }))).toBe(
+      'ABSORBED',
+    );
+    expect(
+      defaultSource('email', email, mergeFields({ email: 'b@correo.com.ve' }), mergeFields({ email: 'a@correo.com.ve' })),
+    ).toBe('KEPT');
+    expect(defaultSource('email', email, mergeFields({ email: 'b@correo.com.ve' }), mergeFields())).toBe('KEPT');
+    // El médico: con uno de sus dos datos, el grupo ya no está vacío.
+    const physician = cols('physician');
+    expect(
+      defaultSource('physician', physician, mergeFields({ physicianPhone: '+582125550000' }), mergeFields({ physicianName: 'Dr. Pérez' })),
+    ).toBe('KEPT');
+    // El documento: sin número cuenta como vacío aunque tenga tipo.
+    expect(defaultSource('document', cols('document'), mergeFields({ docNumber: null }), mergeFields())).toBe('ABSORBED');
+  });
+
+  it('lo efectivo: lo elegido gana; sin elegir, lo propuesto; los grupos iguales no salen', () => {
+    const kept = mergeFields({ email: null, phone: '+584141234567' });
+    const absorbed = mergeFields({ email: 'a@correo.com.ve', phone: '+584125550000' });
+    expect(effectiveChoices(kept, absorbed, {})).toEqual({ phone: 'KEPT', email: 'ABSORBED' });
+    expect(effectiveChoices(kept, absorbed, { email: 'KEPT', phone: 'ABSORBED', firstName: 'ABSORBED' })).toEqual({
+      phone: 'ABSORBED',
+      email: 'KEPT',
+    });
   });
 });

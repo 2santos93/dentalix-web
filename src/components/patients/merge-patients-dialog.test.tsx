@@ -62,11 +62,14 @@ describe('MergePatientsDialog (DX-266)', () => {
     const doc = await screen.findByRole('radiogroup', { name: 'Documento' });
     expect(within(doc).getByRole('radio', { name: 'Documento nacional V-12.345.678' })).toBeChecked();
     expect(within(doc).getByRole('radio', { name: 'Documento nacional 12345678' })).not.toBeChecked();
-    // El teléfono solo está en la conservada; el correo solo en la absorbida.
+    // El teléfono solo está en la conservada: se queda el suyo.
     const phone = screen.getByRole('radiogroup', { name: 'Teléfono' });
+    expect(within(phone).getByRole('radio', { name: '+584141234567' })).toBeChecked();
     expect(within(phone).getByRole('radio', { name: copy.empty })).not.toBeChecked();
+    // El correo solo está en la absorbida: se propone el suyo, no el vacío.
     const email = screen.getByRole('radiogroup', { name: 'Correo' });
-    expect(within(email).getByRole('radio', { name: 'maria.r@correo.com.ve' })).toBeInTheDocument();
+    expect(within(email).getByRole('radio', { name: 'maria.r@correo.com.ve' })).toBeChecked();
+    expect(within(email).getByRole('radio', { name: copy.empty })).not.toBeChecked();
     // Los iguales no se eligen: se listan.
     expect(screen.queryByRole('radiogroup', { name: 'Nombre' })).not.toBeInTheDocument();
     expect(screen.getByText(/Nombre, Apellidos, Fecha de nacimiento, Sexo/)).toBeInTheDocument();
@@ -210,5 +213,65 @@ describe('MergePatientsDialog (DX-266)', () => {
     expect(await screen.findByText(/ya está archivado o se fusionó con otro/)).toBeInTheDocument();
     expect(props.onStale).toHaveBeenCalled();
     expect(props.onMerged).not.toHaveBeenCalled();
+  });
+
+  it('sin tocar nada, lo que solo tiene la absorbida viaja en el cuerpo; lo que tienen las dos, no', async () => {
+    const user = userEvent.setup();
+    mockedPreview.mockResolvedValue(
+      mergePreview({
+        kept: mergeSide({ fields: mergeFields({ docNumber: null, email: null }) }),
+        absorbed: mergeSide({
+          id: 'p-b',
+          fields: mergeFields({ docNumber: '12345678', email: 'maria.r@correo.com.ve', phone: '+584125550000' }),
+        }),
+      }),
+    );
+    mockedMerge.mockResolvedValue({} as never);
+    renderDialog();
+    const doc = await screen.findByRole('radiogroup', { name: 'Documento' });
+    expect(within(doc).getByRole('radio', { name: 'Documento nacional 12345678' })).toBeChecked();
+    // Teléfonos distintos en las dos: sigue el del conservado.
+    const phone = screen.getByRole('radiogroup', { name: 'Teléfono' });
+    expect(within(phone).getByRole('radio', { name: '+584141234567' })).toBeChecked();
+    await user.click(screen.getByRole('checkbox', { name: copy.confirm }));
+    await user.click(submitButton());
+    await waitFor(() =>
+      expect(mockedMerge).toHaveBeenCalledWith('tok', {
+        keptId: 'p-a',
+        absorbedId: 'p-b',
+        fields: { document: 'ABSORBED', email: 'ABSORBED' },
+      }),
+    );
+  });
+
+  it('se puede volver al vacío del conservado aunque se proponga el de la absorbida', async () => {
+    const user = userEvent.setup();
+    mockedPreview.mockResolvedValue(
+      mergePreview({ absorbed: mergeSide({ id: 'p-b', fields: mergeFields({ email: 'maria.r@correo.com.ve' }) }) }),
+    );
+    mockedMerge.mockResolvedValue({} as never);
+    renderDialog();
+    const email = await screen.findByRole('radiogroup', { name: 'Correo' });
+    await user.click(within(email).getByRole('radio', { name: copy.empty }));
+    await user.click(screen.getByRole('checkbox', { name: copy.confirm }));
+    await user.click(submitButton());
+    await waitFor(() => expect(mockedMerge).toHaveBeenCalledWith('tok', { keptId: 'p-a', absorbedId: 'p-b' }));
+  });
+
+  it('la dirección enseña la ciudad por su nombre', async () => {
+    mockedPreview.mockResolvedValue(
+      mergePreview({
+        kept: mergeSide({ cityName: 'Valencia', fields: mergeFields({ address: 'Av. Bolívar 12', cityId: 10 }) }),
+        absorbed: mergeSide({
+          id: 'p-b',
+          cityName: 'Maracay',
+          fields: mergeFields({ address: 'Av. Bolívar 12', cityId: 11 }),
+        }),
+      }),
+    );
+    renderDialog();
+    const address = await screen.findByRole('radiogroup', { name: 'Dirección' });
+    expect(within(address).getByRole('radio', { name: 'Av. Bolívar 12 · Valencia · Venezuela' })).toBeChecked();
+    expect(within(address).getByRole('radio', { name: 'Av. Bolívar 12 · Maracay · Venezuela' })).not.toBeChecked();
   });
 });

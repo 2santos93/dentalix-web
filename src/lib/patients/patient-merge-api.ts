@@ -165,6 +165,51 @@ export function groupDiffers(
   return columns.some((column) => (kept[column] ?? null) !== (absorbed[column] ?? null));
 }
 
+const isEmpty = (value: unknown) => value === null || value === undefined || value === '';
+
+/**
+ * ¿La ficha no tiene el dato del grupo? Todo el grupo vacío; el documento, sin
+ * número (su tipo siempre tiene valor, y un tipo sin número no es un documento).
+ */
+export function groupIsEmpty(
+  group: MergeFieldGroup,
+  columns: readonly (keyof MergeFieldValues)[],
+  values: MergeFieldValues,
+): boolean {
+  if (group === 'document') return isEmpty(values.docNumber);
+  return columns.every((column) => isEmpty(values[column]));
+}
+
+/**
+ * El valor que se propone para un grupo distinto: el del conservado, salvo que
+ * el conservado no tenga el dato y el absorbido sí (no se pierde por defecto).
+ */
+export function defaultSource(
+  group: MergeFieldGroup,
+  columns: readonly (keyof MergeFieldValues)[],
+  kept: MergeFieldValues,
+  absorbed: MergeFieldValues,
+): MergeFieldSource {
+  return groupIsEmpty(group, columns, kept) && !groupIsEmpty(group, columns, absorbed) ? 'ABSORBED' : 'KEPT';
+}
+
+/**
+ * Lo que se queda de cada grupo distinto: lo elegido o, sin elegir, lo propuesto.
+ * Los grupos iguales no aparecen (da igual de qué ficha salgan).
+ */
+export function effectiveChoices(
+  kept: MergeFieldValues,
+  absorbed: MergeFieldValues,
+  choices: Partial<Record<MergeFieldGroup, MergeFieldSource>>,
+): Partial<Record<MergeFieldGroup, MergeFieldSource>> {
+  const result: Partial<Record<MergeFieldGroup, MergeFieldSource>> = {};
+  for (const { group, columns } of MERGE_FIELD_GROUPS) {
+    if (!groupDiffers(columns, kept, absorbed)) continue;
+    result[group] = choices[group] ?? defaultSource(group, columns, kept, absorbed);
+  }
+  return result;
+}
+
 /**
  * El `fields` del cuerpo: solo los grupos que se toman de la ficha absorbida
  * (lo demás, sin indicar, se queda con el valor del conservado). `undefined`
