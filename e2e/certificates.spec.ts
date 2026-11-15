@@ -111,11 +111,17 @@ test('certificados: justificante emitido, impreso y anulado a 1440 y 390; reposo
     await dialog.getByRole('button', { name: 'Emitir' }).click();
     await expect(dialog.getByText(/^Justificante de asistencia nº \d{6} emitido$/)).toBeVisible();
 
-    // «Imprimir»: el PDF (con la sesión) se abre en otra pestaña.
+    // «Imprimir»: el PDF llega con la sesión (200, application/pdf) y se abre una
+    // pestaña. No se mira su URL: Chromium sin ventana puede descargar el PDF en
+    // vez de mostrarlo y dejarla en about:blank.
+    const pdfResponse = page.waitForResponse(
+      (r) => /\/certificates\/[^/]+\/pdf$/.test(new URL(r.url()).pathname) && r.status() === 200,
+    );
     const popupPromise = page.waitForEvent('popup');
     await dialog.getByRole('button', { name: 'Imprimir' }).click();
     const popup = await popupPromise;
-    await expect.poll(() => popup.url(), { timeout: 15_000 }).toMatch(/^blob:/);
+    const pdf = await pdfResponse;
+    expect(pdf.headers()['content-type']).toContain('application/pdf');
     await popup.close();
     await dialog.getByRole('button', { name: 'Cerrar' }).last().click();
     await expect(dialog).toBeHidden();
