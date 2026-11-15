@@ -30,6 +30,11 @@ const copy = {
     `${shown} ${n === 1 ? 'saldo no se creó' : 'saldos no se crearon'}: su paciente ya tenía un saldo migrado en esa moneda de otra importación.`,
   balancesAmbiguous: (n: number, shown: string) =>
     `${shown} ${n === 1 ? 'saldo no se creó' : 'saldos no se crearon'}: su documento es de varios pacientes. Corrige las fichas repetidas.`,
+  appointments: (done: string, total: string) => `Citas: ${done} de ${total}`,
+  appointmentsFailed: (n: number, shown: string) =>
+    `${shown} ${n === 1 ? 'cita no se creó' : 'citas no se crearon'}: algo cambió en la agenda desde la validación. El motivo está en el informe de la hoja de citas.`,
+  appointmentsReminders:
+    'Las citas importadas no reciben recordatorios automáticos hasta que los actives desde el historial.',
   consent: 'Recuerda pedir la autorización de datos a los pacientes importados: su ficha la marca pendiente.',
 };
 
@@ -101,6 +106,21 @@ export function ImportProgress({
           ) : null}
           {batch.balances.progress.ambiguous > 0 ? (
             <p className="text-warning-text">{copy.balancesAmbiguous(batch.balances.progress.ambiguous, n(batch.balances.progress.ambiguous))}</p>
+          ) : null}
+        </div>
+      ) : null}
+      {batch.appointments && batch.appointments.preparedCount > 0 ? (
+        <div className="flex flex-col gap-1 text-sm">
+          <p className="tabular-nums text-ink">
+            {copy.appointments(n(batch.appointments.progress.processed), n(batch.appointments.preparedCount))}
+          </p>
+          {batch.appointments.progress.failed > 0 ? (
+            <p className="text-warning-text">
+              {copy.appointmentsFailed(batch.appointments.progress.failed, n(batch.appointments.progress.failed))}
+            </p>
+          ) : null}
+          {!active && batch.appointments.progress.created > 0 && !batch.appointments.remindersEnabledAt ? (
+            <p className="text-muted">{copy.appointmentsReminders}</p>
           ) : null}
         </div>
       ) : null}

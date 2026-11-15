@@ -7422,6 +7422,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patient-imports/appointments-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Plantilla CSV de la hoja de citas futuras (DX-263)
+         * @description numero_documento, fecha (DD/MM/AAAA o AAAA-MM-DD), hora (HH:MM, 24 h, en la zona de la sede), duracion_min (5–480; opcional si viene tipo_cita), email_profesional, sede (opcional: la del lote), tipo_cita (opcional) y motivo (opcional). UTF-8 con BOM; una fila de ejemplo ficticia que hay que borrar.
+         */
+        get: operations["PatientImportsController_appointmentTemplate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patient-imports/inspect": {
         parameters: {
             query?: never;
@@ -7561,6 +7581,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patient-imports/{id}/appointments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hoja de citas futuras del lote (DX-263): validar las citas (dry-run)
+         * @description Solo con el lote validado y sin confirmar; hasta 2.000 filas. Cada cita pasa por las MISMAS reglas que agendar a mano: futura y como mucho a 366 días, profesional del equipo por su email (uno desconocido es error de la fila: nunca se asigna a otro) que atiende en la sede, sede activa y permitida (por nombre; vacía, la del lote), horario de la sede, bloqueos, festivos de la sede (DX-316), solapes con la agenda (profesional y paciente) y entre las filas del propio archivo, tipo de cita activo y duración de 5 a 480 minutos (o la del tipo, con aviso). La fecha y la hora se leen en la zona de la sede de la cita. Las filas rechazadas salen con su motivo en español; NO crea ninguna cita: se crean al confirmar el lote, después de los pacientes y los saldos, sin recordatorios automáticos hasta activarlos (POST :id/appointments/reminders). Volver a subirla la reemplaza.
+         */
+        post: operations["PatientImportsController_appointments"];
+        /** Quitar la hoja de citas de un lote aún sin confirmar (DX-263) */
+        delete: operations["PatientImportsController_removeAppointments"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patient-imports/{id}/appointments/errors.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Informe de errores y avisos de la hoja de citas (CSV, DX-263)
+         * @description Fila, columna, tipo, motivo y valor, también las rechazadas al importar. UTF-8 con BOM; fórmulas neutralizadas (inyección CSV).
+         */
+        get: operations["PatientImportsController_appointmentErrors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patient-imports/{id}/appointments/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retirar solo las citas importadas del lote (DX-263)
+         * @description Retira en blando las citas del lote que siguen programadas (SCHEDULED), aunque sus pacientes ya tengan actividad; las que cambiaron de estado (confirmadas, atendidas, canceladas…) se quedan. El lote sigue importado.
+         */
+        post: operations["PatientImportsController_undoAppointments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patient-imports/{id}/appointments/reminders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activar los recordatorios automáticos de las citas importadas (DX-263)
+         * @description Las citas importadas no reciben recordatorios automáticos (DX-128) hasta que un ADMIN los activa en su lote; desde ese momento el barrido las trata como a las demás. Idempotente.
+         */
+        post: operations["PatientImportsController_enableAppointmentReminders"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patient-imports/{id}/confirm": {
         parameters: {
             query?: never;
@@ -7572,7 +7673,7 @@ export interface paths {
         put?: never;
         /**
          * Paso 3: confirmar e importar en segundo plano
-         * @description Encola el trabajo que importa el lote por bloques (la clínica sigue trabajando): primero los pacientes y después, si el lote trae hoja de saldos, un «Saldo migrado» por paciente y moneda (DX-262). Una importación en curso por clínica. Los pacientes quedan SIN autorización de datos registrada: la ficha la marca pendiente.
+         * @description Encola el trabajo que importa el lote por bloques (la clínica sigue trabajando): primero los pacientes, después, si el lote trae hoja de saldos, un «Saldo migrado» por paciente y moneda (DX-262) y, si trae hoja de citas, sus citas (DX-263), cada una revalidada con las reglas de agendar. Una importación en curso por clínica. Los pacientes quedan SIN autorización de datos registrada: la ficha la marca pendiente.
          */
         post: operations["PatientImportsController_confirm"];
         delete?: never;
@@ -7592,7 +7693,7 @@ export interface paths {
         put?: never;
         /**
          * Deshacer el lote
-         * @description Retira en blando SOLO los pacientes que creó el lote, revierte los campos que rellenó (si siguen con el valor del lote) y retira sus saldos migrados (DX-262). Se niega (409) si alguno de los creados ya tiene citas, historia clínica, planes, pagos, saldos de otra importación u otros datos, o si algún saldo migrado del lote tiene abonos imputados.
+         * @description Retira en blando SOLO los pacientes que creó el lote, revierte los campos que rellenó (si siguen con el valor del lote), retira sus saldos migrados (DX-262) y sus citas importadas que siguen programadas (DX-263; las que cambiaron de estado se quedan). Se niega (409) si alguno de los creados ya tiene otras citas (o una importada que cambió de estado), historia clínica, planes, pagos, saldos de otra importación u otros datos, o si algún saldo migrado del lote tiene abonos imputados.
          */
         post: operations["PatientImportsController_undo"];
         delete?: never;
@@ -8280,6 +8381,17 @@ export interface components {
             balanceTotals?: components["schemas"]["AuditCurrencyTotalDto"][];
             /** @description DX-262: lo que retiró de verdad el deshacer, por moneda */
             balanceUndoneTotals?: components["schemas"]["AuditCurrencyTotalDto"][];
+            /** @description DX-263: SHA-256 (hex) de la hoja de citas */
+            appointmentFileSha256?: string;
+            appointmentRows?: number;
+            appointmentErrors?: number;
+            appointmentsPrepared?: number;
+            appointmentsCreated?: number;
+            /** @description DX-263: citas rechazadas al importar */
+            appointmentsFailed?: number;
+            appointmentsUndone?: number;
+            /** @description DX-263: recordatorios automáticos de las citas del lote activados */
+            appointmentRemindersEnabled?: boolean;
         };
         AuditAttributionSideDto: {
             /** Format: uuid */
@@ -23970,16 +24082,47 @@ export interface components {
             /** @description Lote terminado con saldos vivos: se pueden retirar solos (POST :id/balances/undo) */
             canUndo: boolean;
         };
+        AppointmentProgressDto: {
+            processed: number;
+            created: number;
+            /** @description Rechazadas al importar: algo cambió desde el dry-run (otra cita a esa hora, un bloqueo, un festivo, el paciente no llegó a crearse) */
+            failed: number;
+        };
+        PatientImportAppointmentsDto: {
+            fileName: string;
+            fileFormat: components["schemas"]["PatientImportFileFormat"];
+            fileSizeBytes: number;
+            /** @description SHA-256 (hex) de la hoja de citas */
+            fileSha256: string;
+            /** @description Filas con datos */
+            totalRows: number;
+            /** @description Citas que se crearán al confirmar: pasaron todas las reglas de la agenda */
+            preparedCount: number;
+            /** @description Filas rechazadas (dato inválido, solape, fuera de horario, bloqueo, festivo…): no se importan */
+            errorRows: number;
+            progress: components["schemas"]["AppointmentProgressDto"];
+            /** @description Citas del lote que siguen programadas (las que retiraría el deshacer) */
+            live: number;
+            /** @description Citas que retiró el deshacer */
+            undoneCount: number | null;
+            /**
+             * Format: date-time
+             * @description Cuándo se activaron los recordatorios automáticos de sus citas (DX-128); null: no se envía ninguno
+             */
+            remindersEnabledAt: string | null;
+            /** @description Lote terminado con citas programadas: se pueden retirar solas (POST :id/appointments/undo) */
+            canUndo: boolean;
+        };
         /**
-         * @description MERGED (DX-262): fila de la hoja de saldos sumada a otra del mismo paciente y moneda (aviso, no error). EXISTING_BALANCE (QA D1): el paciente ya tenía un saldo migrado vivo en esa moneda y se añade otro porque se marcó «Añadir aunque ya tenga saldo migrado» (aviso, no error).
+         * @description MERGED (DX-262): fila de la hoja de saldos sumada a otra del mismo paciente y moneda (aviso, no error). EXISTING_BALANCE (QA D1): el paciente ya tenía un saldo migrado vivo en esa moneda y se añade otro porque se marcó «Añadir aunque ya tenga saldo migrado» (aviso, no error). WARNING (DX-263): aviso de una cita que sí se importa (fuera del horario del profesional, bloqueo que deja agendar, duración tomada del tipo).
          * @enum {string}
          */
-        PatientImportIssueKind: "ERROR" | "DUPLICATE_FILE" | "DUPLICATE_EXISTING" | "MERGED" | "EXISTING_BALANCE";
+        PatientImportIssueKind: "ERROR" | "DUPLICATE_FILE" | "DUPLICATE_EXISTING" | "MERGED" | "EXISTING_BALANCE" | "WARNING";
         ImportIssueDto: {
             /** @description Fila del archivo (1 = cabecera) */
             row: number;
             column: string | null;
-            /** @description MERGED (DX-262): fila de la hoja de saldos sumada a otra del mismo paciente y moneda (aviso, no error). EXISTING_BALANCE (QA D1): el paciente ya tenía un saldo migrado vivo en esa moneda y se añade otro porque se marcó «Añadir aunque ya tenga saldo migrado» (aviso, no error). */
+            /** @description MERGED (DX-262): fila de la hoja de saldos sumada a otra del mismo paciente y moneda (aviso, no error). EXISTING_BALANCE (QA D1): el paciente ya tenía un saldo migrado vivo en esa moneda y se añade otro porque se marcó «Añadir aunque ya tenga saldo migrado» (aviso, no error). WARNING (DX-263): aviso de una cita que sí se importa (fuera del horario del profesional, bloqueo que deja agendar, duración tomada del tipo). */
             kind: components["schemas"]["PatientImportIssueKind"];
             /** @description Motivo en español */
             message: string;
@@ -24048,6 +24191,8 @@ export interface components {
             reportAvailable: boolean;
             /** @description DX-262: hoja de saldos del lote; null si no trae */
             balances: components["schemas"]["PatientImportBalancesDto"] | null;
+            /** @description DX-263: hoja de citas futuras del lote; null si no trae */
+            appointments: components["schemas"]["PatientImportAppointmentsDto"] | null;
             /** @description Los primeros 200; todos en errors.csv */
             issues: components["schemas"]["ImportIssueDto"][];
             issuesTotal: number;
@@ -24056,6 +24201,9 @@ export interface components {
             /** @description DX-262: errores y avisos de la hoja de saldos (los primeros 200; todos en balances/errors.csv) */
             balanceIssues: components["schemas"]["ImportIssueDto"][];
             balanceIssuesTotal: number;
+            /** @description DX-263: errores y avisos de la hoja de citas (los primeros 200; todos en appointments/errors.csv) */
+            appointmentIssues: components["schemas"]["ImportIssueDto"][];
+            appointmentIssuesTotal: number;
         };
         PatientImportBatchDto: {
             /** Format: uuid */
@@ -24096,6 +24244,8 @@ export interface components {
             reportAvailable: boolean;
             /** @description DX-262: hoja de saldos del lote; null si no trae */
             balances: components["schemas"]["PatientImportBalancesDto"] | null;
+            /** @description DX-263: hoja de citas futuras del lote; null si no trae */
+            appointments: components["schemas"]["PatientImportAppointmentsDto"] | null;
         };
         PatientImportListDto: {
             items: components["schemas"]["PatientImportBatchDto"][];
@@ -44857,6 +45007,36 @@ export interface operations {
             };
         };
     };
+    PatientImportsController_appointmentTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede por defecto del lote (su prefijo telefónico se usa con los teléfonos sin +). Sin ella, la sede de escritura. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plantilla CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Solo un administrador de la clínica puede importar pacientes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PatientImportsController_inspect: {
         parameters: {
             query?: never;
@@ -45303,6 +45483,255 @@ export interface operations {
                 content?: never;
             };
             /** @description El lote no está terminado o algún saldo tiene abonos */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientImportsController_appointments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description CSV (UTF-8, Latin-1 o UTF-16; separador «,» «;» o tabulador) o .xlsx; hasta 5 MB y 10.000 filas
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientImportBatchDetailDto"];
+                };
+            };
+            /** @description Archivo vacío, de otro formato, con más de 2.000 filas o sin las columnas de documento, fecha, hora o email del profesional */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador de la clínica puede importar pacientes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lote de importación no encontrado en esta clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La hoja de citas solo se puede cambiar antes de confirmar la importación. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El archivo pesa más de 5 MB. Divídelo en varios archivos más pequeños. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hay demasiadas subidas en curso. Inténtalo de nuevo en unos segundos. (semáforo de subidas, antes de recibir el cuerpo) / Ya se está leyendo otro archivo de importación de esta clínica. Vuelve a intentarlo en unos segundos. / Hay otras importaciones leyéndose ahora mismo. Vuelve a intentarlo en unos segundos. (con el fichero ya recibido). Siempre con Retry-After. SEC-046: como mucho 2 lecturas a la vez por réplica y 1 por clínica (configurable). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientImportsController_removeAppointments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientImportBatchDetailDto"];
+                };
+            };
+            /** @description Solo un administrador de la clínica puede importar pacientes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lote de importación no encontrado en esta clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La hoja de citas solo se puede cambiar antes de confirmar la importación. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientImportsController_appointmentErrors: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Solo un administrador de la clínica puede importar pacientes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lote de importación no encontrado en esta clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Este lote no tiene hoja de citas o su informe ya no está disponible. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientImportsController_undoAppointments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientImportBatchDetailDto"];
+                };
+            };
+            /** @description Solo un administrador de la clínica puede importar pacientes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lote de importación no encontrado en esta clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El lote no está terminado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientImportsController_enableAppointmentReminders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientImportBatchDetailDto"];
+                };
+            };
+            /** @description Solo un administrador de la clínica puede importar pacientes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lote de importación no encontrado en esta clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El lote no está terminado */
             409: {
                 headers: {
                     [name: string]: unknown;

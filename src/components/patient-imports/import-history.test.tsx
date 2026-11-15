@@ -1,8 +1,14 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '@/lib/api/client';
-import { listImports, undoBalances, undoImport } from '@/lib/patient-imports/patient-imports-api';
-import { balancesFixture, batchFixture } from '@/lib/test/patient-imports';
+import {
+  enableAppointmentReminders,
+  listImports,
+  undoAppointments,
+  undoBalances,
+  undoImport,
+} from '@/lib/patient-imports/patient-imports-api';
+import { appointmentsFixture, balancesFixture, batchFixture } from '@/lib/test/patient-imports';
 import { notifyError } from '@/components/errors/notify';
 import { toast } from 'sonner';
 import { ImportHistory } from './import-history';
@@ -26,6 +32,8 @@ jest.mock('../../lib/patient-imports/patient-imports-api', () => ({
   listImports: jest.fn(),
   undoImport: jest.fn(),
   undoBalances: jest.fn(),
+  undoAppointments: jest.fn(),
+  enableAppointmentReminders: jest.fn(),
   downloadErrorsCsv: jest.fn(),
 }));
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
@@ -359,5 +367,69 @@ describe('ImportHistory: la fecha de confirmación con la sede de la pantalla (D
     await waitFor(() => expect(norm(list.textContent)).toContain(norm(dateTimeIn('berlin', '2026-10-21T14:05:00.000Z'))));
     expect(norm(list.textContent)).toContain(norm(dateTimeIn('miami', '2026-10-21T14:05:00.000Z')));
     expect(norm(list.textContent)).not.toContain(norm(dateTimeIn('caracas', '2026-10-21T14:05:00.000Z')));
+  });
+});
+
+describe('DX-263: citas importadas en el historial', () => {
+  const withAppointments = batchFixture({
+    ...completed,
+    id: 'batch-citas',
+    fileName: 'con-citas.csv',
+    appointments: appointmentsFixture({ live: 2, canUndo: true, progress: { processed: 3, created: 2, failed: 1 } }),
+  });
+
+  it('enseña las citas programadas sin recordatorios y las rechazadas al importar', async () => {
+    mockedList.mockResolvedValue(page([withAppointments]));
+    render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
+    const list = await screen.findByRole('list', { name: /importaciones de la clínica/i });
+    expect(list).toHaveTextContent('2 citas importadas programadas · sin recordatorios automáticos');
+    expect(list).toHaveTextContent('1 cita no se creó al importar');
+  });
+
+  it('activar los recordatorios de sus citas desde el «⋯»', async () => {
+    mockedList.mockResolvedValue(page([withAppointments]));
+    const enabled = {
+      ...withAppointments,
+      appointments: { ...withAppointments.appointments!, remindersEnabledAt: '2026-11-15T10:00:00.000Z' },
+    };
+    jest.mocked(enableAppointmentReminders).mockResolvedValue({
+      ...enabled,
+      issues: [],
+      issuesTotal: 0,
+      preview: [],
+      balanceIssues: [],
+      balanceIssuesTotal: 0,
+      appointmentIssues: [],
+      appointmentIssuesTotal: 0,
+    });
+    const user = userEvent.setup();
+    render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
+    await historyAction(user, 'con-citas.csv', 'Activar recordatorios de sus citas');
+    expect(enableAppointmentReminders).toHaveBeenCalledWith('tok', 'batch-citas');
+    expect(await screen.findByText(/recordatorios activados/)).toBeInTheDocument();
+    expect(toast.success).toHaveBeenCalled();
+  });
+
+  it('retirar solo las citas importadas, con confirmación', async () => {
+    mockedList.mockResolvedValue(page([withAppointments]));
+    jest.mocked(undoAppointments).mockResolvedValue({
+      ...withAppointments,
+      appointments: { ...withAppointments.appointments!, live: 0, canUndo: false, undoneCount: 2 },
+      issues: [],
+      issuesTotal: 0,
+      preview: [],
+      balanceIssues: [],
+      balanceIssuesTotal: 0,
+      appointmentIssues: [],
+      appointmentIssuesTotal: 0,
+    });
+    const user = userEvent.setup();
+    render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
+    await historyAction(user, 'con-citas.csv', 'Retirar citas importadas');
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent(/sus 2 citas importadas que siguen programadas/);
+    await user.click(within(dialog).getByRole('button', { name: 'Retirar citas' }));
+    await waitFor(() => expect(undoAppointments).toHaveBeenCalledWith('tok', 'batch-citas'));
+    expect(toast.success).toHaveBeenCalledWith('Citas importadas retiradas.');
   });
 });

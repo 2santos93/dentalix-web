@@ -61,6 +61,9 @@ export function batchFixture(overrides: Partial<ImportBatchDetail> = {}): Import
     balances: null,
     balanceIssues: [],
     balanceIssuesTotal: 0,
+    appointments: null,
+    appointmentIssues: [],
+    appointmentIssuesTotal: 0,
     issues: [
       {
         row: 3,
@@ -110,6 +113,27 @@ export function balancesFixture(
     progress: { processed: 0, created: 0, skipped: 0, ambiguous: 0, existing: 0 },
     undoneCount: null,
     undoneTotals: [],
+    canUndo: false,
+    ...overrides,
+  };
+}
+
+/** Hoja de citas (DX-263) validada: 5 filas, 2 rechazadas. */
+export function appointmentsFixture(
+  overrides: Partial<NonNullable<ImportBatchDetail['appointments']>> = {},
+): NonNullable<ImportBatchDetail['appointments']> {
+  return {
+    fileName: 'citas.csv',
+    fileFormat: 'CSV',
+    fileSizeBytes: 300,
+    fileSha256: 'c'.repeat(64),
+    totalRows: 5,
+    preparedCount: 3,
+    errorRows: 2,
+    progress: { processed: 0, created: 0, failed: 0 },
+    live: 0,
+    undoneCount: null,
+    remindersEnabledAt: null,
     canUndo: false,
     ...overrides,
   };

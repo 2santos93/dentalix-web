@@ -19,6 +19,8 @@ export type ImportFieldKey = keyof ColumnMapping;
 // DX-262: hoja de saldos «Saldo migrado» del lote.
 export type ImportBalances = components['schemas']['PatientImportBalancesDto'];
 export type BalanceCurrencyTotal = components['schemas']['BalanceCurrencyTotalDto'];
+// DX-263: hoja de citas futuras del lote.
+export type ImportAppointments = components['schemas']['PatientImportAppointmentsDto'];
 
 /** Igual que la API (PATIENT_IMPORT_ROLES): solo ADMIN. */
 export function canImportPatients(role: ClinicRole | null): boolean {
@@ -37,6 +39,7 @@ export const ISSUE_KIND_LABELS: Record<ImportIssue['kind'], string> = {
   DUPLICATE_EXISTING: 'Ya existe en la clínica',
   MERGED: 'Sumada a otra fila',
   EXISTING_BALANCE: 'Ya tenía saldo migrado',
+  WARNING: 'Aviso',
 };
 
 /** ¿Sigue trabajando la cola? (la pantalla consulta el progreso). */
@@ -136,6 +139,42 @@ export function downloadBalanceErrorsCsv(token: string, batchId: string): Promis
  */
 export function undoBalances(token: string, id: string): Promise<ImportBatchDetail> {
   return apiFetch<ImportBatchDetail>(`/patient-imports/${id}/balances/undo`, { method: 'POST', token });
+}
+
+export function downloadAppointmentTemplate(token: string): Promise<string> {
+  return apiFetchText('/patient-imports/appointments-template', { token });
+}
+
+/**
+ * Hoja de citas futuras del lote validado (DX-263): dry-run con las mismas
+ * reglas que agendar a mano. No crea citas: se crean al confirmar, después de
+ * los pacientes y los saldos. Volver a subirla la reemplaza.
+ */
+export function uploadAppointments(
+  token: string,
+  batchId: string,
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<ImportBatchDetail> {
+  return uploadImportFile<ImportBatchDetail>({ appointmentsOf: batchId }, fileForm(file), { token, onProgress });
+}
+
+export function removeAppointments(token: string, batchId: string): Promise<ImportBatchDetail> {
+  return apiFetch<ImportBatchDetail>(`/patient-imports/${batchId}/appointments`, { method: 'DELETE', token });
+}
+
+export function downloadAppointmentErrorsCsv(token: string, batchId: string): Promise<string> {
+  return apiFetchText(`/patient-imports/${batchId}/appointments/errors.csv`, { token });
+}
+
+/** Retira SOLO las citas del lote que siguen programadas (DX-263). */
+export function undoAppointments(token: string, id: string): Promise<ImportBatchDetail> {
+  return apiFetch<ImportBatchDetail>(`/patient-imports/${id}/appointments/undo`, { method: 'POST', token });
+}
+
+/** Activa los recordatorios automáticos de las citas importadas del lote (DX-263). */
+export function enableAppointmentReminders(token: string, id: string): Promise<ImportBatchDetail> {
+  return apiFetch<ImportBatchDetail>(`/patient-imports/${id}/appointments/reminders`, { method: 'POST', token });
 }
 
 export function undoImport(token: string, id: string): Promise<ImportBatchDetail> {

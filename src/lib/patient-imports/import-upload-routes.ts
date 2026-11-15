@@ -18,26 +18,34 @@ export const IMPORT_UPLOAD_ROUTES = {
 export type ImportUploadStep = keyof typeof IMPORT_UPLOAD_ROUTES;
 
 /**
- * Qué se sube: un paso del asistente o la hoja de saldos («Saldo migrado»,
+ * Qué se sube: un paso del asistente, la hoja de saldos («Saldo migrado»,
  * DX-262) de un lote validado (`/api/import-upload/balances/:id` →
- * `POST /patient-imports/:id/balances`).
+ * `POST /patient-imports/:id/balances`) o su hoja de citas (DX-263,
+ * `/api/import-upload/appointments/:id` → `POST /patient-imports/:id/appointments`).
  */
-export type ImportUploadTarget = ImportUploadStep | { balancesOf: string };
+export type ImportUploadTarget = ImportUploadStep | { balancesOf: string } | { appointmentsOf: string };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** El id del lote, solo si es un UUID (nunca un trozo de ruta). */
+/** El id del lote de la hoja de saldos, solo si es un UUID (nunca un trozo de ruta). */
 export function balancesBatchId(target: ImportUploadTarget): string | null {
-  if (typeof target === 'string') return null;
+  if (typeof target === 'string' || !('balancesOf' in target)) return null;
   return UUID.test(target.balancesOf) ? target.balancesOf : null;
+}
+
+/** El id del lote de la hoja de citas (DX-263), solo si es un UUID. */
+export function appointmentsBatchId(target: ImportUploadTarget): string | null {
+  if (typeof target === 'string' || !('appointmentsOf' in target)) return null;
+  return UUID.test(target.appointmentsOf) ? target.appointmentsOf : null;
 }
 
 /** Ruta de la web (navegador) y de la API para lo que se sube. */
 export function importUploadPaths(target: ImportUploadTarget): { web: string; api: string } | null {
   if (typeof target === 'string') return IMPORT_UPLOAD_ROUTES[target];
-  const id = balancesBatchId(target);
+  const sheet = 'appointmentsOf' in target ? 'appointments' : 'balances';
+  const id = sheet === 'appointments' ? appointmentsBatchId(target) : balancesBatchId(target);
   if (id === null) return null;
-  return { web: `/api/import-upload/balances/${id}`, api: `/patient-imports/${id}/balances` };
+  return { web: `/api/import-upload/${sheet}/${id}`, api: `/patient-imports/${id}/${sheet}` };
 }
 
 /** Tope de la API para el archivo (MAX_IMPORT_BYTES de dentalix-api): 5 MB. */

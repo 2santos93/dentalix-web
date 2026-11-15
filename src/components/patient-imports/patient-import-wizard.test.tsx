@@ -42,6 +42,10 @@ jest.mock('../../lib/patient-imports/patient-imports-api', () => ({
   downloadBalanceErrorsCsv: jest.fn().mockResolvedValue('csv'),
   uploadBalances: jest.fn(),
   removeBalances: jest.fn(),
+  uploadAppointments: jest.fn(),
+  removeAppointments: jest.fn(),
+  downloadAppointmentTemplate: jest.fn().mockResolvedValue('csv'),
+  downloadAppointmentErrorsCsv: jest.fn().mockResolvedValue('csv'),
 }));
 jest.mock('../../lib/files/save-csv', () => ({ saveCsv: jest.fn() }));
 jest.mock('../../lib/patients/document-type-names-api', () => ({ getDocumentTypeNames: jest.fn() }));
@@ -318,6 +322,7 @@ it('paso 3: confirma con «actualizar vacíos» y sigue el avance hasta terminar
     await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
     await user.click(await screen.findByRole('button', { name: 'Continuar' }));
     await user.click(await screen.findByRole('button', { name: 'Continuar sin saldos' }));
+    await user.click(await screen.findByRole('button', { name: 'Continuar sin citas' }));
 
     expect(screen.getByText(/autorización de datos pendiente/)).toBeInTheDocument();
     await user.click(screen.getByLabelText(/actualizar solo los campos vacíos/i));
@@ -350,6 +355,7 @@ it('confirmar falla con 409: el motivo de la API junto al botón', async () => {
   await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
   await user.click(await screen.findByRole('button', { name: 'Continuar' }));
   await user.click(await screen.findByRole('button', { name: 'Continuar sin saldos' }));
+  await user.click(await screen.findByRole('button', { name: 'Continuar sin citas' }));
   await user.click(screen.getByRole('button', { name: 'Importar 1 paciente' }));
   expect(await screen.findByRole('alert')).toHaveTextContent(/en curso/);
 });
@@ -365,6 +371,7 @@ it('mientras carga el formato de la sede: aviso de subida en esqueleto e «Impor
   await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
   await user.click(await screen.findByRole('button', { name: 'Continuar' }));
   await user.click(await screen.findByRole('button', { name: 'Continuar sin saldos' }));
+  await user.click(await screen.findByRole('button', { name: 'Continuar sin citas' }));
   const confirm = screen.getByRole('button', { name: 'Importar' });
   expect(confirm).toBeDisabled();
   expect(confirm).toHaveAttribute('aria-busy', 'true');
@@ -465,6 +472,8 @@ it('QA O1: al avanzar, el foco va al título del paso nuevo (no se pierde en <bo
     ).toHaveFocus(),
   );
   await user.click(screen.getByRole('button', { name: 'Continuar sin saldos' }));
+  await waitFor(() => expect(screen.getByRole('heading', { name: 'Citas futuras (opcional)' })).toHaveFocus());
+  await user.click(screen.getByRole('button', { name: 'Continuar sin citas' }));
   await waitFor(() => expect(screen.getByRole('heading', { name: 'Confirmar la importación' })).toHaveFocus());
 });
 
@@ -532,6 +541,7 @@ describe('DX-262: hoja de saldos «Saldo migrado»', () => {
     expect(within(issues).getByText('El importe debe ser mayor que 0.')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Continuar' }));
+    await user.click(await screen.findByRole('button', { name: 'Continuar sin citas' }));
     expect(screen.getByRole('heading', { name: 'Confirmar la importación' })).toBeInTheDocument();
     expect(screen.getByText(/3 saldos migrados/)).toBeInTheDocument();
     // DX-354b: los totales de la nota de confirmación, con el formato de la sede (de-DE: «201.000,50 VES · 40,00 USD»).
@@ -651,12 +661,13 @@ describe('DX-262: hoja de saldos «Saldo migrado»', () => {
     render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
     await upload(user);
     await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
-    expect(await screen.findByText(/No hay pacientes nuevos: puedes importar solo sus saldos/)).toBeInTheDocument();
+    expect(await screen.findByText(/No hay pacientes nuevos: puedes importar solo sus saldos o sus citas/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Continuar' }));
     // Sin hoja todavía no hay nada que importar: no se puede seguir sin saldos.
     expect(screen.getByRole('button', { name: 'Continuar sin saldos' })).toBeDisabled();
     await user.upload(screen.getByLabelText('Hoja de saldos (CSV o .xlsx)'), saldos());
     await user.click(await screen.findByRole('button', { name: 'Continuar' }));
+    await user.click(await screen.findByRole('button', { name: 'Continuar sin citas' }));
     await user.click(screen.getByRole('button', { name: 'Importar 3 saldos migrados' }));
     expect(mockedConfirm).toHaveBeenCalledWith('tok', 'batch-1', 'SKIP');
   });
@@ -680,6 +691,7 @@ describe('DX-262: hoja de saldos «Saldo migrado»', () => {
     await user.click(await screen.findByRole('button', { name: 'Continuar' }));
     await user.upload(screen.getByLabelText('Hoja de saldos (CSV o .xlsx)'), saldos());
     await user.click(await screen.findByRole('button', { name: 'Continuar' }));
+    await user.click(await screen.findByRole('button', { name: 'Continuar sin citas' }));
     expect(screen.getByRole('button', { name: 'Importar 1 saldo migrado' })).toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: /Actualizar solo los campos vacíos/ }));
     expect(screen.getByRole('button', { name: 'Procesar los pacientes que ya existen' })).toBeInTheDocument();
@@ -792,4 +804,45 @@ it('el aviso del avance se cierra solo cuando la consulta vuelve a ir bien', asy
   } finally {
     jest.useRealTimers();
   }
+});
+
+describe('DX-263: hoja de citas futuras', () => {
+  it('sin pacientes nuevos ni saldos: sube la hoja de citas y el botón dice «Importar N citas»', async () => {
+    const { uploadAppointments } = jest.requireMock('../../lib/patient-imports/patient-imports-api') as {
+      uploadAppointments: jest.Mock;
+    };
+    const { appointmentsFixture } = jest.requireActual('../../lib/test/patient-imports') as typeof import('../../lib/test/patient-imports');
+    const onlyExisting = batchFixture({
+      createdAt: new Date().toISOString(),
+      canConfirm: false,
+      totals: { totalRows: 1, validRows: 0, duplicateRows: 1, errorRows: 0 },
+      progress: { ...batchFixture().progress, preparedRows: 0 },
+      issues: [],
+      issuesTotal: 0,
+    });
+    mockedInspect.mockResolvedValue(inspectFixture());
+    mockedValidate.mockResolvedValue(onlyExisting);
+    uploadAppointments.mockResolvedValue({
+      ...onlyExisting,
+      canConfirm: true,
+      appointments: appointmentsFixture({ preparedCount: 3 }),
+    });
+    mockedConfirm.mockResolvedValue(batchFixture({ status: 'QUEUED', canConfirm: false }));
+    const user = userEvent.setup();
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
+    await upload(user);
+    await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
+    await user.click(await screen.findByRole('button', { name: 'Continuar' }));
+    // Saldos: sin nada que importar todavía no se puede seguir sin saldos; se va al paso «Citas» desde el asistente.
+    await user.click(screen.getByRole('button', { name: /Citas/ }));
+    expect(screen.getByRole('button', { name: 'Continuar sin citas' })).toBeDisabled();
+    await user.upload(
+      screen.getByLabelText('Hoja de citas (CSV o .xlsx)'),
+      new File(['numero_documento;fecha;hora'], 'citas.csv', { type: 'text/csv' }),
+    );
+    await user.click(await screen.findByRole('button', { name: 'Continuar' }));
+    expect(screen.getByText(/También se crearán 3 citas futuras/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Importar 3 citas' }));
+    expect(mockedConfirm).toHaveBeenCalledWith('tok', 'batch-1', 'SKIP');
+  });
 });

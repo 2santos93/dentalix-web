@@ -150,6 +150,7 @@ for (const viewport of [
     await result.getByRole('button', { name: 'Continuar' }).click();
     // DX-262: el paso «Saldos» es opcional.
     await page.getByRole('button', { name: 'Continuar sin saldos' }).click();
+    await page.getByRole('button', { name: 'Continuar sin citas' }).click();
     await expect(page.getByText(/autorización de datos pendiente/)).toBeVisible();
     await page.getByRole('button', { name: 'Importar 2 pacientes' }).click();
     // El avance de ESTE lote, no el «Importado» de otro lote del historial
@@ -316,6 +317,7 @@ test('legacy «Tipo Doc» Cédula, DX-107 × DX-259: un CSV de 10.000 pacientes 
   // Importar y seguir el avance.
   await result.getByRole('button', { name: 'Continuar' }).click();
   await page.getByRole('button', { name: 'Continuar sin saldos' }).click();
+  await page.getByRole('button', { name: 'Continuar sin citas' }).click();
   await page.getByRole('button', { name: /^Importar 10[.\s]?000 pacientes$/ }).click();
   // El avance del lote, no el «Importado» de otro lote del historial.
   await expect(page.getByText(/^10[.\s]?000 de 10[.\s]?000 filas procesadas$/)).toBeVisible({ timeout: 120_000 });

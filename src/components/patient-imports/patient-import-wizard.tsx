@@ -29,6 +29,7 @@ import {
   type ImportInspect,
 } from '@/lib/patient-imports/patient-imports-api';
 import { saveCsv } from '@/lib/files/save-csv';
+import { AppointmentsStep } from './appointments-step';
 import { BalancesStep } from './balances-step';
 import { ColumnMappingFields } from './column-mapping-fields';
 import { ImportIssuesTable } from './import-issues-table';
@@ -43,7 +44,7 @@ import {
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 
 export const wizardCopy = {
-  steps: ['Subir archivo', 'Columnas y validación', 'Saldos', 'Confirmar'],
+  steps: ['Subir archivo', 'Columnas y validación', 'Saldos', 'Citas', 'Confirmar'],
   uploadTitle: 'Sube el archivo de pacientes',
   mappingTitle: 'Revisa las columnas y valida',
   uploadHint: (maxRows: string) =>
@@ -79,9 +80,11 @@ export const wizardCopy = {
   previewExisting: 'Ya existe',
   nothingToImport: 'No hay filas que importar: corrige el archivo y vuelve a subirlo.',
   // DX-262 (I2): sin pacientes nuevos, aún se pueden importar sus saldos.
-  onlyBalances: 'No hay pacientes nuevos: puedes importar solo sus saldos en el paso siguiente.',
+  onlyBalances: 'No hay pacientes nuevos: puedes importar solo sus saldos o sus citas en los pasos siguientes.',
   confirmBalances: (n: number, shown: string) =>
     `Importar ${shown} ${n === 1 ? 'saldo migrado' : 'saldos migrados'}`,
+  // DX-263: sin pacientes nuevos ni saldos, solo las citas.
+  confirmAppointments: (n: number, shown: string) => `Importar ${shown} ${n === 1 ? 'cita' : 'citas'}`,
   continue: 'Continuar',
   back: 'Atrás',
   confirmTitle: 'Confirmar la importación',
@@ -99,6 +102,8 @@ export const wizardCopy = {
   confirmError: 'No se pudo iniciar la importación. Intenta de nuevo.',
   balancesNote: (count: number, shown: string, totals: string) =>
     `También se crearán ${shown} ${count === 1 ? 'saldo migrado' : 'saldos migrados'} (${totals}), después de los pacientes.`,
+  appointmentsNote: (count: number, shown: string) =>
+    `También ${count === 1 ? 'se creará' : 'se crearán'} ${shown} ${count === 1 ? 'cita futura' : 'citas futuras'}, al final y revisadas otra vez contra la agenda, sin recordatorios automáticos hasta que los actives.`,
   started: 'Importación en marcha.',
   progressError: 'No se pudo actualizar el avance de la importación.',
   another: 'Importar otro archivo',
@@ -132,9 +137,9 @@ interface PatientImportWizardProps {
 }
 
 /**
- * Asistente «Importar pacientes» (DX-107) en cuatro pasos: subir → columnas
+ * Asistente «Importar pacientes» (DX-107) en cinco pasos: subir → columnas
  * y validación (dry-run, sin escribir) → saldos (hoja de saldos opcional,
- * DX-262) → confirmar (en segundo plano, con avance). El archivo vive solo en el navegador entre pasos: volver a validar
+ * DX-262) → citas (hoja de citas futuras opcional, DX-263) → confirmar (en segundo plano, con avance). El archivo vive solo en el navegador entre pasos: volver a validar
  * lo sube de nuevo con el mapeo cambiado.
  */
 /**
@@ -397,8 +402,8 @@ export function PatientImportWizard({ token, onBatchChange, fmt, formatLoading =
         if (
           i === 0 ||
           (i === 1 && inspect) ||
-          (i === 2 && dryRun && isEditableDryRun(dryRun)) ||
-          (i === 3 && dryRun?.canConfirm)
+          ((i === 2 || i === 3) && dryRun && isEditableDryRun(dryRun)) ||
+          (i === 4 && dryRun?.canConfirm)
         )
           setStep(i);
       }}
@@ -511,12 +516,27 @@ export function PatientImportWizard({ token, onBatchChange, fmt, formatLoading =
           onBack={() => setStep(1)}
           onContinue={() => {
             setStep(3);
-            setFocusTarget('confirm');
+            setFocusTarget('appointments');
           }}
         />
       ) : null}
 
       {step === 3 && dryRun ? (
+        <AppointmentsStep
+          token={token}
+          headingId={`${id}-appointments`}
+          batch={dryRun}
+          fmt={fmt}
+          onBatch={setDryRun}
+          onBack={() => setStep(2)}
+          onContinue={() => {
+            setStep(4);
+            setFocusTarget('confirm');
+          }}
+        />
+      ) : null}
+
+      {step === 4 && dryRun ? (
         <section aria-labelledby={`${id}-confirm`} className="flex flex-col gap-5">
           <h2 id={`${id}-confirm`} tabIndex={-1} className="t-title text-ink focus:outline-none">
             {wizardCopy.confirmTitle}
@@ -545,10 +565,18 @@ export function PatientImportWizard({ token, onBatchChange, fmt, formatLoading =
                 )}
               </li>
             ) : null}
+            {dryRun.appointments && dryRun.appointments.preparedCount > 0 ? (
+              <li>
+                {wizardCopy.appointmentsNote(
+                  dryRun.appointments.preparedCount,
+                  n(dryRun.appointments.preparedCount),
+                )}
+              </li>
+            ) : null}
           </ul>
           {confirmError ? <InlineError variant="summary">{confirmError}</InlineError> : null}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-            <Button type="button" variant="outline" onClick={() => setStep(2)} className="w-full sm:w-auto">
+            <Button type="button" variant="outline" onClick={() => setStep(3)} className="w-full sm:w-auto">
               {wizardCopy.back}
             </Button>
             <Button
@@ -568,7 +596,13 @@ export function PatientImportWizard({ token, onBatchChange, fmt, formatLoading =
                         dryRun.balances?.preparedCount ?? 0,
                         n(dryRun.balances?.preparedCount ?? 0),
                       )
-                    : wizardCopy.confirmExistingOnly}
+                    : (dryRun.progress.preparedRows === 0 || mode === 'SKIP') &&
+                        (dryRun.appointments?.preparedCount ?? 0) > 0
+                      ? wizardCopy.confirmAppointments(
+                          dryRun.appointments?.preparedCount ?? 0,
+                          n(dryRun.appointments?.preparedCount ?? 0),
+                        )
+                      : wizardCopy.confirmExistingOnly}
             </Button>
           </div>
         </section>
