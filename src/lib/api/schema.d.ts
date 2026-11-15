@@ -2915,6 +2915,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patient-duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Posibles pacientes duplicados (solo ADMIN)
+         * @description DX-266. Parejas de pacientes vivos de la clínica con el mismo documento normalizado, el mismo nombre y fecha de nacimiento o el mismo teléfono y nombre, con el motivo. Primero las de documento. No salen las marcadas «No es duplicado». Con `locationId`, solo las parejas con una cita o el saldo en esa sede.
+         */
+        get: operations["PatientDuplicatesController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patient-duplicates/dismissals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * «No es duplicado» (solo ADMIN)
+         * @description DX-266. La pareja deja de salir en «Posibles duplicados». Idempotente. Queda un audit_event (UPDATE de PATIENT, `PATIENT_DUPLICATE_DISMISSED`) en cada paciente.
+         */
+        post: operations["PatientDuplicatesController_dismiss"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patient-duplicates/merge-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vista previa de la fusión (solo ADMIN)
+         * @description DX-266. Los dos pacientes campo a campo, cuánto tiene cada uno, lo que impide fusionar (`blockers`) y los enlaces públicos vivos del absorbido que se anularán. Deja un VIEW de cada ficha en la auditoría.
+         */
+        get: operations["PatientDuplicatesController_preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patient-duplicates/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fusionar dos pacientes (solo ADMIN)
+         * @description DX-266. En una transacción: anula los enlaces públicos vivos del absorbido, pasa al conservado TODO lo suyo (citas, historia clínica y evoluciones, odontograma, periodontograma, anamnesis, consentimientos, documentos, planes, pagos, saldos, coberturas, responsables…) sin cambiar su contenido, escribe en el conservado los datos elegidos del absorbido (`fields`) y deja al absorbido retirado con `mergedIntoId`: su ficha y su búsqueda llevan al conservado. El saldo total no cambia. Auditoría en los dos pacientes con lo movido por tipo y cantidad. Sin deshacer.
+         */
+        post: operations["PatientDuplicatesController_merge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/waitlist": {
         parameters: {
             query?: never;
@@ -14263,6 +14343,170 @@ export interface components {
             email?: string | null;
             /** @description Nota para el paciente. */
             note?: string | null;
+        };
+        /** @enum {string} */
+        DocumentType: "NATIONAL_ID" | "PASSPORT" | "RESIDENCE_PERMIT" | "TAX_ID" | "OTHER";
+        DuplicatePatientDto: {
+            /** Format: uuid */
+            id: string;
+            /** @description Código corto del paciente (DX-484). */
+            patientCode: string;
+            firstName: string;
+            lastName: string;
+            documentType: components["schemas"]["DocumentType"];
+            docTypeLabel: string | null;
+            docNumber: string | null;
+            /**
+             * Format: date
+             * @description Día civil AAAA-MM-DD.
+             */
+            birthDate: string | null;
+            phone: string | null;
+            email: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            lastAttentionAt: string | null;
+        };
+        /**
+         * @description DOCUMENT: el mismo documento normalizado (solo letras y dígitos: «V-12.345.678» = «v12345678»). NAME_BIRTHDATE: el mismo nombre completo (sin tildes ni mayúsculas) y la misma fecha de nacimiento. PHONE_NAME: el mismo teléfono (8 últimos dígitos) y el mismo primer nombre y primer apellido.
+         * @enum {string}
+         */
+        DuplicateReason: "DOCUMENT" | "NAME_BIRTHDATE" | "PHONE_NAME";
+        DuplicatePairDto: {
+            /** @description Los dos pacientes, en orden de id. */
+            patients: components["schemas"]["DuplicatePatientDto"][];
+            /** @description DOCUMENT: el mismo documento normalizado (solo letras y dígitos: «V-12.345.678» = «v12345678»). NAME_BIRTHDATE: el mismo nombre completo (sin tildes ni mayúsculas) y la misma fecha de nacimiento. PHONE_NAME: el mismo teléfono (8 últimos dígitos) y el mismo primer nombre y primer apellido. */
+            reasons: components["schemas"]["DuplicateReason"][];
+        };
+        DuplicatePageDto: {
+            items: components["schemas"]["DuplicatePairDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        DismissDuplicateDto: {
+            /** @description Los dos pacientes de la pareja (en cualquier orden). */
+            patientIds: string[];
+        };
+        /** @enum {string} */
+        Sex: "M" | "F" | "OTHER" | "UNSPECIFIED";
+        MergeFieldValuesDto: {
+            firstName: string;
+            lastName: string;
+            documentType: components["schemas"]["DocumentType"];
+            docTypeLabel: string | null;
+            docNumber: string | null;
+            /** Format: date */
+            birthDate: string | null;
+            sex: components["schemas"]["Sex"];
+            phone: string | null;
+            email: string | null;
+            address: string | null;
+            countryCode: string | null;
+            cityId: number | null;
+            maritalStatus: string | null;
+            occupation: string | null;
+            physicianName: string | null;
+            physicianPhone: string | null;
+            emergencyContactName: string | null;
+            emergencyContactRelationship: string | null;
+            emergencyContactPhone: string | null;
+            notes: string | null;
+            preferredLanguage: string | null;
+        };
+        /** @enum {string} */
+        MergeCategory: "appointments" | "clinicalEntries" | "odontogram" | "periodontogram" | "anamnesis" | "consents" | "documents" | "prescriptions" | "treatmentPlans" | "payments" | "coverages" | "responsibleParties" | "recalls" | "other";
+        MergeCategoryCountDto: {
+            category: components["schemas"]["MergeCategory"];
+            count: number;
+        };
+        MergeSideDto: {
+            /** Format: uuid */
+            id: string;
+            patientCode: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            lastAttentionAt: string | null;
+            /** @description Nombre de la ciudad de `fields.cityId`, para enseñarla. */
+            cityName: string | null;
+            fields: components["schemas"]["MergeFieldValuesDto"];
+            /** @description Cuánto tiene de cada cosa (lo que pasará al conservado). */
+            counts: components["schemas"]["MergeCategoryCountDto"][];
+        };
+        /**
+         * @description Lo que impide fusionar y hay que resolver antes: citas a la misma hora, saldos migrados del mismo lote y moneda, dos compromisos de pago abiertos. Vacío: se puede fusionar.
+         * @enum {string}
+         */
+        MergeBlocker: "DX266_OVERLAPPING_APPOINTMENTS" | "DX266_OPENING_BALANCE_CONFLICT" | "DX266_OPEN_PAYMENT_PROMISES";
+        MergePreviewDto: {
+            kept: components["schemas"]["MergeSideDto"];
+            absorbed: components["schemas"]["MergeSideDto"];
+            /** @description Lo que impide fusionar y hay que resolver antes: citas a la misma hora, saldos migrados del mismo lote y moneda, dos compromisos de pago abiertos. Vacío: se puede fusionar. */
+            blockers: components["schemas"]["MergeBlocker"][];
+            /** @description Enlaces públicos vivos del absorbido (receta, certificado, firma, presupuesto, anamnesis, pago…): la fusión los anula. */
+            absorbedLiveLinks: components["schemas"]["LivePublicLinksDto"];
+        };
+        /** @enum {string} */
+        MergeFieldSource: "KEPT" | "ABSORBED";
+        MergeFieldChoicesDto: {
+            firstName?: components["schemas"]["MergeFieldSource"];
+            lastName?: components["schemas"]["MergeFieldSource"];
+            /** @description Tipo, nombre del tipo y número, juntos. */
+            document?: components["schemas"]["MergeFieldSource"];
+            birthDate?: components["schemas"]["MergeFieldSource"];
+            sex?: components["schemas"]["MergeFieldSource"];
+            phone?: components["schemas"]["MergeFieldSource"];
+            email?: components["schemas"]["MergeFieldSource"];
+            /** @description Dirección, país y ciudad, juntos. */
+            address?: components["schemas"]["MergeFieldSource"];
+            maritalStatus?: components["schemas"]["MergeFieldSource"];
+            occupation?: components["schemas"]["MergeFieldSource"];
+            /** @description Nombre y teléfono del médico, juntos. */
+            physician?: components["schemas"]["MergeFieldSource"];
+            /** @description Nombre, parentesco y teléfono del contacto de emergencia, juntos. */
+            emergencyContact?: components["schemas"]["MergeFieldSource"];
+            notes?: components["schemas"]["MergeFieldSource"];
+            preferredLanguage?: components["schemas"]["MergeFieldSource"];
+        };
+        MergePatientsDto: {
+            /**
+             * Format: uuid
+             * @description El paciente que se conserva.
+             */
+            keptId: string;
+            /**
+             * Format: uuid
+             * @description El paciente que se absorbe: todo lo suyo pasa al conservado y queda retirado.
+             */
+            absorbedId: string;
+            fields?: components["schemas"]["MergeFieldChoicesDto"];
+        };
+        MergeMovedDto: {
+            /** @description Tabla de la base (tipo de registro). */
+            table: string;
+            count: number;
+        };
+        MergeResolvedDto: {
+            /** @description Qué «uno por paciente» se resolvió a favor del conservado (p. ej. coveragesNoLongerPrimary). */
+            kind: string;
+            count: number;
+        };
+        /** @enum {string} */
+        MergeFieldGroup: "firstName" | "lastName" | "document" | "birthDate" | "sex" | "phone" | "email" | "address" | "maritalStatus" | "occupation" | "physician" | "emergencyContact" | "notes" | "preferredLanguage";
+        MergeResultDto: {
+            /**
+             * Format: uuid
+             * @description El paciente que se conserva.
+             */
+            patientId: string;
+            /** Format: uuid */
+            absorbedPatientId: string;
+            moved: components["schemas"]["MergeMovedDto"][];
+            resolved: components["schemas"]["MergeResolvedDto"][];
+            revokedLinks: components["schemas"]["LivePublicLinksDto"];
+            fieldsFromAbsorbed: components["schemas"]["MergeFieldGroup"][];
         };
         /** @enum {string} */
         WaitlistStatus: "OPEN" | "SCHEDULED" | "DISMISSED";
@@ -32869,6 +33113,184 @@ export interface operations {
             };
             /** @description Medio o datos no encontrados */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientDuplicatesController_list: {
+        parameters: {
+            query?: {
+                /** @description Solo parejas en las que alguno de los dos tiene una cita en esta sede o su saldo es de ella. */
+                locationId?: string;
+                page?: number;
+                /** @description Tope: 50 (un valor mayor se recorta). */
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicatePageDto"];
+                };
+            };
+            /** @description Parámetros no válidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede revisar y fusionar pacientes duplicados. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientDuplicatesController_dismiss: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DismissDuplicateDto"];
+            };
+        };
+        responses: {
+            /** @description Pareja descartada */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No son dos pacientes distintos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede revisar y fusionar pacientes duplicados. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Alguno no existe en la clínica o está archivado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientDuplicatesController_preview: {
+        parameters: {
+            query: {
+                /** @description El paciente que se conserva. */
+                keptId: string;
+                /** @description El paciente que se absorbe (queda retirado). */
+                absorbedId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergePreviewDto"];
+                };
+            };
+            /** @description No son dos pacientes distintos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede revisar y fusionar pacientes duplicados. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Alguno no existe en la clínica o está archivado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientDuplicatesController_merge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergePatientsDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeResultDto"];
+                };
+            };
+            /** @description No son dos pacientes distintos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede revisar y fusionar pacientes duplicados. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Alguno no existe en la clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Alguno ya está archivado o fusionado (`MERGE_PATIENT_INACTIVE`), tienen citas a la misma hora (`MERGE_OVERLAPPING_APPOINTMENTS`), saldos migrados del mismo lote (`MERGE_OPENING_BALANCE_CONFLICT`), dos compromisos de pago abiertos (`MERGE_OPEN_PAYMENT_PROMISES`) o el documento elegido ya es de otro paciente. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { hasUnsavedChanges, requestNavigation } from '@/components/settings/unsaved-changes';
-import { Cake, CalendarPlus, CornerDownLeft, ListTodo, Phone, PhoneCall, Search, UserPlus, UserRound } from 'lucide-react';
+import { Cake, CalendarPlus, CornerDownLeft, ListTodo, Phone, PhoneCall, Search, UserPlus, UserRound, UsersRound } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { NEW_APPOINTMENT_EVENT, NEW_APPOINTMENT_PARAM } from '@/lib/ui/new-appointment';
 import { canManageRecall } from '@/lib/recall/presentation';
 import { canReviewMajority, COMING_OF_AGE_HREF } from '@/lib/patients/majority-review-api';
+import { canManageDuplicates, DUPLICATES_HREF } from '@/lib/patients/patient-merge-api';
 import { canSee, ALL_NAV_ITEMS } from './nav-config';
 import { useEffectivePermissions } from '@/lib/auth/permissions';
 import { useCloseOnBack } from './use-shell-media';
@@ -30,6 +31,8 @@ const copy = {
   recallHint: 'Pacientes por llamar: control vencido y sin cita',
   comingOfAge: 'Cumplen la mayoría de edad',
   comingOfAgeHint: 'Revisar a quién van los avisos de quien deja de ser menor',
+  duplicates: 'Posibles duplicados',
+  duplicatesHint: 'Pacientes registrados dos veces: fusionar o descartar',
   actions: 'Acciones',
   searching: 'Buscando pacientes…',
   searchFailed: 'No se pudo buscar pacientes. Revisa la conexión e inténtalo de nuevo.',
@@ -207,6 +210,17 @@ export function CommandPalette({
         hint: copy.comingOfAgeHint,
         icon: Cake,
         run: () => go(COMING_OF_AGE_HREF),
+      });
+    }
+    // DX-266: tampoco gasta entrada en la barra; solo ADMIN.
+    if (q && canManageDuplicates(role) && matches(copy.duplicates, copy.duplicatesHint)) {
+      result.push({
+        id: 'nav-duplicates',
+        group: 'goto',
+        label: copy.duplicates,
+        hint: copy.duplicatesHint,
+        icon: UsersRound,
+        run: () => go(DUPLICATES_HREF),
       });
     }
     // Las pantallas de Ajustes solo al escribir: sin texto, la lista es corta.

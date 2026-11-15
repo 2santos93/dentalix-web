@@ -21,19 +21,25 @@ export const routeRoleGateCopy = {
 export function RouteRoleGate({ href, token, children }: { href: string; token: string; children: ReactNode }) {
   const role = getTokenRole(token);
   const item = ALL_NAV_ITEMS.find((i) => i.href === href);
-  if (role !== null && item && !canSee(item, role)) {
-    return (
-      <EmptyState
-        role="status"
-        title={routeRoleGateCopy.title}
-        description={routeRoleGateCopy.description}
-        action={
-          <Link href="/dashboard" className={buttonVariants({ variant: 'secondary' })}>
-            {routeRoleGateCopy.home}
-          </Link>
-        }
-      />
-    );
-  }
+  if (role !== null && item && !canSee(item, role)) return <RouteForbidden />;
   return <>{children}</>;
+}
+
+/**
+ * El aviso de `RouteRoleGate`, para una pantalla sin entrada en el menú que
+ * decide su permiso ella misma (p. ej. «Posibles duplicados», DX-266).
+ */
+export function RouteForbidden() {
+  return (
+    <EmptyState
+      role="status"
+      title={routeRoleGateCopy.title}
+      description={routeRoleGateCopy.description}
+      action={
+        <Link href="/dashboard" className={buttonVariants({ variant: 'secondary' })}>
+          {routeRoleGateCopy.home}
+        </Link>
+      }
+    />
+  );
 }
