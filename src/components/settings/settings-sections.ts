@@ -13,6 +13,7 @@ import {
   ClipboardList,
   Repeat,
   Stethoscope,
+  Syringe,
   Coins,
   FileBadge,
   FileClock,
@@ -41,6 +42,7 @@ import { canManagePatientLanguages } from '@/lib/patients/patient-languages';
 import { canManageCertificateSettings } from '@/lib/certificates/certificates-api';
 import { canManageConsentTemplates } from '@/lib/consents/consents-api';
 import { canManagePrescriptionSettings } from '@/lib/prescriptions/prescriptions-api';
+import { canManageAnestheticCatalog } from '@/lib/anesthesia/anesthesia-api';
 import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
 import { canManageRecallTypes } from '@/lib/recall/recall-api';
 import { canManageSlotOfferSettings } from '@/lib/appointments/slot-offer-settings-api';
@@ -336,6 +338,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Plantillas y datos que imprime la receta.',
         icon: Pill,
         visible: canManagePrescriptionSettings,
+      },
+      // DX-408: el catálogo de anestésicos (DX-307).
+      {
+        href: '/settings/anestesicos',
+        label: 'Anestésicos',
+        description: 'Concentración, carpule y dosis máximas de los anestésicos que se registran en la evolución.',
+        icon: Syringe,
+        visible: canManageAnestheticCatalog,
       },
       // DX-306.
       {
