@@ -124,6 +124,8 @@ interface DayColumnsProps {
    * el MISMO profesional si cambió de hora, y ambos si las dos cosas.
    */
   onDrop: (appointment: Appointment, target: MovePatch) => void;
+  /** DX-046: avisa al empezar y al acabar un arrastre (la agenda no relee de fondo en medio). */
+  onDragActiveChange?: (active: boolean) => void;
   /** «Nueva cita» de una columna, o clic en un hueco libre (con su hora). */
   onNewAppointment: (providerId: string, startTime?: string) => void;
   /** DX-237: el siguiente paso del flujo en la tarjeta; lo decide el rol. */
@@ -244,6 +246,7 @@ export function DayColumns({
   now: nowProp,
   providerRanges = {},
   chairColumns,
+  onDragActiveChange,
 }: DayColumnsProps) {
   const byChair = chairColumns !== undefined;
   const columns = byChair
@@ -262,6 +265,16 @@ export function DayColumns({
     saveActiveColumn(id);
   };
   const [drag, setDrag] = useState<DragState | null>(null);
+  const dragActive = drag !== null;
+  const onDragActiveChangeRef = useRef(onDragActiveChange);
+  useEffect(() => {
+    onDragActiveChangeRef.current = onDragActiveChange;
+  });
+  useEffect(() => {
+    if (!dragActive) return;
+    onDragActiveChangeRef.current?.(true);
+    return () => onDragActiveChangeRef.current?.(false);
+  }, [dragActive]);
   const columnRefs = useRef(new Map<string, HTMLDivElement>());
   // Un arrastre que termina dispara también un `click` en la tarjeta: este
   // indicador lo descarta para que soltar no abra el detalle.

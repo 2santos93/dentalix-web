@@ -60,6 +60,12 @@ export interface PublicConfirmationCopy {
   calendarTitle: string;
   calendarIcs: string;
   calendarGoogle: string;
+  /** DX-046: paso «¿Seguro?» antes de cancelar. */
+  cancelConfirmTitle: string;
+  cancelConfirmMessage: string;
+  cancelConfirmYes: string;
+  cancelConfirmBack: string;
+  close: string;
 }
 
 const es: PublicConfirmationCopy = {
@@ -130,6 +136,12 @@ const es: PublicConfirmationCopy = {
   calendarTitle: 'Añadir a mi calendario',
   calendarIcs: 'Apple, Outlook u otro (.ics)',
   calendarGoogle: 'Google Calendar',
+  cancelConfirmTitle: '¿Seguro que quieres cancelar la cita?',
+  cancelConfirmMessage:
+    'La clínica recibirá tu cancelación al momento. Si después quieres otra fecha, tendrás que comunicarte con ella.',
+  cancelConfirmYes: 'Sí, cancelar',
+  cancelConfirmBack: 'Volver',
+  close: 'Cerrar',
 };
 
 const en: PublicConfirmationCopy = {
@@ -194,6 +206,12 @@ const en: PublicConfirmationCopy = {
   calendarTitle: 'Add to my calendar',
   calendarIcs: 'Apple, Outlook or other (.ics)',
   calendarGoogle: 'Google Calendar',
+  cancelConfirmTitle: 'Are you sure you want to cancel the appointment?',
+  cancelConfirmMessage:
+    'The clinic will receive your cancellation right away. If you would like another date later, you will need to contact them.',
+  cancelConfirmYes: 'Yes, cancel',
+  cancelConfirmBack: 'Go back',
+  close: 'Close',
 };
 
 export const PUBLIC_CONFIRMATION_COPY = { es, en } as const;
