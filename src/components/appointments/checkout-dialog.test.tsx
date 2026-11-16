@@ -31,6 +31,7 @@ const list = (over: Partial<CheckoutChecklist> = {}): CheckoutChecklist => ({
   remindersOptedOut: false,
   recallTypes: [],
   balance: { hasOverdue: true, overdueDays: 30 },
+  pending: null,
   ...over,
 });
 
