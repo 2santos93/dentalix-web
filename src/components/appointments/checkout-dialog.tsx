@@ -1,83 +1,67 @@
-"use client";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
-import dynamic from "next/dynamic";
-import { CircleCheck, CircleAlert } from "lucide-react";
-import { apiErrorMessage } from "@/lib/api/error-message";
+'use client';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import dynamic from 'next/dynamic';
+import { CircleCheck, CircleAlert } from 'lucide-react';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   checkoutItems,
   getCheckoutChecklist,
   type CheckoutChecklist,
   type CheckoutItem,
-} from "@/lib/appointments/checkout-checklist";
-import { SectionError } from "@/components/errors/section-error";
-import { FormModal } from "@/components/shared/form-modal";
-import { Skeleton } from "@/components/ui/skeleton";
-import { ExternalLink } from "@/components/shared/external-link";
-import {
-  CheckoutRecallOffer,
-  ScheduledRecallText,
-  type ScheduledRecall,
-} from "./checkout-recall-offer";
-import { CheckoutContactField } from "./checkout-contact-field";
-import { InlineError } from "@/components/errors/inline-error";
-import { notifySuccess } from "@/components/errors/notify";
-import { Button } from "@/components/ui/button";
-import {
-  canRegisterPayments,
-  useEffectivePermissions,
-} from "@/lib/auth/permissions";
-import { getTokenRole } from "@/lib/auth/token-role";
-import { useSedeStamp } from "@/lib/locations/sede-stamp";
+} from '@/lib/appointments/checkout-checklist';
+import { SectionError } from '@/components/errors/section-error';
+import { FormModal } from '@/components/shared/form-modal';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ExternalLink } from '@/components/shared/external-link';
+import { CheckoutRecallOffer, ScheduledRecallText, type ScheduledRecall } from './checkout-recall-offer';
+import { CheckoutContactField } from './checkout-contact-field';
+import { InlineError } from '@/components/errors/inline-error';
+import { notifySuccess } from '@/components/errors/notify';
+import { Button } from '@/components/ui/button';
+import { canRegisterPayments, useEffectivePermissions } from '@/lib/auth/permissions';
+import { getTokenRole } from '@/lib/auth/token-role';
+import { useSedeStamp } from '@/lib/locations/sede-stamp';
 
 // DX-202-bis: el modal de cobro (con sus medios, tasas y comprobante) solo se
 // descarga cuando alguien pulsa «Cobrar»: la salida se abre muchas veces al día.
 const RecordPaymentModal = dynamic(
-  () =>
-    import("@/components/payments/record-payment-modal").then(
-      (m) => m.RecordPaymentModal,
-    ),
+  () => import('@/components/payments/record-payment-modal').then((m) => m.RecordPaymentModal),
   { ssr: false },
 );
 
 export const checkoutCopy = {
   title: (name: string) => `Salida de ${name}`,
-  description:
-    "Antes de despedirlo, revisa si falta algo. Puedes completar la cita aunque quede algo pendiente.",
-  submit: "Completar la cita",
+  description: 'Antes de despedirlo, revisa si falta algo. Puedes completar la cita aunque quede algo pendiente.',
+  submit: 'Completar la cita',
   /** FE-108: la primaria mientras llega la lista; sin ella no se completa. */
-  loading: "Cargando…",
-  submitWithPending: (count: number) =>
-    `Completar con ${count} pendiente${count === 1 ? "" : "s"}`,
-  loadError: "No pudimos comprobar la salida del paciente.",
-  completeError: "No pudimos completar la cita. Intenta de nuevo.",
-  remindersOff: "Dio de baja los recordatorios.",
-  open: "Abrir ficha",
+  loading: 'Cargando…',
+  submitWithPending: (count: number) => `Completar con ${count} pendiente${count === 1 ? '' : 's'}`,
+  loadError: 'No pudimos comprobar la salida del paciente.',
+  completeError: 'No pudimos completar la cita. Intenta de nuevo.',
+  remindersOff: 'Dio de baja los recordatorios.',
+  open: 'Abrir ficha',
   items: {
     NEXT_VISIT: {
-      done: "Tiene próxima cita o recall",
-      pending: "Sin próxima cita ni recall",
-      tab: "",
+      done: 'Tiene próxima cita o recall',
+      pending: 'Sin próxima cita ni recall',
+      tab: '',
     },
     PAYMENT: {
-      done: "Sin saldo pendiente",
-      pending: "Tiene saldo pendiente hoy",
-      tab: "?tab=account-statement",
+      done: 'Sin saldo pendiente',
+      pending: 'Tiene saldo pendiente hoy',
+      tab: '?tab=account-statement',
     },
-    PHONE: { done: "Tiene teléfono", pending: "Falta el teléfono", tab: "" },
-    EMAIL: { done: "Tiene correo", pending: "Falta el correo", tab: "" },
-  } satisfies Record<
-    CheckoutItem,
-    { done: string; pending: string; tab: string }
-  >,
+    PHONE: { done: 'Tiene teléfono', pending: 'Falta el teléfono', tab: '' },
+    EMAIL: { done: 'Tiene correo', pending: 'Falta el correo', tab: '' },
+  } satisfies Record<CheckoutItem, { done: string; pending: string; tab: string }>,
   /** DX-202-bis: con algo vencido, el punto lo dice antes que el pendiente. */
-  overdue: "Tiene saldo vencido",
+  overdue: 'Tiene saldo vencido',
   pendingToday: (amounts: string) => `Pendiente hoy: ${amounts}`,
-  overdueDays: (days: number) =>
-    `Vencido hace ${days} día${days === 1 ? "" : "s"}`,
-  charge: "Cobrar",
-  checking: "Comprobando…",
-  refreshError: "No pudimos volver a comprobar este punto.",
-  retry: "Reintentar",
+  overdueDays: (days: number) => `Vencido hace ${days} día${days === 1 ? '' : 's'}`,
+  charge: 'Cobrar',
+  checking: 'Comprobando…',
+  refreshError: 'No pudimos volver a comprobar este punto.',
+  retry: 'Reintentar',
 };
 
 /** Un punto que se está releyendo tras resolverlo aquí, o cuya relectura falló. */
@@ -143,8 +127,8 @@ export function CheckoutDialog({
 
   useEffect(() => {
     load();
-    window.addEventListener("focus", load);
-    return () => window.removeEventListener("focus", load);
+    window.addEventListener('focus', load);
+    return () => window.removeEventListener('focus', load);
   }, [load]);
 
   // Relee la lista tras resolver `item` aquí: el resto de puntos sigue a la
@@ -177,8 +161,7 @@ export function CheckoutDialog({
   // Programado aquí, el punto queda hecho sin esperar a la relectura.
   const items = list
     ? checkoutItems(list).map((i) =>
-        (i.item === "NEXT_VISIT" && scheduled) ||
-        ((i.item === "PHONE" || i.item === "EMAIL") && savedContact[i.item])
+        (i.item === 'NEXT_VISIT' && scheduled) || ((i.item === 'PHONE' || i.item === 'EMAIL') && savedContact[i.item])
           ? { ...i, done: true }
           : i,
       )
@@ -204,26 +187,22 @@ export function CheckoutDialog({
     const parts: string[] = [];
     const pending = list.pending ?? [];
     if (pending.length > 0) {
-      parts.push(
-        checkoutCopy.pendingToday(
-          pending.map((a) => stamp.money(a.amount, a.currency)).join(" + "),
-        ),
-      );
+      parts.push(checkoutCopy.pendingToday(pending.map((a) => stamp.money(a.amount, a.currency)).join(' + ')));
     }
     if (list.balance.hasOverdue && list.balance.overdueDays !== null) {
       parts.push(checkoutCopy.overdueDays(list.balance.overdueDays));
     }
-    return parts.length > 0 ? parts.join(" · ") : null;
+    return parts.length > 0 ? parts.join(' · ') : null;
   }
 
   function action(item: CheckoutItem, pendingText: string) {
     if (!list) return null;
-    if (item === "PHONE" || item === "EMAIL") {
+    if (item === 'PHONE' || item === 'EMAIL') {
       return (
         <CheckoutContactField
           token={token}
           patientId={list.patientId}
-          kind={item === "PHONE" ? "phone" : "email"}
+          kind={item === 'PHONE' ? 'phone' : 'email'}
           onSaved={() => {
             setSavedContact((prev) => ({ ...prev, [item]: true }));
             refresh(item);
@@ -231,7 +210,7 @@ export function CheckoutDialog({
         />
       );
     }
-    if (item === "PAYMENT" && canCharge) {
+    if (item === 'PAYMENT' && canCharge) {
       return (
         <Button
           type="button"
@@ -289,16 +268,11 @@ export function CheckoutDialog({
             {items.map(({ item, done }) => {
               const text = checkoutCopy.items[item];
               const Icon = done ? CircleCheck : CircleAlert;
-              const pendingText =
-                item === "PAYMENT" && list.balance?.hasOverdue
-                  ? checkoutCopy.overdue
-                  : text.pending;
-              const detail =
-                item === "PAYMENT" && !done ? paymentDetail() : null;
+              const pendingText = item === 'PAYMENT' && list.balance?.hasOverdue ? checkoutCopy.overdue : text.pending;
+              const detail = item === 'PAYMENT' && !done ? paymentDetail() : null;
               const checking = row?.item === item && row.error === null;
               const rowError = row?.item === item ? row.error : null;
-              const offerRecall =
-                item === "NEXT_VISIT" && !done && list.recallTypes.length > 0;
+              const offerRecall = item === 'NEXT_VISIT' && !done && list.recallTypes.length > 0;
               return (
                 <li
                   key={item}
@@ -311,17 +285,10 @@ export function CheckoutDialog({
                     <span className="flex min-w-0 items-center gap-2">
                       <Icon
                         aria-hidden
-                        className={
-                          done
-                            ? "size-4 shrink-0 text-success-text"
-                            : "size-4 shrink-0 text-warning-text"
-                        }
+                        className={done ? 'size-4 shrink-0 text-success-text' : 'size-4 shrink-0 text-warning-text'}
                       />
-                      {item === "NEXT_VISIT" && done && scheduled ? (
-                        <ScheduledRecallText
-                          token={token}
-                          scheduled={scheduled}
-                        />
+                      {item === 'NEXT_VISIT' && done && scheduled ? (
+                        <ScheduledRecallText token={token} scheduled={scheduled} />
                       ) : done ? (
                         text.done
                       ) : (
@@ -329,10 +296,7 @@ export function CheckoutDialog({
                       )}
                     </span>
                     {checking ? (
-                      <span
-                        role="status"
-                        className="shrink-0 text-xs text-muted"
-                      >
+                      <span role="status" className="shrink-0 text-xs text-muted">
                         {checkoutCopy.checking}
                       </span>
                     ) : done ? null : (
@@ -340,22 +304,14 @@ export function CheckoutDialog({
                     )}
                   </span>
                   {detail ? (
-                    <p
-                      className="text-xs text-muted tabular-nums"
-                      data-testid="checkout-PAYMENT-detail"
-                    >
+                    <p className="text-xs text-muted tabular-nums" data-testid="checkout-PAYMENT-detail">
                       {detail}
                     </p>
                   ) : null}
                   {rowError ? (
                     <div className="flex flex-wrap items-center gap-2">
                       <InlineError>{rowError}</InlineError>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => refresh(item)}
-                      >
+                      <Button type="button" variant="ghost" size="sm" onClick={() => refresh(item)}>
                         {checkoutCopy.retry}
                       </Button>
                     </div>
@@ -373,7 +329,7 @@ export function CheckoutDialog({
                       onStale={load}
                     />
                   ) : null}
-                  {item === "NEXT_VISIT" && scheduled?.excluded ? (
+                  {item === 'NEXT_VISIT' && scheduled?.excluded ? (
                     <p className="text-xs text-muted">{scheduled.excluded}.</p>
                   ) : null}
                 </li>
@@ -381,9 +337,7 @@ export function CheckoutDialog({
             })}
           </ul>
         )}
-        {list?.remindersOptedOut ? (
-          <p className="text-xs text-muted">{checkoutCopy.remindersOff}</p>
-        ) : null}
+        {list?.remindersOptedOut ? <p className="text-xs text-muted">{checkoutCopy.remindersOff}</p> : null}
       </FormModal>
       {/* Fuera del formulario de la salida: el envío del cobro no debe subir
         por el árbol de React hasta «Completar la cita». */}
@@ -396,7 +350,7 @@ export function CheckoutDialog({
           onRecorded={(notice, opts) => {
             setCharging(false);
             notifySuccess(notice, opts);
-            refresh("PAYMENT");
+            refresh('PAYMENT');
           }}
         />
       ) : null}
