@@ -17,7 +17,7 @@ import {
 import { PatientDataPanel } from '@/components/patients/patient-data-panel';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 import { PatientRecordHeader } from '@/components/patients/patient-record-header';
-import { ImagingExportDialog, imagingExportMenuAction } from '@/components/patients/imaging-export-dialog';
+import { imagingExportMenuAction } from '@/components/patients/imaging-export-action';
 import {
   PatientRetentionDialogs,
   PatientRetentionSection,
@@ -59,6 +59,7 @@ import {
   ClinicalRecordCopiesSection,
   DataConsentsTab,
   FamilyAccountStatementSection,
+  ImagingExportDialog,
   OdontogramTab,
   PatientCollectionsSection,
   PatientConsentsTab,
@@ -460,7 +461,7 @@ function PatientDetailView() {
             patientId={patientId}
             onCreated={() => setAnamnesisVersion((v) => v + 1)}
           />
-          {patient && imagingAction ? (
+          {patient && imagingAction && imagingExportOpen ? (
             <ImagingExportDialog
               open={imagingExportOpen}
               onOpenChange={setImagingExportOpen}

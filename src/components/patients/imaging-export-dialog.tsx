@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import * as React from 'react';
-import { Check, Copy, Download, ScanLine } from 'lucide-react';
+import { Check, Copy, Download } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -12,16 +12,13 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { SectionError } from '@/components/errors/section-error';
-import type { RowAction } from '@/components/shared/row-actions';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { saveBlob } from '@/lib/files/save-blob';
 import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
-import type { ClinicRole } from '@/lib/me/me-api';
-import {
-  canExportImaging,
-  fetchPatientImagingExport,
-  imagingExportFileName,
-} from '@/lib/patients/patients-api';
+import { fetchPatientImagingExport, imagingExportFileName } from '@/lib/patients/patients-api';
+import { IMAGING_EXPORT_ACTION } from './imaging-export-action';
+
+export { imagingExportMenuAction } from './imaging-export-action';
 import { cn } from '@/lib/utils';
 
 /** Ruta de la página de ayuda (DX-484). */
@@ -29,8 +26,8 @@ export const IMAGING_HELP_HREF = '/ayuda/software-de-imagen';
 
 // Copy as constants (i18n-ready).
 export const imagingExportCopy = {
-  action: 'Datos para el software de imagen',
-  title: 'Datos para el software de imagen',
+  action: IMAGING_EXPORT_ACTION,
+  title: IMAGING_EXPORT_ACTION,
   description: 'Con estos datos das de alta al paciente en el software de imagen de la clínica.',
   loading: 'Preparando los datos del paciente…',
   errorTitle: 'No se pudieron preparar los datos',
@@ -43,22 +40,6 @@ export const imagingExportCopy = {
   note: 'Dentalix no se conecta con el software de imagen: da de alta al paciente allí con este código.',
   helpLink: 'Cómo darlo de alta en Sidexis, Romexis, Dexis o CS Imaging',
 };
-
-/**
- * La entrada del menú «⋯» de la ficha, solo para los roles clínicos (DENTIST,
- * ASSISTANT, ADMIN: los mismos que la API). `null` para recepción o sin rol.
- */
-export function imagingExportMenuAction(
-  role: ClinicRole | null,
-  onSelect: () => void,
-): RowAction | null {
-  if (!canExportImaging(role)) return null;
-  return {
-    label: imagingExportCopy.action,
-    icon: <ScanLine aria-hidden />,
-    onSelect,
-  };
-}
 
 interface ImagingExportDialogProps {
   open: boolean;
