@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { hasUnsavedChanges, requestNavigation } from '@/components/settings/unsaved-changes';
-import { Cake, CalendarPlus, CornerDownLeft, ListTodo, Phone, PhoneCall, Search, UserPlus, UserRound, UsersRound } from 'lucide-react';
+import { Cake, CalendarPlus, ClipboardList, CornerDownLeft, ListTodo, Phone, PhoneCall, Search, UserPlus, UserRound, UsersRound } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
@@ -16,6 +16,7 @@ import { NEW_APPOINTMENT_EVENT, NEW_APPOINTMENT_PARAM } from '@/lib/ui/new-appoi
 import { canManageRecall } from '@/lib/recall/presentation';
 import { canReviewMajority, COMING_OF_AGE_HREF } from '@/lib/patients/majority-review-api';
 import { canManageDuplicates, DUPLICATES_HREF } from '@/lib/patients/patient-merge-api';
+import { canReadExternalOrders, PENDING_EXTERNAL_ORDERS_HREF } from '@/lib/external-orders/external-orders-api';
 import { canSee, ALL_NAV_ITEMS } from './nav-config';
 import { useEffectivePermissions } from '@/lib/auth/permissions';
 import { useCloseOnBack } from './use-shell-media';
@@ -33,6 +34,8 @@ const copy = {
   comingOfAgeHint: 'Revisar a quién van los avisos de quien deja de ser menor',
   duplicates: 'Posibles duplicados',
   duplicatesHint: 'Pacientes registrados dos veces: fusionar o descartar',
+  pendingOrders: 'Órdenes sin resultado',
+  pendingOrdersHint: 'Estudios y referencias emitidos que esperan su resultado',
   actions: 'Acciones',
   searching: 'Buscando pacientes…',
   searchFailed: 'No se pudo buscar pacientes. Revisa la conexión e inténtalo de nuevo.',
@@ -221,6 +224,18 @@ export function CommandPalette({
         hint: copy.duplicatesHint,
         icon: UsersRound,
         run: () => go(DUPLICATES_HREF),
+      });
+    }
+    // DX-572: tampoco gasta entrada en la barra; los cuatro roles. Se llega
+    // también desde la pestaña «Órdenes» de la ficha.
+    if (q && canReadExternalOrders(role) && matches(copy.pendingOrders, copy.pendingOrdersHint)) {
+      result.push({
+        id: 'nav-pending-external-orders',
+        group: 'goto',
+        label: copy.pendingOrders,
+        hint: copy.pendingOrdersHint,
+        icon: ClipboardList,
+        run: () => go(PENDING_EXTERNAL_ORDERS_HREF),
       });
     }
     // Las pantallas de Ajustes solo al escribir: sin texto, la lista es corta.

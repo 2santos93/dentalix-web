@@ -20,6 +20,8 @@ describe('patientTabAccess (qué pestañas de la ficha ve cada rol)', () => {
     // DX-243: envía consentimientos a firmar a distancia y ve su estado (la
     // pestaña no le enseña los documentos firmados).
     expect(access.consents).toBe(true);
+    // DX-572: ve las órdenes (sin la nota), las imprime, envía y liga su resultado.
+    expect(access['external-orders']).toBe(true);
   });
 
   it.each(['DENTIST', 'ASSISTANT'] as const)(
