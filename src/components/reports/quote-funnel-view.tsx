@@ -457,7 +457,17 @@ function FunnelSkeleton() {
  * viven en la URL (`?periodo=`, `?desde=`, `?hasta=`, `?sede=`,
  * `?profesional=`). El CSV, solo ADMIN.
  */
-export function QuoteFunnelView({ token, isAdmin }: { token: string; isAdmin: boolean }) {
+export function QuoteFunnelView({
+  token,
+  isAdmin,
+  ownByRole = false,
+}: {
+  token: string;
+  isAdmin: boolean;
+  /** DENTIST sin FINANCIAL_REPORTS_VIEW: la API solo le da lo suyo, así que un
+   *  `?profesional=` copiado de otra persona no se manda (daría 403). */
+  ownByRole?: boolean;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -498,7 +508,7 @@ export function QuoteFunnelView({ token, isAdmin }: { token: string; isAdmin: bo
 
   // Con scope OWN la API ya acota a quien consulta: el filtro no se ve ni se manda.
   const own = data?.scope === 'OWN';
-  const providerId = own ? '' : providerParam;
+  const providerId = own || ownByRole ? '' : providerParam;
   const filters: QuoteFunnelFilters | null =
     period && !invalidPeriod
       ? { ...period, ...(locationId ? { locationId } : {}), ...(providerId ? { providerId } : {}) }

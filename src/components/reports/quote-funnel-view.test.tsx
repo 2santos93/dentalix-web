@@ -273,6 +273,15 @@ describe('QuoteFunnelView (DX-558)', () => {
     expect(screen.queryByRole('button', { name: 'Descargar CSV' })).not.toBeInTheDocument();
   });
 
+  it('DENTIST con un «?profesional=» copiado de otra persona: no lo manda (la API daría 403)', async () => {
+    search = new URLSearchParams('tab=presupuestos&profesional=u-otro');
+    mockedGet.mockResolvedValue(report({ scope: 'OWN', byProfessional: [professional()] }));
+    render(<QuoteFunnelView token="t" isAdmin={false} ownByRole />);
+    await screen.findByTestId('quote-funnel-step-PRESENTED');
+    expect(mockedGet).toHaveBeenCalledWith('t', NOV);
+    expect(mockedGet).not.toHaveBeenCalledWith('t', expect.objectContaining({ providerId: 'u-otro' }));
+  });
+
   it('sin tasa: aviso con el número de presentaciones fuera de los importes', async () => {
     mockedGet.mockResolvedValue(report({ warnings: ['WITHOUT_RATE'], withoutRate: { presentations: 2 } }));
     render(<QuoteFunnelView token="t" isAdmin />);

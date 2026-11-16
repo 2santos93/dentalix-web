@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { PageHeader } from '@/components/shared/page-header';
 import { getTokenRole } from '@/lib/auth/token-role';
-import { useEffectivePermissions } from '@/lib/auth/permissions';
+import { canViewFinancialReports, useEffectivePermissions } from '@/lib/auth/permissions';
 import { LocationsComparisonView } from '@/components/reports/locations-comparison-view';
 import { ProductionByProcedureView } from '@/components/reports/production-by-procedure-view';
 import { RecoveredSlotsView } from '@/components/reports/recovered-slots-view';
@@ -88,7 +88,11 @@ function ReportesRoute() {
     ) : tab === 'rentabilidad' ? (
       <ProfitabilityView token={accessToken} />
     ) : tab === 'presupuestos' ? (
-      <QuoteFunnelView token={accessToken} isAdmin={role === 'ADMIN'} />
+      <QuoteFunnelView
+        token={accessToken}
+        isAdmin={role === 'ADMIN'}
+        ownByRole={role === 'DENTIST' && !canViewFinancialReports(role, permissions)}
+      />
     ) : tab === 'sin-imputar' ? (
       <UnallocatedPaymentsView token={accessToken} />
     ) : (
