@@ -1,4 +1,5 @@
 import { apiFetch } from '@/lib/api/client';
+import { amountText } from '@/lib/money/round';
 import type { components } from '@/lib/api/schema';
 
 // DX-017: laboratorio dental (prótesis, coronas, férulas, alineadores). NO es
@@ -175,6 +176,18 @@ export function suggestLabOrderDueDate(
 }
 
 // ── Presentación ────────────────────────────────────────────────────────────
+
+/** El precio de referencia del servicio (decimal de la API) como importe; `null` sin precio. */
+export function referencePriceAmount(service: Pick<DentalLabService, 'referencePrice'>): number | null {
+  if (service.referencePrice === null) return null;
+  const value = Number(service.referencePrice);
+  return Number.isFinite(value) ? value : null;
+}
+
+/** El importe leído del campo, como el decimal de 2 cifras que espera la API. */
+export function referencePriceText(amount: number): string {
+  return amountText(amount, 2);
+}
 
 /** «N.º 12». */
 export function labOrderNumberLabel(number: number): string {

@@ -7,6 +7,7 @@ import { getTokenRole } from '@/lib/auth/token-role';
 import {
   canManageDentalLabs,
   listDentalLabs,
+  referencePriceAmount,
   updateDentalLab,
   updateDentalLabService,
   type DentalLab,
@@ -168,14 +169,18 @@ export function DentalLabsManager({ token }: { token: string }) {
         id: 'price',
         header: copy.colPrice,
         numeric: true,
-        cell: (s) =>
-          s.referencePrice !== null && s.referenceCurrency ? (
-            stamp.money(Number(s.referencePrice), s.referenceCurrency)
+        cell: (s) => {
+          const amount = referencePriceAmount(s);
+          return amount !== null && s.referenceCurrency ? (
+            stamp.money(amount, s.referenceCurrency)
           ) : (
             <span className="text-muted">{copy.noPrice}</span>
-          ),
-        mobileCell: (s) =>
-          s.referencePrice !== null && s.referenceCurrency ? stamp.money(Number(s.referencePrice), s.referenceCurrency) : null,
+          );
+        },
+        mobileCell: (s) => {
+          const amount = referencePriceAmount(s);
+          return amount !== null && s.referenceCurrency ? stamp.money(amount, s.referenceCurrency) : null;
+        },
       });
     }
     columns.push({

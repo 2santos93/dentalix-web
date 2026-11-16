@@ -2,10 +2,12 @@
 import * as React from 'react';
 import { useId, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { parseMoneyInput } from '@/lib/format/money';
+import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
 import {
   createDentalLabService,
   LAB_LIMITS as L,
+  referencePriceAmount,
+  referencePriceText,
   updateDentalLabService,
   type DentalLab,
   type DentalLabService,
@@ -73,7 +75,10 @@ export function DentalLabServiceFormModal({
       : '';
   const [name, setName] = useState(service?.name ?? '');
   const [leadTime, setLeadTime] = useState(service ? String(service.leadTimeBusinessDays) : '');
-  const [price, setPrice] = useState(service?.referencePrice ? service.referencePrice.replace('.', ',') : '');
+  const [price, setPrice] = useState(() => {
+    const amount = service ? referencePriceAmount(service) : null;
+    return amount === null ? '' : moneyInputText(amount);
+  });
   const [currencyPicked, setCurrencyPicked] = useState<string | null>(service?.referenceCurrency ?? null);
   const [active, setActive] = useState(service?.active ?? true);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -96,6 +101,7 @@ export function DentalLabServiceFormModal({
       setLeadTimeError(copy.leadTimeInvalid);
       invalid = true;
     }
+    let referenceAmount: number | null = null;
     let referencePrice: string | null = null;
     let referenceCurrency: string | null = null;
     if (price.trim() !== '') {
@@ -108,7 +114,8 @@ export function DentalLabServiceFormModal({
           setPriceError(parsed.message);
           invalid = true;
         } else {
-          referencePrice = parsed.value.toFixed(2);
+          referenceAmount = parsed.value;
+          referencePrice = referencePriceText(parsed.value);
           referenceCurrency = currency;
         }
       }
@@ -123,8 +130,7 @@ export function DentalLabServiceFormModal({
         if (trimmed !== service.name) patch.name = trimmed;
         if (days !== service.leadTimeBusinessDays) patch.leadTimeBusinessDays = days;
         const priceChanged =
-          (referencePrice === null ? null : Number(referencePrice)) !==
-            (service.referencePrice === null ? null : Number(service.referencePrice)) ||
+          referenceAmount !== referencePriceAmount(service) ||
           referenceCurrency !== service.referenceCurrency;
         if (priceChanged) {
           patch.referencePrice = referencePrice;
