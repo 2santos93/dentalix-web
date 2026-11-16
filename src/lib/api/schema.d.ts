@@ -1015,6 +1015,26 @@ export interface paths {
         patch: operations["PatientResponsiblePartiesController_update"];
         trace?: never;
     };
+    "/api/v1/patients/{id}/balance-reminders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Marcar avisado del saldo vencido (DX-146)
+         * @description Crea una gestión de cobranza REMINDER_SENT (append-only; no se desmarca). Un aviso por paciente y día civil de la sede de su deuda: el paciente sale de «Por avisar hoy» hasta su siguiente tramo. Sin cuerpo del mensaje ni importes.
+         */
+        post: operations["CollectionsController_balanceReminder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{id}/collection-notes": {
         parameters: {
             query?: never;
@@ -4451,6 +4471,46 @@ export interface paths {
          */
         get: operations["ReceivablesController_creditBalances"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/receivables/reminders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Por avisar hoy: deudores a los que hoy toca avisar de su saldo vencido
+         * @description Deudores de la cartera (mismo cálculo y sede que GET /receivables/aging) cuya deuda vencida más antigua alcanzó un tramo de la política de la clínica (7, 30 y 60 días por defecto) que aún no se avisó, con como mucho `maxNotices` avisos por deuda y `minGapDays` días entre avisos. Un aviso es una gestión REMINDER_SENT; la deuda empieza el día en que venció su línea exigible más antigua (días civiles de la sede, DX-110). Fuera: compromiso de pago abierto y baja de los avisos (DX-128), contados en `excluded` sin nombres. Más antigua primero.
+         */
+        get: operations["ReceivablesController_reminders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/receivables/reminder-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Cambia la política de avisos de saldo vencido de la clínica (DX-146); queda en la auditoría
+         * @description Tramos (1 a 3 días crecientes entre 1 y 365), máximo de avisos por deuda (1..10) y mínimo de días entre avisos (1..90). Aplica desde la siguiente lectura de «Por avisar hoy». Si nada cambia, responde 200 sin evento de auditoría.
+         */
+        put: operations["ReceivablesController_setReminderPolicy"];
         post?: never;
         delete?: never;
         options?: never;
@@ -10204,23 +10264,21 @@ export interface components {
             receivesNotices?: boolean;
         };
         /**
-         * @description Llamada, enlace de WhatsApp, email o en persona
+         * @description Por dónde se le avisó; sin él, el enlace de WhatsApp
          * @enum {string}
          */
         CollectionChannel: "CALL" | "WHATSAPP_LINK" | "EMAIL" | "IN_PERSON";
-        /**
-         * @description No contesta, promete pago, pagará en la cita, disputa o número erróneo
-         * @enum {string}
-         */
-        CollectionOutcome: "NO_ANSWER" | "PROMISED_PAYMENT" | "WILL_PAY_AT_APPOINTMENT" | "DISPUTE" | "WRONG_NUMBER";
-        CreateCollectionNoteDto: {
-            /** @description Llamada, enlace de WhatsApp, email o en persona */
+        MarkBalanceReminderDto: {
+            /**
+             * @description Por dónde se le avisó; sin él, el enlace de WhatsApp
+             * @default WHATSAPP_LINK
+             */
             channel: components["schemas"]["CollectionChannel"];
-            /** @description No contesta, promete pago, pagará en la cita, disputa o número erróneo */
-            outcome: components["schemas"]["CollectionOutcome"];
-            /** @description Nota administrativa (sin datos clínicos). No se edita ni se borra: una corrección es otra nota. */
+            /** @description Nota administrativa opcional (sin datos clínicos) */
             text?: string | null;
         };
+        /** @enum {string} */
+        CollectionOutcome: "NO_ANSWER" | "PROMISED_PAYMENT" | "WILL_PAY_AT_APPOINTMENT" | "DISPUTE" | "WRONG_NUMBER" | "REMINDER_SENT";
         StaffRefDto: {
             /** Format: uuid */
             id: string;
@@ -10239,6 +10297,14 @@ export interface components {
             author: components["schemas"]["StaffRefDto"];
             /** Format: date-time */
             createdAt: string;
+        };
+        CreateCollectionNoteDto: {
+            /** @description Llamada, enlace de WhatsApp, email o en persona */
+            channel: components["schemas"]["CollectionChannel"];
+            /** @description No contesta, promete pago, pagará en la cita, disputa o número erróneo */
+            outcome: components["schemas"]["CollectionOutcome"];
+            /** @description Nota administrativa (sin datos clínicos). No se edita ni se borra: una corrección es otra nota. */
+            text?: string | null;
         };
         CreatePaymentPromiseDto: {
             /** @example 200000 */
@@ -18539,6 +18605,100 @@ export interface components {
             paymentsWithoutRateCount: number;
             /** @description DX-472-bis: el proveedor de tasas no respondió a tiempo: cifras incompletas; volver a pedirla las completa */
             rateProviderTimedOut: boolean;
+        };
+        BalanceReminderPolicyDto: {
+            /**
+             * @description Tramos: días de la deuda vencida más antigua, crecientes
+             * @example [
+             *       7,
+             *       30,
+             *       60
+             *     ]
+             */
+            days: number[];
+            /**
+             * @description Máximo de avisos por deuda
+             * @example 3
+             */
+            maxNotices: number;
+            /**
+             * @description Mínimo de días entre dos avisos al mismo paciente
+             * @example 7
+             */
+            minGapDays: number;
+        };
+        BalanceReminderStateDto: {
+            /** @description Tramo alcanzado (1 = primer umbral) */
+            stage: number;
+            /** @description Umbral del tramo, en días */
+            stageDays: number;
+            /** @description Avisos ya dados para esta deuda */
+            noticesSent: number;
+            /**
+             * @description Día del último aviso de esta deuda (zona de la sede de la deuda)
+             * @example 2026-11-08
+             */
+            lastNoticeOn: string | null;
+        };
+        BalanceReminderRowDto: {
+            patient: components["schemas"]["AgingPatientDto"];
+            /**
+             * Format: uuid
+             * @description Sede de la deuda: la de la última cita atendida; sin citas atendidas, la del último abono; sin abonos, la de la última presentación de un plan; null si no hay ninguna
+             */
+            locationId: string | null;
+            /** @description Máximo de `oldestAgeDays` de sus monedas */
+            oldestAgeDays: number | null;
+            ageApproximate: boolean;
+            /** @description DX-472-bis: abonos en otra moneda que no suman por falta de tasa (o porque el proveedor no respondió): el saldo de la fila está incompleto */
+            paymentsWithoutRateCount: number;
+            /** @description DX-472-bis: el proveedor de tasas no respondió a tiempo para algún abono de la fila; esa deuda no se da por vencida (va a `current`) hasta que responda */
+            rateProviderTimedOut: boolean;
+            /** @description Una entrada por moneda con deuda o saldo a favor */
+            currencies: components["schemas"]["AgingCurrencyDto"][];
+            lastPayment: components["schemas"]["AgingLastPaymentDto"] | null;
+            /** @description La próxima cuota por vencer, de cualquier moneda */
+            nextInstallment: components["schemas"]["AgingRowNextInstallmentDto"] | null;
+            /** @description DX-150: última gestión de cobro (el texto, en la ficha) */
+            lastNote: components["schemas"]["AgingLastNoteDto"] | null;
+            /** @description DX-150: último compromiso de pago; el vigente si está OPEN, o cómo terminó (KEPT/BROKEN) */
+            promise: components["schemas"]["AgingPromiseDto"] | null;
+            reminder: components["schemas"]["BalanceReminderStateDto"];
+        };
+        BalanceRemindersExcludedDto: {
+            /** @description A quienes hoy tocaba avisar pero tienen un compromiso de pago abierto */
+            openPromise: number;
+            /** @description A quienes hoy tocaba avisar pero se dieron de baja de los avisos (DX-128) */
+            optedOut: number;
+        };
+        BalanceRemindersPageDto: {
+            /**
+             * @description «Hoy» en la zona de la sede del alcance
+             * @example 2026-11-15
+             */
+            asOf: string;
+            scope: components["schemas"]["AgingScopeDto"];
+            policy: components["schemas"]["BalanceReminderPolicyDto"];
+            items: components["schemas"]["BalanceReminderRowDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+            excluded: components["schemas"]["BalanceRemindersExcludedDto"];
+        };
+        UpdateBalanceReminderPolicyDto: {
+            /**
+             * @description Días de la deuda vencida más antigua en que toca avisar: de 1 a 3 enteros crecientes entre 1 y 365.
+             * @example [
+             *       7,
+             *       30,
+             *       60
+             *     ]
+             */
+            days: number[];
+            /** @example 3 */
+            maxNotices: number;
+            /** @example 7 */
+            minGapDays: number;
         };
         TransferCreditDto: {
             /**
@@ -27435,6 +27595,62 @@ export interface operations {
             };
             /** @description Ya tiene pagador principal */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CollectionsController_balanceReminder: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede activa: queda en la nota y es la sede del compromiso. */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkBalanceReminderDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionNoteDto"];
+                };
+            };
+            /** @description Canal inválido o nota de más de 280 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no gestiona la cobranza: es para administración y recepción. O la deuda es de una sede a la que no tienes acceso. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya se marcó como avisado hoy: vuelve a aparecer en «Por avisar hoy» cuando le toque el siguiente aviso. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -37217,6 +37433,84 @@ export interface operations {
                 content?: never;
             };
             /** @description Tu rol no tiene acceso a la cartera: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReceivablesController_reminders: {
+        parameters: {
+            query?: {
+                /** @description Sede de la deuda. Sin él, la de la cabecera X-Location-Id; sin ninguna, las sedes permitidas al miembro. */
+                locationId?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: {
+                /** @description Sede activa. El parámetro `locationId` manda sobre ella; sin ninguno, toda la clínica. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BalanceRemindersPageDto"];
+                };
+            };
+            /** @description Filtro inválido o sede que no es de esta clínica */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no tiene acceso a la cartera: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReceivablesController_setReminderPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateBalanceReminderPolicyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BalanceReminderPolicyDto"];
+                };
+            };
+            /** @description Tramos, máximo o separación fuera de rango */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar la política de avisos de saldo. */
             403: {
                 headers: {
                     [name: string]: unknown;

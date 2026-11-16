@@ -1,4 +1,8 @@
 import {
+  overdueAmounts,
+  reminderDaysText,
+  reminderMessage,
+  reminderWhatsAppHref,
   AGE_FILTERS,
   BUCKET_LABELS,
   BUCKET_ORDER,
@@ -72,5 +76,46 @@ describe('cartera · presentación (DX-145)', () => {
 
   it('nombra el CSV con la fecha de la sede', () => {
     expect(csvFileName('2026-10-17')).toBe('cartera-2026-10-17.csv');
+  });
+});
+
+describe('aviso de saldo vencido (DX-146)', () => {
+  const currency = (code: string, buckets: Partial<Record<string, number>>) => ({
+    currency: code,
+    balance: 0,
+    debt: 0,
+    credit: 0,
+    buckets: { current: 0, days0to30: 0, days31to60: 0, days61to90: 0, over90: 0, ...buckets },
+    oldestAgeDays: null,
+    ageApproximate: false,
+    nextInstallment: null,
+    paymentsWithoutRateCount: 0,
+    rateProviderTimedOut: false,
+  });
+
+  it('overdueAmounts suma lo vencido en céntimos, sin «por vencer», y omite monedas sin vencido', () => {
+    expect(
+      overdueAmounts([
+        currency('USD', { current: 50, days0to30: 0.1, days31to60: 0.2, over90: 10 }),
+        currency('VES', { current: 500 }),
+      ]),
+    ).toEqual([{ currency: 'USD', amount: 10.3 }]);
+  });
+
+  it('el mensaje lleva solo la clínica y el saldo con su moneda', () => {
+    expect(reminderMessage({ clinicName: 'Clínica Sonrisa', amounts: ['USD 120,00', 'VES 1.000,00'] })).toBe(
+      'Hola, te escribimos de Clínica Sonrisa. Tienes un saldo vencido de USD 120,00 y VES 1.000,00. Si ya lo pagaste, ignora este mensaje. Puedes respondernos por aquí para ponerte al día.',
+    );
+    expect(reminderMessage({ clinicName: null, amounts: [] })).toContain('te escribimos de la clínica. Tienes un saldo vencido.');
+  });
+
+  it('sin WhatsApp no hay enlace; con él, wa.me con el texto', () => {
+    expect(reminderWhatsAppHref(null, 'X', ['USD 1,00'])).toBeNull();
+    expect(reminderWhatsAppHref('584125550101', 'X', ['USD 1,00'])).toMatch(/^https:\/\/wa\.me\/584125550101\?text=Hola/);
+  });
+
+  it('reminderDaysText', () => {
+    expect(reminderDaysText([7, 30, 60])).toBe('7, 30 y 60 días');
+    expect(reminderDaysText([40])).toBe('40 días');
   });
 });

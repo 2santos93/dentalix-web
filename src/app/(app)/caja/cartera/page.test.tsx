@@ -29,7 +29,16 @@ jest.mock('../../../../components/receivables/credit-balances-view', () => ({
   ),
 }));
 
-describe('/caja/cartera (DX-145, DX-430)', () => {
+jest.mock('../../../../components/receivables/balance-reminders-view', () => ({
+  BalanceRemindersView: ({ tabs }: { tabs?: { nav: React.ReactNode } }) => (
+    <div>
+      vista por avisar
+      {tabs?.nav}
+    </div>
+  ),
+}));
+
+describe('/caja/cartera (DX-145, DX-430, DX-146)', () => {
   beforeEach(() => {
     mockReplace.mockReset();
     mockSearch = '';
@@ -46,6 +55,15 @@ describe('/caja/cartera (DX-145, DX-430)', () => {
     render(<CarteraPage />);
     expect(screen.getByText('vista saldo a favor')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Saldo a favor' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('?tab=por-avisar enseña «Por avisar hoy» (DX-146)', async () => {
+    mockSearch = 'tab=por-avisar';
+    render(<CarteraPage />);
+    expect(screen.getByText('vista por avisar')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Por avisar hoy' })).toHaveAttribute('aria-selected', 'true');
+    await setupUser().click(screen.getByRole('tab', { name: 'Por cobrar' }));
+    expect(mockReplace).toHaveBeenCalledWith('/caja/cartera', { scroll: false });
   });
 
   it('una pestaña desconocida cae en «Por cobrar»', () => {
@@ -70,8 +88,9 @@ describe('/caja/cartera (DX-145, DX-430)', () => {
     const view = render(<CarteraPage />);
     screen.getByRole('tab', { name: 'Por cobrar' }).focus();
     await user.keyboard('{ArrowRight}{Enter}');
-    mockSearch = 'tab=saldo-a-favor';
+    expect(mockReplace).toHaveBeenCalledWith('/caja/cartera?tab=por-avisar', { scroll: false });
+    mockSearch = 'tab=por-avisar';
     view.rerender(<CarteraPage />);
-    expect(screen.getByRole('tab', { name: 'Saldo a favor' })).toHaveFocus();
+    expect(screen.getByRole('tab', { name: 'Por avisar hoy' })).toHaveFocus();
   });
 });
