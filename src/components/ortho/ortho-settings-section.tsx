@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { SettingRows, SettingsSection } from '@/components/settings/settings-page';
 
 export const orthoSettingsCopy = {
@@ -30,6 +31,14 @@ export const orthoSettingsCopy = {
   savedOn: 'Ortodoncia activada.',
   savedOff: 'Ortodoncia desactivada.',
   savedGauges: 'Calibres guardados.',
+  overdueTitle: 'Saldo vencido de ortodoncia',
+  overdueDescription:
+    'La cita y «En clínica» marcan «Ortodoncia: saldo vencido» cuando un cargo del caso (inicial, control o retiro) realizado lleva sin pagar más de estos días.',
+  overdueDays: 'Días sin pagar',
+  overdueHint: 'Entre 1 y 365. De fábrica, 30.',
+  overdueInvalid: 'Escribe un número entero de días de 1 a 365.',
+  saveOverdue: 'Guardar días',
+  savedOverdue: 'Días del saldo vencido guardados.',
   forbiddenTitle: 'Solo administración cambia los ajustes de ortodoncia.',
   forbiddenHint: 'Si la clínica la activa, verás la pestaña «Ortodoncia» en la ficha del paciente.',
 };
@@ -50,6 +59,8 @@ export function OrthoSettingsSection({ token, allowed }: { token: string; allowe
   const [reloadKey, setReloadKey] = useState(0);
   const [saving, setSaving] = useState(false);
   const [gaugesError, setGaugesError] = useState<string | null>(null);
+  const [overdueText, setOverdueText] = useState('');
+  const [overdueError, setOverdueError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!allowed) return;
@@ -59,6 +70,7 @@ export function OrthoSettingsSection({ token, allowed }: { token: string; allowe
         if (cancelled) return;
         setSettings(s);
         setGaugesText(s.wireGauges.join('\n'));
+        setOverdueText(String(s.overdueDays));
         setLoadError(false);
       })
       .catch(() => {
@@ -93,6 +105,27 @@ export function OrthoSettingsSection({ token, allowed }: { token: string; allowe
       toast.success(copy.savedGauges);
     } catch (err) {
       setGaugesError(apiErrorMessage(err, copy.saveError));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveOverdue(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const days = /^\d{1,3}$/.test(overdueText.trim()) ? Number(overdueText.trim()) : null;
+    if (days === null || days < 1 || days > 365) {
+      setOverdueError(copy.overdueInvalid);
+      return;
+    }
+    setSaving(true);
+    setOverdueError(null);
+    try {
+      const saved = await updateOrthoSettings(token, { overdueDays: days });
+      setSettings(saved);
+      setOverdueText(String(saved.overdueDays));
+      toast.success(copy.savedOverdue);
+    } catch (err) {
+      setOverdueError(apiErrorMessage(err, copy.saveError));
     } finally {
       setSaving(false);
     }
@@ -140,6 +173,28 @@ export function OrthoSettingsSection({ token, allowed }: { token: string; allowe
           </SettingRows>
           <Button type="submit" disabled={saving} className="w-full sm:w-auto sm:self-start">
             {copy.saveGauges}
+          </Button>
+        </form>
+      </SettingsSection>
+      <SettingsSection title={copy.overdueTitle} description={copy.overdueDescription}>
+        <form onSubmit={(e) => void saveOverdue(e)} noValidate className="flex flex-col gap-3">
+          <SettingRows>
+            <div className="px-4 py-3 sm:px-6 sm:py-4">
+              <FormField htmlFor={`${ids}-overdue`} label={copy.overdueDays} hint={copy.overdueHint} error={overdueError}>
+                <Input
+                  id={`${ids}-overdue`}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={3}
+                  className="t-data sm:max-w-40"
+                  value={overdueText}
+                  onChange={(e) => setOverdueText(e.target.value)}
+                />
+              </FormField>
+            </div>
+          </SettingRows>
+          <Button type="submit" disabled={saving} className="w-full sm:w-auto sm:self-start">
+            {copy.saveOverdue}
           </Button>
         </form>
       </SettingsSection>
