@@ -18,9 +18,18 @@ export function confirmationMessage({
   url,
   appointment,
   clock,
+  anamnesisUrl = null,
+  anamnesisPending = false,
 }: {
   url: string;
   appointment: ConfirmationAppointment;
+  /**
+   * DX-290: enlace al cuestionario de salud (paciente nuevo o con la
+   * anamnesis caducada). Solo el enlace: el mensaje no dice nada clínico.
+   */
+  anamnesisUrl?: string | null;
+  /** DX-290: ya tiene un enlace vivo de antes: se le recuerda, sin otro. */
+  anamnesisPending?: boolean;
   /** Reloj de la sede de la cita: el día y la hora que verá el paciente. */
   clock: SedeClock;
 }): string {
@@ -29,10 +38,16 @@ export function confirmationMessage({
   const where = appointment.locationAddress
     ? `${appointment.locationName} (${appointment.locationAddress})`
     : appointment.locationName;
+  const anamnesis = anamnesisUrl
+    ? ` Antes de la cita, responde el cuestionario de salud: ${anamnesisUrl}`
+    : anamnesisPending
+      ? ' Si aún no completaste el cuestionario de salud, usa el enlace que te enviamos.'
+      : '';
   return (
     `${greeting}, te recordamos tu cita del ${longAppointmentDay(appointment.start, clock.timeZone)} ` +
     `a las ${sedeTime(appointment.start, clock)}${withWhom} en ${where}. ` +
-    `Confírmala, cancélala o pide que te llamemos aquí: ${url}`
+    `Confírmala, cancélala o pide que te llamemos aquí: ${url}` +
+    anamnesis
   );
 }
 

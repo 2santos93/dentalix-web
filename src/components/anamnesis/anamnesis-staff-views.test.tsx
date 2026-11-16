@@ -47,6 +47,7 @@ function submission(overrides: Partial<AnamnesisSubmission> = {}): AnamnesisSubm
     status: 'SUBMITTED',
     expiresAt: '2026-10-30T15:00:00.000Z',
     createdAt: '2026-10-22T15:00:00.000Z',
+    origin: 'STAFF',
     createdByName: 'Recepción',
     submittedAt: '2026-10-23T15:00:00.000Z',
     reviewedAt: null,

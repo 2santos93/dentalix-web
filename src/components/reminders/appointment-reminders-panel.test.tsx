@@ -43,6 +43,7 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
       enabled: true,
       leadHours: [48, 2],
       patientBlocker: null,
+      anamnesis: null,
       items: [
         item({
           state: 'SENT',
@@ -75,11 +76,52 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
     expect(mockedGet).toHaveBeenCalledWith('tok', 'a-1');
   });
 
+  it('DX-290: dice que la anamnesis salió con el recordatorio y su estado, sin respuestas', async () => {
+    mockedGet.mockResolvedValue({
+      enabled: true,
+      leadHours: [48],
+      patientBlocker: null,
+      items: [item({ state: 'SENT', sentAt: '2026-10-14T14:00:00.000Z' })],
+      anamnesis: {
+        origin: 'REMINDER',
+        status: 'PENDING_PATIENT',
+        sentAt: '2026-10-14T14:00:00.000Z',
+        expiresAt: '2026-10-16T14:00:00.000Z',
+        submittedAt: null,
+      },
+    });
+    render(<AppointmentRemindersPanel clock={CLOCK} token="tok" appointmentId="a-1" />);
+    const box = await screen.findByTestId('appointment-anamnesis');
+    expect(box).toHaveTextContent('Anamnesis enviada con el recordatorio 14/10 14:00');
+    expect(box).toHaveTextContent('Sin responder todavía');
+  });
+
+  it('DX-290: también sin recordatorios por salir (la envió recepción y ya la respondió)', async () => {
+    mockedGet.mockResolvedValue({
+      enabled: false,
+      leadHours: [],
+      patientBlocker: null,
+      items: [],
+      anamnesis: {
+        origin: 'STAFF',
+        status: 'SUBMITTED',
+        sentAt: '2026-10-14T14:00:00.000Z',
+        expiresAt: '2026-10-16T14:00:00.000Z',
+        submittedAt: '2026-10-15T10:00:00.000Z',
+      },
+    });
+    render(<AppointmentRemindersPanel clock={CLOCK} token="tok" appointmentId="a-1" />);
+    const box = await screen.findByTestId('appointment-anamnesis');
+    expect(box).toHaveTextContent('Anamnesis enviada por recepción');
+    expect(box).toHaveTextContent('Respondida: falta revisarla');
+  });
+
   it('DX-378: la hora de envío, con la zona y el reloj de 12 h de la sede de la cita', async () => {
     mockedGet.mockResolvedValue({
       enabled: true,
       leadHours: [48],
       patientBlocker: null,
+      anamnesis: null,
       items: [item({ state: 'SENT', sentAt: '2026-10-14T14:00:00.000Z', emailDelivery: 'SENT' })],
     });
     render(<AppointmentRemindersPanel clock={testAgendaClock([caracasSede()])} token="tok" appointmentId="a-1" />);
@@ -93,6 +135,7 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
       enabled: true,
       leadHours: [48, 2],
       patientBlocker: null,
+      anamnesis: null,
       items: [
         item({ state: 'MISSED' }),
         item({ leadHours: 2, state: 'SKIPPED', skipReason: 'NO_EMAIL' }),
@@ -117,6 +160,7 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
       enabled: true,
       leadHours: [2],
       patientBlocker: null,
+      anamnesis: null,
       items: [item({
         leadHours: 2,
         state: 'FAILED',
@@ -133,14 +177,14 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
   });
 
   it('vacío: sede sin recordatorios, o nada por salir', async () => {
-    mockedGet.mockResolvedValueOnce({ enabled: false, leadHours: [], patientBlocker: null, items: [] });
+    mockedGet.mockResolvedValueOnce({ enabled: false, leadHours: [], patientBlocker: null, items: [], anamnesis: null });
     const { unmount } = render(<AppointmentRemindersPanel clock={CLOCK} token="tok" appointmentId="a-1" />);
     expect(
       await screen.findByText('La sede de esta cita no tiene recordatorios automáticos.'),
     ).toBeInTheDocument();
     unmount();
 
-    mockedGet.mockResolvedValueOnce({ enabled: true, leadHours: [2], patientBlocker: null, items: [] });
+    mockedGet.mockResolvedValueOnce({ enabled: true, leadHours: [2], patientBlocker: null, items: [], anamnesis: null });
     render(<AppointmentRemindersPanel clock={CLOCK} token="tok" appointmentId="a-2" />);
     expect(await screen.findByText('Esta cita no tiene recordatorios por salir.')).toBeInTheDocument();
   });
@@ -153,6 +197,7 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
         enabled: true,
         leadHours: [2],
         patientBlocker: null,
+      anamnesis: null,
         items: [item({ leadHours: 2 })],
       });
     render(<AppointmentRemindersPanel clock={CLOCK} token="tok" appointmentId="a-1" />);
@@ -172,7 +217,7 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
       'El canal del paciente es WhatsApp: no recibe el email automático. Usa «Abrir WhatsApp» para escribirle.',
     ],
   ] as const)('con %s lo dice en vez de «sin recordatorios por salir»', async (blocker, text) => {
-    mockedGet.mockResolvedValue({ enabled: true, leadHours: [2], patientBlocker: blocker, items: [] });
+    mockedGet.mockResolvedValue({ enabled: true, leadHours: [2], patientBlocker: blocker, items: [], anamnesis: null });
     render(<AppointmentRemindersPanel clock={CLOCK} token="tok" appointmentId="a-1" />);
     expect(await screen.findByText(text)).toHaveAttribute('role', 'status');
     expect(screen.queryByText('Esta cita no tiene recordatorios por salir.')).not.toBeInTheDocument();
@@ -183,6 +228,7 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
       enabled: true,
       leadHours: [48, 2],
       patientBlocker: 'OPTED_OUT',
+      anamnesis: null,
       items: [item({ state: 'SENT', sentAt: '2026-10-14T14:00:00.000Z' })],
     });
     render(<AppointmentRemindersPanel clock={CLOCK} token="tok" appointmentId="a-1" />);
@@ -195,6 +241,7 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
       enabled: true,
       leadHours: [48, 2],
       patientBlocker: null,
+      anamnesis: null,
       items: [
         item({ state: 'SKIPPED', skipReason: 'OPTED_OUT' }),
         item({ leadHours: 2, state: 'SKIPPED', skipReason: 'CHANNEL_WHATSAPP' }),
@@ -211,6 +258,7 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
       enabled: true,
       leadHours: [48],
       patientBlocker: null,
+      anamnesis: null,
       items: [
         item({
           state: 'SENT',
@@ -229,6 +277,7 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
       enabled: true,
       leadHours: [48, 2],
       patientBlocker: null,
+      anamnesis: null,
       items: [
         item({ state: 'SENT', sentAt: '2026-10-14T14:00:00.000Z', language: 'es', languageFallbackFrom: 'ca' }),
         item({ leadHours: 2, state: 'SENT', sentAt: '2026-10-16T12:00:00.000Z', language: 'en' }),

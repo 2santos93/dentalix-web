@@ -62,6 +62,50 @@ describe('confirmationMessage', () => {
     );
   });
 
+  it('DX-290: con el enlace de anamnesis, lo añade al final sin nada clínico', () => {
+    const text = confirmationMessage({
+      url: 'https://demo.dentalix.app/confirmar/tok',
+      anamnesisUrl: 'https://demo.dentalix.app/anamnesis/anam',
+      appointment: {
+        patientFirstName: 'Ana',
+        start: '2026-10-20T14:00:00.000Z',
+        end: '2026-10-20T14:30:00.000Z',
+        providerName: null,
+        locationName: 'Sede Norte',
+        locationAddress: null,
+        wantsEarlier: false,
+        earlierWindow: null,
+        earlierAllowed: true,
+        ...PUBLIC_REGIONAL_VE,
+      },
+      clock: CLOCK,
+    });
+    expect(text.endsWith(
+      'aquí: https://demo.dentalix.app/confirmar/tok Antes de la cita, responde el cuestionario de salud: https://demo.dentalix.app/anamnesis/anam',
+    )).toBe(true);
+  });
+
+  it('DX-290: con un enlace vivo de antes, solo lo recuerda', () => {
+    const text = confirmationMessage({
+      url: 'u',
+      anamnesisPending: true,
+      appointment: {
+        patientFirstName: null,
+        start: '2026-10-20T14:00:00.000Z',
+        end: '2026-10-20T14:30:00.000Z',
+        providerName: null,
+        locationName: 'Sede Norte',
+        locationAddress: null,
+        wantsEarlier: false,
+        earlierWindow: null,
+        earlierAllowed: true,
+        ...PUBLIC_REGIONAL_VE,
+      },
+      clock: CLOCK,
+    });
+    expect(text.endsWith('aquí: u Si aún no completaste el cuestionario de salud, usa el enlace que te enviamos.')).toBe(true);
+  });
+
   it('omite lo que falte sin dejar huecos', () => {
     const text = confirmationMessage({
       url: 'u',

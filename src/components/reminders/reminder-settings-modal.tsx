@@ -40,6 +40,10 @@ const copy = {
   alarmLabel: 'Aviso en el calendario del paciente',
   alarmHint: `Cuando el paciente añade la cita a su calendario, su móvil le avisa estas horas antes. De 0 a ${MAX_ALARM_HOURS}; 0 lo quita.`,
   alarmInvalid: `La alarma del calendario debe ser de 0 a ${MAX_ALARM_HOURS} horas antes (0 la quita).`,
+  // DX-290: el criterio, dicho como lo aplica la API.
+  anamnesis: 'Enviar la anamnesis con el recordatorio',
+  anamnesisHint:
+    'A los pacientes nuevos o con la anamnesis caducada el día de la cita (la vigencia se fija en Ajustes › Historia clínica, 12 meses por defecto), el recordatorio lleva el enlace del cuestionario de salud; si ya tiene uno sin responder, no se envía otro. Solo el enlace, sin datos clínicos; el de un menor va a su responsable.',
 };
 
 /** Lo que se propone al activar una sede que nunca se configuró. */
@@ -82,6 +86,7 @@ export function ReminderSettingsModal({
     settings.leadHours.length > 0 ? settings.leadHours.map(String) : SUGGESTED,
   );
   const [alarm, setAlarm] = useState(String(settings.calendarAlarmHours));
+  const [sendAnamnesis, setSendAnamnesis] = useState(settings.sendAnamnesis);
   const [alarmError, setAlarmError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -104,6 +109,7 @@ export function ReminderSettingsModal({
         enabled,
         leadHours: parsed,
         calendarAlarmHours: alarmHours,
+        sendAnamnesis,
       });
       onSaved(saved);
       onOpenChange(false);
@@ -117,6 +123,7 @@ export function ReminderSettingsModal({
   const enabledId = `${ids}-enabled`;
   const hintId = `${ids}-leads-hint`;
   const alarmId = `${ids}-alarm`;
+  const anamnesisId = `${ids}-anamnesis`;
 
   return (
     <FormModal
@@ -203,6 +210,14 @@ export function ReminderSettingsModal({
           <span className="text-sm text-muted">{copy.hoursSuffix}</span>
         </div>
       </FormField>
+
+      <Checkbox
+        id={anamnesisId}
+        checked={sendAnamnesis}
+        onChange={(e) => setSendAnamnesis(e.target.checked)}
+        label={copy.anamnesis}
+        description={copy.anamnesisHint}
+      />
     </FormModal>
   );
 }
