@@ -677,6 +677,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                               patientName: payment.patient.fullName,
                               splitLines: payment.splitLines,
                               fmt: stamp.fmtOf(payment.location.id),
+                              periodLocked: payment.periodLocked,
                             }),
                         },
                       ]
@@ -727,7 +728,10 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
         onOpenChange={(open) => {
           if (!open) voiding.close();
         }}
-        onConfirm={(reason) => void voiding.confirm(reason)}
+        onConfirm={(reason, lockOverrideReason) => void voiding.confirm(reason, lockOverrideReason)}
+        token={token}
+        paidOn={voiding.target?.paidOn}
+        periodLocked={voiding.target?.periodLocked}
         submitting={voiding.submitting}
         error={voiding.error}
         // Pinta el aviso de la ventana de recepción; la regla la aplica la API.

@@ -248,8 +248,10 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       {
         href: '/settings/caja',
         label: 'Caja',
-        // DX-515-bis: también los medios de pago (DX-377) y el recibo (DX-515).
-        description: 'Cómo se abre y se cierra la caja por turno, con qué medios se cobra y qué dice el recibo.',
+        // DX-515-bis: también los medios de pago (DX-377) y el recibo (DX-515);
+        // DX-091: y el cierre contable.
+        description:
+          'Cómo se abre y se cierra la caja por turno, con qué medios se cobra, qué dice el recibo y el cierre contable.',
         icon: Wallet,
         visible: canManageCashSessions,
       },

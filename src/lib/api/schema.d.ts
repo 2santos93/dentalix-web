@@ -4346,6 +4346,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/clinic/settings/financial-lock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cierre contable de la clínica y sus últimas excepciones (DX-091) */
+        get: operations["FinancialLockSettingsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Cambia el cierre contable (DX-091)
+         * @description Fecha fija (cerrado ese día y lo anterior) y/o días abiertos hacia atrás; rige el cierre más tardío, en el día civil de la sede de cada abono. Con el cierre, crear un abono con fecha cerrada, anularlo o crear o cancelar un plan con cuotas en días cerrados responde 409 `PERIOD_LOCKED`. Con `adminExempt`, el ADMIN puede hacerlo indicando `lockOverrideReason`, y queda registrado. Solo cambian los campos enviados; null quita ese cierre. Auditado con el antes y el después.
+         */
+        patch: operations["FinancialLockSettingsController_update"];
+        trace?: never;
+    };
+    "/api/v1/payments/period-lock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cierre contable vigente en la sede (DX-091)
+         * @description El último día cerrado hoy en la sede donde se registra el abono (los días hasta él, inclusive, no admiten abonos ni anulaciones) y si quien pregunta puede saltarlo con motivo.
+         */
+        get: operations["PeriodLockController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/currencies": {
         parameters: {
             query?: never;
@@ -5422,6 +5463,66 @@ export interface paths {
          * @description Mismos filtros y alcance que el informe, más el lado (`INCOME`/`EXPENSE`), la moneda y, en los gastos, la categoría: los abonos, procedimientos realizados, pagos de gastos o gastos que suman la cifra, del más reciente al más antiguo, con el `total` de todas las filas. Sin `locationId`, las de todas las sedes visibles (la cifra del total del grupo). Sin datos de pacientes.
          */
         get: operations["ProfitabilityController_lines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/quote-funnel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Embudo de presupuestos: presentados → aceptados → agendados → realizados → cobrados
+         * @description Presupuestos PRESENTADOS en el período (la fecha de la primera presentación, en el día civil de la sede donde se presentó) y lo que pasó con ellos hasta hoy: aceptados, agendados, realizados y cobrados. Una presentación = un grupo de opciones A/B (cuenta una vez; importe = la opción de mayor total) con la cadena de pendientes de sus aceptaciones parciales (un pendiente no es otra presentación). Importes = precio − descuento en la moneda del CATÁLOGO: un plan en otra moneda se convierte con la tasa guardada en cada ítem; sin ella, la presentación cuenta en los números y queda fuera de los importes (`withoutRate`, aviso WITHOUT_RATE). ADMIN o quien tenga FINANCIAL_REPORTS_VIEW ve toda la clínica (scope CLINIC); un DENTIST, solo lo que elaboró (scope OWN). Solo las sedes que ve quien consulta (DX-089). `definitions` trae «Cómo se calcula». Sin datos de pacientes.
+         */
+        get: operations["QuoteFunnelController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/quote-funnel.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Embudo de presupuestos en CSV (mismos filtros; solo ADMIN)
+         * @description Presupuestos PRESENTADOS en el período (la fecha de la primera presentación, en el día civil de la sede donde se presentó) y lo que pasó con ellos hasta hoy: aceptados, agendados, realizados y cobrados. Una presentación = un grupo de opciones A/B (cuenta una vez; importe = la opción de mayor total) con la cadena de pendientes de sus aceptaciones parciales (un pendiente no es otra presentación). Importes = precio − descuento en la moneda del CATÁLOGO: un plan en otra moneda se convierte con la tasa guardada en cada ítem; sin ella, la presentación cuenta en los números y queda fuera de los importes (`withoutRate`, aviso WITHOUT_RATE). ADMIN o quien tenga FINANCIAL_REPORTS_VIEW ve toda la clínica (scope CLINIC); un DENTIST, solo lo que elaboró (scope OWN). Solo las sedes que ve quien consulta (DX-089). `definitions` trae «Cómo se calcula». Sin datos de pacientes. Una fila por profesional que lo elaboró y el «Total», con cada paso (número e importe), las tasas de aceptación y la mediana de días; cabecera con período, sede, profesional y moneda. UTF-8 con BOM; celdas protegidas contra fórmulas. Auditado (EXPORT).
+         */
+        get: operations["QuoteFunnelController_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/quote-funnel/presentations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Detalle de una cifra del embudo: sus presentaciones
+         * @description Mismos filtros y alcance que el embudo, más el paso o desenlace (`step`) y, en las rechazadas, el motivo: cada presentación con paciente, fecha, sede, quién lo elaboró, opciones, importes de cada paso y desenlace, de la más reciente a la más antigua (`page`/`pageSize`, 25 por defecto, máx. 100). Lleva el nombre del paciente: auditado (VIEW). El motivo de rechazo solo filtra las presentaciones rechazadas (step=REJECTED).
+         */
+        get: operations["QuoteFunnelController_presentations"];
         put?: never;
         post?: never;
         delete?: never;
@@ -18172,6 +18273,90 @@ export interface components {
             /** @description DX-502-bis. Moneda del catálogo de precios: código ISO 4217 de una moneda admitida (GET /currencies). Es la que se congela en los ítems NUEVOS del plan, para mostrar el precio de lista y el ahorro por convenio; los ítems ya creados no cambian. Vacío o null = sin fijar: la moneda común de las sedes activas, o ninguna. */
             catalogCurrency?: string | null;
         };
+        /**
+         * @description Registrar un abono, anularlo, crear un plan de cuotas o cancelarlo.
+         * @enum {string}
+         */
+        FinancialLockOperation: "PAYMENT_CREATE" | "PAYMENT_VOID" | "PAYMENT_PLAN_CREATE" | "PAYMENT_PLAN_CANCEL";
+        FinancialLockActorDto: {
+            /** Format: uuid */
+            userId: string;
+            /** @description Nombre visible; null si ya no es miembro de la clínica. */
+            name: string | null;
+        };
+        FinancialLockLocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        FinancialLockOverrideDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: date-time
+             * @description Cuándo (hora del servidor).
+             */
+            createdAt: string;
+            /** @description Registrar un abono, anularlo, crear un plan de cuotas o cancelarlo. */
+            operation: components["schemas"]["FinancialLockOperation"];
+            /**
+             * Format: date
+             * @description El día cerrado que tocó (el del abono o la cuota más antigua).
+             */
+            businessDate: string;
+            /**
+             * Format: date
+             * @description El cierre vigente en ese momento (último día cerrado).
+             */
+            lockedThrough: string;
+            /** @description Por qué (lo escribió el ADMIN). */
+            reason: string;
+            /** @description Quién. */
+            actor: components["schemas"]["FinancialLockActorDto"];
+            /** Format: uuid */
+            paymentId: string | null;
+            /** Format: uuid */
+            paymentPlanId: string | null;
+            /** @description La sede del abono o del plan; null = la principal. */
+            location: components["schemas"]["FinancialLockLocationDto"] | null;
+        };
+        FinancialLockSettingsDto: {
+            /** Format: date */
+            lockDate: string | null;
+            lockDays: number | null;
+            adminExempt: boolean;
+            /**
+             * Format: date
+             * @description El último día cerrado hoy en la sede de la petición: el más tardío de la fecha fija y de hoy − días − 1. Null sin cierre.
+             */
+            lockedThrough: string | null;
+            /** @description Las últimas 50 excepciones (quién, cuándo y por qué), de la más reciente a la más antigua. */
+            overrides: components["schemas"]["FinancialLockOverrideDto"][];
+        };
+        UpdateFinancialLockDto: {
+            /**
+             * Format: date
+             * @description Cerrado este día civil y todo lo anterior. Tiene que ser anterior a hoy en la sede. Null = sin fecha fija; ausente = no cambia.
+             * @example 2026-09-30
+             */
+            lockDate?: string | null;
+            /**
+             * @description Días abiertos hacia atrás: con N quedan abiertos hoy y los N días anteriores, y cerrado todo lo de antes (0 = solo hoy). Null = sin cierre por días; ausente = no cambia. Si hay fecha fija y días, rige el cierre más tardío.
+             * @example 7
+             */
+            lockDays?: number | null;
+            /** @description El ADMIN puede registrar o anular en un período cerrado indicando un motivo, que queda registrado. Ausente = no cambia. */
+            adminExempt?: boolean;
+        };
+        PeriodLockDto: {
+            /**
+             * Format: date
+             * @description Último día cerrado hoy en la sede donde se registra (X-Location-Id o la de escritura). Null sin cierre.
+             */
+            lockedThrough: string | null;
+            /** @description Quien pregunta puede elegir un día cerrado indicando un motivo (ADMIN con la exención de la clínica). */
+            canOverride: boolean;
+        };
         CurrencyDto: {
             /**
              * @description Minor units de ISO 4217 según la List One de SIX (RSD 2, JPY 0). Dato normativo; no se usa para redondear.
@@ -18317,6 +18502,8 @@ export interface components {
             createdById: string | null;
             /** @description Si quien consulta puede anular este abono: ADMIN siempre; RECEPTION solo los que registró ella el mismo día (calendario de la sede del abono). Solo orienta a la interfaz: `DELETE /payments/:id` vuelve a aplicar la regla. */
             canVoid: boolean;
+            /** @description DX-091: el día del abono (en su sede) está en un período contable cerrado. Entonces `canVoid` es `false`, salvo para el ADMIN con la exención de la clínica, que anula indicando `lockOverrideReason`. */
+            periodLocked: boolean;
             /**
              * Format: date-time
              * @description Instante del pago. Un abono registrado solo con fecha (YYYY-MM-DD) se guarda al mediodía de la zona de su sede. Para mostrar el día, usar `paidOn`.
@@ -18509,6 +18696,11 @@ export interface components {
              */
             proofUploadId?: string;
             notes?: string;
+            /**
+             * @description DX-091: motivo para hacerlo en un período contable cerrado. Solo vale para ADMIN y si la clínica admite la exención (`financialLockAdminExempt`); entonces es obligatorio (3–300 caracteres, 400 sin él) y queda registrado con quién y cuándo. Para cualquier otro rol se ignora y el período cerrado da 409 `PERIOD_LOCKED`.
+             * @example Abono del 15/09 que recepción olvidó registrar; cuadrado con el extracto del banco
+             */
+            lockOverrideReason?: string;
         };
         FrozenExchangeRateDto: {
             /** @description Moneda de destino: la del plan (o la del saldo migrado) */
@@ -18649,6 +18841,11 @@ export interface components {
             /** @description Confirma que el total, si supera lo pendiente del plan, deja el excedente como saldo a favor (sin ella, 409 `SPLIT_PAYMENT_EXCEEDS_BALANCE`). */
             confirmCreditBalance?: boolean;
             notes?: string;
+            /**
+             * @description DX-091: motivo para hacerlo en un período contable cerrado. Solo vale para ADMIN y si la clínica admite la exención (`financialLockAdminExempt`); entonces es obligatorio (3–300 caracteres, 400 sin él) y queda registrado con quién y cuándo. Para cualquier otro rol se ignora y el período cerrado da 409 `PERIOD_LOCKED`.
+             * @example Abono del 15/09 que recepción olvidó registrar; cuadrado con el extracto del banco
+             */
+            lockOverrideReason?: string;
         };
         SplitPaymentDto: {
             /**
@@ -18794,6 +18991,11 @@ export interface components {
              * @example Cobro duplicado: el paciente pagó una sola vez
              */
             reason: string;
+            /**
+             * @description DX-091: motivo para hacerlo en un período contable cerrado. Solo vale para ADMIN y si la clínica admite la exención (`financialLockAdminExempt`); entonces es obligatorio (3–300 caracteres, 400 sin él) y queda registrado con quién y cuándo. Para cualquier otro rol se ignora y el período cerrado da 409 `PERIOD_LOCKED`.
+             * @example Abono del 15/09 que recepción olvidó registrar; cuadrado con el extracto del banco
+             */
+            lockOverrideReason?: string;
         };
         /**
          * @description FROZEN: congeló su tasa (rate y equivalentAmount presentes). MISSING: «sin tasa» de su día. LEGACY: anterior a la tasa congelada y aún sin congelar.
@@ -19429,6 +19631,11 @@ export interface components {
              */
             totalToFinance?: number;
             notes?: string;
+            /**
+             * @description DX-091: motivo para hacerlo en un período contable cerrado. Solo vale para ADMIN y si la clínica admite la exención (`financialLockAdminExempt`); entonces es obligatorio (3–300 caracteres, 400 sin él) y queda registrado con quién y cuándo. Para cualquier otro rol se ignora y el período cerrado da 409 `PERIOD_LOCKED`.
+             * @example Abono del 15/09 que recepción olvidó registrar; cuadrado con el extracto del banco
+             */
+            lockOverrideReason?: string;
         };
         TramoViewDto: {
             /**
@@ -19568,6 +19775,13 @@ export interface components {
              * @example false
              */
             isFullyPaid: boolean;
+        };
+        CancelPaymentPlanDto: {
+            /**
+             * @description DX-091: motivo para hacerlo en un período contable cerrado. Solo vale para ADMIN y si la clínica admite la exención (`financialLockAdminExempt`); entonces es obligatorio (3–300 caracteres, 400 sin él) y queda registrado con quién y cuándo. Para cualquier otro rol se ignora y el período cerrado da 409 `PERIOD_LOCKED`.
+             * @example Abono del 15/09 que recepción olvidó registrar; cuadrado con el extracto del banco
+             */
+            lockOverrideReason?: string;
         };
         AccountStatementClinicDto: {
             /** @example Clínica Sonrisas */
@@ -19818,8 +20032,10 @@ export interface components {
             createdById: string | null;
             /** @description Si quien consulta puede anular este abono: ADMIN cualquiera activo; RECEPTION solo los suyos registrados el mismo día (calendario de la sede del abono). `false` si ya está anulado. Solo orienta a la interfaz: `DELETE /payments/:id` vuelve a aplicar la regla. */
             canVoid: boolean;
-            /** @description DX-432: por qué este abono no se anula aunque su rol pueda (es referencia de una devolución, que no se deshace), con el texto del 409 de `DELETE /payments/:id`. `null` si nada lo impide. La interfaz lo pinta como «Anular» deshabilitado con esta explicación. */
+            /** @description DX-432: por qué este abono no se anula aunque su rol pueda (es referencia de una devolución, que no se deshace; DX-091: o es de un período contable cerrado), con el texto del 409 de `DELETE /payments/:id`. `null` si nada lo impide. La interfaz lo pinta como «Anular» deshabilitado con esta explicación. */
             voidBlockedReason: string | null;
+            /** @description DX-091: el día del abono (en su sede) está en un período contable cerrado. Entonces `canVoid` es `false` y `voidBlockedReason` lo explica, salvo para el ADMIN con la exención de la clínica, que anula indicando `lockOverrideReason`. */
+            periodLocked: boolean;
             /** @description Abono anulado: se lista pero no suma. */
             voided: boolean;
             /** Format: date-time */
@@ -21309,6 +21525,204 @@ export interface components {
             pageSize: number;
             /** @description De la más reciente a la más antigua */
             lines: components["schemas"]["ProfitabilityLineDto"][];
+        };
+        QuoteFunnelPeriodDto: {
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+        };
+        QuoteFunnelFiltersDto: {
+            /** Format: uuid */
+            locationId: string | null;
+            /**
+             * Format: uuid
+             * @description Con scope OWN, siempre quien consulta
+             */
+            providerId: string | null;
+        };
+        QuoteFunnelStepDto: {
+            /** @enum {string} */
+            key: "PRESENTED" | "ACCEPTED" | "SCHEDULED" | "DONE" | "COLLECTED";
+            /** @description Presentaciones que llegaron a este paso */
+            count: number;
+            /** @description Importe del paso en la moneda del catálogo (2 decimales), sin las presentaciones sin tasa. null sin moneda de catálogo */
+            amount: number | null;
+            /** @description count ÷ presentados, en % con 1 decimal (40 = 40 %). null sin presentados («—») */
+            rateOfPresented: number | null;
+            /** @description amount ÷ importe presentado, en % con 1 decimal. null sin importes */
+            amountRateOfPresented: number | null;
+        };
+        QuoteFunnelRateDto: {
+            /** @description Aceptados ÷ presentados, en % con 1 decimal; null sin datos */
+            byCount: number | null;
+            /** @description Importe aceptado ÷ importe presentado, en % con 1 decimal; null sin importes */
+            byAmount: number | null;
+        };
+        QuoteFunnelCountAmountDto: {
+            count: number;
+            /** @description Moneda del catálogo, 2 decimales; null sin moneda de catálogo */
+            amount: number | null;
+        };
+        QuoteFunnelOutcomesDto: {
+            /** @description Alguna opción sigue presentada (importe: el presentado) */
+            pending: components["schemas"]["QuoteFunnelCountAmountDto"];
+            /** @description Todas las opciones rechazadas o canceladas, al menos una rechazada por el paciente */
+            rejected: components["schemas"]["QuoteFunnelCountAmountDto"];
+            /** @description El resto: canceladas por la clínica */
+            cancelled: components["schemas"]["QuoteFunnelCountAmountDto"];
+        };
+        QuoteFunnelRejectionReasonDto: {
+            /**
+             * @description El de la opción rechazada más reciente. Nunca OTHER_OPTION_ACCEPTED (no es rechazo)
+             * @enum {string}
+             */
+            reason: "PRICE" | "FEAR" | "SECOND_OPINION" | "OTHER";
+            count: number;
+            /** @description Importe presentado de esas presentaciones */
+            amount: number | null;
+        };
+        QuoteFunnelProfessionalDto: {
+            /**
+             * Format: uuid
+             * @description Quien elaboró el presupuesto; null = «Sin atribuir» (sin autor o ya no es miembro)
+             */
+            professionalId: string | null;
+            /**
+             * @description «Sin atribuir» si null
+             * @example Dra. Pérez
+             */
+            name: string;
+            presented: components["schemas"]["QuoteFunnelCountAmountDto"];
+            accepted: components["schemas"]["QuoteFunnelCountAmountDto"];
+            scheduled: components["schemas"]["QuoteFunnelCountAmountDto"];
+            done: components["schemas"]["QuoteFunnelCountAmountDto"];
+            collected: components["schemas"]["QuoteFunnelCountAmountDto"];
+            acceptanceRate: components["schemas"]["QuoteFunnelRateDto"];
+            /** @description Mediana de días (1 decimal) presentación → primera aceptación de SUS presentaciones; null sin aceptadas */
+            medianDaysToAccept: number | null;
+        };
+        QuoteFunnelWithoutRateDto: {
+            /** @description Presentaciones con algún procedimiento en otra moneda sin tasa guardada: cuentan en los números y quedan fuera de los importes (la web avisa) */
+            presentations: number;
+        };
+        QuoteFunnelDefinitionDto: {
+            /** @enum {string} */
+            key: "PRESENTED" | "ACCEPTED" | "SCHEDULED" | "DONE" | "COLLECTED" | "ACCEPTANCE_RATE" | "MEDIAN_DAYS_TO_ACCEPT" | "OUTCOMES" | "REJECTION_REASONS" | "PROFESSIONAL" | "CURRENCY";
+            /** @example Presentados */
+            label: string;
+            /** @description «Cómo se calcula», una regla por línea */
+            howItIsCalculated: string[];
+        };
+        QuoteFunnelLocationOptionDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @description false = sede desactivada (sigue saliendo) */
+            isActive: boolean;
+        };
+        QuoteFunnelProfessionalOptionDto: {
+            /** Format: uuid */
+            userId: string;
+            fullName: string;
+        };
+        QuoteFunnelOptionsDto: {
+            /** @description Las sedes que ve quien consulta (DX-089) */
+            locations: components["schemas"]["QuoteFunnelLocationOptionDto"][];
+            /** @description Miembros que elaboraron algún presupuesto presentado en esas sedes; con scope OWN, solo quien consulta */
+            professionals: components["schemas"]["QuoteFunnelProfessionalOptionDto"][];
+        };
+        QuoteFunnelReportDto: {
+            period: components["schemas"]["QuoteFunnelPeriodDto"];
+            /** @description Moneda del catálogo de la clínica: la de todos los importes. null = no se resuelve (aviso NO_CATALOG_CURRENCY; importes null) */
+            currency: string | null;
+            /**
+             * @description CLINIC: toda la clínica (ADMIN o FINANCIAL_REPORTS_VIEW); OWN: solo lo que elaboró quien consulta (DENTIST)
+             * @enum {string}
+             */
+            scope: "CLINIC" | "OWN";
+            /** @description true = quien consulta solo ve algunas sedes (DX-089): las cifras son de esas */
+            restrictedToLocations: boolean;
+            filters: components["schemas"]["QuoteFunnelFiltersDto"];
+            /** @description Los pasos en orden: PRESENTED, ACCEPTED, SCHEDULED, DONE, COLLECTED */
+            steps: components["schemas"]["QuoteFunnelStepDto"][];
+            acceptanceRate: components["schemas"]["QuoteFunnelRateDto"];
+            /** @description Mediana de días (1 decimal) desde la presentación hasta la primera aceptación; null sin aceptadas */
+            medianDaysToAccept: number | null;
+            outcomes: components["schemas"]["QuoteFunnelOutcomesDto"];
+            /** @description Por número y luego por importe (desc) */
+            rejectionReasons: components["schemas"]["QuoteFunnelRejectionReasonDto"][];
+            /** @description Una fila por profesional que lo elaboró (por presentados desc), «Sin atribuir» al final; con scope OWN, solo la suya */
+            byProfessional: components["schemas"]["QuoteFunnelProfessionalDto"][];
+            withoutRate: components["schemas"]["QuoteFunnelWithoutRateDto"];
+            /** @description NO_CATALOG_CURRENCY: sin moneda de catálogo (importes null). WITHOUT_RATE: hay presentaciones fuera de los importes (ver withoutRate) */
+            warnings: ("NO_CATALOG_CURRENCY" | "WITHOUT_RATE")[];
+            /** @description Las definiciones de cada paso, tasa, mediana, desenlace, motivos, profesional y moneda («Cómo se calcula») */
+            definitions: components["schemas"]["QuoteFunnelDefinitionDto"][];
+            options: components["schemas"]["QuoteFunnelOptionsDto"];
+        };
+        QuoteFunnelPresentationDto: {
+            /**
+             * Format: uuid
+             * @description El grupo de opciones (id del plan que lo abrió; un plan suelto es su propio grupo)
+             */
+            groupId: string;
+            /** @description Los planes de la presentación: sus opciones y los pendientes de una aceptación parcial */
+            planIds: string[];
+            /**
+             * Format: uuid
+             * @description El plan de la primera opción presentada (para enlazar la ficha)
+             */
+            firstPlanId: string;
+            /**
+             * Format: uuid
+             * @description null = paciente eliminado (no se nombra ni se enlaza)
+             */
+            patientId: string | null;
+            patientName: string | null;
+            /** Format: date-time */
+            presentedAt: string;
+            /**
+             * Format: uuid
+             * @description Sede de la primera presentación; null = sin sede
+             */
+            locationId: string | null;
+            locationName: string | null;
+            /**
+             * @description Zona de la sede (o de la principal si no tiene): la fecha se pinta con ella
+             * @example America/Caracas
+             */
+            timeZone: string;
+            /**
+             * Format: uuid
+             * @description Quien lo elaboró; null = «Sin atribuir»
+             */
+            professionalId: string | null;
+            professionalName: string | null;
+            /** @description Opciones presentadas (A/B) */
+            optionCount: number;
+            /** @description Total de la opción más amplia, en la moneda del catálogo. null = sin tasa o sin moneda de catálogo (fuera de los importes) */
+            presentedAmount: number | null;
+            acceptedAmount: number | null;
+            scheduledAmount: number | null;
+            doneAmount: number | null;
+            collectedAmount: number | null;
+            /** @enum {string} */
+            outcome: "ACCEPTED" | "PENDING" | "REJECTED" | "CANCELLED";
+            /**
+             * @description Solo en las rechazadas: el motivo de la opción rechazada más reciente (sin la nota)
+             * @enum {string|null}
+             */
+            rejectionReason: "PRICE" | "FEAR" | "SECOND_OPINION" | "OTHER" | null;
+        };
+        QuoteFunnelPresentationsDto: {
+            /** @description Moneda de los importes (la del catálogo) */
+            currency: string | null;
+            /** @description Por fecha de presentación desc */
+            items: components["schemas"]["QuoteFunnelPresentationDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
         };
         /**
          * @description Las secciones que ve el rol: ADMIN las tres, DENTIST EVOLUTION y TREATMENT, RECEPTION OUTCOME
@@ -38902,6 +39316,109 @@ export interface operations {
             };
         };
     };
+    FinancialLockSettingsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinancialLockSettingsDto"];
+                };
+            };
+            /** @description Solo administración configura el cierre contable. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code: LOCATION_TIMEZONE_REQUIRED` si la sede de la petición no tiene zona horaria válida. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    FinancialLockSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateFinancialLockDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinancialLockSettingsDto"];
+                };
+            };
+            /** @description Fecha que no es AAAA-MM-DD o no es anterior a hoy en la sede, días fuera de 0..365 o exención que no es sí/no */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración configura el cierre contable. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code: LOCATION_TIMEZONE_REQUIRED` si la sede de la petición no tiene zona horaria válida. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PeriodLockController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeriodLockDto"];
+                };
+            };
+            /** @description `code: LOCATION_TIMEZONE_REQUIRED` si la sede de la petición no tiene zona horaria válida. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     ReferenceController_currencies: {
         parameters: {
             query?: never;
@@ -39250,7 +39767,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description El plan está rechazado o cancelado: no admite abonos (DX-109). Un plan completado sí. DX-377: `code: PAYMENT_REFERENCE_DUPLICATE` si la referencia y el medio ya están en otro abono vivo de ±90 días (`matches`); se confirma repitiendo con `duplicateReferenceReason`. */
+            /** @description El plan está rechazado o cancelado: no admite abonos (DX-109). Un plan completado sí. DX-377: `code: PAYMENT_REFERENCE_DUPLICATE` si la referencia y el medio ya están en otro abono vivo de ±90 días (`matches`); se confirma repitiendo con `duplicateReferenceReason`. DX-091: `code: PERIOD_LOCKED` (con `lockedThrough`) si el día del abono en la sede está en un período contable cerrado. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -39304,7 +39821,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Plan rechazado o cancelado (DX-109). `code: PAYMENT_REFERENCE_DUPLICATE` con `line` (desde 0) si la referencia de una línea ya está en otro abono vivo de ±90 días: se confirma con su `duplicateReferenceReason`. `code: SPLIT_PAYMENT_EXCEEDS_BALANCE` (con `total`, `pending` —nunca bajo 0—, `excess` —lo que este cobro supera lo pendiente— y `currency`, la del plan) si el total supera lo pendiente: se confirma con `confirmCreditBalance`. `code: SPLIT_PAYMENT_BALANCE_CHANGED` si, sin esa confirmación, otro movimiento del plan (un abono, un traspaso o una devolución de saldo a favor) entró mientras se registraba el cobro: no se registra nada y se repite la petición (misma clave). Sin caja abierta, si la clínica la exige para el efectivo (DX-027). */
+            /** @description Plan rechazado o cancelado (DX-109). `code: PAYMENT_REFERENCE_DUPLICATE` con `line` (desde 0) si la referencia de una línea ya está en otro abono vivo de ±90 días: se confirma con su `duplicateReferenceReason`. `code: SPLIT_PAYMENT_EXCEEDS_BALANCE` (con `total`, `pending` —nunca bajo 0—, `excess` —lo que este cobro supera lo pendiente— y `currency`, la del plan) si el total supera lo pendiente: se confirma con `confirmCreditBalance`. `code: SPLIT_PAYMENT_BALANCE_CHANGED` si, sin esa confirmación, otro movimiento del plan (un abono, un traspaso o una devolución de saldo a favor) entró mientras se registraba el cobro: no se registra nada y se repite la petición (misma clave). Sin caja abierta, si la clínica la exige para el efectivo (DX-027). DX-091: `code: PERIOD_LOCKED` si el día del cobro está en un período contable cerrado. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -39477,7 +39994,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Id que no es UUID, o falta `reason` o no tiene 3–300 caracteres */
+            /** @description Id que no es UUID, o falta `reason` o no tiene 3–300 caracteres. DX-091: ADMIN con la exención activa anulando un abono de un período cerrado sin `lockOverrideReason` (3–300). */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -39498,7 +40015,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description DX-253: el abono (o una línea de su cobro dividido) es referencia de una devolución de saldo a favor, o del plan ya se traspasó o devolvió saldo a favor y sin este abono quedaría al descubierto */
+            /** @description DX-253: el abono (o una línea de su cobro dividido) es referencia de una devolución de saldo a favor, o del plan ya se traspasó o devolvió saldo a favor y sin este abono quedaría al descubierto. DX-091: `code: PERIOD_LOCKED` (con `lockedThrough`) si el día del abono en su sede está en un período contable cerrado (también para RECEPTION desde Caja o Estado de cuenta). El ADMIN lo salta con `lockOverrideReason` si la clínica lo admite. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -40107,7 +40624,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description El plan ya tiene un plan de cuotas activo, o está rechazado o cancelado y no se financia (DX-109). */
+            /** @description El plan ya tiene un plan de cuotas activo, o está rechazado o cancelado y no se financia (DX-109). DX-091: `code: PERIOD_LOCKED` si alguna cuota vence en un período contable cerrado. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -40125,7 +40642,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelPaymentPlanDto"];
+            };
+        };
         responses: {
             /** @description Payment plan cancelled */
             200: {
@@ -40136,6 +40657,13 @@ export interface operations {
             };
             /** @description Id que no es UUID */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description DX-091: `code: PERIOD_LOCKED` si el plan tiene cuotas vencidas en un período contable cerrado. El ADMIN lo salta con `lockOverrideReason` si la clínica admite la exención. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -41441,6 +41969,160 @@ export interface operations {
             };
             /** @description Solo la administración ve la rentabilidad de las sedes. / sede fuera de las del usuario */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    QuoteFunnelController_get: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD): cuenta la fecha de la PRIMERA presentación del presupuesto, en el día civil de la sede donde se presentó. Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día del período (inclusive) */
+                to: string;
+                /** @description Solo lo presentado en esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve (y, si las ve todas, lo presentado sin sede). La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo los presupuestos que elaboró este usuario («Profesional que lo elaboró»: quien creó el presupuesto). Quien ve solo lo suyo (scope OWN) solo puede pedirse a sí mismo (403 si no); sin él, ve igualmente solo lo suyo. */
+                providerId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteFunnelReportDto"];
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 366 días. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración, los odontólogos y quien tenga acceso a los reportes financieros ven el embudo de presupuestos. / Solo puedes ver tus propios presupuestos. / No tienes acceso a esta sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con presentaciones no tiene zona horaria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    QuoteFunnelController_csv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD): cuenta la fecha de la PRIMERA presentación del presupuesto, en el día civil de la sede donde se presentó. Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día del período (inclusive) */
+                to: string;
+                /** @description Solo lo presentado en esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve (y, si las ve todas, lo presentado sin sede). La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo los presupuestos que elaboró este usuario («Profesional que lo elaboró»: quien creó el presupuesto). Quien ve solo lo suyo (scope OWN) solo puede pedirse a sí mismo (403 si no); sin él, ve igualmente solo lo suyo. */
+                providerId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 366 días. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración descarga el embudo de presupuestos. / No tienes acceso a esta sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con presentaciones no tiene zona horaria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    QuoteFunnelController_presentations: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD): cuenta la fecha de la PRIMERA presentación del presupuesto, en el día civil de la sede donde se presentó. Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día del período (inclusive) */
+                to: string;
+                /** @description Solo lo presentado en esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve (y, si las ve todas, lo presentado sin sede). La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo los presupuestos que elaboró este usuario («Profesional que lo elaboró»: quien creó el presupuesto). Quien ve solo lo suyo (scope OWN) solo puede pedirse a sí mismo (403 si no); sin él, ve igualmente solo lo suyo. */
+                providerId?: string;
+                /** @description La cifra que se abre: un paso del embudo (PRESENTED, ACCEPTED, SCHEDULED, DONE, COLLECTED) o un desenlace de lo no aceptado (PENDING, REJECTED, CANCELLED). */
+                step: "PRESENTED" | "ACCEPTED" | "SCHEDULED" | "DONE" | "COLLECTED" | "PENDING" | "REJECTED" | "CANCELLED";
+                /** @description Solo las rechazadas por este motivo (el de su opción rechazada más reciente). Exige step=REJECTED (400 si no). */
+                reason?: "PRICE" | "FEAR" | "SECOND_OPINION" | "OTHER";
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteFunnelPresentationsDto"];
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 366 días. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración, los odontólogos y quien tenga acceso a los reportes financieros ven el embudo de presupuestos. / Solo puedes ver tus propios presupuestos. / No tienes acceso a esta sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con presentaciones no tiene zona horaria */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

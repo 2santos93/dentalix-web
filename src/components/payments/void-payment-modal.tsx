@@ -6,6 +6,9 @@ import { Label } from '@/components/ui/label';
 import { Callout } from '@/components/ui/callout';
 import { InlineError } from '@/components/errors/inline-error';
 import { Textarea } from '@/components/ui/textarea';
+import { isDayLocked } from '@/lib/financial-lock/financial-lock-api';
+import { readyPeriodLock, usePeriodLock } from './use-period-lock';
+import { LockOverrideReasonField, periodLockCopy, validLockReason } from './period-lock-field';
 
 // Mismos límites que `VoidPaymentDto.reason` en la API (tras recortar).
 export const VOID_REASON_MIN = 3;
@@ -27,13 +30,21 @@ const copy = {
   // DX-390: una línea de un cobro dividido se anula con todo el cobro.
   splitNotice: (lines: number) =>
     `Es una de las ${lines} formas de pago de un mismo cobro: se anulan todas y su recibo.`,
+  // DX-091: el abono es de un período contable cerrado.
+  lockedOverride:
+    'Este abono es de un período contable cerrado. Como administración puedes anularlo indicando por qué; queda registrado quién, cuándo y por qué.',
+  lockedBlocked:
+    'Este abono es de un período contable cerrado: ya no se puede anular. Pide a administración que lo revise.',
 };
 
 interface VoidPaymentModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Recibe el motivo ya recortado y válido. */
-  onConfirm: (reason: string) => void;
+  /**
+   * Recibe el motivo ya recortado y válido y, en un período contable cerrado
+   * con la exención del ADMIN, el motivo de la excepción (DX-091).
+   */
+  onConfirm: (reason: string, lockOverrideReason?: string) => void;
   submitting: boolean;
   /** Fallo del envío (p. ej. el 403 de la ventana de recepción). */
   error: string | null;
@@ -43,6 +54,15 @@ interface VoidPaymentModalProps {
   subject?: string;
   /** DX-390: formas de pago del cobro dividido al que pertenece el abono (se anulan juntas). */
   splitLines?: number;
+  /**
+   * DX-091: para leer el cierre contable vigente (`GET /payments/period-lock`)
+   * mientras el modal está abierto. Sin él, no se mira el cierre (decide la API).
+   */
+  token?: string;
+  /** DX-091: día civil del abono en su sede (`paidOn`). */
+  paidOn?: string;
+  /** DX-091: lo que dice la lista (Caja, Estado de cuenta); gana a `paidOn`. */
+  periodLocked?: boolean;
 }
 
 /**
@@ -59,7 +79,17 @@ export function VoidPaymentModal({
   restrictedToOwnToday,
   subject,
   splitLines,
+  token,
+  paidOn,
+  periodLocked,
 }: VoidPaymentModalProps) {
+  const lock = readyPeriodLock(usePeriodLock(token ?? '', open && token !== undefined));
+  const locked = periodLocked ?? (paidOn !== undefined && isDayLocked(paidOn, lock?.lockedThrough));
+  // Solo con el cierre leído: sin él no se sabe si se puede saltar.
+  const override = locked && lock !== null && lock.canOverride;
+  const blocked = locked && lock !== null && !lock.canOverride;
+  const [lockReason, setLockReason] = useState('');
+  const [lockReasonError, setLockReasonError] = useState<string | null>(null);
   const fieldId = useId();
   const hintId = `${fieldId}-hint`;
   const errorId = `${fieldId}-error`;
@@ -74,6 +104,17 @@ export function VoidPaymentModal({
       return;
     }
     setValidationError(null);
+    if (override) {
+      const valid = validLockReason(lockReason);
+      if (!valid) {
+        setLockReasonError(periodLockCopy.reasonMissing);
+        document.getElementById(`${fieldId}-lock`)?.focus();
+        return;
+      }
+      setLockReasonError(null);
+      onConfirm(trimmed, valid);
+      return;
+    }
     onConfirm(trimmed);
   }
 
@@ -94,6 +135,11 @@ export function VoidPaymentModal({
         <p className="rounded-lg bg-surface-sunken px-3 py-2 text-sm font-medium text-ink tabular-nums">
           {subject}
         </p>
+      ) : null}
+      {override || blocked ? (
+        <Callout tone="warning" role="note">
+          {override ? copy.lockedOverride : copy.lockedBlocked}
+        </Callout>
       ) : null}
       {splitLines && splitLines > 1 ? (
         <Callout tone="warning" role="note">
@@ -131,6 +177,19 @@ export function VoidPaymentModal({
           </span>
         </div>
       </div>
+      {override ? (
+        <LockOverrideReasonField
+          id={`${fieldId}-lock`}
+          label={periodLockCopy.voidReasonLabel}
+          value={lockReason}
+          error={lockReasonError}
+          disabled={submitting}
+          onChange={(next) => {
+            setLockReason(next);
+            if (lockReasonError) setLockReasonError(null);
+          }}
+        />
+      ) : null}
     </FormModal>
   );
 }

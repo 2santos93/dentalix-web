@@ -53,6 +53,8 @@ export interface VoidPaymentTarget {
    * del gancho; `undefined` = el del gancho. En la caja de «Todas las sedes» cada abono es de la suya.
    */
   fmt?: RegionalFormat | null;
+  /** DX-091: el día del abono está en un período contable cerrado (lo dice la lista). */
+  periodLocked?: boolean;
 }
 
 /**
@@ -112,12 +114,12 @@ export function useVoidPayment(token: string, onVoided: () => void, fmt: Regiona
     setError(null);
   }
 
-  async function confirm(reason: string) {
+  async function confirm(reason: string, lockOverrideReason?: string) {
     if (!target) return;
     setSubmitting(true);
     setError(null);
     try {
-      await voidPayment(token, target.id, reason);
+      await voidPayment(token, target.id, reason, lockOverrideReason);
       setNotice(voidedNotice(target, fmt));
       setTarget(null);
       onVoided();

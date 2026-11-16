@@ -736,13 +736,13 @@ export function TreatmentPlansTab({
     setPaymentToVoid(paymentId);
   }
 
-  async function handleVoidPayment(reason: string) {
+  async function handleVoidPayment(reason: string, lockOverrideReason?: string) {
     const paymentId = paymentToVoid;
     if (!paymentId) return;
     setVoidingPaymentId(paymentId);
     setPaymentActionError(null);
     try {
-      await voidPayment(token, paymentId, reason);
+      await voidPayment(token, paymentId, reason, lockOverrideReason);
       // Se cierra antes de refrescar, como en `payment-plan-section`: el
       // diálogo solo sigue abierto si hay algo que decidir.
       setPaymentToVoid(null);

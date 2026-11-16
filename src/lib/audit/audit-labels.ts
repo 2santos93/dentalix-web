@@ -1056,6 +1056,7 @@ const RECEIPT_REASONS: Record<string, string> = {
   CLINIC_PROFILE: 'Datos de la clínica',
   CLINIC_LOGO: 'Logo de la clínica',
   RECEIPT_SETTINGS: 'Título y leyenda del recibo',
+  FINANCIAL_LOCK: 'Cierre contable',
   RECEIPT_LEGEND: 'Leyenda del recibo de la sede',
   EXTERNAL_INVOICE_NUMBER: 'Nº de factura externa del abono',
   // DX-516: ajustes por medio de pago (sobre el medio).
