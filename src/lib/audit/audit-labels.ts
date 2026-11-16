@@ -158,6 +158,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   // paciente desde él (reporte, confirmar, rechazar, ver el comprobante).
   PAYMENT_LINK: 'Enlace de pago',
   PAYMENT_REPORT: 'Pago reportado',
+  // DX-559: plantillas de plan de tratamiento (crear, editar, desactivar).
+  TREATMENT_PLAN_TEMPLATE: 'Plantilla de plan',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
