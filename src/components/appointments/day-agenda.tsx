@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { AttendanceBadge } from '@/components/appointments/attendance-badge';
 import { OverbookedChip } from '@/components/appointments/overbooked-chip';
 import { OverdueChip } from '@/components/collections/overdue-chip';
+import { OrthoOverdueChip } from '@/components/ortho/ortho-overdue-chip';
 import { CoverageChip } from '@/components/patients/coverage-chip';
 import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
 import { CalendarDays, ChevronRight } from 'lucide-react';
@@ -280,6 +281,7 @@ export function DayAgenda({
                       />
                       <ConfirmationBadge appointment={appointment} />
                       <OverdueChip balance={appointment.balance} fmt={clock.fmt} />
+                      <OrthoOverdueChip flag={appointment.orthoBalance} />
                       <CoverageChip coverage={appointment.coverage} compact />
                       <AttendanceBadge counts={appointment.attendance} />
                       {/* DX-509: solo mientras es sobrecupo. */}
@@ -371,6 +373,7 @@ export function DayAgenda({
               </p>
               <ConfirmationBadge appointment={appointment} className="mt-2" />
               <OverdueChip balance={appointment.balance} className="mt-2" fmt={clock.fmt} />
+              <OrthoOverdueChip flag={appointment.orthoBalance} className="mt-2" />
               <CoverageChip coverage={appointment.coverage} compact className="mt-2" />
               <AttendanceBadge counts={appointment.attendance} className="mt-2" />
               <OverbookedChip overbooked={appointment.overbooked} status={appointment.status} className="mt-2" />

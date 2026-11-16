@@ -59,6 +59,7 @@ function item(overrides: Partial<InClinicItem> & { appointmentId: string }): InC
     minutesInStatus: 12,
     waitedMinutes: 12,
     punctuality: 'ON_TIME',
+    orthoBalance: { hasOverdue: false, overdueDays: null },
     medicalAlerts: {
       hasCriticalAlert: false,
       requiresPremedication: false,

@@ -20,7 +20,8 @@ import { API_URL, tenantOrigin } from './support/urls';
  *   2. 390 px: el formulario de control (con el arco anterior puesto) y la
  *      pestaña sin scroll horizontal, en claro y oscuro.
  *   3. Recepción ve Pacientes › Ortodoncia a 1440 y 390 px con la paciente
- *      (tiene cita: «Al día»), sin «Ortodoncia» en la ficha.
+ *      (tiene cita: «Al día»); en la ficha, la pestaña solo con la cuenta
+ *      del caso (DX-285), nunca el caso clínico.
  */
 const suffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase();
 const subdomain = `orto-${suffix}`.slice(0, 40);
@@ -155,7 +156,9 @@ test('recepción ve la lista de ortodoncia y no la pestaña clínica (1440 y 390
   await expect(list.getByText(`Valentina ${lastName}`)).toBeVisible();
   await checkViewports(page, 'ortho-follow-up');
 
-  await page.goto(`${origin}/patients/${patientId}`);
-  await expect(page.getByRole('tab', { name: 'Datos' })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole('tab', { name: 'Ortodoncia' })).toHaveCount(0);
+  // DX-285: la pestaña sí, pero solo con la cuenta de los casos (sin honorario: vacía), nunca el caso clínico.
+  await page.goto(`${origin}/patients/${patientId}?tab=ortho`);
+  const panel = page.locator('#tabpanel-ortho');
+  await expect(panel.getByText('Sin cuenta de ortodoncia')).toBeVisible({ timeout: 15_000 });
+  await expect(panel.getByText('Historial de controles')).toHaveCount(0);
 });

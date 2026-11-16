@@ -121,6 +121,12 @@ export interface Appointment {
    */
   attendance?: components['schemas']['PatientIncidentCountsDto'];
   /**
+   * DX-285: «Ortodoncia: saldo vencido» del paciente (solo en la lista): un
+   * cargo de ortodoncia realizado y sin pagar de más días que el ajuste de la
+   * clínica. Sin importe.
+   */
+  orthoBalance?: components['schemas']['OrthoBalanceFlagDto'];
+  /**
    * DX-122: solo en la respuesta de crear o mover — avisos que no impidieron la
    * operación (p. ej. «La cita cae en un bloqueo que permite agendar…»).
    */

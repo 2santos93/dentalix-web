@@ -12,6 +12,11 @@ export function canWriteOrtho(role: ClinicRole | null): boolean {
   return role === 'ADMIN' || role === 'DENTIST';
 }
 
+/** DX-285: la cuenta del caso la ven los cuatro roles (ORTHO_ACCOUNT_READ_ROLES). */
+export function canReadOrthoAccount(role: ClinicRole | null): boolean {
+  return role !== null;
+}
+
 /** Cambiar los ajustes de ortodoncia: solo ADMIN. */
 export function canManageOrthoSettings(role: ClinicRole | null): boolean {
   return role === 'ADMIN';

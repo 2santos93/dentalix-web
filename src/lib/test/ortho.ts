@@ -1,4 +1,5 @@
 import type { OrthoCase, OrthoFollowUpRow, OrthoVisit } from '@/lib/ortho/ortho-api';
+import type { OrthoAligners, OrthoAlignerSeries, OrthoCaseAccount, OrthoFee } from '@/lib/ortho/ortho-billing';
 
 /** Caso de ortodoncia de prueba: 24 meses y 24 controles, sede Caracas. */
 export function makeOrthoCase(overrides: Partial<OrthoCase> = {}): OrthoCase {
@@ -31,6 +32,7 @@ export function makeOrthoCase(overrides: Partial<OrthoCase> = {}): OrthoCase {
     lastVisitDate: '2026-11-10',
     nextVisitProposedOn: '2026-12-10',
     overdue: false,
+    fee: null,
     ...overrides,
   };
 }
@@ -83,6 +85,99 @@ export function makeFollowUpRow(overrides: Partial<OrthoFollowUpRow> = {}): Orth
     nextAppointmentAt: null,
     noNextAppointment: true,
     noShowCount: 1,
+    ...overrides,
+  };
+}
+
+/** DX-285: honorario de prueba: 3.000.000 VES (600.000 + 24 × 90.000 + 240.000). */
+export function makeOrthoFee(overrides: Partial<OrthoFee> = {}): OrthoFee {
+  return {
+    currency: 'VES',
+    total: 3_000_000,
+    initial: 600_000,
+    perVisit: 90_000,
+    visitCount: 24,
+    retention: 240_000,
+    updatedAt: '2026-08-10T14:00:00.000Z',
+    updatedById: 'u-dentist',
+    acceptedAt: '2026-08-10T15:00:00.000Z',
+    acceptedById: 'u-dentist',
+    paymentPlanId: null,
+    ...overrides,
+  };
+}
+
+/** DX-285: cuenta del caso con 3 de 24 controles realizados. */
+export function makeOrthoAccount(overrides: Partial<OrthoCaseAccount> = {}): OrthoCaseAccount {
+  return {
+    caseId: 'case-1',
+    patientId: 'p1',
+    locationId: 'loc-1',
+    status: 'ACTIVE',
+    startDate: '2026-08-10',
+    plannedVisits: 24,
+    visitsDone: 3,
+    billing: 'PLAN_ITEMS',
+    currency: 'VES',
+    treatmentPlanId: 'plan-1',
+    fee: makeOrthoFee(),
+    billed: 870_000,
+    paid: 600_000,
+    balance: 270_000,
+    remaining: 2_130_000,
+    overdue: 0,
+    overdueSince: null,
+    overdueAgeDays: 0,
+    hasOverdue: false,
+    overdueDays: 30,
+    visitsCharged: 3,
+    removedCharges: 0,
+    paymentPlan: null,
+    ...overrides,
+  };
+}
+
+export function makeAlignerSeries(overrides: Partial<OrthoAlignerSeries> = {}): OrthoAlignerSeries {
+  return {
+    id: 'series-1',
+    caseId: 'case-1',
+    arch: 'BOTH',
+    brand: 'Marca X',
+    totalTrays: 20,
+    daysPerTray: 14,
+    refinementOfId: null,
+    sequence: 1,
+    createdById: 'u-dentist',
+    createdByName: 'Dra. Rivas',
+    createdAt: '2026-09-01T14:00:00.000Z',
+    deliveries: [
+      {
+        id: 'd-1',
+        fromTray: 1,
+        toTray: 4,
+        deliveredOn: '2026-09-01',
+        visitId: null,
+        createdById: 'u-dentist',
+        createdByName: 'Dra. Rivas',
+        createdAt: '2026-09-01T14:00:00.000Z',
+      },
+    ],
+    state: 'IN_PROGRESS',
+    currentTray: 3,
+    currentTrayStartedOn: '2026-09-29',
+    nextChangeOn: '2026-10-13',
+    lastDeliveredTray: 4,
+    estimatedEndOn: '2027-06-08',
+    ...overrides,
+  };
+}
+
+export function makeAligners(overrides: Partial<OrthoAligners> = {}): OrthoAligners {
+  return {
+    today: '2026-10-05',
+    series: [makeAlignerSeries()],
+    upperSeriesId: 'series-1',
+    lowerSeriesId: 'series-1',
     ...overrides,
   };
 }
