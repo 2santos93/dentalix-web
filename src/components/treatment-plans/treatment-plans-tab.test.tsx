@@ -4028,6 +4028,24 @@ describe('TreatmentPlansTab · una primaria por estado del plan (D2)', () => {
     expect(primaries()).toEqual([add]);
   });
 
+  it.each(['DRAFT', 'PRESENTED'] as const)(
+    'DX-559: %s ofrece «Añadir desde plantilla» como secundaria junto a «Agregar ítem»',
+    async (status) => {
+      show(status);
+      render(<TreatmentPlansTab patientId="pat-1" token={dentist} />);
+      await screen.findByRole('button', { name: /^agregar ítem$/i });
+      const fromTemplate = screen.getByRole('button', { name: 'Añadir desde plantilla' });
+      expect(isPrimary(fromTemplate)).toBe(false);
+    },
+  );
+
+  it('DX-559: un plan aceptado sin firma no ofrece «Añadir desde plantilla» (la API da 409)', async () => {
+    show('ACCEPTED');
+    render(<TreatmentPlansTab patientId="pat-1" token={dentist} />);
+    await screen.findByRole('heading', { name: /agregar ítem/i });
+    expect(screen.queryByRole('button', { name: 'Añadir desde plantilla' })).not.toBeInTheDocument();
+  });
+
   it('PRESENTED (odontólogo): «Aceptar con firma» es la única; «Agregar ítem» y «Enviar a aceptar» en secundario', async () => {
     show('PRESENTED');
     render(<TreatmentPlansTab patientId="pat-1" token={dentist} />);

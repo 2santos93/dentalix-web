@@ -305,64 +305,44 @@ export function apiErrorFromBody(
   body: unknown,
   retryAfterHeader: string | null,
 ): ApiError {
-  let messages: string[] = [];
-  let code: string | null = null;
-  let field: string | null = null;
-  let locationId: string | null = null;
-  let holidayId: string | null = null;
-  let line: number | null = null;
-  let canOverride: boolean | null = null;
-  let existingPatientId: string | null = null;
-  let existingPatient: ExistingPatientRef | null = null;
-  let affectedAppointments: AffectedAppointmentsRef | null = null;
-  let mergedIntoId: string | null = null;
-  if (body && typeof body === 'object') {
-    const data = body as {
-      message?: unknown;
-      code?: unknown;
-      field?: unknown;
-      locationId?: unknown;
-      holidayId?: unknown;
-      line?: unknown;
-      canOverride?: unknown;
-      existingPatientId?: unknown;
-      existingPatient?: unknown;
-      affectedAppointments?: AffectedAppointmentsRef;
-      mergedIntoId?: unknown;
-    };
-    const raw = data.message;
-    if (typeof raw === 'string' && raw) messages = [raw];
-    else if (Array.isArray(raw)) messages = raw.filter((m): m is string => typeof m === 'string');
-    if (typeof data.code === 'string' && data.code) code = data.code;
-    if (typeof data.field === 'string' && data.field) field = data.field;
-    if (typeof data.locationId === 'string' && data.locationId) locationId = data.locationId;
-    if (typeof data.holidayId === 'string' && data.holidayId) holidayId = data.holidayId;
-    if (typeof data.line === 'number' && Number.isInteger(data.line) && data.line >= 0) line = data.line;
-    if (typeof data.canOverride === 'boolean') canOverride = data.canOverride;
-    if (typeof data.existingPatientId === 'string' && data.existingPatientId) {
-      existingPatientId = data.existingPatientId;
-    }
-    existingPatient = parseExistingPatient(data.existingPatient);
-    if (data.affectedAppointments && typeof data.affectedAppointments === 'object') {
-      affectedAppointments = data.affectedAppointments;
-    }
-    if (typeof data.mergedIntoId === 'string' && data.mergedIntoId) mergedIntoId = data.mergedIntoId;
-  }
+  const data = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+  const raw = data.message;
+  const messages =
+    typeof raw === 'string' && raw
+      ? [raw]
+      : Array.isArray(raw)
+        ? raw.filter((m): m is string => typeof m === 'string')
+        : [];
+  const affected = data.affectedAppointments;
   const message = messages.length > 0 ? messages.join('; ') : `HTTP ${status}`;
   return new ApiError(status, message, {
     messages,
     retryAfterSeconds: parseRetryAfter(retryAfterHeader),
-    code,
-    field,
-    locationId,
-    holidayId,
-    line,
-    canOverride,
-    existingPatientId,
-    existingPatient,
-    affectedAppointments,
-    mergedIntoId,
+    code: text(data.code),
+    field: text(data.field),
+    locationId: text(data.locationId),
+    holidayId: text(data.holidayId),
+    line: index(data.line),
+    canOverride: typeof data.canOverride === 'boolean' ? data.canOverride : null,
+    existingPatientId: text(data.existingPatientId),
+    existingPatient: parseExistingPatient(data.existingPatient),
+    affectedAppointments:
+      affected && typeof affected === 'object' ? (affected as AffectedAppointmentsRef) : null,
+    mergedIntoId: text(data.mergedIntoId),
+    // DX-559: la línea de la plantilla de plan (al guardarla, `position`; al aplicarla, `lineId`).
+    position: index(data.position),
+    lineId: text(data.lineId),
   });
+}
+
+/** Un texto no vacío del cuerpo de error, o `null`. */
+function text(value: unknown): string | null {
+  return typeof value === 'string' && value ? value : null;
+}
+
+/** Un índice (entero ≥ 0) del cuerpo de error, o `null`. */
+function index(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
 }
 
 function parseExistingPatient(value: unknown): ExistingPatientRef | null {
