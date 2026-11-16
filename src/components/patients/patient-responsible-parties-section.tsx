@@ -1,4 +1,5 @@
 'use client';
+import dynamic from 'next/dynamic';
 import * as React from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -20,9 +21,15 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
-import { ResponsiblePartyDialog } from './responsible-party-dialog';
 import { SectionHeader } from '@/components/ui/section-header';
 import { DATA_SECTION_CLASS, DATA_SECTION_HEADER_CLASS, RESPONSIBLES_ANCHOR } from './data-section';
+
+// DX-202-ter: el diálogo llega en su propio trozo de JS al abrirlo (solo se
+// monta abierto); así no pesa en la primera carga de la ficha del paciente.
+const ResponsiblePartyDialog = dynamic(
+  () => import('./responsible-party-dialog').then((m) => m.ResponsiblePartyDialog),
+  { ssr: false },
+);
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the app.
 export const responsiblesCopy = {

@@ -19,7 +19,6 @@ import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 import { PatientRecordHeader } from '@/components/patients/patient-record-header';
 import { imagingExportMenuAction } from '@/components/patients/imaging-export-action';
 import {
-  PatientRetentionDialogs,
   PatientRetentionSection,
   retentionActionLabels,
   retentionChip,
@@ -47,7 +46,6 @@ import { PatientTabPanel as TabPanel } from '@/components/patients/patient-tab-p
 import { canRegisterImplants } from '@/lib/implants/implants-api';
 import { PatientAnamnesisSection } from '@/components/anamnesis/patient-anamnesis-section';
 import { canSeeAnamnesisInbox } from '@/lib/anamnesis/anamnesis-api';
-import { MedicalHistoryPanel } from '@/components/patients/medical-history-panel';
 // DX-117 (FE-021): todo lo que no es la pestaña «Datos» llega en su propio
 // trozo de JS al abrir su pestaña (ver `patient-lazy-tabs`).
 import {
@@ -60,6 +58,7 @@ import {
   DataConsentsTab,
   FamilyAccountStatementSection,
   ImagingExportDialog,
+  MedicalHistoryPanel,
   OdontogramTab,
   PatientCollectionsSection,
   PatientConsentsTab,
@@ -68,6 +67,7 @@ import {
   PatientImplantsTab,
   PatientPostOpDeliveries,
   PatientPrescriptionsTab,
+  PatientRetentionDialogs,
   PatientCertificatesTab,
   PerioTab,
   TreatmentPlansTab,
@@ -232,9 +232,31 @@ function PatientDetailView() {
     [pathname, router, searchParams],
   );
 
-  /** La sección «Anamnesis» de «Historia clínica»: destino de «Registrar en Historia clínica». */
-  function focusAnamnesisHeading() {
-    document.getElementById(ANAMNESIS_HEADING_ID)?.focus();
+  /**
+   * La sección «Anamnesis» de «Historia clínica»: destino de «Registrar en
+   * Historia clínica». DX-202-ter: `MedicalHistoryPanel` llega en su propio
+   * trozo de JS, así que al abrir la pestaña su título puede no existir aún:
+   * el foco espera en el panel (no se pierde en el `body`) y pasa al título en
+   * cuanto se monta. Devuelve la limpieza del observador.
+   */
+  function focusAnamnesisHeading(): (() => void) | undefined {
+    const heading = document.getElementById(ANAMNESIS_HEADING_ID);
+    if (heading) {
+      heading.focus();
+      return undefined;
+    }
+    const panel = panels.current.get('clinical-history');
+    if (!panel) return undefined;
+    panel.focus();
+    const observer = new MutationObserver(() => {
+      const mounted = document.getElementById(ANAMNESIS_HEADING_ID);
+      if (!mounted) return;
+      observer.disconnect();
+      // Solo si el usuario no se ha movido entretanto (sigue en el panel).
+      if (document.activeElement === panel || document.activeElement === document.body) mounted.focus();
+    });
+    observer.observe(panel, { childList: true, subtree: true });
+    return () => observer.disconnect();
   }
 
   function registerPanel(tab: PatientDetailTabKey, el: HTMLDivElement | null) {
@@ -257,8 +279,7 @@ function PatientDetailView() {
     }
     if (activeTab === 'clinical-history' && focusAnamnesisForm.current) {
       focusAnamnesisForm.current = false;
-      focusAnamnesisHeading();
-      return;
+      return focusAnamnesisHeading();
     }
     panels.current.get(activeTab)?.focus();
   }, [activeTab]);

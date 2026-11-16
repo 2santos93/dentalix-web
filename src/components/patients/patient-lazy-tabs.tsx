@@ -24,9 +24,14 @@ import { SectionSkeleton } from '@/components/shared/async-section';
  * un objeto literal para generar su carga.
  */
 
-// «Historia clínica». `MedicalHistoryPanel` NO entra aquí: «Registrar en
-// Historia clínica» enfoca su título (`ANAMNESIS_HEADING_ID`) en el mismo
-// efecto que abre la pestaña, y ese título tiene que existir ya.
+// «Historia clínica». DX-202-ter: `MedicalHistoryPanel` también entra aquí.
+// «Registrar en Historia clínica» enfoca su título (`ANAMNESIS_HEADING_ID`):
+// la página deja el foco en el panel de la pestaña mientras llega el trozo y
+// lo pasa al título en cuanto aparece (`focusWhenMounted` en la página).
+export const MedicalHistoryPanel = dynamic(
+  () => import('@/components/patients/medical-history-panel').then((m) => m.MedicalHistoryPanel),
+  { ssr: false, loading: () => <SectionSkeleton /> },
+);
 export const ClinicalEntriesList = dynamic(
   () => import('@/components/patients/clinical-entries-list').then((m) => m.ClinicalEntriesList),
   { ssr: false, loading: () => <SectionSkeleton /> },
@@ -118,5 +123,10 @@ export const ImagingExportDialog = dynamic(
 );
 export const AnamnesisSendDialog = dynamic(
   () => import('@/components/anamnesis/anamnesis-send-dialog').then((m) => m.AnamnesisSendDialog),
+  { ssr: false },
+);
+// DX-202-ter: retención, supresión y archivo (solo ADMIN, desde el menú «⋯»).
+export const PatientRetentionDialogs = dynamic(
+  () => import('@/components/patients/patient-retention-dialogs').then((m) => m.PatientRetentionDialogs),
   { ssr: false },
 );

@@ -1,4 +1,5 @@
 'use client';
+import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
 import { UserCheck } from 'lucide-react';
 import { ApiError } from '@/lib/api/api-error';
@@ -8,7 +9,13 @@ import { getMajorityReview, type MajorityReviewView } from '@/lib/patients/major
 import { SectionError } from '@/components/errors/section-error';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
-import { MajorityReviewDialog } from './majority-review-dialog';
+
+// DX-202-ter: el diálogo de revisión llega en su propio trozo de JS, después de
+// pintar la ficha (cerrado no pinta nada): no pesa en su primera carga.
+const MajorityReviewDialog = dynamic(
+  () => import('./majority-review-dialog').then((m) => m.MajorityReviewDialog),
+  { ssr: false },
+);
 
 export const majorityBannerCopy = {
   title: (age: number, date: string | null) =>
