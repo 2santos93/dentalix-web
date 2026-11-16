@@ -7219,6 +7219,289 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/external-orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Órdenes externas del paciente (más reciente primero, con anuladas)
+         * @description De las sedes permitidas al usuario. La nota clínica solo sale para los roles clínicos; recepción recibe `clinicalNote: null` y `hasClinicalNote`.
+         */
+        get: operations["PatientExternalOrdersController_list"];
+        put?: never;
+        /**
+         * Emitir una orden de estudios o una referencia a especialista
+         * @description DENTIST o ADMIN con registro profesional. Desde la ficha (sede activa) o desde una cita del paciente (su sede). Guarda la foto de clínica, sede, profesional y paciente, el número de la sede y el logo de hoy, y archiva el PDF SIN la nota en los documentos del paciente (REFERRAL). Auditado: CREATE · EXTERNAL_ORDER · EXTERNAL_ORDER_ISSUED (sin estudios, destinatario ni nota).
+         */
+        post: operations["PatientExternalOrdersController_issue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/external-orders/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * «Órdenes sin resultado» de una sede
+         * @description Las órdenes ISSUED de la sede (la pedida o la activa), la más antigua primero, paginadas, con `ageDays` (días civiles de la sede desde la emisión) y `overdue` (ageDays > N días de la clínica). `overdueOnly=true` deja solo las vencidas. Recepción las ve sin la nota.
+         */
+        get: operations["ExternalOrdersController_pending"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/external-orders/recipients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sugerencias de destinatario
+         * @description Los habituales de las plantillas activas y los distintos de las órdenes de la clínica de los últimos 12 meses (los más usados primero), que contienen `q`. Como mucho 10.
+         */
+        get: operations["ExternalOrdersController_recipients"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/external-orders/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ajustes de las órdenes externas de la clínica */
+        get: operations["ExternalOrdersController_getSettings"];
+        /**
+         * Cambia el plazo para «vencida»; queda en la auditoría
+         * @description Días (1–365) sin resultado tras los que una orden sale vencida. Si nada cambia, 200 sin evento (UPDATE · CLINIC_SETTINGS · EXTERNAL_ORDER_SETTINGS).
+         */
+        put: operations["ExternalOrdersController_updateSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/external-orders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Una orden externa */
+        get: operations["ExternalOrdersController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/external-orders/{id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * PDF de la orden (generado ahora desde su foto)
+         * @description Sin `withNote`, sin la nota clínica (lo que reimprime recepción). `withNote=true`, con ella: solo los roles clínicos. Una anulada sale con «ANULADA». Auditado: PRINT · EXTERNAL_ORDER.
+         */
+        get: operations["ExternalOrdersController_pdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/external-orders/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Anular una orden con motivo
+         * @description ADMIN o quien la emitió, solo si está ISSUED. No se borra: queda anulada, el PDF archivado se anula en la ficha, se archiva el PDF con «ANULADA» y la copia enviada deja de servir. Auditado: VOID · EXTERNAL_ORDER · EXTERNAL_ORDER_VOIDED (sin el motivo).
+         */
+        post: operations["ExternalOrdersController_void"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/external-orders/{id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ligar el resultado (un documento del paciente)
+         * @description Los 4 roles. La orden pasa de ISSUED a RESULT_RECEIVED y sale de «Órdenes sin resultado». El documento es del MISMO paciente y no está anulado; puede ser el resultado de varias órdenes. Auditado: UPDATE · EXTERNAL_ORDER · EXTERNAL_ORDER_RESULT_LINKED.
+         */
+        post: operations["ExternalOrdersController_linkResult"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/external-orders/{id}/result/unlink": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Desligar el resultado
+         * @description Un rol clínico o quien lo ligó. RESULT_RECEIVED → ISSUED (vuelve a «Órdenes sin resultado»); el documento sigue en la ficha. Auditado: UPDATE · EXTERNAL_ORDER · EXTERNAL_ORDER_RESULT_UNLINKED.
+         */
+        post: operations["ExternalOrdersController_unlinkResult"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/external-orders/{id}/patient-copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enviar al paciente una copia de la orden (email o WhatsApp)
+         * @description Los 4 roles; orden ISSUED o RESULT_RECEIVED. Crea un enlace de UN SOLO USO (7 días por defecto; se guarda solo el hash) que se gasta al descargar el PDF; el anterior deja de servir. EMAIL: el outbox envía el enlace (sin adjunto). WHATSAPP: devuelve el número, el enlace y el texto para wa.me. La copia lleva la nota clínica (es del paciente). Un menor la recibe por su responsable que recibe avisos. Auditado: SEND · EXTERNAL_ORDER · EXTERNAL_ORDER_COPY_SENT.
+         */
+        post: operations["ExternalOrdersController_sendPatientCopy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/external-order-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Plantillas de órdenes externas de la clínica */
+        get: operations["ExternalOrderTemplatesController_list"];
+        put?: never;
+        /**
+         * Crear una plantilla de orden externa
+         * @description Auditado: CREATE · EXTERNAL_ORDER_TEMPLATE · EXTERNAL_ORDER_TEMPLATE_CREATED (el destinatario y los estudios solo por nombre de campo).
+         */
+        post: operations["ExternalOrderTemplatesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/external-order-templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Editar, activar o desactivar una plantilla de orden externa
+         * @description Las órdenes ya emitidas no cambian. `version` es obligatoria (409 EXTERNAL_ORDER_TEMPLATE_STALE si cambió). Auditado: UPDATE · EXTERNAL_ORDER_TEMPLATE · EXTERNAL_ORDER_TEMPLATE_UPDATED.
+         */
+        patch: operations["ExternalOrderTemplatesController_update"];
+        trace?: never;
+    };
+    "/api/v1/public/external-order-copies/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * El paciente abre el enlace de la copia de su orden
+         * @description NO gasta el enlace. AVAILABLE (se puede descargar una vez) o USED, con los datos mínimos: clínica, número, tipo y fecha. Cada apertura queda en la auditoría como VIEW de EXTERNAL_ORDER, origen PUBLIC_LINK, reason EXTERNAL_ORDER_COPY_OPENED.
+         */
+        get: operations["PublicExternalOrderCopiesController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/external-order-copies/{token}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * El paciente descarga el PDF de su orden y gasta el enlace
+         * @description Una sola vez: el PDF con la nota clínica (es del paciente). Queda en la auditoría como EXPORT de EXTERNAL_ORDER, origen PUBLIC_LINK, reason EXTERNAL_ORDER_COPY_DOWNLOADED.
+         */
+        post: operations["PublicExternalOrderCopiesController_download"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/clinical-record-copies": {
         parameters: {
             query?: never;
@@ -8404,7 +8687,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -10098,6 +10381,8 @@ export interface components {
             certificateCopies: number;
             /** @description Enlaces de pago sin reporte (DX-569) */
             paymentLinks: number;
+            /** @description Enlaces de un solo uso de la copia de una orden externa sin usar ni caducar (DX-572) */
+            externalOrderCopies: number;
             /** @description Suma de todos los tipos */
             total: number;
         };
@@ -23875,6 +24160,275 @@ export interface components {
             /** @description Zona, locale y reloj de la sede (para pintar las fechas). */
             format: components["schemas"]["PublicCertificateFormatDto"];
             certificate: components["schemas"]["PublicCertificateDto"] | null;
+        };
+        /** @enum {string} */
+        ExternalOrderKind: "IMAGING" | "LAB" | "SPECIALIST" | "OTHER";
+        /** @enum {string} */
+        ExternalOrderStatus: "ISSUED" | "RESULT_RECEIVED" | "VOIDED";
+        ExternalOrderPatientSnapshotDto: {
+            name: string;
+            document: string | null;
+            ageYears: number | null;
+        };
+        ExternalOrderProfessionalSnapshotDto: {
+            name: string;
+            license: string | null;
+            specialty: string | null;
+        };
+        ExternalOrderLocationSnapshotDto: {
+            name: string;
+            address: string | null;
+            healthRegistrationNumber: string | null;
+            /** @example America/Caracas */
+            timeZone: string;
+            /** @example es-VE */
+            locale: string;
+            /** @enum {string} */
+            hourCycle: "h12" | "h23";
+        };
+        ExternalOrderClinicSnapshotDto: {
+            name: string;
+            legalName: string | null;
+            taxIdLabel: string | null;
+            taxId: string | null;
+        };
+        ExternalOrderSnapshotDto: {
+            patient: components["schemas"]["ExternalOrderPatientSnapshotDto"];
+            professional: components["schemas"]["ExternalOrderProfessionalSnapshotDto"];
+            location: components["schemas"]["ExternalOrderLocationSnapshotDto"];
+            clinic: components["schemas"]["ExternalOrderClinicSnapshotDto"];
+        };
+        ExternalOrderDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: uuid */
+            appointmentId: string | null;
+            kind: components["schemas"]["ExternalOrderKind"];
+            status: components["schemas"]["ExternalOrderStatus"];
+            /** @description Correlativo de la sede. */
+            number: number;
+            /** @example 000123 */
+            numberLabel: string;
+            /** Format: date-time */
+            issuedAt: string;
+            /** Format: uuid */
+            issuedById: string;
+            issuedByName: string | null;
+            recipient: string;
+            items: string[];
+            toothNumbers: string[];
+            /** @description Solo para los roles clínicos (recepción recibe null y `hasClinicalNote`). */
+            clinicalNote: string | null;
+            /** @description La orden lleva nota clínica (aunque este usuario no la vea). */
+            hasClinicalNote: boolean;
+            /** Format: uuid */
+            templateId: string | null;
+            snapshot: components["schemas"]["ExternalOrderSnapshotDto"];
+            /**
+             * Format: uuid
+             * @description PDF archivado (sin la nota) en los documentos del paciente.
+             */
+            documentId: string | null;
+            /** Format: uuid */
+            resultDocumentId: string | null;
+            /** Format: date-time */
+            resultLinkedAt: string | null;
+            /** Format: uuid */
+            resultLinkedById: string | null;
+            resultLinkedByName: string | null;
+            /** Format: date-time */
+            voidedAt: string | null;
+            voidedByName: string | null;
+            voidReason: string | null;
+            /** Format: uuid */
+            voidedDocumentId: string | null;
+        };
+        IssueExternalOrderDto: {
+            /** @description IMAGING = imagen; LAB = laboratorio clínico; SPECIALIST = referencia a especialista; OTHER = otro. */
+            kind: components["schemas"]["ExternalOrderKind"];
+            /**
+             * @description Centro o especialista al que va la orden (1–120).
+             * @example Centro de Imagen Los Palos Grandes
+             */
+            recipient: string;
+            /**
+             * @description Estudios solicitados o motivo de la referencia (1–20 líneas de hasta 200).
+             * @example [
+             *       "Radiografía panorámica"
+             *     ]
+             */
+            items: string[];
+            /**
+             * @description Dientes FDI (11–48, 51–85), sin repetir.
+             * @example [
+             *       "36",
+             *       "37"
+             *     ]
+             */
+            toothNumbers?: string[];
+            /** @description Nota clínica para el centro o el especialista. Dato de salud: nunca va a la auditoría ni la ve recepción. */
+            clinicalNote?: string | null;
+            /**
+             * Format: uuid
+             * @description Cita del paciente desde la que se emite (opcional). Sin ella, la orden es de la sede activa.
+             */
+            appointmentId?: string | null;
+            /**
+             * Format: uuid
+             * @description Plantilla de la que sale (solo informativo; activa).
+             */
+            templateId?: string | null;
+        };
+        PendingExternalOrderPatientDto: {
+            /** Format: uuid */
+            id: string;
+            firstName: string;
+            lastName: string;
+        };
+        PendingExternalOrderDto: {
+            order: components["schemas"]["ExternalOrderDto"];
+            patient: components["schemas"]["PendingExternalOrderPatientDto"];
+            /** @description Días civiles de la sede desde la emisión (0 = hoy). */
+            ageDays: number;
+            /** @description ageDays > overdueDays de la clínica. */
+            overdue: boolean;
+        };
+        PendingExternalOrdersPageDto: {
+            /** @description El plazo de la clínica (N días). */
+            overdueDays: number;
+            total: number;
+            page: number;
+            pageSize: number;
+            items: components["schemas"]["PendingExternalOrderDto"][];
+        };
+        RecipientSuggestionDto: {
+            name: string;
+            /**
+             * @description TEMPLATE = destinatario habitual de una plantilla; RECENT = de una orden de los últimos 12 meses.
+             * @enum {string}
+             */
+            source: "TEMPLATE" | "RECENT";
+        };
+        ExternalOrderSettingsDto: {
+            /**
+             * @description Días sin resultado tras los que una orden sale vencida en «Órdenes sin resultado».
+             * @example 15
+             */
+            overdueDays: number;
+        };
+        VoidExternalOrderDto: {
+            /** @example Se pidió el estudio equivocado */
+            reason: string;
+        };
+        LinkExternalOrderResultDto: {
+            /**
+             * Format: uuid
+             * @description Documento del MISMO paciente, sin anular (p. ej. la radiografía subida en Documentos).
+             */
+            documentId: string;
+        };
+        /**
+         * @description EMAIL = el outbox envía el enlace; WHATSAPP = la respuesta trae el número, el enlace y el texto para wa.me.
+         * @enum {string}
+         */
+        ExternalOrderCopyChannel: "EMAIL" | "WHATSAPP";
+        SendExternalOrderCopyDto: {
+            /** @description EMAIL = el outbox envía el enlace; WHATSAPP = la respuesta trae el número, el enlace y el texto para wa.me. */
+            channel: components["schemas"]["ExternalOrderCopyChannel"];
+        };
+        ExternalOrderWhatsAppDto: {
+            /**
+             * @description Dígitos E.164 sin «+» para wa.me.
+             * @example 584121234567
+             */
+            phone: string;
+            /** @description Mensaje prellenado: clínica y enlace, nada clínico. */
+            text: string;
+            /** @description Enlace de un solo uso (solo aquí: la API guarda su hash). */
+            url: string;
+        };
+        ExternalOrderCopySentDto: {
+            channel: components["schemas"]["ExternalOrderCopyChannel"];
+            /** Format: date-time */
+            sentAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @example ••• 4567 */
+            destinationMasked: string;
+            /**
+             * @description RESPONSIBLE = va al responsable de un menor.
+             * @enum {string}
+             */
+            recipientKind: "PATIENT" | "RESPONSIBLE";
+            /** @description Solo por WhatsApp. */
+            whatsapp: components["schemas"]["ExternalOrderWhatsAppDto"] | null;
+        };
+        ExternalOrderTemplateDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            kind: components["schemas"]["ExternalOrderKind"];
+            recipient: string | null;
+            items: string[];
+            active: boolean;
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateExternalOrderTemplateDto: {
+            name: string;
+            kind: components["schemas"]["ExternalOrderKind"];
+            /** @description Destinatario habitual (centro o especialista). */
+            recipient?: string | null;
+            items: string[];
+            /** @default true */
+            active: boolean;
+        };
+        UpdateExternalOrderTemplateDto: {
+            name?: string;
+            kind?: components["schemas"]["ExternalOrderKind"];
+            /** @description null o vacío = sin destinatario habitual. */
+            recipient?: string | null;
+            items?: string[];
+            active?: boolean;
+            /** @description Versión leída; si cambió, 409 EXTERNAL_ORDER_TEMPLATE_STALE. */
+            version: number;
+        };
+        PublicExternalOrderClinicDto: {
+            name: string;
+            primaryColor: string | null;
+            logoUrl: string | null;
+        };
+        PublicExternalOrderFormatDto: {
+            /** @example America/Caracas */
+            timeZone: string;
+            /** @example es-VE */
+            locale: string;
+            /** @enum {string} */
+            hourCycle: "h12" | "h23";
+        };
+        PublicExternalOrderCopyDto: {
+            /**
+             * @description AVAILABLE = se puede descargar (una vez); USED = el enlace ya se usó.
+             * @enum {string}
+             */
+            status: "AVAILABLE" | "USED";
+            clinic: components["schemas"]["PublicExternalOrderClinicDto"] | null;
+            /** @example 000123 */
+            numberLabel: string;
+            kind: components["schemas"]["ExternalOrderKind"];
+            /** Format: date-time */
+            issuedAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @description Zona, locale y reloj de la sede (para pintar las fechas). */
+            format: components["schemas"]["PublicExternalOrderFormatDto"];
         };
         /** @enum {string} */
         ClinicalRecordCopySection: "EVOLUTIONS" | "DIAGNOSES" | "ANAMNESIS" | "ODONTOGRAM" | "ANESTHESIA_SEDATION" | "CONSENTS" | "PRESCRIPTIONS" | "APPOINTMENTS";
@@ -44977,6 +45531,678 @@ export interface operations {
                 content?: never;
             };
             /** @description El enlace caducó (`CERTIFICATE_COPY_LINK_EXPIRED`): hay que pedir otro a la clínica. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiadas peticiones
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientExternalOrdersController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalOrderDto"][];
+                };
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientExternalOrdersController_issue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueExternalOrderDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalOrderDto"];
+                };
+            };
+            /** @description Contenido inválido o sin registro profesional (mensaje en español que dice qué falta) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Recepción o auxiliar (solo emiten DENTIST y ADMIN), o la sede no está permitida (LOCATION_NOT_ALLOWED) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente, cita (de otro paciente o clínica) o plantilla no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plantilla desactivada, o la sede no tiene zona o formato regional */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExternalOrdersController_pending: {
+        parameters: {
+            query?: {
+                /** @description Sede; sin ella, la sede activa (X-Location-Id). */
+                locationId?: string;
+                /** @description Solo las vencidas (más de N días sin resultado). */
+                overdueOnly?: boolean;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingExternalOrdersPageDto"];
+                };
+            };
+            /** @description Sin sede pedida ni activa */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sede no está permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExternalOrdersController_recipients: {
+        parameters: {
+            query?: {
+                /** @description Texto que contiene el destinatario (sin mayúsculas). */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipientSuggestionDto"][];
+                };
+            };
+        };
+    };
+    ExternalOrdersController_getSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalOrderSettingsDto"];
+                };
+            };
+        };
+    };
+    ExternalOrdersController_updateSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExternalOrderSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalOrderSettingsDto"];
+                };
+            };
+            /** @description Días fuera de 1–365 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar los ajustes de las órdenes externas. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExternalOrdersController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalOrderDto"];
+                };
+            };
+            /** @description Orden no encontrada en esta clínica (o de una sede no permitida) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExternalOrdersController_pdf: {
+        parameters: {
+            query?: {
+                /** @description true = con la nota clínica (solo los roles clínicos; 403 a recepción). Sin él, sin la nota. */
+                withNote?: boolean;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El PDF (inline). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Recepción pidiendo `withNote=true` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Orden no encontrada en esta clínica (o de una sede no permitida) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExternalOrdersController_void: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidExternalOrderDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalOrderDto"];
+                };
+            };
+            /** @description Motivo de menos de 5 o más de 500 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No la emitió ni es ADMIN, o la sede no está permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Orden no encontrada en esta clínica (o de una sede no permitida) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya está anulada, o tiene su resultado ligado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExternalOrdersController_linkResult: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkExternalOrderResultDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalOrderDto"];
+                };
+            };
+            /** @description La orden, o el documento (de otro paciente o clínica) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La orden está anulada o ya tiene resultado, o el documento está anulado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExternalOrdersController_unlinkResult: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalOrderDto"];
+                };
+            };
+            /** @description Recepción que no ligó ese resultado */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Orden no encontrada en esta clínica (o de una sede no permitida) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La orden no tiene resultado ligado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExternalOrdersController_sendPatientCopy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendExternalOrderCopyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalOrderCopySentDto"];
+                };
+            };
+            /** @description La sede no está permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Orden no encontrada en esta clínica (o de una sede no permitida) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La orden está anulada, el paciente está archivado, la sede no tiene zona o formato, o no se pudo armar el enlace de la clínica */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sin a quién enviarlo: sin email o teléfono para WhatsApp, baja de los envíos, o un menor sin responsable con ese contacto */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tope de emails de la clínica o del destinatario */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExternalOrderTemplatesController_list: {
+        parameters: {
+            query?: {
+                /** @description true = también las desactivadas (Ajustes). */
+                includeInactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalOrderTemplateDto"][];
+                };
+            };
+            /** @description Recepción no emite órdenes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExternalOrderTemplatesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateExternalOrderTemplateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalOrderTemplateDto"];
+                };
+            };
+            /** @description Nombre (1–80), tipo, destinatario (≤120) o estudios (1–20 de ≤200) inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code` EXTERNAL_ORDER_TEMPLATE_DUPLICATE_NAME: ya existe una plantilla con ese nombre (sin distinguir mayúsculas) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExternalOrderTemplatesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateExternalOrderTemplateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExternalOrderTemplateDto"];
+                };
+            };
+            /** @description Plantilla resultante inválida */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plantilla no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code` EXTERNAL_ORDER_TEMPLATE_STALE: la plantilla cambió; o `code` EXTERNAL_ORDER_TEMPLATE_DUPLICATE_NAME: ya existe una plantilla con ese nombre (sin distinguir mayúsculas) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicExternalOrderCopiesController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicExternalOrderCopyDto"];
+                };
+            };
+            /** @description Token mal formado, inexistente, de otra clínica, caducado, invalidado (reenvío, orden anulada o paciente archivado): el mismo 404 genérico. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiadas peticiones
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicExternalOrderCopiesController_download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El PDF (attachment). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Token mal formado, inexistente, de otra clínica, caducado, invalidado (reenvío, orden anulada o paciente archivado): el mismo 404 genérico. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace ya se usó (`EXTERNAL_ORDER_COPY_LINK_USED`): hay que pedir otro a la clínica. */
             410: {
                 headers: {
                     [name: string]: unknown;
