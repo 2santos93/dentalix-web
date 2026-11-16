@@ -172,7 +172,9 @@ test('DENTIST: solo su producción, sin filtro de profesional', async ({ page })
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 1440, height: 900 });
   await openProduction(page, DENTIST_EMAIL);
-  await expect(page.getByRole('tab')).toHaveCount(0);
+  // DX-558: el odontólogo ve dos pestañas, las dos con lo suyo.
+  await expect(page.getByRole('tab')).toHaveText(['Producción por procedimiento', 'Presupuestos']);
+  await expect(page.getByRole('tab', { name: 'Producción por procedimiento', selected: true })).toBeVisible();
   await expect(page.getByText('Solo tu producción', { exact: false })).toBeVisible();
   await expect(page.getByLabel('Profesional')).toHaveCount(0);
 });

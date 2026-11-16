@@ -262,16 +262,16 @@ test('ADMIN a 390 px: tarjetas por sede sin scroll horizontal', async ({ page })
   await expectNoHorizontalScrollIn(page);
 });
 
-test('DENTIST: «Reportes» solo con su producción, sin «Comparar sedes» (DX-423)', async ({ page }) => {
+test('DENTIST: «Reportes» solo con lo suyo, sin «Comparar sedes» (DX-423, DX-558)', async ({ page }) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 1440, height: 900 });
   await loginAs(page, origin, DENTIST_EMAIL, DEMO_PASSWORD);
   await expect(page.getByRole('link', { name: 'Pacientes' }).filter({ visible: true }).first()).toBeVisible();
   // Aunque pida la pestaña por URL, la de la administración no está.
   await page.goto(`${origin}/reportes?tab=comparar-sedes`);
-  // Un solo informe: sin barra de pestañas (una pestaña sola promete secciones que no hay).
+  // DX-558: sus dos informes (Producción y Presupuestos, los dos con lo suyo); cae en el primero.
   await expect(page.getByText('Solo tu producción', { exact: false })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole('tab')).toHaveCount(0);
+  await expect(page.getByRole('tab')).toHaveText(['Producción por procedimiento', 'Presupuestos']);
   await expect(page.getByRole('table', { name: 'Indicadores por sede y total de la clínica' })).toHaveCount(0);
 });
 
