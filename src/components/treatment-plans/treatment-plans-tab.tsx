@@ -92,6 +92,12 @@ interface TreatmentPlansTabProps {
    * registra implantes) no se pinta.
    */
   implantHref?: (item: TreatmentPlanItem) => string;
+  /**
+   * DX-558: el plan de `?planId=` (p. ej. desde el embudo de presupuestos):
+   * llega elegido en el selector al cargar. Si no es de este paciente o ya no
+   * está, el primero, como sin él.
+   */
+  initialPlanId?: string | null;
 }
 
 /**
@@ -139,6 +145,7 @@ export function TreatmentPlansTab({
   focusedTooth: focusedToothOnPlan = null,
   odontogramHref,
   implantHref,
+  initialPlanId = null,
 }: TreatmentPlansTabProps) {
   // DX-097: la fecha por defecto del abono es hoy en la zona de la sede. Sin
   // su zona, la fecha empieza vacía (nunca se cuenta en otra zona).
@@ -414,7 +421,9 @@ export function TreatmentPlansTab({
   const [prevPlansLen, setPrevPlansLen] = useState(0);
   if (plans.length !== prevPlansLen) {
     setPrevPlansLen(plans.length);
-    if (!selectedPlanId && plans.length > 0) setSelectedPlanId(plans[0].id);
+    if (!selectedPlanId && plans.length > 0) {
+      setSelectedPlanId(plans.find((p) => p.id === initialPlanId)?.id ?? plans[0].id);
+    }
   }
 
   // Reset the previously-selected plan's detail (a genuinely different

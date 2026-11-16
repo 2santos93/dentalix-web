@@ -70,3 +70,14 @@ export function resolvePatientTab(
 ): PatientDetailTabKey {
   return isPatientDetailTabKey(requested) && access[requested] ? requested : 'data';
 }
+
+/**
+ * Enlace a la pestaña «Plan de tratamiento» de la ficha; con `planId`, ese
+ * plan llega elegido en el selector (DX-558; si ya no está en la lista, el
+ * primero, como siempre).
+ */
+export function treatmentPlanHref(patientId: string, planId?: string | null): string {
+  const params = new URLSearchParams({ tab: 'treatment-plans' });
+  if (planId) params.set('planId', planId);
+  return `/patients/${encodeURIComponent(patientId)}?${params.toString()}`;
+}
