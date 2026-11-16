@@ -37,6 +37,7 @@ import { cn } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { SectionHeader } from '@/components/ui/section-header';
 import { Badge } from '@/components/ui/badge';
+import { OrthoOverdueChip } from '@/components/ortho/ortho-overdue-chip';
 import { triageLabels } from '@/lib/appointments/walk-in';
 import { canMoveAppointments } from '@/lib/appointments/appointments-api';
 import { chairDisplayName } from '@/lib/chairs/chair-columns';
@@ -410,6 +411,8 @@ function InClinicGroup({
                       </p>
                     ) : null}
                     <TriageSummary item={item} patientName={name} />
+                    {/* DX-285: la misma marca de ortodoncia que la tarjeta de la agenda. */}
+                    <OrthoOverdueChip flag={item.orthoBalance} className="mt-1 max-w-full" />
                   </div>
                   {item.walkIn ? (
                     <Badge variant="neutral" className="tabular-nums">

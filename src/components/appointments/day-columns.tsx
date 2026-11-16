@@ -1,5 +1,7 @@
 'use client';
 import { OverdueChip } from '@/components/collections/overdue-chip';
+import { OrthoOverdueChip } from '@/components/ortho/ortho-overdue-chip';
+import { orthoOverdueChipText } from '@/lib/ortho/ortho-overdue';
 import { AttendanceBadge } from '@/components/appointments/attendance-badge';
 import { attendanceBadgeText } from '@/lib/cancellations/cancellation';
 import { overdueChipText } from '@/lib/collections/presentation';
@@ -745,6 +747,7 @@ export function DayColumns({
                             a.appointmentType?.name,
                             STATUS_LABELS[a.status],
                             overdueChipText(a.balance, fmt),
+                            orthoOverdueChipText(a.orthoBalance),
                             attendanceBadgeText(a.attendance),
                             copy.detailFor(byChair ? providerName(a.providerId) : p.label),
                             coverageChipText(a.coverage),
@@ -815,6 +818,7 @@ export function DayColumns({
                             </span>
                           )}{' '}
                           <OverdueChip balance={a.balance} compact fmt={fmt} />{' '}
+                          <OrthoOverdueChip flag={a.orthoBalance} compact />{' '}
                           {/* DX-279: inasistencias y cancelaciones tardías (12 meses). */}
                           <AttendanceBadge counts={a.attendance} compact />
                         </button>
