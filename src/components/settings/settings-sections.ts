@@ -11,6 +11,7 @@ import {
   CalendarDays,
   ClipboardClock,
   ClipboardList,
+  ClipboardPlus,
   Repeat,
   Stethoscope,
   Syringe,
@@ -41,6 +42,7 @@ import {
 import type { ClinicRole } from '@/lib/me/me-api';
 import { canManagePatientLanguages } from '@/lib/patients/patient-languages';
 import { canManageCertificateSettings } from '@/lib/certificates/certificates-api';
+import { canManageExternalOrderSettings } from '@/lib/external-orders/external-orders-api';
 import { canManageConsentTemplates } from '@/lib/consents/consents-api';
 import { canManagePrescriptionSettings } from '@/lib/prescriptions/prescriptions-api';
 import { canManageAnestheticCatalog } from '@/lib/anesthesia/anesthesia-api';
@@ -364,6 +366,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Días de reposo y diagnóstico en los certificados del paciente.',
         icon: FileBadge,
         visible: canManageCertificateSettings,
+      },
+      // DX-572.
+      {
+        href: '/settings/ordenes-externas',
+        label: 'Órdenes externas',
+        description: 'Plantillas de órdenes de estudios y referencias, y el plazo para darlas por vencidas.',
+        icon: ClipboardPlus,
+        visible: canManageExternalOrderSettings,
       },
       // DX-222.
       {
