@@ -21,6 +21,7 @@ function links(overrides: Partial<LivePublicLinks> = {}): LivePublicLinks {
     anamnesis: 0,
     prescriptionCopies: 0,
     certificateCopies: 0,
+    externalOrderCopies: 0,
     paymentLinks: 0,
     ...overrides,
   };
@@ -34,6 +35,7 @@ function links(overrides: Partial<LivePublicLinks> = {}): LivePublicLinks {
       base.anamnesis +
       base.prescriptionCopies +
       base.certificateCopies +
+      base.externalOrderCopies +
       base.paymentLinks,
   };
 }
@@ -77,6 +79,13 @@ test('singular: «Se anulará 1 enlace enviado»', async () => {
   render(<ArchiveLinksNotice token="tok" patientId="p1" />);
   expect(await screen.findByText('Se anulará 1 enlace enviado')).toBeInTheDocument();
   expect(screen.getByText('1 consentimiento por firmar')).toBeInTheDocument();
+});
+
+test('DX-572: una copia de una orden, en singular', async () => {
+  mockedCount.mockResolvedValue(links({ externalOrderCopies: 1 }));
+  render(<ArchiveLinksNotice token="tok" patientId="p1" />);
+  expect(await screen.findByText('Se anulará 1 enlace enviado')).toBeInTheDocument();
+  expect(screen.getByText('1 copia de una orden')).toBeInTheDocument();
 });
 
 test('DX-306: una copia de un certificado, en singular', async () => {

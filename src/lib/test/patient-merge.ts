@@ -95,6 +95,7 @@ export function mergePreview(over: Partial<MergePreview> = {}): MergePreview {
       anamnesis: 0,
       prescriptionCopies: 0,
       certificateCopies: 0,
+      externalOrderCopies: 0,
       paymentLinks: 0,
       total: 0,
     },

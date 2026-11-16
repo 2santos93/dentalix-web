@@ -28,6 +28,7 @@ export const archiveLinksCopy = {
     anamnesis: (n: number) => plural(n, 'cuestionario de salud', 'cuestionarios de salud'),
     prescriptionCopies: (n: number) => plural(n, 'copia de una receta', 'copias de recetas'),
     certificateCopies: (n: number) => plural(n, 'copia de un certificado', 'copias de certificados'),
+    externalOrderCopies: (n: number) => plural(n, 'copia de una orden', 'copias de órdenes'),
     paymentLinks: (n: number) => plural(n, 'enlace de pago', 'enlaces de pago'),
   } satisfies Record<Kind, (n: number) => string>,
 };
@@ -47,7 +48,7 @@ interface ArchiveLinksNoticeProps {
 /**
  * DX-461: dentro del diálogo de archivar, cuántos enlaces enviados al
  * paciente (oferta de hueco, firma y presupuesto a distancia, copia del PDF,
- * cuestionario de salud, copia de una receta —DX-468— o de un certificado —DX-306—,
+ * cuestionario de salud, copia de una receta —DX-468—, de un certificado —DX-306— o de una orden —DX-572—,
  * enlace de pago —DX-569—) dejarán de servir. Se cuenta al abrir; si falla, el
  * aviso se sustituye en su sitio por un error con reintento (escalón 2): el
  * diálogo sigue sirviendo y la API anula igual al archivar.
