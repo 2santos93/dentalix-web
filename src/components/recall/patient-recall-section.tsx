@@ -1,4 +1,5 @@
 'use client';
+import dynamic from 'next/dynamic';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -28,8 +29,17 @@ import { Button } from '@/components/ui/button';
 import { SectionHeader } from '@/components/ui/section-header';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { RecallContactDialog } from './recall-contact-dialog';
-import { RecallIntervalDialog } from './recall-interval-dialog';
+
+// DX-202-ter: los diálogos llegan en su propio trozo de JS al abrirlos (solo
+// se montan abiertos); así no pesan en la primera carga de la ficha del paciente.
+const RecallIntervalDialog = dynamic(
+  () => import('./recall-interval-dialog').then((m) => m.RecallIntervalDialog),
+  { ssr: false },
+);
+const RecallContactDialog = dynamic(
+  () => import('./recall-contact-dialog').then((m) => m.RecallContactDialog),
+  { ssr: false },
+);
 
 export const patientRecallCopy = {
   heading: 'Recall',

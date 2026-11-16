@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { testStamp } from '@/lib/test/stamp';
 import { stampPainters } from '@/lib/locations/sede-stamp';
 import { clinicLocation } from '@/lib/test/locations';
+import { PatientRetentionDialogs } from './patient-retention-dialogs';
 import {
-  PatientRetentionDialogs,
   PatientRetentionSection,
   retentionChip,
   retentionHint,
