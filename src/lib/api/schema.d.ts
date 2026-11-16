@@ -8030,6 +8030,245 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dental-labs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Laboratorios de la clínica con sus servicios, por nombre */
+        get: operations["DentalLabsController_list"];
+        put?: never;
+        /** Da de alta un laboratorio (solo ADMIN) */
+        post: operations["DentalLabsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dental-labs/{labId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Cambia o desactiva un laboratorio (solo ADMIN; nunca se borra) */
+        patch: operations["DentalLabsController_update"];
+        trace?: never;
+    };
+    "/api/v1/dental-labs/{labId}/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Añade un servicio con su plazo en días hábiles (solo ADMIN) */
+        post: operations["DentalLabsController_createService"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dental-labs/{labId}/services/{serviceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Cambia o desactiva un servicio (solo ADMIN; nunca se borra) */
+        patch: operations["DentalLabsController_updateService"];
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/lab-orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Órdenes de laboratorio del paciente, la más reciente primero */
+        get: operations["PatientLabOrdersController_list"];
+        put?: never;
+        /**
+         * Crea una orden de laboratorio en borrador
+         * @description El profesional es quien la crea. Sin dueOn y con servicio, la fecha prometida sugerida desde hoy en días hábiles de la sede.
+         */
+        post: operations["PatientLabOrdersController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lab-orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Trabajos de laboratorio de una sede, con filtros
+         * @description Una sede: la pedida o la activa (respeta las sedes del miembro). Orden: atrasadas primero, luego fecha prometida (sin fecha al final) y luego el número más alto. from/to filtran por la fecha prometida.
+         */
+        get: operations["LabOrdersController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lab-orders/due-date-suggestion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fecha prometida sugerida para un servicio
+         * @description Día de inicio + plazo del servicio en días hábiles de la sede (calendario y festivos DX-316, solo los días con horario).
+         */
+        get: operations["LabOrdersController_suggestDueDate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lab-orders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Una orden de laboratorio */
+        get: operations["LabOrdersController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Cambia datos y vínculos de la orden (null borra un opcional)
+         * @description En borrador, todo. Tras «Enviada» solo dueOn y appointmentId (409 para el resto: se corrige con una orden nueva que la sustituya). Recepción solo dueOn y appointmentId.
+         */
+        patch: operations["LabOrdersController_update"];
+        trace?: never;
+    };
+    "/api/v1/lab-orders/{id}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Marca la orden como enviada (desde aquí el contenido no cambia) */
+        post: operations["LabOrdersController_send"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lab-orders/{id}/receive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Marca el trabajo como recibido (fecha y quién) */
+        post: operations["LabOrdersController_receive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lab-orders/{id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Marca el trabajo como revisado */
+        post: operations["LabOrdersController_check"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lab-orders/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Anula la orden con motivo (nunca se borra; una revisada no se anula) */
+        post: operations["LabOrdersController_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lab-orders/{id}/print": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * La orden como prescripción imprimible (A4)
+         * @description Datos de la clínica y la sede, el profesional con su nº de registro y especialidad, el paciente y la orden completa.
+         */
+        get: operations["LabOrdersController_print"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/documents": {
         parameters: {
             query?: never;
@@ -9042,7 +9281,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE" | "ORTHO_CASE" | "ORTHO_VISIT";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE" | "ORTHO_CASE" | "ORTHO_VISIT" | "DENTAL_LAB" | "DENTAL_LAB_ORDER";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -25975,6 +26214,344 @@ export interface components {
         };
         VoidImplantDto: {
             reason: string;
+        };
+        DentalLabServiceDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            labId: string;
+            /** @example Corona zirconio */
+            name: string;
+            /** @example 5 */
+            leadTimeBusinessDays: number;
+            /**
+             * @description Precio de referencia (decimal en texto). Solo ADMIN; null para el resto.
+             * @example 180.00
+             */
+            referencePrice: string | null;
+            /** @description ISO 4217. Solo ADMIN; null para el resto. */
+            referenceCurrency: string | null;
+            active: boolean;
+        };
+        DentalLabDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Laboratorio Dental Caracas */
+            name: string;
+            /** @example Carmen Rondón */
+            contactName: string | null;
+            phone: string | null;
+            /** @example pedidos@labcaracas.com.ve */
+            email: string | null;
+            notes: string | null;
+            active: boolean;
+            services: components["schemas"]["DentalLabServiceDto"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateDentalLabDto: {
+            /** @example Laboratorio Dental Caracas */
+            name: string;
+            contactName?: string | null;
+            phone?: string | null;
+            email?: string | null;
+            notes?: string | null;
+        };
+        UpdateDentalLabDto: {
+            name?: string;
+            contactName?: string | null;
+            phone?: string | null;
+            email?: string | null;
+            notes?: string | null;
+            /** @description false = desactivar (nunca se borra) */
+            active?: boolean;
+        };
+        CreateDentalLabServiceDto: {
+            /** @example Corona zirconio */
+            name: string;
+            /** @example 5 */
+            leadTimeBusinessDays: number;
+            /**
+             * @description Decimal ≥ 0 con hasta 2 decimales, en texto. Va junto a la moneda.
+             * @example 180.00
+             */
+            referencePrice?: string | null;
+            referenceCurrency?: string | null;
+        };
+        UpdateDentalLabServiceDto: {
+            name?: string;
+            leadTimeBusinessDays?: number;
+            /** @example 180.00 */
+            referencePrice?: string | null;
+            referenceCurrency?: string | null;
+            /** @description false = desactivar (nunca se borra) */
+            active?: boolean;
+        };
+        /**
+         * @description Derivado de las fechas: anulada → CANCELLED; revisada → CHECKED; recibida → RECEIVED; enviada → SENT; si no, DRAFT.
+         * @enum {string}
+         */
+        LabOrderStatus: "DRAFT" | "SENT" | "RECEIVED" | "CHECKED" | "CANCELLED";
+        LabOrderPatientDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example María Rondón */
+            fullName: string;
+        };
+        LabOrderNamedRefDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        LabOrderServiceRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Corona zirconio */
+            name: string;
+            /** @example 5 */
+            leadTimeBusinessDays: number;
+        };
+        LabOrderProfessionalDto: {
+            /** Format: uuid */
+            membershipId: string;
+            /** Format: uuid */
+            userId: string;
+            fullName: string;
+        };
+        LabOrderPersonDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+        };
+        LabOrderPlanItemRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            planId: string;
+            /** @example 16 */
+            toothNumber: string;
+            /** @example Corona de zirconio */
+            procedureName: string;
+        };
+        LabOrderAppointmentRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            start: string;
+        };
+        LabOrderNumberRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example 12 */
+            number: number;
+        };
+        LabOrderDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description Correlativo por clínica
+             * @example 12
+             */
+            number: number;
+            /** @description Derivado de las fechas: anulada → CANCELLED; revisada → CHECKED; recibida → RECEIVED; enviada → SENT; si no, DRAFT. */
+            status: components["schemas"]["LabOrderStatus"];
+            /** @description Fecha prometida anterior a hoy (día civil de la sede), sin recibir y sin anular */
+            overdue: boolean;
+            /** @description Días naturales de atraso; null si no está atrasada */
+            daysOverdue: number | null;
+            /** Format: uuid */
+            patientId: string;
+            patient: components["schemas"]["LabOrderPatientDto"];
+            /** Format: uuid */
+            locationId: string;
+            location: components["schemas"]["LabOrderNamedRefDto"];
+            lab: components["schemas"]["LabOrderNamedRefDto"];
+            service: components["schemas"]["LabOrderServiceRefDto"] | null;
+            professional: components["schemas"]["LabOrderProfessionalDto"];
+            /** @example Corona de zirconio */
+            description: string;
+            /**
+             * @example [
+             *       "16"
+             *     ]
+             */
+            toothNumbers: string[];
+            /**
+             * @description Color/tono. Dato de salud: null para recepción.
+             * @example A2
+             */
+            shade: string | null;
+            /**
+             * @description null para recepción.
+             * @example Zirconio monolítico
+             */
+            material: string | null;
+            /** @description Dato de salud: null para recepción. */
+            instructions: string | null;
+            /** @description true si color, material e instrucciones se ocultaron por el rol */
+            clinicalRedacted: boolean;
+            /**
+             * Format: date
+             * @example 2026-11-27
+             */
+            dueOn: string | null;
+            /** Format: date-time */
+            sentAt: string | null;
+            sentBy: components["schemas"]["LabOrderPersonDto"] | null;
+            /** Format: date-time */
+            receivedAt: string | null;
+            receivedBy: components["schemas"]["LabOrderPersonDto"] | null;
+            /** Format: date-time */
+            checkedAt: string | null;
+            checkedBy: components["schemas"]["LabOrderPersonDto"] | null;
+            /** Format: date-time */
+            cancelledAt: string | null;
+            cancelledBy: components["schemas"]["LabOrderPersonDto"] | null;
+            cancelReason: string | null;
+            treatmentPlanItem: components["schemas"]["LabOrderPlanItemRefDto"] | null;
+            appointment: components["schemas"]["LabOrderAppointmentRefDto"] | null;
+            /** @description La orden anterior que esta corrige */
+            replacesOrder: components["schemas"]["LabOrderNumberRefDto"] | null;
+            /** @description Órdenes nuevas que corrigen esta */
+            replacedBy: components["schemas"]["LabOrderNumberRefDto"][];
+            /** Format: date-time */
+            createdAt: string;
+            createdBy: components["schemas"]["LabOrderPersonDto"];
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        LabOrderPageDto: {
+            items: components["schemas"]["LabOrderDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        CreateLabOrderDto: {
+            /** Format: uuid */
+            labId: string;
+            /** Format: uuid */
+            serviceId?: string | null;
+            /** @example Corona de zirconio */
+            description: string;
+            /**
+             * @example [
+             *       "16"
+             *     ]
+             */
+            toothNumbers?: string[];
+            /** @example A2 */
+            shade?: string | null;
+            material?: string | null;
+            instructions?: string | null;
+            /**
+             * Format: date
+             * @description Fecha prometida. Sin ella y con servicio, la sugerida desde hoy en días hábiles de la sede.
+             * @example 2026-11-27
+             */
+            dueOn?: string | null;
+            /** Format: uuid */
+            treatmentPlanItemId?: string | null;
+            /**
+             * Format: uuid
+             * @description Cita de colocación (de este paciente)
+             */
+            appointmentId?: string | null;
+            /**
+             * Format: uuid
+             * @description Orden anterior (de este paciente) que esta corrige
+             */
+            replacesOrderId?: string | null;
+            /**
+             * Format: uuid
+             * @description Sede de la orden. Sin ella, la sede activa (X-Location-Id).
+             */
+            locationId?: string;
+        };
+        DueDateSuggestionDto: {
+            /**
+             * Format: date
+             * @example 2026-11-27
+             */
+            dueOn: string;
+            /**
+             * Format: date
+             * @example 2026-11-20
+             */
+            from: string;
+            /** @example 5 */
+            leadTimeBusinessDays: number;
+        };
+        UpdateLabOrderDto: {
+            /** Format: uuid */
+            labId?: string;
+            /** Format: uuid */
+            serviceId?: string | null;
+            description?: string;
+            toothNumbers?: string[];
+            shade?: string | null;
+            material?: string | null;
+            instructions?: string | null;
+            /** Format: date */
+            dueOn?: string | null;
+            /** Format: uuid */
+            treatmentPlanItemId?: string | null;
+            /** Format: uuid */
+            appointmentId?: string | null;
+            /** Format: uuid */
+            replacesOrderId?: string | null;
+        };
+        SendLabOrderDto: {
+            /**
+             * Format: date
+             * @description Fecha prometida. Sin ella y con servicio: la sugerida desde el día del envío (si la orden no tenía una puesta a mano).
+             */
+            dueOn?: string | null;
+        };
+        CancelLabOrderDto: {
+            reason: string;
+        };
+        LabOrderPrintClinicDto: {
+            name: string;
+            legalName: string | null;
+            /** @description Nombre del identificador fiscal de la clínica */
+            taxIdLabel: string | null;
+            taxId: string | null;
+            phone: string | null;
+            email: string | null;
+            logoUrl: string | null;
+        };
+        LabOrderPrintLocationDto: {
+            name: string;
+            address: string | null;
+            phone: string | null;
+            /** @description Registro sanitario de la sede, solo si la sede lo muestra */
+            healthRegistrationNumber: string | null;
+        };
+        LabOrderPrintProfessionalDto: {
+            fullName: string;
+            /** @description Nº de registro profesional (ClinicMembership.professionalLicense) */
+            license: string | null;
+            specialty: string | null;
+        };
+        LabOrderPrintPatientDto: {
+            fullName: string;
+            /** @description «{nombre del tipo} {número}» o null sin número */
+            document: string | null;
+            /** Format: date */
+            birthDate: string | null;
+            ageYears: number | null;
+        };
+        LabOrderPrintDto: {
+            /** @description La orden completa (sin redactar) */
+            order: components["schemas"]["LabOrderDto"];
+            clinic: components["schemas"]["LabOrderPrintClinicDto"];
+            location: components["schemas"]["LabOrderPrintLocationDto"];
+            professional: components["schemas"]["LabOrderPrintProfessionalDto"];
+            patient: components["schemas"]["LabOrderPrintPatientDto"];
+            /** Format: date-time */
+            printedAt: string;
         };
         /** @enum {string} */
         PatientDocumentCategory: "XRAY" | "PHOTO" | "REFERRAL" | "SIGNED_CONSENT" | "REPORT" | "OTHER";
@@ -48759,6 +49336,759 @@ export interface operations {
             };
             /** @description El implante ya está anulado */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DentalLabsController_list: {
+        parameters: {
+            query?: {
+                /** @description true = también los desactivados (pantalla de gestión). Por defecto, solo los activos. */
+                includeInactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DentalLabDto"][];
+                };
+            };
+        };
+    };
+    DentalLabsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDentalLabDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DentalLabDto"];
+                };
+            };
+            /** @description Campos fuera de rango */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador da de alta y cambia los laboratorios dentales y sus servicios. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Nombre repetido o tope de 100 laboratorios */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DentalLabsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                labId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDentalLabDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DentalLabDto"];
+                };
+            };
+            /** @description Campos fuera de rango */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador da de alta y cambia los laboratorios dentales y sus servicios. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Laboratorio de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Nombre repetido */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DentalLabsController_createService: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                labId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDentalLabServiceDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DentalLabServiceDto"];
+                };
+            };
+            /** @description Plazo fuera de 0–120, precio sin moneda o al revés */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador da de alta y cambia los laboratorios dentales y sus servicios. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Laboratorio de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Nombre repetido en el laboratorio o tope de 100 servicios */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Moneda inexistente */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DentalLabsController_updateService: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                labId: string;
+                serviceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDentalLabServiceDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DentalLabServiceDto"];
+                };
+            };
+            /** @description Plazo fuera de 0–120, precio sin moneda o al revés */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador da de alta y cambia los laboratorios dentales y sus servicios. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Laboratorio o servicio de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Nombre repetido en el laboratorio */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Moneda inexistente */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientLabOrdersController_list: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabOrderPageDto"];
+                };
+            };
+            /** @description Página fuera de rango */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientLabOrdersController_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede activa. Sin ella, la sede principal (o la primera permitida). */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLabOrderDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabOrderDto"];
+                };
+            };
+            /** @description Descripción, dientes FDI, textos o fecha fuera de rango */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo el odontólogo o la administración crean, cambian y anulan órdenes de laboratorio. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente, sede, laboratorio o servicio no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ítem del plan, cita u orden corregida de otro paciente; laboratorio o servicio inactivo; servicio de otro laboratorio */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LabOrdersController_list: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                /** @description Sede. Sin ella, la sede activa (X-Location-Id o la principal). */
+                locationId?: string;
+                /** @description Uno o varios (status=DRAFT&status=SENT). Sin él, todos. */
+                status?: components["schemas"]["LabOrderStatus"][];
+                labId?: string;
+                /** @description Fecha prometida desde (incluida) */
+                from?: string;
+                /** @description Fecha prometida hasta (incluida) */
+                to?: string;
+                /** @description true = solo atrasadas (fecha prometida vencida, sin recibir ni anular) */
+                overdue?: boolean;
+            };
+            header?: {
+                /** @description Sede activa. Sin ella, la sede principal (o la primera permitida). */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabOrderPageDto"];
+                };
+            };
+            /** @description Filtro, fecha o página inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 403 LOCATION_NOT_ALLOWED: sede no permitida al miembro */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LabOrdersController_suggestDueDate: {
+        parameters: {
+            query: {
+                serviceId: string;
+                /** @description Sede. Sin ella, la activa. */
+                locationId?: string;
+                /** @description Día de inicio (por defecto, hoy en la sede) */
+                from?: string;
+            };
+            header?: {
+                /** @description Sede activa. Sin ella, la sede principal (o la primera permitida). */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DueDateSuggestionDto"];
+                };
+            };
+            /** @description Ids o fecha inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede o servicio no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LabOrdersController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabOrderDto"];
+                };
+            };
+            /** @description Orden de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LabOrdersController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLabOrderDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabOrderDto"];
+                };
+            };
+            /** @description Campos fuera de rango o sin cambios */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no cambia órdenes de laboratorio: recepción solo la fecha prometida y la cita; el contenido, el odontólogo. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Orden, laboratorio o servicio de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Orden anulada, ya enviada o cambiada a la vez */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ítem, cita u orden corregida de otro paciente; laboratorio o servicio inactivo */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LabOrdersController_send: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendLabOrderDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabOrderDto"];
+                };
+            };
+            /** @description Envían y reciben trabajos de laboratorio el odontólogo, recepción y la administración. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Orden de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya enviada o anulada */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LabOrdersController_receive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabOrderDto"];
+                };
+            };
+            /** @description Envían y reciben trabajos de laboratorio el odontólogo, recepción y la administración. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Orden de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya recibida o anulada */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No se puede recibir una orden que no se ha enviado */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LabOrdersController_check: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabOrderDto"];
+                };
+            };
+            /** @description Solo el odontólogo o la administración marcan un trabajo de laboratorio como revisado. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Orden de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya revisada o anulada */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No se puede revisar una orden que no se ha recibido */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LabOrdersController_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelLabOrderDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabOrderDto"];
+                };
+            };
+            /** @description Motivo de menos de 3 o más de 500 caracteres */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo el odontólogo o la administración crean, cambian y anulan órdenes de laboratorio. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Orden de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya anulada o revisada */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LabOrdersController_print: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabOrderPrintDto"];
+                };
+            };
+            /** @description La orden impresa lleva datos clínicos: la imprimen los roles clínicos. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Orden de otra clínica o inexistente */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -163,6 +163,9 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   // DX-190: caso de ortodoncia y sus controles.
   ORTHO_CASE: 'Caso de ortodoncia',
   ORTHO_VISIT: 'Control de ortodoncia',
+  // DX-017: laboratorios dentales (y sus servicios) y órdenes de laboratorio.
+  DENTAL_LAB: 'Laboratorio dental',
+  DENTAL_LAB_ORDER: 'Orden de laboratorio',
   // DX-572: órdenes de estudios y referencias externas, y sus plantillas.
   EXTERNAL_ORDER: 'Orden externa',
   EXTERNAL_ORDER_TEMPLATE: 'Plantilla de orden externa',
