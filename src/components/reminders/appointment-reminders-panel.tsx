@@ -41,6 +41,18 @@ const copy = {
   // DX-497: idioma del email según el registro de envíos.
   language: (name: string) => `Enviado en ${name}`,
   noTranslation: (from: string, to: string) => `sin traducción: ${from} → ${to}`,
+  // DX-290: el enlace de anamnesis de la cita (sin respuestas: solo el estado).
+  anamnesis: {
+    REMINDER: (at: string) => `Anamnesis enviada con el recordatorio ${at}`,
+    STAFF: (at: string) => `Anamnesis enviada por recepción ${at}`,
+  },
+  anamnesisStatus: {
+    PENDING_PATIENT: 'Sin responder todavía',
+    SUBMITTED: 'Respondida: falta revisarla',
+    ACCEPTED: 'Respondida y aceptada',
+    REJECTED: 'Respondida y rechazada',
+    EXPIRED: 'Caducó o se anuló sin respuesta',
+  } as const,
   delivery: {
     PENDING: 'Entregándose al correo del paciente',
     SENT: 'Entregado al proveedor de correo',
@@ -141,11 +153,22 @@ export function AppointmentRemindersPanel({ token, appointmentId, clock }: Appoi
     }
     // DX-128: con baja o con otro canal no queda nada por salir por email.
     const blocker = data.patientBlocker ? PATIENT_BLOCKER_LABELS[data.patientBlocker] : null;
+    const anamnesis = data.anamnesis ? (
+      <div data-testid="appointment-anamnesis" className="flex flex-col gap-0.5 rounded-md bg-surface-sunken px-3 py-2">
+        <p className="text-sm text-ink tabular-nums">
+          {copy.anamnesis[data.anamnesis.origin](shortDateTime(data.anamnesis.sentAt, clock))}
+        </p>
+        <p className="text-xs text-muted">{copy.anamnesisStatus[data.anamnesis.status]}</p>
+      </div>
+    ) : null;
     if (data.items.length === 0) {
       return (
-        <p role="status" className="text-sm text-muted">
-          {data.enabled ? (blocker ?? copy.none) : copy.disabled}
-        </p>
+        <>
+          <p role="status" className="text-sm text-muted">
+            {data.enabled ? (blocker ?? copy.none) : copy.disabled}
+          </p>
+          {anamnesis}
+        </>
       );
     }
     return (
@@ -183,6 +206,7 @@ export function AppointmentRemindersPanel({ token, appointmentId, clock }: Appoi
           })}
         </ul>
         {blocker && <p className="text-xs text-muted">{blocker}</p>}
+        {anamnesis}
       </>
     );
   }

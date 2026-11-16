@@ -28,6 +28,8 @@ const copy = {
   colStatus: 'Estado',
   colLeads: 'Cuándo se envían',
   none: 'Sin recordatorios',
+  // DX-290: la sede manda la anamnesis a nuevos o caducados con el recordatorio.
+  withAnamnesis: 'con anamnesis',
   on: 'Activos',
   off: 'Desactivados',
   /** Delante del nombre de la sede, solo para lectores: «Configurar los recordatorios de Sede Norte». */
@@ -125,7 +127,10 @@ export function ReminderSettingsManager({ token, allowed }: ReminderSettingsMana
       header: copy.colLeads,
       mobile: 'meta',
       cellClassName: 'tabular-nums',
-      cell: (row) => (row.enabled ? leadListLabel(row.leadHours) : copy.none),
+      cell: (row) =>
+        row.enabled
+          ? `${leadListLabel(row.leadHours)}${row.sendAnamnesis ? ` · ${copy.withAnamnesis}` : ''}`
+          : copy.none,
     },
   ];
 

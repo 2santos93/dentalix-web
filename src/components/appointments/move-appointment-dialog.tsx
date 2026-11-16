@@ -28,7 +28,8 @@ import type { Chair } from '@/lib/chairs/chairs-api';
 import { chairDisplayName, offeredProvider } from '@/lib/chairs/chair-columns';
 import { endSentence } from '@/lib/format/text';
 import { defaultHoursNote } from '@/lib/locations/default-business-hours';
-import { HolidayNotice } from './holiday-notice';
+import { HolidayNotice, holidayClosedMessage, useHolidayOnDay } from './holiday-notice';
+import { isInClinic } from '@/lib/appointments/patient-flow';
 
 const copy = {
   title: 'Mover a…',
@@ -231,6 +232,9 @@ export function MoveAppointmentDialog({
     }
   }
 
+  const holiday = useHolidayOnDay(token, appointment.locationId, date);
+  const inClinic = isInClinic(appointment.status);
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
@@ -260,6 +264,12 @@ export function MoveAppointmentDialog({
     }
     if (!fitsBusinessHoursLocal(date, time, formatMinute(startMinute + duration), hours)) {
       setError(copy.outsideHours(describeDay(civilWeekday(date), hours, fmt)));
+      return;
+    }
+    // DX-263-bis: la sede cerrada por festivo (con el paciente ya en la
+    // clínica la cita no sale de hoy y la API la deja mover).
+    if (holiday.status === 'holiday' && !inClinic) {
+      setError(holidayClosedMessage(holiday.name));
       return;
     }
     await submit(target);
@@ -317,7 +327,7 @@ export function MoveAppointmentDialog({
             value={date || null}
             onChange={(next) => setDate(next ?? '')}
           />
-          <HolidayNotice token={token} locationId={appointment.locationId} date={date} />
+          {inClinic ? null : <HolidayNotice state={holiday} />}
         </FormField>
         <FormField
           htmlFor="move-time"

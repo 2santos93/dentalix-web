@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { OpeningsDialog } from './openings-dialog';
 import { ApiError } from '@/lib/api/client';
@@ -77,7 +77,7 @@ describe('OpeningsDialog (DX-122)', () => {
       end: at('2031-03-10', '10:00'),
       chair: { id: 'c2', name: 'Sillón 2', active: true },
     };
-    const result = { timeZone: 'UTC', durationMinutes: 30, truncated: false, defaultHours: false, openings: [opening] };
+    const result = { timeZone: 'UTC', durationMinutes: 30, truncated: false, defaultHours: false, holidays: [], openings: [opening] };
 
     it('un sillón filtra la búsqueda; el hueco dice el libre y «Agendar aquí» lo guarda', async () => {
       mockedChairs.mockResolvedValue(chairs);
@@ -121,7 +121,7 @@ describe('OpeningsDialog (DX-122)', () => {
     mockedOpenings.mockResolvedValue({
       timeZone: 'America/Caracas',
       durationMinutes: 30,
-      truncated: true, defaultHours: false,
+      truncated: true, defaultHours: false, holidays: [],
       openings: [
         { start: at('2031-03-10', '09:00'), end: at('2031-03-10', '12:00') },
         { start: at('2031-03-10', '15:00'), end: at('2031-03-10', '19:00') },
@@ -142,13 +142,34 @@ describe('OpeningsDialog (DX-122)', () => {
   });
 
   it('vacío: lo dice y sugiere otra búsqueda', async () => {
-    mockedOpenings.mockResolvedValue({ timeZone: 'UTC', durationMinutes: 30, truncated: false, defaultHours: false, openings: [] });
+    mockedOpenings.mockResolvedValue({ timeZone: 'UTC', durationMinutes: 30, truncated: false, defaultHours: false, holidays: [], openings: [] });
     renderDialog();
     expect(await screen.findByText('No hay huecos libres en estas fechas')).toBeInTheDocument();
   });
 
+  it('DX-263-bis: los festivos del rango se nombran, en el vacío y bajo la lista', async () => {
+    const holidays = [{ date: '2031-03-11', name: 'Fiesta de la sede' }];
+    const note = 'La sede cierra por festivo el martes, 11 de marzo (Fiesta de la sede): ese día no hay huecos.';
+    mockedOpenings.mockResolvedValueOnce({ timeZone: 'UTC', durationMinutes: 30, truncated: false, defaultHours: false, holidays, openings: [] });
+    renderDialog();
+    const empty = (await screen.findByText('No hay huecos libres en estas fechas')).closest('[role="status"]')!;
+    expect(empty).toHaveTextContent(note);
+    cleanup();
+
+    mockedOpenings.mockResolvedValueOnce({
+      timeZone: 'UTC',
+      durationMinutes: 30,
+      truncated: false,
+      defaultHours: false,
+      holidays,
+      openings: [{ start: at('2031-03-10', '09:00'), end: at('2031-03-10', '12:00') }],
+    });
+    renderDialog();
+    expect(await screen.findByTestId('openings-holidays')).toHaveTextContent(note);
+  });
+
   it('DX-533: sede sin horario: el vacío y la lista dicen que se buscó en el horario de alta', async () => {
-    mockedOpenings.mockResolvedValueOnce({ timeZone: 'UTC', durationMinutes: 30, truncated: false, defaultHours: true, openings: [] });
+    mockedOpenings.mockResolvedValueOnce({ timeZone: 'UTC', durationMinutes: 30, truncated: false, defaultHours: true, holidays: [], openings: [] });
     renderDialog();
     const empty = (await screen.findByText('No hay huecos libres en estas fechas')).closest('[role="status"]')!;
     expect(empty).toHaveTextContent('Esta sede no tiene horario');
@@ -161,7 +182,7 @@ describe('OpeningsDialog (DX-122)', () => {
       timeZone: 'UTC',
       durationMinutes: 30,
       truncated: false,
-      defaultHours: true,
+      defaultHours: true, holidays: [],
       openings: [{ start: at('2031-03-10', '09:00'), end: at('2031-03-10', '12:00') }],
     });
     renderDialog();
@@ -171,7 +192,7 @@ describe('OpeningsDialog (DX-122)', () => {
   it('error con Reintentar', async () => {
     mockedOpenings
       .mockRejectedValueOnce(new ApiError(500, 'boom'))
-      .mockResolvedValueOnce({ timeZone: 'UTC', durationMinutes: 30, truncated: false, defaultHours: false, openings: [] });
+      .mockResolvedValueOnce({ timeZone: 'UTC', durationMinutes: 30, truncated: false, defaultHours: false, holidays: [], openings: [] });
     renderDialog();
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('No pudimos buscar huecos.');
@@ -183,7 +204,7 @@ describe('OpeningsDialog (DX-122)', () => {
     mockedOpenings.mockResolvedValue({
       timeZone: 'UTC',
       durationMinutes: 30,
-      truncated: false, defaultHours: false,
+      truncated: false, defaultHours: false, holidays: [],
       openings: [{ start: at('2031-03-10', '09:00'), end: at('2031-03-10', '12:00') }],
     });
     mockedSchedule.mockRejectedValue(

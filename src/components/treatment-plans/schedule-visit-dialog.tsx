@@ -26,6 +26,7 @@ import { formatMinute } from "@/lib/appointments/day-grid";
 import { civilDateLabel } from "@/lib/format/date";
 import { sedeTimeRange, useSedeClock } from "@/lib/locations/sede-clock";
 import { addCivilDays, wallDay, wallMinuteOfDay } from "@/lib/time/wall-clock";
+import { openingsHolidaysNote } from "@/lib/appointments/openings-holidays";
 
 /** DX-283: el catálogo no tiene duración por procedimiento: la del hueco se elige. */
 const SLOT_DURATIONS = [30, 45, 60, 90, 120];
@@ -67,6 +68,8 @@ export function ScheduleVisitDialog({
   const [chosenProvider, setChosenProvider] = useState("");
   const [duration, setDuration] = useState(30);
   const [openings, setOpenings] = useState<Opening[] | null>(null);
+  // DX-263-bis: por qué faltan días (la sede cierra por festivo).
+  const [holidaysNote, setHolidaysNote] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const searchVersion = useRef(0);
   const [slot, setSlot] = useState<Opening | null>(null);
@@ -116,6 +119,7 @@ export function ScheduleVisitDialog({
   function resetSearch() {
     searchVersion.current += 1;
     setOpenings(null);
+    setHolidaysNote(null);
     setSlot(null);
     setSearchError(null);
     setSearching(false);
@@ -142,7 +146,10 @@ export function ScheduleVisitDialog({
         durationMinutes: duration,
         patientId,
       });
-      if (version === searchVersion.current) setOpenings(result.openings);
+      if (version === searchVersion.current) {
+        setOpenings(result.openings);
+        setHolidaysNote(openingsHolidaysNote(result.holidays));
+      }
     } catch (err) {
       if (version === searchVersion.current)
         setSearchError(
@@ -276,6 +283,14 @@ export function ScheduleVisitDialog({
                         </Button>
                       ))
                     )}
+                    {holidaysNote ? (
+                      <p
+                        data-testid="openings-holidays"
+                        className="text-xs text-muted"
+                      >
+                        {holidaysNote}
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

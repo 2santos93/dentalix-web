@@ -45,6 +45,7 @@ function submission(id: string, place: { id: string; name: string }, overrides: 
     status: 'SUBMITTED',
     expiresAt: '2026-11-12T15:00:00.000Z',
     createdAt: '2026-11-01T15:00:00.000Z',
+    origin: 'STAFF',
     createdByName: 'Recepción',
     submittedAt: SUBMITTED,
     reviewedAt: null,

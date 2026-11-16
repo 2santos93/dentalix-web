@@ -1099,6 +1099,8 @@ describe('AgendaView', () => {
     mockedListAppointments.mockResolvedValue([pendingApt]);
     mockedCreateConfirmationLink.mockResolvedValue({
       url: 'http://demo.localhost:3001/confirmar/tok',
+      anamnesisUrl: null,
+      anamnesisPending: false,
       expiresAt: start,
       whatsappPhone: '584145550101',
       appointment: {
