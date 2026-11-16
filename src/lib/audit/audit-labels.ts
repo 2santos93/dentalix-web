@@ -158,6 +158,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   // paciente desde él (reporte, confirmar, rechazar, ver el comprobante).
   PAYMENT_LINK: 'Enlace de pago',
   PAYMENT_REPORT: 'Pago reportado',
+  // DX-559: plantillas de plan de tratamiento (crear, editar, desactivar).
+  TREATMENT_PLAN_TEMPLATE: 'Plantilla de plan',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
@@ -277,6 +279,8 @@ const TREATMENT_PLAN_ACCEPTANCE_REASONS: Record<string, string> = {
   PLAN_PARTIALLY_ACCEPTED: 'Presupuesto aceptado en parte',
   ACCEPT_PARTIAL_PREVIEW: 'Vista previa de la aceptación parcial',
   PLAN_SPLIT_PENDING: 'Presupuesto pendiente creado por una aceptación parcial',
+  // DX-559: ítems añadidos al plan desde una plantilla.
+  PLAN_TEMPLATE_APPLIED: 'Procedimientos añadidos desde una plantilla',
 };
 
 /**

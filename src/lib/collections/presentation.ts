@@ -25,6 +25,8 @@ export const OUTCOME_LABELS: Record<CollectionOutcome, string> = {
   WILL_PAY_AT_APPOINTMENT: 'Pagará en la cita',
   DISPUTE: 'Disputa el saldo',
   WRONG_NUMBER: 'Número erróneo',
+  // DX-146 (API): resultado que la API escribe al marcar «avisado»; no se elige a mano.
+  REMINDER_SENT: 'Aviso enviado',
 };
 
 /** Etiquetas; tono y etiqueta en `@/lib/status/tones` (`StatusBadge kind="paymentPromise"`). */

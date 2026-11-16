@@ -1015,6 +1015,26 @@ export interface paths {
         patch: operations["PatientResponsiblePartiesController_update"];
         trace?: never;
     };
+    "/api/v1/patients/{id}/balance-reminders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Marcar avisado del saldo vencido (DX-146)
+         * @description Crea una gestión de cobranza REMINDER_SENT (append-only; no se desmarca). Un aviso por paciente y día civil de la sede de su deuda: el paciente sale de «Por avisar hoy» hasta su siguiente tramo. Sin cuerpo del mensaje ni importes.
+         */
+        post: operations["CollectionsController_balanceReminder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{id}/collection-notes": {
         parameters: {
             query?: never;
@@ -1993,6 +2013,45 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/treatment-plan-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Plantillas de plan de la clínica, con sus líneas */
+        get: operations["TreatmentPlanTemplatesController_list"];
+        put?: never;
+        /** Crear una plantilla de plan */
+        post: operations["TreatmentPlanTemplatesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/treatment-plan-templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Una plantilla de plan, activa o no */
+        get: operations["TreatmentPlanTemplatesController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Editar, activar o desactivar una plantilla de plan
+         * @description Los planes ya creados no cambian (sus ítems son ítems normales). `lines`, si viene, sustituye todas las líneas. `version` es obligatoria (409 PLAN_TEMPLATE_STALE si cambió).
+         */
+        patch: operations["TreatmentPlanTemplatesController_update"];
         trace?: never;
     };
     "/api/v1/patients/{patientId}/tooth-records": {
@@ -3630,6 +3689,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/treatment-plans/{id}/apply-template/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vista previa de una plantilla sobre el plan (no escribe nada)
+         * @description Por línea: visita destino, precio vigente del paciente (sin descuento) y su fuente, total de la línea y si se omite (procedimiento desactivado). Una línea sin precio no falla: `priceMissing`. Total en la moneda del plan.
+         */
+        post: operations["PlanTemplateApplyController_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/treatment-plans/{id}/apply-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Añadir al plan los procedimientos de una plantilla
+         * @description Crea N ítems por línea (cantidad) detrás de la última visita viva del plan, con el precio vigente del paciente y sin descuento, y fusiona los días entre visitas sin pisar los del plan. Todo o nada. Las líneas de procedimientos desactivados se omiten y se listan en `skipped`.
+         */
+        post: operations["PlanTemplateApplyController_apply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/discount-policy": {
         parameters: {
             query?: never;
@@ -4451,6 +4550,46 @@ export interface paths {
          */
         get: operations["ReceivablesController_creditBalances"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/receivables/reminders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Por avisar hoy: deudores a los que hoy toca avisar de su saldo vencido
+         * @description Deudores de la cartera (mismo cálculo y sede que GET /receivables/aging) cuya deuda vencida más antigua alcanzó un tramo de la política de la clínica (7, 30 y 60 días por defecto) que aún no se avisó, con como mucho `maxNotices` avisos por deuda y `minGapDays` días entre avisos. Un aviso es una gestión REMINDER_SENT; la deuda empieza el día en que venció su línea exigible más antigua (días civiles de la sede, DX-110). Fuera: compromiso de pago abierto y baja de los avisos (DX-128), contados en `excluded` sin nombres. Más antigua primero.
+         */
+        get: operations["ReceivablesController_reminders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/receivables/reminder-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Cambia la política de avisos de saldo vencido de la clínica (DX-146); queda en la auditoría
+         * @description Tramos (1 a 3 días crecientes entre 1 y 365), máximo de avisos por deuda (1..10) y mínimo de días entre avisos (1..90). Aplica desde la siguiente lectura de «Por avisar hoy». Si nada cambia, responde 200 sin evento de auditoría.
+         */
+        put: operations["ReceivablesController_setReminderPolicy"];
         post?: never;
         delete?: never;
         options?: never;
@@ -8265,7 +8404,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -10204,23 +10343,21 @@ export interface components {
             receivesNotices?: boolean;
         };
         /**
-         * @description Llamada, enlace de WhatsApp, email o en persona
+         * @description Por dónde se le avisó; sin él, el enlace de WhatsApp
          * @enum {string}
          */
         CollectionChannel: "CALL" | "WHATSAPP_LINK" | "EMAIL" | "IN_PERSON";
-        /**
-         * @description No contesta, promete pago, pagará en la cita, disputa o número erróneo
-         * @enum {string}
-         */
-        CollectionOutcome: "NO_ANSWER" | "PROMISED_PAYMENT" | "WILL_PAY_AT_APPOINTMENT" | "DISPUTE" | "WRONG_NUMBER";
-        CreateCollectionNoteDto: {
-            /** @description Llamada, enlace de WhatsApp, email o en persona */
+        MarkBalanceReminderDto: {
+            /**
+             * @description Por dónde se le avisó; sin él, el enlace de WhatsApp
+             * @default WHATSAPP_LINK
+             */
             channel: components["schemas"]["CollectionChannel"];
-            /** @description No contesta, promete pago, pagará en la cita, disputa o número erróneo */
-            outcome: components["schemas"]["CollectionOutcome"];
-            /** @description Nota administrativa (sin datos clínicos). No se edita ni se borra: una corrección es otra nota. */
+            /** @description Nota administrativa opcional (sin datos clínicos) */
             text?: string | null;
         };
+        /** @enum {string} */
+        CollectionOutcome: "NO_ANSWER" | "PROMISED_PAYMENT" | "WILL_PAY_AT_APPOINTMENT" | "DISPUTE" | "WRONG_NUMBER" | "REMINDER_SENT";
         StaffRefDto: {
             /** Format: uuid */
             id: string;
@@ -10239,6 +10376,14 @@ export interface components {
             author: components["schemas"]["StaffRefDto"];
             /** Format: date-time */
             createdAt: string;
+        };
+        CreateCollectionNoteDto: {
+            /** @description Llamada, enlace de WhatsApp, email o en persona */
+            channel: components["schemas"]["CollectionChannel"];
+            /** @description No contesta, promete pago, pagará en la cita, disputa o número erróneo */
+            outcome: components["schemas"]["CollectionOutcome"];
+            /** @description Nota administrativa (sin datos clínicos). No se edita ni se borra: una corrección es otra nota. */
+            text?: string | null;
         };
         CreatePaymentPromiseDto: {
             /** @example 200000 */
@@ -12253,6 +12398,101 @@ export interface components {
             monitorId: string;
             /** @description Sedación moderada con el operador como monitor: justificación (≥ 10 caracteres) */
             sameMonitorJustification?: string;
+        };
+        TreatmentPlanTemplateLineDto: {
+            /** Format: uuid */
+            id: string;
+            position: number;
+            /** Format: uuid */
+            catalogItemId: string;
+            /** @example Endodoncia unirradicular */
+            catalogItemLabel: string;
+            /** @example END-01 */
+            catalogItemCode: string;
+            /** @description false si el procedimiento está desactivado o retirado del catálogo: al aplicar la plantilla esta línea se omite */
+            catalogItemActive: boolean;
+            quantity: number;
+            visit: number;
+            /** @example Conductometría */
+            visitLabel: string | null;
+            /** @description Al aplicar, la vista previa ofrece las superficies (opcionales). El diente se pide siempre. */
+            asksSurfaces: boolean;
+        };
+        TreatmentPlanTemplateDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** @example Endodoncia + corona */
+            name: string;
+            active: boolean;
+            /** @description Versión optimista: se envía de vuelta en el PATCH; sube en 1 con cada edición */
+            version: number;
+            /**
+             * @description Días mínimos entre visitas, con la misma forma que `visitIntervals` del plan: la clave N (de "2" a "50", sin pasar de la última visita de la plantilla) son los días (0 a 3650) tras la visita N-1. Al aplicar se desplazan con las visitas y no pisan los que el plan ya tenga.
+             * @example {
+             *       "2": 7,
+             *       "3": 14
+             *     }
+             */
+            visitIntervals: {
+                [key: string]: number;
+            };
+            lines: components["schemas"]["TreatmentPlanTemplateLineDto"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        PlanTemplateLineInputDto: {
+            /**
+             * Format: uuid
+             * @description Procedimiento del catálogo de esta clínica (no un diagnóstico ni uno retirado: 422/404). Uno desactivado se admite.
+             */
+            catalogItemId: string;
+            /** @description N ítems iguales al aplicar (por defecto, 1) */
+            quantity?: number;
+            /** @description Visita de la plantilla (por defecto, 1) */
+            visit?: number;
+            /** @description Etiqueta de la visita; todas las líneas de una visita llevan la misma */
+            visitLabel?: string | null;
+            /** @description Si al aplicar se ofrecen las superficies (por defecto, no) */
+            asksSurfaces?: boolean;
+        };
+        CreateTreatmentPlanTemplateDto: {
+            name: string;
+            /**
+             * @description Días mínimos entre visitas, con la misma forma que `visitIntervals` del plan: la clave N (de "2" a "50", sin pasar de la última visita de la plantilla) son los días (0 a 3650) tras la visita N-1. Al aplicar se desplazan con las visitas y no pisan los que el plan ya tenga.
+             * @example {
+             *       "2": 7,
+             *       "3": 14
+             *     }
+             */
+            visitIntervals?: {
+                [key: string]: number;
+            };
+            lines: components["schemas"]["PlanTemplateLineInputDto"][];
+            /** @description Por defecto, true */
+            active?: boolean;
+        };
+        UpdateTreatmentPlanTemplateDto: {
+            name?: string;
+            /**
+             * @description Días mínimos entre visitas, con la misma forma que `visitIntervals` del plan: la clave N (de "2" a "50", sin pasar de la última visita de la plantilla) son los días (0 a 3650) tras la visita N-1. Al aplicar se desplazan con las visitas y no pisan los que el plan ya tenga.
+             * @example {
+             *       "2": 7,
+             *       "3": 14
+             *     }
+             */
+            visitIntervals?: {
+                [key: string]: number;
+            };
+            /** @description Si viene, sustituye todas las líneas */
+            lines?: components["schemas"]["PlanTemplateLineInputDto"][];
+            /** @description false = desactivarla (sale del selector del plan) */
+            active?: boolean;
+            /** @description Versión que el cliente leyó (la `version` de la plantilla). Si ya cambió: 409 `code` PLAN_TEMPLATE_STALE. Obligatoria. */
+            version: number;
         };
         CreateToothRecordDto: {
             /**
@@ -16208,6 +16448,115 @@ export interface components {
             /** @description true = repetición con la misma Idempotency-Key: devuelve lo ya aplicado, sin volver a escribir. */
             replayed: boolean;
         };
+        PreviewPlanTemplateDto: {
+            /**
+             * Format: uuid
+             * @description Plantilla de esta clínica
+             */
+            templateId: string;
+        };
+        TemplatePreviewLineDto: {
+            /** Format: uuid */
+            lineId: string;
+            position: number;
+            /** Format: uuid */
+            catalogItemId: string;
+            /** @example Endodoncia unirradicular */
+            catalogItemLabel: string;
+            /** @example END-01 */
+            catalogItemCode: string;
+            quantity: number;
+            /** @description Visita de la plantilla */
+            templateVisit: number;
+            /** @description Visita del plan a la que va (detrás de la última visita viva del plan); null si la línea se omite */
+            targetVisit: number | null;
+            visitLabel: string | null;
+            /** @description Ofrecer las superficies (opcionales). El diente se pide siempre. */
+            asksSurfaces: boolean;
+            /** @description Precio unitario vigente para este paciente en la moneda del plan (convenio, lista de la sede o catálogo), sin descuento; null sin precio u omitida */
+            unitPrice: number | null;
+            /** @enum {string|null} */
+            priceSource: "CATALOG" | "PRICE_LIST" | "AGREEMENT_PERCENT" | "AGREEMENT_PRICE_LIST" | null;
+            agreementName: string | null;
+            /** @description `unitPrice × quantity`; null sin precio u omitida */
+            lineTotal: number | null;
+            /** @description Sin precio en la moneda del plan (o sin la tasa del día): aplicar daría 422 */
+            priceMissing: boolean;
+            /**
+             * @description NO_PRICE: ni convenio, ni lista de la sede, ni precio de catálogo; RATE_MISSING: el precio está en otra moneda y falta la tasa de hoy
+             * @enum {string|null}
+             */
+            priceIssue: "NO_PRICE" | "RATE_MISSING" | null;
+            /**
+             * @description CATALOG_ITEM_INACTIVE: el procedimiento está desactivado o retirado del catálogo; al aplicar se omite
+             * @enum {string|null}
+             */
+            skipped: "CATALOG_ITEM_INACTIVE" | null;
+        };
+        TemplatePreviewDto: {
+            /** Format: uuid */
+            planId: string;
+            /** Format: uuid */
+            templateId: string;
+            templateVersion: number;
+            /** @description Moneda del plan (ISO 4217) */
+            currency: string;
+            currencyDigits: components["schemas"]["CurrencyDigitsDto"];
+            /** @description La mayor visita viva del plan (0 si no tiene ítems) */
+            visitOffset: number;
+            lines: components["schemas"]["TemplatePreviewLineDto"][];
+            /** @description Los intervalos del plan tal como quedarían (los de la plantilla desplazados, sin pisar los que el plan ya tiene) */
+            visitIntervals: {
+                [key: string]: number;
+            };
+            /** @description Ítems que se crearían (líneas aplicables × cantidad) */
+            itemCount: number;
+            /** @description Suma de las líneas con precio */
+            total: number;
+        };
+        TemplateLineChoiceDto: {
+            /**
+             * Format: uuid
+             * @description Una línea de la plantilla (`lines[].lineId` de la vista previa)
+             */
+            lineId: string;
+            /**
+             * @description Diente de esta línea; gana al común
+             * @example 36
+             */
+            toothNumber?: string;
+            /** @description Superficies (opcionales); solo se guardan en las líneas con `asksSurfaces` */
+            surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
+        };
+        ApplyPlanTemplateDto: {
+            /**
+             * Format: uuid
+             * @description Plantilla de esta clínica
+             */
+            templateId: string;
+            /**
+             * @description Diente para todas las líneas (D2). Toda línea aplicable necesita diente: el suyo o este; sin ninguno, 400 PLAN_TEMPLATE_TOOTH_REQUIRED y no se crea nada.
+             * @example 36
+             */
+            toothNumber?: string;
+            lines?: components["schemas"]["TemplateLineChoiceDto"][];
+        };
+        SkippedTemplateLineDto: {
+            /** Format: uuid */
+            lineId: string;
+            /** Format: uuid */
+            catalogItemId: string;
+            catalogItemLabel: string;
+            /** @enum {string} */
+            reason: "CATALOG_ITEM_INACTIVE";
+        };
+        TemplateApplicationDto: {
+            /** @description El plan tal como queda (como GET /treatment-plans/:id: ítems, total, `visitIntervals`, `quoteExpired` y `currencyDigits`) */
+            plan: components["schemas"]["TreatmentPlanDto"];
+            /** @description Los ítems creados, en el orden de la plantilla */
+            createdItems: components["schemas"]["TreatmentPlanItemDto"][];
+            skipped: components["schemas"]["SkippedTemplateLineDto"][];
+        };
         DiscountMaxPercentByRoleDto: {
             /** @description Administración (por defecto 100) */
             ADMIN: number;
@@ -18539,6 +18888,100 @@ export interface components {
             paymentsWithoutRateCount: number;
             /** @description DX-472-bis: el proveedor de tasas no respondió a tiempo: cifras incompletas; volver a pedirla las completa */
             rateProviderTimedOut: boolean;
+        };
+        BalanceReminderPolicyDto: {
+            /**
+             * @description Tramos: días de la deuda vencida más antigua, crecientes
+             * @example [
+             *       7,
+             *       30,
+             *       60
+             *     ]
+             */
+            days: number[];
+            /**
+             * @description Máximo de avisos por deuda
+             * @example 3
+             */
+            maxNotices: number;
+            /**
+             * @description Mínimo de días entre dos avisos al mismo paciente
+             * @example 7
+             */
+            minGapDays: number;
+        };
+        BalanceReminderStateDto: {
+            /** @description Tramo alcanzado (1 = primer umbral) */
+            stage: number;
+            /** @description Umbral del tramo, en días */
+            stageDays: number;
+            /** @description Avisos ya dados para esta deuda */
+            noticesSent: number;
+            /**
+             * @description Día del último aviso de esta deuda (zona de la sede de la deuda)
+             * @example 2026-11-08
+             */
+            lastNoticeOn: string | null;
+        };
+        BalanceReminderRowDto: {
+            patient: components["schemas"]["AgingPatientDto"];
+            /**
+             * Format: uuid
+             * @description Sede de la deuda: la de la última cita atendida; sin citas atendidas, la del último abono; sin abonos, la de la última presentación de un plan; null si no hay ninguna
+             */
+            locationId: string | null;
+            /** @description Máximo de `oldestAgeDays` de sus monedas */
+            oldestAgeDays: number | null;
+            ageApproximate: boolean;
+            /** @description DX-472-bis: abonos en otra moneda que no suman por falta de tasa (o porque el proveedor no respondió): el saldo de la fila está incompleto */
+            paymentsWithoutRateCount: number;
+            /** @description DX-472-bis: el proveedor de tasas no respondió a tiempo para algún abono de la fila; esa deuda no se da por vencida (va a `current`) hasta que responda */
+            rateProviderTimedOut: boolean;
+            /** @description Una entrada por moneda con deuda o saldo a favor */
+            currencies: components["schemas"]["AgingCurrencyDto"][];
+            lastPayment: components["schemas"]["AgingLastPaymentDto"] | null;
+            /** @description La próxima cuota por vencer, de cualquier moneda */
+            nextInstallment: components["schemas"]["AgingRowNextInstallmentDto"] | null;
+            /** @description DX-150: última gestión de cobro (el texto, en la ficha) */
+            lastNote: components["schemas"]["AgingLastNoteDto"] | null;
+            /** @description DX-150: último compromiso de pago; el vigente si está OPEN, o cómo terminó (KEPT/BROKEN) */
+            promise: components["schemas"]["AgingPromiseDto"] | null;
+            reminder: components["schemas"]["BalanceReminderStateDto"];
+        };
+        BalanceRemindersExcludedDto: {
+            /** @description A quienes hoy tocaba avisar pero tienen un compromiso de pago abierto */
+            openPromise: number;
+            /** @description A quienes hoy tocaba avisar pero se dieron de baja de los avisos (DX-128) */
+            optedOut: number;
+        };
+        BalanceRemindersPageDto: {
+            /**
+             * @description «Hoy» en la zona de la sede del alcance
+             * @example 2026-11-15
+             */
+            asOf: string;
+            scope: components["schemas"]["AgingScopeDto"];
+            policy: components["schemas"]["BalanceReminderPolicyDto"];
+            items: components["schemas"]["BalanceReminderRowDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+            excluded: components["schemas"]["BalanceRemindersExcludedDto"];
+        };
+        UpdateBalanceReminderPolicyDto: {
+            /**
+             * @description Días de la deuda vencida más antigua en que toca avisar: de 1 a 3 enteros crecientes entre 1 y 365.
+             * @example [
+             *       7,
+             *       30,
+             *       60
+             *     ]
+             */
+            days: number[];
+            /** @example 3 */
+            maxNotices: number;
+            /** @example 7 */
+            minGapDays: number;
         };
         TransferCreditDto: {
             /**
@@ -27442,6 +27885,62 @@ export interface operations {
             };
         };
     };
+    CollectionsController_balanceReminder: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede activa: queda en la nota y es la sede del compromiso. */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkBalanceReminderDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionNoteDto"];
+                };
+            };
+            /** @description Canal inválido o nota de más de 280 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no gestiona la cobranza: es para administración y recepción. O la deuda es de una sede a la que no tienes acceso. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya se marcó como avisado hoy: vuelve a aparecer en «Por avisar hoy» cuando le toque el siguiente aviso. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     CollectionsController_note: {
         parameters: {
             query?: never;
@@ -30328,6 +30827,188 @@ export interface operations {
             };
             /** @description Sin checklist o egreso ya firmado */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    TreatmentPlanTemplatesController_list: {
+        parameters: {
+            query?: {
+                /** @description true = también las desactivadas (Ajustes). Por defecto, solo las activas. */
+                includeInactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreatmentPlanTemplateDto"][];
+                };
+            };
+            /** @description Recepción no arma planes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    TreatmentPlanTemplatesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTreatmentPlanTemplateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreatmentPlanTemplateDto"];
+                };
+            };
+            /** @description Nombre vacío o largo, sin líneas o con más de 50, cantidad o visita fuera de rango, etiquetas distintas en una visita o días entre visitas inválidos (mensaje en español) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plantilla no encontrada en esta clínica, o `code` PLAN_TEMPLATE_CATALOG_ITEM_NOT_FOUND: el procedimiento de una línea no existe en el catálogo de esta clínica (o está retirado); el cuerpo lleva su `position` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code` PLAN_TEMPLATE_DUPLICATE_NAME: ya existe una plantilla con ese nombre (sin distinguir mayúsculas) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code` PLAN_TEMPLATE_NOT_A_PROCEDURE: una línea apunta a un diagnóstico, no a un procedimiento; el cuerpo lleva su `position` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    TreatmentPlanTemplatesController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreatmentPlanTemplateDto"];
+                };
+            };
+            /** @description Recepción no arma planes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plantilla no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    TreatmentPlanTemplatesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTreatmentPlanTemplateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreatmentPlanTemplateDto"];
+                };
+            };
+            /** @description Plantilla resultante inválida */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plantilla no encontrada en esta clínica, o `code` PLAN_TEMPLATE_CATALOG_ITEM_NOT_FOUND: el procedimiento de una línea no existe en el catálogo de esta clínica (o está retirado); el cuerpo lleva su `position` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code` PLAN_TEMPLATE_STALE: la plantilla cambió («La plantilla cambió mientras la editabas: recárgala.»); o PLAN_TEMPLATE_DUPLICATE_NAME */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code` PLAN_TEMPLATE_NOT_A_PROCEDURE: una línea apunta a un diagnóstico, no a un procedimiento; el cuerpo lleva su `position` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -35225,6 +35906,112 @@ export interface operations {
             };
         };
     };
+    PlanTemplateApplyController_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewPlanTemplateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplatePreviewDto"];
+                };
+            };
+            /** @description Recepción no arma planes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan o plantilla inexistente o de otra clínica (también una plantilla de otra clínica: el mismo 404) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code` PLAN_TEMPLATE_PLAN_NOT_EDITABLE: el plan no está en borrador ni presentado, o está firmado (también ACEPTADO sin firma; el mensaje nombra el estado y el cuerpo lleva `status`); PLAN_TEMPLATE_INACTIVE: la plantilla está desactivada; PLAN_TEMPLATE_VISIT_OVERFLOW: una visita o un intervalo desplazado pasaría de 1000 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlanTemplateApplyController_apply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyPlanTemplateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateApplicationDto"];
+                };
+            };
+            /** @description `code` PLAN_TEMPLATE_TOOTH_REQUIRED: una línea aplicable sin diente (el cuerpo lleva `lineId`); PLAN_TEMPLATE_UNKNOWN_LINE: un `lines[].lineId` no es de la plantilla. Nada se crea */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Recepción no arma planes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan o plantilla inexistente o de otra clínica (también una plantilla de otra clínica: el mismo 404) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code` PLAN_TEMPLATE_PLAN_NOT_EDITABLE: el plan no está en borrador ni presentado, o está firmado (también ACEPTADO sin firma; el mensaje nombra el estado y el cuerpo lleva `status`); PLAN_TEMPLATE_INACTIVE: la plantilla está desactivada; PLAN_TEMPLATE_VISIT_OVERFLOW: una visita o un intervalo desplazado pasaría de 1000 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code` PLAN_TEMPLATE_PRICE_MISSING: una línea sin precio en la moneda del plan; DISCOUNT_REFERENCE_RATE_MISSING: falta la tasa del día (los dos con `lineId`); PLAN_TEMPLATE_NOTHING_TO_APPLY: ninguna línea aplicable. Nada se crea */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     DiscountPolicyController_get: {
         parameters: {
             query?: never;
@@ -37217,6 +38004,84 @@ export interface operations {
                 content?: never;
             };
             /** @description Tu rol no tiene acceso a la cartera: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReceivablesController_reminders: {
+        parameters: {
+            query?: {
+                /** @description Sede de la deuda. Sin él, la de la cabecera X-Location-Id; sin ninguna, las sedes permitidas al miembro. */
+                locationId?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: {
+                /** @description Sede activa. El parámetro `locationId` manda sobre ella; sin ninguno, toda la clínica. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BalanceRemindersPageDto"];
+                };
+            };
+            /** @description Filtro inválido o sede que no es de esta clínica */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no tiene acceso a la cartera: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReceivablesController_setReminderPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateBalanceReminderPolicyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BalanceReminderPolicyDto"];
+                };
+            };
+            /** @description Tramos, máximo o separación fuera de rango */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar la política de avisos de saldo. */
             403: {
                 headers: {
                     [name: string]: unknown;

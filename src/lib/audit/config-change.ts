@@ -103,6 +103,9 @@ const FIELD_LABELS: Record<string, string> = {
   // DX-497: idiomas de los pacientes (Ajustes) e idioma de un paciente (ficha).
   patientLanguages: "Idiomas de los pacientes",
   preferredLanguage: "Idioma de los mensajes",
+  // DX-559: plantillas de plan de tratamiento.
+  lineCount: "Nº de procedimientos",
+  visitCount: "Nº de visitas",
 };
 const FIELD_ORDER = Object.keys(FIELD_LABELS);
 
