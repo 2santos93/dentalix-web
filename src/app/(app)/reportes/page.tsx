@@ -1,5 +1,6 @@
 'use client';
 import { Suspense } from 'react';
+import dynamic from 'next/dynamic';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { PageHeader } from '@/components/shared/page-header';
@@ -12,6 +13,7 @@ import { ChairOccupancyView } from '@/components/reports/chair-occupancy-view';
 import { PatientLinksView } from '@/components/reports/patient-links-view';
 import { ProfitabilityView } from '@/components/reports/profitability-view';
 import { UnallocatedPaymentsView } from '@/components/reports/unallocated-payments-view';
+import { SectionSkeleton } from '@/components/shared/async-section';
 import {
   ReportsTabs,
   reportPanelId,
@@ -21,15 +23,23 @@ import {
   type ReportTabKey,
 } from '@/components/reports/reports-tabs';
 
+// DX-558: «Presupuestos» llega en su propio trozo de JS al abrir la pestaña
+// (patrón de `patient-lazy-tabs`); las demás vistas siguen en la carga de la página.
+const QuoteFunnelView = dynamic(
+  () => import('@/components/reports/quote-funnel-view').then((m) => m.QuoteFunnelView),
+  { ssr: false, loading: () => <SectionSkeleton /> },
+);
+
 // «Reportes» (DX-014). Mismo guard de sesión que la Caja; la pestaña va en
 // `?tab=` (la primera del rol, sin parámetro). Cada rol ve las pestañas que
-// su API le deja abrir (DX-423: el odontólogo, solo «Producción por
-// procedimiento»; DX-399: recepción, solo «Cobrado sin imputar»). Un rol sin acceso que llegue por URL ve el aviso de la
+// su API le deja abrir (DX-423 y DX-558: el odontólogo, «Producción por
+// procedimiento» y «Presupuestos», los dos solo con lo suyo; DX-399: recepción, solo «Cobrado sin imputar»). Un rol sin acceso que llegue por URL ve el aviso de la
 // propia vista (la API responde 403): la frontera es el servidor.
 const copy = {
   title: 'Reportes',
   description: 'Cómo van tus sedes: producción, cobros, rentabilidad, citas y ocupación, y qué procedimientos sostienen la clínica.',
-  descriptionOwn: 'Tu producción: qué procedimientos realizaste y a qué honorario frente al de catálogo.',
+  descriptionOwn:
+    'Solo lo tuyo: qué procedimientos realizaste y a qué honorario frente al de catálogo, y qué pasó con los presupuestos que elaboraste.',
   descriptionCollections: 'Los abonos con algo sin imputar a ítems del plan: cuánto está imputado y cuánto queda a cuenta, descontado lo ya devuelto o traspasado.',
 };
 
@@ -63,7 +73,8 @@ function ReportesRoute() {
     router.replace(next === tabs[0].key ? pathname : `${pathname}?tab=${next}`, { scroll: false });
   }
 
-  const ownOnly = tabs.length === 1 && tabs[0].key === 'produccion';
+  // El odontólogo sin FINANCIAL_REPORTS_VIEW: solo pestañas con «lo suyo» (scope OWN en la API).
+  const ownOnly = tabs.every((t) => t.key === 'produccion' || t.key === 'presupuestos');
   const collectionsOnly = tabs.length === 1 && tabs[0].key === 'sin-imputar';
   const view =
     tab === 'produccion' ? (
@@ -76,6 +87,8 @@ function ReportesRoute() {
       <PatientLinksView token={accessToken} />
     ) : tab === 'rentabilidad' ? (
       <ProfitabilityView token={accessToken} />
+    ) : tab === 'presupuestos' ? (
+      <QuoteFunnelView token={accessToken} isAdmin={role === 'ADMIN'} />
     ) : tab === 'sin-imputar' ? (
       <UnallocatedPaymentsView token={accessToken} />
     ) : (

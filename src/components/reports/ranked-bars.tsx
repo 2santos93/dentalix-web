@@ -5,12 +5,16 @@ export interface RankedBar {
   key: string;
   name: React.ReactNode;
   value: number;
-  /** El valor ya formateado (con su moneda): la etiqueta de la punta. */
-  display: string;
+  /**
+   * El valor ya formateado (con su moneda): la etiqueta de la punta. Puede ser
+   * un botón que abre el detalle (DX-558), siempre con el texto en tinta.
+   */
+  display: React.ReactNode;
 }
 
 /**
- * Barras horizontales ordenadas de mayor a menor, de UNA serie (skill dataviz:
+ * Barras horizontales ordenadas de mayor a menor (o, con `sort={false}`, en el
+ * orden recibido: los pasos de un embudo, DX-558), de UNA serie (skill dataviz:
  * «ranked horizontal bars, one hue»). Pensadas para pocas filas (sedes,
  * categorías) junto a la tabla que da el detalle.
  *
@@ -29,16 +33,19 @@ export function RankedBars({
   caption,
   bars,
   max,
+  sort = true,
   className,
 }: {
   title: string;
   caption?: React.ReactNode;
   bars: readonly RankedBar[];
   max?: number;
+  /** `false` = en el orden de `bars` (p. ej. los pasos de un embudo). */
+  sort?: boolean;
   className?: string;
 }) {
   const titleId = React.useId();
-  const sorted = [...bars].sort((a, b) => b.value - a.value);
+  const sorted = sort ? [...bars].sort((a, b) => b.value - a.value) : bars;
   const top = Math.max(max ?? 0, ...sorted.map((b) => b.value), 0);
   return (
     <figure aria-labelledby={titleId} className={cn('flex min-w-0 flex-col gap-3', className)}>

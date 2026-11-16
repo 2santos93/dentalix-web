@@ -8,7 +8,8 @@ import { TabBar } from '@/components/ui/tabs';
  * «Producción por procedimiento» (DX-423: ADMIN y DENTIST, que ve solo la
  * suya), «Cobrado sin imputar» (DX-399: ADMIN y recepción) y «Huecos
  * recuperados» (DX-436: ADMIN), «Ocupación por sillón» (DX-481: ADMIN) y
- * «Enlaces del paciente» (DX-424: ADMIN). Las siguientes son una línea más en `REPORT_TABS` y su vista en la
+ * «Enlaces del paciente» (DX-424: ADMIN) y «Presupuestos» (DX-558: ADMIN,
+ * DENTIST, que ve los que elaboró, y FINANCIAL_REPORTS_VIEW). Las siguientes son una línea más en `REPORT_TABS` y su vista en la
  * página. Patrón ARIA de pestañas con activación manual, como la Caja: las
  * flechas mueven el foco y Enter/Espacio (o el clic) eligen.
  */
@@ -18,6 +19,13 @@ export const REPORT_TABS = [
   // DX-410: ingresos − gastos por sede en base Caja o Devengo; administración (PROFITABILITY_REPORT_ROLES).
   { key: 'rentabilidad', label: 'Rentabilidad', roles: ['ADMIN'], permissions: ['FINANCIAL_REPORTS_VIEW'] },
   { key: 'produccion', label: 'Producción por procedimiento', roles: ['ADMIN', 'DENTIST'] },
+  // DX-558: embudo de presupuestos; ADMIN y FINANCIAL_REPORTS_VIEW, toda la clínica; DENTIST, los que elaboró (QUOTE_FUNNEL_REPORT_ROLES).
+  {
+    key: 'presupuestos',
+    label: 'Presupuestos',
+    roles: ['ADMIN', 'DENTIST'],
+    permissions: ['FINANCIAL_REPORTS_VIEW'],
+  },
   // DX-399: lo cobrado que aún no cubre ningún ítem; los roles de cobro (UNALLOCATED_PAYMENTS_ROLES).
   {
     key: 'sin-imputar',
