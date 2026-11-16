@@ -4,6 +4,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 
 export const labOrderStatusCopy = {
   overdue: 'Atrasada',
+  overdueLine: (days: number | null) => (days === null ? 'Atrasada' : `Atrasada, ${daysOverdueLabel(days)}`),
 };
 
 /**
@@ -23,4 +24,25 @@ export function LabOrderStatusChips({ order }: { order: Pick<LabOrder, 'status' 
       ) : null}
     </span>
   );
+}
+
+/**
+ * La fecha prometida en la tarjeta del teléfono: el chip «Atrasada» no cabe
+ * junto al estado sin apretar el nombre, así que el atraso va en rojo en la
+ * línea de la fecha («Prometida 13/11/2026 · Atrasada, 3 días de atraso»).
+ */
+export function LabOrderDueLine({
+  order,
+  day,
+  label,
+}: {
+  order: Pick<LabOrder, 'overdue' | 'daysOverdue'>;
+  day: string | null;
+  label: (day: string) => string;
+}) {
+  if (!day && !order.overdue) return null;
+  const parts = [day ? label(day) : null, order.overdue ? labOrderStatusCopy.overdueLine(order.daysOverdue) : null].filter(
+    (v): v is string => v !== null,
+  );
+  return <span className={order.overdue ? 'font-medium text-danger-text' : undefined}>{parts.join(' · ')}</span>;
 }

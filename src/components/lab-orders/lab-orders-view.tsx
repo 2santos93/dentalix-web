@@ -30,10 +30,11 @@ import { PageHeader } from '@/components/shared/page-header';
 import { Pagination } from '@/components/shared/pagination';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { DataList, DATA_LIST_PHONE_QUERY, type DataListColumn } from '@/components/ui/data-list';
 import { NativeSelect } from '@/components/ui/native-select';
 import { cn } from '@/lib/utils';
-import { LabOrderStatusChips } from './lab-order-status';
+import { LabOrderDueLine, LabOrderStatusChips } from './lab-order-status';
 
 export const labOrdersViewCopy = {
   title: 'Trabajos de laboratorio',
@@ -213,8 +214,9 @@ export function LabOrdersView({ token }: { token: string }) {
         </span>
       ),
       mobileCell: (o) => {
+        // Sin fecha (o sin formato de la sede) y sin atraso, la línea se omite.
         const day = o.dueOn ? stamp.maybe.civilDate(o.dueOn, o.locationId) : null;
-        return day ? <span className={cn(o.overdue && 'font-medium text-danger-text')}>{copy.dueOn(day)}</span> : null;
+        return day || o.overdue ? <LabOrderDueLine order={o} day={day} label={copy.dueOn} /> : null;
       },
     },
     {
@@ -222,6 +224,8 @@ export function LabOrdersView({ token }: { token: string }) {
       header: copy.colStatus,
       mobile: 'trailing',
       cell: (o) => <LabOrderStatusChips order={o} />,
+      // En la tarjeta, solo el estado: el atraso va en la línea de la fecha.
+      mobileCell: (o) => <StatusBadge kind="labOrder" status={o.status} />,
     },
   ];
 

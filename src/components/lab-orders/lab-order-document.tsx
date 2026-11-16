@@ -96,7 +96,7 @@ export function LabOrderDocument({ data, stamp }: LabOrderDocumentProps) {
             ) : null}
           </div>
         </div>
-        <div className="sm:text-right print:text-right">
+        <div className="sm:shrink-0 sm:text-right print:shrink-0 print:text-right">
           <h1 className="text-xl font-semibold tracking-tight">{copy.title}</h1>
           <p className="text-xs text-[#4b5563]">{copy.subtitle}</p>
           <p className="mt-1 text-sm font-semibold tabular-nums">
