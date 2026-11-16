@@ -5490,6 +5490,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/scheduled-production": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Producción agendada (por día y profesional), citas sin tratamiento y previsión del mes
+         * @description Lo agendado del período: procedimientos ACEPTADOS o ya REALIZADOS de un presupuesto ligados a citas que cuentan (vivas, ni canceladas ni inasistencias), por día civil de la cita (zona de su sede) y por profesional de la cita. Un procedimiento ligado a varias citas cuenta una vez, en la de inicio más reciente. Importes = precio − descuento en la moneda del CATÁLOGO, convertidos con la tasa GUARDADA del día (la de la cita; la de hoy si es futura; nunca se pide al proveedor): sin ella, ese importe queda fuera (`withoutRate`, aviso WITHOUT_RATE). Previsión del mes en curso (siempre, con los mismos filtros): Previsión = Producido hasta hoy + Agendado pendiente. ADMIN o quien tenga FINANCIAL_REPORTS_VIEW ve toda la clínica (scope CLINIC); un DENTIST, solo lo suyo (scope OWN); recepción y asistente, nada. Solo las sedes que ve quien consulta (DX-089). `definitions` trae «Cómo se calcula». Sin datos de pacientes.
+         */
+        get: operations["ScheduledProductionController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/scheduled-production/unlinked": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Citas sin tratamiento ligado del período
+         * @description Mismos filtros y alcance que la producción agendada: las citas que cuentan (ni canceladas ni inasistencias) sin ningún procedimiento de un presupuesto ligado, con paciente, tipo, profesional y sede, por inicio (asc; `page`/`pageSize`, 25 por defecto, máx. 100). Lleva el nombre del paciente: auditado (VIEW).
+         */
+        get: operations["ScheduledProductionController_unlinked"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/closing-queue": {
         parameters: {
             query?: never;
@@ -21803,6 +21843,206 @@ export interface components {
             currency: string | null;
             /** @description Por fecha de presentación desc */
             items: components["schemas"]["QuoteFunnelPresentationDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        ScheduledProductionPeriodDto: {
+            /** @example 2026-11-01 */
+            from: string;
+            /** @example 2026-11-30 */
+            to: string;
+        };
+        ScheduledProductionFiltersDto: {
+            /** Format: uuid */
+            locationId: string | null;
+            /**
+             * Format: uuid
+             * @description Con scope OWN, siempre quien consulta
+             */
+            providerId: string | null;
+        };
+        ScheduledProductionTotalsDto: {
+            /**
+             * @description Agendado del período en la moneda del catálogo (2 decimales). null = sin moneda de catálogo
+             * @example 1250
+             */
+            scheduledAmount: number | null;
+            /** @description Citas que cuentan (ni canceladas ni inasistencias) */
+            appointments: number;
+            /** @description De esas citas, las que no tienen tratamiento ligado */
+            appointmentsWithoutItems: number;
+        };
+        ScheduledProductionDayDto: {
+            /**
+             * @description Agendado del período en la moneda del catálogo (2 decimales). null = sin moneda de catálogo
+             * @example 1250
+             */
+            scheduledAmount: number | null;
+            /** @description Citas que cuentan (ni canceladas ni inasistencias) */
+            appointments: number;
+            /** @description De esas citas, las que no tienen tratamiento ligado */
+            appointmentsWithoutItems: number;
+            /**
+             * @description Día civil (AAAA-MM-DD) en la zona de la sede de cada cita
+             * @example 2026-11-17
+             */
+            date: string;
+        };
+        ScheduledProductionProfessionalDto: {
+            /**
+             * @description Agendado del período en la moneda del catálogo (2 decimales). null = sin moneda de catálogo
+             * @example 1250
+             */
+            scheduledAmount: number | null;
+            /** @description Citas que cuentan (ni canceladas ni inasistencias) */
+            appointments: number;
+            /** @description De esas citas, las que no tienen tratamiento ligado */
+            appointmentsWithoutItems: number;
+            /**
+             * Format: uuid
+             * @description El profesional de la cita (`providerId`)
+             */
+            professionalId: string;
+            /** @example Dra. Andrea Pérez */
+            name: string;
+        };
+        ScheduledProductionDayProfessionalDto: {
+            /** @example 2026-11-17 */
+            date: string;
+            /** Format: uuid */
+            professionalId: string;
+            /** @example 100 */
+            scheduledAmount: number | null;
+            appointments: number;
+        };
+        ScheduledProductionForecastDto: {
+            /**
+             * @description Mes en curso (AAAA-MM) de la sede de referencia: la elegida o, si no, la principal. Cada sede usa su propio mes y su hoy (aviso MIXED_MONTHS si no coinciden).
+             * @example 2026-11
+             */
+            month: string;
+            /**
+             * @description Hoy (AAAA-MM-DD) en la sede de referencia
+             * @example 2026-11-17
+             */
+            today: string;
+            /**
+             * @description Producido hasta hoy: realizados desde el día 1 del mes hasta hoy (incluido), en la moneda del catálogo. null = sin moneda de catálogo
+             * @example 3200
+             */
+            producedToDate: number | null;
+            /**
+             * @description Agendado pendiente: aceptados aún no realizados en citas de hoy a fin de mes. null = sin moneda de catálogo
+             * @example 1800
+             */
+            scheduledPending: number | null;
+            /**
+             * @description Previsión = Producido hasta hoy + Agendado pendiente (suma de los dos ya redondeados). null = sin moneda de catálogo
+             * @example 5000
+             */
+            forecast: number | null;
+            /** @description Procedimientos de la previsión (realizados o pendientes) fuera de los importes por falta de tasa guardada */
+            itemsWithoutRate: number;
+        };
+        ScheduledProductionWithoutRateDto: {
+            /** @description Citas del período con algún procedimiento en otra moneda sin tasa guardada del día: cuentan en las citas y quedan fuera de los importes */
+            appointments: number;
+            /** @description Procedimientos del período fuera de los importes por eso */
+            items: number;
+        };
+        ScheduledProductionDefinitionDto: {
+            /** @enum {string} */
+            key: "SCHEDULED" | "WITHOUT_ITEMS" | "PRODUCED_TO_DATE" | "SCHEDULED_PENDING" | "FORECAST" | "WITHOUT_RATE";
+            /** @example Agendado */
+            label: string;
+            /** @description «Cómo se calcula», una regla por línea */
+            howItIsCalculated: string[];
+        };
+        ScheduledProductionLocationOptionDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Sede Chacao */
+            name: string;
+            /** @description false = sede desactivada (sigue saliendo) */
+            isActive: boolean;
+        };
+        ScheduledProductionProfessionalOptionDto: {
+            /** Format: uuid */
+            userId: string;
+            /** @example Dra. Andrea Pérez */
+            fullName: string;
+        };
+        ScheduledProductionOptionsDto: {
+            /** @description Las sedes que ve quien consulta (DX-089) */
+            locations: components["schemas"]["ScheduledProductionLocationOptionDto"][];
+            /** @description Miembros que atienden alguna cita en esas sedes; con scope OWN, solo quien consulta */
+            professionals: components["schemas"]["ScheduledProductionProfessionalOptionDto"][];
+        };
+        ScheduledProductionReportDto: {
+            period: components["schemas"]["ScheduledProductionPeriodDto"];
+            /** @description Moneda del catálogo de la clínica: la de todos los importes. null = no se resuelve (aviso NO_CATALOG_CURRENCY; importes null, los recuentos siguen) */
+            currency: string | null;
+            /**
+             * @description CLINIC: toda la clínica (ADMIN o FINANCIAL_REPORTS_VIEW); OWN: solo lo de quien consulta (DENTIST)
+             * @enum {string}
+             */
+            scope: "CLINIC" | "OWN";
+            /** @description true = quien consulta solo ve algunas sedes (DX-089): las cifras son de esas */
+            restrictedToLocations: boolean;
+            filters: components["schemas"]["ScheduledProductionFiltersDto"];
+            totals: components["schemas"]["ScheduledProductionTotalsDto"];
+            /** @description TODOS los días del período, en orden (también con 0) */
+            byDay: components["schemas"]["ScheduledProductionDayDto"][];
+            /** @description Una fila por profesional con citas en el período (por importe desc, luego nombre); con scope OWN, solo la suya */
+            byProfessional: components["schemas"]["ScheduledProductionProfessionalDto"][];
+            /** @description Por día y profesional (solo los pares con citas), por día y nombre: la tira de la agenda */
+            byDayAndProfessional: components["schemas"]["ScheduledProductionDayProfessionalDto"][];
+            /** @description Previsión del mes en curso con los mismos filtros de sede y profesional (no depende de from/to) */
+            forecast: components["schemas"]["ScheduledProductionForecastDto"];
+            withoutRate: components["schemas"]["ScheduledProductionWithoutRateDto"];
+            /** @description Realizados sin sede o sin fecha (anteriores a DX-050): no entran en lo producido (aviso UNATTRIBUTED_DONE) */
+            unattributedDone: number;
+            /** @description NO_CATALOG_CURRENCY: sin moneda de catálogo (importes null). WITHOUT_RATE: hay importes fuera por falta de tasa guardada (ver withoutRate y forecast.itemsWithoutRate). MIXED_MONTHS: alguna sede está en otro mes que la de referencia. UNATTRIBUTED_DONE: hay realizados sin sede o sin fecha */
+            warnings: ("NO_CATALOG_CURRENCY" | "WITHOUT_RATE" | "MIXED_MONTHS" | "UNATTRIBUTED_DONE")[];
+            /** @description Agendado, sin tratamiento, producido hasta hoy, agendado pendiente, previsión (con la fórmula) y sin tasa («Cómo se calcula») */
+            definitions: components["schemas"]["ScheduledProductionDefinitionDto"][];
+            options: components["schemas"]["ScheduledProductionOptionsDto"];
+        };
+        UnlinkedAppointmentDto: {
+            /** Format: uuid */
+            appointmentId: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** @description Nunca CANCELLED ni NO_SHOW (no cuentan) */
+            status: components["schemas"]["AppointmentStatus"];
+            /**
+             * Format: uuid
+             * @description Paciente vivo o archivado (las citas de un paciente eliminado no cuentan)
+             */
+            patientId: string;
+            /** @example María Fernández */
+            patientName: string;
+            /** @example Control */
+            appointmentTypeName: string | null;
+            /** Format: uuid */
+            professionalId: string;
+            professionalName: string | null;
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sede Chacao */
+            locationName: string;
+            /**
+             * @description Zona de la sede: la hora se pinta con ella
+             * @example America/Caracas
+             */
+            timeZone: string;
+        };
+        ScheduledProductionUnlinkedDto: {
+            /** @description Por inicio de la cita (asc) */
+            items: components["schemas"]["UnlinkedAppointmentDto"][];
             total: number;
             page: number;
             pageSize: number;
@@ -42429,6 +42669,106 @@ export interface operations {
                 content?: never;
             };
             /** @description LOCATION_TIMEZONE_REQUIRED: una sede con presentaciones no tiene zona horaria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduledProductionController_get: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD): cuenta el día de inicio de cada cita en la zona horaria de su sede. Como mucho 62 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). No cambia la previsión, que es siempre del mes en curso. */
+                from: string;
+                /** @description Último día del período (inclusive) */
+                to: string;
+                /** @description Solo las citas (y, en la previsión, lo realizado) de esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo las citas de este profesional (y, en la previsión, lo que realizó). Quien ve solo lo suyo (scope OWN) solo puede pedirse a sí mismo (403 si no); sin él, ve igualmente solo lo suyo. */
+                providerId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledProductionReportDto"];
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 62 días. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración, los odontólogos y quien tenga acceso a los reportes financieros ven la producción agendada. / Solo puedes ver tu propia producción agendada. / No tienes acceso a esta sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con citas o realizados no tiene zona horaria / LOCATION_REQUIRED: la clínica no tiene ninguna sede activa */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduledProductionController_unlinked: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD): cuenta el día de inicio de cada cita en la zona horaria de su sede. Como mucho 62 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). No cambia la previsión, que es siempre del mes en curso. */
+                from: string;
+                /** @description Último día del período (inclusive) */
+                to: string;
+                /** @description Solo las citas (y, en la previsión, lo realizado) de esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo las citas de este profesional (y, en la previsión, lo que realizó). Quien ve solo lo suyo (scope OWN) solo puede pedirse a sí mismo (403 si no); sin él, ve igualmente solo lo suyo. */
+                providerId?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledProductionUnlinkedDto"];
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 62 días. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración, los odontólogos y quien tenga acceso a los reportes financieros ven la producción agendada. / Solo puedes ver tu propia producción agendada. / No tienes acceso a esta sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con citas o realizados no tiene zona horaria / LOCATION_REQUIRED: la clínica no tiene ninguna sede activa */
             409: {
                 headers: {
                     [name: string]: unknown;
