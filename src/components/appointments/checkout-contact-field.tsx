@@ -1,6 +1,8 @@
 'use client';
 import { useId, useRef, useState, type KeyboardEvent } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { updatePatient } from '@/lib/patients/patients-api';
+import { isEmailAddress } from '@/lib/format/email';
 import { InlineError } from '@/components/errors/inline-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,10 +34,7 @@ const copy = checkoutContactCopy;
  *
  * No es un `<form>`: vive dentro del de la salida. Enter guarda este campo y
  * nunca completa la cita.
- *
- * La API de pacientes y la regla del correo se piden al guardar (`import()`):
- * la ficha también las usa y, compartidas con la salida, Turbopack las sacaba a
- * otro chunk de su primera carga (presupuesto de bundle de /patients/[id]).
+
  */
 export function CheckoutContactField({
   token,
@@ -66,14 +65,10 @@ export function CheckoutContactField({
     if (saving) return;
     const text = value.trim();
     if (!text) return fail(copy.missing[kind]);
-    if (kind === 'email') {
-      const { isEmailAddress } = await import('@/lib/format/email');
-      if (!isEmailAddress(text)) return fail(copy.emailInvalid);
-    }
+    if (kind === 'email' && !isEmailAddress(text)) return fail(copy.emailInvalid);
     setSaving(true);
     setError(null);
     try {
-      const { updatePatient } = await import('@/lib/patients/patients-api');
       await updatePatient(token, patientId, kind === 'phone' ? { phone: text } : { email: text });
       setEditing(false);
       setValue('');
