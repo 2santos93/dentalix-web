@@ -49,7 +49,7 @@ const catalogById = new Map([
   ['cat-res', catalogItem('cat-res', 'Resina')],
 ]);
 
-function renderTable(items: TreatmentPlanItem[]) {
+function renderTable(items: TreatmentPlanItem[], extra: { labOrderHref?: (item: TreatmentPlanItem) => string } = {}) {
   render(
     <ItemsTable
       items={items}
@@ -63,6 +63,7 @@ function renderTable(items: TreatmentPlanItem[]) {
       selection={{ selectedIds: new Set(), onToggle: jest.fn() }}
       fmt={regionalFormat({ locale: 'es-VE', hourCycle: 'h12' })}
       stamp={testStamp()}
+      {...extra}
     />,
   );
 }
@@ -101,5 +102,19 @@ describe('ItemsTable: nombre de estado y selección de cada ítem (DX-546 · FE-
     expect(statuses).toHaveLength(6);
     const selects = names('checkbox');
     expect(new Set(selects).size).toBe(3);
+  });
+});
+
+describe('ItemsTable: «Orden de laboratorio» desde el ítem (DX-017)', () => {
+  it('con `labOrderHref`, cada ítem enlaza a la sección «Laboratorio» con su id', () => {
+    renderTable([item('i2', 'cat-res', '16')], { labOrderHref: (it) => `/patients/p1?tab=lab-orders&labOrderPlanItem=${it.id}` });
+    const links = screen.getAllByRole('link', { name: 'Orden de laboratorio del diente 16', hidden: true });
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) expect(link).toHaveAttribute('href', '/patients/p1?tab=lab-orders&labOrderPlanItem=i2');
+  });
+
+  it('sin `labOrderHref` (un rol que no crea órdenes) no se pinta', () => {
+    renderTable([item('i2', 'cat-res', '16')]);
+    expect(screen.queryByRole('link', { name: /Orden de laboratorio/, hidden: true })).not.toBeInTheDocument();
   });
 });

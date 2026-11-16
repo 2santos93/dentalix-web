@@ -156,6 +156,16 @@ const orthoFollowUp = {
   ON_TRACK: s('neutral', 'Al día'),
 } satisfies Presentations<'OVERDUE' | 'NO_NEXT_APPOINTMENT' | 'ON_TRACK'>;
 
+// DX-017: orden de laboratorio dental. El estado sale de sus fechas (API).
+// Enviada = espera al laboratorio; Recibida = falta revisarla; Revisada, hecho.
+const labOrder = {
+  DRAFT: s('neutral', 'Borrador'),
+  SENT: s('warning', 'Enviada'),
+  RECEIVED: s('info', 'Recibida'),
+  CHECKED: s('success', 'Revisada'),
+  CANCELLED: s('neutral', 'Anulada'),
+} satisfies Presentations<Schemas['LabOrderStatus']>;
+
 const perioExam = {
   DRAFT: s('neutral', 'Borrador'),
   FINAL: s('success', 'Finalizado'),
@@ -400,6 +410,7 @@ export const STATUS_PRESENTATION = {
   clinicalRecord,
   orthoCase,
   orthoFollowUp,
+  labOrder,
   perioExam,
   prescription,
   certificate,
