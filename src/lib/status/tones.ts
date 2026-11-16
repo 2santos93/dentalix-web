@@ -141,6 +141,21 @@ const clinicalRecord = {
   VOIDED: s('neutral', 'Anulado'),
 } satisfies Presentations<'VOIDED'>;
 
+// DX-190: caso de ortodoncia. Abandonado = cerrado sin juicio: neutro.
+const orthoCase = {
+  ACTIVE: s('info', 'Activo'),
+  RETENTION: s('info', 'En retención'),
+  FINISHED: s('success', 'Finalizado'),
+  ABANDONED: s('neutral', 'Abandonado'),
+} satisfies Presentations<Schemas['OrthoCaseDto']['status']>;
+
+// DX-190: seguimiento de la lista de ortodoncia.
+const orthoFollowUp = {
+  OVERDUE: s('danger', 'Atrasado'),
+  NO_NEXT_APPOINTMENT: s('warning', 'Sin próxima cita'),
+  ON_TRACK: s('neutral', 'Al día'),
+} satisfies Presentations<'OVERDUE' | 'NO_NEXT_APPOINTMENT' | 'ON_TRACK'>;
+
 const perioExam = {
   DRAFT: s('neutral', 'Borrador'),
   FINAL: s('success', 'Finalizado'),
@@ -383,6 +398,8 @@ export const STATUS_PRESENTATION = {
   treatmentPlanItem,
   toothRecord,
   clinicalRecord,
+  orthoCase,
+  orthoFollowUp,
   perioExam,
   prescription,
   certificate,

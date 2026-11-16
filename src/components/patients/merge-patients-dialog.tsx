@@ -79,6 +79,8 @@ const BLOCKER_API_CODES = new Set([
   'MERGE_OVERLAPPING_APPOINTMENTS',
   'MERGE_OPENING_BALANCE_CONFLICT',
   'MERGE_OPEN_PAYMENT_PROMISES',
+  // DX-190: dos casos de ortodoncia activos.
+  'MERGE_TWO_ACTIVE_ORTHO_CASES',
 ]);
 
 type LinkKind = keyof typeof archiveLinksCopy.kinds;

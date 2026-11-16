@@ -17,6 +17,14 @@ import { getRoster, type MinuteRangeDto, type Roster } from '@/lib/locations/pro
 import { hiddenProviderIds, rosterDayOf } from '@/lib/locations/provider-schedule';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { NEW_APPOINTMENT_EVENT, NEW_APPOINTMENT_PARAM } from '@/lib/ui/new-appointment';
+import { canWriteOrtho } from '@/lib/ortho/ortho-roles';
+import dynamic from 'next/dynamic';
+
+// DX-190: el atajo de ortodoncia llega en su propio trozo (y solo pide algo con el panel abierto).
+const AppointmentOrthoAction = dynamic(
+  () => import('@/components/ortho/appointment-ortho-action').then((m) => m.AppointmentOrthoAction),
+  { ssr: false },
+);
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import {
@@ -2116,6 +2124,10 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                     <NotebookPen aria-hidden />
                     {copy.registerEvolution}
                   </Button>
+                ) : null}
+                {/* DX-190: el control de ortodoncia de esta cita (si el paciente tiene caso abierto). */}
+                {canRegisterEvolution(role, liveDetailAppointment, today, timeZone) && canWriteOrtho(role) ? (
+                  <AppointmentOrthoAction key={`ortho-${liveDetailAppointment.id}`} token={token} appointment={liveDetailAppointment} />
                 ) : null}
                 <AppointmentCertificateAction key={`cert-${liveDetailAppointment.id}`} token={token} appointment={liveDetailAppointment} />
                 {/* DX-572: orden de estudios o referencia desde la cita (DENTIST y ADMIN). */}

@@ -7675,6 +7675,123 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/ortho-cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Casos de ortodoncia del paciente con progreso y arco actual */
+        get: operations["PatientOrthoController_list"];
+        put?: never;
+        /** Abre un caso de ortodoncia (uno activo por paciente) */
+        post: operations["PatientOrthoController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/ortho-cases/{caseId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Cambia la planificación del caso (abierto) */
+        patch: operations["PatientOrthoController_update"];
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/ortho-cases/{caseId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pasa el caso a retención, lo finaliza o lo da por abandonado
+         * @description ACTIVE → RETENTION | FINISHED | ABANDONED; RETENTION → FINISHED | ABANDONED. El abandono exige motivo. Un caso cerrado ya no cambia.
+         */
+        post: operations["PatientOrthoController_changeStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/ortho-cases/{caseId}/visits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Controles del caso con sus adendas, el más reciente primero */
+        get: operations["PatientOrthoController_listVisits"];
+        put?: never;
+        /**
+         * Registra un control (inalterable: se corrige con una adenda)
+         * @description Crea la evolución que lo documenta (mismas reglas que una evolución: cita de este paciente, atendida y no futura; fecha no futura) y el control estructurado en la misma transacción. Los calibres salen de la lista de la clínica.
+         */
+        post: operations["PatientOrthoController_registerVisit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ortho/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ajustes de ortodoncia: módulo activo y calibres de arco */
+        get: operations["OrthoController_getSettings"];
+        /**
+         * Activa la ortodoncia o cambia los calibres (solo ADMIN, auditado)
+         * @description Un control guardado conserva el calibre que se eligió aunque la lista cambie. Si nada cambia, 200 sin evento de auditoría.
+         */
+        put: operations["OrthoController_updateSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ortho/follow-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Casos activos: atrasados, sin próxima cita y no-show
+         * @description «Atrasado»: el último control (o, sin controles, el inicio) fue hace más de intervalo + 15 días, en el día civil de la sede del caso. «Sin próxima cita»: sin cita futura agendada o confirmada ni una en curso. Filtrable por sede y profesional; respeta las sedes del miembro.
+         */
+        get: operations["OrthoController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/documents": {
         parameters: {
             query?: never;
@@ -8687,7 +8804,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE" | "ORTHO_CASE" | "ORTHO_VISIT";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -15089,7 +15206,7 @@ export interface components {
          * @description Lo que impide fusionar y hay que resolver antes: citas a la misma hora, saldos migrados del mismo lote y moneda, dos compromisos de pago abiertos. Vacío: se puede fusionar.
          * @enum {string}
          */
-        MergeBlocker: "DX266_OVERLAPPING_APPOINTMENTS" | "DX266_OPENING_BALANCE_CONFLICT" | "DX266_OPEN_PAYMENT_PROMISES";
+        MergeBlocker: "DX266_OVERLAPPING_APPOINTMENTS" | "DX266_OPENING_BALANCE_CONFLICT" | "DX266_OPEN_PAYMENT_PROMISES" | "DX266_TWO_ACTIVE_ORTHO_CASES";
         MergePreviewDto: {
             kept: components["schemas"]["MergeSideDto"];
             absorbed: components["schemas"]["MergeSideDto"];
@@ -24856,6 +24973,243 @@ export interface components {
         };
         VoidImplantDto: {
             reason: string;
+        };
+        OrthoProgressDto: {
+            visitsDone: number;
+            plannedVisits: number;
+            monthsElapsed: number;
+            estimatedMonths: number;
+            /** @description 0–100 */
+            percent: number;
+        };
+        OrthoWireDto: {
+            /** @enum {string} */
+            material: "NITI" | "STEEL" | "TMA" | "OTHER";
+            /** @example 0.016x0.022 */
+            gauge: string;
+        };
+        OrthoCaseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            /** Format: uuid */
+            providerId: string;
+            providerName: string | null;
+            /** Format: uuid */
+            treatmentPlanId: string | null;
+            /** @enum {string} */
+            technique: "METAL_BRACKETS" | "AESTHETIC_BRACKETS" | "SELF_LIGATING" | "ALIGNERS" | "REMOVABLE" | "OTHER";
+            /** Format: date */
+            startDate: string;
+            estimatedMonths: number;
+            plannedVisits: number;
+            visitIntervalDays: number;
+            /** @enum {string} */
+            status: "ACTIVE" | "RETENTION" | "FINISHED" | "ABANDONED";
+            statusReason: string | null;
+            /** Format: date-time */
+            statusChangedAt: string | null;
+            /** Format: uuid */
+            statusChangedById: string | null;
+            statusChangedByName: string | null;
+            /** Format: date */
+            bondedOn: string | null;
+            /** Format: date */
+            debondedOn: string | null;
+            /** Format: uuid */
+            createdById: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            progress: components["schemas"]["OrthoProgressDto"];
+            currentUpperWire: components["schemas"]["OrthoWireDto"] | null;
+            currentLowerWire: components["schemas"]["OrthoWireDto"] | null;
+            /** Format: date */
+            lastVisitDate: string | null;
+            /** Format: date */
+            nextVisitProposedOn: string | null;
+            /** @description Caso activo con el último control (o el inicio) hace más de intervalo + 15 días */
+            overdue: boolean;
+        };
+        CreateOrthoCaseDto: {
+            /** @enum {string} */
+            technique: "METAL_BRACKETS" | "AESTHETIC_BRACKETS" | "SELF_LIGATING" | "ALIGNERS" | "REMOVABLE" | "OTHER";
+            /**
+             * Format: date
+             * @example 2026-11-16
+             */
+            startDate: string;
+            /** @example 24 */
+            estimatedMonths: number;
+            /** @example 24 */
+            plannedVisits: number;
+            /** @default 30 */
+            visitIntervalDays: number;
+            /** Format: date */
+            bondedOn?: string | null;
+            /** Format: date */
+            debondedOn?: string | null;
+            /**
+             * Format: uuid
+             * @description Profesional responsable (por defecto, quien crea el caso)
+             */
+            providerId?: string;
+            /**
+             * Format: uuid
+             * @description Sede del caso (por defecto, la sede activa)
+             */
+            locationId?: string;
+            /** Format: uuid */
+            treatmentPlanId?: string | null;
+        };
+        UpdateOrthoCaseDto: {
+            /** @enum {string} */
+            technique?: "METAL_BRACKETS" | "AESTHETIC_BRACKETS" | "SELF_LIGATING" | "ALIGNERS" | "REMOVABLE" | "OTHER";
+            /** Format: date */
+            startDate?: string;
+            estimatedMonths?: number;
+            plannedVisits?: number;
+            visitIntervalDays?: number;
+            /** Format: date */
+            bondedOn?: string | null;
+            /** Format: date */
+            debondedOn?: string | null;
+            /** Format: uuid */
+            providerId?: string;
+            /** Format: uuid */
+            treatmentPlanId?: string | null;
+        };
+        ChangeOrthoCaseStatusDto: {
+            /** @enum {string} */
+            status: "RETENTION" | "FINISHED" | "ABANDONED";
+            /** @description Motivo (obligatorio al abandonar) */
+            reason?: string;
+        };
+        OrthoVisitAddendumDto: {
+            /** Format: uuid */
+            id: string;
+            reason: string | null;
+            text: string;
+            /** Format: uuid */
+            authorId: string;
+            authorName: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        OrthoVisitDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            caseId: string;
+            /**
+             * Format: uuid
+             * @description Evolución que documenta el control (las adendas van aquí)
+             */
+            clinicalEntryId: string;
+            visitNumber: number;
+            /** Format: date */
+            visitDate: string;
+            /** Format: uuid */
+            appointmentId: string | null;
+            upperWire: components["schemas"]["OrthoWireDto"] | null;
+            lowerWire: components["schemas"]["OrthoWireDto"] | null;
+            /** @enum {string|null} */
+            elasticsType: "CLASS_II" | "CLASS_III" | "CROSS" | "BOX" | "TRIANGLE" | "OTHER" | null;
+            /** @enum {string|null} */
+            elasticsWear: "FULL_TIME" | "NIGHT" | "PART_TIME" | null;
+            applianceChanges: string | null;
+            incidents: ("BRACKET_DEBONDED" | "BRACKET_BROKEN" | "WIRE_DAMAGED")[];
+            hygieneIndex: number | null;
+            /** Format: date */
+            nextVisitProposedOn: string | null;
+            notes: string;
+            /** Format: uuid */
+            authorId: string;
+            authorName: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            addenda: components["schemas"]["OrthoVisitAddendumDto"][];
+        };
+        RegisterOrthoVisitDto: {
+            /**
+             * Format: date
+             * @description Día de la atención. Con cita, el de la cita (por defecto); sin ella, hoy.
+             */
+            entryDate?: string;
+            /** Format: uuid */
+            appointmentId?: string;
+            upperWire?: components["schemas"]["OrthoWireDto"] | null;
+            lowerWire?: components["schemas"]["OrthoWireDto"] | null;
+            /** @enum {string|null} */
+            elasticsType?: "CLASS_II" | "CLASS_III" | "CROSS" | "BOX" | "TRIANGLE" | "OTHER" | null;
+            /** @enum {string|null} */
+            elasticsWear?: "FULL_TIME" | "NIGHT" | "PART_TIME" | null;
+            applianceChanges?: string | null;
+            incidents?: ("BRACKET_DEBONDED" | "BRACKET_BROKEN" | "WIRE_DAMAGED")[];
+            hygieneIndex?: number | null;
+            note?: string | null;
+            /** Format: date */
+            nextVisitProposedOn?: string | null;
+        };
+        OrthoSettingsDto: {
+            /** @description La clínica usa el módulo de ortodoncia */
+            enabled: boolean;
+            /**
+             * @description Calibres de arco que ofrece el control (lista de la clínica)
+             * @example [
+             *       "0.014",
+             *       "0.016",
+             *       "0.016x0.022",
+             *       "0.019x0.025"
+             *     ]
+             */
+            wireGauges: string[];
+        };
+        UpdateOrthoSettingsDto: {
+            enabled?: boolean;
+            wireGauges?: string[];
+        };
+        OrthoFollowUpRowDto: {
+            /** Format: uuid */
+            caseId: string;
+            /** Format: uuid */
+            patientId: string;
+            patientFirstName: string;
+            patientLastName: string;
+            patientPhone: string | null;
+            patientPhoneE164: string | null;
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            /** Format: uuid */
+            providerId: string;
+            providerName: string | null;
+            /** @enum {string} */
+            technique: "METAL_BRACKETS" | "AESTHETIC_BRACKETS" | "SELF_LIGATING" | "ALIGNERS" | "REMOVABLE" | "OTHER";
+            /** Format: date */
+            startDate: string;
+            visitIntervalDays: number;
+            visitsDone: number;
+            plannedVisits: number;
+            /** Format: date */
+            lastVisitDate: string | null;
+            daysSinceLastVisit: number;
+            overdue: boolean;
+            /** Format: date-time */
+            nextAppointmentAt: string | null;
+            noNextAppointment: boolean;
+            noShowCount: number;
+        };
+        OrthoFollowUpPageDto: {
+            items: components["schemas"]["OrthoFollowUpRowDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
         };
         /** @enum {string} */
         PatientDocumentCategory: "XRAY" | "PHOTO" | "REFERRAL" | "SIGNED_CONSENT" | "REPORT" | "OTHER";
@@ -34720,7 +35074,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Alguno ya está archivado o fusionado (`MERGE_PATIENT_INACTIVE`), tienen citas a la misma hora (`MERGE_OVERLAPPING_APPOINTMENTS`), saldos migrados del mismo lote (`MERGE_OPENING_BALANCE_CONFLICT`), dos compromisos de pago abiertos (`MERGE_OPEN_PAYMENT_PROMISES`) o el documento elegido ya es de otro paciente. */
+            /** @description Alguno ya está archivado o fusionado (`MERGE_PATIENT_INACTIVE`), tienen citas a la misma hora (`MERGE_OVERLAPPING_APPOINTMENTS`), saldos migrados del mismo lote (`MERGE_OPENING_BALANCE_CONFLICT`), dos compromisos de pago abiertos (`MERGE_OPEN_PAYMENT_PROMISES`), dos casos de ortodoncia activos (`MERGE_TWO_ACTIVE_ORTHO_CASES`) o el documento elegido ya es de otro paciente. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -46697,6 +47051,389 @@ export interface operations {
             };
             /** @description El implante ya está anulado */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientOrthoController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrthoCaseDto"][];
+                };
+            };
+            /** @description El caso de ortodoncia es historia clínica: tu rol no lo consulta. La lista de seguimiento sí está en Pacientes › Ortodoncia. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientOrthoController_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede activa. Sin ella, la sede principal (o las permitidas). */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateOrthoCaseDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrthoCaseDto"];
+                };
+            };
+            /** @description Técnica, fechas, meses, controles o intervalo fuera de rango; responsable que no atiende; plan de otro paciente */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo el odontólogo o la administración abren casos de ortodoncia y registran sus controles. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente, sede o profesional no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El paciente ya tiene un caso activo, o la clínica no tiene la ortodoncia activada */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientOrthoController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateOrthoCaseDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrthoCaseDto"];
+                };
+            };
+            /** @description Valores fuera de rango */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo el odontólogo o la administración abren casos de ortodoncia y registran sus controles. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o caso de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El caso está cerrado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientOrthoController_changeStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeOrthoCaseStatusDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrthoCaseDto"];
+                };
+            };
+            /** @description Transición no permitida o sin motivo */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo el odontólogo o la administración abren casos de ortodoncia y registran sus controles. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o caso de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El caso está cerrado o cambió a la vez */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientOrthoController_listVisits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrthoVisitDto"][];
+                };
+            };
+            /** @description Paciente o caso de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientOrthoController_registerVisit: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede activa. Sin ella, la sede principal (o las permitidas). */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                patientId: string;
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterOrthoVisitDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrthoVisitDto"];
+                };
+            };
+            /** @description Control vacío, calibre fuera de la lista, higiene fuera de 1–4, próximo control no posterior, cita de otro paciente o no atendida */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo el odontólogo o la administración abren casos de ortodoncia y registran sus controles. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente, caso o cita no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El caso no está activo ni en retención, o la clínica no tiene la ortodoncia activada */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OrthoController_getSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrthoSettingsDto"];
+                };
+            };
+        };
+    };
+    OrthoController_updateSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateOrthoSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrthoSettingsDto"];
+                };
+            };
+            /** @description Lista vacía, más de 40, calibres repetidos o de más de 20 caracteres */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar los ajustes de ortodoncia. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OrthoController_list: {
+        parameters: {
+            query?: {
+                filter?: "ALL" | "OVERDUE" | "NO_NEXT_APPOINTMENT";
+                locationId?: string;
+                providerId?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: {
+                /** @description Sede activa. Sin ella, la sede principal (o las permitidas). */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrthoFollowUpPageDto"];
+                };
+            };
+            /** @description Filtro, página o ids inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 403 LOCATION_NOT_ALLOWED: sede no permitida al miembro */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

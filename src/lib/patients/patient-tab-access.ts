@@ -5,6 +5,7 @@ import { canUsePerio } from '@/lib/perio/perio-api';
 import { canUsePrescriptions } from '@/lib/prescriptions/prescriptions-api';
 import { canReadAuditLog } from '@/lib/audit/audit-api';
 import { canReadImplants } from '@/lib/implants/implants-api';
+import { canReadOrtho } from '@/lib/ortho/ortho-roles';
 import {
   isPatientDetailTabKey,
   type PatientDetailTabKey,
@@ -42,6 +43,8 @@ export function patientTabAccess(role: ClinicRole | null): PatientTabAccess {
     'clinical-history': clinical,
     odontogram: clinical,
     'treatment-plans': clinical,
+    // DX-190: además, la página la quita si la clínica no activó el módulo.
+    ortho: canReadOrtho(role),
     'account-statement': canReadAccountStatement(role),
     consents: role !== null,
     perio: canUsePerio(role),

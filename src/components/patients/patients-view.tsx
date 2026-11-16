@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Cake, Plus, UsersRound } from 'lucide-react';
+import { Cake, Plus, Smile, UsersRound } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
 import { listPayers, type Payer } from '@/lib/payers/payers-api';
@@ -18,6 +18,8 @@ import { ClinicWideNote } from '@/components/locations/clinic-wide-note';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canReviewMajority, COMING_OF_AGE_HREF } from '@/lib/patients/majority-review-api';
 import { canManageDuplicates, DUPLICATES_HREF } from '@/lib/patients/patient-merge-api';
+import { ORTHO_FOLLOW_UP_HREF } from '@/lib/ortho/ortho-roles';
+import { orthoEnabled, useOrthoSettings } from '@/lib/ortho/ortho-settings';
 
 // Corto para no notarse al teclear, largo para no lanzar una petición por
 // tecla. Mismo valor que el resto de las listas.
@@ -37,6 +39,8 @@ const copy = {
   // DX-266: solo ADMIN; tampoco gasta entrada en el menú.
   duplicates: 'Duplicados',
   duplicatesLabel: 'Posibles duplicados',
+  ortho: 'Ortodoncia',
+  orthoLabel: 'Ortodoncia: pacientes atrasados o sin próxima cita',
   searchLabel: 'Buscar por nombre, apellido o documento',
   // La búsqueda de la API mira nombre, apellido y documento —no el teléfono—:
   // el placeholder no promete lo que no hace (informe K2). Corto para caber
@@ -67,6 +71,8 @@ interface PatientsViewProps {
  * dejaba sin tests: no había forma de montarla sin el store de auth.
  */
 export function PatientsView({ token }: PatientsViewProps) {
+  // DX-190: «Ortodoncia» solo si la clínica la usa (sin respuesta, no se ofrece).
+  const orthoOn = orthoEnabled(useOrthoSettings(token));
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -180,6 +186,14 @@ export function PatientsView({ token }: PatientsViewProps) {
                 <Button asChild variant="secondary">
                   <Link href={COMING_OF_AGE_HREF} aria-label={copy.comingOfAgeLabel} title={copy.comingOfAgeLabel}>
                     <Cake aria-hidden /> {copy.comingOfAge}
+                  </Link>
+                </Button>
+              ) : null}
+              {/* DX-190: solo si la clínica usa la ortodoncia. */}
+              {orthoOn ? (
+                <Button asChild variant="secondary">
+                  <Link href={ORTHO_FOLLOW_UP_HREF} aria-label={copy.orthoLabel} title={copy.orthoLabel}>
+                    <Smile aria-hidden /> {copy.ortho}
                   </Link>
                 </Button>
               ) : null}
