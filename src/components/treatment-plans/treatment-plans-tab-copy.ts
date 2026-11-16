@@ -195,6 +195,13 @@ export const copy = {
   emptyCatalogTitle: 'No hay procedimientos en el catálogo.',
   emptyCatalogDescription: 'Crea procedimientos en el catálogo dental para poder agregarlos a un plan.',
   manageCatalogCta: 'Ir al catálogo',
+  // DX-559: «Añadir desde plantilla».
+  addFromTemplate: 'Añadir desde plantilla',
+  templateApplied: (n: number) => (n === 1 ? 'Se añadió 1 procedimiento' : `Se añadieron ${n} procedimientos`),
+  templateSkipped: (names: string[]) =>
+    names.length === 1
+      ? `Se omitió «${names[0]}»: está desactivado en el catálogo.`
+      : `Se omitieron ${names.length} procedimientos desactivados en el catálogo: ${names.map((n) => `«${n}»`).join(', ')}.`,
 
   // Abonos + saldo (PAY-T4).
   paymentsHeading: 'Abonos y saldo',
