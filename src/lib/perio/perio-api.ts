@@ -33,7 +33,10 @@ function examPath(patientId: string, examId: string): string {
   return `${examsPath(patientId)}/${encodeURIComponent(examId)}`;
 }
 
-/** `GET /patients/:id/perio-exams` — histórico, fecha desc, con índices. */
+/**
+ * `GET /patients/:id/perio-exams` — histórico, fecha desc, con índices y sin
+ * medidas (DX-103: como mucho los 100 más recientes).
+ */
 export async function listPerioExams(
   token: string,
   patientId: string,
