@@ -13,6 +13,7 @@ import {
   type ClinicLocation,
 } from "@/lib/locations/locations-api";
 import { getActiveLocationId } from "@/lib/locations/location-store";
+import { treatmentPlanHref } from "@/lib/patients/patient-tab-access";
 import { apiErrorMessage } from "@/lib/api/error-message";
 import { NO_SEDE_FORMAT, sedeMoney } from "@/lib/format/sede-number";
 import { useSedeClock } from "@/lib/locations/sede-clock";
@@ -182,7 +183,7 @@ export function UnscheduledPlansView({ token }: { token: string }) {
             >
               <div className="min-w-0">
                 <Link
-                  href={`/patients/${item.patientId}?tab=plan&planId=${item.planId}`}
+                  href={treatmentPlanHref(item.patientId, item.planId)}
                   className="inline-flex min-h-11 items-center text-base font-semibold text-ink underline-offset-4 hover:text-primary-text hover:underline"
                 >
                   {item.patientName}

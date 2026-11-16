@@ -676,6 +676,7 @@ function PatientDetailView() {
                 token={accessToken}
                 patientId={patientId}
                 focusedTooth={focusedTooth}
+                initialPlanId={searchParams.get('planId')}
                 odontogramHref={(tooth) => `${pathname}?tab=odontogram&tooth=${tooth}`}
                 // DX-191: desde el ítem que se ejecuta, «Registrar implante»
                 // con el diente y el ítem del plan puestos.

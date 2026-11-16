@@ -62,6 +62,11 @@ it("muestra importe y moneda independientes, siguiente visita y enlace seguro Wh
   });
   render(<UnscheduledPlansView token="token" />);
   expect(await screen.findByText("Ana Pérez")).toBeInTheDocument();
+  // DX-558: la pestaña del plan es `treatment-plans` (con `?tab=plan` caía en «Datos») y llega con el plan elegido.
+  expect(screen.getByRole("link", { name: "Ana Pérez" })).toHaveAttribute(
+    "href",
+    "/patients/a?tab=treatment-plans&planId=p1",
+  );
   // DX-378 (FE-078): fecha mínima e importe con el formato de la sede (en-US).
   expect(await screen.findByText("04/01/2027")).toBeInTheDocument();
   // Una sola moneda: el código va con el importe, no repetido al lado.

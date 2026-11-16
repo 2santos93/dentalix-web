@@ -1,4 +1,4 @@
-import { patientTabAccess, resolvePatientTab } from './patient-tab-access';
+import { patientTabAccess, resolvePatientTab, treatmentPlanHref } from './patient-tab-access';
 
 describe('patientTabAccess (qué pestañas de la ficha ve cada rol)', () => {
   it('recepción no ve ninguna pestaña clínica (la API le responde 403)', () => {
@@ -64,5 +64,13 @@ describe('resolvePatientTab', () => {
     expect(resolvePatientTab('nope', reception)).toBe('data');
     expect(resolvePatientTab(null, reception)).toBe('data');
     expect(resolvePatientTab('account-statement', reception)).toBe('account-statement');
+  });
+});
+
+describe('treatmentPlanHref (DX-558)', () => {
+  it('abre «Plan de tratamiento» y, con planId, ese plan', () => {
+    expect(treatmentPlanHref('pat-1')).toBe('/patients/pat-1?tab=treatment-plans');
+    expect(treatmentPlanHref('pat-1', 'plan-9')).toBe('/patients/pat-1?tab=treatment-plans&planId=plan-9');
+    expect(treatmentPlanHref('pat-1', null)).toBe('/patients/pat-1?tab=treatment-plans');
   });
 });

@@ -580,6 +580,21 @@ describe('TreatmentPlansTab', () => {
     expect(screen.getByText(sedeCurrencyText(expectedTotal))).toBeInTheDocument();
   });
 
+  it('DX-558: `initialPlanId` (el `?planId=` de la ficha) llega elegido; uno que no está cae en el primero', async () => {
+    mockedListPlans.mockResolvedValue([plan1, plan2]);
+    mockedGetPlan.mockImplementation((_t, id) => Promise.resolve(id === 'plan-2' ? plan2Detail : plan1Detail));
+    const { unmount } = render(<TreatmentPlansTab patientId="pat-1" token={tok} initialPlanId="plan-2" />);
+    await waitFor(() => expect(screen.getByLabelText<HTMLSelectElement>(/^plan$/i)).toHaveValue('plan-2'));
+    expect(mockedGetPlan).toHaveBeenCalledWith(tok, 'plan-2');
+    expect(mockedGetPlan).not.toHaveBeenCalledWith(tok, 'plan-1');
+    unmount();
+
+    mockedGetPlan.mockClear();
+    render(<TreatmentPlansTab patientId="pat-1" token={tok} initialPlanId="plan-ajeno" />);
+    await waitFor(() => expect(screen.getByLabelText<HTMLSelectElement>(/^plan$/i)).toHaveValue('plan-1'));
+    expect(mockedGetPlan).toHaveBeenCalledWith(tok, 'plan-1');
+  });
+
   it('DX-191: «Registrar implante» en los ítems aceptados o realizados lleva a Implantes con el ítem y el diente', async () => {
     mockedListPlans.mockResolvedValue([plan1]);
     const done = { ...item2, id: 'item-3', toothNumber: '36', status: 'DONE' as const };
