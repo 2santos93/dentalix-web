@@ -45899,7 +45899,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description La orden está anulada o ya tiene resultado, o el documento está anulado */
+            /** @description La orden está anulada o ya tiene resultado, el documento está anulado, o es el PDF de una orden o de un certificado */
             409: {
                 headers: {
                     [name: string]: unknown;
