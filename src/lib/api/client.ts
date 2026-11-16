@@ -316,6 +316,8 @@ export function apiErrorFromBody(
   let existingPatient: ExistingPatientRef | null = null;
   let affectedAppointments: AffectedAppointmentsRef | null = null;
   let mergedIntoId: string | null = null;
+  let position: number | null = null;
+  let lineId: string | null = null;
   if (body && typeof body === 'object') {
     const data = body as {
       message?: unknown;
@@ -329,6 +331,8 @@ export function apiErrorFromBody(
       existingPatient?: unknown;
       affectedAppointments?: AffectedAppointmentsRef;
       mergedIntoId?: unknown;
+      position?: unknown;
+      lineId?: unknown;
     };
     const raw = data.message;
     if (typeof raw === 'string' && raw) messages = [raw];
@@ -347,6 +351,10 @@ export function apiErrorFromBody(
       affectedAppointments = data.affectedAppointments;
     }
     if (typeof data.mergedIntoId === 'string' && data.mergedIntoId) mergedIntoId = data.mergedIntoId;
+    if (typeof data.position === 'number' && Number.isInteger(data.position) && data.position >= 0) {
+      position = data.position;
+    }
+    if (typeof data.lineId === 'string' && data.lineId) lineId = data.lineId;
   }
   const message = messages.length > 0 ? messages.join('; ') : `HTTP ${status}`;
   return new ApiError(status, message, {
@@ -362,6 +370,8 @@ export function apiErrorFromBody(
     existingPatient,
     affectedAppointments,
     mergedIntoId,
+    position,
+    lineId,
   });
 }
 

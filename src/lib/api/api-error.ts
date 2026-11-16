@@ -76,6 +76,13 @@ export class ApiError extends Error {
    * se conservó en la fusión (la ficha antigua lleva a él).
    */
   public readonly mergedIntoId: string | null;
+  /**
+   * DX-559: la línea (desde 0) de la plantilla de plan a la que se refiere un
+   * 404/422 al guardarla (procedimiento inexistente o que no es procedimiento).
+   */
+  public readonly position: number | null;
+  /** DX-559: la línea de la plantilla que falla al aplicarla (diente, precio, tasa). */
+  public readonly lineId: string | null;
 
   constructor(
     public readonly status: number,
@@ -93,6 +100,8 @@ export class ApiError extends Error {
       existingPatient?: ExistingPatientRef | null;
       affectedAppointments?: AffectedAppointmentsRef | null;
       mergedIntoId?: string | null;
+      position?: number | null;
+      lineId?: string | null;
     } = {},
   ) {
     super(message);
@@ -109,6 +118,8 @@ export class ApiError extends Error {
     this.existingPatient = details.existingPatient ?? null;
     this.affectedAppointments = details.affectedAppointments ?? null;
     this.mergedIntoId = details.mergedIntoId ?? null;
+    this.position = details.position ?? null;
+    this.lineId = details.lineId ?? null;
   }
 }
 

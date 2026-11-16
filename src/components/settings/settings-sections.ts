@@ -27,6 +27,7 @@ import {
   KeyRound,
   Landmark,
   LifeBuoy,
+  ListChecks,
   ListOrdered,
   NotebookPen,
   Pill,
@@ -52,6 +53,7 @@ import { canManagePayers } from '@/lib/payers/payers-api';
 import { canManagePriceLists } from '@/lib/price-lists/price-lists-api';
 import { canManageAgreements } from '@/lib/agreements/agreements-api';
 import { canManageNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
+import { canManagePlanTemplates } from '@/lib/treatment-plans/plan-templates-api';
 import { canManagePostOpTemplates } from '@/lib/postop/postop-api';
 import { canManageReminders } from '@/lib/reminders/reminders-api';
 import { canManageDiscounts } from '@/lib/discounts/discounts-api';
@@ -322,6 +324,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Preguntas guía para redactar las evoluciones.',
         icon: NotebookPen,
         visible: canManageNoteTemplates,
+      },
+      // DX-559.
+      {
+        href: '/settings/plantillas-de-plan',
+        label: 'Plantillas de plan',
+        description: 'Procedimientos de un caso habitual, por visitas, para el plan de tratamiento.',
+        icon: ListChecks,
+        visible: canManagePlanTemplates,
       },
       // DX-006.
       {
