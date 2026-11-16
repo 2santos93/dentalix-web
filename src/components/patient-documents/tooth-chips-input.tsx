@@ -13,7 +13,7 @@ const copy = {
   placeholder: 'Ej. 11',
   hint: 'Escribe el código FDI y pulsa Enter o coma.',
   invalid: (value: string) => `«${value}» no es un código FDI válido.`,
-  full: `Como mucho ${MAX_DOCUMENT_TEETH} dientes.`,
+  full: (max: number) => `Como mucho ${max} dientes.`,
   remove: (tooth: string) => `Quitar el diente ${tooth}`,
 };
 
@@ -28,6 +28,8 @@ interface ToothChipsInputProps {
    * con el error): quien lo usa no debe enviar el formulario así.
    */
   onInvalidChange?: (invalid: boolean) => void;
+  /** Tope de dientes (por defecto, el de un documento). DX-572: una orden admite 32. */
+  max?: number;
 }
 
 /**
@@ -42,6 +44,7 @@ export function ToothChipsInput({
   onChange,
   disabled,
   onInvalidChange,
+  max = MAX_DOCUMENT_TEETH,
 }: ToothChipsInputProps) {
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -65,8 +68,8 @@ export function ToothChipsInput({
         return false;
       }
       if (next.includes(part)) continue;
-      if (next.length >= MAX_DOCUMENT_TEETH) {
-        showError(copy.full);
+      if (next.length >= max) {
+        showError(copy.full(max));
         return false;
       }
       next.push(part);

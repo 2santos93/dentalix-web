@@ -121,3 +121,17 @@ describe('CommandPalette: «Posibles duplicados» (DX-266)', () => {
     expect(screen.queryByRole('option', { name: /Posibles duplicados/ })).not.toBeInTheDocument();
   });
 });
+
+describe('CommandPalette: «Órdenes sin resultado» (DX-572)', () => {
+  beforeEach(() => {
+    jest.mocked(listPatients).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 5 } as never);
+  });
+
+  it.each(['ADMIN', 'DENTIST', 'ASSISTANT', 'RECEPTION'] as const)('%s la encuentra al escribir y lleva a la lista', async (role) => {
+    const user = userEvent.setup();
+    render(<CommandPalette open onOpenChange={() => {}} token="t" role={role} />);
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'sin resultado' } });
+    await user.click(await screen.findByRole('option', { name: /Órdenes sin resultado/ }));
+    expect(push).toHaveBeenCalledWith('/ordenes-sin-resultado');
+  });
+});
