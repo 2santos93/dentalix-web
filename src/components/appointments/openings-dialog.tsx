@@ -37,6 +37,7 @@ import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { addCivilDays, wallDay } from '@/lib/time/wall-clock';
 import { endSentence } from '@/lib/format/text';
 import { listChairs, type Chair } from '@/lib/chairs/chairs-api';
+import { openingsHolidaysNote, type OpeningsHoliday } from '@/lib/appointments/openings-holidays';
 
 // Copy as constants (i18n-ready, es-first).
 const copy = {
@@ -141,11 +142,14 @@ export function OpeningsDialog({
   const [truncated, setTruncated] = useState(false);
   // DX-533: la sede no tiene horario y se buscó en el de alta.
   const [defaultHours, setDefaultHours] = useState(false);
+  // DX-263-bis: festivos de la sede en el rango (esos días no dan huecos).
+  const [holidays, setHolidays] = useState<OpeningsHoliday[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [bookingStart, setBookingStart] = useState<string | null>(null);
   const [bookError, setBookError] = useState<string | null>(null);
   const name = waitlistPatientName(entry);
+  const holidaysNote = openingsHolidaysNote(holidays);
 
   useEffect(() => {
     let cancelled = false;
@@ -183,6 +187,7 @@ export function OpeningsDialog({
         setOpenings(result.openings);
         setTruncated(result.truncated);
         setDefaultHours(result.defaultHours);
+        setHolidays(result.holidays ?? []);
         setLoadError(null);
       } catch (err) {
         if (!cancelled) setLoadError(apiErrorMessage(err, copy.loadError));
@@ -321,7 +326,9 @@ export function OpeningsDialog({
             <EmptyState
               role="status"
               title={copy.empty}
-              description={defaultHours ? `${copy.emptyHint} ${defaultHoursNote(clock.fmt)}` : copy.emptyHint}
+              description={[copy.emptyHint, holidaysNote, defaultHours ? defaultHoursNote(clock.fmt) : null]
+                .filter(Boolean)
+                .join(' ')}
             />
           ) : (
             <>
@@ -359,6 +366,11 @@ export function OpeningsDialog({
                 </div>
               ))}
               {truncated ? <p className="text-xs text-muted">{copy.truncated}</p> : null}
+              {holidaysNote ? (
+                <p data-testid="openings-holidays" className="text-xs text-muted">
+                  {holidaysNote}
+                </p>
+              ) : null}
               {defaultHours ? (
                 <p data-testid="openings-default-hours" className="text-xs text-muted">
                   {defaultHoursNote(clock.fmt)}

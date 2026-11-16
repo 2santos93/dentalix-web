@@ -16,7 +16,7 @@ const openings = (list: [string, string][]) => ({
   timeZone: 'America/Caracas',
   durationMinutes: 30,
   truncated: false,
-  defaultHours: false,
+  defaultHours: false, holidays: [],
   openings: list.map(([start, end]) => ({ start, end })),
 });
 
@@ -89,7 +89,7 @@ describe('next-opening (DX-509-bis)', () => {
   });
 
   it('DX-533: dice si la sede no tiene horario y se buscó en el de alta', async () => {
-    mocked.mockResolvedValueOnce({ ...openings([]), defaultHours: true });
+    mocked.mockResolvedValueOnce({ ...openings([]), defaultHours: true, holidays: [] });
     const target = { start: '2026-11-11T23:00:00.000Z', end: '2026-11-11T23:30:00.000Z', providerId: 'p' };
     await expect(findNextOpening('tok', appointment, target, 'UTC')).resolves.toEqual({
       target: null,

@@ -13262,6 +13262,15 @@ export interface components {
             /** @description DX-492: el sillón libre en todo el hueco. Solo si se pidió `chairIds`. */
             chair?: components["schemas"]["ChairSummaryDto"];
         };
+        OpeningHolidayDto: {
+            /**
+             * @description Día civil de la sede.
+             * @example 2027-01-01
+             */
+            date: string;
+            /** @example Año Nuevo */
+            name: string;
+        };
         OpeningsDto: {
             /** @example UTC */
             timeZone: string;
@@ -13271,6 +13280,8 @@ export interface components {
             truncated: boolean;
             /** @description DX-533: la sede no tiene horario configurado y los huecos se buscaron en el horario de alta (lun–vie 9:00–13:00 y 15:00–19:00, sáb 9:00–13:00, hora de la sede). Reservar fuera de él sigue permitido. */
             defaultHours: boolean;
+            /** @description DX-263-bis: festivos de la sede (DX-316) dentro del rango. Esos días no dan huecos: la sede está cerrada. */
+            holidays: components["schemas"]["OpeningHolidayDto"][];
         };
         InClinicItemDto: {
             /** Format: uuid */
@@ -31363,7 +31374,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Solape con otra cita (del profesional, del paciente o, DX-211, del sillón: «El sillón X ya está ocupado de HH:MM a HH:MM»), el horario está bloqueado para ese profesional o la sede (DX-122), o es un hueco reservado para otros tipos y aún sin liberar (DX-446: `code: RESERVED_SLOT`, `canOverride` dice si quien agenda puede reintentar con `overrideReason`) */
+            /** @description Solape con otra cita (del profesional, del paciente o, DX-211, del sillón: «El sillón X ya está ocupado de HH:MM a HH:MM»), el horario está bloqueado para ese profesional o la sede (DX-122), o es un hueco reservado para otros tipos y aún sin liberar (DX-446: `code: RESERVED_SLOT`, `canOverride` dice si quien agenda puede reintentar con `overrideReason`). DX-263-bis: ese día la sede está cerrada por festivo (DX-316, en su zona): `code: LOCATION_HOLIDAY`, `holiday` con `date` y `name`, y el nombre en el mensaje */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -31636,7 +31647,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Solape con otra cita del profesional, del paciente o del sillón (DX-211, con su nombre y horas; también si otro movimiento ganó la carrera): cuerpo con `code: APPOINTMENT_OVERLAP` y `scope` (`provider` | `patient` | `chair`) para que la web ofrezca el siguiente hueco (DX-509-bis, DX-492-bis). El nuevo horario está bloqueado (DX-122) o reservado sin liberar (DX-446, `RESERVED_SLOT`), o un salto imposible del flujo en la clínica o la cita cambió mientras tanto (DX-200). DX-509: `OVERBOOK_SLOT_TAKEN` (`canKeepOverbooked`) al reactivar una urgencia en sobrecupo cuya hora ya ocupa otra cita del profesional; se puede reintentar con `keepOverbooked: true`. DX-267-bis: reactivar (CANCELLED/NO_SHOW → SCHEDULED/CONFIRMED) aplica las reglas de mover a su misma hora y profesional (bloqueos, hueco reservado, horario del profesional en modo estricto, solapes); si la cita ya terminó, `code: APPOINTMENT_PAST` («La cita ya pasó: agenda una nueva») */
+            /** @description Solape con otra cita del profesional, del paciente o del sillón (DX-211, con su nombre y horas; también si otro movimiento ganó la carrera): cuerpo con `code: APPOINTMENT_OVERLAP` y `scope` (`provider` | `patient` | `chair`) para que la web ofrezca el siguiente hueco (DX-509-bis, DX-492-bis). El nuevo horario está bloqueado (DX-122) o reservado sin liberar (DX-446, `RESERVED_SLOT`), o un salto imposible del flujo en la clínica o la cita cambió mientras tanto (DX-200). DX-509: `OVERBOOK_SLOT_TAKEN` (`canKeepOverbooked`) al reactivar una urgencia en sobrecupo cuya hora ya ocupa otra cita del profesional; se puede reintentar con `keepOverbooked: true`. DX-267-bis: reactivar (CANCELLED/NO_SHOW → SCHEDULED/CONFIRMED) aplica las reglas de mover a su misma hora y profesional (bloqueos, hueco reservado, horario del profesional en modo estricto, solapes); si la cita ya terminó, `code: APPOINTMENT_PAST` («La cita ya pasó: agenda una nueva»). DX-263-bis: mover o reactivar a un día en que la sede está cerrada por festivo es `code: LOCATION_HOLIDAY` (`holiday` con `date` y `name`), salvo con el paciente ya en la clínica */
             409: {
                 headers: {
                     [name: string]: unknown;
