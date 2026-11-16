@@ -1,55 +1,32 @@
-import type { ReactElement } from "react";
-import { clearSessionStore } from "@/lib/session/session-store";
-import { useAuthStore } from "@/lib/auth/auth-store";
-import {
-  act,
-  configure,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import {
-  readDate,
-  readTime,
-  typeDate,
-  typeTime,
-} from "./date-segments-for-tests";
-import { AGENDA_REFRESH_MS, AgendaView } from "./agenda-view";
-import { currentlyOffline } from "@/lib/offline/connectivity";
-import { Toaster } from "@/components/errors/toaster";
-import { toast } from "sonner";
-import { ApiError } from "@/lib/api/client";
-import { wallDayRange, wallWeekRange } from "@/lib/time/wall-clock";
-import { caracasSede, utcSede } from "@/lib/test/sede-clock";
-import {
-  createAppointment,
-  listAppointments,
-  updateAppointment,
-} from "@/lib/appointments/appointments-api";
-import { listStaff } from "@/lib/appointments/staff-api";
-import { listPatients } from "@/lib/patients/patients-api";
-import { createConfirmationLink } from "@/lib/appointments/confirmations-api";
-import { getAppointmentReminders } from "@/lib/reminders/reminders-api";
-import { deliverPostOp, getAppointmentPostOp } from "@/lib/postop/postop-api";
-import {
-  deleteScheduleBlock,
-  listScheduleBlocks,
-} from "@/lib/appointments/schedule-blocks-api";
-import {
-  listWaitlist,
-  scheduleFromWaitlist,
-} from "@/lib/appointments/waitlist-api";
-import { listLocations } from "@/lib/locations/locations-api";
-import { getLocationSchedule } from "@/lib/locations/schedule-api";
-import { listOpeningCandidates } from "@/lib/appointments/opening-candidates";
-import { getRoster } from "@/lib/locations/provider-schedule-api";
-import { setActiveLocationId } from "@/lib/locations/location-store";
-import { listChairs } from "@/lib/chairs/chairs-api";
-import { notifyError } from "@/components/errors/notify";
-import { PUBLIC_REGIONAL_VE } from "@/lib/test/document-regional";
+import type { ReactElement } from 'react';
+import { clearSessionStore } from '@/lib/session/session-store';
+import { useAuthStore } from '@/lib/auth/auth-store';
+import { act, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { readDate, readTime, typeDate, typeTime } from './date-segments-for-tests';
+import { AGENDA_REFRESH_MS, AgendaView } from './agenda-view';
+import { currentlyOffline } from '@/lib/offline/connectivity';
+import { Toaster } from '@/components/errors/toaster';
+import { toast } from 'sonner';
+import { ApiError } from '@/lib/api/client';
+import { wallDayRange, wallWeekRange } from '@/lib/time/wall-clock';
+import { caracasSede, utcSede } from '@/lib/test/sede-clock';
+import { createAppointment, listAppointments, updateAppointment } from '@/lib/appointments/appointments-api';
+import { listStaff } from '@/lib/appointments/staff-api';
+import { listPatients } from '@/lib/patients/patients-api';
+import { createConfirmationLink } from '@/lib/appointments/confirmations-api';
+import { getAppointmentReminders } from '@/lib/reminders/reminders-api';
+import { deliverPostOp, getAppointmentPostOp } from '@/lib/postop/postop-api';
+import { deleteScheduleBlock, listScheduleBlocks } from '@/lib/appointments/schedule-blocks-api';
+import { listWaitlist, scheduleFromWaitlist } from '@/lib/appointments/waitlist-api';
+import { listLocations } from '@/lib/locations/locations-api';
+import { getLocationSchedule } from '@/lib/locations/schedule-api';
+import { listOpeningCandidates } from '@/lib/appointments/opening-candidates';
+import { getRoster } from '@/lib/locations/provider-schedule-api';
+import { setActiveLocationId } from '@/lib/locations/location-store';
+import { listChairs } from '@/lib/chairs/chairs-api';
+import { notifyError } from '@/components/errors/notify';
+import { PUBLIC_REGIONAL_VE } from '@/lib/test/document-regional';
 
 // Los campos de fecha y hora por segmentos (react-aria) hacen el formulario más
 // pesado en jsdom: con la máquina cargada, 1 s de espera de `findBy` se quedaba corto
@@ -62,29 +39,23 @@ configure({ asyncUtilTimeout: 5_000 });
  * la sede, nunca un `<input type="date">`): se escribe segmento a segmento.
  */
 async function goToDate(user: ReturnType<typeof userEvent.setup>, iso: string) {
-  const group = screen.getByRole("group", { name: /^fecha$/i });
-  const [y, m, d] = iso.split("-");
-  await user.click(within(group).getAllByRole("spinbutton")[0]);
+  const group = screen.getByRole('group', { name: /^fecha$/i });
+  const [y, m, d] = iso.split('-');
+  await user.click(within(group).getAllByRole('spinbutton')[0]);
   await user.keyboard(`${d}${m}${y}`);
 }
 
 /** El día ISO que muestra la fecha de la barra. */
 function agendaDate(): string {
-  const group = screen.getByRole("group", { name: /^fecha$/i });
+  const group = screen.getByRole('group', { name: /^fecha$/i });
   const read = (type: string) =>
-    group
-      .querySelector(`[role="spinbutton"][data-type="${type}"]`)
-      ?.getAttribute("aria-valuenow") ?? "";
-  return `${read("year").padStart(4, "0")}-${read("month").padStart(2, "0")}-${read("day").padStart(2, "0")}`;
+    group.querySelector(`[role="spinbutton"][data-type="${type}"]`)?.getAttribute('aria-valuenow') ?? '';
+  return `${read('year').padStart(4, '0')}-${read('month').padStart(2, '0')}-${read('day').padStart(2, '0')}`;
 }
 
-async function pickStatus(
-  user: ReturnType<typeof userEvent.setup>,
-  trigger: HTMLElement,
-  label: string,
-) {
+async function pickStatus(user: ReturnType<typeof userEvent.setup>, trigger: HTMLElement, label: string) {
   await user.click(trigger);
-  await user.click(screen.getByRole("option", { name: label }));
+  await user.click(screen.getByRole('option', { name: label }));
 }
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
@@ -92,81 +63,72 @@ async function pickStatus(
 // path here, matching odontogram-tab.test.tsx's / appointment-form.test.tsx's
 // convention. Both `AgendaView` and the real (unmocked) `AppointmentForm` it
 // renders import from these same modules, so one mock per module covers both.
-jest.mock("../../lib/appointments/appointments-api", () => ({
-  ...jest.requireActual("../../lib/appointments/appointments-api"),
+jest.mock('../../lib/appointments/appointments-api', () => ({
+  ...jest.requireActual('../../lib/appointments/appointments-api'),
   createAppointment: jest.fn(),
   listAppointments: jest.fn(),
   updateAppointment: jest.fn(),
 }));
 // DX-279: la vista previa del aviso del diálogo de cancelar.
 // DX-211: el aviso de fondo sigue siendo el real; se espía para comprobarlo.
-jest.mock("../errors/notify", () => {
-  const actual = jest.requireActual("../errors/notify");
+jest.mock('../errors/notify', () => {
+  const actual = jest.requireActual('../errors/notify');
   return { ...actual, notifyError: jest.fn(actual.notifyError) };
 });
 // DX-046: en jsdom las peticiones reales sin mock fallan por red y marcan
 // «sin conexión»; la relectura de fondo lo consulta, así que se controla aquí
 // (por defecto, el comportamiento real).
-jest.mock("../../lib/offline/connectivity", () => {
-  const actual = jest.requireActual("../../lib/offline/connectivity");
+jest.mock('../../lib/offline/connectivity', () => {
+  const actual = jest.requireActual('../../lib/offline/connectivity');
   return { ...actual, currentlyOffline: jest.fn(actual.currentlyOffline) };
 });
 // DX-211: sillones de la sede activa (por defecto, ninguno).
-jest.mock("../../lib/chairs/chairs-api", () => ({
-  ...jest.requireActual("../../lib/chairs/chairs-api"),
+jest.mock('../../lib/chairs/chairs-api', () => ({
+  ...jest.requireActual('../../lib/chairs/chairs-api'),
   listChairs: jest.fn().mockResolvedValue([]),
 }));
-jest.mock("../../lib/cancellations/cancellation", () => ({
-  ...jest.requireActual("../../lib/cancellations/cancellation"),
+jest.mock('../../lib/cancellations/cancellation', () => ({
+  ...jest.requireActual('../../lib/cancellations/cancellation'),
   getCancellationPreview: jest.fn().mockResolvedValue({
-    appointmentId: "apt-c",
+    appointmentId: 'apt-c',
     noticeMinutes: 300,
     lateCancellation: true,
-    policy: { id: "p1", version: 1, noticeHours: 24 },
+    policy: { id: 'p1', version: 1, noticeHours: 24 },
   }),
 }));
-jest.mock("../../lib/appointments/appointment-types-api", () => ({
+jest.mock('../../lib/appointments/appointment-types-api', () => ({
   listAppointmentTypes: jest.fn().mockResolvedValue([]),
 }));
-jest.mock("../../lib/locations/locations-api", () => ({
+jest.mock('../../lib/locations/locations-api', () => ({
   // DX-378: la agenda va en el reloj de la sede (aquí, UTC y 24 h: las horas de estas pruebas).
-  listLocations: jest
-    .fn()
-    .mockResolvedValue([
-      jest.requireActual("../../lib/test/sede-clock").utcSede(),
-    ]),
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]),
 }));
 // Sede sin horario configurado: nada sombreado, nada bloqueado.
-jest.mock("../../lib/locations/schedule-api", () => ({
-  ...jest.requireActual("../../lib/locations/schedule-api"),
+jest.mock('../../lib/locations/schedule-api', () => ({
+  ...jest.requireActual('../../lib/locations/schedule-api'),
   getLocationSchedule: jest.fn().mockResolvedValue(null),
 }));
-jest.mock("../../lib/appointments/staff-api", () => ({
+jest.mock('../../lib/appointments/staff-api', () => ({
   listStaff: jest.fn(),
 }));
-jest.mock("../../lib/patients/patients-api", () => ({
+jest.mock('../../lib/patients/patients-api', () => ({
   listPatients: jest.fn(),
 }));
-jest.mock("../../lib/appointments/confirmations-api", () => ({
+jest.mock('../../lib/appointments/confirmations-api', () => ({
   createConfirmationLink: jest.fn(),
 }));
-jest.mock("../../lib/reminders/reminders-api", () => ({
-  ...jest.requireActual("../../lib/reminders/reminders-api"),
+jest.mock('../../lib/reminders/reminders-api', () => ({
+  ...jest.requireActual('../../lib/reminders/reminders-api'),
   getAppointmentReminders: jest.fn(),
 }));
 // DX-222: el panel «Indicaciones» se prueba aparte; aquí basta con que cargue.
-jest.mock("../../lib/postop/postop-api", () => ({
-  ...jest.requireActual("../../lib/postop/postop-api"),
+jest.mock('../../lib/postop/postop-api', () => ({
+  ...jest.requireActual('../../lib/postop/postop-api'),
   getAppointmentPostOp: jest.fn().mockResolvedValue({
-    patientId: "p1",
+    patientId: 'p1',
     suggested: [],
     others: [],
-    email: {
-      allowed: false,
-      reason: null,
-      toMasked: null,
-      toResponsible: false,
-    },
+    email: { allowed: false, reason: null, toMasked: null, toResponsible: false },
     whatsapp: { phone: null, reason: null },
     locationPhone: null,
     deliveries: [],
@@ -174,88 +136,69 @@ jest.mock("../../lib/postop/postop-api", () => ({
   deliverPostOp: jest.fn(),
 }));
 // DX-122: bloqueos y pendientes (su comportamiento propio se prueba abajo).
-jest.mock("../../lib/appointments/schedule-blocks-api", () => ({
-  ...jest.requireActual("../../lib/appointments/schedule-blocks-api"),
+jest.mock('../../lib/appointments/schedule-blocks-api', () => ({
+  ...jest.requireActual('../../lib/appointments/schedule-blocks-api'),
   listScheduleBlocks: jest.fn().mockResolvedValue([]),
   deleteScheduleBlock: jest.fn().mockResolvedValue(undefined),
 }));
 // DX-170: «Registrar evolución» abre el modal, que pide las plantillas.
-jest.mock("../../lib/clinical-notes/note-templates-api", () => ({
+jest.mock('../../lib/clinical-notes/note-templates-api', () => ({
   listNoteTemplates: jest.fn().mockResolvedValue([]),
 }));
-jest.mock("../../lib/appointments/waitlist-api", () => ({
-  listWaitlist: jest
-    .fn()
-    .mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 50 }),
+jest.mock('../../lib/appointments/waitlist-api', () => ({
+  listWaitlist: jest.fn().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 50 }),
   scheduleFromWaitlist: jest.fn(),
 }));
 // DX-233: cuadrante del día en la sede (por defecto, nadie con horario).
-jest.mock("../../lib/locations/provider-schedule-api", () => ({
-  ...jest.requireActual("../../lib/locations/provider-schedule-api"),
+jest.mock('../../lib/locations/provider-schedule-api', () => ({
+  ...jest.requireActual('../../lib/locations/provider-schedule-api'),
   getRoster: jest.fn().mockResolvedValue({
-    from: "2026-01-01",
-    to: "2026-01-01",
+    from: '2026-01-01',
+    to: '2026-01-01',
     locationId: null,
     locations: [],
     providers: [],
   }),
 }));
 // DX-210: «Ocupar este hueco» (el panel se prueba aparte; aquí, el cableado).
-jest.mock("../../lib/appointments/opening-candidates", () => ({
-  ...jest.requireActual("../../lib/appointments/opening-candidates"),
+jest.mock('../../lib/appointments/opening-candidates', () => ({
+  ...jest.requireActual('../../lib/appointments/opening-candidates'),
   listOpeningCandidates: jest.fn(),
 }));
 
-const mockedCreateAppointment = createAppointment as jest.MockedFunction<
-  typeof createAppointment
->;
-const mockedListAppointments = listAppointments as jest.MockedFunction<
-  typeof listAppointments
->;
-const mockedUpdateAppointment = updateAppointment as jest.MockedFunction<
-  typeof updateAppointment
->;
+const mockedCreateAppointment = createAppointment as jest.MockedFunction<typeof createAppointment>;
+const mockedListAppointments = listAppointments as jest.MockedFunction<typeof listAppointments>;
+const mockedUpdateAppointment = updateAppointment as jest.MockedFunction<typeof updateAppointment>;
 const mockedListStaff = listStaff as jest.MockedFunction<typeof listStaff>;
-const mockedListPatients = listPatients as jest.MockedFunction<
-  typeof listPatients
+const mockedListPatients = listPatients as jest.MockedFunction<typeof listPatients>;
+const mockedCreateConfirmationLink = createConfirmationLink as jest.MockedFunction<
+  typeof createConfirmationLink
 >;
-const mockedCreateConfirmationLink =
-  createConfirmationLink as jest.MockedFunction<typeof createConfirmationLink>;
 
 const staff = [
-  {
-    userId: "staff-1",
-    fullName: "Dra. Ana Ríos",
-    role: "DENTIST" as const,
-    locationIds: null,
-  },
-  {
-    userId: "staff-2",
-    fullName: "Dr. Luis Gómez",
-    role: "DENTIST" as const,
-    locationIds: null,
-  },
+  { userId: 'staff-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const, locationIds: null },
+  { userId: 'staff-2', fullName: 'Dr. Luis Gómez', role: 'DENTIST' as const, locationIds: null },
 ];
 
 const patientsPage = {
   items: [
     {
-      id: "pat-1",
-      tenantId: "t1",
-      patientCode: "1179",
-      firstName: "María",
-      lastName: "López",
-      docType: "NATIONAL_ID" as const,
-      docNumber: "123",
+      id: 'pat-1',
+      tenantId: 't1',
+      patientCode: '1179',
+      firstName: 'María',
+      lastName: 'López',
+      docType: 'NATIONAL_ID' as const,
+      docNumber: '123',
       birthDate: null,
-      sex: "F" as const,
+      sex: 'F' as const,
       phone: null,
       email: null,
       address: null,
       notes: null,
       createdById: null,
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z",
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
     },
   ],
   total: 1,
@@ -263,38 +206,34 @@ const patientsPage = {
   pageSize: 100,
 };
 
-function appointment(
-  overrides: Partial<
-    import("@/lib/appointments/appointments-api").Appointment
-  > & { id: string },
-) {
+function appointment(overrides: Partial<import('@/lib/appointments/appointments-api').Appointment> & { id: string }) {
   return {
-    tenantId: "t1",
-    patientCode: "1202",
-    patientId: "pat-1",
+    tenantId: 't1',
+    patientCode: '1202',
+    patientId: 'pat-1',
     patientFirstName: null,
     patientLastName: null,
-    providerId: "staff-1",
-    start: "2026-03-10T09:00:00.000Z",
-    end: "2026-03-10T09:30:00.000Z",
-    status: "SCHEDULED" as const,
+    providerId: 'staff-1',
+    start: '2026-03-10T09:00:00.000Z',
+    end: '2026-03-10T09:30:00.000Z',
+    status: 'SCHEDULED' as const,
     reason: null,
     notes: null,
     createdById: null,
-    locationId: "loc-1",
+    locationId: 'loc-1',
     appointmentTypeId: null,
     appointmentType: null,
     confirmationSentAt: null,
     callbackRequestedAt: null,
     wantsEarlier: false,
-    createdAt: "2026-01-01T00:00:00.000Z",
-    updatedAt: "2026-01-01T00:00:00.000Z",
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
   };
 }
 
-const apt1 = appointment({ id: "apt-1" });
-const apt2 = appointment({ id: "apt-2", patientId: "pat-1" });
+const apt1 = appointment({ id: 'apt-1' });
+const apt2 = appointment({ id: 'apt-2', patientId: 'pat-1' });
 
 /**
  * DX-378: la agenda espera al reloj de la sede (la lista de sedes) antes de
@@ -302,7 +241,7 @@ const apt2 = appointment({ id: "apt-2", patientId: "pat-1" });
  */
 async function renderAgenda(ui: ReactElement) {
   const result = render(ui);
-  await screen.findByRole("group", { name: "Vista" });
+  await screen.findByRole('group', { name: 'Vista' });
   return result;
 }
 
@@ -319,8 +258,8 @@ function deferred<T>() {
 // instant in the past, so a hardcoded date would rot.
 const FUTURE_DATE = (() => {
   const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
   return `${d.getFullYear()}-${mm}-${dd}`;
 })();
 
@@ -330,24 +269,13 @@ const fakeDateOnly = (now: Date) =>
   jest.useFakeTimers({
     now,
     doNotFake: [
-      "hrtime",
-      "nextTick",
-      "performance",
-      "queueMicrotask",
-      "requestAnimationFrame",
-      "cancelAnimationFrame",
-      "requestIdleCallback",
-      "cancelIdleCallback",
-      "setImmediate",
-      "clearImmediate",
-      "setInterval",
-      "clearInterval",
-      "setTimeout",
-      "clearTimeout",
+      'hrtime', 'nextTick', 'performance', 'queueMicrotask', 'requestAnimationFrame',
+      'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback', 'setImmediate',
+      'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout',
     ],
   });
 
-describe("AgendaView", () => {
+describe('AgendaView', () => {
   beforeEach(() => {
     mockedCreateAppointment.mockReset();
     mockedListAppointments.mockReset();
@@ -362,10 +290,8 @@ describe("AgendaView", () => {
     });
   });
 
-  it("cuando falla la carga de profesionales, el filtro se sustituye por el error en su sitio", async () => {
-    mockedListStaff.mockRejectedValueOnce(
-      new ApiError(500, "Error del servidor"),
-    );
+  it('cuando falla la carga de profesionales, el filtro se sustituye por el error en su sitio', async () => {
+    mockedListStaff.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
     mockedListAppointments.mockResolvedValue([]);
 
     await renderAgenda(<AgendaView token="tok" />);
@@ -376,38 +302,27 @@ describe("AgendaView", () => {
     // misma ventana, así que una consulta de rol sin más es una carrera.
     const region = await screen.findByText(/no pudimos cargar profesionales/i);
     expect(region.closest('[role="status"]')).not.toBeNull();
-    expect(screen.queryByLabelText("Profesional")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Profesional')).not.toBeInTheDocument();
 
     // Y no interrumpe: la agenda sigue en pantalla y no hay alerta asertiva.
-    expect(
-      screen.getByRole("button", { name: /nueva cita/i }),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /nueva cita/i })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it("DX-339: «Agenda de contingencia» solo para ADMIN y RECEPTION, y abre su diálogo", async () => {
+  it('DX-339: «Agenda de contingencia» solo para ADMIN y RECEPTION, y abre su diálogo', async () => {
     mockedListStaff.mockResolvedValue([]);
     mockedListAppointments.mockResolvedValue([]);
-    const tokenFor = (role: string) =>
-      `h.${btoa(JSON.stringify({ sub: "u1", tenantId: "t1", role }))}.s`;
+    const tokenFor = (role: string) => `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role }))}.s`;
     const user = userEvent.setup();
 
-    const { unmount } = await renderAgenda(
-      <AgendaView token={tokenFor("DENTIST")} />,
-    );
-    expect(
-      screen.queryByRole("button", { name: "Agenda de contingencia" }),
-    ).not.toBeInTheDocument();
+    const { unmount } = await renderAgenda(<AgendaView token={tokenFor('DENTIST')} />);
+    expect(screen.queryByRole('button', { name: 'Agenda de contingencia' })).not.toBeInTheDocument();
     unmount();
     clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
-    await renderAgenda(<AgendaView token={tokenFor("RECEPTION")} />);
-    await user.click(
-      screen.getByRole("button", { name: "Agenda de contingencia" }),
-    );
-    expect(
-      await screen.findByRole("dialog", { name: "Agenda de contingencia" }),
-    ).toBeInTheDocument();
+    await renderAgenda(<AgendaView token={tokenFor('RECEPTION')} />);
+    await user.click(screen.getByRole('button', { name: 'Agenda de contingencia' }));
+    expect(await screen.findByRole('dialog', { name: 'Agenda de contingencia' })).toBeInTheDocument();
   });
 
   it('defaults the provider filter to "Todos" (all providers) and offers each staff member as an option', async () => {
@@ -416,23 +331,18 @@ describe("AgendaView", () => {
 
     await renderAgenda(<AgendaView token="tok" />);
 
-    const providerSelect =
-      await screen.findByLabelText<HTMLSelectElement>(/profesional/i);
+    const providerSelect = await screen.findByLabelText<HTMLSelectElement>(/profesional/i);
     // '' = "Todos los profesionales" — the month calendar shows the whole clinic.
-    expect(providerSelect.value).toBe("");
+    expect(providerSelect.value).toBe('');
     expect(
-      within(providerSelect).getByRole("option", {
-        name: /todos los profesionales/i,
-      }),
+      within(providerSelect).getByRole('option', { name: /todos los profesionales/i }),
     ).toBeInTheDocument();
     await waitFor(() =>
-      expect(
-        within(providerSelect).getByRole("option", { name: "Dra. Ana Ríos" }),
-      ).toBeInTheDocument(),
+      expect(within(providerSelect).getByRole('option', { name: 'Dra. Ana Ríos' })).toBeInTheDocument(),
     );
   });
 
-  it("in Día view fetches the selected day with the sede day boundaries, scoped to the chosen provider", async () => {
+  it('in Día view fetches the selected day with the sede day boundaries, scoped to the chosen provider', async () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([]);
     const user = userEvent.setup();
@@ -440,19 +350,19 @@ describe("AgendaView", () => {
     await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
-    await user.click(screen.getByRole("button", { name: /^día$/i }));
-    await user.click(screen.getByRole("button", { name: /^lista$/i }));
-    await user.selectOptions(screen.getByLabelText(/profesional/i), "staff-1");
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await user.click(screen.getByRole('button', { name: /^lista$/i }));
+    await user.selectOptions(screen.getByLabelText(/profesional/i), 'staff-1');
 
     mockedListAppointments.mockClear();
-    await goToDate(user, "2026-03-10");
+    await goToDate(user, '2026-03-10');
 
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
     const params = mockedListAppointments.mock.calls.at(-1)![1];
-    const expected = wallDayRange("2026-03-10", "UTC");
+    const expected = wallDayRange('2026-03-10', 'UTC');
     expect(params.from).toBe(expected.from);
     expect(params.to).toBe(expected.to);
-    expect(params.providerId).toBe("staff-1");
+    expect(params.providerId).toBe('staff-1');
   });
 
   it('refreshes appointments in place after a cita is created — DayAgenda stays mounted, "Actualizando…" shows instead of a full reload', async () => {
@@ -463,7 +373,7 @@ describe("AgendaView", () => {
     // post-create refresh triggered by `handleAppointmentCreated`) is
     // controlled manually so the test can assert the interim "refreshing"
     // state before it settles — mirrors odontogram-tab.test.tsx.
-    const refetch = deferred<(typeof apt1)[]>();
+    const refetch = deferred<typeof apt1[]>();
     let callCount = 0;
     mockedListAppointments.mockImplementation(() => {
       callCount += 1;
@@ -478,68 +388,58 @@ describe("AgendaView", () => {
 
     // Switch to Día view — where the appointment table renders — then let the
     // initial load settle with the one appointment.
-    await user.click(screen.getByRole("button", { name: /^día$/i }));
-    await user.click(screen.getByRole("button", { name: /^lista$/i }));
-    const table = await screen.findByRole("table", { name: /agenda del día/i });
-    expect(screen.getAllByRole("row")).toHaveLength(2); // header + apt1
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await user.click(screen.getByRole('button', { name: /^lista$/i }));
+    const table = await screen.findByRole('table', { name: /agenda del día/i });
+    expect(screen.getAllByRole('row')).toHaveLength(2); // header + apt1
 
     // Open the form and fill it in. Both the agenda's own selectors and the
     // form share the "Profesional"/"Fecha" label text while the form is
     // open — disambiguate by id (the form's fields, per `appointment-form.tsx`).
-    await user.click(screen.getByRole("button", { name: /nueva cita/i }));
+    await user.click(screen.getByRole('button', { name: /nueva cita/i }));
     // Auto-select María López (pat-1) by typing her exact document number —
     // wait for the chosen-patient chip ("Cambiar") so the debounced select lands.
-    await user.type(screen.getByLabelText(/^paciente$/i), "123");
-    await screen.findByRole("button", { name: /cambiar/i });
+    await user.type(screen.getByLabelText(/^paciente$/i), '123');
+    await screen.findByRole('button', { name: /cambiar/i });
     await user.selectOptions(
-      screen.getByLabelText(/profesional/i, {
-        selector: "#appointment-provider",
-      }),
-      "staff-1",
+      screen.getByLabelText(/profesional/i, { selector: '#appointment-provider' }),
+      'staff-1',
     );
-    const form = screen.getByRole("form", { name: /agendar cita/i });
+    const form = screen.getByRole('form', { name: /agendar cita/i });
     await typeDate(user, /^fecha$/i, FUTURE_DATE, form);
-    await typeTime(user, /hora de inicio/i, "09:00", form);
-    await typeTime(user, /hora de fin/i, "09:30", form);
+    await typeTime(user, /hora de inicio/i, '09:00', form);
+    await typeTime(user, /hora de fin/i, '09:30', form);
 
-    await user.click(screen.getByRole("button", { name: /agendar/i }));
+    await user.click(screen.getByRole('button', { name: /agendar/i }));
 
-    await waitFor(() =>
-      expect(mockedCreateAppointment).toHaveBeenCalledTimes(1),
-    );
+    await waitFor(() => expect(mockedCreateAppointment).toHaveBeenCalledTimes(1));
     // The refresh-in-place fetch has started (2nd listAppointments call is
     // pending on `refetch`); the form closes and a non-blocking refreshing
     // indicator shows, but the day table must stay the SAME mounted node —
     // no full-page reload / remount.
-    await waitFor(() =>
-      expect(mockedListAppointments).toHaveBeenCalledTimes(4),
-    );
-    expect(
-      screen.queryByRole("form", { name: /agendar cita/i }),
-    ).not.toBeInTheDocument();
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalledTimes(4));
+    expect(screen.queryByRole('form', { name: /agendar cita/i })).not.toBeInTheDocument();
     expect(await screen.findByText(/actualizando/i)).toBeInTheDocument();
-    expect(screen.getByRole("table", { name: /agenda del día/i })).toBe(table);
+    expect(screen.getByRole('table', { name: /agenda del día/i })).toBe(table);
 
     // Settle the refetch with both appointments — the indicator clears, the
     // table is still the same mounted node, now with the new row.
     refetch.resolve([apt1, apt2]);
-    await waitFor(() =>
-      expect(screen.queryByText(/actualizando/i)).not.toBeInTheDocument(),
-    );
-    expect(screen.getByRole("table", { name: /agenda del día/i })).toBe(table);
-    expect(screen.getAllByRole("row")).toHaveLength(3); // header + apt1 + apt2
+    await waitFor(() => expect(screen.queryByText(/actualizando/i)).not.toBeInTheDocument());
+    expect(screen.getByRole('table', { name: /agenda del día/i })).toBe(table);
+    expect(screen.getAllByRole('row')).toHaveLength(3); // header + apt1 + apt2
   });
 
-  it("changing a row's status select calls updateAppointment(id, {status}) then refreshes the agenda in place — DayAgenda stays mounted (no remount)", async () => {
+  it('changing a row\'s status select calls updateAppointment(id, {status}) then refreshes the agenda in place — DayAgenda stays mounted (no remount)', async () => {
     mockedListStaff.mockResolvedValue(staff);
-    mockedUpdateAppointment.mockResolvedValue({ ...apt1, status: "CONFIRMED" });
+    mockedUpdateAppointment.mockResolvedValue({ ...apt1, status: 'CONFIRMED' });
 
     // First call (initial load) resolves immediately with apt1 as SCHEDULED;
     // the second call (the post-PATCH refresh triggered by
     // `handleStatusChange`) is controlled manually so the test can assert
     // the interim state before it settles — same pattern as the
     // create-appointment refresh-in-place test above.
-    const refetch = deferred<(typeof apt1)[]>();
+    const refetch = deferred<typeof apt1[]>();
     let callCount = 0;
     mockedListAppointments.mockImplementation(() => {
       callCount += 1;
@@ -552,146 +452,117 @@ describe("AgendaView", () => {
     const user = userEvent.setup();
     await renderAgenda(<AgendaView token="tok" />);
 
-    await user.click(screen.getByRole("button", { name: /^día$/i }));
-    await user.click(screen.getByRole("button", { name: /^lista$/i }));
-    const table = await screen.findByRole("table", { name: /agenda del día/i });
-    const statusSelect = within(table).getByRole("combobox");
-    expect(statusSelect).toHaveTextContent("Agendada");
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await user.click(screen.getByRole('button', { name: /^lista$/i }));
+    const table = await screen.findByRole('table', { name: /agenda del día/i });
+    const statusSelect = within(table).getByRole('combobox');
+    expect(statusSelect).toHaveTextContent('Agendada');
 
-    await pickStatus(user, statusSelect, "Confirmada");
+    await pickStatus(user, statusSelect, 'Confirmada');
 
     await waitFor(() =>
-      expect(mockedUpdateAppointment).toHaveBeenCalledWith("tok", "apt-1", {
-        status: "CONFIRMED",
-      }),
+      expect(mockedUpdateAppointment).toHaveBeenCalledWith('tok', 'apt-1', { status: 'CONFIRMED' }),
     );
     // The refresh-in-place fetch has started (2nd listAppointments call
     // pending on `refetch`) — same mounted table node, control disabled
     // while its own update is in flight.
-    await waitFor(() =>
-      expect(mockedListAppointments).toHaveBeenCalledTimes(4),
-    );
-    expect(screen.getByRole("table", { name: /agenda del día/i })).toBe(table);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalledTimes(4));
+    expect(screen.getByRole('table', { name: /agenda del día/i })).toBe(table);
 
-    refetch.resolve([{ ...apt1, status: "CONFIRMED" }]);
+    refetch.resolve([{ ...apt1, status: 'CONFIRMED' }]);
 
     await waitFor(() =>
-      expect(within(table).getByRole("combobox")).toHaveTextContent(
-        "Confirmada",
-      ),
+      expect(within(table).getByRole('combobox')).toHaveTextContent('Confirmada'),
     );
-    expect(screen.getByRole("table", { name: /agenda del día/i })).toBe(table);
+    expect(screen.getByRole('table', { name: /agenda del día/i })).toBe(table);
   });
 
-  describe("urgencia en sobrecupo (DX-509)", () => {
+  describe('urgencia en sobrecupo (DX-509)', () => {
     async function openList(user: ReturnType<typeof userEvent.setup>) {
       await renderAgenda(<AgendaView token="tok" />);
-      await user.click(screen.getByRole("button", { name: /^día$/i }));
-      await user.click(screen.getByRole("button", { name: /^lista$/i }));
-      return screen.findByRole("table", { name: /agenda del día/i });
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await user.click(screen.getByRole('button', { name: /^lista$/i }));
+      return screen.findByRole('table', { name: /agenda del día/i });
     }
 
-    it("el distintivo «Sobrecupo» sale solo mientras lo es (no en una normal ni en una cancelada)", async () => {
+    it('el distintivo «Sobrecupo» sale solo mientras lo es (no en una normal ni en una cancelada)', async () => {
       mockedListStaff.mockResolvedValue(staff);
       mockedListAppointments.mockResolvedValue([
+        appointment({ id: 'urg', patientFirstName: 'Úrsula', patientLastName: 'Pérez', overbooked: true, status: 'ARRIVED' }),
         appointment({
-          id: "urg",
-          patientFirstName: "Úrsula",
-          patientLastName: "Pérez",
-          overbooked: true,
-          status: "ARRIVED",
-        }),
-        appointment({
-          id: "normal",
-          patientFirstName: "Berta",
-          patientLastName: "Gil",
-          start: "2026-03-10T10:00:00.000Z",
-          end: "2026-03-10T10:30:00.000Z",
+          id: 'normal',
+          patientFirstName: 'Berta',
+          patientLastName: 'Gil',
+          start: '2026-03-10T10:00:00.000Z',
+          end: '2026-03-10T10:30:00.000Z',
           overbooked: false,
         }),
         appointment({
-          id: "cancelada",
-          patientFirstName: "Carla",
-          patientLastName: "Ruiz",
-          start: "2026-03-10T11:00:00.000Z",
-          end: "2026-03-10T11:30:00.000Z",
+          id: 'cancelada',
+          patientFirstName: 'Carla',
+          patientLastName: 'Ruiz',
+          start: '2026-03-10T11:00:00.000Z',
+          end: '2026-03-10T11:30:00.000Z',
           overbooked: true,
-          status: "CANCELLED",
+          status: 'CANCELLED',
         }),
       ]);
       const user = userEvent.setup();
       const table = await openList(user);
-      const rows = within(table).getAllByRole("row").slice(1);
+      const rows = within(table).getAllByRole('row').slice(1);
       const chipIn = (name: RegExp) =>
-        within(rows.find((r) => name.test(r.textContent ?? ""))!).queryByTestId(
-          "overbooked-chip",
-        );
-      expect(chipIn(/Úrsula/)).toHaveTextContent("Sobrecupo");
+        within(rows.find((r) => name.test(r.textContent ?? ''))!).queryByTestId('overbooked-chip');
+      expect(chipIn(/Úrsula/)).toHaveTextContent('Sobrecupo');
       expect(chipIn(/Berta/)).toBeNull();
       expect(chipIn(/Carla/)).toBeNull();
     });
 
-    it("reactivar con su hora ocupada: pregunta y «Mantener en sobrecupo» reenvía con keepOverbooked", async () => {
+    it('reactivar con su hora ocupada: pregunta y «Mantener en sobrecupo» reenvía con keepOverbooked', async () => {
       mockedListStaff.mockResolvedValue(staff);
-      const cancelled = appointment({
-        id: "urg",
-        overbooked: true,
-        status: "CANCELLED",
-        cancelledByKind: "STAFF_FOR_PATIENT",
-      });
+      const cancelled = appointment({ id: 'urg', overbooked: true, status: 'CANCELLED', cancelledByKind: 'STAFF_FOR_PATIENT' });
       mockedListAppointments.mockResolvedValue([cancelled]);
       mockedUpdateAppointment
         .mockRejectedValueOnce(
           new ApiError(
             409,
-            "Esta urgencia se atendió en sobrecupo y su hora ya la ocupa otra cita del profesional. Muévela a otra hora o mantenla como sobrecupo.",
-            { code: "OVERBOOK_SLOT_TAKEN" },
+            'Esta urgencia se atendió en sobrecupo y su hora ya la ocupa otra cita del profesional. Muévela a otra hora o mantenla como sobrecupo.',
+            { code: 'OVERBOOK_SLOT_TAKEN' },
           ),
         )
-        .mockResolvedValueOnce({ ...cancelled, status: "SCHEDULED" });
+        .mockResolvedValueOnce({ ...cancelled, status: 'SCHEDULED' });
       const user = userEvent.setup();
       const table = await openList(user);
-      await pickStatus(user, within(table).getByRole("combobox"), "Agendada");
+      await pickStatus(user, within(table).getByRole('combobox'), 'Agendada');
 
-      const dialog = await screen.findByRole("dialog", {
-        name: "Su hora ya está ocupada",
-      });
-      expect(dialog).toHaveTextContent("mantenla como sobrecupo");
+      const dialog = await screen.findByRole('dialog', { name: 'Su hora ya está ocupada' });
+      expect(dialog).toHaveTextContent('mantenla como sobrecupo');
       expect(mockedUpdateAppointment).toHaveBeenCalledTimes(1);
-      await user.click(
-        within(dialog).getByRole("button", { name: "Mantener en sobrecupo" }),
-      );
+      await user.click(within(dialog).getByRole('button', { name: 'Mantener en sobrecupo' }));
       await waitFor(() =>
-        expect(mockedUpdateAppointment).toHaveBeenLastCalledWith("tok", "urg", {
-          status: "SCHEDULED",
+        expect(mockedUpdateAppointment).toHaveBeenLastCalledWith('tok', 'urg', {
+          status: 'SCHEDULED',
           keepOverbooked: true,
         }),
       );
       await waitFor(() =>
-        expect(
-          screen.queryByRole("dialog", { name: "Su hora ya está ocupada" }),
-        ).not.toBeInTheDocument(),
+        expect(screen.queryByRole('dialog', { name: 'Su hora ya está ocupada' })).not.toBeInTheDocument(),
       );
     });
   });
 
-  describe("reactivar con las reglas de mover (DX-267-bis)", () => {
+  describe('reactivar con las reglas de mover (DX-267-bis)', () => {
     const OFF_SCHEDULE =
-      "Fuera del horario del profesional: no trabaja en Sede principal el martes 10 de marzo.";
+      'Fuera del horario del profesional: no trabaja en Sede principal el martes 10 de marzo.';
 
-    it("fuera del horario del profesional: la cita se reactiva y sale el aviso", async () => {
+    it('fuera del horario del profesional: la cita se reactiva y sale el aviso', async () => {
       mockedListStaff.mockResolvedValue(staff);
-      const cancelled = appointment({
-        id: "apt-c",
-        status: "CANCELLED",
-        cancelledByKind: "STAFF_FOR_PATIENT",
-      });
+      const cancelled = appointment({ id: 'apt-c', status: 'CANCELLED', cancelledByKind: 'STAFF_FOR_PATIENT' });
       mockedListAppointments.mockResolvedValue([cancelled]);
       mockedUpdateAppointment.mockResolvedValueOnce({
         ...cancelled,
-        status: "SCHEDULED",
+        status: 'SCHEDULED',
         warnings: [OFF_SCHEDULE],
-        warningCodes: ["PROVIDER_OFF_SCHEDULE"],
+        warningCodes: ['PROVIDER_OFF_SCHEDULE'],
       } as Awaited<ReturnType<typeof updateAppointment>>);
       const user = userEvent.setup();
       await renderAgenda(
@@ -700,42 +571,29 @@ describe("AgendaView", () => {
           <Toaster />
         </>,
       );
-      await user.click(screen.getByRole("button", { name: /^día$/i }));
-      await user.click(screen.getByRole("button", { name: /^lista$/i }));
-      const table = await screen.findByRole("table", {
-        name: /agenda del día/i,
-      });
-      await pickStatus(user, within(table).getByRole("combobox"), "Agendada");
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await user.click(screen.getByRole('button', { name: /^lista$/i }));
+      const table = await screen.findByRole('table', { name: /agenda del día/i });
+      await pickStatus(user, within(table).getByRole('combobox'), 'Agendada');
 
-      expect(
-        await screen.findByText("Cita fuera del horario del profesional"),
-      ).toBeInTheDocument();
+      expect(await screen.findByText('Cita fuera del horario del profesional')).toBeInTheDocument();
       expect(screen.getByText(OFF_SCHEDULE)).toBeInTheDocument();
-      expect(mockedUpdateAppointment).toHaveBeenCalledWith("tok", "apt-c", {
-        status: "SCHEDULED",
-      });
+      expect(mockedUpdateAppointment).toHaveBeenCalledWith('tok', 'apt-c', { status: 'SCHEDULED' });
     });
 
-    it("mantenerla en sobrecupo al reactivar también enseña los avisos", async () => {
+    it('mantenerla en sobrecupo al reactivar también enseña los avisos', async () => {
       mockedListStaff.mockResolvedValue(staff);
-      const cancelled = appointment({
-        id: "urg",
-        overbooked: true,
-        status: "CANCELLED",
-        cancelledByKind: "STAFF_FOR_PATIENT",
-      });
+      const cancelled = appointment({ id: 'urg', overbooked: true, status: 'CANCELLED', cancelledByKind: 'STAFF_FOR_PATIENT' });
       mockedListAppointments.mockResolvedValue([cancelled]);
       mockedUpdateAppointment
         .mockRejectedValueOnce(
-          new ApiError(409, "Su hora ya la ocupa otra cita del profesional.", {
-            code: "OVERBOOK_SLOT_TAKEN",
-          }),
+          new ApiError(409, 'Su hora ya la ocupa otra cita del profesional.', { code: 'OVERBOOK_SLOT_TAKEN' }),
         )
         .mockResolvedValueOnce({
           ...cancelled,
-          status: "SCHEDULED",
+          status: 'SCHEDULED',
           warnings: [OFF_SCHEDULE],
-          warningCodes: ["PROVIDER_OFF_SCHEDULE"],
+          warningCodes: ['PROVIDER_OFF_SCHEDULE'],
         } as Awaited<ReturnType<typeof updateAppointment>>);
       const user = userEvent.setup();
       await renderAgenda(
@@ -744,68 +602,46 @@ describe("AgendaView", () => {
           <Toaster />
         </>,
       );
-      await user.click(screen.getByRole("button", { name: /^día$/i }));
-      await user.click(screen.getByRole("button", { name: /^lista$/i }));
-      const table = await screen.findByRole("table", {
-        name: /agenda del día/i,
-      });
-      await pickStatus(user, within(table).getByRole("combobox"), "Agendada");
-      const dialog = await screen.findByRole("dialog", {
-        name: "Su hora ya está ocupada",
-      });
-      await user.click(
-        within(dialog).getByRole("button", { name: "Mantener en sobrecupo" }),
-      );
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await user.click(screen.getByRole('button', { name: /^lista$/i }));
+      const table = await screen.findByRole('table', { name: /agenda del día/i });
+      await pickStatus(user, within(table).getByRole('combobox'), 'Agendada');
+      const dialog = await screen.findByRole('dialog', { name: 'Su hora ya está ocupada' });
+      await user.click(within(dialog).getByRole('button', { name: 'Mantener en sobrecupo' }));
 
-      expect(
-        await screen.findByText("Cita fuera del horario del profesional"),
-      ).toBeInTheDocument();
+      expect(await screen.findByText('Cita fuera del horario del profesional')).toBeInTheDocument();
       expect(screen.getByText(OFF_SCHEDULE)).toBeInTheDocument();
-      expect(mockedUpdateAppointment).toHaveBeenLastCalledWith("tok", "urg", {
-        status: "SCHEDULED",
+      expect(mockedUpdateAppointment).toHaveBeenLastCalledWith('tok', 'urg', {
+        status: 'SCHEDULED',
         keepOverbooked: true,
       });
     });
 
-    it("una cita que ya pasó: el mensaje del servidor en el detalle, sin «Reintentar»", async () => {
+    it('una cita que ya pasó: el mensaje del servidor en el detalle, sin «Reintentar»', async () => {
       const tokenFor = (role: string) =>
-        `h.${btoa(JSON.stringify({ sub: "staff-1", tenantId: "t1", role }))}.s`;
-      const cancelled = appointment({
-        id: "apt-p",
-        status: "CANCELLED",
-        cancelledByKind: "STAFF_FOR_PATIENT",
-      });
+        `h.${btoa(JSON.stringify({ sub: 'staff-1', tenantId: 't1', role }))}.s`;
+      const cancelled = appointment({ id: 'apt-p', status: 'CANCELLED', cancelledByKind: 'STAFF_FOR_PATIENT' });
       mockedListStaff.mockResolvedValue(staff);
       mockedListAppointments.mockResolvedValue([cancelled]);
       mockedUpdateAppointment.mockRejectedValueOnce(
-        new ApiError(409, "La cita ya pasó: agenda una nueva", {
-          code: "APPOINTMENT_PAST",
-        }),
+        new ApiError(409, 'La cita ya pasó: agenda una nueva', { code: 'APPOINTMENT_PAST' }),
       );
       const user = userEvent.setup();
-      await renderAgenda(<AgendaView token={tokenFor("RECEPTION")} />);
+      await renderAgenda(<AgendaView token={tokenFor('RECEPTION')} />);
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
-      await goToDate(user, "2026-03-11");
-      await user.click(screen.getByRole("button", { name: /^semana$/i }));
+      await goToDate(user, '2026-03-11');
+      await user.click(screen.getByRole('button', { name: /^semana$/i }));
       await screen.findByLabelText(/agenda de la semana/i);
-      await user.click(screen.getByTestId("week-grid-appointment"));
-      await pickStatus(
-        user,
-        await screen.findByRole("combobox", { name: /^Estado: / }),
-        "Agendada",
-      );
+      await user.click(screen.getByTestId('week-grid-appointment'));
+      await pickStatus(user, await screen.findByRole('combobox', { name: /^Estado: / }), 'Agendada');
 
-      const dialog = screen.getByRole("dialog");
-      expect(
-        await within(dialog).findByText("La cita ya pasó: agenda una nueva"),
-      ).toBeInTheDocument();
-      expect(
-        within(dialog).queryByRole("button", { name: /reintentar/i }),
-      ).not.toBeInTheDocument();
+      const dialog = screen.getByRole('dialog');
+      expect(await within(dialog).findByText('La cita ya pasó: agenda una nueva')).toBeInTheDocument();
+      expect(within(dialog).queryByRole('button', { name: /reintentar/i })).not.toBeInTheDocument();
     });
   });
 
-  it("keeps the row's status select disabled until the in-place refresh actually resolves, not just until the PATCH settles (review fix)", async () => {
+  it('keeps the row\'s status select disabled until the in-place refresh actually resolves, not just until the PATCH settles (review fix)', async () => {
     mockedListStaff.mockResolvedValue(staff);
 
     // Both the PATCH and the follow-up refetch are DEFERRED so the test can
@@ -819,7 +655,7 @@ describe("AgendaView", () => {
     const patch = deferred<typeof apt1>();
     mockedUpdateAppointment.mockReturnValue(patch.promise);
 
-    const refetch = deferred<(typeof apt1)[]>();
+    const refetch = deferred<typeof apt1[]>();
     let callCount = 0;
     mockedListAppointments.mockImplementation(() => {
       callCount += 1;
@@ -832,23 +668,21 @@ describe("AgendaView", () => {
     const user = userEvent.setup();
     await renderAgenda(<AgendaView token="tok" />);
 
-    await user.click(screen.getByRole("button", { name: /^día$/i }));
-    await user.click(screen.getByRole("button", { name: /^lista$/i }));
-    const table = await screen.findByRole("table", { name: /agenda del día/i });
-    const statusSelect = within(table).getByRole("combobox");
-    expect(statusSelect).toHaveTextContent("Agendada");
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await user.click(screen.getByRole('button', { name: /^lista$/i }));
+    const table = await screen.findByRole('table', { name: /agenda del día/i });
+    const statusSelect = within(table).getByRole('combobox');
+    expect(statusSelect).toHaveTextContent('Agendada');
     expect(statusSelect).not.toBeDisabled();
 
-    await pickStatus(user, statusSelect, "Confirmada");
+    await pickStatus(user, statusSelect, 'Confirmada');
     // Selecting a new value while disabled-testing must not race ahead:
     // the PATCH is in flight, so the select is already disabled.
     expect(statusSelect).toBeDisabled();
 
     // Resolve the PATCH but leave the refetch pending.
-    patch.resolve({ ...apt1, status: "CONFIRMED" });
-    await waitFor(() =>
-      expect(mockedListAppointments).toHaveBeenCalledTimes(4),
-    );
+    patch.resolve({ ...apt1, status: 'CONFIRMED' });
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalledTimes(4));
 
     // THE ASSERTION THAT PROVES THE FIX: the PATCH has settled and the
     // in-place refresh has started, but has NOT resolved yet — the row must
@@ -856,22 +690,22 @@ describe("AgendaView", () => {
     // since `appointments` hasn't been updated yet). Against the old
     // fire-and-forget code, `updatingId` was already cleared here (its
     // `.finally` ran off the PATCH promise alone), so this assertion fails.
-    expect(within(table).getByRole("combobox")).toBeDisabled();
-    expect(within(table).getByRole("combobox")).toHaveTextContent("Agendada");
+    expect(within(table).getByRole('combobox')).toBeDisabled();
+    expect(within(table).getByRole('combobox')).toHaveTextContent('Agendada');
 
     // Now resolve the refresh — only now should the select re-enable, showing
     // the new status.
-    refetch.resolve([{ ...apt1, status: "CONFIRMED" }]);
+    refetch.resolve([{ ...apt1, status: 'CONFIRMED' }]);
 
     await waitFor(() =>
-      expect(within(table).getByRole("combobox")).not.toBeDisabled(),
+      expect(within(table).getByRole('combobox')).not.toBeDisabled(),
     );
-    expect(within(table).getByRole("combobox")).toHaveTextContent("Confirmada");
+    expect(within(table).getByRole('combobox')).toHaveTextContent('Confirmada');
   });
 
   it('el reintento del toast de refresh usa el filtro vigente al pulsar "Reintentar", no el capturado cuando el refresh falló (fix ronda 1: closure obsoleto)', async () => {
     mockedListStaff.mockResolvedValue(staff);
-    mockedUpdateAppointment.mockResolvedValue({ ...apt1, status: "CONFIRMED" });
+    mockedUpdateAppointment.mockResolvedValue({ ...apt1, status: 'CONFIRMED' });
 
     let callCount = 0;
     mockedListAppointments.mockImplementation(() => {
@@ -881,7 +715,7 @@ describe("AgendaView", () => {
       if (callCount <= 3) return Promise.resolve([apt1]);
       // #4: the in-place refresh right after the status PATCH — fails while
       // providerId is still '' (todos). This is what builds the toast.
-      if (callCount === 4) return Promise.reject(new Error("boom"));
+      if (callCount === 4) return Promise.reject(new Error('boom'));
       // #5: the user narrows the filter to staff-2 WHILE the toast is still
       // up — an ordinary fetch for that provider.
       if (callCount === 5) return Promise.resolve([]);
@@ -898,32 +732,29 @@ describe("AgendaView", () => {
       </>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^día$/i }));
-    await user.click(screen.getByRole("button", { name: /^lista$/i }));
-    const table = await screen.findByRole("table", { name: /agenda del día/i });
-    const statusSelect = within(table).getByRole("combobox");
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await user.click(screen.getByRole('button', { name: /^lista$/i }));
+    const table = await screen.findByRole('table', { name: /agenda del día/i });
+    const statusSelect = within(table).getByRole('combobox');
 
-    await pickStatus(user, statusSelect, "Confirmada");
+    await pickStatus(user, statusSelect, 'Confirmada');
 
     // The failed in-place refresh surfaces as a toast with a retry action.
-    const retryButton = await screen.findByRole("button", {
-      name: "Reintentar",
-    });
+    const retryButton = await screen.findByRole('button', { name: 'Reintentar' });
     await waitFor(() => expect(callCount).toBe(4));
 
     // Narrow the provider filter while the toast is still on screen — the
     // stale-closure trap: the toast's `onRetry` was built during the failed
     // refresh, when `providerId` was still ''.
-    const providerSelect =
-      screen.getByLabelText<HTMLSelectElement>(/^profesional$/i);
-    await user.selectOptions(providerSelect, "staff-2");
+    const providerSelect = screen.getByLabelText<HTMLSelectElement>(/^profesional$/i);
+    await user.selectOptions(providerSelect, 'staff-2');
     await waitFor(() => expect(callCount).toBe(5));
 
     await user.click(retryButton);
 
     await waitFor(() => expect(callCount).toBe(6));
     const lastCallOpts = mockedListAppointments.mock.calls[5][1];
-    expect(lastCallOpts).toMatchObject({ providerId: "staff-2" });
+    expect(lastCallOpts).toMatchObject({ providerId: 'staff-2' });
   });
 
   it('opens the "Nueva cita" modal and pre-fills AppointmentForm\'s date with the selected day', async () => {
@@ -937,25 +768,21 @@ describe("AgendaView", () => {
     const selectedDate = agendaDate();
 
     // The form lives in a modal now — closed until "Nueva cita" is clicked.
-    expect(
-      screen.queryByRole("form", { name: /agendar cita/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: /agendar cita/i })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /nueva cita/i }));
+    await user.click(screen.getByRole('button', { name: /nueva cita/i }));
 
-    const dialog = await screen.findByRole("dialog");
-    expect(
-      within(dialog).getByRole("form", { name: /agendar cita/i }),
-    ).toBeInTheDocument();
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('form', { name: /agendar cita/i })).toBeInTheDocument();
 
     expect(readDate(/^fecha$/i, dialog)).toBe(selectedDate);
   });
 
-  describe("teléfono (≤ 767 px)", () => {
+  describe('teléfono (≤ 767 px)', () => {
     const original = window.matchMedia;
     beforeEach(() => {
       window.matchMedia = ((query: string) => ({
-        matches: query === "(max-width: 767px)",
+        matches: query === '(max-width: 767px)',
         media: query,
         addEventListener: () => {},
         removeEventListener: () => {},
@@ -965,43 +792,31 @@ describe("AgendaView", () => {
       window.matchMedia = original;
     });
 
-    it("abre en Día · Lista con el profesional de cada cita; el Mes es de puntos con la lista del día debajo", async () => {
+    it('abre en Día · Lista con el profesional de cada cita; el Mes es de puntos con la lista del día debajo', async () => {
       mockedListStaff.mockResolvedValue(staff);
       mockedListAppointments.mockResolvedValue([apt1]);
       const user = userEvent.setup();
 
       await renderAgenda(<AgendaView token="tok" />);
-      expect(screen.getByRole("button", { name: /^día$/i })).toHaveAttribute(
-        "aria-pressed",
-        "true",
-      );
-      expect(screen.getByRole("button", { name: /^lista$/i })).toHaveAttribute(
-        "aria-pressed",
-        "true",
-      );
-      const list = await screen.findByRole("list", { name: /agenda del día/i });
+      expect(screen.getByRole('button', { name: /^día$/i })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: /^lista$/i })).toHaveAttribute('aria-pressed', 'true');
+      const list = await screen.findByRole('list', { name: /agenda del día/i });
       expect(within(list).getByText(/Dra\. Ana Ríos/)).toBeInTheDocument();
 
-      await user.click(screen.getByRole("button", { name: /^mes$/i }));
-      await goToDate(user, "2026-03-10");
-      const day = await screen.findByRole("button", {
-        name: "10 de marzo · 1 cita",
-      });
+      await user.click(screen.getByRole('button', { name: /^mes$/i }));
+      await goToDate(user, '2026-03-10');
+      const day = await screen.findByRole('button', { name: '10 de marzo · 1 cita' });
       await user.click(day);
       // Sin hoja: la lista del día elegido va debajo del calendario.
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-      const selected = screen.getByRole("region", { name: /10 de marzo/ });
-      expect(selected).toHaveTextContent("1 cita");
-      expect(
-        within(selected).getByRole("list", { name: /agenda del día/i }),
-      ).toBeInTheDocument();
-      expect(screen.queryAllByTestId("medical-alert-indicator")).toHaveLength(
-        0,
-      );
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      const selected = screen.getByRole('region', { name: /10 de marzo/ });
+      expect(selected).toHaveTextContent('1 cita');
+      expect(within(selected).getByRole('list', { name: /agenda del día/i })).toBeInTheDocument();
+      expect(screen.queryAllByTestId('medical-alert-indicator')).toHaveLength(0);
     });
   });
 
-  it("defaults to Mes (calendar) view; switching to Semana fetches the week range and renders WeekTimeGrid", async () => {
+  it('defaults to Mes (calendar) view; switching to Semana fetches the week range and renders WeekTimeGrid', async () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([]);
     const user = userEvent.setup();
@@ -1009,39 +824,28 @@ describe("AgendaView", () => {
     await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
-    expect(screen.getByRole("button", { name: /^mes$/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(screen.getByRole("button", { name: /^semana$/i })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
+    expect(screen.getByRole('button', { name: /^mes$/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^semana$/i })).toHaveAttribute('aria-pressed', 'false');
 
-    await goToDate(user, "2026-03-11");
+    await goToDate(user, '2026-03-11');
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
     mockedListAppointments.mockClear();
-    await user.click(screen.getByRole("button", { name: /^semana$/i }));
+    await user.click(screen.getByRole('button', { name: /^semana$/i }));
 
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
     const params = mockedListAppointments.mock.calls.at(-1)![1];
-    const expected = wallWeekRange("2026-03-11", "UTC");
+    const expected = wallWeekRange('2026-03-11', 'UTC');
     expect(params.from).toBe(expected.from);
     expect(params.to).toBe(expected.to);
     // Default provider filter is "Todos" ('') → no providerId sent.
     expect(params.providerId).toBeUndefined();
 
-    expect(screen.getByRole("button", { name: /^semana$/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(
-      await screen.findByLabelText(/agenda de la semana/i),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^semana$/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(await screen.findByLabelText(/agenda de la semana/i)).toBeInTheDocument();
   });
 
-  it("shows a SectionError with a retry button (not a bare alert) when Semana fails to load, and the retry re-fetches (escalón 1)", async () => {
+  it('shows a SectionError with a retry button (not a bare alert) when Semana fails to load, and the retry re-fetches (escalón 1)', async () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValueOnce([]); // month mount
     const user = userEvent.setup();
@@ -1049,57 +853,41 @@ describe("AgendaView", () => {
     await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
-    mockedListAppointments.mockRejectedValueOnce(
-      new ApiError(500, "Error del servidor"),
-    );
-    await user.click(screen.getByRole("button", { name: /^semana$/i }));
+    mockedListAppointments.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
+    await user.click(screen.getByRole('button', { name: /^semana$/i }));
 
-    const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("No pudimos cargar la agenda.");
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('No pudimos cargar la agenda.');
     // `SectionError` renders its own retry button next to the message — no
     // naked red text with nothing to press.
-    const retryButton = within(alert).getByRole("button", {
-      name: /reintentar/i,
-    });
+    const retryButton = within(alert).getByRole('button', { name: /reintentar/i });
 
     mockedListAppointments.mockResolvedValueOnce([]);
     await user.click(retryButton);
 
-    await waitFor(() =>
-      expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
-    );
-    expect(
-      await screen.findByLabelText(/agenda de la semana/i),
-    ).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+    expect(await screen.findByLabelText(/agenda de la semana/i)).toBeInTheDocument();
   });
 
-  it("shows a SectionError with a retry button when Mes (the default view) fails to load, and the retry re-fetches (fix ronda 1: Mes/Día no tenían onRetry)", async () => {
+  it('shows a SectionError with a retry button when Mes (the default view) fails to load, and the retry re-fetches (fix ronda 1: Mes/Día no tenían onRetry)', async () => {
     mockedListStaff.mockResolvedValue(staff);
-    mockedListAppointments.mockRejectedValueOnce(
-      new ApiError(500, "Error del servidor"),
-    );
+    mockedListAppointments.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
     const user = userEvent.setup();
 
     await renderAgenda(<AgendaView token="tok" />);
 
-    const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("No pudimos cargar la agenda.");
-    const retryButton = within(alert).getByRole("button", {
-      name: /reintentar/i,
-    });
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('No pudimos cargar la agenda.');
+    const retryButton = within(alert).getByRole('button', { name: /reintentar/i });
 
     mockedListAppointments.mockResolvedValueOnce([]);
     await user.click(retryButton);
 
-    await waitFor(() =>
-      expect(mockedListAppointments).toHaveBeenCalledTimes(2),
-    );
-    await waitFor(() =>
-      expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
-    );
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
   });
 
-  it("clicking a day header in Semana view switches back to Día view with that date selected", async () => {
+  it('clicking a day header in Semana view switches back to Día view with that date selected', async () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([]);
     const user = userEvent.setup();
@@ -1107,36 +895,29 @@ describe("AgendaView", () => {
     await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
-    await goToDate(user, "2026-03-11");
+    await goToDate(user, '2026-03-11');
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
-    await user.click(screen.getByRole("button", { name: /^semana$/i }));
+    await user.click(screen.getByRole('button', { name: /^semana$/i }));
     await screen.findByLabelText(/agenda de la semana/i);
 
     const mondayHeader = screen
-      .getAllByTestId("week-day-header")
-      .find((h) => h.getAttribute("data-date") === "2026-03-09") as HTMLElement;
+      .getAllByTestId('week-day-header')
+      .find((h) => h.getAttribute('data-date') === '2026-03-09') as HTMLElement;
     await user.click(mondayHeader);
 
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /^día$/i })).toHaveAttribute(
-        "aria-pressed",
-        "true",
-      ),
+      expect(screen.getByRole('button', { name: /^día$/i })).toHaveAttribute('aria-pressed', 'true'),
     );
-    expect(agendaDate()).toBe("2026-03-09");
+    expect(agendaDate()).toBe('2026-03-09');
     // Back in Día view (columnas por profesional, DX-121) — with no
     // appointments mocked for this test, each column's empty state confirms
     // it's the one rendering (the week grid has no such copy).
-    expect(await screen.findAllByText("Sin citas este día")).toHaveLength(
-      staff.length,
-    );
-    expect(
-      screen.queryByLabelText(/agenda de la semana/i),
-    ).not.toBeInTheDocument();
+    expect(await screen.findAllByText('Sin citas este día')).toHaveLength(staff.length);
+    expect(screen.queryByLabelText(/agenda de la semana/i)).not.toBeInTheDocument();
   });
 
-  it("week mode: clicking an empty slot opens the form prefilled with that date and time", async () => {
+  it('week mode: clicking an empty slot opens the form prefilled with that date and time', async () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([]);
     mockedListPatients.mockResolvedValue(patientsPage);
@@ -1145,60 +926,55 @@ describe("AgendaView", () => {
     await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
-    await goToDate(user, "2026-03-11");
-    await user.click(screen.getByRole("button", { name: /^semana$/i }));
+    await goToDate(user, '2026-03-11');
+    await user.click(screen.getByRole('button', { name: /^semana$/i }));
     await screen.findByLabelText(/agenda de la semana/i);
 
     // Click en el hueco de las 09:00 del lunes 2026-03-09.
-    await user.click(screen.getByTestId("week-grid-slot-2026-03-09-09:00"));
+    await user.click(screen.getByTestId('week-grid-slot-2026-03-09-09:00'));
 
     // El form se abre pre-rellenado (fecha del slot + hora inicio 09:00).
-    const dialog = await screen.findByRole("dialog");
-    await within(dialog).findByRole("group", { name: /^fecha$/i });
-    expect(readDate(/^fecha$/i, dialog)).toBe("2026-03-09");
-    expect(readTime(/hora de inicio/i, dialog)).toBe("09:00");
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByRole('group', { name: /^fecha$/i });
+    expect(readDate(/^fecha$/i, dialog)).toBe('2026-03-09');
+    expect(readTime(/hora de inicio/i, dialog)).toBe('09:00');
   });
 
-  it("DX-247: al abrir la cita de un paciente con profilaxis antibiótica el detalle avisa «Requiere premedicación»", async () => {
+  it('DX-247: al abrir la cita de un paciente con profilaxis antibiótica el detalle avisa «Requiere premedicación»', async () => {
     mockedListStaff.mockResolvedValue(staff);
     // La nota de anamnesis lee el formato de la sede con la sesión (DX-354b).
-    useAuthStore.setState({ accessToken: "tok" });
+    useAuthStore.setState({ accessToken: 'tok' });
     mockedListAppointments.mockResolvedValue([
       {
         ...apt1,
         medicalAlerts: {
           hasCriticalAlert: true,
           requiresPremedication: true,
-          anamnesisStatus: "EXPIRED",
-          alerts: ["profilaxisAntibiotica"],
-          anamnesisReviewedAt: "2025-01-10T00:00:00.000Z",
+          anamnesisStatus: 'EXPIRED',
+          alerts: ['profilaxisAntibiotica'],
+          anamnesisReviewedAt: '2025-01-10T00:00:00.000Z',
         },
       },
     ]);
     const user = userEvent.setup();
     await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
-    await goToDate(user, "2026-03-11");
-    await user.click(screen.getByRole("button", { name: /^semana$/i }));
+    await goToDate(user, '2026-03-11');
+    await user.click(screen.getByRole('button', { name: /^semana$/i }));
     await screen.findByLabelText(/agenda de la semana/i);
-    expect(screen.getByTestId("medical-alert-indicator")).toHaveAttribute(
-      "data-severity",
-      "critical",
-    );
+    expect(screen.getByTestId('medical-alert-indicator')).toHaveAttribute('data-severity', 'critical');
 
-    await user.click(screen.getByTestId("week-grid-appointment"));
-    expect(await screen.findByTestId("premedication-notice")).toHaveTextContent(
-      "Requiere premedicación",
-    );
+    await user.click(screen.getByTestId('week-grid-appointment'));
+    expect(await screen.findByTestId('premedication-notice')).toHaveTextContent('Requiere premedicación');
     await waitFor(() =>
-      expect(
-        screen.getByTestId("appointment-medical-alerts"),
-      ).toHaveTextContent("Anamnesis caducada · última revisión 10/01/2025"),
+      expect(screen.getByTestId('appointment-medical-alerts')).toHaveTextContent(
+        'Anamnesis caducada · última revisión 10/01/2025',
+      ),
     );
     useAuthStore.setState({ accessToken: null });
   });
 
-  it("week mode: the detail panel's status select reflects the server-confirmed status, not an optimistic one — a failed PATCH leaves it showing the real (unchanged) status", async () => {
+  it('week mode: the detail panel\'s status select reflects the server-confirmed status, not an optimistic one — a failed PATCH leaves it showing the real (unchanged) status', async () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([apt1]);
 
@@ -1215,25 +991,23 @@ describe("AgendaView", () => {
     await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
-    await goToDate(user, "2026-03-11");
-    await user.click(screen.getByRole("button", { name: /^semana$/i }));
+    await goToDate(user, '2026-03-11');
+    await user.click(screen.getByRole('button', { name: /^semana$/i }));
     await screen.findByLabelText(/agenda de la semana/i);
 
-    await user.click(screen.getByTestId("week-grid-appointment"));
+    await user.click(screen.getByTestId('week-grid-appointment'));
 
-    const statusSelect = await screen.findByRole("combobox", {
-      name: /^Estado: /,
-    });
-    expect(statusSelect).toHaveTextContent("Agendada");
+    const statusSelect = await screen.findByRole('combobox', { name: /^Estado: / });
+    expect(statusSelect).toHaveTextContent('Agendada');
 
-    await pickStatus(user, statusSelect, "Confirmada");
+    await pickStatus(user, statusSelect, 'Confirmada');
 
     // PATCH is in flight: the select stays bound to the (unchanged)
     // server-confirmed status from `appointments`, and is disabled.
-    expect(statusSelect).toHaveTextContent("Agendada");
+    expect(statusSelect).toHaveTextContent('Agendada');
     expect(statusSelect).toBeDisabled();
 
-    rejectPatch(new Error("boom"));
+    rejectPatch(new Error('boom'));
     // Sync point: the status failure is now a toast (rung 3), not a
     // role="alert" in this tree — wait on the select re-enabling instead,
     // which only happens once the failure has actually landed.
@@ -1242,140 +1016,99 @@ describe("AgendaView", () => {
     // After the failure: re-enabled, and still showing the real status —
     // no optimistic leak.
     expect(statusSelect).not.toBeDisabled();
-    expect(statusSelect).toHaveTextContent("Agendada");
+    expect(statusSelect).toHaveTextContent('Agendada');
   });
 
   // DX-153: la línea de cobertura del detalle (nunca el número de afiliado).
   it.each([
     [
-      "vencida",
-      {
-        status: "EXPIRED" as const,
-        payerName: "Surco Salud",
-        planName: "Plan Oro",
-        validTo: "2026-01-31",
-      },
-      "Cobertura: Surco Salud · venció el 31/01/2026",
+      'vencida',
+      { status: 'EXPIRED' as const, payerName: 'Surco Salud', planName: 'Plan Oro', validTo: '2026-01-31' },
+      'Cobertura: Surco Salud · venció el 31/01/2026',
     ],
     [
-      "vigente con plan",
-      {
-        status: "ACTIVE" as const,
-        payerName: "Surco Salud",
-        planName: "Plan Oro",
-        validTo: null,
-      },
-      "Cobertura: Surco Salud · Plan Oro",
+      'vigente con plan',
+      { status: 'ACTIVE' as const, payerName: 'Surco Salud', planName: 'Plan Oro', validTo: null },
+      'Cobertura: Surco Salud · Plan Oro',
     ],
     [
-      "pendiente de inicio",
-      {
-        status: "NOT_STARTED" as const,
-        payerName: "Surco Salud",
-        planName: "Plan Oro",
-        validTo: null,
-      },
-      "Cobertura: Surco Salud · pendiente de inicio",
+      'pendiente de inicio',
+      { status: 'NOT_STARTED' as const, payerName: 'Surco Salud', planName: 'Plan Oro', validTo: null },
+      'Cobertura: Surco Salud · pendiente de inicio',
     ],
-  ])(
-    "Día: el detalle muestra la línea de cobertura (%s)",
-    async (_label, coverage, expected) => {
-      const future = new Date(Date.now() + 3 * 24 * 3600_000);
-      const day = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, "0")}-${String(future.getDate()).padStart(2, "0")}`;
-      const start = new Date(`${day}T09:00:00`).toISOString();
-      const end = new Date(`${day}T09:30:00`).toISOString();
-      mockedListStaff.mockResolvedValue(staff);
-      mockedListAppointments.mockResolvedValue([
-        appointment({
-          id: "apt-cov",
-          start,
-          end,
-          patientFirstName: "María",
-          coverage,
-        }),
-      ]);
-      const user = userEvent.setup();
-
-      await renderAgenda(<AgendaView token="tok" />);
-      await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
-      await user.click(screen.getByRole("button", { name: /^día$/i }));
-      await goToDate(user, day);
-
-      const [detail] = await screen.findAllByRole("button", {
-        name: /^09:00–09:30.*detalle de la cita/i,
-      });
-      await user.click(detail);
-
-      expect(
-        await screen.findByTestId("coverage-detail-line"),
-      ).toHaveTextContent(expected);
-    },
-  );
-
-  it("Día: sin cobertura, el detalle no pinta la línea", async () => {
+  ])('Día: el detalle muestra la línea de cobertura (%s)', async (_label, coverage, expected) => {
     const future = new Date(Date.now() + 3 * 24 * 3600_000);
-    const day = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, "0")}-${String(future.getDate()).padStart(2, "0")}`;
+    const day = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-${String(future.getDate()).padStart(2, '0')}`;
+    const start = new Date(`${day}T09:00:00`).toISOString();
+    const end = new Date(`${day}T09:30:00`).toISOString();
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockResolvedValue([
+      appointment({ id: 'apt-cov', start, end, patientFirstName: 'María', coverage }),
+    ]);
+    const user = userEvent.setup();
+
+    await renderAgenda(<AgendaView token="tok" />);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await goToDate(user, day);
+
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
+    await user.click(detail);
+
+    expect(await screen.findByTestId('coverage-detail-line')).toHaveTextContent(expected);
+  });
+
+  it('Día: sin cobertura, el detalle no pinta la línea', async () => {
+    const future = new Date(Date.now() + 3 * 24 * 3600_000);
+    const day = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-${String(future.getDate()).padStart(2, '0')}`;
     const start = new Date(`${day}T09:00:00`).toISOString();
     const end = new Date(`${day}T09:30:00`).toISOString();
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([
       appointment({
-        id: "apt-nocov",
+        id: 'apt-nocov',
         start,
         end,
-        patientFirstName: "María",
-        coverage: {
-          status: "NONE",
-          payerName: null,
-          planName: null,
-          validTo: null,
-        },
+        patientFirstName: 'María',
+        coverage: { status: 'NONE', payerName: null, planName: null, validTo: null },
       }),
     ]);
     const user = userEvent.setup();
 
     await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
-    await user.click(screen.getByRole("button", { name: /^día$/i }));
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
     await goToDate(user, day);
 
-    const [detail] = await screen.findAllByRole("button", {
-      name: /^09:00–09:30.*detalle de la cita/i,
-    });
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
     await user.click(detail);
 
     await screen.findByLabelText(/estado/i);
-    expect(
-      screen.queryByTestId("coverage-detail-line"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId('coverage-detail-line')).not.toBeInTheDocument();
   });
 
   // DX-005: "Enviar confirmación" vive en el detalle de la cita, que ahora
   // también se abre desde las filas del Día (botón "Detalle").
   it('Día: "Detalle" abre la cita; "Enviar confirmación" genera el enlace y la agenda se refresca para mostrar "Confirmación pendiente"', async () => {
     const future = new Date(Date.now() + 3 * 24 * 3600_000);
-    const day = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, "0")}-${String(future.getDate()).padStart(2, "0")}`;
+    const day = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-${String(future.getDate()).padStart(2, '0')}`;
     const start = new Date(`${day}T09:00:00`).toISOString();
     const end = new Date(`${day}T09:30:00`).toISOString();
-    const pendingApt = appointment({
-      id: "apt-c",
-      start,
-      end,
-      patientFirstName: "María",
-    });
+    const pendingApt = appointment({ id: 'apt-c', start, end, patientFirstName: 'María' });
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([pendingApt]);
     mockedCreateConfirmationLink.mockResolvedValue({
-      url: "http://demo.localhost:3001/confirmar/tok",
+      url: 'http://demo.localhost:3001/confirmar/tok',
       anamnesisUrl: null,
+      anamnesisPending: false,
       expiresAt: start,
-      whatsappPhone: "584145550101",
+      whatsappPhone: '584145550101',
       appointment: {
-        patientFirstName: "María",
+        patientFirstName: 'María',
         start,
         end,
-        providerName: "Dra. Ana Ríos",
-        locationName: "Sede principal",
+        providerName: 'Dra. Ana Ríos',
+        locationName: 'Sede principal',
         locationAddress: null,
         wantsEarlier: false,
         earlierWindow: null,
@@ -1387,301 +1120,224 @@ describe("AgendaView", () => {
 
     await renderAgenda(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
-    await user.click(screen.getByRole("button", { name: /^día$/i }));
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
     await goToDate(user, day);
 
-    const [detail] = await screen.findAllByRole("button", {
-      name: /^09:00–09:30.*detalle de la cita/i,
-    });
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
     await user.click(detail);
 
     // Tras generar, el refresh trae la cita ya marcada como pendiente.
     mockedListAppointments.mockResolvedValue([
       { ...pendingApt, confirmationSentAt: new Date().toISOString() },
     ]);
-    await user.click(
-      await screen.findByRole("button", { name: "Enviar confirmación" }),
-    );
+    await user.click(await screen.findByRole('button', { name: 'Enviar confirmación' }));
 
-    await waitFor(() =>
-      expect(mockedCreateConfirmationLink).toHaveBeenCalledWith("tok", "apt-c"),
+    await waitFor(() => expect(mockedCreateConfirmationLink).toHaveBeenCalledWith('tok', 'apt-c'));
+    expect(await screen.findByLabelText('Enlace de confirmación')).toHaveValue(
+      'http://demo.localhost:3001/confirmar/tok',
     );
-    expect(await screen.findByLabelText("Enlace de confirmación")).toHaveValue(
-      "http://demo.localhost:3001/confirmar/tok",
-    );
-    expect(
-      screen.getByRole("link", { name: /abrir whatsapp/i }),
-    ).toHaveAttribute(
-      "href",
+    expect(screen.getByRole('link', { name: /abrir whatsapp/i })).toHaveAttribute(
+      'href',
       expect.stringMatching(/^https:\/\/wa\.me\/584145550101\?text=/),
     );
     await waitFor(() =>
-      expect(
-        screen.getAllByTestId("appointment-confirmation-indicator").length,
-      ).toBeGreaterThan(0),
+      expect(screen.getAllByTestId('appointment-confirmation-indicator').length).toBeGreaterThan(0),
     );
     // El enlace sigue a la vista tras el refresh (el panel no se remonta).
-    expect(screen.getByLabelText("Enlace de confirmación")).toBeInTheDocument();
+    expect(screen.getByLabelText('Enlace de confirmación')).toBeInTheDocument();
     // DX-026: el mismo detalle enseña el estado de sus recordatorios.
-    expect(getAppointmentReminders).toHaveBeenCalledWith("tok", "apt-c");
+    expect(getAppointmentReminders).toHaveBeenCalledWith('tok', 'apt-c');
     expect(
-      screen.getByRole("heading", { name: "Recordatorios por email" }),
+      screen.getByRole('heading', { name: 'Recordatorios por email' }),
     ).toBeInTheDocument();
     // DX-222: sin un rol legible en la sesión no se ofrecen las indicaciones.
-    expect(
-      screen.queryByRole("heading", { name: "Indicaciones" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Indicaciones' })).not.toBeInTheDocument();
   });
 
   // DX-222: «Indicaciones» en el detalle de la cita, para cualquier rol de la clínica.
-  it("el detalle de la cita monta el panel «Indicaciones» de esa cita", async () => {
-    const receptionToken = `h.${btoa(JSON.stringify({ sub: "u1", tenantId: "t1", role: "RECEPTION" }))}.s`;
+  it('el detalle de la cita monta el panel «Indicaciones» de esa cita', async () => {
+    const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'RECEPTION' }))}.s`;
     // DX-250: solo se ofrecen en una cita de hoy o de un día pasado.
     const past = new Date(Date.now() - 3 * 24 * 3600_000);
-    const day = `${past.getFullYear()}-${String(past.getMonth() + 1).padStart(2, "0")}-${String(past.getDate()).padStart(2, "0")}`;
+    const day = `${past.getFullYear()}-${String(past.getMonth() + 1).padStart(2, '0')}-${String(past.getDate()).padStart(2, '0')}`;
     const start = new Date(`${day}T09:00:00`).toISOString();
     const end = new Date(`${day}T09:30:00`).toISOString();
     mockedListStaff.mockResolvedValue(staff);
-    mockedListAppointments.mockResolvedValue([
-      appointment({ id: "apt-p", start, end }),
-    ]);
+    mockedListAppointments.mockResolvedValue([appointment({ id: 'apt-p', start, end })]);
     const user = userEvent.setup();
     // Dos hermanos con la misma `key` hacen que React duplique paneles al
     // re-renderizar (el de confirmación salía repetido tras «Enviar confirmación»).
-    const consoleError = jest.spyOn(console, "error");
+    const consoleError = jest.spyOn(console, 'error');
 
     await renderAgenda(<AgendaView token={receptionToken} />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
-    await user.click(screen.getByRole("button", { name: /^día$/i }));
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
     await goToDate(user, day);
-    const [detail] = await screen.findAllByRole("button", {
-      name: /^09:00–09:30.*detalle de la cita/i,
-    });
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
     await user.click(detail);
 
-    expect(
-      await screen.findByRole("region", { name: "Indicaciones" }),
-    ).toBeInTheDocument();
-    expect(getAppointmentPostOp).toHaveBeenCalledWith(receptionToken, "apt-p");
-    expect(
-      await screen.findByText("No hay indicaciones para esta cita"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getAllByRole("region", { name: "Confirmación del paciente" }),
-    ).toHaveLength(1);
+    expect(await screen.findByRole('region', { name: 'Indicaciones' })).toBeInTheDocument();
+    expect(getAppointmentPostOp).toHaveBeenCalledWith(receptionToken, 'apt-p');
+    expect(await screen.findByText('No hay indicaciones para esta cita')).toBeInTheDocument();
+    expect(screen.getAllByRole('region', { name: 'Confirmación del paciente' })).toHaveLength(1);
     const duplicateKeys = consoleError.mock.calls.filter((args) =>
-      args.some((a) => typeof a === "string" && a.includes("same key")),
+      args.some((a) => typeof a === 'string' && a.includes('same key')),
     );
     expect(duplicateKeys).toEqual([]);
     consoleError.mockRestore();
   });
 
   // DX-250: una cita de un día que aún no llega: ni se monta el panel ni se pide su lista.
-  it("una cita SCHEDULED de un día posterior: el detalle no monta «Indicaciones» ni pide GET …/post-op-instructions", async () => {
-    const receptionToken = `h.${btoa(JSON.stringify({ sub: "u1", tenantId: "t1", role: "RECEPTION" }))}.s`;
+  it('una cita SCHEDULED de un día posterior: el detalle no monta «Indicaciones» ni pide GET …/post-op-instructions', async () => {
+    const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'RECEPTION' }))}.s`;
     const when = new Date(Date.now() + 3 * 24 * 3600_000);
-    const day = `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, "0")}-${String(when.getDate()).padStart(2, "0")}`;
+    const day = `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, '0')}-${String(when.getDate()).padStart(2, '0')}`;
     const start = new Date(`${day}T09:00:00`).toISOString();
     const end = new Date(`${day}T09:30:00`).toISOString();
     mockedListStaff.mockResolvedValue(staff);
-    mockedListAppointments.mockResolvedValue([
-      appointment({ id: "apt-x", start, end, status: "SCHEDULED" }),
-    ]);
+    mockedListAppointments.mockResolvedValue([appointment({ id: 'apt-x', start, end, status: 'SCHEDULED' })]);
     (getAppointmentPostOp as jest.Mock).mockClear();
     const user = userEvent.setup();
 
     await renderAgenda(<AgendaView token={receptionToken} />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
-    await user.click(screen.getByRole("button", { name: /^día$/i }));
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
     await goToDate(user, day);
-    const [detail] = await screen.findAllByRole("button", {
-      name: /^09:00–09:30.*detalle de la cita/i,
-    });
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
     await user.click(detail);
 
-    expect(
-      await screen.findByRole("heading", { name: "Recordatorios por email" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("region", { name: "Indicaciones" }),
-    ).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Recordatorios por email' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Indicaciones' })).not.toBeInTheDocument();
     expect(getAppointmentPostOp).not.toHaveBeenCalled();
   });
 
   // DX-250 (L5): cancelada o no-show — lo ya entregado se sigue viendo, sin acciones.
-  it.each(["CANCELLED", "NO_SHOW"] as const)(
-    "una cita %s con entregas anteriores: las lista sin botones de entrega",
-    async (status) => {
-      const receptionToken = `h.${btoa(JSON.stringify({ sub: "u1", tenantId: "t1", role: "RECEPTION" }))}.s`;
-      const past = new Date(Date.now() - 3 * 24 * 3600_000);
-      const day = `${past.getFullYear()}-${String(past.getMonth() + 1).padStart(2, "0")}-${String(past.getDate()).padStart(2, "0")}`;
-      const start = new Date(`${day}T09:00:00`).toISOString();
-      const end = new Date(`${day}T09:30:00`).toISOString();
-      mockedListStaff.mockResolvedValue(staff);
-      mockedListAppointments.mockResolvedValue([
-        appointment({ id: "apt-x", start, end, status }),
-      ]);
-      (getAppointmentPostOp as jest.Mock).mockResolvedValueOnce({
-        patientId: "p1",
-        suggested: [],
-        others: [],
-        email: {
-          allowed: true,
-          reason: null,
-          toMasked: "a***@correo.com",
-          toResponsible: false,
+  it.each(['CANCELLED', 'NO_SHOW'] as const)('una cita %s con entregas anteriores: las lista sin botones de entrega', async (status) => {
+    const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'RECEPTION' }))}.s`;
+    const past = new Date(Date.now() - 3 * 24 * 3600_000);
+    const day = `${past.getFullYear()}-${String(past.getMonth() + 1).padStart(2, '0')}-${String(past.getDate()).padStart(2, '0')}`;
+    const start = new Date(`${day}T09:00:00`).toISOString();
+    const end = new Date(`${day}T09:30:00`).toISOString();
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockResolvedValue([appointment({ id: 'apt-x', start, end, status })]);
+    (getAppointmentPostOp as jest.Mock).mockResolvedValueOnce({
+      patientId: 'p1',
+      suggested: [],
+      others: [],
+      email: { allowed: true, reason: null, toMasked: 'a***@correo.com', toResponsible: false },
+      whatsapp: { phone: null, reason: null },
+      locationPhone: null,
+      deliveries: [
+        {
+          id: 'del-1', patientId: 'p1', appointmentId: 'apt-x', templateId: 't', templateCode: 'EXO',
+          templateTitle: 'Tras una extracción', templateVersion: 1, channel: 'PRINT',
+          deliveredAt: '2026-03-01T10:00:00.000Z', deliveredByName: 'Laura', recipientMasked: null,
+          sentToResponsible: false, firstOpenedAt: null, linkExpiresAt: null, emailStatus: null,
         },
-        whatsapp: { phone: null, reason: null },
-        locationPhone: null,
-        deliveries: [
-          {
-            id: "del-1",
-            patientId: "p1",
-            appointmentId: "apt-x",
-            templateId: "t",
-            templateCode: "EXO",
-            templateTitle: "Tras una extracción",
-            templateVersion: 1,
-            channel: "PRINT",
-            deliveredAt: "2026-03-01T10:00:00.000Z",
-            deliveredByName: "Laura",
-            recipientMasked: null,
-            sentToResponsible: false,
-            firstOpenedAt: null,
-            linkExpiresAt: null,
-            emailStatus: null,
-          },
-        ],
-      });
-      const user = userEvent.setup();
+      ],
+    });
+    const user = userEvent.setup();
 
-      await renderAgenda(<AgendaView token={receptionToken} />);
-      await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
-      await user.click(screen.getByRole("button", { name: /^día$/i }));
-      await goToDate(user, day);
-      const [detail] = await screen.findAllByRole("button", {
-        name: /^09:00–09:30.*detalle de la cita/i,
-      });
-      await user.click(detail);
+    await renderAgenda(<AgendaView token={receptionToken} />);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await goToDate(user, day);
+    const [detail] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
+    await user.click(detail);
 
-      const region = await screen.findByRole("region", {
-        name: "Indicaciones",
-      });
-      expect(
-        within(region).getByRole("list", { name: "Entregadas en esta cita" }),
-      ).toHaveTextContent("EXO v1");
-      expect(within(region).queryByRole("button")).not.toBeInTheDocument();
-      expect(within(region).queryByRole("radio")).not.toBeInTheDocument();
-      expect(deliverPostOp).not.toHaveBeenCalled();
-    },
-  );
+    const region = await screen.findByRole('region', { name: 'Indicaciones' });
+    expect(within(region).getByRole('list', { name: 'Entregadas en esta cita' })).toHaveTextContent('EXO v1');
+    expect(within(region).queryByRole('button')).not.toBeInTheDocument();
+    expect(within(region).queryByRole('radio')).not.toBeInTheDocument();
+    expect(deliverPostOp).not.toHaveBeenCalled();
+  });
 
   // DX-121: vista Día en columnas por profesional.
-  describe("Día en columnas", () => {
+  describe('Día en columnas', () => {
     // Token de clínica legible con rol de recepción (el arrastre y «Mover a…»
     // solo se pintan para quien puede mover citas).
-    const receptionToken = `h.${btoa(JSON.stringify({ sub: "u1", tenantId: "t1", role: "RECEPTION" }))}.s`;
+    const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'RECEPTION' }))}.s`;
     const team = [
       ...staff,
-      {
-        userId: "staff-3",
-        fullName: "Rita Recepción",
-        role: "RECEPTION" as const,
-        locationIds: null,
-      },
+      { userId: 'staff-3', fullName: 'Rita Recepción', role: 'RECEPTION' as const, locationIds: null },
     ];
 
-    it("por defecto, una columna por odontólogo/administración y pide sus citas con providerIds", async () => {
+    it('por defecto, una columna por odontólogo/administración y pide sus citas con providerIds', async () => {
       mockedListStaff.mockResolvedValue(team);
       mockedListAppointments.mockResolvedValue([]);
       const user = userEvent.setup();
       await renderAgenda(<AgendaView token="tok" />);
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
-      await user.click(screen.getByRole("button", { name: /^día$/i }));
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
 
-      expect(await screen.findAllByTestId("day-column")).toHaveLength(2);
+      expect(await screen.findAllByTestId('day-column')).toHaveLength(2);
       const params = mockedListAppointments.mock.calls.at(-1)![1];
-      expect(params.providerIds).toEqual(["staff-1", "staff-2"]);
+      expect(params.providerIds).toEqual(['staff-1', 'staff-2']);
       expect(params.providerId).toBeUndefined();
-      expect(
-        screen.getByRole("button", { name: /profesionales en columnas/i }),
-      ).toHaveTextContent("2 profesionales");
+      expect(screen.getByRole('button', { name: /profesionales en columnas/i })).toHaveTextContent(
+        '2 profesionales',
+      );
     });
 
     // DX-089: con una sede activa, las columnas por defecto son los clínicos
     // que trabajan en ella (o en todas); si ninguno, como antes.
-    describe("con una sede activa (DX-089)", () => {
+    describe('con una sede activa (DX-089)', () => {
       afterEach(() => window.localStorage.clear());
       const porSede = [
-        {
-          userId: "staff-1",
-          fullName: "Dra. Norte",
-          role: "DENTIST" as const,
-          locationIds: ["loc-2"],
-        },
-        {
-          userId: "staff-2",
-          fullName: "Dr. Todas",
-          role: "ADMIN" as const,
-          locationIds: null,
-        },
-        {
-          userId: "staff-4",
-          fullName: "Dr. Sur",
-          role: "DENTIST" as const,
-          locationIds: ["loc-3"],
-        },
+        { userId: 'staff-1', fullName: 'Dra. Norte', role: 'DENTIST' as const, locationIds: ['loc-2'] },
+        { userId: 'staff-2', fullName: 'Dr. Todas', role: 'ADMIN' as const, locationIds: null },
+        { userId: 'staff-4', fullName: 'Dr. Sur', role: 'DENTIST' as const, locationIds: ['loc-3'] },
       ];
 
-      it("solo los profesionales de esa sede o de todas", async () => {
-        window.localStorage.setItem("dentalix.activeLocationId", "loc-2");
+      it('solo los profesionales de esa sede o de todas', async () => {
+        window.localStorage.setItem('dentalix.activeLocationId', 'loc-2');
         mockedListStaff.mockResolvedValue(porSede);
         mockedListAppointments.mockResolvedValue([]);
         const user = userEvent.setup();
         await renderAgenda(<AgendaView token="tok" />);
         await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
-        await user.click(screen.getByRole("button", { name: /^día$/i }));
+        await user.click(screen.getByRole('button', { name: /^día$/i }));
 
-        expect(await screen.findAllByTestId("day-column")).toHaveLength(2);
-        expect(
-          mockedListAppointments.mock.calls.at(-1)![1].providerIds,
-        ).toEqual(["staff-1", "staff-2"]);
+        expect(await screen.findAllByTestId('day-column')).toHaveLength(2);
+        expect(mockedListAppointments.mock.calls.at(-1)![1].providerIds).toEqual([
+          'staff-1',
+          'staff-2',
+        ]);
       });
 
-      it("si nadie trabaja en esa sede, vuelve a todos los clínicos", async () => {
-        window.localStorage.setItem("dentalix.activeLocationId", "loc-9");
-        mockedListStaff.mockResolvedValue(
-          porSede.filter((m) => m.locationIds !== null),
-        );
+      it('si nadie trabaja en esa sede, vuelve a todos los clínicos', async () => {
+        window.localStorage.setItem('dentalix.activeLocationId', 'loc-9');
+        mockedListStaff.mockResolvedValue(porSede.filter((m) => m.locationIds !== null));
         mockedListAppointments.mockResolvedValue([]);
         const user = userEvent.setup();
         await renderAgenda(<AgendaView token="tok" />);
         await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
-        await user.click(screen.getByRole("button", { name: /^día$/i }));
+        await user.click(screen.getByRole('button', { name: /^día$/i }));
 
-        expect(await screen.findAllByTestId("day-column")).toHaveLength(2);
-        expect(
-          mockedListAppointments.mock.calls.at(-1)![1].providerIds,
-        ).toEqual(["staff-1", "staff-4"]);
+        expect(await screen.findAllByTestId('day-column')).toHaveLength(2);
+        expect(mockedListAppointments.mock.calls.at(-1)![1].providerIds).toEqual([
+          'staff-1',
+          'staff-4',
+        ]);
       });
     });
 
-    it("«Mover a…» mueve la cita con un PATCH y refresca; un 409 deja todo como estaba", async () => {
+    it('«Mover a…» mueve la cita con un PATCH y refresca; un 409 deja todo como estaba', async () => {
       const future = new Date(Date.now() + 3 * 24 * 3600_000);
-      const day = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, "0")}-${String(future.getDate()).padStart(2, "0")}`;
+      const day = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-${String(future.getDate()).padStart(2, '0')}`;
       const apt = appointment({
-        id: "apt-m",
-        patientFirstName: "María",
+        id: 'apt-m',
+        patientFirstName: 'María',
         start: new Date(`${day}T09:00:00`).toISOString(),
         end: new Date(`${day}T09:30:00`).toISOString(),
       });
       mockedListStaff.mockResolvedValue(staff);
       mockedListAppointments.mockResolvedValue([apt]);
       mockedUpdateAppointment.mockRejectedValueOnce(
-        new ApiError(409, "El profesional ya tiene una cita en ese horario"),
+        new ApiError(409, 'El profesional ya tiene una cita en ese horario'),
       );
       const user = userEvent.setup();
       await renderAgenda(
@@ -1691,195 +1347,132 @@ describe("AgendaView", () => {
         </>,
       );
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
-      await user.click(screen.getByRole("button", { name: /^día$/i }));
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
       await goToDate(user, day);
 
-      await user.click(
-        await screen.findByRole("button", {
-          name: "Mover a… la cita de María",
-        }),
-      );
-      await user.selectOptions(
-        screen.getByLabelText("Profesional", { selector: "#move-provider" }),
-        "staff-2",
-      );
-      await user.click(screen.getByRole("button", { name: "Mover cita" }));
+      await user.click(await screen.findByRole('button', { name: 'Mover a… la cita de María' }));
+      await user.selectOptions(screen.getByLabelText('Profesional', { selector: '#move-provider' }), 'staff-2');
+      await user.click(screen.getByRole('button', { name: 'Mover cita' }));
 
-      expect(
-        await screen.findByText(
-          "El profesional ya tiene una cita en ese horario",
-        ),
-      ).toBeInTheDocument();
-      expect(mockedUpdateAppointment).toHaveBeenCalledWith(
-        receptionToken,
-        "apt-m",
-        {
-          start: apt.start,
-          end: apt.end,
-          providerId: "staff-2",
-        },
-      );
+      expect(await screen.findByText('El profesional ya tiene una cita en ese horario')).toBeInTheDocument();
+      expect(mockedUpdateAppointment).toHaveBeenCalledWith(receptionToken, 'apt-m', {
+        start: apt.start,
+        end: apt.end,
+        providerId: 'staff-2',
+      });
 
       // Segundo intento: el servidor acepta y la agenda se refresca.
-      mockedUpdateAppointment.mockResolvedValueOnce({
-        ...apt,
-        providerId: "staff-2",
-      });
-      mockedListAppointments.mockResolvedValue([
-        { ...apt, providerId: "staff-2" },
-      ]);
+      mockedUpdateAppointment.mockResolvedValueOnce({ ...apt, providerId: 'staff-2' });
+      mockedListAppointments.mockResolvedValue([{ ...apt, providerId: 'staff-2' }]);
       const calls = mockedListAppointments.mock.calls.length;
-      await user.click(screen.getByRole("button", { name: "Mover cita" }));
-      await waitFor(() =>
-        expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
-      );
-      await waitFor(() =>
-        expect(mockedListAppointments.mock.calls.length).toBeGreaterThan(calls),
-      );
-      const [, second] = screen.getAllByTestId("day-column");
-      expect(await within(second).findByText("María")).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Mover cita' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await waitFor(() => expect(mockedListAppointments.mock.calls.length).toBeGreaterThan(calls));
+      const [, second] = screen.getAllByTestId('day-column');
+      expect(await within(second).findByText('María')).toBeInTheDocument();
       // Con el modal cerrado, quien usa teclado o lector de pantalla necesita
       // saber que el movimiento se guardó.
-      expect(await screen.findByText("Cita movida.")).toBeInTheDocument();
+      expect(await screen.findByText('Cita movida.')).toBeInTheDocument();
     });
   });
 
   // DX-233: el horario de cada profesional en la sede activa.
-  describe("horario del profesional (DX-233)", () => {
+  describe('horario del profesional (DX-233)', () => {
     afterEach(() => {
       window.localStorage.clear();
       (getRoster as jest.Mock).mockReset().mockResolvedValue({
-        from: "2026-01-01",
-        to: "2026-01-01",
+        from: '2026-01-01',
+        to: '2026-01-01',
         locationId: null,
         locations: [],
         providers: [],
       });
     });
 
-    function rosterDay(
-      date: string,
-      worksAtLocation: boolean,
-      locationRanges: { startMinute: number; endMinute: number }[] | null,
-    ) {
-      return {
-        date,
-        weekday: 2,
-        unrestricted: false,
-        assignments: [],
-        worksAtLocation,
-        locationRanges,
-      };
+    function rosterDay(date: string, worksAtLocation: boolean, locationRanges: { startMinute: number; endMinute: number }[] | null) {
+      return { date, weekday: 2, unrestricted: false, assignments: [], worksAtLocation, locationRanges };
     }
 
-    it("oculta a quien no atiende ese día en la sede, con «Mostrar todos», y sombrea fuera de su horario", async () => {
-      window.localStorage.setItem("dentalix.activeLocationId", "loc-1");
+    it('oculta a quien no atiende ese día en la sede, con «Mostrar todos», y sombrea fuera de su horario', async () => {
+      window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
       mockedListStaff.mockResolvedValue(staff);
       mockedListAppointments.mockResolvedValue([]);
-      (getRoster as jest.Mock).mockImplementation(
-        (_t: string, params: { weekStart: string }) =>
-          Promise.resolve({
-            from: params.weekStart,
-            to: params.weekStart,
-            locationId: "loc-1",
-            locations: [
-              {
-                id: "loc-1",
-                name: "Sede principal",
-                timeZone: "America/Caracas",
-              },
-            ],
-            providers: [
-              {
-                providerId: "staff-1",
-                fullName: "Dra. Ana Ríos",
-                role: "DENTIST",
-                configured: true,
-                days: [
-                  rosterDay(params.weekStart, true, [
-                    { startMinute: 9 * 60, endMinute: 13 * 60 },
-                  ]),
-                ],
-              },
-              {
-                providerId: "staff-2",
-                fullName: "Dr. Luis Gómez",
-                role: "DENTIST",
-                configured: true,
-                days: [rosterDay(params.weekStart, false, [])],
-              },
-            ],
-          }),
+      (getRoster as jest.Mock).mockImplementation((_t: string, params: { weekStart: string }) =>
+        Promise.resolve({
+          from: params.weekStart,
+          to: params.weekStart,
+          locationId: 'loc-1',
+          locations: [{ id: 'loc-1', name: 'Sede principal', timeZone: 'America/Caracas' }],
+          providers: [
+            {
+              providerId: 'staff-1',
+              fullName: 'Dra. Ana Ríos',
+              role: 'DENTIST',
+              configured: true,
+              days: [rosterDay(params.weekStart, true, [{ startMinute: 9 * 60, endMinute: 13 * 60 }])],
+            },
+            {
+              providerId: 'staff-2',
+              fullName: 'Dr. Luis Gómez',
+              role: 'DENTIST',
+              configured: true,
+              days: [rosterDay(params.weekStart, false, [])],
+            },
+          ],
+        }),
       );
       const user = userEvent.setup();
       await renderAgenda(<AgendaView token="tok" />);
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
-      await user.click(screen.getByRole("button", { name: /^día$/i }));
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
 
-      await waitFor(() =>
-        expect(screen.getAllByTestId("day-column")).toHaveLength(1),
-      );
-      expect(getRoster).toHaveBeenLastCalledWith(
-        "tok",
-        expect.objectContaining({ days: 1, locationId: "loc-1" }),
-      );
-      const [only] = screen.getAllByTestId("day-column");
-      expect(only).toHaveAttribute("data-provider-id", "staff-1");
-      expect(
-        within(only).getAllByTestId("provider-off-band").length,
-      ).toBeGreaterThan(0);
+      await waitFor(() => expect(screen.getAllByTestId('day-column')).toHaveLength(1));
+      expect(getRoster).toHaveBeenLastCalledWith('tok', expect.objectContaining({ days: 1, locationId: 'loc-1' }));
+      const [only] = screen.getAllByTestId('day-column');
+      expect(only).toHaveAttribute('data-provider-id', 'staff-1');
+      expect(within(only).getAllByTestId('provider-off-band').length).toBeGreaterThan(0);
 
-      const toggle = screen.getByRole("checkbox", { name: /mostrar todos/i });
-      expect(
-        screen.getByText("1 profesional no atiende este día en esta sede."),
-      ).toBeInTheDocument();
+      const toggle = screen.getByRole('checkbox', { name: /mostrar todos/i });
+      expect(screen.getByText('1 profesional no atiende este día en esta sede.')).toBeInTheDocument();
       await user.click(toggle);
-      expect(screen.getAllByTestId("day-column")).toHaveLength(2);
+      expect(screen.getAllByTestId('day-column')).toHaveLength(2);
     });
 
-    it("con «Todas las sedes» no pide el cuadrante ni oculta a nadie", async () => {
+    it('con «Todas las sedes» no pide el cuadrante ni oculta a nadie', async () => {
       mockedListStaff.mockResolvedValue(staff);
       mockedListAppointments.mockResolvedValue([]);
       const user = userEvent.setup();
       await renderAgenda(<AgendaView token="tok" />);
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
-      await user.click(screen.getByRole("button", { name: /^día$/i }));
-      expect(await screen.findAllByTestId("day-column")).toHaveLength(2);
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      expect(await screen.findAllByTestId('day-column')).toHaveLength(2);
       expect(getRoster).not.toHaveBeenCalled();
-      expect(
-        screen.queryByRole("checkbox", { name: /mostrar todos/i }),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('checkbox', { name: /mostrar todos/i })).not.toBeInTheDocument();
     });
   });
 
-  describe("bloqueos y pendientes (DX-122)", () => {
-    const mockedListBlocks = listScheduleBlocks as jest.MockedFunction<
-      typeof listScheduleBlocks
-    >;
-    const mockedDeleteBlock = deleteScheduleBlock as jest.MockedFunction<
-      typeof deleteScheduleBlock
-    >;
-    const mockedListWaitlist = listWaitlist as jest.MockedFunction<
-      typeof listWaitlist
-    >;
+  describe('bloqueos y pendientes (DX-122)', () => {
+    const mockedListBlocks = listScheduleBlocks as jest.MockedFunction<typeof listScheduleBlocks>;
+    const mockedDeleteBlock = deleteScheduleBlock as jest.MockedFunction<typeof deleteScheduleBlock>;
+    const mockedListWaitlist = listWaitlist as jest.MockedFunction<typeof listWaitlist>;
     const tokenFor = (role: string) =>
-      `h.${btoa(JSON.stringify({ sub: "u1", tenantId: "t1", role }))}.s`;
+      `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role }))}.s`;
     // TST-020: «hoy» fijo. Con el reloj real, una corrida que cruza las 00:00
     // calculaba `today` un día y pintaba la agenda al siguiente.
     const FIXED_NOW = new Date(2026, 5, 15, 12, 0, 0);
     const today = (() => {
       const d = FIXED_NOW;
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     })();
     const lunch = {
-      id: "b-1",
-      tenantId: "t1",
-      patientCode: "2456",
+      id: 'b-1',
+      tenantId: 't1',
+      patientCode: '2456',
       providerId: null,
       locationId: null,
       start: new Date(`${today}T13:00:00`).toISOString(),
       end: new Date(`${today}T14:00:00`).toISOString(),
-      kind: "LUNCH" as const,
+      kind: 'LUNCH' as const,
       allowsBooking: true,
       note: null,
       reservedForTypeIds: [],
@@ -1887,9 +1480,9 @@ describe("AgendaView", () => {
       reservedForTypes: [],
       releaseAt: null,
       released: false,
-      createdById: "u1",
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z",
+      createdById: 'u1',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
     };
 
     beforeEach(() => {
@@ -1902,156 +1495,101 @@ describe("AgendaView", () => {
     beforeEach(() => {
       mockedListBlocks.mockReset().mockResolvedValue([lunch]);
       mockedDeleteBlock.mockReset().mockResolvedValue(undefined);
-      mockedListWaitlist
-        .mockReset()
-        .mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 50 });
+      mockedListWaitlist.mockReset().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 50 });
       mockedListStaff.mockResolvedValue(staff);
       mockedListAppointments.mockResolvedValue([]);
     });
 
-    it("Día: pinta los bloqueos del día y recepción puede quitarlos con confirmación", async () => {
+    it('Día: pinta los bloqueos del día y recepción puede quitarlos con confirmación', async () => {
       const user = userEvent.setup();
-      await renderAgenda(<AgendaView token={tokenFor("RECEPTION")} />);
-      await user.click(screen.getByRole("button", { name: /^día$/i }));
+      await renderAgenda(<AgendaView token={tokenFor('RECEPTION')} />);
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
 
-      expect(await screen.findAllByTestId("schedule-block")).toHaveLength(2);
+      expect(await screen.findAllByTestId('schedule-block')).toHaveLength(2);
       const range = mockedListBlocks.mock.calls.at(-1)![1];
-      expect(range).toEqual(wallDayRange(today, "UTC"));
+      expect(range).toEqual(wallDayRange(today, 'UTC'));
 
-      await user.click(
-        screen.getAllByRole("button", { name: /^Quitar bloqueo: Almuerzo/ })[0],
-      );
-      const dialog = await screen.findByRole("dialog", {
-        name: "Quitar el bloqueo",
-      });
+      await user.click(screen.getAllByRole('button', { name: /^Quitar bloqueo: Almuerzo/ })[0]);
+      const dialog = await screen.findByRole('dialog', { name: 'Quitar el bloqueo' });
       const calls = mockedListBlocks.mock.calls.length;
-      await user.click(
-        within(dialog).getByRole("button", { name: "Quitar bloqueo" }),
-      );
-      await waitFor(() =>
-        expect(mockedDeleteBlock).toHaveBeenCalledWith(
-          tokenFor("RECEPTION"),
-          "b-1",
-        ),
-      );
-      await waitFor(() =>
-        expect(mockedListBlocks.mock.calls.length).toBeGreaterThan(calls),
-      );
+      await user.click(within(dialog).getByRole('button', { name: 'Quitar bloqueo' }));
+      await waitFor(() => expect(mockedDeleteBlock).toHaveBeenCalledWith(tokenFor('RECEPTION'), 'b-1'));
+      await waitFor(() => expect(mockedListBlocks.mock.calls.length).toBeGreaterThan(calls));
     });
 
-    it("«Bloquear horario» solo para quien puede bloquear (no la asistente)", async () => {
-      const { unmount } = await renderAgenda(
-        <AgendaView token={tokenFor("ASSISTANT")} />,
-      );
+    it('«Bloquear horario» solo para quien puede bloquear (no la asistente)', async () => {
+      const { unmount } = await renderAgenda(<AgendaView token={tokenFor('ASSISTANT')} />);
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
-      expect(
-        screen.queryByRole("button", { name: "Bloquear horario" }),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Bloquear horario' })).not.toBeInTheDocument();
       unmount();
       clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
       const user = userEvent.setup();
-      await renderAgenda(<AgendaView token={tokenFor("RECEPTION")} />);
-      await user.click(
-        await screen.findByRole("button", { name: "Bloquear horario" }),
-      );
-      expect(
-        await screen.findByRole("dialog", { name: "Bloquear horario" }),
-      ).toBeInTheDocument();
+      await renderAgenda(<AgendaView token={tokenFor('RECEPTION')} />);
+      await user.click(await screen.findByRole('button', { name: 'Bloquear horario' }));
+      expect(await screen.findByRole('dialog', { name: 'Bloquear horario' })).toBeInTheDocument();
     });
 
-    it("cancelar una cita recarga «Pendientes por agendar»", async () => {
-      const apt = appointment({
-        id: "apt-c",
-        start: new Date(`${today}T09:00:00`).toISOString(),
-        end: new Date(`${today}T09:30:00`).toISOString(),
-      });
+    it('cancelar una cita recarga «Pendientes por agendar»', async () => {
+      const apt = appointment({ id: 'apt-c', start: new Date(`${today}T09:00:00`).toISOString(), end: new Date(`${today}T09:30:00`).toISOString() });
       mockedListAppointments.mockResolvedValue([apt]);
-      mockedUpdateAppointment.mockResolvedValue({
-        ...apt,
-        status: "CANCELLED",
-      });
+      mockedUpdateAppointment.mockResolvedValue({ ...apt, status: 'CANCELLED' });
       const user = userEvent.setup();
-      await renderAgenda(<AgendaView token={tokenFor("RECEPTION")} />);
-      await user.click(screen.getByRole("button", { name: /^día$/i }));
-      await user.click(screen.getByRole("button", { name: "Lista" }));
+      await renderAgenda(<AgendaView token={tokenFor('RECEPTION')} />);
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await user.click(screen.getByRole('button', { name: 'Lista' }));
       await waitFor(() => expect(mockedListWaitlist).toHaveBeenCalled());
       const before = mockedListWaitlist.mock.calls.length;
 
-      const [select] = await screen.findAllByTestId(
-        "appointment-status-select",
-      );
-      await pickStatus(user, select, "Cancelada");
+      const [select] = await screen.findAllByTestId('appointment-status-select');
+      await pickStatus(user, select, 'Cancelada');
       // DX-279: cancelar pide origen y motivo, y avisa si es tardía.
-      const dialog = await screen.findByRole("dialog", {
-        name: /Cancelar la cita de/,
-      });
+      const dialog = await screen.findByRole('dialog', { name: /Cancelar la cita de/ });
       expect(mockedUpdateAppointment).not.toHaveBeenCalled();
       await user.click(within(dialog).getByLabelText(/El paciente avisa/));
-      expect(
-        await within(dialog).findByTestId("late-cancellation-warning"),
-      ).toHaveTextContent(
-        "Cancelación tardía: aviso de 5 h, la política pide 24 h",
+      expect(await within(dialog).findByTestId('late-cancellation-warning')).toHaveTextContent(
+        'Cancelación tardía: aviso de 5 h, la política pide 24 h',
       );
-      await user.selectOptions(
-        within(dialog).getByLabelText("Motivo"),
-        "ILLNESS",
-      );
-      await user.click(
-        within(dialog).getByRole("button", { name: "Cancelar la cita" }),
-      );
-      expect(mockedUpdateAppointment).toHaveBeenCalledWith(
-        expect.any(String),
-        "apt-c",
-        {
-          status: "CANCELLED",
-          cancelledByKind: "STAFF_FOR_PATIENT",
-          cancelReasonCode: "ILLNESS",
-        },
-      );
-      await waitFor(() =>
-        expect(mockedListWaitlist.mock.calls.length).toBeGreaterThan(before),
-      );
+      await user.selectOptions(within(dialog).getByLabelText('Motivo'), 'ILLNESS');
+      await user.click(within(dialog).getByRole('button', { name: 'Cancelar la cita' }));
+      expect(mockedUpdateAppointment).toHaveBeenCalledWith(expect.any(String), 'apt-c', {
+        status: 'CANCELLED',
+        cancelledByKind: 'STAFF_FOR_PATIENT',
+        cancelReasonCode: 'ILLNESS',
+      });
+      await waitFor(() => expect(mockedListWaitlist.mock.calls.length).toBeGreaterThan(before));
     });
 
-    it("con el teclado, Enter sobre «Cancelada» abre el diálogo y Esc lo cierra sin cambiar nada, con el foco en el selector (QA 14)", async () => {
-      const apt = appointment({
-        id: "apt-k",
-        start: new Date(`${today}T09:00:00`).toISOString(),
-        end: new Date(`${today}T09:30:00`).toISOString(),
-      });
+    it('con el teclado, Enter sobre «Cancelada» abre el diálogo y Esc lo cierra sin cambiar nada, con el foco en el selector (QA 14)', async () => {
+      const apt = appointment({ id: 'apt-k', start: new Date(`${today}T09:00:00`).toISOString(), end: new Date(`${today}T09:30:00`).toISOString() });
       mockedListAppointments.mockResolvedValue([apt]);
       const user = userEvent.setup();
-      await renderAgenda(<AgendaView token={tokenFor("RECEPTION")} />);
-      await user.click(screen.getByRole("button", { name: /^día$/i }));
-      await user.click(screen.getByRole("button", { name: "Lista" }));
-      const [select] = await screen.findAllByTestId(
-        "appointment-status-select",
-      );
+      await renderAgenda(<AgendaView token={tokenFor('RECEPTION')} />);
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await user.click(screen.getByRole('button', { name: 'Lista' }));
+      const [select] = await screen.findAllByTestId('appointment-status-select');
       select.focus();
-      await user.keyboard("{ArrowDown}");
-      const option = await screen.findByRole("option", { name: "Cancelada" });
+      await user.keyboard('{ArrowDown}');
+      const option = await screen.findByRole('option', { name: 'Cancelada' });
       option.focus();
-      await user.keyboard("{Enter}");
-      const dialog = await screen.findByRole("dialog", {
-        name: /Cancelar la cita de/,
-      });
-      await user.keyboard("{Escape}");
+      await user.keyboard('{Enter}');
+      const dialog = await screen.findByRole('dialog', { name: /Cancelar la cita de/ });
+      await user.keyboard('{Escape}');
       await waitFor(() => expect(dialog).not.toBeInTheDocument());
       await waitFor(() => expect(select).toHaveFocus());
-      expect(select).toHaveTextContent("Agendada");
+      expect(select).toHaveTextContent('Agendada');
       expect(mockedUpdateAppointment).not.toHaveBeenCalled();
     });
   });
   // DX-170: la evolución se registra desde la tarjeta de la cita.
-  describe("«Registrar evolución» (DX-170)", () => {
+  describe('«Registrar evolución» (DX-170)', () => {
     const tokenFor = (role: string) =>
-      `h.${btoa(JSON.stringify({ sub: "staff-1", tenantId: "t1", role }))}.s`;
+      `h.${btoa(JSON.stringify({ sub: 'staff-1', tenantId: 't1', role }))}.s`;
     const completed = appointment({
-      id: "apt-done",
-      status: "COMPLETED",
-      patientFirstName: "María",
-      patientLastName: "López",
+      id: 'apt-done',
+      status: 'COMPLETED',
+      patientFirstName: 'María',
+      patientLastName: 'López',
     });
 
     async function openDetail(token: string) {
@@ -2060,165 +1598,125 @@ describe("AgendaView", () => {
       const user = userEvent.setup();
       await renderAgenda(<AgendaView token={token} />);
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
-      await goToDate(user, "2026-03-11");
-      await user.click(screen.getByRole("button", { name: /^semana$/i }));
+      await goToDate(user, '2026-03-11');
+      await user.click(screen.getByRole('button', { name: /^semana$/i }));
       await screen.findByLabelText(/agenda de la semana/i);
-      await user.click(screen.getByTestId("week-grid-appointment"));
+      await user.click(screen.getByTestId('week-grid-appointment'));
       await screen.findByLabelText(/^estado$/i);
       return user;
     }
 
-    it("DENTIST lo ve en una cita atendida y abre el formulario ligado a la cita", async () => {
-      const user = await openDetail(tokenFor("DENTIST"));
-      await user.click(
-        screen.getByRole("button", { name: "Registrar evolución" }),
-      );
-      const dialog = await screen.findByRole("dialog", {
-        name: "Registrar evolución",
-      });
-      expect(
-        await within(dialog).findByText(
-          /^Cita del \d{1,2}\/\d{1,2} · Dra\. Ana Ríos$/,
-        ),
-      ).toBeInTheDocument();
+    it('DENTIST lo ve en una cita atendida y abre el formulario ligado a la cita', async () => {
+      const user = await openDetail(tokenFor('DENTIST'));
+      await user.click(screen.getByRole('button', { name: 'Registrar evolución' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Registrar evolución' });
+      expect(await within(dialog).findByText(/^Cita del \d{1,2}\/\d{1,2} · Dra\. Ana Ríos$/)).toBeInTheDocument();
     });
 
-    it("RECEPTION no ve el botón", async () => {
-      await openDetail(tokenFor("RECEPTION"));
-      expect(
-        screen.queryByRole("button", { name: "Registrar evolución" }),
-      ).toBeNull();
+    it('RECEPTION no ve el botón', async () => {
+      await openDetail(tokenFor('RECEPTION'));
+      expect(screen.queryByRole('button', { name: 'Registrar evolución' })).toBeNull();
     });
   });
   // DX-295: el selector de estado del detalle no cambia la cita al moverse con
   // las flechas; solo con Enter o con un clic en una opción.
-  describe("selector de estado del detalle con teclado (DX-295)", () => {
+  describe('selector de estado del detalle con teclado (DX-295)', () => {
     const tokenFor = (role: string) =>
-      `h.${btoa(JSON.stringify({ sub: "staff-1", tenantId: "t1", role }))}.s`;
+      `h.${btoa(JSON.stringify({ sub: 'staff-1', tenantId: 't1', role }))}.s`;
 
-    async function openDetail(
-      token: string,
-      apt: ReturnType<typeof appointment>,
-    ) {
+    async function openDetail(token: string, apt: ReturnType<typeof appointment>) {
       mockedListStaff.mockResolvedValue(staff);
       mockedListAppointments.mockResolvedValue([apt]);
       const user = userEvent.setup();
       await renderAgenda(<AgendaView token={token} />);
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
-      await goToDate(user, "2026-03-11");
-      await user.click(screen.getByRole("button", { name: /^semana$/i }));
+      await goToDate(user, '2026-03-11');
+      await user.click(screen.getByRole('button', { name: /^semana$/i }));
       await screen.findByLabelText(/agenda de la semana/i);
-      await user.click(screen.getByTestId("week-grid-appointment"));
-      const trigger = await screen.findByRole("combobox", {
-        name: /^Estado: /,
-      });
+      await user.click(screen.getByTestId('week-grid-appointment'));
+      const trigger = await screen.findByRole('combobox', { name: /^Estado: / });
       return { user, trigger };
     }
 
-    it("↑/↓ no envían ningún PATCH; Enter aplica la opción enfocada", async () => {
-      mockedUpdateAppointment.mockResolvedValue({
-        ...apt1,
-        status: "CONFIRMED",
-      });
-      const { user, trigger } = await openDetail(tokenFor("RECEPTION"), apt1);
-      expect(trigger).toHaveAccessibleName("Estado: Agendada");
+    it('↑/↓ no envían ningún PATCH; Enter aplica la opción enfocada', async () => {
+      mockedUpdateAppointment.mockResolvedValue({ ...apt1, status: 'CONFIRMED' });
+      const { user, trigger } = await openDetail(tokenFor('RECEPTION'), apt1);
+      expect(trigger).toHaveAccessibleName('Estado: Agendada');
 
       trigger.focus();
-      await user.keyboard(
-        "{ArrowDown}{ArrowDown}{ArrowDown}{ArrowUp}{ArrowDown}{ArrowUp}",
-      );
-      expect(screen.getByRole("option", { name: "Confirmada" })).toHaveFocus();
+      await user.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{ArrowUp}{ArrowDown}{ArrowUp}');
+      expect(screen.getByRole('option', { name: 'Confirmada' })).toHaveFocus();
       expect(mockedUpdateAppointment).not.toHaveBeenCalled();
 
-      await user.keyboard("{Enter}");
+      await user.keyboard('{Enter}');
       await waitFor(() =>
-        expect(mockedUpdateAppointment).toHaveBeenCalledWith(
-          tokenFor("RECEPTION"),
-          "apt-1",
-          {
-            status: "CONFIRMED",
-          },
-        ),
+        expect(mockedUpdateAppointment).toHaveBeenCalledWith(tokenFor('RECEPTION'), 'apt-1', {
+          status: 'CONFIRMED',
+        }),
       );
       expect(mockedUpdateAppointment).toHaveBeenCalledTimes(1);
     });
 
-    it("Esc tras recorrer la lista no cambia nada", async () => {
-      const { user, trigger } = await openDetail(tokenFor("RECEPTION"), apt1);
+    it('Esc tras recorrer la lista no cambia nada', async () => {
+      const { user, trigger } = await openDetail(tokenFor('RECEPTION'), apt1);
       trigger.focus();
-      await user.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}{Escape}");
-      expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
-      expect(trigger).toHaveTextContent("Agendada");
+      await user.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{Escape}');
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      expect(trigger).toHaveTextContent('Agendada');
       expect(mockedUpdateAppointment).not.toHaveBeenCalled();
     });
 
-    it("salir de «Completada» con Enter sigue abriendo el diálogo del motivo, sin PATCH", async () => {
-      const completed = appointment({ id: "apt-done", status: "COMPLETED" });
-      const { user, trigger } = await openDetail(tokenFor("ADMIN"), completed);
+    it('salir de «Completada» con Enter sigue abriendo el diálogo del motivo, sin PATCH', async () => {
+      const completed = appointment({ id: 'apt-done', status: 'COMPLETED' });
+      const { user, trigger } = await openDetail(tokenFor('ADMIN'), completed);
       trigger.focus();
       // La lista abre en «Completada»; ↑ lleva a «Confirmada».
-      await user.keyboard("{ArrowDown}{ArrowUp}");
+      await user.keyboard('{ArrowDown}{ArrowUp}');
       expect(mockedUpdateAppointment).not.toHaveBeenCalled();
-      await user.keyboard("{Enter}");
+      await user.keyboard('{Enter}');
       expect(
-        await screen.findByRole("dialog", {
-          name: "¿Pasar la cita completada a «Confirmada»?",
-        }),
+        await screen.findByRole('dialog', { name: '¿Pasar la cita completada a «Confirmada»?' }),
       ).toBeInTheDocument();
       expect(mockedUpdateAppointment).not.toHaveBeenCalled();
     });
   });
   // DX-210: cableado de «Ocupar este hueco» en la vista Día.
-  describe("«Ocupar este hueco» (DX-210)", () => {
-    const mockedListLocations = listLocations as jest.MockedFunction<
-      typeof listLocations
+  describe('«Ocupar este hueco» (DX-210)', () => {
+    const mockedListLocations = listLocations as jest.MockedFunction<typeof listLocations>;
+    const mockedSchedule = getLocationSchedule as jest.MockedFunction<typeof getLocationSchedule>;
+    const mockedCandidates = listOpeningCandidates as jest.MockedFunction<typeof listOpeningCandidates>;
+    const mockedScheduleFromWaitlist = scheduleFromWaitlist as jest.MockedFunction<
+      typeof scheduleFromWaitlist
     >;
-    const mockedSchedule = getLocationSchedule as jest.MockedFunction<
-      typeof getLocationSchedule
-    >;
-    const mockedCandidates = listOpeningCandidates as jest.MockedFunction<
-      typeof listOpeningCandidates
-    >;
-    const mockedScheduleFromWaitlist =
-      scheduleFromWaitlist as jest.MockedFunction<typeof scheduleFromWaitlist>;
-    const tokenFor = (role: string, sub = "u1") =>
-      `h.${btoa(JSON.stringify({ sub, tenantId: "t1", role }))}.s`;
+    const tokenFor = (role: string, sub = 'u1') =>
+      `h.${btoa(JSON.stringify({ sub, tenantId: 't1', role }))}.s`;
     // Lunes 15/06/2026 a mediodía (hora local): la tarde queda libre.
     const FIXED_NOW = new Date(2026, 5, 15, 12, 0, 0);
-    const today = "2026-06-15";
+    const today = '2026-06-15';
     const hours = {
-      timezone: "America/Caracas",
-      ranges: [
-        {
-          weekday: FIXED_NOW.getDay(),
-          startMinute: 14 * 60,
-          endMinute: 18 * 60,
-        },
-      ],
+      timezone: 'America/Caracas',
+      ranges: [{ weekday: FIXED_NOW.getDay(), startMinute: 14 * 60, endMinute: 18 * 60 }],
     };
-    const sedes = [
-      utcSede({ id: "loc-1", name: "Sede principal" }),
-      utcSede({ id: "loc-2", name: "Sede Norte" }),
-    ];
+    const sedes = [utcSede({ id: 'loc-1', name: 'Sede principal' }), utcSede({ id: 'loc-2', name: 'Sede Norte' })];
     const candidate = {
-      kind: "WAITLIST" as const,
-      patientId: "pat-9",
-      patientFirstName: "Ana",
-      patientLastName: "Ríos",
+      kind: 'WAITLIST' as const,
+      patientId: 'pat-9',
+      patientFirstName: 'Ana',
+      patientLastName: 'Ríos',
       phone: null,
       whatsappPhone: null,
       whatsappBlocked: true,
-      whatsappBlockedReason: "NO_OPT_IN" as const,
-      waitlistEntryId: "wl-9",
+      whatsappBlockedReason: 'NO_OPT_IN' as const,
+      waitlistEntryId: 'wl-9',
       appointmentId: null,
-      priority: "URGENT" as const,
+      priority: 'URGENT' as const,
       durationMinutes: 30,
       appointmentType: null,
       reason: null,
       preferredWindow: null,
       providerId: null,
       currentAppointment: null,
-      waitingSince: "2026-06-01T00:00:00.000Z",
+      waitingSince: '2026-06-01T00:00:00.000Z',
       offersToday: 0,
       offeredForSlot: false,
       pendingOfferId: null,
@@ -2239,21 +1737,16 @@ describe("AgendaView", () => {
       mockedSchedule.mockResolvedValue(null);
     });
 
-    it("un hueco libre de la columna abre el panel con la sede activa y su profesional; «Asignar» refresca la agenda", async () => {
-      window.localStorage.setItem("dentalix.activeLocationId", "loc-2");
+    it('un hueco libre de la columna abre el panel con la sede activa y su profesional; «Asignar» refresca la agenda', async () => {
+      window.localStorage.setItem('dentalix.activeLocationId', 'loc-2');
       mockedListLocations.mockResolvedValue(sedes);
       mockedSchedule.mockResolvedValue(hours);
       mockedCandidates.mockImplementation((_t, slot) =>
         Promise.resolve({
           ...slot,
-          timeZone: "America/Caracas",
+          timeZone: 'America/Caracas',
           providerOffSchedule: false,
-          linkOffers: {
-            pending: 0,
-            total: 0,
-            acceptedBy: null,
-            expired: false,
-          },
+          linkOffers: { pending: 0, total: 0, acceptedBy: null, expired: false },
           linkOfferOpen: true,
           linkOfferClosedMessage: null,
           offerCap: 2,
@@ -2262,139 +1755,107 @@ describe("AgendaView", () => {
         }),
       );
       mockedScheduleFromWaitlist.mockResolvedValue({
-        ...appointment({
-          id: "apt-new",
-          start: new Date(`${today}T14:00:00`).toISOString(),
-        }),
+        ...appointment({ id: 'apt-new', start: new Date(`${today}T14:00:00`).toISOString() }),
         warnings: [],
       } as never);
       const user = userEvent.setup();
       await renderAgenda(
         <>
-          <AgendaView token={tokenFor("RECEPTION")} />
+          <AgendaView token={tokenFor('RECEPTION')} />
           <Toaster />
         </>,
       );
-      await user.click(screen.getByRole("button", { name: /^día$/i }));
-      const [gap] = await screen.findAllByRole("button", {
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      const [gap] = await screen.findAllByRole('button', {
         name: /^Hueco libre · 14:00–18:00 · Ocupar con Dra\. Ana Ríos$/,
       });
       await user.click(gap);
 
-      const panel = await screen.findByTestId("fill-opening-panel");
+      const panel = await screen.findByTestId('fill-opening-panel');
       expect(within(panel).getByText(/Sede Norte/)).toBeInTheDocument();
-      expect(mockedCandidates).toHaveBeenCalledWith(tokenFor("RECEPTION"), {
-        locationId: "loc-2",
-        providerId: "staff-1",
+      expect(mockedCandidates).toHaveBeenCalledWith(tokenFor('RECEPTION'), {
+        locationId: 'loc-2',
+        providerId: 'staff-1',
         start: new Date(`${today}T14:00:00`).toISOString(),
         end: new Date(`${today}T18:00:00`).toISOString(),
       });
 
       const calls = mockedListAppointments.mock.calls.length;
-      await user.click(
-        await within(panel).findByRole("button", {
-          name: "Asignar el hueco a Ana Ríos",
+      await user.click(await within(panel).findByRole('button', { name: 'Asignar el hueco a Ana Ríos' }));
+      await waitFor(() =>
+        expect(mockedScheduleFromWaitlist).toHaveBeenCalledWith(tokenFor('RECEPTION'), 'wl-9', {
+          providerId: 'staff-1',
+          start: new Date(`${today}T14:00:00`).toISOString(),
         }),
       );
-      await waitFor(() =>
-        expect(mockedScheduleFromWaitlist).toHaveBeenCalledWith(
-          tokenFor("RECEPTION"),
-          "wl-9",
-          {
-            providerId: "staff-1",
-            start: new Date(`${today}T14:00:00`).toISOString(),
-          },
-        ),
-      );
-      await waitFor(() =>
-        expect(
-          screen.queryByTestId("fill-opening-panel"),
-        ).not.toBeInTheDocument(),
-      );
-      await waitFor(() =>
-        expect(mockedListAppointments.mock.calls.length).toBeGreaterThan(calls),
-      );
-      expect(
-        await screen.findByText(
-          "La agenda ya muestra al paciente en el hueco.",
-        ),
-      ).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByTestId('fill-opening-panel')).not.toBeInTheDocument());
+      await waitFor(() => expect(mockedListAppointments.mock.calls.length).toBeGreaterThan(calls));
+      expect(await screen.findByText('La agenda ya muestra al paciente en el hueco.')).toBeInTheDocument();
     });
 
-    it("«Todas las sedes» con varias sedes: sin huecos libres inventados; la cita cancelada usa SU sede", async () => {
+    it('«Todas las sedes» con varias sedes: sin huecos libres inventados; la cita cancelada usa SU sede', async () => {
       mockedListLocations.mockResolvedValue(sedes);
       mockedSchedule.mockResolvedValue(hours);
       mockedCandidates.mockResolvedValue({
-        locationId: "loc-2",
-        providerId: "staff-1",
-        start: "",
-        end: "",
+        locationId: 'loc-2',
+        providerId: 'staff-1',
+        start: '',
+        end: '',
         providerOffSchedule: false,
         linkOffers: { pending: 0, total: 0, acceptedBy: null, expired: false },
         linkOfferOpen: true,
         linkOfferClosedMessage: null,
-        timeZone: "America/Caracas",
+        timeZone: 'America/Caracas',
         offerCap: 2,
         items: [],
         truncated: false,
       });
       mockedListAppointments.mockResolvedValue([
         appointment({
-          id: "apt-x",
-          patientFirstName: "María",
-          status: "CANCELLED",
-          locationId: "loc-2",
+          id: 'apt-x',
+          patientFirstName: 'María',
+          status: 'CANCELLED',
+          locationId: 'loc-2',
           start: new Date(`${today}T15:00:00`).toISOString(),
           end: new Date(`${today}T15:30:00`).toISOString(),
         }),
       ]);
       const user = userEvent.setup();
-      await renderAgenda(<AgendaView token={tokenFor("RECEPTION")} />);
-      await user.click(screen.getByRole("button", { name: /^día$/i }));
-      const fill = await screen.findByTestId("fill-cancelled");
-      expect(screen.queryAllByTestId("free-gap")).toHaveLength(0);
+      await renderAgenda(<AgendaView token={tokenFor('RECEPTION')} />);
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      const fill = await screen.findByTestId('fill-cancelled');
+      expect(screen.queryAllByTestId('free-gap')).toHaveLength(0);
       await user.click(fill);
       await waitFor(() =>
         expect(mockedCandidates).toHaveBeenCalledWith(
-          tokenFor("RECEPTION"),
-          expect.objectContaining({
-            locationId: "loc-2",
-            providerId: "staff-1",
-          }),
+          tokenFor('RECEPTION'),
+          expect.objectContaining({ locationId: 'loc-2', providerId: 'staff-1' }),
         ),
       );
     });
 
-    it("el odontólogo solo tiene «Ocupar» en su columna; la asistente, en ninguna", async () => {
+    it('el odontólogo solo tiene «Ocupar» en su columna; la asistente, en ninguna', async () => {
       mockedSchedule.mockResolvedValue(hours);
       const user = userEvent.setup();
-      const { unmount } = await renderAgenda(
-        <AgendaView token={tokenFor("DENTIST", "staff-2")} />,
-      );
-      await user.click(screen.getByRole("button", { name: /^día$/i }));
-      const gaps = await screen.findAllByTestId("free-gap");
-      expect(
-        gaps.every((g) =>
-          /Dr\. Luis Gómez$/.test(g.getAttribute("aria-label") ?? ""),
-        ),
-      ).toBe(true);
+      const { unmount } = await renderAgenda(<AgendaView token={tokenFor('DENTIST', 'staff-2')} />);
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      const gaps = await screen.findAllByTestId('free-gap');
+      expect(gaps.every((g) => /Dr\. Luis Gómez$/.test(g.getAttribute('aria-label') ?? ''))).toBe(true);
       unmount();
       clearSessionStore(); // FE-031: la caché de sesión no pasa a la vista siguiente
 
-      await renderAgenda(<AgendaView token={tokenFor("ASSISTANT")} />);
-      await user.click(screen.getByRole("button", { name: /^día$/i }));
-      await screen.findAllByTestId("day-column");
-      expect(screen.queryAllByTestId("free-gap")).toHaveLength(0);
+      await renderAgenda(<AgendaView token={tokenFor('ASSISTANT')} />);
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await screen.findAllByTestId('day-column');
+      expect(screen.queryAllByTestId('free-gap')).toHaveLength(0);
     });
   });
 });
 
-describe("AgendaView con el reloj de la sede (DX-378)", () => {
-  const mockedListLocations = listLocations as jest.MockedFunction<
-    typeof listLocations
-  >;
+describe('AgendaView con el reloj de la sede (DX-378)', () => {
+  const mockedListLocations = listLocations as jest.MockedFunction<typeof listLocations>;
   // 2026-03-10 a mediodía en Caracas (16:00 UTC). Jest corre con TZ=UTC.
-  const NOW = new Date("2026-03-10T16:00:00.000Z");
+  const NOW = new Date('2026-03-10T16:00:00.000Z');
 
   beforeEach(() => {
     mockedListStaff.mockReset();
@@ -2407,57 +1868,45 @@ describe("AgendaView con el reloj de la sede (DX-378)", () => {
     mockedListLocations.mockResolvedValue([utcSede()]);
   });
 
-  it("pide el día de la sede y pinta la hora con su reloj de 12 h, como «En clínica»", async () => {
-    mockedListLocations.mockResolvedValue([caracasSede({ id: "loc-1" })]);
+  it('pide el día de la sede y pinta la hora con su reloj de 12 h, como «En clínica»', async () => {
+    mockedListLocations.mockResolvedValue([caracasSede({ id: 'loc-1' })]);
     // 19:30 UTC son las 3:30 p. m. en Caracas.
     mockedListAppointments.mockResolvedValue([
-      appointment({
-        id: "apt-ccs",
-        start: "2026-03-10T19:30:00.000Z",
-        end: "2026-03-10T20:00:00.000Z",
-      }),
+      appointment({ id: 'apt-ccs', start: '2026-03-10T19:30:00.000Z', end: '2026-03-10T20:00:00.000Z' }),
     ]);
     const user = userEvent.setup();
     await renderAgenda(<AgendaView token="tok" />);
-    await user.click(screen.getByRole("button", { name: /^día$/i }));
-    await user.click(screen.getByRole("button", { name: /^lista$/i }));
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await user.click(screen.getByRole('button', { name: /^lista$/i }));
 
-    const table = await screen.findByRole("table", { name: /agenda del día/i });
-    expect(
-      within(table).getByText("3:30 p. m. – 4:00 p. m."),
-    ).toBeInTheDocument();
+    const table = await screen.findByRole('table', { name: /agenda del día/i });
+    expect(within(table).getByText('3:30 p. m. – 4:00 p. m.')).toBeInTheDocument();
     const params = mockedListAppointments.mock.calls.at(-1)![1];
     // El día 10 de Caracas, no el del navegador.
-    expect(params.from).toBe("2026-03-10T04:00:00.000Z");
-    expect(params.to).toBe("2026-03-11T03:59:59.999Z");
+    expect(params.from).toBe('2026-03-10T04:00:00.000Z');
+    expect(params.to).toBe('2026-03-11T03:59:59.999Z');
   });
 
-  it("al cambiar a una sede de otra zona, «Hoy» es el día de la nueva sede (no el de la anterior)", async () => {
+  it('al cambiar a una sede de otra zona, «Hoy» es el día de la nueva sede (no el de la anterior)', async () => {
     // 16:00 UTC: día 10 en Caracas, ya día 11 en Kiritimati (UTC+14).
     mockedListLocations.mockResolvedValue([
-      caracasSede({ id: "loc-1" }),
-      caracasSede({
-        id: "loc-2",
-        name: "Sede Kiritimati",
-        timeZone: "Pacific/Kiritimati",
-      }),
+      caracasSede({ id: 'loc-1' }),
+      caracasSede({ id: 'loc-2', name: 'Sede Kiritimati', timeZone: 'Pacific/Kiritimati' }),
     ]);
     mockedListAppointments.mockResolvedValue([]);
-    setActiveLocationId("loc-1");
+    setActiveLocationId('loc-1');
     try {
       const user = userEvent.setup();
       await renderAgenda(<AgendaView token="tok" />);
-      await user.click(screen.getByRole("button", { name: /^día$/i }));
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
       await waitFor(() =>
-        expect(mockedListAppointments.mock.calls.at(-1)![1].from).toBe(
-          wallDayRange("2026-03-10", "America/Caracas").from,
-        ),
+        expect(mockedListAppointments.mock.calls.at(-1)![1].from).toBe(wallDayRange('2026-03-10', 'America/Caracas').from),
       );
-      setActiveLocationId("loc-2");
-      await user.click(await screen.findByRole("button", { name: "Hoy" }));
+      setActiveLocationId('loc-2');
+      await user.click(await screen.findByRole('button', { name: 'Hoy' }));
       await waitFor(() =>
         expect(mockedListAppointments.mock.calls.at(-1)![1].from).toBe(
-          wallDayRange("2026-03-11", "Pacific/Kiritimati").from,
+          wallDayRange('2026-03-11', 'Pacific/Kiritimati').from,
         ),
       );
     } finally {
@@ -2465,37 +1914,31 @@ describe("AgendaView con el reloj de la sede (DX-378)", () => {
     }
   });
 
-  it("sin el reloj de la sede no pinta la agenda con el del navegador: «Falta un dato de la sede» con Reintentar", async () => {
+  it('sin el reloj de la sede no pinta la agenda con el del navegador: «Falta un dato de la sede» con Reintentar', async () => {
     mockedListLocations.mockResolvedValue([caracasSede({ hourCycle: null })]);
     mockedListAppointments.mockResolvedValue([]);
     render(<AgendaView token="tok" />);
-    expect(
-      await screen.findByText("Falta un dato de la sede"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Reintentar" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Falta un dato de la sede')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
     expect(mockedListAppointments).not.toHaveBeenCalled();
   });
 
   // DX-211: «Columnas: Profesionales | Sillones» en la vista Día.
-  describe("columnas por sillón (DX-211)", () => {
-    const mockedListChairs = listChairs as jest.MockedFunction<
-      typeof listChairs
-    >;
-    const token = `h.${btoa(JSON.stringify({ sub: "u1", tenantId: "t1", role: "RECEPTION" }))}.s`;
+  describe('columnas por sillón (DX-211)', () => {
+    const mockedListChairs = listChairs as jest.MockedFunction<typeof listChairs>;
+    const token = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'RECEPTION' }))}.s`;
     const base = {
-      tenantId: "t1",
-      patientCode: "2913",
-      locationId: "loc-1",
+      tenantId: 't1',
+      patientCode: '2913',
+      locationId: 'loc-1',
       defaultProviderId: null,
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z",
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
     };
     const chairs = [
-      { ...base, id: "ch-2", name: "Sillón 2", sortOrder: 1, active: true },
-      { ...base, id: "ch-1", name: "Sillón 1", sortOrder: 0, active: true },
-      { ...base, id: "ch-off", name: "Viejo", sortOrder: 2, active: false },
+      { ...base, id: 'ch-2', name: 'Sillón 2', sortOrder: 1, active: true },
+      { ...base, id: 'ch-1', name: 'Sillón 1', sortOrder: 0, active: true },
+      { ...base, id: 'ch-off', name: 'Viejo', sortOrder: 2, active: false },
     ];
 
     afterEach(() => {
@@ -2508,143 +1951,103 @@ describe("AgendaView con el reloj de la sede (DX-378)", () => {
       const user = userEvent.setup();
       await renderAgenda(<AgendaView token={token} />);
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
-      await user.click(screen.getByRole("button", { name: /^día$/i }));
-      await screen.findAllByTestId("day-column");
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await screen.findAllByTestId('day-column');
       return user;
     }
 
-    it("sin sillones en la sede, el conmutador no aparece", async () => {
-      window.localStorage.setItem("dentalix.activeLocationId", "loc-1");
+    it('sin sillones en la sede, el conmutador no aparece', async () => {
+      window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
       mockedListStaff.mockResolvedValue(staff);
       mockedListAppointments.mockResolvedValue([]);
       await openDay();
-      await waitFor(() =>
-        expect(mockedListChairs).toHaveBeenCalledWith(token, "loc-1", {
-          includeInactive: true,
-        }),
-      );
-      expect(
-        screen.queryByRole("button", { name: "Sillones" }),
-      ).not.toBeInTheDocument();
+      await waitFor(() => expect(mockedListChairs).toHaveBeenCalledWith(token, 'loc-1', { includeInactive: true }));
+      expect(screen.queryByRole('button', { name: 'Sillones' })).not.toBeInTheDocument();
     });
 
-    it("con sillones: columnas por sillón activo en su orden más «Sin sillón», sin pedir por profesional, y se recuerda", async () => {
-      window.localStorage.setItem("dentalix.activeLocationId", "loc-1");
+    it('con sillones: columnas por sillón activo en su orden más «Sin sillón», sin pedir por profesional, y se recuerda', async () => {
+      window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
       mockedListStaff.mockResolvedValue(staff);
       mockedListChairs.mockResolvedValue(chairs);
       mockedListAppointments.mockResolvedValue([
-        appointment({
-          id: "apt-c",
-          chairId: "ch-2",
-          chair: { id: "ch-2", name: "Sillón 2", active: true },
-        }),
-        appointment({ id: "apt-n", providerId: "staff-2" }),
+        appointment({ id: 'apt-c', chairId: 'ch-2', chair: { id: 'ch-2', name: 'Sillón 2', active: true } }),
+        appointment({ id: 'apt-n', providerId: 'staff-2' }),
       ]);
       const user = await openDay();
-      await user.click(await screen.findByRole("button", { name: "Sillones" }));
+      await user.click(await screen.findByRole('button', { name: 'Sillones' }));
       await waitFor(() =>
-        expect(
-          screen.getByRole("region", { name: "Agenda del día por sillón" }),
-        ).toBeInTheDocument(),
+        expect(screen.getByRole('region', { name: 'Agenda del día por sillón' })).toBeInTheDocument(),
       );
-      expect(
-        screen.getAllByTestId("day-column-header").map((h) => h.textContent),
-      ).toEqual([
-        expect.stringContaining("Sillón 1"),
-        expect.stringContaining("Sillón 2"),
-        expect.stringContaining("Sin sillón"),
+      expect(screen.getAllByTestId('day-column-header').map((h) => h.textContent)).toEqual([
+        expect.stringContaining('Sillón 1'),
+        expect.stringContaining('Sillón 2'),
+        expect.stringContaining('Sin sillón'),
       ]);
       const last = mockedListAppointments.mock.calls.at(-1)?.[1];
-      expect(last).not.toHaveProperty("providerIds");
-      expect(window.localStorage.getItem("dentalix.agenda.columnsBy.u1")).toBe(
-        "chairs",
-      );
+      expect(last).not.toHaveProperty('providerIds');
+      expect(window.localStorage.getItem('dentalix.agenda.columnsBy.u1')).toBe('chairs');
     });
 
-    it("revisión B4: con la preferencia «Sillones», si los sillones no cargan avisa con Reintentar", async () => {
-      window.localStorage.setItem("dentalix.activeLocationId", "loc-1");
-      window.localStorage.setItem("dentalix.agenda.columnsBy.u1", "chairs");
+    it('revisión B4: con la preferencia «Sillones», si los sillones no cargan avisa con Reintentar', async () => {
+      window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+      window.localStorage.setItem('dentalix.agenda.columnsBy.u1', 'chairs');
       mockedListStaff.mockResolvedValue(staff);
       mockedListAppointments.mockResolvedValue([]);
-      mockedListChairs
-        .mockRejectedValueOnce(new Error("boom"))
-        .mockResolvedValue(chairs);
+      mockedListChairs.mockRejectedValueOnce(new Error('boom')).mockResolvedValue(chairs);
       await openDay();
       await waitFor(() =>
         expect(notifyError).toHaveBeenCalledWith(
-          "No pudimos cargar los sillones de la sede: la agenda se ve por profesional.",
+          'No pudimos cargar los sillones de la sede: la agenda se ve por profesional.',
           expect.objectContaining({ onRetry: expect.any(Function) }),
         ),
       );
-      const { onRetry } = (notifyError as jest.Mock).mock.calls.at(-1)[1] as {
-        onRetry: () => void;
-      };
+      const { onRetry } = (notifyError as jest.Mock).mock.calls.at(-1)[1] as { onRetry: () => void };
       act(() => onRetry());
-      expect(
-        await screen.findByRole("region", {
-          name: "Agenda del día por sillón",
-        }),
-      ).toBeInTheDocument();
+      expect(await screen.findByRole('region', { name: 'Agenda del día por sillón' })).toBeInTheDocument();
     });
 
-    describe("arrastre entre sillones (DX-479)", () => {
+    describe('arrastre entre sillones (DX-479)', () => {
       // jsdom no trae PointerEvent (ver day-columns.test.tsx).
-      if (typeof window.PointerEvent === "undefined") {
+      if (typeof window.PointerEvent === 'undefined') {
         class PointerEventPolyfill extends MouseEvent {
           pointerId: number;
           pointerType: string;
           constructor(type: string, init: PointerEventInit = {}) {
             super(type, init);
             this.pointerId = init.pointerId ?? 0;
-            this.pointerType = init.pointerType ?? "";
+            this.pointerType = init.pointerType ?? '';
           }
         }
-        window.PointerEvent =
-          PointerEventPolyfill as unknown as typeof PointerEvent;
+        window.PointerEvent = PointerEventPolyfill as unknown as typeof PointerEvent;
       }
       // «Sillón 2» tiene al Dr. Luis Gómez por defecto; la cita es de la Dra. Ana Ríos en «Sillón 1».
       const chairsWithDefault = [
-        { ...base, id: "ch-1", name: "Sillón 1", sortOrder: 0, active: true },
-        {
-          ...base,
-          id: "ch-2",
-          name: "Sillón 2",
-          sortOrder: 1,
-          active: true,
-          defaultProviderId: "staff-2",
-        },
+        { ...base, id: 'ch-1', name: 'Sillón 1', sortOrder: 0, active: true },
+        { ...base, id: 'ch-2', name: 'Sillón 2', sortOrder: 1, active: true, defaultProviderId: 'staff-2' },
       ];
       const seated = appointment({
-        id: "apt-s",
-        providerId: "staff-1",
-        chairId: "ch-1",
-        chair: { id: "ch-1", name: "Sillón 1", active: true },
+        id: 'apt-s',
+        providerId: 'staff-1',
+        chairId: 'ch-1',
+        chair: { id: 'ch-1', name: 'Sillón 1', active: true },
       });
-      const columnIds = ["ch-1", "ch-2", "sin-sillon"];
+      const columnIds = ['ch-1', 'ch-2', 'sin-sillon'];
       let rectSpy: jest.SpyInstance;
 
       beforeEach(() => {
-        window.localStorage.setItem("dentalix.activeLocationId", "loc-1");
-        window.localStorage.setItem("dentalix.agenda.columnsBy.u1", "chairs");
+        window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+        window.localStorage.setItem('dentalix.agenda.columnsBy.u1', 'chairs');
         mockedListStaff.mockResolvedValue(staff);
         mockedListChairs.mockResolvedValue(chairsWithDefault);
         mockedListAppointments.mockResolvedValue([seated]);
-        mockedUpdateAppointment.mockResolvedValue({
-          ...seated,
-          notes: null,
-        } as Awaited<ReturnType<typeof updateAppointment>>);
+        mockedUpdateAppointment.mockResolvedValue({ ...seated, notes: null } as Awaited<ReturnType<typeof updateAppointment>>);
         // Cada columna ocupa 200 px desde x = 100; las tarjetas no maquetan.
         rectSpy = jest
-          .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+          .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
           .mockImplementation(function (this: HTMLElement) {
-            const index = columnIds.indexOf(this.dataset.chairColumn ?? "");
+            const index = columnIds.indexOf(this.dataset.chairColumn ?? '');
             return index >= 0
-              ? ({
-                  left: 100 + index * 200,
-                  right: 300 + index * 200,
-                  top: 0,
-                  bottom: 4000,
-                } as DOMRect)
+              ? ({ left: 100 + index * 200, right: 300 + index * 200, top: 0, bottom: 4000 } as DOMRect)
               : ({ left: 0, right: 0, top: 0, bottom: 0 } as DOMRect);
           });
       });
@@ -2656,263 +2059,179 @@ describe("AgendaView con el reloj de la sede (DX-378)", () => {
       /** Arrastra la única tarjeta a la columna `columnIndex`, 160 px más abajo (otra hora). */
       async function dropOn(columnIndex: number) {
         await openDay();
-        const card = await screen.findByTestId("day-column-appointment");
-        fireEvent.pointerDown(card, {
-          pointerId: 21,
-          pointerType: "mouse",
-          button: 0,
-          clientX: 150,
-          clientY: 0,
-        });
-        fireEvent.pointerMove(window, {
-          pointerId: 21,
-          clientX: 150 + columnIndex * 200,
-          clientY: 160,
-        });
-        fireEvent.pointerUp(window, {
-          pointerId: 21,
-          clientX: 150 + columnIndex * 200,
-          clientY: 160,
-        });
+        const card = await screen.findByTestId('day-column-appointment');
+        fireEvent.pointerDown(card, { pointerId: 21, pointerType: 'mouse', button: 0, clientX: 150, clientY: 0 });
+        fireEvent.pointerMove(window, { pointerId: 21, clientX: 150 + columnIndex * 200, clientY: 160 });
+        fireEvent.pointerUp(window, { pointerId: 21, clientX: 150 + columnIndex * 200, clientY: 160 });
       }
 
-      it("soltar en un sillón con otro profesional por defecto pregunta; «Mantener» (con el foco) mueve sin cambiarlo", async () => {
+      it('soltar en un sillón con otro profesional por defecto pregunta; «Mantener» (con el foco) mueve sin cambiarlo', async () => {
         const user = userEvent.setup();
         await dropOn(1);
-        const dialog = await screen.findByRole("dialog", {
-          name: "¿Asignar a Dr. Luis Gómez?",
-        });
+        const dialog = await screen.findByRole('dialog', { name: '¿Asignar a Dr. Luis Gómez?' });
         expect(dialog).toHaveAccessibleDescription(
-          "«Sillón 2» tiene a Dr. Luis Gómez como profesional por defecto. La cita sigue con Dra. Ana Ríos salvo que la asignes.",
+          '«Sillón 2» tiene a Dr. Luis Gómez como profesional por defecto. La cita sigue con Dra. Ana Ríos salvo que la asignes.',
         );
         // Nada se mandó todavía: se pregunta ANTES de mover.
         expect(mockedUpdateAppointment).not.toHaveBeenCalled();
-        const keep = within(dialog).getByRole("button", {
-          name: "Mantener a Dra. Ana Ríos",
-        });
+        const keep = within(dialog).getByRole('button', { name: 'Mantener a Dra. Ana Ríos' });
         await waitFor(() => expect(keep).toHaveFocus());
         await user.click(keep);
         await waitFor(() =>
           expect(mockedUpdateAppointment).toHaveBeenCalledWith(
             token,
-            "apt-s",
-            expect.objectContaining({
-              chairId: "ch-2",
-              providerId: "staff-1",
-              start: expect.any(String),
-            }),
+            'apt-s',
+            expect.objectContaining({ chairId: 'ch-2', providerId: 'staff-1', start: expect.any(String) }),
           ),
         );
-        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       });
 
-      it("«Asignar a X» mueve la cita con el profesional del sillón", async () => {
+      it('«Asignar a X» mueve la cita con el profesional del sillón', async () => {
         const user = userEvent.setup();
         await dropOn(1);
-        await user.click(
-          await screen.findByRole("button", {
-            name: "Asignar a Dr. Luis Gómez",
-          }),
-        );
+        await user.click(await screen.findByRole('button', { name: 'Asignar a Dr. Luis Gómez' }));
         await waitFor(() =>
           expect(mockedUpdateAppointment).toHaveBeenCalledWith(
             token,
-            "apt-s",
-            expect.objectContaining({
-              chairId: "ch-2",
-              providerId: "staff-2",
-              start: expect.any(String),
-              end: expect.any(String),
-            }),
+            'apt-s',
+            expect.objectContaining({ chairId: 'ch-2', providerId: 'staff-2', start: expect.any(String), end: expect.any(String) }),
           ),
         );
       });
 
-      it("Cancelar no mueve nada: la tarjeta sigue en su sillón", async () => {
+      it('Cancelar no mueve nada: la tarjeta sigue en su sillón', async () => {
         const user = userEvent.setup();
         await dropOn(1);
-        await user.click(
-          await screen.findByRole("button", { name: "Cancelar" }),
-        );
+        await user.click(await screen.findByRole('button', { name: 'Cancelar' }));
         expect(mockedUpdateAppointment).not.toHaveBeenCalled();
-        expect(
-          screen
-            .getByTestId("day-column-appointment")
-            .closest("[data-chair-column]"),
-        ).toHaveAttribute("data-chair-column", "ch-1");
+        expect(screen.getByTestId('day-column-appointment').closest('[data-chair-column]')).toHaveAttribute(
+          'data-chair-column',
+          'ch-1',
+        );
       });
 
-      it("a «Sin sillón» no hay nada que preguntar: el PATCH sale con chairId null y se anuncia", async () => {
-        const announced = jest.spyOn(toast, "success");
+      it('a «Sin sillón» no hay nada que preguntar: el PATCH sale con chairId null y se anuncia', async () => {
+        const announced = jest.spyOn(toast, 'success');
         await dropOn(2);
         await waitFor(() =>
           expect(mockedUpdateAppointment).toHaveBeenCalledWith(
             token,
-            "apt-s",
-            expect.objectContaining({ chairId: null, providerId: "staff-1" }),
+            'apt-s',
+            expect.objectContaining({ chairId: null, providerId: 'staff-1' }),
           ),
         );
-        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-        await waitFor(() =>
-          expect(announced).toHaveBeenCalledWith(
-            expect.stringMatching(/^Cita movida a Sin sillón, .+\.$/),
-          ),
-        );
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        await waitFor(() => expect(announced).toHaveBeenCalledWith(expect.stringMatching(/^Cita movida a Sin sillón, .+\.$/)));
         announced.mockRestore();
       });
     });
 
     // DX-480: el clic en un hueco de la columna de un sillón precarga el
     // sillón y su profesional por defecto, y los dos se pueden cambiar.
-    describe("clic en un hueco (DX-480)", () => {
+    describe('clic en un hueco (DX-480)', () => {
       // «Sillón 2» tiene al Dr. Luis Gómez por defecto; «Sillón 1», a nadie.
       const chairsWithDefault = [
-        { ...base, id: "ch-1", name: "Sillón 1", sortOrder: 0, active: true },
-        {
-          ...base,
-          id: "ch-2",
-          name: "Sillón 2",
-          sortOrder: 1,
-          active: true,
-          defaultProviderId: "staff-2",
-        },
+        { ...base, id: 'ch-1', name: 'Sillón 1', sortOrder: 0, active: true },
+        { ...base, id: 'ch-2', name: 'Sillón 2', sortOrder: 1, active: true, defaultProviderId: 'staff-2' },
       ];
       // Una cita en cada sillón: el clic es en el hueco libre de la columna,
       // no en «Nueva cita» de una columna vacía.
       const seated = [
-        appointment({
-          id: "apt-1",
-          chairId: "ch-1",
-          chair: { id: "ch-1", name: "Sillón 1", active: true },
-        }),
-        appointment({
-          id: "apt-2",
-          chairId: "ch-2",
-          chair: { id: "ch-2", name: "Sillón 2", active: true },
-        }),
+        appointment({ id: 'apt-1', chairId: 'ch-1', chair: { id: 'ch-1', name: 'Sillón 1', active: true } }),
+        appointment({ id: 'apt-2', chairId: 'ch-2', chair: { id: 'ch-2', name: 'Sillón 2', active: true } }),
       ];
 
       beforeEach(() => {
-        window.localStorage.setItem("dentalix.activeLocationId", "loc-1");
+        window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
         mockedListStaff.mockResolvedValue(staff);
         mockedListChairs.mockResolvedValue(chairsWithDefault);
         mockedListAppointments.mockResolvedValue(seated);
       });
 
       /** Abre la vista Día (por sillón o por profesional) y hace clic en el hueco de la columna `columnId`. */
-      async function clickSlot(by: "chairs" | "providers", columnId: string) {
-        if (by === "chairs")
-          window.localStorage.setItem("dentalix.agenda.columnsBy.u1", "chairs");
+      async function clickSlot(by: 'chairs' | 'providers', columnId: string) {
+        if (by === 'chairs') window.localStorage.setItem('dentalix.agenda.columnsBy.u1', 'chairs');
         const user = await openDay();
-        if (by === "chairs")
-          await screen.findByRole("region", {
-            name: "Agenda del día por sillón",
-          });
-        const selector =
-          by === "chairs"
-            ? `[data-chair-column="${columnId}"]`
-            : `[data-provider-id="${columnId}"]`;
+        if (by === 'chairs') await screen.findByRole('region', { name: 'Agenda del día por sillón' });
+        const selector = by === 'chairs' ? `[data-chair-column="${columnId}"]` : `[data-provider-id="${columnId}"]`;
         const column = await waitFor(() => {
           const el = document.querySelector<HTMLElement>(selector);
           expect(el).not.toBeNull();
           return el!;
         });
         fireEvent.click(column, { clientY: 0 });
-        const dialog = await screen.findByRole("dialog", {
-          name: "Nueva cita",
-        });
+        const dialog = await screen.findByRole('dialog', { name: 'Nueva cita' });
         // El formulario ya cargó los sillones y el personal.
-        await within(dialog).findByRole("option", { name: "Sillón 2" });
-        await within(dialog).findByRole("option", { name: "Dr. Luis Gómez" });
+        await within(dialog).findByRole('option', { name: 'Sillón 2' });
+        await within(dialog).findByRole('option', { name: 'Dr. Luis Gómez' });
         return { user, dialog };
       }
 
-      it("en un sillón con profesional por defecto, el formulario abre con el sillón, su profesional y la hora", async () => {
-        const { dialog } = await clickSlot("chairs", "ch-2");
-        expect(within(dialog).getByLabelText("Sillón (opcional)")).toHaveValue(
-          "ch-2",
-        );
-        await waitFor(() =>
-          expect(within(dialog).getByLabelText(/^profesional$/i)).toHaveValue(
-            "staff-2",
-          ),
-        );
+      it('en un sillón con profesional por defecto, el formulario abre con el sillón, su profesional y la hora', async () => {
+        const { dialog } = await clickSlot('chairs', 'ch-2');
+        expect(within(dialog).getByLabelText('Sillón (opcional)')).toHaveValue('ch-2');
+        await waitFor(() => expect(within(dialog).getByLabelText(/^profesional$/i)).toHaveValue('staff-2'));
         expect(readTime(/hora de inicio/i, dialog)).toMatch(/^\d{2}:\d{2}$/);
       });
 
-      it("los dos siguen editables, y cambiar el sillón no cambia solo el profesional elegido", async () => {
-        const { user, dialog } = await clickSlot("chairs", "ch-2");
+      it('los dos siguen editables, y cambiar el sillón no cambia solo el profesional elegido', async () => {
+        const { user, dialog } = await clickSlot('chairs', 'ch-2');
         const provider = within(dialog).getByLabelText(/^profesional$/i);
-        const chair = within(dialog).getByLabelText("Sillón (opcional)");
-        await waitFor(() => expect(provider).toHaveValue("staff-2"));
-        await user.selectOptions(provider, "staff-1");
-        expect(provider).toHaveValue("staff-1");
-        await user.selectOptions(chair, "ch-1");
-        expect(chair).toHaveValue("ch-1");
-        expect(provider).toHaveValue("staff-1");
+        const chair = within(dialog).getByLabelText('Sillón (opcional)');
+        await waitFor(() => expect(provider).toHaveValue('staff-2'));
+        await user.selectOptions(provider, 'staff-1');
+        expect(provider).toHaveValue('staff-1');
+        await user.selectOptions(chair, 'ch-1');
+        expect(chair).toHaveValue('ch-1');
+        expect(provider).toHaveValue('staff-1');
         // Volver al sillón con profesional por defecto tampoco pisa la elección.
-        await user.selectOptions(chair, "ch-2");
-        expect(provider).toHaveValue("staff-1");
+        await user.selectOptions(chair, 'ch-2');
+        expect(provider).toHaveValue('staff-1');
       });
 
-      it("en un sillón sin profesional por defecto, trae el sillón y el profesional queda por elegir, como antes", async () => {
-        const { dialog } = await clickSlot("chairs", "ch-1");
-        expect(within(dialog).getByLabelText("Sillón (opcional)")).toHaveValue(
-          "ch-1",
-        );
-        expect(within(dialog).getByLabelText(/^profesional$/i)).toHaveValue("");
+      it('en un sillón sin profesional por defecto, trae el sillón y el profesional queda por elegir, como antes', async () => {
+        const { dialog } = await clickSlot('chairs', 'ch-1');
+        expect(within(dialog).getByLabelText('Sillón (opcional)')).toHaveValue('ch-1');
+        expect(within(dialog).getByLabelText(/^profesional$/i)).toHaveValue('');
       });
 
-      it("en la columna de un profesional no cambia nada: ese profesional y sin sillón", async () => {
-        const { dialog } = await clickSlot("providers", "staff-1");
-        expect(within(dialog).getByLabelText(/^profesional$/i)).toHaveValue(
-          "staff-1",
-        );
-        expect(within(dialog).getByLabelText("Sillón (opcional)")).toHaveValue(
-          "",
-        );
+      it('en la columna de un profesional no cambia nada: ese profesional y sin sillón', async () => {
+        const { dialog } = await clickSlot('providers', 'staff-1');
+        expect(within(dialog).getByLabelText(/^profesional$/i)).toHaveValue('staff-1');
+        expect(within(dialog).getByLabelText('Sillón (opcional)')).toHaveValue('');
       });
     });
 
-    it("la preferencia guardada abre la vista por sillón", async () => {
-      window.localStorage.setItem("dentalix.activeLocationId", "loc-1");
-      window.localStorage.setItem("dentalix.agenda.columnsBy.u1", "chairs");
+    it('la preferencia guardada abre la vista por sillón', async () => {
+      window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+      window.localStorage.setItem('dentalix.agenda.columnsBy.u1', 'chairs');
       mockedListStaff.mockResolvedValue(staff);
       mockedListChairs.mockResolvedValue(chairs);
       mockedListAppointments.mockResolvedValue([]);
       await openDay();
-      expect(
-        await screen.findByRole("region", {
-          name: "Agenda del día por sillón",
-        }),
-      ).toBeInTheDocument();
+      expect(await screen.findByRole('region', { name: 'Agenda del día por sillón' })).toBeInTheDocument();
     });
   });
 });
 
-describe("DX-046: la agenda relee de fondo (respuesta del paciente por el enlace)", () => {
+
+describe('DX-046: la agenda relee de fondo (respuesta del paciente por el enlace)', () => {
   let hidden = false;
-  const hiddenDescriptor = Object.getOwnPropertyDescriptor(
-    Document.prototype,
-    "hidden",
-  );
+  const hiddenDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'hidden');
   function returnToTab() {
     hidden = true;
-    document.dispatchEvent(new Event("visibilitychange"));
+    document.dispatchEvent(new Event('visibilitychange'));
     hidden = false;
-    document.dispatchEvent(new Event("visibilitychange"));
+    document.dispatchEvent(new Event('visibilitychange'));
   }
 
   beforeAll(() => {
-    Object.defineProperty(document, "hidden", {
-      configurable: true,
-      get: () => hidden,
-    });
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
   });
   afterAll(() => {
     delete (document as { hidden?: boolean }).hidden;
-    if (hiddenDescriptor)
-      Object.defineProperty(Document.prototype, "hidden", hiddenDescriptor);
+    if (hiddenDescriptor) Object.defineProperty(Document.prototype, 'hidden', hiddenDescriptor);
   });
   beforeEach(() => {
     hidden = false;
@@ -2922,29 +2241,23 @@ describe("DX-046: la agenda relee de fondo (respuesta del paciente por el enlace
     mockedListStaff.mockResolvedValue(staff);
     mockedListPatients.mockReset();
     mockedListPatients.mockResolvedValue(patientsPage);
-    (getAppointmentReminders as jest.Mock).mockResolvedValue({
-      enabled: true,
-      leadHours: [48, 2],
-      items: [],
-    });
+    (getAppointmentReminders as jest.Mock).mockResolvedValue({ enabled: true, leadHours: [48, 2], items: [] });
   });
   afterEach(() => {
-    const actual = jest.requireActual("../../lib/offline/connectivity");
+    const actual = jest.requireActual('../../lib/offline/connectivity');
     (currentlyOffline as jest.Mock).mockImplementation(actual.currentlyOffline);
   });
 
   async function openDayList(user: ReturnType<typeof userEvent.setup>) {
     await renderAgenda(<AgendaView token="tok" />);
-    await user.click(screen.getByRole("button", { name: /^día$/i }));
-    await user.click(screen.getByRole("button", { name: /^lista$/i }));
-    const table = await screen.findByRole("table", { name: /agenda del día/i });
-    await waitFor(() =>
-      expect(within(table).getByRole("combobox")).toHaveTextContent("Agendada"),
-    );
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await user.click(screen.getByRole('button', { name: /^lista$/i }));
+    const table = await screen.findByRole('table', { name: /agenda del día/i });
+    await waitFor(() => expect(within(table).getByRole('combobox')).toHaveTextContent('Agendada'));
     return table;
   }
 
-  it("al volver a la pestaña relee y muestra «Confirmada» sin estado de carga ni remontar la tabla", async () => {
+  it('al volver a la pestaña relee y muestra «Confirmada» sin estado de carga ni remontar la tabla', async () => {
     let server: (typeof apt1)[] = [apt1];
     mockedListAppointments.mockImplementation(() => Promise.resolve(server));
     const user = userEvent.setup();
@@ -2952,34 +2265,25 @@ describe("DX-046: la agenda relee de fondo (respuesta del paciente por el enlace
     const calls = mockedListAppointments.mock.calls.length;
 
     // El paciente confirmó por el enlace.
-    server = [{ ...apt1, status: "CONFIRMED" }];
+    server = [{ ...apt1, status: 'CONFIRMED' }];
     act(() => returnToTab());
 
-    await waitFor(() =>
-      expect(within(table).getByRole("combobox")).toHaveTextContent(
-        "Confirmada",
-      ),
-    );
+    await waitFor(() => expect(within(table).getByRole('combobox')).toHaveTextContent('Confirmada'));
     expect(mockedListAppointments).toHaveBeenCalledTimes(calls + 1);
     // Con los mismos filtros que la vista.
-    expect(mockedListAppointments.mock.calls.at(-1)).toEqual(
-      mockedListAppointments.mock.calls.at(-2),
-    );
-    expect(screen.getByRole("table", { name: /agenda del día/i })).toBe(table);
+    expect(mockedListAppointments.mock.calls.at(-1)).toEqual(mockedListAppointments.mock.calls.at(-2));
+    expect(screen.getByRole('table', { name: /agenda del día/i })).toBe(table);
     expect(screen.queryByText(/actualizando/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/cargando agenda/i)).not.toBeInTheDocument();
   });
 
-  it("cada AGENDA_REFRESH_MS con la pestaña visible, y nada con la pestaña oculta", async () => {
+  it('cada AGENDA_REFRESH_MS con la pestaña visible, y nada con la pestaña oculta', async () => {
     let server: (typeof apt1)[] = [apt1];
     mockedListAppointments.mockImplementation(() => Promise.resolve(server));
     const user = userEvent.setup();
     const intervals: Array<{ fn: () => void; ms: number | undefined }> = [];
     const realSetInterval = window.setInterval;
-    const spy = jest.spyOn(window, "setInterval").mockImplementation(((
-      fn: () => void,
-      ms?: number,
-    ) => {
+    const spy = jest.spyOn(window, 'setInterval').mockImplementation(((fn: () => void, ms?: number) => {
       intervals.push({ fn, ms });
       return realSetInterval(() => {}, 1_000_000);
     }) as typeof window.setInterval);
@@ -2994,52 +2298,38 @@ describe("DX-046: la agenda relee de fondo (respuesta del paciente por el enlace
       expect(mockedListAppointments).toHaveBeenCalledTimes(calls);
 
       hidden = false;
-      server = [{ ...apt1, status: "CANCELLED" }];
+      server = [{ ...apt1, status: 'CANCELLED' }];
       act(() => tick!.fn());
-      await waitFor(() =>
-        expect(mockedListAppointments).toHaveBeenCalledTimes(calls + 1),
-      );
-      await waitFor(() =>
-        expect(within(table).getByRole("combobox")).toHaveTextContent(
-          "Cancelada",
-        ),
-      );
+      await waitFor(() => expect(mockedListAppointments).toHaveBeenCalledTimes(calls + 1));
+      await waitFor(() => expect(within(table).getByRole('combobox')).toHaveTextContent('Cancelada'));
     } finally {
       spy.mockRestore();
     }
   });
 
-  it("con un modal abierto no relee; al cerrarlo, relee lo que se saltó", async () => {
+  it('con un modal abierto no relee; al cerrarlo, relee lo que se saltó', async () => {
     let server: (typeof apt1)[] = [apt1];
     mockedListAppointments.mockImplementation(() => Promise.resolve(server));
     const user = userEvent.setup();
     const table = await openDayList(user);
 
-    await user.click(screen.getByRole("button", { name: /nueva cita/i }));
-    const form = await screen.findByRole("form", { name: /agendar cita/i });
+    await user.click(screen.getByRole('button', { name: /nueva cita/i }));
+    const form = await screen.findByRole('form', { name: /agendar cita/i });
     const calls = mockedListAppointments.mock.calls.length;
-    server = [{ ...apt1, status: "CONFIRMED" }];
+    server = [{ ...apt1, status: 'CONFIRMED' }];
     act(() => returnToTab());
     // Nada se pide ni cambia debajo del formulario.
     await new Promise((r) => setTimeout(r, 50));
     expect(mockedListAppointments).toHaveBeenCalledTimes(calls);
     expect(form).toBeInTheDocument();
 
-    await user.keyboard("{Escape}");
-    await waitFor(() =>
-      expect(
-        screen.queryByRole("form", { name: /agendar cita/i }),
-      ).not.toBeInTheDocument(),
-    );
-    await waitFor(() =>
-      expect(within(table).getByRole("combobox")).toHaveTextContent(
-        "Confirmada",
-      ),
-    );
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('form', { name: /agendar cita/i })).not.toBeInTheDocument());
+    await waitFor(() => expect(within(table).getByRole('combobox')).toHaveTextContent('Confirmada'));
     expect(mockedListAppointments).toHaveBeenCalledTimes(calls + 1);
   });
 
-  it("sin conexión no relee (el aviso «Sin conexión» no recibe fallos de más)", async () => {
+  it('sin conexión no relee (el aviso «Sin conexión» no recibe fallos de más)', async () => {
     mockedListAppointments.mockResolvedValue([apt1]);
     const user = userEvent.setup();
     await openDayList(user);
@@ -3050,18 +2340,16 @@ describe("DX-046: la agenda relee de fondo (respuesta del paciente por el enlace
     expect(mockedListAppointments).toHaveBeenCalledTimes(calls);
   });
 
-  it("un fallo de la relectura de fondo no avisa ni tapa la agenda", async () => {
+  it('un fallo de la relectura de fondo no avisa ni tapa la agenda', async () => {
     mockedListAppointments.mockResolvedValue([apt1]);
     const user = userEvent.setup();
     const table = await openDayList(user);
     (notifyError as jest.Mock).mockClear();
-    mockedListAppointments.mockRejectedValueOnce(
-      new ApiError(500, "Error del servidor"),
-    );
+    mockedListAppointments.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
     act(() => returnToTab());
     await new Promise((r) => setTimeout(r, 50));
     expect(notifyError).not.toHaveBeenCalled();
-    expect(screen.getByRole("table", { name: /agenda del día/i })).toBe(table);
-    expect(within(table).getByRole("combobox")).toHaveTextContent("Agendada");
+    expect(screen.getByRole('table', { name: /agenda del día/i })).toBe(table);
+    expect(within(table).getByRole('combobox')).toHaveTextContent('Agendada');
   });
 });

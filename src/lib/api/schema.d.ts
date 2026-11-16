@@ -3242,7 +3242,7 @@ export interface paths {
         put?: never;
         /**
          * Genera (o reenvía) el enlace de confirmación de la cita; el anterior deja de valer
-         * @description DX-361: queda en la auditoría como UPDATE de APPOINTMENT (la cita), origen STAFF y `reason` CONFIRMATION_LINK_CREATED, o CONFIRMATION_LINK_RESENT si la cita ya tenía un enlace enviado. Sin el token ni la URL. DX-290: si la sede envía la anamnesis con el recordatorio y el paciente es nuevo o su anamnesis caduca el día de la cita, también emite su enlace de anamnesis (`anamnesisUrl`, para el mensaje de WhatsApp; anula el que aún esperaba respuesta) y lo audita como CREATE de MEDICAL_HISTORY_SUBMISSION (ANAMNESIS_LINK_CREATED).
+         * @description DX-361: queda en la auditoría como UPDATE de APPOINTMENT (la cita), origen STAFF y `reason` CONFIRMATION_LINK_CREATED, o CONFIRMATION_LINK_RESENT si la cita ya tenía un enlace enviado. Sin el token ni la URL. DX-290: si la sede envía la anamnesis con el recordatorio y el paciente es nuevo o su anamnesis caduca el día de la cita, también emite su enlace de anamnesis (`anamnesisUrl`, para el mensaje de WhatsApp) si no tiene ya uno vivo; con uno vivo no emite otro ni lo anula (`anamnesisPending`) y lo audita como CREATE de MEDICAL_HISTORY_SUBMISSION (ANAMNESIS_LINK_CREATED).
          */
         post: operations["ConfirmationLinksController_create"];
         delete?: never;
@@ -15349,6 +15349,8 @@ export interface components {
             appointment: components["schemas"]["PublicConfirmationAppointmentDto"];
             /** @description DX-290: enlace de un solo uso al cuestionario de salud, para el mismo mensaje, si la sede envía la anamnesis con el recordatorio y el paciente es nuevo o su anamnesis caduca el día de la cita. Contiene el token en claro: se entrega solo aquí. null si no toca. */
             anamnesisUrl: string | null;
+            /** @description DX-290: tocaba la anamnesis pero el paciente ya tiene un enlace vivo (de un recordatorio o de recepción): no se emite otro ni se anula; el mensaje puede recordarle que lo use. */
+            anamnesisPending: boolean;
         };
         PublicConfirmationClinicDto: {
             name: string;

@@ -1,8 +1,8 @@
-"use client";
-import { useEffect, useId, useState } from "react";
-import { apiErrorMessage } from "@/lib/api/error-message";
-import { NO_SEDE_FORMAT } from "@/lib/format/sede-number";
-import type { SedeClock } from "@/lib/locations/sede-clock";
+'use client';
+import { useEffect, useId, useState } from 'react';
+import { apiErrorMessage } from '@/lib/api/error-message';
+import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
+import type { SedeClock } from '@/lib/locations/sede-clock';
 import {
   getAppointmentReminders,
   leadHoursLabel,
@@ -10,97 +10,86 @@ import {
   SKIP_REASON_LABELS,
   type AppointmentReminderItem,
   type AppointmentReminders,
-} from "@/lib/reminders/reminders-api";
-import { SectionError } from "@/components/errors/section-error";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { languageName } from "@/lib/patients/patient-languages";
+} from '@/lib/reminders/reminders-api';
+import { SectionError } from '@/components/errors/section-error';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { languageName } from '@/lib/patients/patient-languages';
 
 /** El idioma de la clínica (DX-497): un email en él no lleva nota de idioma. */
-const CLINIC_LANGUAGE = "es";
+const CLINIC_LANGUAGE = 'es';
 
 const copy = {
-  heading: "Recordatorios por email",
-  loading: "Cargando recordatorios",
-  loadError: "No pudimos cargar los recordatorios de la cita.",
-  disabled: "La sede de esta cita no tiene recordatorios automáticos.",
-  none: "Esta cita no tiene recordatorios por salir.",
-  listLabel: "Recordatorios de la cita",
+  heading: 'Recordatorios por email',
+  loading: 'Cargando recordatorios',
+  loadError: 'No pudimos cargar los recordatorios de la cita.',
+  disabled: 'La sede de esta cita no tiene recordatorios automáticos.',
+  none: 'Esta cita no tiene recordatorios por salir.',
+  listLabel: 'Recordatorios de la cita',
   sent: (at: string) => `Enviado ${at}`,
-  pending: "Pendiente",
+  pending: 'Pendiente',
   pendingAt: (at: string) => `sale el ${at}`,
-  sending: "Enviándose",
-  failed: "Falló el envío",
-  failedHint: "El recordatorio no pudo enviarse tras agotar los intentos.",
+  sending: 'Enviándose',
+  failed: 'Falló el envío',
+  failedHint: 'El recordatorio no pudo enviarse tras agotar los intentos.',
   skipped: (reason: string) => `Omitido: ${reason}`,
-  missed: "No enviado",
-  missedHint: "La cita se agendó después de esa hora.",
-  previous: "Para la hora anterior de la cita",
+  missed: 'No enviado',
+  missedHint: 'La cita se agendó después de esa hora.',
+  previous: 'Para la hora anterior de la cita',
   // DX-203: un menor o un paciente sin email lo recibe su responsable.
-  toResponsible: "Recordatorio enviado al responsable",
+  toResponsible: 'Recordatorio enviado al responsable',
   // DX-497: idioma del email según el registro de envíos.
   language: (name: string) => `Enviado en ${name}`,
-  noTranslation: (from: string, to: string) =>
-    `sin traducción: ${from} → ${to}`,
+  noTranslation: (from: string, to: string) => `sin traducción: ${from} → ${to}`,
   // DX-290: el enlace de anamnesis de la cita (sin respuestas: solo el estado).
   anamnesis: {
     REMINDER: (at: string) => `Anamnesis enviada con el recordatorio ${at}`,
     STAFF: (at: string) => `Anamnesis enviada por recepción ${at}`,
   },
   anamnesisStatus: {
-    PENDING_PATIENT: "Sin responder todavía",
-    SUBMITTED: "Respondida: falta revisarla",
-    ACCEPTED: "Respondida y aceptada",
-    REJECTED: "Respondida y rechazada",
-    EXPIRED: "Caducó o se anuló sin respuesta",
+    PENDING_PATIENT: 'Sin responder todavía',
+    SUBMITTED: 'Respondida: falta revisarla',
+    ACCEPTED: 'Respondida y aceptada',
+    REJECTED: 'Respondida y rechazada',
+    EXPIRED: 'Caducó o se anuló sin respuesta',
   } as const,
   delivery: {
-    PENDING: "Entregándose al correo del paciente",
-    SENT: "Entregado al proveedor de correo",
-    FAILED: "El proveedor de correo no pudo entregarlo",
+    PENDING: 'Entregándose al correo del paciente',
+    SENT: 'Entregado al proveedor de correo',
+    FAILED: 'El proveedor de correo no pudo entregarlo',
   },
 };
 
 /** Día, mes y hora con el reloj de la sede de la cita, como la agenda (DX-378); «—» sin él. */
 function shortDateTime(iso: string | null, clock: SedeClock | null): string {
-  if (!iso) return "";
+  if (!iso) return '';
   if (!clock) return NO_SEDE_FORMAT;
   const instant = new Date(iso);
   return `${clock.fmt.dayMonth(instant, clock.timeZone)} ${clock.fmt.time(instant, clock.timeZone)}`;
 }
 
-function stateLabel(
-  item: AppointmentReminderItem,
-  clock: SedeClock | null,
-): string {
+function stateLabel(item: AppointmentReminderItem, clock: SedeClock | null): string {
   switch (item.state) {
-    case "FAILED":
+    case 'FAILED':
       return copy.failed;
-    case "SENT":
+    case 'SENT':
       return copy.sent(shortDateTime(item.sentAt, clock));
-    case "PENDING":
+    case 'PENDING':
       return copy.pending;
-    case "SENDING":
+    case 'SENDING':
       return copy.sending;
-    case "SKIPPED":
-      return copy.skipped(
-        item.skipReason ? SKIP_REASON_LABELS[item.skipReason] : "—",
-      );
-    case "MISSED":
+    case 'SKIPPED':
+      return copy.skipped(item.skipReason ? SKIP_REASON_LABELS[item.skipReason] : '—');
+    case 'MISSED':
       return copy.missed;
   }
 }
 
-function detail(
-  item: AppointmentReminderItem,
-  clock: SedeClock | null,
-): string | null {
-  if (item.state === "FAILED") return copy.failedHint;
-  if (item.state === "PENDING")
-    return copy.pendingAt(shortDateTime(item.dueAt, clock));
-  if (item.state === "MISSED") return copy.missedHint;
-  if (item.state === "SENT" && item.emailDelivery)
-    return copy.delivery[item.emailDelivery];
+function detail(item: AppointmentReminderItem, clock: SedeClock | null): string | null {
+  if (item.state === 'FAILED') return copy.failedHint;
+  if (item.state === 'PENDING') return copy.pendingAt(shortDateTime(item.dueAt, clock));
+  if (item.state === 'MISSED') return copy.missedHint;
+  if (item.state === 'SENT' && item.emailDelivery) return copy.delivery[item.emailDelivery];
   return null;
 }
 
@@ -118,11 +107,7 @@ interface AppointmentRemindersPanelProps {
  * con una `key` por cita, hora y estado: así se relee tras reprogramarla o
  * cancelarla.
  */
-export function AppointmentRemindersPanel({
-  token,
-  appointmentId,
-  clock,
-}: AppointmentRemindersPanelProps) {
+export function AppointmentRemindersPanel({ token, appointmentId, clock }: AppointmentRemindersPanelProps) {
   const ids = useId();
   const [data, setData] = useState<AppointmentReminders | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -160,33 +145,20 @@ export function AppointmentRemindersPanel({
     }
     if (!data) {
       return (
-        <div
-          role="status"
-          aria-label={copy.loading}
-          className="flex flex-col gap-2"
-        >
+        <div role="status" aria-label={copy.loading} className="flex flex-col gap-2">
           <Skeleton className="h-5 w-2/3" />
           <Skeleton className="h-5 w-1/2" />
         </div>
       );
     }
     // DX-128: con baja o con otro canal no queda nada por salir por email.
-    const blocker = data.patientBlocker
-      ? PATIENT_BLOCKER_LABELS[data.patientBlocker]
-      : null;
+    const blocker = data.patientBlocker ? PATIENT_BLOCKER_LABELS[data.patientBlocker] : null;
     const anamnesis = data.anamnesis ? (
-      <div
-        data-testid="appointment-anamnesis"
-        className="flex flex-col gap-0.5 rounded-md bg-surface-sunken px-3 py-2"
-      >
+      <div data-testid="appointment-anamnesis" className="flex flex-col gap-0.5 rounded-md bg-surface-sunken px-3 py-2">
         <p className="text-sm text-ink tabular-nums">
-          {copy.anamnesis[data.anamnesis.origin](
-            shortDateTime(data.anamnesis.sentAt, clock),
-          )}
+          {copy.anamnesis[data.anamnesis.origin](shortDateTime(data.anamnesis.sentAt, clock))}
         </p>
-        <p className="text-xs text-muted">
-          {copy.anamnesisStatus[data.anamnesis.status]}
-        </p>
+        <p className="text-xs text-muted">{copy.anamnesisStatus[data.anamnesis.status]}</p>
       </div>
     ) : null;
     if (data.items.length === 0) {
@@ -201,10 +173,7 @@ export function AppointmentRemindersPanel({
     }
     return (
       <>
-        <ul
-          aria-label={copy.listLabel}
-          className="flex flex-col divide-y divide-border-subtle"
-        >
+        <ul aria-label={copy.listLabel} className="flex flex-col divide-y divide-border-subtle">
           {data.items.map((item) => {
             const extra = detail(item, clock);
             return (
@@ -213,45 +182,25 @@ export function AppointmentRemindersPanel({
                 className="flex flex-col gap-1 py-2 first:pt-0 last:pb-0"
               >
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <StatusBadge
-                    kind="reminder"
-                    status={
-                      item.emailDelivery === "FAILED" ? "FAILED" : item.state
-                    }
-                  >
+                  <StatusBadge kind="reminder" status={item.emailDelivery === 'FAILED' ? 'FAILED' : item.state}>
                     {stateLabel(item, clock)}
                   </StatusBadge>
-                  <span className="text-sm tabular-nums text-ink">
-                    {leadHoursLabel(item.leadHours)}
-                  </span>
+                  <span className="text-sm tabular-nums text-ink">{leadHoursLabel(item.leadHours)}</span>
                 </div>
-                {item.state === "SENT" && item.sentToResponsible && (
+                {item.state === 'SENT' && item.sentToResponsible && (
                   <p className="text-xs text-ink">{copy.toResponsible}</p>
                 )}
                 {item.languageFallbackFrom && item.language ? (
-                  <p
-                    className="text-xs text-ink"
-                    data-testid="reminder-language"
-                  >
-                    {copy.noTranslation(
-                      item.languageFallbackFrom,
-                      item.language,
-                    )}
+                  <p className="text-xs text-ink" data-testid="reminder-language">
+                    {copy.noTranslation(item.languageFallbackFrom, item.language)}
                   </p>
                 ) : item.language && item.language !== CLINIC_LANGUAGE ? (
-                  <p
-                    className="text-xs text-muted"
-                    data-testid="reminder-language"
-                  >
+                  <p className="text-xs text-muted" data-testid="reminder-language">
                     {copy.language(languageName(item.language))}
                   </p>
                 ) : null}
-                {extra && (
-                  <p className="text-xs tabular-nums text-muted">{extra}</p>
-                )}
-                {!item.current && (
-                  <p className="text-xs text-muted">{copy.previous}</p>
-                )}
+                {extra && <p className="text-xs tabular-nums text-muted">{extra}</p>}
+                {!item.current && <p className="text-xs text-muted">{copy.previous}</p>}
               </li>
             );
           })}
@@ -263,10 +212,7 @@ export function AppointmentRemindersPanel({
   }
 
   return (
-    <section
-      aria-labelledby={`${ids}-heading`}
-      className="flex flex-col gap-3 border-t border-border-subtle pt-4"
-    >
+    <section aria-labelledby={`${ids}-heading`} className="flex flex-col gap-3 border-t border-border-subtle pt-4">
       <h3 id={`${ids}-heading`} className="text-sm font-semibold text-ink">
         {copy.heading}
       </h3>

@@ -1,48 +1,41 @@
-"use client";
-import * as React from "react";
-import { useEffect, useState } from "react";
-import { BellRing, Lock } from "lucide-react";
-import { apiErrorMessage } from "@/lib/api/error-message";
+'use client';
+import * as React from 'react';
+import { useEffect, useState } from 'react';
+import { BellRing, Lock } from 'lucide-react';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   leadListLabel,
   listReminderSettings,
   type LocationReminderSettings,
-} from "@/lib/reminders/reminders-api";
-import { AsyncSection, TableSkeleton } from "@/components/shared/async-section";
-import { EmptyState } from "@/components/shared/empty-state";
-import { Badge } from "@/components/ui/badge";
-import { DataList, type DataListColumn } from "@/components/ui/data-list";
-import { ReminderSettingsModal } from "./reminder-settings-modal";
+} from '@/lib/reminders/reminders-api';
+import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
+import { EmptyState } from '@/components/shared/empty-state';
+import { Badge } from '@/components/ui/badge';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
+import { ReminderSettingsModal } from './reminder-settings-modal';
 
 const copy = {
-  count: (n: number) => (n === 1 ? "1 sede" : `${n} sedes`),
+  count: (n: number) => (n === 1 ? '1 sede' : `${n} sedes`),
   active: (n: number) =>
-    n === 0
-      ? "ninguna con recordatorios"
-      : n === 1
-        ? "1 con recordatorios"
-        : `${n} con recordatorios`,
-  empty: "Todavía no hay sedes.",
-  emptyHint: "Crea una sede para configurar sus recordatorios.",
-  loadError: "No pudimos cargar los recordatorios de las sedes.",
-  forbiddenTitle: "Solo administración configura los recordatorios.",
-  forbiddenHint:
-    "En el detalle de cada cita puedes ver si al paciente le llegó el suyo.",
-  tableLabel: "Recordatorios por sede",
-  colLocation: "Sede",
-  colStatus: "Estado",
-  colLeads: "Cuándo se envían",
-  none: "Sin recordatorios",
+    n === 0 ? 'ninguna con recordatorios' : n === 1 ? '1 con recordatorios' : `${n} con recordatorios`,
+  empty: 'Todavía no hay sedes.',
+  emptyHint: 'Crea una sede para configurar sus recordatorios.',
+  loadError: 'No pudimos cargar los recordatorios de las sedes.',
+  forbiddenTitle: 'Solo administración configura los recordatorios.',
+  forbiddenHint: 'En el detalle de cada cita puedes ver si al paciente le llegó el suyo.',
+  tableLabel: 'Recordatorios por sede',
+  colLocation: 'Sede',
+  colStatus: 'Estado',
+  colLeads: 'Cuándo se envían',
+  none: 'Sin recordatorios',
   // DX-290: la sede manda la anamnesis a nuevos o caducados con el recordatorio.
-  withAnamnesis: "con anamnesis",
-  on: "Activos",
-  off: "Desactivados",
+  withAnamnesis: 'con anamnesis',
+  on: 'Activos',
+  off: 'Desactivados',
   /** Delante del nombre de la sede, solo para lectores: «Configurar los recordatorios de Sede Norte». */
-  configurePrefix: "Configurar los recordatorios de ",
+  configurePrefix: 'Configurar los recordatorios de ',
   saved: (name: string, enabled: boolean) =>
-    enabled
-      ? `Recordatorios activados en ${name}.`
-      : `Recordatorios desactivados en ${name}.`,
+    enabled ? `Recordatorios activados en ${name}.` : `Recordatorios desactivados en ${name}.`,
 };
 
 interface ReminderSettingsManagerProps {
@@ -56,17 +49,14 @@ interface ReminderSettingsManagerProps {
  * antelaciones; «Configurar» abre el formulario en un modal. Lo que se cambia
  * aplica a los recordatorios que aún no han salido.
  */
-export function ReminderSettingsManager({
-  token,
-  allowed,
-}: ReminderSettingsManagerProps) {
+export function ReminderSettingsManager({ token, allowed }: ReminderSettingsManagerProps) {
   const [rows, setRows] = useState<LocationReminderSettings[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [editing, setEditing] = useState<LocationReminderSettings | null>(null);
   const [modalKey, setModalKey] = useState(0);
-  const [announcement, setAnnouncement] = useState("");
+  const [announcement, setAnnouncement] = useState('');
 
   useEffect(() => {
     if (!allowed) return;
@@ -108,27 +98,21 @@ export function ReminderSettingsManager({
   }
 
   function handleSaved(saved: LocationReminderSettings) {
-    setRows((prev) =>
-      prev.map((r) => (r.locationId === saved.locationId ? saved : r)),
-    );
+    setRows((prev) => prev.map((r) => (r.locationId === saved.locationId ? saved : r)));
     setAnnouncement(copy.saved(saved.locationName, saved.enabled));
   }
 
   const activeCount = rows.filter((r) => r.enabled).length;
 
   function status(row: LocationReminderSettings) {
-    return (
-      <Badge variant={row.enabled ? "success" : "neutral"}>
-        {row.enabled ? copy.on : copy.off}
-      </Badge>
-    );
+    return <Badge variant={row.enabled ? 'success' : 'neutral'}>{row.enabled ? copy.on : copy.off}</Badge>;
   }
 
   const columns: DataListColumn<LocationReminderSettings>[] = [
     {
-      id: "location",
+      id: 'location',
       header: copy.colLocation,
-      mobile: "primary",
+      mobile: 'primary',
       // La fila entera abre el modal; el nombre del botón dice qué hace.
       cell: (row) => (
         <>
@@ -137,15 +121,15 @@ export function ReminderSettingsManager({
         </>
       ),
     },
-    { id: "status", header: copy.colStatus, mobile: "trailing", cell: status },
+    { id: 'status', header: copy.colStatus, mobile: 'trailing', cell: status },
     {
-      id: "leads",
+      id: 'leads',
       header: copy.colLeads,
-      mobile: "meta",
-      cellClassName: "tabular-nums",
+      mobile: 'meta',
+      cellClassName: 'tabular-nums',
       cell: (row) =>
         row.enabled
-          ? `${leadListLabel(row.leadHours)}${row.sendAnamnesis ? ` · ${copy.withAnamnesis}` : ""}`
+          ? `${leadListLabel(row.leadHours)}${row.sendAnamnesis ? ` · ${copy.withAnamnesis}` : ''}`
           : copy.none,
     },
   ];
@@ -153,9 +137,7 @@ export function ReminderSettingsManager({
   return (
     <div className="flex flex-col gap-3">
       <p className="min-h-5 text-sm text-muted tabular-nums">
-        {loading || error
-          ? ""
-          : `${copy.count(rows.length)} · ${copy.active(activeCount)}`}
+        {loading || error ? '' : `${copy.count(rows.length)} · ${copy.active(activeCount)}`}
       </p>
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}

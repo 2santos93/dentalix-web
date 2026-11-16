@@ -1,16 +1,12 @@
-import { civilDateLabel } from "@/lib/format/date";
-import { sedeTime, type SedeClock } from "@/lib/locations/sede-clock";
-import { wallDay } from "@/lib/time/wall-clock";
-import type { Appointment } from "./appointments-api";
-import type { ConfirmationAppointment } from "./confirmations-api";
+import { civilDateLabel } from '@/lib/format/date';
+import { sedeTime, type SedeClock } from '@/lib/locations/sede-clock';
+import { wallDay } from '@/lib/time/wall-clock';
+import type { Appointment } from './appointments-api';
+import type { ConfirmationAppointment } from './confirmations-api';
 
 /** "martes, 20 de octubre": el día del instante en la zona de la sede, nunca en la del navegador. */
 export function longAppointmentDay(iso: string, timeZone: string): string {
-  return civilDateLabel(wallDay(iso, timeZone), {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
+  return civilDateLabel(wallDay(iso, timeZone), { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
 /**
@@ -23,6 +19,7 @@ export function confirmationMessage({
   appointment,
   clock,
   anamnesisUrl = null,
+  anamnesisPending = false,
 }: {
   url: string;
   appointment: ConfirmationAppointment;
@@ -31,21 +28,21 @@ export function confirmationMessage({
    * anamnesis caducada). Solo el enlace: el mensaje no dice nada clínico.
    */
   anamnesisUrl?: string | null;
+  /** DX-290: ya tiene un enlace vivo de antes: se le recuerda, sin otro. */
+  anamnesisPending?: boolean;
   /** Reloj de la sede de la cita: el día y la hora que verá el paciente. */
   clock: SedeClock;
 }): string {
-  const greeting = appointment.patientFirstName
-    ? `Hola ${appointment.patientFirstName}`
-    : "Hola";
-  const withWhom = appointment.providerName
-    ? ` con ${appointment.providerName}`
-    : "";
+  const greeting = appointment.patientFirstName ? `Hola ${appointment.patientFirstName}` : 'Hola';
+  const withWhom = appointment.providerName ? ` con ${appointment.providerName}` : '';
   const where = appointment.locationAddress
     ? `${appointment.locationName} (${appointment.locationAddress})`
     : appointment.locationName;
   const anamnesis = anamnesisUrl
     ? ` Antes de la cita, responde el cuestionario de salud: ${anamnesisUrl}`
-    : "";
+    : anamnesisPending
+      ? ' Si aún no completaste el cuestionario de salud, usa el enlace que te enviamos.'
+      : '';
   return (
     `${greeting}, te recordamos tu cita del ${longAppointmentDay(appointment.start, clock.timeZone)} ` +
     `a las ${sedeTime(appointment.start, clock)}${withWhom} en ${where}. ` +
@@ -59,18 +56,16 @@ export function whatsAppUrl(phone: string, message: string): string {
   return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
 }
 
-export type ConfirmationIndicator = "callback" | "pending";
+export type ConfirmationIndicator = 'callback' | 'pending';
 
 /**
  * Indicador de la tarjeta de la cita. Solo aplica a una cita AGENDADA: si el
  * paciente confirmó o canceló, el propio estado ya lo dice (y el backend
  * limpia las marcas cuando recepción reagenda o cambia el estado a mano).
  */
-export function confirmationIndicator(
-  appointment: Appointment,
-): ConfirmationIndicator | null {
-  if (appointment.status !== "SCHEDULED") return null;
-  if (appointment.callbackRequestedAt) return "callback";
-  if (appointment.confirmationSentAt) return "pending";
+export function confirmationIndicator(appointment: Appointment): ConfirmationIndicator | null {
+  if (appointment.status !== 'SCHEDULED') return null;
+  if (appointment.callbackRequestedAt) return 'callback';
+  if (appointment.confirmationSentAt) return 'pending';
   return null;
 }
