@@ -64,6 +64,7 @@ import {
   PatientConsentsTab,
   PatientDocumentsTab,
   PatientEditModal,
+  PatientExternalOrdersTab,
   PatientImplantsTab,
   PatientPostOpDeliveries,
   PatientPrescriptionsTab,
@@ -92,6 +93,7 @@ const copy = {
   tabOrtho: 'Ortodoncia',
   tabPrescriptions: 'Recetas',
   tabCertificates: 'Certificados',
+  tabExternalOrders: 'Órdenes',
   tabImplants: 'Implantes',
   tabDocuments: 'Documentos',
   tabAccessLog: 'Accesos',
@@ -474,6 +476,7 @@ function PatientDetailView() {
               orthoLabel={access.ortho ? copy.tabOrtho : undefined}
               prescriptionsLabel={access.prescriptions ? copy.tabPrescriptions : undefined}
               certificatesLabel={access.certificates ? copy.tabCertificates : undefined}
+              externalOrdersLabel={access['external-orders'] ? copy.tabExternalOrders : undefined}
               implantsLabel={access.implants ? copy.tabImplants : undefined}
               documentsLabel={access.documents ? copy.tabDocuments : undefined}
               accessLogLabel={access['access-log'] ? copy.tabAccessLog : undefined}
@@ -755,6 +758,12 @@ function PatientDetailView() {
           {access.certificates ? (
             <TabPanel tab="certificates" activeTab={activeTab} register={registerPanel}>
               <PatientCertificatesTab token={accessToken} patientId={patientId} />
+            </TabPanel>
+          ) : null}
+          {/* DX-572: órdenes de estudios y referencias a especialistas externos. */}
+          {access['external-orders'] ? (
+            <TabPanel tab="external-orders" activeTab={activeTab} register={registerPanel}>
+              <PatientExternalOrdersTab token={accessToken} patientId={patientId} />
             </TabPanel>
           ) : null}
           {/* DX-191: implantes por diente y tarjeta imprimible. `registerTooth`

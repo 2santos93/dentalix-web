@@ -7,6 +7,7 @@ import {
   receiptDetail,
   receiptsSummaryPeriodDetail,
   cancellationDetail,
+  externalOrderDetail,
   importBatchDetail,
   AUDIT_ACTION_LABELS,
   AUDIT_ACTION_OPTIONS,
@@ -144,6 +145,30 @@ describe('implantSearchDetail (DX-191)', () => {
     );
     expect(staffLoginDetail({ reason: 'REMINDER_OPT_OUT' })).toBeNull();
     expect(staffLoginDetail({})).toBeNull();
+  });
+});
+
+describe('externalOrderDetail (DX-572)', () => {
+  it('nombra cada paso de la orden y de su plantilla; el recurso tiene etiqueta', () => {
+    expect(AUDIT_RESOURCE_LABELS.EXTERNAL_ORDER).toBe('Orden externa');
+    expect(AUDIT_RESOURCE_LABELS.EXTERNAL_ORDER_TEMPLATE).toBe('Plantilla de orden externa');
+    expect(externalOrderDetail({ reason: 'EXTERNAL_ORDER_ISSUED' })).toBe('Orden emitida');
+    expect(externalOrderDetail({ reason: 'EXTERNAL_ORDER_RESULT_LINKED' })).toBe('Resultado ligado a la orden');
+    expect(externalOrderDetail({ reason: 'EXTERNAL_ORDER_RESULT_UNLINKED' })).toBe('Resultado desligado de la orden');
+    expect(externalOrderDetail({ reason: 'EXTERNAL_ORDER_COPY_DOWNLOADED' })).toBe(
+      'Orden descargada por el paciente con el enlace',
+    );
+    expect(externalOrderDetail({ reason: 'EXTERNAL_ORDER_TEMPLATE_UPDATED' })).toBe('Plantilla de orden cambiada');
+    expect(externalOrderDetail({ reason: 'CHAIR_ORDER' })).toBeNull();
+  });
+
+  it('el paciente abre y descarga con su enlace (sin usuario); el plazo es un ajuste de la clínica', () => {
+    expect(isPatientOptOut({ reason: 'EXTERNAL_ORDER_COPY_OPENED' })).toBe(true);
+    expect(isPatientOptOut({ reason: 'EXTERNAL_ORDER_COPY_DOWNLOADED' })).toBe(true);
+    expect(isPatientOptOut({ reason: 'EXTERNAL_ORDER_COPY_SENT' })).toBe(false);
+    expect(clinicSettingsDetail({ reason: 'EXTERNAL_ORDER_SETTINGS', changedFields: ['overdueDays'] })).toBe(
+      'Plazo de las órdenes externas sin resultado',
+    );
   });
 });
 

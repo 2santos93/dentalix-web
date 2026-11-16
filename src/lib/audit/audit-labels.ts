@@ -163,6 +163,9 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   // DX-190: caso de ortodoncia y sus controles.
   ORTHO_CASE: 'Caso de ortodoncia',
   ORTHO_VISIT: 'Control de ortodoncia',
+  // DX-572: órdenes de estudios y referencias externas, y sus plantillas.
+  EXTERNAL_ORDER: 'Orden externa',
+  EXTERNAL_ORDER_TEMPLATE: 'Plantilla de orden externa',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
@@ -232,12 +235,16 @@ const PATIENT_CONFIRMATION_REASONS = new Set([
  * DX-099: también el envío de la anamnesis por enlace y su autorización.
  * DX-243: y los pasos del enlace de firma a distancia.
  * DX-361: y su respuesta al enlace de confirmación de la cita.
+ * DX-572: y la apertura y la descarga de la orden con su enlace.
  */
 export function isPatientOptOut(metadata: AuditMetadata): boolean {
   return (
     metadata.reason === 'REMINDER_OPT_OUT' ||
     metadata.reason === 'ANAMNESIS_SUBMITTED' ||
     metadata.reason === 'ANAMNESIS_LINK' ||
+    // DX-572: el paciente abre y descarga la orden con su enlace.
+    metadata.reason === 'EXTERNAL_ORDER_COPY_OPENED' ||
+    metadata.reason === 'EXTERNAL_ORDER_COPY_DOWNLOADED' ||
     (metadata.reason !== undefined &&
       (PATIENT_SIGNATURE_REASONS.has(metadata.reason) ||
         PATIENT_CONFIRMATION_REASONS.has(metadata.reason)))
@@ -294,6 +301,28 @@ const TREATMENT_PLAN_ACCEPTANCE_REASONS: Record<string, string> = {
  */
 export function treatmentPlanAcceptanceDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && TREATMENT_PLAN_ACCEPTANCE_REASONS[metadata.reason]) ?? null;
+}
+
+/**
+ * DX-572: qué se hizo con una orden externa o su plantilla. La metadata solo
+ * trae ids, número, tipo y estado: nunca la nota, los estudios ni el
+ * destinatario.
+ */
+const EXTERNAL_ORDER_REASONS: Record<string, string> = {
+  EXTERNAL_ORDER_ISSUED: 'Orden emitida',
+  EXTERNAL_ORDER_VOIDED: 'Orden anulada',
+  EXTERNAL_ORDER_RESULT_LINKED: 'Resultado ligado a la orden',
+  EXTERNAL_ORDER_RESULT_UNLINKED: 'Resultado desligado de la orden',
+  EXTERNAL_ORDER_COPY_SENT: 'Orden enviada al paciente',
+  EXTERNAL_ORDER_COPY_OPENED: 'Enlace de la orden abierto por el paciente',
+  EXTERNAL_ORDER_COPY_DOWNLOADED: 'Orden descargada por el paciente con el enlace',
+  EXTERNAL_ORDER_TEMPLATE_CREATED: 'Plantilla de orden creada',
+  EXTERNAL_ORDER_TEMPLATE_UPDATED: 'Plantilla de orden cambiada',
+};
+
+/** DX-572: el paso de la orden externa, o null si el evento no es de ella. */
+export function externalOrderDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && EXTERNAL_ORDER_REASONS[metadata.reason]) ?? null;
 }
 
 const STAFF_LOGIN_REASONS: Record<string, string> = {
@@ -903,6 +932,8 @@ export function clinicSettingsDetail(metadata: AuditMetadata): string | null {
   }
   // DX-497: la lista antes y después la pinta `configChangeItems`.
   if (metadata.reason === 'PATIENT_LANGUAGES_SETTINGS') return 'Idiomas de los pacientes';
+  // DX-572: solo el campo cambiado; el plazo no viaja en la metadata.
+  if (metadata.reason === 'EXTERNAL_ORDER_SETTINGS') return 'Plazo de las órdenes externas sin resultado';
   if (!metadata.statusChange) return null;
   const { from, to } = metadata.statusChange;
   if (metadata.reason === 'PRESCRIPTION_SETTINGS') return prescriptionSettingsDetail(from, to);

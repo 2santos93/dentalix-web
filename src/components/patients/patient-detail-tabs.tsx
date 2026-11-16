@@ -13,6 +13,7 @@ export type PatientDetailTabKey =
   | 'consents'
   | 'prescriptions'
   | 'certificates'
+  | 'external-orders'
   | 'implants'
   | 'documents'
   | 'data-consents'
@@ -52,6 +53,8 @@ interface PatientDetailTabsProps {
   prescriptionsLabel?: string;
   /** «Certificados» (DX-306): los cuatro roles emiten el justificante. */
   certificatesLabel?: string;
+  /** «Órdenes» (DX-572): los cuatro roles (emiten DENTIST y ADMIN; lo decide la pestaña). */
+  externalOrdersLabel?: string;
   /** «Implantes» (DX-191): los cuatro roles (recepción entrega la tarjeta). */
   implantsLabel?: string;
   /** «Documentos» (DX-151): los cuatro roles leen y suben. */
@@ -72,6 +75,7 @@ const TAB_ORDER: PatientDetailTabKey[] = [
   'consents',
   'prescriptions',
   'certificates',
+  'external-orders',
   'implants',
   'documents',
   'data-consents',
@@ -119,6 +123,7 @@ export function PatientDetailTabs({
   orthoLabel,
   prescriptionsLabel,
   certificatesLabel,
+  externalOrdersLabel,
   implantsLabel,
   documentsLabel,
   accessLogLabel,
@@ -135,6 +140,7 @@ export function PatientDetailTabs({
     consents: consentsLabel,
     prescriptions: prescriptionsLabel,
     certificates: certificatesLabel,
+    'external-orders': externalOrdersLabel,
     implants: implantsLabel,
     documents: documentsLabel,
     'access-log': accessLogLabel,
@@ -142,7 +148,7 @@ export function PatientDetailTabs({
   // Las pestañas que de verdad se pintan, en orden: las flechas recorren estas.
   const tabs = TAB_ORDER.filter((tab) => labels[tab] !== undefined);
 
-  // Trece pestañas no caben en 390px: `TabBar` desplaza la franja de lado,
+  // Catorce pestañas no caben en 390px: `TabBar` desplaza la franja de lado,
   // desvanece los bordes cuando hay más y mantiene la activa a la vista (p. ej.
   // al abrir `?tab=account-statement`); la página nunca crece en horizontal.
   return (

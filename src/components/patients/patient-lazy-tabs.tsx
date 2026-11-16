@@ -103,6 +103,12 @@ export const PatientCertificatesTab = dynamic(
   () => import('@/components/certificates/patient-certificates-tab').then((m) => m.PatientCertificatesTab),
   { ssr: false, loading: () => <SectionSkeleton /> },
 );
+// DX-572: órdenes de estudios y referencias externas (sus diálogos llegan
+// aparte, al abrirse, desde la propia pestaña).
+export const PatientExternalOrdersTab = dynamic(
+  () => import('@/components/external-orders/patient-external-orders-tab').then((m) => m.PatientExternalOrdersTab),
+  { ssr: false, loading: () => <SectionSkeleton /> },
+);
 export const PatientImplantsTab = dynamic(
   () => import('@/components/implants/patient-implants-tab').then((m) => m.PatientImplantsTab),
   { ssr: false, loading: () => <SectionSkeleton /> },

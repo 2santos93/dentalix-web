@@ -174,6 +174,15 @@ const certificate = {
   VOIDED: s('neutral', 'Anulado'),
 } satisfies Presentations<'LIVE' | 'VOIDED'>;
 
+// DX-572: orden de estudios o referencia externa. Emitida y con resultado son
+// documentos vigentes (la falta de resultado la marca «Vencida», aparte);
+// anulada = documento inmutable retirado, no un error.
+const externalOrder = {
+  ISSUED: s('success', 'Emitida'),
+  RESULT_RECEIVED: s('success', 'Resultado recibido'),
+  VOIDED: s('neutral', 'Anulada'),
+} satisfies Presentations<Schemas['ExternalOrderStatus']>;
+
 // ── Anamnesis y consentimientos ─────────────────────────────────────────────
 
 const anamnesisSubmission = {
@@ -394,6 +403,7 @@ export const STATUS_PRESENTATION = {
   perioExam,
   prescription,
   certificate,
+  externalOrder,
   anamnesisSubmission,
   dataConsent,
   installment,
