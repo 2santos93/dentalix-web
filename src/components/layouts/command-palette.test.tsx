@@ -135,3 +135,17 @@ describe('CommandPalette: «Órdenes sin resultado» (DX-572)', () => {
     expect(push).toHaveBeenCalledWith('/ordenes-sin-resultado');
   });
 });
+
+describe('CommandPalette: «Laboratorio dental» (DX-017)', () => {
+  beforeEach(() => {
+    jest.mocked(listPatients).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 5 } as never);
+  });
+
+  it.each(['ADMIN', 'DENTIST', 'ASSISTANT', 'RECEPTION'] as const)('%s la encuentra al escribir y lleva a los trabajos', async (role) => {
+    const user = userEvent.setup();
+    render(<CommandPalette open onOpenChange={() => {}} token="t" role={role} />);
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'laborat' } });
+    await user.click(await screen.findByRole('option', { name: /Laboratorio dental/ }));
+    expect(push).toHaveBeenCalledWith('/laboratorio');
+  });
+});

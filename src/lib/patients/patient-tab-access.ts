@@ -6,6 +6,7 @@ import { canUsePrescriptions } from '@/lib/prescriptions/prescriptions-api';
 import { canReadAuditLog } from '@/lib/audit/audit-api';
 import { canReadImplants } from '@/lib/implants/implants-api';
 import { canReadOrtho } from '@/lib/ortho/ortho-roles';
+import { canReadLabOrders } from '@/lib/lab-orders/lab-orders-roles';
 import {
   isPatientDetailTabKey,
   type PatientDetailTabKey,
@@ -29,6 +30,8 @@ export type PatientTabAccess = Record<PatientDetailTabKey, boolean>;
  *   cualquiera; el reposo, DENTIST o ADMIN, lo decide la pestaña).
  * - Órdenes (DX-572): los cuatro roles (emiten DENTIST y ADMIN; recepción
  *   imprime sin la nota, envía al paciente y liga el resultado).
+ * - Laboratorio (DX-017): los cuatro roles (crean y anulan DENTIST y ADMIN;
+ *   recepción envía y recibe y no ve color, material ni instrucciones).
  * - Autorizaciones (DX-037), Implantes (DX-191), Documentos (DX-151) y
  *   Datos: los cuatro roles.
  * - Accesos (auditoría de la ficha, DX-009): `AUDIT_READ_ROLES` (solo ADMIN).
@@ -51,6 +54,7 @@ export function patientTabAccess(role: ClinicRole | null): PatientTabAccess {
     prescriptions: canUsePrescriptions(role),
     certificates: role !== null,
     'external-orders': role !== null,
+    'lab-orders': canReadLabOrders(role),
     implants: canReadImplants(role),
     documents: role !== null,
     'data-consents': role !== null,

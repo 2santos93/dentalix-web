@@ -149,6 +149,9 @@ export const copy = {
   // diente puestos.
   registerImplant: 'Registrar implante',
   registerImplantFor: (tooth: string) => `Registrar implante en el diente ${tooth}`,
+  // DX-017.
+  labOrder: 'Orden de laboratorio',
+  labOrderFor: (tooth: string) => `Orden de laboratorio del diente ${tooth}`,
   focusedToothNotice: (tooth: string) => `Diente ${tooth}: sus ítems aparecen resaltados abajo.`,
   focusedToothRow: 'Diente en foco',
   clearFocusedTooth: 'Ver todos los dientes',

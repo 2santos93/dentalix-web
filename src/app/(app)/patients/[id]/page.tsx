@@ -65,6 +65,7 @@ import {
   PatientDocumentsTab,
   PatientEditModal,
   PatientExternalOrdersTab,
+  PatientLabOrdersTab,
   PatientImplantsTab,
   PatientPostOpDeliveries,
   PatientPrescriptionsTab,
@@ -75,6 +76,7 @@ import {
   TreatmentPlansTab,
 } from '@/components/patients/patient-lazy-tabs';
 import { orthoEnabled, useOrthoSettings } from '@/lib/ortho/ortho-settings';
+import { canWriteLabOrders } from '@/lib/lab-orders/lab-orders-roles';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -94,6 +96,7 @@ const copy = {
   tabPrescriptions: 'Recetas',
   tabCertificates: 'Certificados',
   tabExternalOrders: 'Órdenes',
+  tabLabOrders: 'Laboratorio',
   tabImplants: 'Implantes',
   tabDocuments: 'Documentos',
   tabAccessLog: 'Accesos',
@@ -477,6 +480,7 @@ function PatientDetailView() {
               prescriptionsLabel={access.prescriptions ? copy.tabPrescriptions : undefined}
               certificatesLabel={access.certificates ? copy.tabCertificates : undefined}
               externalOrdersLabel={access['external-orders'] ? copy.tabExternalOrders : undefined}
+              labOrdersLabel={access['lab-orders'] ? copy.tabLabOrders : undefined}
               implantsLabel={access.implants ? copy.tabImplants : undefined}
               documentsLabel={access.documents ? copy.tabDocuments : undefined}
               accessLogLabel={access['access-log'] ? copy.tabAccessLog : undefined}
@@ -692,6 +696,13 @@ function PatientDetailView() {
                         `${pathname}?tab=implants&registerTooth=${item.toothNumber}&planItem=${item.id}`
                     : undefined
                 }
+                // DX-017: «Orden de laboratorio» desde el ítem, con el diente y
+                // la prestación precargados en la sección «Laboratorio».
+                labOrderHref={
+                  access['lab-orders'] && canWriteLabOrders(getTokenRole(accessToken))
+                    ? (item) => `${pathname}?tab=lab-orders&labOrderPlanItem=${item.id}`
+                    : undefined
+                }
               />
             </TabPanel>
           ) : null}
@@ -764,6 +775,19 @@ function PatientDetailView() {
           {access['external-orders'] ? (
             <TabPanel tab="external-orders" activeTab={activeTab} register={registerPanel}>
               <PatientExternalOrdersTab token={accessToken} patientId={patientId} />
+            </TabPanel>
+          ) : null}
+          {/* DX-017: trabajos del laboratorio dental. `labOrderPlanItem` llega
+              de «Orden de laboratorio» en el ítem del plan y abre «Nueva
+              orden» desde él; al cerrar el formulario se limpia de la URL. */}
+          {access['lab-orders'] ? (
+            <TabPanel tab="lab-orders" activeTab={activeTab} register={registerPanel}>
+              <PatientLabOrdersTab
+                token={accessToken}
+                patientId={patientId}
+                planItemId={searchParams.get('labOrderPlanItem')}
+                onShortcutConsumed={() => setParams({ labOrderPlanItem: null })}
+              />
             </TabPanel>
           ) : null}
           {/* DX-191: implantes por diente y tarjeta imprimible. `registerTooth`
