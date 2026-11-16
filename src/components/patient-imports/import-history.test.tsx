@@ -289,7 +289,10 @@ it('DX-262: con saldos migrados, el deshacer avisa de que también se retiran y 
     undoneFilled: 0,
     balances: balancesFixture({ imported: [], undoneCount: 3 }),
   });
-  const user = userEvent.setup();
+  // Menú → diálogo (Radix): con la CI cargada, el body conserva un instante el
+  // `pointer-events: none` del menú que se cierra y el clic fallaba a veces.
+  // Mismo patrón que cash-shifts-view.test.tsx.
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
   render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
   await historyAction(user, 'pacientes.csv', 'Deshacer lote');
   const dialog = screen.getByRole('dialog');

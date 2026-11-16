@@ -111,6 +111,11 @@ export const PatientEditModal = dynamic(
   () => import('@/components/patients/patient-edit-modal').then((m) => m.PatientEditModal),
   { ssr: false },
 );
+// DX-202-bis: solo se abre desde el menú «⋯» (roles clínicos).
+export const ImagingExportDialog = dynamic(
+  () => import('@/components/patients/imaging-export-dialog').then((m) => m.ImagingExportDialog),
+  { ssr: false },
+);
 export const AnamnesisSendDialog = dynamic(
   () => import('@/components/anamnesis/anamnesis-send-dialog').then((m) => m.AnamnesisSendDialog),
   { ssr: false },

@@ -1,4 +1,5 @@
 'use client';
+import dynamic from 'next/dynamic';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Armchair, CircleCheck, DoorOpen, Undo2, Wallet } from 'lucide-react';
@@ -25,11 +26,22 @@ import { notifyError } from '@/components/errors/notify';
 import { ApiError, isRejection } from '@/lib/api/api-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { OVERBOOK_SLOT_TAKEN } from '@/lib/appointments/walk-in';
-import { KeepOverbookedDialog, type KeepOverbookedPrompt } from '@/components/appointments/keep-overbooked-dialog';
-import { CheckoutDialog } from '@/components/appointments/checkout-dialog';
+import type { KeepOverbookedPrompt } from '@/components/appointments/keep-overbooked-dialog';
 import type { CheckoutItem } from '@/lib/appointments/checkout-checklist';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+
+// DX-202-bis: la salida (lista, cobro y contacto en línea) solo se descarga al
+// pulsar «Completar»: la ficha y la agenda no la cargan de entrada (presupuesto de bundle).
+const CheckoutDialog = dynamic(
+  () => import('@/components/appointments/checkout-dialog').then((m) => m.CheckoutDialog),
+  { ssr: false },
+);
+// Solo sale con el 409 de una urgencia en sobrecupo (DX-509): tampoco entra de primeras.
+const KeepOverbookedDialog = dynamic(
+  () => import('@/components/appointments/keep-overbooked-dialog').then((m) => m.KeepOverbookedDialog),
+  { ssr: false },
+);
 
 export const patientFlowCopy = {
   retry: 'Reintentar',
@@ -281,7 +293,9 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
     token,
     claimingKey,
     claim,
-    overbookDialog: <KeepOverbookedDialog prompt={overbookPrompt} onClose={() => setOverbookPrompt(null)} />,
+    overbookDialog: overbookPrompt ? (
+      <KeepOverbookedDialog prompt={overbookPrompt} onClose={() => setOverbookPrompt(null)} />
+    ) : null,
   };
 }
 
