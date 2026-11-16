@@ -56,6 +56,7 @@ import {
   type ExternalInvoiceTarget,
 } from '@/components/payments/external-invoice-modal';
 import { getTokenAllowedLocationIds, getTokenRole } from '@/lib/auth/token-role';
+import { periodLockCopy } from './period-lock-field';
 import { canManagePayments, canRegisterPayments, useEffectivePermissions } from '@/lib/auth/permissions';
 import { cn } from '@/lib/utils';
 
@@ -662,12 +663,17 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                         },
                       ]
                     : []),
-                  ...(payment.canVoid
+                  // DX-091: al ADMIN sin la exención, el abono de un período
+                  // cerrado le sale con «Anular» deshabilitado y el porqué
+                  // (como en el estado de cuenta). Recepción nunca anula un día
+                  // cerrado (solo los suyos de hoy): no se le ofrece.
+                  ...(payment.canVoid || (payment.periodLocked && viewerRole === 'ADMIN')
                     ? [
                         {
                           label: copy.voidAction,
                           destructive: true,
                           separatorBefore: true,
+                          ...(payment.canVoid ? {} : { disabledReason: periodLockCopy.voidBlocked }),
                           onSelect: () =>
                             voiding.request({
                               id: payment.id,

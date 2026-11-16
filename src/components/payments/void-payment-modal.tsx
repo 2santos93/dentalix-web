@@ -86,7 +86,9 @@ export function VoidPaymentModal({
   const lock = readyPeriodLock(usePeriodLock(token ?? '', open && token !== undefined));
   const locked = periodLocked ?? (paidOn !== undefined && isDayLocked(paidOn, lock?.lockedThrough));
   // Solo con el cierre leído: sin él no se sabe si se puede saltar.
-  const override = locked && lock !== null && lock.canOverride;
+  // Si la lista ya dice que está cerrado y aun así ofreció anular (`canVoid`),
+  // es el ADMIN con la exención: se pide el motivo aunque el cierre no cargue.
+  const override = locked && (lock !== null ? lock.canOverride : periodLocked === true);
   const blocked = locked && lock !== null && !lock.canOverride;
   const [lockReason, setLockReason] = useState('');
   const [lockReasonError, setLockReasonError] = useState<string | null>(null);

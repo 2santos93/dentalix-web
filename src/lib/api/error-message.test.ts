@@ -4,7 +4,9 @@ import {
   errorMessageCopy,
   isHumanSpanish,
   parseRetryAfter,
+  sedeCivilDateOption,
 } from './error-message';
+import { apiErrorFromBody } from './client';
 
 describe('isHumanSpanish — heurística de idioma', () => {
   it.each([
@@ -309,4 +311,46 @@ describe('apiErrorMessage — correcciones tras la revisión', () => {
       expect(errorMessageCopy[key]).not.toMatch(/intenta de nuevo|vuelve a intentarlo/i);
     },
   );
+});
+
+describe('DX-091 · 409 PERIOD_LOCKED (cierre contable)', () => {
+  const apiMessage =
+    'La fecha del abono cae en un período contable cerrado. Elige una fecha posterior al cierre o pide a administración que lo revise.';
+  const ddmmyyyy = (day: string) => day.split('-').reverse().join('/');
+
+  it('lee `lockedThrough` del cuerpo y descarta lo que no es un día', () => {
+    expect(
+      apiErrorFromBody(409, { message: apiMessage, code: 'PERIOD_LOCKED', lockedThrough: '2026-09-30' }, null)
+        .lockedThrough,
+    ).toBe('2026-09-30');
+    expect(apiErrorFromBody(409, { code: 'PERIOD_LOCKED', lockedThrough: 'ayer' }, null).lockedThrough).toBeNull();
+    expect(apiErrorFromBody(409, { code: 'PERIOD_LOCKED' }, null).lockedThrough).toBeNull();
+  });
+
+  it('enseña el mensaje de la API y el día del cierre con el formato de la sede', () => {
+    const err = new ApiError(409, apiMessage, { code: 'PERIOD_LOCKED', lockedThrough: '2026-09-30' });
+    expect(apiErrorMessage(err, { fallback: 'x', civilDate: ddmmyyyy })).toBe(
+      `${apiMessage} Cerrado hasta el 30/09/2026, inclusive.`,
+    );
+  });
+
+  it('sin formato de la sede (o sin `lockedThrough`, la guarda de la BD), solo el mensaje', () => {
+    const err = new ApiError(409, apiMessage, { code: 'PERIOD_LOCKED', lockedThrough: '2026-09-30' });
+    expect(apiErrorMessage(err, 'x')).toBe(apiMessage);
+    const db = new ApiError(409, 'La operación toca un período contable cerrado y no se guardó.', {
+      code: 'PERIOD_LOCKED',
+    });
+    expect(apiErrorMessage(db, { civilDate: ddmmyyyy })).toBe(
+      'La operación toca un período contable cerrado y no se guardó.',
+    );
+  });
+
+  it('gana al override del 409 de la pantalla y, si el servidor no da texto en español, usa el propio', () => {
+    const err = new ApiError(409, 'Period locked', { code: 'PERIOD_LOCKED', lockedThrough: '2026-09-30' });
+    expect(apiErrorMessage(err, { byStatus: { 409: 'Ya tiene un plan de cuotas activo.' } })).toBe(
+      errorMessageCopy.periodLocked,
+    );
+    expect(sedeCivilDateOption(null)).toEqual({});
+    expect(sedeCivilDateOption({ civilDate: ddmmyyyy }).civilDate?.('2026-09-30')).toBe('30/09/2026');
+  });
 });

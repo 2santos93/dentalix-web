@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { notifySuccess } from '@/components/errors/notify';
-import { apiErrorMessage } from '@/lib/api/error-message';
+import { apiErrorMessage, sedeCivilDateOption } from '@/lib/api/error-message';
 import { parseMoneyInput } from '@/lib/format/money';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { SEDE_TIME_ZONE_ERROR, readyTimeZone, sedeToday, type SedeZoneState } from '@/lib/locations/use-sede-time-zone';
@@ -184,7 +184,9 @@ export function PlanPaymentFormModal({
       // DX-377: la referencia repetida se avisa junto al campo y pide motivo.
       if (paymentMethodFields.catchDuplicate(err)) return;
       // Un 400 técnico (importe/moneda) se dice en español (apiErrorMessage).
-      setSubmitError(apiErrorMessage(err, copy.genericAddPaymentError));
+      setSubmitError(
+        apiErrorMessage(err, { fallback: copy.genericAddPaymentError, ...sedeCivilDateOption(sedeFmt) }),
+      );
     } finally {
       setSubmitting(false);
     }

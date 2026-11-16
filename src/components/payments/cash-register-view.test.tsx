@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { clearSessionStore } from '@/lib/session/session-store';
 import userEvent from '@testing-library/user-event';
+import { periodLockCopy } from './period-lock-field';
 import { CashRegisterView } from './cash-register-view';
 import { ApiError, NetworkError } from '@/lib/api/client';
 import {
@@ -705,6 +706,33 @@ describe('anular desde la caja (DX-057)', () => {
     expect(await rowMenuItems(user, ana)).toEqual(['Recibo', 'Factura externa', 'Anular']);
     const beto = within(table).getByRole('row', { name: /beto ruiz/i });
     expect(await rowMenuItems(user, beto)).toEqual(['Recibo', 'Factura externa']);
+  });
+
+  it('DX-091: al ADMIN sin la exención, un abono de un período cerrado le sale con «Anular» deshabilitado y el porqué', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const b64url = (value: string) => btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const adminToken = `${b64url('{"alg":"HS256"}')}.${b64url(JSON.stringify({ sub: 'u-admin', role: 'ADMIN' }))}.firma`;
+    mockedList.mockResolvedValue(
+      response({
+        items: [
+          { ...anaCash, canVoid: false, periodLocked: true },
+          // Recepción-like: sin cierre y sin permiso, no se ofrece.
+          { ...betoCard, canVoid: false, periodLocked: false },
+        ],
+        total: 2,
+      }),
+    );
+    render(<CashRegisterView token={adminToken} />);
+    const table = await screen.findByRole('table', { name: /abonos/i });
+    expect(await rowMenuItems(user, within(table).getByRole('row', { name: /beto ruiz/i }))).not.toContain('Anular');
+    await user.click(
+      within(within(table).getByRole('row', { name: /ana gómez/i })).getByRole('button', { name: /^acciones de abono de/i }),
+    );
+    const item = await screen.findByRole('menuitem', { name: 'Anular' });
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    expect(item).toHaveAccessibleDescription(periodLockCopy.voidBlocked);
+    await user.click(item);
+    expect(screen.queryByRole('dialog', { name: /anular este abono/i })).not.toBeInTheDocument();
   });
 
   it('DX-414: las líneas de un cobro dividido llevan el distintivo con el recibo único', async () => {

@@ -17,13 +17,19 @@ export const periodLockCopy = {
   // Junto al campo de fecha: por qué el calendario no ofrece esos días.
   hint: (through: string) =>
     `Cierre contable: los días hasta el ${through} están cerrados y no admiten abonos.`,
+  // DX-091: la 1ª cuota de un plan de cuotas.
+  planHint: (through: string) =>
+    `Cierre contable: los días hasta el ${through} están cerrados; la primera cuota tiene que vencer después.`,
   hintOverride: (through: string) =>
     `Cierre contable hasta el ${through}. Como administración puedes usar una fecha cerrada indicando el motivo; queda registrado.`,
   lockedDate: (through: string) =>
     `Esa fecha está en un período contable cerrado (hasta el ${through}). Elige una fecha posterior o pide a administración que lo revise.`,
   reasonLabel: 'Motivo para registrar en un período cerrado',
   voidReasonLabel: 'Motivo para anular en un período cerrado',
-  planReasonLabel: 'Motivo para cambiarlo en un período cerrado',
+  planReasonLabel: 'Motivo para cuotas en un período cerrado',
+  planCancelReasonLabel: 'Motivo para cancelarlo con cuotas en un período cerrado',
+  // Igual que el `voidBlockedReason` de la API en el estado de cuenta.
+  voidBlocked: 'El abono es de un período contable cerrado: ya no se puede anular. Pide a administración que lo revise.',
   reasonHint: `Queda registrado quién, cuándo y por qué. Entre ${LOCK_OVERRIDE_REASON_MIN} y ${LOCK_OVERRIDE_REASON_MAX} caracteres.`,
   reasonMissing: `Escribe el motivo (al menos ${LOCK_OVERRIDE_REASON_MIN} caracteres): la fecha está en un período cerrado.`,
 };
@@ -38,10 +44,15 @@ export function minDateAfterLock(lock: PeriodLock | null): string | undefined {
 }
 
 /** El texto de ayuda del campo de fecha, o `undefined` sin cierre. */
-export function periodLockHint(lock: PeriodLock | null, fmt: RegionalFormat | null): string | undefined {
+export function periodLockHint(
+  lock: PeriodLock | null,
+  fmt: RegionalFormat | null,
+  subject: 'payment' | 'plan' = 'payment',
+): string | undefined {
   if (!lock?.lockedThrough) return undefined;
   const through = sedeCivilDate(lock.lockedThrough, fmt);
-  return lock.canOverride ? periodLockCopy.hintOverride(through) : periodLockCopy.hint(through);
+  if (lock.canOverride) return periodLockCopy.hintOverride(through);
+  return subject === 'plan' ? periodLockCopy.planHint(through) : periodLockCopy.hint(through);
 }
 
 /** ¿Hace falta el motivo de la excepción para `day`? */

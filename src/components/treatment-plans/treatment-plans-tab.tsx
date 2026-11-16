@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { ApiError } from '@/lib/api/client';
-import { apiErrorMessage } from '@/lib/api/error-message';
+import { apiErrorMessage, sedeCivilDateOption } from '@/lib/api/error-message';
 import { QUOTE_EXPIRED, type PlanQuote } from '@/lib/treatment-plans/plan-quote-api';
 import {
   createPlan,
@@ -742,13 +742,13 @@ export function TreatmentPlansTab({
     setVoidingPaymentId(paymentId);
     setPaymentActionError(null);
     try {
-      await voidPayment(token, paymentId, reason, lockOverrideReason);
+      await voidPayment(token, paymentId, reason, ...(lockOverrideReason ? [lockOverrideReason] : []));
       // Se cierra antes de refrescar, como en `payment-plan-section`: el
       // diálogo solo sigue abierto si hay algo que decidir.
       setPaymentToVoid(null);
       await refreshBalanceAndPayments();
     } catch (err) {
-      setPaymentActionError(voidPaymentErrorMessage(err));
+      setPaymentActionError(voidPaymentErrorMessage(err, sedeFmt));
     } finally {
       setVoidingPaymentId(null);
     }
@@ -765,7 +765,11 @@ export function TreatmentPlansTab({
       // saldo y el plan de pagos se refrescan con el plan, como al firmar.
       await Promise.all([refreshPlanDetail(), refreshPlansInPlace(), refreshBalanceAndPayments()]);
     } catch (err) {
-      setPlanStatusError(apiErrorMessage(err, copy.genericPlanStatusError));
+      // DX-091: cancelar el plan cancela su plan de cuotas; con cuotas vencidas
+      // en un período cerrado, 409 `PERIOD_LOCKED` con el día del cierre.
+      setPlanStatusError(
+        apiErrorMessage(err, { fallback: copy.genericPlanStatusError, ...sedeCivilDateOption(sedeFmt) }),
+      );
       // DX-379 (C): venció sin que la pantalla lo supiera; al recargar, el plan
       // sale `quoteExpired` y el selector deja de ofrecer «Aceptado».
       if (err instanceof ApiError && err.code === QUOTE_EXPIRED) {

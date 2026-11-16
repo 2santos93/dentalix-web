@@ -83,6 +83,12 @@ export class ApiError extends Error {
   public readonly position: number | null;
   /** DX-559: la línea de la plantilla que falla al aplicarla (diente, precio, tasa). */
   public readonly lineId: string | null;
+  /**
+   * DX-091: en el 409 `PERIOD_LOCKED`, el último día cerrado (`YYYY-MM-DD`)
+   * para decirlo con el formato de la sede. `null` si no viene (la guarda de
+   * la BD no lo sabe).
+   */
+  public readonly lockedThrough: string | null;
 
   constructor(
     public readonly status: number,
@@ -102,6 +108,7 @@ export class ApiError extends Error {
       mergedIntoId?: string | null;
       position?: number | null;
       lineId?: string | null;
+      lockedThrough?: string | null;
     } = {},
   ) {
     super(message);
@@ -120,6 +127,7 @@ export class ApiError extends Error {
     this.mergedIntoId = details.mergedIntoId ?? null;
     this.position = details.position ?? null;
     this.lineId = details.lineId ?? null;
+    this.lockedThrough = details.lockedThrough ?? null;
   }
 }
 

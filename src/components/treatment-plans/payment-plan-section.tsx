@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { apiErrorMessage } from '@/lib/api/error-message';
+import { apiErrorMessage, sedeCivilDateOption } from '@/lib/api/error-message';
 import {
   deletePaymentPlan,
   getPaymentPlan,
@@ -139,6 +139,7 @@ export function PaymentPlanSection({
       const valid = validLockReason(lockReason);
       if (!valid) {
         setLockReasonError(periodLockCopy.reasonMissing);
+        document.getElementById('pp-cancel-lock-reason')?.focus();
         return;
       }
       lockOverrideReason = valid;
@@ -150,7 +151,9 @@ export function PaymentPlanSection({
       setShowCancel(false);
       await refetch();
     } catch (err) {
-      setCancelError(apiErrorMessage(err, 'No pudimos cancelar el plan de pagos.'));
+      setCancelError(
+        apiErrorMessage(err, { fallback: 'No pudimos cancelar el plan de pagos.', ...sedeCivilDateOption(fmt) }),
+      );
     } finally {
       setCancelling(false);
     }
@@ -164,7 +167,12 @@ export function PaymentPlanSection({
         </h3>
         {plan ? (
           // Abre su confirmación: destructiva en forma «ghost» (DESIGN.md).
-          <Button type="button" variant="destructive-ghost" size="sm" onClick={() => setShowCancel(true)}>
+          <Button type="button" variant="destructive-ghost" size="sm" onClick={() => {
+              setLockReason('');
+              setLockReasonError(null);
+              setCancelError(null);
+              setShowCancel(true);
+            }}>
             {copy.cancelPlan}
           </Button>
         ) : null}
@@ -233,7 +241,7 @@ export function PaymentPlanSection({
           periodLock.canOverride ? (
             <LockOverrideReasonField
               id="pp-cancel-lock-reason"
-              label={periodLockCopy.planReasonLabel}
+              label={periodLockCopy.planCancelReasonLabel}
               value={lockReason}
               error={lockReasonError}
               disabled={cancelling}

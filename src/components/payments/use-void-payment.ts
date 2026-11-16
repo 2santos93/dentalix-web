@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { apiErrorMessage } from '@/lib/api/error-message';
+import { apiErrorMessage, sedeCivilDateOption } from '@/lib/api/error-message';
 import { voidPayment } from '@/lib/payments/payments-api';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
@@ -27,8 +27,10 @@ const copy = {
  * da en español («Solo puedes anular…»); cualquier otro (p. ej. «Insufficient
  * role») se sustituye.
  */
-export function voidPaymentErrorMessage(err: unknown): string {
+export function voidPaymentErrorMessage(err: unknown, fmt: RegionalFormat | null = null): string {
   return apiErrorMessage(err, {
+    // DX-091: el 409 `PERIOD_LOCKED` dice hasta qué día está cerrado.
+    ...sedeCivilDateOption(fmt),
     fallback: copy.generic,
     byStatus: { 403: copy.forbidden, 404: copy.gone, 400: copy.badReason },
   });
@@ -119,12 +121,13 @@ export function useVoidPayment(token: string, onVoided: () => void, fmt: Regiona
     setSubmitting(true);
     setError(null);
     try {
-      await voidPayment(token, target.id, reason, lockOverrideReason);
+      // Sin la excepción, la llamada de siempre (3 argumentos).
+      await voidPayment(token, target.id, reason, ...(lockOverrideReason ? [lockOverrideReason] : []));
       setNotice(voidedNotice(target, fmt));
       setTarget(null);
       onVoided();
     } catch (err) {
-      setError(voidPaymentErrorMessage(err));
+      setError(voidPaymentErrorMessage(err, target.fmt === undefined ? fmt : target.fmt));
     } finally {
       setSubmitting(false);
     }

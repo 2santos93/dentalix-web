@@ -479,7 +479,7 @@ export function RecordPaymentModal({
         if (line && split.fields(line).catchDuplicate(err)) return;
       }
       if (methodFields.catchDuplicate(err)) return;
-      setError(recordPaymentErrorMessage(err));
+      setError(recordPaymentErrorMessage(err, fmt));
     } finally {
       setSubmitting(false);
     }
@@ -622,7 +622,7 @@ export function RecordPaymentModal({
         setProofError(copy.proofRejected);
         return;
       }
-      setError(recordPaymentErrorMessage(err));
+      setError(recordPaymentErrorMessage(err, fmt));
     } finally {
       setSubmitting(false);
     }

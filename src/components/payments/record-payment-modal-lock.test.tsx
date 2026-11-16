@@ -17,8 +17,6 @@ import { periodLockCopy } from './period-lock-field';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { addDaysIso } from '@/lib/locations/provider-schedule';
 
-
-
 /** Escribe un día en el `DatePicker` por segmentos (dd/mm/aaaa, locale de la sede). */
 async function typePaymentDate(user: ReturnType<typeof userEvent.setup>, dialog: HTMLElement, iso: string) {
   const [y, m, d] = iso.split('-');
@@ -168,7 +166,6 @@ const eurPlan: BillablePlan = {
   rateProviderTimedOut: false,
 };
 
-
 function savedPayment(
   overrides: Partial<Awaited<ReturnType<typeof recordPayment>>> = {},
 ): Awaited<ReturnType<typeof recordPayment>> {
@@ -239,7 +236,6 @@ function renderModal() {
   return { onRecorded, onOpenChange };
 }
 
-
 const mockedLock = getPeriodLock as jest.MockedFunction<typeof getPeriodLock>;
 // La sede del fixture: Caracas. Cerrado hasta ayer en la sede.
 const TODAY = sedeToday('America/Caracas');
@@ -292,13 +288,16 @@ describe('DX-091 · cierre contable en «Registrar abono»', () => {
     mockedList.mockResolvedValue([eurPlan]);
     const message =
       'La fecha del abono cae en un período contable cerrado. Elige una fecha posterior al cierre o pide a administración que lo revise.';
-    mockedRecord.mockRejectedValue(new ApiError(409, message, { code: 'PERIOD_LOCKED' }));
+    mockedRecord.mockRejectedValue(new ApiError(409, message, { code: 'PERIOD_LOCKED', lockedThrough: YESTERDAY }));
     renderModal();
     const dialog = screen.getByRole('dialog');
     await within(dialog).findByLabelText('Plan');
     await user.type(within(dialog).getByLabelText('Importe'), '100');
     await user.click(within(dialog).getByRole('button', { name: recordPaymentCopy.submit }));
-    expect(await within(dialog).findByText(message)).toBeInTheDocument();
+    // El mensaje de la API y el día del cierre con el formato de la sede.
+    expect(
+      await within(dialog).findByText(`${message} Cerrado hasta el ${ddmmyyyy(YESTERDAY)}, inclusive.`),
+    ).toBeInTheDocument();
   });
 
   it('el ADMIN con la exención elige un día cerrado e indica el motivo, que viaja a la API', async () => {
