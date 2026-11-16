@@ -24,6 +24,7 @@ configure({ asyncUtilTimeout: 5_000 });
 // useRouter() — mock it the same way patient-form.test.tsx does, since it's
 // unused here (this form always passes onCreated, so the router.push
 // fallback path never runs).
+import { getHolidayOnDay } from '@/lib/locations/location-calendar-api';
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -33,6 +34,10 @@ jest.mock('../../lib/appointments/appointments-api', () => ({
 }));
 jest.mock('../../lib/appointments/staff-api', () => ({
   listStaff: jest.fn(),
+}));
+// DX-263-bis: por defecto el día elegido no es festivo en la sede.
+jest.mock('../../lib/locations/location-calendar-api', () => ({
+  getHolidayOnDay: jest.fn(),
 }));
 // El formulario lee el horario de la sede. Se mockea el módulo entero pero se
 // mantienen los helpers REALES (fitsBusinessHoursLocal/describeDay) para que los
@@ -253,6 +258,10 @@ describe('AppointmentForm', () => {
     mockedCreatePatient.mockReset();
     mockedListStaff.mockResolvedValue(staff);
     mockedListPatients.mockResolvedValue(patientsPage);
+    (getHolidayOnDay as jest.Mock).mockReset();
+    (getHolidayOnDay as jest.Mock).mockImplementation((_t: string, _l: string, date: string) =>
+      Promise.resolve({ date, name: null }),
+    );
     mockedGetSchedule.mockReset();
     // Sede sin horario configurado => sin restricción (igual que el backend).
     mockedGetSchedule.mockResolvedValue(null);
@@ -674,6 +683,20 @@ describe('AppointmentForm', () => {
     expect(new Date(input.start).getTime()).toBeLessThan(new Date(input.end ?? '').getTime());
     expect(input.start).toBe(new Date(`${FUTURE_DATE}T09:00:00`).toISOString());
     expect(input.end).toBe(new Date(`${FUTURE_DATE}T09:30:00`).toISOString());
+  });
+
+  it('DX-263-bis: un festivo de la sede ese día se avisa y frena el guardado sin llamar a la API', async () => {
+    const user = userEvent.setup();
+    (getHolidayOnDay as jest.Mock).mockImplementation((_t: string, _l: string, date: string) =>
+      Promise.resolve({ date, name: 'Carnaval' }),
+    );
+    await renderFormAndWaitForLoad();
+    await fillValidForm(user);
+    const message = 'Ese día la sede está cerrada por festivo (Carnaval): elige otro día.';
+    expect(await screen.findByTestId('holiday-notice')).toHaveTextContent(message);
+    await user.click(screen.getByRole('button', { name: /^agendar cita$/i }));
+    expect(await screen.findAllByText(message)).toHaveLength(2);
+    expect(mockedCreateAppointment).not.toHaveBeenCalled();
   });
 
   describe('hueco reservado (DX-446)', () => {

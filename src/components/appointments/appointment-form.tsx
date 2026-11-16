@@ -29,7 +29,7 @@ import {
 } from '@/lib/locations/schedule-api';
 import { screenLocation, sedeMinuteRanges, useSedeClock } from '@/lib/locations/sede-clock';
 import { useLocationsState } from '@/lib/locations/use-locations-state';
-import { HolidayNotice } from './holiday-notice';
+import { HolidayNotice, holidayClosedMessage, useHolidayOnDay } from './holiday-notice';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { civilWeekday, isCivilDay } from '@/lib/time/civil-day';
@@ -316,6 +316,8 @@ export function AppointmentForm({
       ? screenLocation(locationsState.locations, locationsState.activeLocationId)?.id
       : null);
   const clock = sede.status === 'ready' ? sede.clock : null;
+  // DX-263-bis: un festivo de la sede ese día frena el guardado (la API da 409).
+  const holiday = useHolidayOnDay(token, holidayLocationId, date);
   const today = clock ? sedeToday(clock.timeZone) : undefined;
 
   useEffect(() => {
@@ -548,6 +550,10 @@ export function AppointmentForm({
     }
     if (new Date(end).getTime() <= new Date(start).getTime()) {
       setValidationError(copy.validationEndAfterStart);
+      return;
+    }
+    if (holiday.status === 'holiday') {
+      setValidationError(holidayClosedMessage(holiday.name));
       return;
     }
 
@@ -949,7 +955,7 @@ export function AppointmentForm({
               {copy.hoursUnavailable}
             </p>
           )}
-          <HolidayNotice token={token} locationId={holidayLocationId} date={date} />
+          <HolidayNotice state={holiday} />
         </div>
         <div className="flex flex-col gap-1">
           <label id={fieldLabelId('appointment-start-time')} htmlFor="appointment-start-time" className="text-sm font-medium text-ink">

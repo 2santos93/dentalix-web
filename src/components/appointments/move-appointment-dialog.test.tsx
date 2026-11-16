@@ -11,10 +11,15 @@ import { findOpenings } from '@/lib/appointments/waitlist-api';
 /** Reloj de la sede de pruebas (UTC, 24 h): estas pruebas no tratan del reloj. */
 const CLOCK = testAgendaClock();
 
+import { getHolidayOnDay } from '@/lib/locations/location-calendar-api';
 jest.mock('../../lib/appointments/appointments-api', () => ({
   updateAppointment: jest.fn(),
 }));
 const mockedUpdate = updateAppointment as jest.MockedFunction<typeof updateAppointment>;
+// DX-263-bis: el día elegido no es festivo salvo que el test lo diga.
+jest.mock('../../lib/locations/location-calendar-api', () => ({
+  getHolidayOnDay: jest.fn((_t: string, _l: string, date: string) => Promise.resolve({ date, name: null })),
+}));
 jest.mock('../../lib/appointments/waitlist-api', () => ({
   findOpenings: jest.fn(),
 }));
@@ -111,6 +116,21 @@ describe('MoveAppointmentDialog (DX-121)', () => {
     expect(await screen.findByText('El profesional ya tiene una cita en ese horario')).toBeInTheDocument();
     expect(onMoved).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('DX-263-bis: a un día festivo de la sede lo avisa y no manda el PATCH', async () => {
+    const user = userEvent.setup();
+    (getHolidayOnDay as jest.Mock).mockImplementationOnce((_t: string, _l: string, date: string) =>
+      Promise.resolve({ date, name: 'Carnaval' }),
+    );
+    const onMoved = renderDialog();
+    const message = 'Ese día la sede está cerrada por festivo (Carnaval): elige otro día.';
+    expect(await screen.findByTestId('holiday-notice')).toHaveTextContent(message);
+    await user.selectOptions(screen.getByLabelText('Profesional'), 'prov-2');
+    await user.click(screen.getByRole('button', { name: 'Mover cita' }));
+    expect(await screen.findAllByText(message)).toHaveLength(2);
+    expect(mockedUpdate).not.toHaveBeenCalled();
+    expect(onMoved).not.toHaveBeenCalled();
   });
 });
 
@@ -318,7 +338,7 @@ describe('MoveAppointmentDialog · sobrecupo que choca (DX-509-bis)', () => {
     mockedOpenings.mockResolvedValue({
       timeZone: 'UTC',
       durationMinutes: 90,
-      truncated: false, defaultHours: false,
+      truncated: false, defaultHours: false, holidays: [],
       openings: [
         // Antes de la hora pedida: no vale. Corto: no cabe.
         { start: at('07:00'), end: at('08:30') },
@@ -362,7 +382,7 @@ describe('MoveAppointmentDialog · sobrecupo que choca (DX-509-bis)', () => {
   it('DX-509-ter: la sugerencia busca libre el sillón de la cita', async () => {
     const user = userEvent.setup();
     mockedUpdate.mockRejectedValueOnce(overlap());
-    mockedOpenings.mockResolvedValue({ timeZone: 'UTC', durationMinutes: 90, truncated: false, defaultHours: false, openings: [] });
+    mockedOpenings.mockResolvedValue({ timeZone: 'UTC', durationMinutes: 90, truncated: false, defaultHours: false, holidays: [], openings: [] });
     render(
       <MoveAppointmentDialog
         clock={CLOCK}
@@ -409,7 +429,7 @@ describe('MoveAppointmentDialog · sobrecupo que choca (DX-509-bis)', () => {
       mockedOpenings.mockResolvedValue({
         timeZone: 'UTC',
         durationMinutes: 90,
-        truncated: false, defaultHours: false,
+        truncated: false, defaultHours: false, holidays: [],
         openings: [{ start: at('13:00'), end: at('16:00') }],
       });
       renderOverbooked({ appointment: withChair, chairs });
@@ -424,7 +444,7 @@ describe('MoveAppointmentDialog · sobrecupo que choca (DX-509-bis)', () => {
     it('con otra hora y otro sillón busca ese sillón; sin hueco, lo nombra', async () => {
       const user = userEvent.setup();
       mockedUpdate.mockRejectedValueOnce(chairOverlap('Sillón Ávila'));
-      mockedOpenings.mockResolvedValue({ timeZone: 'UTC', durationMinutes: 90, truncated: false, defaultHours: false, openings: [] });
+      mockedOpenings.mockResolvedValue({ timeZone: 'UTC', durationMinutes: 90, truncated: false, defaultHours: false, holidays: [], openings: [] });
       renderOverbooked({ appointment: withChair, chairs });
       await typeTime(user, 'Hora de inicio', '11:00');
       await user.selectOptions(screen.getByLabelText('Sillón'), 'ch-2');
@@ -446,7 +466,7 @@ describe('MoveAppointmentDialog · sobrecupo que choca (DX-509-bis)', () => {
       mockedOpenings.mockResolvedValue({
         timeZone: 'UTC',
         durationMinutes: 90,
-        truncated: false, defaultHours: false,
+        truncated: false, defaultHours: false, holidays: [],
         openings: [{ start: at('13:00'), end: at('16:00') }],
       });
       renderOverbooked({ appointment: off, chairs: [...chairs, { ...base, id: 'ch-old', name: 'Viejo', active: false }] });
@@ -473,7 +493,7 @@ describe('MoveAppointmentDialog · sobrecupo que choca (DX-509-bis)', () => {
   it('sin hueco en 14 días lo dice; una cita normal o otro 409 no busca', async () => {
     const user = userEvent.setup();
     mockedUpdate.mockRejectedValueOnce(overlap());
-    mockedOpenings.mockResolvedValue({ timeZone: 'UTC', durationMinutes: 90, truncated: false, defaultHours: false, openings: [] });
+    mockedOpenings.mockResolvedValue({ timeZone: 'UTC', durationMinutes: 90, truncated: false, defaultHours: false, holidays: [], openings: [] });
     renderOverbooked();
     await user.click(screen.getByRole('button', { name: 'Mover cita' }));
     expect(await screen.findByText(/No hay huecos libres de ese profesional en los próximos 14 días/)).toBeInTheDocument();
@@ -482,7 +502,7 @@ describe('MoveAppointmentDialog · sobrecupo que choca (DX-509-bis)', () => {
   it('DX-533: en una sede sin horario, la oferta dice que se buscó en el horario de alta; con horario, no', async () => {
     const user = userEvent.setup();
     mockedUpdate.mockRejectedValueOnce(overlap());
-    mockedOpenings.mockResolvedValue({ timeZone: 'UTC', durationMinutes: 90, truncated: false, defaultHours: true, openings: [] });
+    mockedOpenings.mockResolvedValue({ timeZone: 'UTC', durationMinutes: 90, truncated: false, defaultHours: true, holidays: [], openings: [] });
     renderOverbooked();
     await user.click(screen.getByRole('button', { name: 'Mover cita' }));
     expect(await screen.findByTestId('move-default-hours')).toHaveTextContent(
@@ -516,7 +536,7 @@ describe('MoveAppointmentDialog · sobrecupo que choca (DX-509-bis)', () => {
     mockedOpenings.mockResolvedValue({
       timeZone: 'UTC',
       durationMinutes: 90,
-      truncated: false, defaultHours: false,
+      truncated: false, defaultHours: false, holidays: [],
       openings: [{ start: at('12:00'), end: at('18:00') }],
     });
     renderOverbooked({
