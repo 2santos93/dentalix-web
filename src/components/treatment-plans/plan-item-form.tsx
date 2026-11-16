@@ -1,4 +1,5 @@
 'use client';
+import type * as React from 'react';
 import { useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { RegionalFormat } from '@/lib/format/regional-format';
@@ -66,6 +67,8 @@ interface PlanItemFormProps {
   onAdded: () => Promise<unknown>;
   /** D2: ¿«Agregar ítem» es LA primaria de la vista? Si no, secundario. */
   submitPrimary?: boolean;
+  /** DX-559: acciones secundarias junto al título (p. ej. «Añadir desde plantilla»). */
+  headerActions?: React.ReactNode;
 }
 
 /**
@@ -84,6 +87,7 @@ export function PlanItemForm({
   fmt,
   onAdded,
   submitPrimary = true,
+  headerActions,
 }: PlanItemFormProps) {
   const money = (amount: number, code: string) => sedeMoney(amount, code, fmt);
   // Add-item form state.
@@ -309,7 +313,7 @@ export function PlanItemForm({
 
   return (
     <form onSubmit={handleAddItem} aria-label={copy.addItemHeading} className="flex flex-col gap-4">
-      <SectionHeader as="h3" title={copy.addItemHeading} />
+      <SectionHeader as="h3" title={copy.addItemHeading} actions={headerActions} />
 
       {/* El diente se TOCA en el mapa, no se transcribe de
           memoria: es el mismo `OdontogramChart` del tab de al

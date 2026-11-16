@@ -1,5 +1,6 @@
 'use client';
 import type * as React from 'react';
+import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
 import type { TreatmentPlan, TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
 import type { Payment } from '@/lib/payments/payments-api';
@@ -21,6 +22,13 @@ import { VoidCancellationFeeModal } from '@/components/appointments/fee-reason-m
 import { NewEvolutionModal } from '@/components/clinical-notes/new-evolution-modal';
 import { MarkDoneModal } from './mark-done-modal';
 import { copy, procedureName, splitLinesOf } from './treatment-plans-tab-copy';
+import type { TemplateApplication } from '@/lib/treatment-plans/plan-templates-api';
+
+// DX-559: en su propio trozo de JS (presupuesto de bundle de /patients/[id]);
+// solo se descarga al abrirlo.
+const ApplyTemplateModal = dynamic(() => import('./apply-template-modal').then((m) => m.ApplyTemplateModal), {
+  ssr: false,
+});
 
 /*
  * DX-117 (FE-021): los modales y diálogos de la pestaña «Plan de tratamiento»
@@ -43,6 +51,11 @@ export function TreatmentPlanModals({
   sedeFmt,
   // «Descuento %» en bloque (DX-204).
   discountRules,
+  // «Añadir desde plantilla» (DX-559).
+  applyTemplateKey,
+  applyTemplateOpen,
+  onApplyTemplateOpenChange,
+  onTemplateApplied,
   bulkKey,
   bulkOpen,
   onBulkOpenChange,
@@ -99,6 +112,10 @@ export function TreatmentPlanModals({
   catalogById: Map<string, DentalCatalogItem>;
   sedeFmt: ReturnType<typeof readyFormat>;
   discountRules: DiscountRules | null;
+  applyTemplateKey: number;
+  applyTemplateOpen: boolean;
+  onApplyTemplateOpenChange: (open: boolean) => void;
+  onTemplateApplied: (result: TemplateApplication) => void;
   bulkKey: number;
   bulkOpen: boolean;
   onBulkOpenChange: (open: boolean) => void;
@@ -144,6 +161,18 @@ export function TreatmentPlanModals({
 }) {
   return (
     <>
+      {planDetail && applyTemplateOpen ? (
+        <ApplyTemplateModal
+          key={applyTemplateKey}
+          open
+          onOpenChange={onApplyTemplateOpenChange}
+          token={token}
+          plan={planDetail}
+          fmt={sedeFmt}
+          onApplied={onTemplateApplied}
+        />
+      ) : null}
+
       {planDetail && discountRules ? (
         <BulkDiscountModal
           key={bulkKey}

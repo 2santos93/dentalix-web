@@ -168,6 +168,33 @@ describe('apiFetch', () => {
     expect((err as ApiError).line).toBe(1);
   });
 
+  it('DX-559: expone la `position` y el `lineId` de los errores de una línea de plantilla', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      headers: { get: () => null },
+      json: async () => ({
+        statusCode: 404,
+        code: 'PLAN_TEMPLATE_CATALOG_ITEM_NOT_FOUND',
+        message: 'El procedimiento de la línea 2 no existe en el catálogo de esta clínica.',
+        position: 1,
+      }),
+    }).mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      headers: { get: () => null },
+      json: async () => ({ statusCode: 400, code: 'PLAN_TEMPLATE_TOOTH_REQUIRED', message: 'Falta el diente.', lineId: 'l-1' }),
+    }) as unknown as typeof fetch;
+    const saved = await apiFetch('/treatment-plan-templates', { method: 'POST', body: {} }).catch((e: unknown) => e);
+    expect((saved as ApiError).position).toBe(1);
+    expect((saved as ApiError).lineId).toBeNull();
+    const applied = await apiFetch('/treatment-plans/p/apply-template', { method: 'POST', body: {} }).catch(
+      (e: unknown) => e,
+    );
+    expect((applied as ApiError).lineId).toBe('l-1');
+    expect((applied as ApiError).position).toBeNull();
+  });
+
   it('DX-446: expone `canOverride` del 409 RESERVED_SLOT (y null si no viene)', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: false,

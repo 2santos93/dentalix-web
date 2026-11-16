@@ -279,6 +279,8 @@ const TREATMENT_PLAN_ACCEPTANCE_REASONS: Record<string, string> = {
   PLAN_PARTIALLY_ACCEPTED: 'Presupuesto aceptado en parte',
   ACCEPT_PARTIAL_PREVIEW: 'Vista previa de la aceptación parcial',
   PLAN_SPLIT_PENDING: 'Presupuesto pendiente creado por una aceptación parcial',
+  // DX-559: ítems añadidos al plan desde una plantilla.
+  PLAN_TEMPLATE_APPLIED: 'Procedimientos añadidos desde una plantilla',
 };
 
 /**

@@ -295,6 +295,9 @@ export function TreatmentPlansTab({
   const [selectedItemIds, setSelectedItemIds] = useState<ReadonlySet<string>>(() => new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkKey, setBulkKey] = useState(0);
+  // DX-559: «Añadir desde plantilla» (una `key` por apertura).
+  const [applyTemplateOpen, setApplyTemplateOpen] = useState(false);
+  const [applyTemplateKey, setApplyTemplateKey] = useState(0);
   const [bulkNotice, setBulkNotice] = useState<string | null>(null);
 
   // Política de descuentos (DX-204): solo para avisar del tope y del motivo
@@ -1210,6 +1213,23 @@ export function TreatmentPlansTab({
                       fmt={sedeFmt}
                       onAdded={() => Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()])}
                       submitPrimary={primary === 'addItem'}
+                      // DX-559: secundaria junto a «Agregar ítem». Un aceptado
+                      // (firmado o no) no admite plantillas: la API da 409.
+                      headerActions={
+                        planDetail.status !== 'ACCEPTED' ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              setApplyTemplateKey((k) => k + 1);
+                              setApplyTemplateOpen(true);
+                            }}
+                          >
+                            {copy.addFromTemplate}
+                          </Button>
+                        ) : null
+                      }
                     />
                   )}
                 </div>
@@ -1227,6 +1247,16 @@ export function TreatmentPlansTab({
         catalogById={catalogById}
         sedeFmt={sedeFmt}
         discountRules={discountRules}
+        applyTemplateKey={applyTemplateKey}
+        applyTemplateOpen={applyTemplateOpen}
+        onApplyTemplateOpenChange={setApplyTemplateOpen}
+        onTemplateApplied={(result) => {
+          const skipped = result.skipped.map((l) => l.catalogItemLabel);
+          toast.success(copy.templateApplied(result.createdItems.length), {
+            description: skipped.length ? copy.templateSkipped(skipped) : undefined,
+          });
+          void Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()]);
+        }}
         bulkKey={bulkKey}
         bulkOpen={bulkOpen}
         onBulkOpenChange={setBulkOpen}
