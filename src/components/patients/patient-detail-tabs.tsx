@@ -8,6 +8,7 @@ export type PatientDetailTabKey =
   | 'odontogram'
   | 'perio'
   | 'treatment-plans'
+  | 'ortho'
   | 'account-statement'
   | 'consents'
   | 'prescriptions'
@@ -40,6 +41,11 @@ interface PatientDetailTabsProps {
   dataConsentsLabel?: string;
   /** «Consentimientos» (DX-006): sin etiqueta no existe (recepción no la ve). */
   consentsLabel?: string;
+  /**
+   * «Ortodoncia» (DX-190): roles clínicos y solo si la clínica activó el
+   * módulo en Ajustes. Sin etiqueta no existe.
+   */
+  orthoLabel?: string;
   /** «Periodontograma» (DX-007): sin etiqueta no existe (recepción no la ve). */
   perioLabel?: string;
   /** «Recetas» (DX-013): sin etiqueta no existe (recepción no la ve). */
@@ -61,6 +67,7 @@ const TAB_ORDER: PatientDetailTabKey[] = [
   'odontogram',
   'perio',
   'treatment-plans',
+  'ortho',
   'account-statement',
   'consents',
   'prescriptions',
@@ -109,6 +116,7 @@ export function PatientDetailTabs({
   dataConsentsLabel,
   consentsLabel,
   perioLabel,
+  orthoLabel,
   prescriptionsLabel,
   certificatesLabel,
   implantsLabel,
@@ -121,6 +129,7 @@ export function PatientDetailTabs({
     odontogram: odontogramLabel,
     perio: perioLabel,
     'treatment-plans': treatmentPlansLabel,
+    ortho: orthoLabel,
     'account-statement': accountStatementLabel,
     'data-consents': dataConsentsLabel,
     consents: consentsLabel,

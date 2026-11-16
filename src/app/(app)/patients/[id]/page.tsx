@@ -69,9 +69,11 @@ import {
   PatientPrescriptionsTab,
   PatientRetentionDialogs,
   PatientCertificatesTab,
+  OrthoTab,
   PerioTab,
   TreatmentPlansTab,
 } from '@/components/patients/patient-lazy-tabs';
+import { orthoEnabled, useOrthoSettings } from '@/lib/ortho/ortho-settings';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -87,6 +89,7 @@ const copy = {
   tabDataConsents: 'Autorizaciones',
   tabConsents: 'Consentimientos',
   tabPerio: 'Periodontograma',
+  tabOrtho: 'Ortodoncia',
   tabPrescriptions: 'Recetas',
   tabCertificates: 'Certificados',
   tabImplants: 'Implantes',
@@ -204,7 +207,10 @@ function PatientDetailView() {
   // consentimientos), que le responderían 403; DENTIST/ASSISTANT no ven el
   // estado de cuenta. Un `?tab=` sin acceso (enlace compartido) cae en «Datos»,
   // igual que cualquier valor desconocido.
-  const access = patientTabAccess(getTokenRole(accessToken));
+  const roleAccess = patientTabAccess(getTokenRole(accessToken));
+  // DX-190: «Ortodoncia», además, solo si la clínica activó el módulo.
+  const orthoSettings = useOrthoSettings(roleAccess.ortho ? accessToken : null);
+  const access = { ...roleAccess, ortho: roleAccess.ortho && orthoEnabled(orthoSettings) };
   const activeTab = resolvePatientTab(searchParams.get('tab'), access);
   // El diente en foco también viaja en la URL: es el puente entre el
   // odontograma (diente seleccionado) y el plan de tratamiento (ítems de ese
@@ -465,6 +471,7 @@ function PatientDetailView() {
               dataConsentsLabel={access['data-consents'] ? copy.tabDataConsents : undefined}
               consentsLabel={access.consents ? copy.tabConsents : undefined}
               perioLabel={access.perio ? copy.tabPerio : undefined}
+              orthoLabel={access.ortho ? copy.tabOrtho : undefined}
               prescriptionsLabel={access.prescriptions ? copy.tabPrescriptions : undefined}
               certificatesLabel={access.certificates ? copy.tabCertificates : undefined}
               implantsLabel={access.implants ? copy.tabImplants : undefined}
@@ -682,6 +689,21 @@ function PatientDetailView() {
                         `${pathname}?tab=implants&registerTooth=${item.toothNumber}&planItem=${item.id}`
                     : undefined
                 }
+              />
+            </TabPanel>
+          ) : null}
+
+          {/* DX-190: caso de ortodoncia. `orthoVisitAppointment` llega del
+              «Registrar control» de la agenda y abre el control desde la cita;
+              al cerrarlo se limpia de la URL. */}
+          {access.ortho && orthoSettings.status === 'ready' ? (
+            <TabPanel tab="ortho" activeTab={activeTab} register={registerPanel}>
+              <OrthoTab
+                token={accessToken}
+                patientId={patientId}
+                wireGauges={orthoSettings.settings.wireGauges}
+                visitAppointmentId={searchParams.get('orthoVisitAppointment')}
+                onShortcutConsumed={() => setParams({ orthoVisitAppointment: null })}
               />
             </TabPanel>
           ) : null}

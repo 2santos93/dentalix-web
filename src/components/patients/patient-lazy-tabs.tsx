@@ -59,6 +59,11 @@ export const PerioTab = dynamic(() => import('@/components/perio/perio-tab').the
   ssr: false,
   loading: () => <SectionSkeleton />,
 });
+// DX-190: «Ortodoncia» (sus diálogos llegan en trozos aparte, al abrirlos).
+export const OrthoTab = dynamic(() => import('@/components/ortho/ortho-tab').then((m) => m.OrthoTab), {
+  ssr: false,
+  loading: () => <SectionSkeleton />,
+});
 export const TreatmentPlansTab = dynamic(
   () => import('@/components/treatment-plans/treatment-plans-tab').then((m) => m.TreatmentPlansTab),
   { ssr: false, loading: () => <SectionSkeleton /> },

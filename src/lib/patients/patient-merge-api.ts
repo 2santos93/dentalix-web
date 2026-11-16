@@ -90,6 +90,9 @@ export const MERGE_BLOCKER_COPY: Record<MergeBlocker, string> = {
     'Los dos pacientes tienen un saldo migrado del mismo lote de importación y en la misma moneda. Esos saldos no se pueden juntar.',
   DX266_OPEN_PAYMENT_PROMISES:
     'Los dos pacientes tienen un compromiso de pago abierto. Cierra uno de los dos antes de fusionar.',
+  // DX-190.
+  DX266_TWO_ACTIVE_ORTHO_CASES:
+    'Los dos pacientes tienen un caso de ortodoncia activo. Finaliza, pasa a retención o da por abandonado uno de los dos antes de fusionar.',
 };
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
