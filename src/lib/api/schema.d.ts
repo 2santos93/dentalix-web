@@ -44655,6 +44655,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Histórico del paciente por fecha de examen descendente, con sus índices y SIN las medidas (están en el detalle). Como máximo los 100 exámenes más recientes. */
             200: {
                 headers: {
                     [name: string]: unknown;
