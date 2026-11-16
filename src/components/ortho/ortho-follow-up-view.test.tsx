@@ -34,7 +34,7 @@ const page = (items = [makeFollowUpRow()]) => ({ items, total: items.length, pag
 describe('OrthoFollowUpView (DX-190)', () => {
   beforeEach(() => {
     mockedList.mockReset();
-    mockedSettings.mockReset().mockReturnValue({ status: 'ready', settings: { enabled: true, wireGauges: ['0.016'] } });
+    mockedSettings.mockReset().mockReturnValue({ status: 'ready', settings: { enabled: true, wireGauges: ['0.016'], overdueDays: 30 } });
     mockedStaff.mockReset().mockResolvedValue([
       { userId: 'u-dentist', fullName: 'Dra. Rivas', role: 'DENTIST', locationIds: null },
       { userId: 'u-rec', fullName: 'Recepción', role: 'RECEPTION', locationIds: null },
@@ -80,7 +80,7 @@ describe('OrthoFollowUpView (DX-190)', () => {
   });
 
   it('con el módulo apagado no pide la lista', async () => {
-    mockedSettings.mockReturnValue({ status: 'ready', settings: { enabled: false, wireGauges: ['0.016'] } });
+    mockedSettings.mockReturnValue({ status: 'ready', settings: { enabled: false, wireGauges: ['0.016'], overdueDays: 30 } });
     render(<OrthoFollowUpView token={RECEPTION} />);
     expect(await screen.findByText('La ortodoncia no está activada en esta clínica.')).toBeInTheDocument();
     await waitFor(() => expect(mockedList).not.toHaveBeenCalled());

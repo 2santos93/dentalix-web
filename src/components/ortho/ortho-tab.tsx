@@ -31,6 +31,10 @@ import { SectionHeader } from '@/components/ui/section-header';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { nextStatuses } from './ortho-status-dialog';
+import { OrthoAccountSection } from './ortho-account-section';
+import { OrthoAlignersSection } from './ortho-aligners-section';
+import { OrthoAccountsView } from './ortho-accounts-view';
+import { canReadOrthoAccount } from '@/lib/ortho/ortho-billing';
 
 // Los diálogos llegan en su propio trozo, al abrirlos (presupuesto de la ficha).
 const OrthoCaseDialog = dynamic(() => import('./ortho-case-dialog').then((m) => m.OrthoCaseDialog), {
@@ -152,7 +156,10 @@ export function OrthoTab({ token, patientId, wireGauges, visitAppointmentId = nu
     cases.map((c) => c.locationId),
   );
 
+  const clinical = canReadOrtho(role);
   useEffect(() => {
+    // Recepción no lee el caso clínico (DX-285: ve solo la cuenta).
+    if (!clinical) return;
     let cancelled = false;
     async function load() {
       setLoading(true);
@@ -172,7 +179,7 @@ export function OrthoTab({ token, patientId, wireGauges, visitAppointmentId = nu
     return () => {
       cancelled = true;
     };
-  }, [token, patientId, reloadKey]);
+  }, [token, patientId, reloadKey, clinical]);
 
   const currentId = current?.id ?? null;
   useEffect(() => {
@@ -214,7 +221,10 @@ export function OrthoTab({ token, patientId, wireGauges, visitAppointmentId = nu
     setVisitsKey((k) => k + 1);
   }
 
-  if (!canReadOrtho(role)) return null;
+  if (!clinical) {
+    // DX-285: recepción ve solo la cuenta de los casos (no el caso clínico).
+    return canReadOrthoAccount(role) ? <OrthoAccountsView token={token} patientId={patientId} /> : null;
+  }
 
   const actions =
     canWrite && current ? (
@@ -270,6 +280,33 @@ export function OrthoTab({ token, patientId, wireGauges, visitAppointmentId = nu
         {current ? (
           <div className="flex flex-col gap-6">
             <CaseSummary orthoCase={current} stamp={stamp} />
+            <OrthoAccountSection
+              token={token}
+              patientId={patientId}
+              caseId={current.id}
+              plannedVisits={current.plannedVisits}
+              canWrite={canWrite}
+              closed={current.status === 'FINISHED' || current.status === 'ABANDONED'}
+              stamp={stamp}
+              reloadKey={reloadKey}
+            />
+            {current.technique === 'ALIGNERS' ? (
+              <OrthoAlignersSection
+                token={token}
+                patientId={patientId}
+                caseId={current.id}
+                locationId={current.locationId}
+                canWrite={canWrite}
+                closed={current.status === 'FINISHED' || current.status === 'ABANDONED'}
+                visits={(visits ?? []).map((v) => ({
+                  id: v.id,
+                  visitNumber: v.visitNumber,
+                  visitDate: v.visitDate,
+                  label: copy.visitTitle(v.visitNumber, stamp.civilDate(v.visitDate, current.locationId)),
+                }))}
+                stamp={stamp}
+              />
+            ) : null}
             <section aria-labelledby="ortho-history" className="flex flex-col gap-3">
               <h4 id="ortho-history" className="t-title text-ink">
                 {copy.history}
