@@ -160,6 +160,9 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   PAYMENT_REPORT: 'Pago reportado',
   // DX-559: plantillas de plan de tratamiento (crear, editar, desactivar).
   TREATMENT_PLAN_TEMPLATE: 'Plantilla de plan',
+  // DX-190: caso de ortodoncia y sus controles.
+  ORTHO_CASE: 'Caso de ortodoncia',
+  ORTHO_VISIT: 'Control de ortodoncia',
   // DX-572: órdenes de estudios y referencias externas, y sus plantillas.
   EXTERNAL_ORDER: 'Orden externa',
   EXTERNAL_ORDER_TEMPLATE: 'Plantilla de orden externa',

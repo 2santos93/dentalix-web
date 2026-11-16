@@ -38,7 +38,9 @@ import {
   Languages,
   UserRound,
   Wallet,
+  Smile,
 } from 'lucide-react';
+import { canManageOrthoSettings } from '@/lib/ortho/ortho-roles';
 import type { ClinicRole } from '@/lib/me/me-api';
 import { canManagePatientLanguages } from '@/lib/patients/patient-languages';
 import { canManageCertificateSettings } from '@/lib/certificates/certificates-api';
@@ -326,6 +328,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Preguntas guía para redactar las evoluciones.',
         icon: NotebookPen,
         visible: canManageNoteTemplates,
+      },
+      // DX-190.
+      {
+        href: '/settings/ortodoncia',
+        label: 'Ortodoncia',
+        description: 'Activar el caso de ortodoncia en la ficha y los calibres de arco del control.',
+        icon: Smile,
+        visible: canManageOrthoSettings,
       },
       // DX-559.
       {
