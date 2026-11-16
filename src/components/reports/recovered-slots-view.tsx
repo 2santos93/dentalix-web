@@ -37,7 +37,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { FormField } from '@/components/shared/form-field';
-import { cn } from '@/lib/utils';
+import { Stat, StatGroup } from './stat-group';
 
 export const recoveredCopy = {
   scope:
@@ -120,45 +120,6 @@ function valueText(metrics: RecoveredSlotsMetrics, fmt: RegionalFormat): string 
   return metrics.recoveredValue.length === 0
     ? recoveredCopy.noValue
     : metrics.recoveredValue.map((v) => moneyWithCode(v.amount, v.currency, fmt)).join(' · ');
-}
-
-/** Una cifra del resumen: etiqueta, valor y, si hace falta, una línea de contexto. */
-function Stat({
-  label,
-  value,
-  hint,
-  testId,
-  className,
-}: {
-  label: string;
-  value: React.ReactNode;
-  hint?: React.ReactNode;
-  testId?: string;
-  className?: string;
-}) {
-  return (
-    <div data-testid={testId} className={cn('flex min-w-0 flex-col gap-1 bg-surface p-4', className)}>
-      <dt className="t-overline">{label}</dt>
-      <dd className="t-data min-w-0 break-words text-xl font-semibold text-ink">{value}</dd>
-      {hint ? <dd className="text-xs text-muted">{hint}</dd> : null}
-    </div>
-  );
-}
-
-function StatGroup({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
-  return (
-    <section className="flex min-w-0 flex-col gap-2" aria-label={title}>
-      <h3 className="t-label text-ink">{title}</h3>
-      <dl
-        className={cn(
-          'grid min-w-0 gap-px overflow-hidden rounded-xl border border-border bg-border-subtle',
-          className,
-        )}
-      >
-        {children}
-      </dl>
-    </section>
-  );
 }
 
 /**

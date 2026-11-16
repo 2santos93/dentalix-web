@@ -5430,6 +5430,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/quote-funnel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Embudo de presupuestos: presentados → aceptados → agendados → realizados → cobrados
+         * @description Presupuestos PRESENTADOS en el período (la fecha de la primera presentación, en el día civil de la sede donde se presentó) y lo que pasó con ellos hasta hoy: aceptados, agendados, realizados y cobrados. Una presentación = un grupo de opciones A/B (cuenta una vez; importe = la opción de mayor total) con la cadena de pendientes de sus aceptaciones parciales (un pendiente no es otra presentación). Importes = precio − descuento en la moneda del CATÁLOGO: un plan en otra moneda se convierte con la tasa guardada en cada ítem; sin ella, la presentación cuenta en los números y queda fuera de los importes (`withoutRate`, aviso WITHOUT_RATE). ADMIN o quien tenga FINANCIAL_REPORTS_VIEW ve toda la clínica (scope CLINIC); un DENTIST, solo lo que elaboró (scope OWN). Solo las sedes que ve quien consulta (DX-089). `definitions` trae «Cómo se calcula». Sin datos de pacientes.
+         */
+        get: operations["QuoteFunnelController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/quote-funnel.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Embudo de presupuestos en CSV (mismos filtros; solo ADMIN)
+         * @description Presupuestos PRESENTADOS en el período (la fecha de la primera presentación, en el día civil de la sede donde se presentó) y lo que pasó con ellos hasta hoy: aceptados, agendados, realizados y cobrados. Una presentación = un grupo de opciones A/B (cuenta una vez; importe = la opción de mayor total) con la cadena de pendientes de sus aceptaciones parciales (un pendiente no es otra presentación). Importes = precio − descuento en la moneda del CATÁLOGO: un plan en otra moneda se convierte con la tasa guardada en cada ítem; sin ella, la presentación cuenta en los números y queda fuera de los importes (`withoutRate`, aviso WITHOUT_RATE). ADMIN o quien tenga FINANCIAL_REPORTS_VIEW ve toda la clínica (scope CLINIC); un DENTIST, solo lo que elaboró (scope OWN). Solo las sedes que ve quien consulta (DX-089). `definitions` trae «Cómo se calcula». Sin datos de pacientes. Una fila por profesional que lo elaboró y el «Total», con cada paso (número e importe), las tasas de aceptación y la mediana de días; cabecera con período, sede, profesional y moneda. UTF-8 con BOM; celdas protegidas contra fórmulas. Auditado (EXPORT).
+         */
+        get: operations["QuoteFunnelController_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/quote-funnel/presentations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Detalle de una cifra del embudo: sus presentaciones
+         * @description Mismos filtros y alcance que el embudo, más el paso o desenlace (`step`) y, en las rechazadas, el motivo: cada presentación con paciente, fecha, sede, quién lo elaboró, opciones, importes de cada paso y desenlace, de la más reciente a la más antigua (`page`/`pageSize`, 25 por defecto, máx. 100). Lleva el nombre del paciente: auditado (VIEW). El motivo de rechazo solo filtra las presentaciones rechazadas (step=REJECTED).
+         */
+        get: operations["QuoteFunnelController_presentations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/closing-queue": {
         parameters: {
             query?: never;
@@ -21309,6 +21369,204 @@ export interface components {
             pageSize: number;
             /** @description De la más reciente a la más antigua */
             lines: components["schemas"]["ProfitabilityLineDto"][];
+        };
+        QuoteFunnelPeriodDto: {
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+        };
+        QuoteFunnelFiltersDto: {
+            /** Format: uuid */
+            locationId: string | null;
+            /**
+             * Format: uuid
+             * @description Con scope OWN, siempre quien consulta
+             */
+            providerId: string | null;
+        };
+        QuoteFunnelStepDto: {
+            /** @enum {string} */
+            key: "PRESENTED" | "ACCEPTED" | "SCHEDULED" | "DONE" | "COLLECTED";
+            /** @description Presentaciones que llegaron a este paso */
+            count: number;
+            /** @description Importe del paso en la moneda del catálogo (2 decimales), sin las presentaciones sin tasa. null sin moneda de catálogo */
+            amount: number | null;
+            /** @description count ÷ presentados, en % con 1 decimal (40 = 40 %). null sin presentados («—») */
+            rateOfPresented: number | null;
+            /** @description amount ÷ importe presentado, en % con 1 decimal. null sin importes */
+            amountRateOfPresented: number | null;
+        };
+        QuoteFunnelRateDto: {
+            /** @description Aceptados ÷ presentados, en % con 1 decimal; null sin datos */
+            byCount: number | null;
+            /** @description Importe aceptado ÷ importe presentado, en % con 1 decimal; null sin importes */
+            byAmount: number | null;
+        };
+        QuoteFunnelCountAmountDto: {
+            count: number;
+            /** @description Moneda del catálogo, 2 decimales; null sin moneda de catálogo */
+            amount: number | null;
+        };
+        QuoteFunnelOutcomesDto: {
+            /** @description Alguna opción sigue presentada (importe: el presentado) */
+            pending: components["schemas"]["QuoteFunnelCountAmountDto"];
+            /** @description Todas las opciones rechazadas o canceladas, al menos una rechazada por el paciente */
+            rejected: components["schemas"]["QuoteFunnelCountAmountDto"];
+            /** @description El resto: canceladas por la clínica */
+            cancelled: components["schemas"]["QuoteFunnelCountAmountDto"];
+        };
+        QuoteFunnelRejectionReasonDto: {
+            /**
+             * @description El de la opción rechazada más reciente. Nunca OTHER_OPTION_ACCEPTED (no es rechazo)
+             * @enum {string}
+             */
+            reason: "PRICE" | "FEAR" | "SECOND_OPINION" | "OTHER";
+            count: number;
+            /** @description Importe presentado de esas presentaciones */
+            amount: number | null;
+        };
+        QuoteFunnelProfessionalDto: {
+            /**
+             * Format: uuid
+             * @description Quien elaboró el presupuesto; null = «Sin atribuir» (sin autor o ya no es miembro)
+             */
+            professionalId: string | null;
+            /**
+             * @description «Sin atribuir» si null
+             * @example Dra. Pérez
+             */
+            name: string;
+            presented: components["schemas"]["QuoteFunnelCountAmountDto"];
+            accepted: components["schemas"]["QuoteFunnelCountAmountDto"];
+            scheduled: components["schemas"]["QuoteFunnelCountAmountDto"];
+            done: components["schemas"]["QuoteFunnelCountAmountDto"];
+            collected: components["schemas"]["QuoteFunnelCountAmountDto"];
+            acceptanceRate: components["schemas"]["QuoteFunnelRateDto"];
+            /** @description Mediana de días (1 decimal) presentación → primera aceptación de SUS presentaciones; null sin aceptadas */
+            medianDaysToAccept: number | null;
+        };
+        QuoteFunnelWithoutRateDto: {
+            /** @description Presentaciones con algún procedimiento en otra moneda sin tasa guardada: cuentan en los números y quedan fuera de los importes (la web avisa) */
+            presentations: number;
+        };
+        QuoteFunnelDefinitionDto: {
+            /** @enum {string} */
+            key: "PRESENTED" | "ACCEPTED" | "SCHEDULED" | "DONE" | "COLLECTED" | "ACCEPTANCE_RATE" | "MEDIAN_DAYS_TO_ACCEPT" | "OUTCOMES" | "REJECTION_REASONS" | "PROFESSIONAL" | "CURRENCY";
+            /** @example Presentados */
+            label: string;
+            /** @description «Cómo se calcula», una regla por línea */
+            howItIsCalculated: string[];
+        };
+        QuoteFunnelLocationOptionDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @description false = sede desactivada (sigue saliendo) */
+            isActive: boolean;
+        };
+        QuoteFunnelProfessionalOptionDto: {
+            /** Format: uuid */
+            userId: string;
+            fullName: string;
+        };
+        QuoteFunnelOptionsDto: {
+            /** @description Las sedes que ve quien consulta (DX-089) */
+            locations: components["schemas"]["QuoteFunnelLocationOptionDto"][];
+            /** @description Miembros que elaboraron algún presupuesto presentado en esas sedes; con scope OWN, solo quien consulta */
+            professionals: components["schemas"]["QuoteFunnelProfessionalOptionDto"][];
+        };
+        QuoteFunnelReportDto: {
+            period: components["schemas"]["QuoteFunnelPeriodDto"];
+            /** @description Moneda del catálogo de la clínica: la de todos los importes. null = no se resuelve (aviso NO_CATALOG_CURRENCY; importes null) */
+            currency: string | null;
+            /**
+             * @description CLINIC: toda la clínica (ADMIN o FINANCIAL_REPORTS_VIEW); OWN: solo lo que elaboró quien consulta (DENTIST)
+             * @enum {string}
+             */
+            scope: "CLINIC" | "OWN";
+            /** @description true = quien consulta solo ve algunas sedes (DX-089): las cifras son de esas */
+            restrictedToLocations: boolean;
+            filters: components["schemas"]["QuoteFunnelFiltersDto"];
+            /** @description Los pasos en orden: PRESENTED, ACCEPTED, SCHEDULED, DONE, COLLECTED */
+            steps: components["schemas"]["QuoteFunnelStepDto"][];
+            acceptanceRate: components["schemas"]["QuoteFunnelRateDto"];
+            /** @description Mediana de días (1 decimal) desde la presentación hasta la primera aceptación; null sin aceptadas */
+            medianDaysToAccept: number | null;
+            outcomes: components["schemas"]["QuoteFunnelOutcomesDto"];
+            /** @description Por número y luego por importe (desc) */
+            rejectionReasons: components["schemas"]["QuoteFunnelRejectionReasonDto"][];
+            /** @description Una fila por profesional que lo elaboró (por presentados desc), «Sin atribuir» al final; con scope OWN, solo la suya */
+            byProfessional: components["schemas"]["QuoteFunnelProfessionalDto"][];
+            withoutRate: components["schemas"]["QuoteFunnelWithoutRateDto"];
+            /** @description NO_CATALOG_CURRENCY: sin moneda de catálogo (importes null). WITHOUT_RATE: hay presentaciones fuera de los importes (ver withoutRate) */
+            warnings: ("NO_CATALOG_CURRENCY" | "WITHOUT_RATE")[];
+            /** @description Las definiciones de cada paso, tasa, mediana, desenlace, motivos, profesional y moneda («Cómo se calcula») */
+            definitions: components["schemas"]["QuoteFunnelDefinitionDto"][];
+            options: components["schemas"]["QuoteFunnelOptionsDto"];
+        };
+        QuoteFunnelPresentationDto: {
+            /**
+             * Format: uuid
+             * @description El grupo de opciones (id del plan que lo abrió; un plan suelto es su propio grupo)
+             */
+            groupId: string;
+            /** @description Los planes de la presentación: sus opciones y los pendientes de una aceptación parcial */
+            planIds: string[];
+            /**
+             * Format: uuid
+             * @description El plan de la primera opción presentada (para enlazar la ficha)
+             */
+            firstPlanId: string;
+            /**
+             * Format: uuid
+             * @description null = paciente eliminado (no se nombra ni se enlaza)
+             */
+            patientId: string | null;
+            patientName: string | null;
+            /** Format: date-time */
+            presentedAt: string;
+            /**
+             * Format: uuid
+             * @description Sede de la primera presentación; null = sin sede
+             */
+            locationId: string | null;
+            locationName: string | null;
+            /**
+             * @description Zona de la sede (o de la principal si no tiene): la fecha se pinta con ella
+             * @example America/Caracas
+             */
+            timeZone: string;
+            /**
+             * Format: uuid
+             * @description Quien lo elaboró; null = «Sin atribuir»
+             */
+            professionalId: string | null;
+            professionalName: string | null;
+            /** @description Opciones presentadas (A/B) */
+            optionCount: number;
+            /** @description Total de la opción más amplia, en la moneda del catálogo. null = sin tasa o sin moneda de catálogo (fuera de los importes) */
+            presentedAmount: number | null;
+            acceptedAmount: number | null;
+            scheduledAmount: number | null;
+            doneAmount: number | null;
+            collectedAmount: number | null;
+            /** @enum {string} */
+            outcome: "ACCEPTED" | "PENDING" | "REJECTED" | "CANCELLED";
+            /**
+             * @description Solo en las rechazadas: el motivo de la opción rechazada más reciente (sin la nota)
+             * @enum {string|null}
+             */
+            rejectionReason: "PRICE" | "FEAR" | "SECOND_OPINION" | "OTHER" | null;
+        };
+        QuoteFunnelPresentationsDto: {
+            /** @description Moneda de los importes (la del catálogo) */
+            currency: string | null;
+            /** @description Por fecha de presentación desc */
+            items: components["schemas"]["QuoteFunnelPresentationDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
         };
         /**
          * @description Las secciones que ve el rol: ADMIN las tres, DENTIST EVOLUTION y TREATMENT, RECEPTION OUTCOME
@@ -41441,6 +41699,160 @@ export interface operations {
             };
             /** @description Solo la administración ve la rentabilidad de las sedes. / sede fuera de las del usuario */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    QuoteFunnelController_get: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD): cuenta la fecha de la PRIMERA presentación del presupuesto, en el día civil de la sede donde se presentó. Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día del período (inclusive) */
+                to: string;
+                /** @description Solo lo presentado en esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve (y, si las ve todas, lo presentado sin sede). La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo los presupuestos que elaboró este usuario («Profesional que lo elaboró»: quien creó el presupuesto). Quien ve solo lo suyo (scope OWN) solo puede pedirse a sí mismo (403 si no); sin él, ve igualmente solo lo suyo. */
+                providerId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteFunnelReportDto"];
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 366 días. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración, los odontólogos y quien tenga acceso a los reportes financieros ven el embudo de presupuestos. / Solo puedes ver tus propios presupuestos. / No tienes acceso a esta sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con presentaciones no tiene zona horaria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    QuoteFunnelController_csv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD): cuenta la fecha de la PRIMERA presentación del presupuesto, en el día civil de la sede donde se presentó. Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día del período (inclusive) */
+                to: string;
+                /** @description Solo lo presentado en esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve (y, si las ve todas, lo presentado sin sede). La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo los presupuestos que elaboró este usuario («Profesional que lo elaboró»: quien creó el presupuesto). Quien ve solo lo suyo (scope OWN) solo puede pedirse a sí mismo (403 si no); sin él, ve igualmente solo lo suyo. */
+                providerId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 366 días. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración descarga el embudo de presupuestos. / No tienes acceso a esta sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con presentaciones no tiene zona horaria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    QuoteFunnelController_presentations: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD): cuenta la fecha de la PRIMERA presentación del presupuesto, en el día civil de la sede donde se presentó. Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día del período (inclusive) */
+                to: string;
+                /** @description Solo lo presentado en esta sede (403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen). Sin él, todas las sedes que ve (y, si las ve todas, lo presentado sin sede). La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo los presupuestos que elaboró este usuario («Profesional que lo elaboró»: quien creó el presupuesto). Quien ve solo lo suyo (scope OWN) solo puede pedirse a sí mismo (403 si no); sin él, ve igualmente solo lo suyo. */
+                providerId?: string;
+                /** @description La cifra que se abre: un paso del embudo (PRESENTED, ACCEPTED, SCHEDULED, DONE, COLLECTED) o un desenlace de lo no aceptado (PENDING, REJECTED, CANCELLED). */
+                step: "PRESENTED" | "ACCEPTED" | "SCHEDULED" | "DONE" | "COLLECTED" | "PENDING" | "REJECTED" | "CANCELLED";
+                /** @description Solo las rechazadas por este motivo (el de su opción rechazada más reciente). Exige step=REJECTED (400 si no). */
+                reason?: "PRICE" | "FEAR" | "SECOND_OPINION" | "OTHER";
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteFunnelPresentationsDto"];
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 366 días. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración, los odontólogos y quien tenga acceso a los reportes financieros ven el embudo de presupuestos. / Solo puedes ver tus propios presupuestos. / No tienes acceso a esta sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con presentaciones no tiene zona horaria */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
