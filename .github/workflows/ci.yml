@@ -136,6 +136,19 @@ jobs:
           name: bundle-report
           path: .next/bundle-report.json
           if-no-files-found: error
+      # TEMPORAL DX-202-ter: los chunks propios de la ficha para ver qué módulos llevan. Se quita antes del merge.
+      - name: TEMPORAL chunks propios de la ficha
+        if: always() && hashFiles('.next/bundle-report.json') != ''
+        run: |
+          mkdir -p .next/dx202t
+          node -e "const r=require('./.next/bundle-report.json');const row=r.rows.find(x=>x.route==='/patients/[id]');for(const c of row.ownChunks)console.log(c.file)" | while read f; do cp ".next/$f" .next/dx202t/; done
+          cp -r .next/diagnostics .next/dx202t/diagnostics 2>/dev/null || true
+      - name: TEMPORAL subir chunks propios
+        if: always() && hashFiles('.next/bundle-report.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: dx202t-own-chunks
+          path: .next/dx202t
 
   # DX-083: la imagen de producción (Dockerfile, `output: 'standalone'`) se
   # construye UNA vez en cada PR, sin publicarla, y la prueba de humo la
