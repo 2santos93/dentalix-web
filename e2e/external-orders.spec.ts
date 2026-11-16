@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { deflateSync } from 'node:zlib';
 import { join } from 'node:path';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
@@ -50,11 +51,36 @@ const VIEWPORTS = [
   { name: 'movil', width: 390, height: 844 },
 ];
 
-// Un PNG de 1×1 válido: la API detecta el tipo por el contenido.
-const PNG_1PX = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-  'base64',
-);
+// PNG de 1×1 válido y distinto por pasada: la API detecta el tipo por el
+// contenido y rechaza un archivo que ya está en la ficha (mismo sha256), y las
+// dos pasadas (1440 y 390) suben al mismo paciente.
+function crc32(buf: Buffer): number {
+  let c = ~0;
+  for (const byte of buf) {
+    c ^= byte;
+    for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+  }
+  return ~c >>> 0;
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+  const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(body));
+  return Buffer.concat([len, body, crc]);
+}
+
+function png1px(gray: number): Buffer {
+  const ihdr = Buffer.from([0, 0, 0, 1, 0, 0, 0, 1, 8, 0, 0, 0, 0]); // 1×1, 8 bits, gris
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', deflateSync(Buffer.from([0, gray & 0xff]))),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
 
 function userIdOf(session: ApiSession): string {
   const token = session.headers.Authorization.replace('Bearer ', '');
@@ -182,7 +208,7 @@ test('órdenes externas: plantilla, emitir, PDF, ligar resultado y «Órdenes si
     await linkDialog.getByRole('radio', { name: 'Subir uno nuevo', exact: true }).click();
     await linkDialog
       .getByLabel('Archivo', { exact: true })
-      .setInputFiles({ name: `panoramica-${viewport.name}.png`, mimeType: 'image/png', buffer: PNG_1PX });
+      .setInputFiles({ name: `panoramica-${viewport.name}.png`, mimeType: 'image/png', buffer: png1px(viewport.width % 256) });
     await linkDialog.getByRole('radio', { name: 'Radiografía', exact: true }).check();
     await expectDialogInsideViewport(page, linkDialog);
     await shoot(page, `ligar-${viewport.name}`);
