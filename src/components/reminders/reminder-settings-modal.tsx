@@ -1,20 +1,24 @@
-'use client';
-import * as React from 'react';
-import { useId, useState } from 'react';
-import { Plus, X } from 'lucide-react';
-import { apiErrorMessage } from '@/lib/api/error-message';
+"use client";
+import * as React from "react";
+import { useId, useState } from "react";
+import { Plus, X } from "lucide-react";
+import { apiErrorMessage } from "@/lib/api/error-message";
 import {
   MAX_LEAD_HOURS,
   MAX_REMINDER_LEADS,
   MIN_LEAD_HOURS,
   updateReminderSettings,
   type LocationReminderSettings,
-} from '@/lib/reminders/reminders-api';
-import { FormModal } from '@/components/shared/form-modal';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { FormField, fieldErrorId, fieldHintId } from '@/components/shared/form-field';
-import { Checkbox } from '@/components/ui/checkbox';
+} from "@/lib/reminders/reminders-api";
+import { FormModal } from "@/components/shared/form-modal";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  FormField,
+  fieldErrorId,
+  fieldHintId,
+} from "@/components/shared/form-field";
+import { Checkbox } from "@/components/ui/checkbox";
 
 /** DX-469: mismo tope que la API (7 días). */
 const MAX_ALARM_HOURS = 168;
@@ -22,28 +26,33 @@ const MAX_ALARM_HOURS = 168;
 const copy = {
   title: (location: string) => `Recordatorios de ${location}`,
   description:
-    'Cada cita agendada o confirmada recibe un email con la fecha, la hora, la sede, el profesional y un enlace para confirmar o cancelar. No lleva datos clínicos.',
-  enabled: 'Enviar recordatorios por email',
-  enabledHint: 'Solo a pacientes con email en su ficha.',
-  leadsLegend: 'Cuándo se envían',
+    "Cada cita agendada o confirmada recibe un email con la fecha, la hora, la sede, el profesional y un enlace para confirmar o cancelar. No lleva datos clínicos.",
+  enabled: "Enviar recordatorios por email",
+  enabledHint: "Solo a pacientes con email en su ficha.",
+  leadsLegend: "Cuándo se envían",
   leadsHint: `Horas antes del inicio de la cita, de ${MIN_LEAD_HOURS} a ${MAX_LEAD_HOURS} (7 días). Hasta ${MAX_REMINDER_LEADS}.`,
   leadLabel: (n: number) => `Recordatorio ${n}: horas antes`,
-  hoursSuffix: 'h antes',
+  hoursSuffix: "h antes",
   remove: (n: number) => `Quitar el recordatorio ${n}`,
-  add: 'Añadir recordatorio',
-  save: 'Guardar',
-  noLeads: 'Para activar los recordatorios elige al menos una antelación.',
+  add: "Añadir recordatorio",
+  save: "Guardar",
+  noLeads: "Para activar los recordatorios elige al menos una antelación.",
   invalidLead: `Cada recordatorio debe ser de ${MIN_LEAD_HOURS} a ${MAX_LEAD_HOURS} horas antes (7 días).`,
-  duplicate: 'No repitas la misma antelación: cada recordatorio sale a una hora distinta.',
-  genericError: 'No pudimos guardar los recordatorios. Intenta de nuevo.',
+  duplicate:
+    "No repitas la misma antelación: cada recordatorio sale a una hora distinta.",
+  genericError: "No pudimos guardar los recordatorios. Intenta de nuevo.",
   // DX-469: alarma del evento «Añadir a mi calendario» (enlace y email).
-  alarmLabel: 'Aviso en el calendario del paciente',
+  alarmLabel: "Aviso en el calendario del paciente",
   alarmHint: `Cuando el paciente añade la cita a su calendario, su móvil le avisa estas horas antes. De 0 a ${MAX_ALARM_HOURS}; 0 lo quita.`,
   alarmInvalid: `La alarma del calendario debe ser de 0 a ${MAX_ALARM_HOURS} horas antes (0 la quita).`,
+  // DX-290: el criterio, dicho como lo aplica la API.
+  anamnesis: "Enviar la anamnesis con el recordatorio",
+  anamnesisHint:
+    "A los pacientes nuevos o con la anamnesis caducada el día de la cita (la vigencia se fija en Ajustes › Historia clínica, 12 meses por defecto), el recordatorio lleva el enlace del cuestionario de salud. Solo el enlace, sin datos clínicos; el de un menor va a su responsable.",
 };
 
 /** Lo que se propone al activar una sede que nunca se configuró. */
-const SUGGESTED = ['48', '2'];
+const SUGGESTED = ["48", "2"];
 
 interface ReminderSettingsModalProps {
   open: boolean;
@@ -55,8 +64,12 @@ interface ReminderSettingsModalProps {
 
 /** Valida las antelaciones escritas; devuelve el error en español o las horas. */
 function parseLeads(values: string[], enabled: boolean): string | number[] {
-  const hours = values.filter((v) => v.trim() !== '').map(Number);
-  if (hours.some((h) => !Number.isInteger(h) || h < MIN_LEAD_HOURS || h > MAX_LEAD_HOURS)) {
+  const hours = values.filter((v) => v.trim() !== "").map(Number);
+  if (
+    hours.some(
+      (h) => !Number.isInteger(h) || h < MIN_LEAD_HOURS || h > MAX_LEAD_HOURS,
+    )
+  ) {
     return copy.invalidLead;
   }
   if (new Set(hours).size !== hours.length) return copy.duplicate;
@@ -82,6 +95,7 @@ export function ReminderSettingsModal({
     settings.leadHours.length > 0 ? settings.leadHours.map(String) : SUGGESTED,
   );
   const [alarm, setAlarm] = useState(String(settings.calendarAlarmHours));
+  const [sendAnamnesis, setSendAnamnesis] = useState(settings.sendAnamnesis);
   const [alarmError, setAlarmError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,9 +105,14 @@ export function ReminderSettingsModal({
     setError(null);
     setAlarmError(null);
     const parsed = parseLeads(leads, enabled);
-    if (typeof parsed === 'string') return setError(parsed);
+    if (typeof parsed === "string") return setError(parsed);
     const alarmHours = Number(alarm);
-    if (alarm.trim() === '' || !Number.isInteger(alarmHours) || alarmHours < 0 || alarmHours > MAX_ALARM_HOURS) {
+    if (
+      alarm.trim() === "" ||
+      !Number.isInteger(alarmHours) ||
+      alarmHours < 0 ||
+      alarmHours > MAX_ALARM_HOURS
+    ) {
       setAlarmError(copy.alarmInvalid);
       document.getElementById(alarmId)?.focus();
       return;
@@ -104,6 +123,7 @@ export function ReminderSettingsModal({
         enabled,
         leadHours: parsed,
         calendarAlarmHours: alarmHours,
+        sendAnamnesis,
       });
       onSaved(saved);
       onOpenChange(false);
@@ -117,6 +137,7 @@ export function ReminderSettingsModal({
   const enabledId = `${ids}-enabled`;
   const hintId = `${ids}-leads-hint`;
   const alarmId = `${ids}-alarm`;
+  const anamnesisId = `${ids}-anamnesis`;
 
   return (
     <FormModal
@@ -138,7 +159,9 @@ export function ReminderSettingsModal({
       />
 
       <fieldset className="flex flex-col gap-3" aria-describedby={hintId}>
-        <legend className="text-sm font-medium text-ink">{copy.leadsLegend}</legend>
+        <legend className="text-sm font-medium text-ink">
+          {copy.leadsLegend}
+        </legend>
         <p id={hintId} className="text-xs text-muted">
           {copy.leadsHint}
         </p>
@@ -153,7 +176,9 @@ export function ReminderSettingsModal({
                 value={value}
                 aria-label={copy.leadLabel(index + 1)}
                 onChange={(e) =>
-                  setLeads((prev) => prev.map((v, i) => (i === index ? e.target.value : v)))
+                  setLeads((prev) =>
+                    prev.map((v, i) => (i === index ? e.target.value : v)),
+                  )
                 }
                 className="w-28 tabular-nums"
               />
@@ -163,7 +188,9 @@ export function ReminderSettingsModal({
                 variant="ghost"
                 size="icon"
                 aria-label={copy.remove(index + 1)}
-                onClick={() => setLeads((prev) => prev.filter((_, i) => i !== index))}
+                onClick={() =>
+                  setLeads((prev) => prev.filter((_, i) => i !== index))
+                }
                 className="ml-auto"
               >
                 <X aria-hidden />
@@ -176,7 +203,7 @@ export function ReminderSettingsModal({
             type="button"
             variant="secondary"
             size="sm"
-            onClick={() => setLeads((prev) => [...prev, ''])}
+            onClick={() => setLeads((prev) => [...prev, ""])}
             className="self-start"
           >
             <Plus aria-hidden />
@@ -185,7 +212,12 @@ export function ReminderSettingsModal({
         )}
       </fieldset>
 
-      <FormField htmlFor={alarmId} label={copy.alarmLabel} hint={copy.alarmHint} error={alarmError ?? undefined}>
+      <FormField
+        htmlFor={alarmId}
+        label={copy.alarmLabel}
+        hint={copy.alarmHint}
+        error={alarmError ?? undefined}
+      >
         <div className="flex items-center gap-2">
           <Input
             id={alarmId}
@@ -197,12 +229,25 @@ export function ReminderSettingsModal({
               setAlarmError(null);
             }}
             aria-invalid={alarmError ? true : undefined}
-            aria-describedby={[fieldHintId(alarmId), alarmError ? fieldErrorId(alarmId) : null].filter(Boolean).join(' ')}
+            aria-describedby={[
+              fieldHintId(alarmId),
+              alarmError ? fieldErrorId(alarmId) : null,
+            ]
+              .filter(Boolean)
+              .join(" ")}
             className="w-28 tabular-nums h-11 sm:h-10"
           />
           <span className="text-sm text-muted">{copy.hoursSuffix}</span>
         </div>
       </FormField>
+
+      <Checkbox
+        id={anamnesisId}
+        checked={sendAnamnesis}
+        onChange={(e) => setSendAnamnesis(e.target.checked)}
+        label={copy.anamnesis}
+        description={copy.anamnesisHint}
+      />
     </FormModal>
   );
 }
