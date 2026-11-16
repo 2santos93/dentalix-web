@@ -13344,6 +13344,8 @@ export interface components {
             recallTypes: components["schemas"]["CheckoutRecallTypeDto"][];
             /** @description Saldo vencido (`hasOverdue`, `overdueDays`, `amounts`); null si el rol no cobra. */
             balance: components["schemas"]["OverdueBalanceDto"] | null;
+            /** @description DX-202-bis: saldo pendiente hoy por moneda (lo que se debe menos el saldo a favor, solo si es positivo; el mismo de «¿Quién llama?»), vencido o no. Vacío si no debe nada; null si el rol no cobra. */
+            pending: components["schemas"]["OverdueAmountDto"][] | null;
         };
         UpdateAppointmentDto: {
             /** @description Ítems aceptados del mismo paciente para esta cita (DX-256). [] desvincula al editar. */
@@ -31163,7 +31165,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description DX-202: lo que recepción comprueba al despedir al paciente. El saldo solo para los roles de cobro. */
+            /** @description DX-202: lo que recepción comprueba al despedir al paciente. El saldo (vencido y pendiente, DX-202-bis) solo para los roles de cobro o con PAYMENT_REGISTER. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -37280,7 +37282,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Rol sin acceso a pagos */
+            /** @description Rol sin acceso a pagos ni PAYMENT_REGISTER */
             403: {
                 headers: {
                     [name: string]: unknown;

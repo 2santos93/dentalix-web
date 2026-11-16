@@ -547,6 +547,7 @@ describe('InClinicPanel (DX-200)', () => {
       remindersOptedOut: false,
       recallTypes: [],
       balance: { hasOverdue: false, overdueDays: null },
+      pending: [],
     });
     render(<Harness role="RECEPTION"/>);
     await userEvent.click(await screen.findByRole('button', {name:'Completar'}));
