@@ -15,6 +15,7 @@ const SETTINGS: LocationReminderSettings = {
   enabled: true,
   leadHours: [48, 2],
   calendarAlarmHours: 24,
+  sendAnamnesis: false,
   updatedAt: '2026-11-01T00:00:00.000Z',
 };
 
@@ -44,6 +45,7 @@ describe('ReminderSettingsModal · alarma del calendario (DX-469)', () => {
         enabled: true,
         leadHours: [48, 2],
         calendarAlarmHours: 0,
+        sendAnamnesis: false,
       }),
     );
     expect(onSaved).toHaveBeenCalled();
@@ -64,5 +66,28 @@ describe('ReminderSettingsModal · alarma del calendario (DX-469)', () => {
       expect(alarm).toHaveFocus();
     }
     expect(mockedUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe('ReminderSettingsModal · anamnesis con el recordatorio (DX-290)', () => {
+  beforeEach(() => mockedUpdate.mockReset());
+
+  it('apagado por defecto; al marcarlo se manda y explica el criterio', async () => {
+    mockedUpdate.mockResolvedValue({ ...SETTINGS, sendAnamnesis: true });
+    const user = setupUser();
+    renderModal();
+    const box = screen.getByRole('checkbox', { name: 'Enviar la anamnesis con el recordatorio' });
+    expect(box).not.toBeChecked();
+    expect(box).toHaveAccessibleDescription(/pacientes nuevos o con la anamnesis caducada el día de la cita/);
+    await user.click(box);
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith('tok', 'loc-1', {
+        enabled: true,
+        leadHours: [48, 2],
+        calendarAlarmHours: 24,
+        sendAnamnesis: true,
+      }),
+    );
   });
 });

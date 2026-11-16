@@ -243,6 +243,8 @@ export function isPatientOptOut(metadata: AuditMetadata): boolean {
 
 const ANAMNESIS_REASONS: Record<string, string> = {
   ANAMNESIS_LINK_CREATED: 'Enlace de anamnesis creado',
+  // DX-290: lo crea el recordatorio automático (sin usuario).
+  ANAMNESIS_LINK_SENT_WITH_REMINDER: 'Enlace de anamnesis enviado con el recordatorio',
   ANAMNESIS_SUBMITTED: 'Anamnesis enviada por el paciente',
   ANAMNESIS_LINK: 'Autorización de datos de salud dada en el enlace de anamnesis',
   ANAMNESIS_ACCEPTED: 'Anamnesis aceptada en la historia clínica',

@@ -102,6 +102,40 @@ describe('ConfirmationLinkPanel', () => {
     expect(await screen.findByText('Enlace copiado')).toBeInTheDocument();
   });
 
+  it('DX-290: con el enlace de anamnesis, el mensaje lo lleva y el panel lo avisa', async () => {
+    create.mockResolvedValueOnce({
+      ...link(),
+      anamnesisUrl: 'http://demo.localhost:3001/anamnesis/anam_tok',
+      anamnesisPending: false,
+    });
+    render(<ConfirmationLinkPanel clock={CLOCK} token="jwt" appointment={appointment()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar confirmación' }));
+    const wa = await screen.findByRole('link', { name: /Abrir WhatsApp/ });
+    const text = decodeURIComponent((wa.getAttribute('href') ?? '').split('?text=')[1]);
+    expect(text).toContain('Antes de la cita, responde el cuestionario de salud: http://demo.localhost:3001/anamnesis/anam_tok');
+    expect(screen.getByTestId('confirmation-anamnesis-note')).toHaveTextContent('cuestionario de salud');
+  });
+
+  it('DX-290: con un enlace vivo de antes, el mensaje lo recuerda sin otro enlace', async () => {
+    create.mockResolvedValueOnce({ ...link(), anamnesisUrl: null, anamnesisPending: true });
+    render(<ConfirmationLinkPanel clock={CLOCK} token="jwt" appointment={appointment()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar confirmación' }));
+    const wa = await screen.findByRole('link', { name: /Abrir WhatsApp/ });
+    const text = decodeURIComponent((wa.getAttribute('href') ?? '').split('?text=')[1]);
+    expect(text).toContain('usa el enlace que te enviamos');
+    expect(text).not.toContain('/anamnesis/');
+    expect(screen.getByTestId('confirmation-anamnesis-note')).toHaveTextContent('no se envía otro');
+  });
+
+  it('DX-290: sin enlace de anamnesis, ni aviso ni texto en el mensaje', async () => {
+    create.mockResolvedValueOnce({ ...link(), anamnesisUrl: null, anamnesisPending: false });
+    render(<ConfirmationLinkPanel clock={CLOCK} token="jwt" appointment={appointment()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar confirmación' }));
+    const wa = await screen.findByRole('link', { name: /Abrir WhatsApp/ });
+    expect(decodeURIComponent(wa.getAttribute('href') ?? '')).not.toContain('cuestionario');
+    expect(screen.queryByTestId('confirmation-anamnesis-note')).not.toBeInTheDocument();
+  });
+
   it('sin teléfono utilizable: "Abrir WhatsApp" deshabilitado con la explicación', async () => {
     create.mockResolvedValueOnce(link(null));
     render(<ConfirmationLinkPanel clock={CLOCK} token="jwt" appointment={appointment()} />);

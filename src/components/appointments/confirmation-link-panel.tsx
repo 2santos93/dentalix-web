@@ -25,6 +25,12 @@ const copy = {
   resend: 'Reenviar confirmación',
   linkLabel: 'Enlace de confirmación',
   resendNote: 'Generar otro enlace anula el anterior.',
+  // DX-290: la sede envía la anamnesis con el recordatorio y este paciente
+  // es nuevo o la tiene caducada: el mensaje lleva también su enlace.
+  anamnesisNote:
+    'El mensaje incluye el enlace del cuestionario de salud: el paciente es nuevo o su anamnesis estará caducada el día de la cita.',
+  anamnesisPendingNote:
+    'El paciente ya tiene un enlace del cuestionario de salud sin responder: no se envía otro y el mensaje le recuerda usar ese.',
   copy: 'Copiar enlace',
   copied: 'Enlace copiado',
   copyFailed: 'No pudimos copiar automáticamente: cópialo a mano desde el campo.',
@@ -171,6 +177,11 @@ export function ConfirmationLinkPanel({ token, appointment, clock, onLinkCreated
           {!link.whatsappPhone || !clock ? (
             <p id={noPhoneId} className="text-xs text-muted">
               {link.whatsappPhone ? copy.noClock : copy.noPhone}
+            </p>
+          ) : null}
+          {link.anamnesisUrl || link.anamnesisPending ? (
+            <p className="text-xs text-ink" data-testid="confirmation-anamnesis-note">
+              {link.anamnesisUrl ? copy.anamnesisNote : copy.anamnesisPendingNote}
             </p>
           ) : null}
           <p className="text-xs text-muted">{copy.resendNote}</p>
