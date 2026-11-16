@@ -3,10 +3,12 @@ import * as React from 'react';
 import { TabBar } from '@/components/ui/tabs';
 import { getTokenRole } from '@/lib/auth/token-role';
 
-export type CarteraTabKey = 'por-cobrar' | 'saldo-a-favor';
+export type CarteraTabKey = 'por-cobrar' | 'por-avisar' | 'saldo-a-favor';
 
 const TABS: { key: CarteraTabKey; label: string }[] = [
   { key: 'por-cobrar', label: 'Por cobrar' },
+  // DX-146: a quién toca avisar hoy de su saldo vencido.
+  { key: 'por-avisar', label: 'Por avisar hoy' },
   { key: 'saldo-a-favor', label: 'Saldo a favor' },
 ];
 
@@ -16,7 +18,12 @@ const copy = {
 
 /** `?tab=` de la URL → pestaña (cualquier otro valor cae en «Por cobrar»). */
 export function resolveCarteraTab(value: string | null | undefined): CarteraTabKey {
-  return value === 'saldo-a-favor' ? 'saldo-a-favor' : 'por-cobrar';
+  return value === 'saldo-a-favor' || value === 'por-avisar' ? value : 'por-cobrar';
+}
+
+/** La URL de cada pestaña: «Por cobrar» es la de siempre, sin `?tab=`. */
+export function carteraTabHref(pathname: string, tab: CarteraTabKey): string {
+  return tab === 'por-cobrar' ? pathname : `${pathname}?tab=${tab}`;
 }
 
 export const carteraTabId = (key: CarteraTabKey) => `cartera-tab-${key}`;
@@ -60,8 +67,9 @@ interface CarteraTabsProps {
 }
 
 /**
- * Pestañas de la cartera (DX-430): «Por cobrar» (lo que deben, por antigüedad)
- * y «Saldo a favor» (a quién se le debe dinero). Mismo patrón ARIA que las de
+ * Pestañas de la cartera (DX-430): «Por cobrar» (lo que deben, por antigüedad),
+ * «Por avisar hoy» (DX-146: a quién toca avisar hoy) y «Saldo a favor» (a
+ * quién se le debe dinero). Mismo patrón ARIA que las de
  * la Caja y los gastos: activación manual, las flechas mueven el foco y
  * Enter/Espacio (o el clic) eligen.
  */

@@ -1,5 +1,6 @@
 import { whatsAppUrl } from '@/lib/appointments/confirmation-message';
-import type { AgingBuckets } from './receivables-api';
+import { amountCents, centsToAmount } from '@/lib/money/round';
+import type { AgingBuckets, AgingCurrency } from './receivables-api';
 
 export type BucketKey = keyof AgingBuckets;
 
@@ -99,3 +100,60 @@ export const PROMISE_FILTERS: readonly PromiseFilter[] = [
   { value: 'yes', label: 'Con compromiso abierto', hasPromise: true },
   { value: 'no', label: 'Sin compromiso abierto', hasPromise: false },
 ];
+
+/** Lo vencido de una moneda (todos los tramos menos «por vencer»), sumado en céntimos. */
+export interface OverdueAmount {
+  currency: string;
+  amount: number;
+}
+
+export function overdueAmounts(currencies: readonly AgingCurrency[]): OverdueAmount[] {
+  return currencies
+    .map((c) => ({
+      currency: c.currency,
+      amount: centsToAmount(
+        BUCKET_ORDER.filter((b) => b !== 'current').reduce((sum, b) => sum + amountCents(c.buckets[b]), 0),
+      ),
+    }))
+    .filter((a) => a.amount > 0);
+}
+
+/** «A, B y C» (sin coma de Oxford). */
+function joinAnd(parts: readonly string[]): string {
+  if (parts.length <= 1) return parts.join('');
+  return `${parts.slice(0, -1).join(', ')} y ${parts[parts.length - 1]}`;
+}
+
+/**
+ * DX-146: mensaje prellenado del aviso de saldo vencido. Lleva SOLO el nombre
+ * de la clínica, el saldo vencido y su moneda (ya formateados con la sede de
+ * la deuda): ni el nombre del paciente, ni cuotas, ni tratamientos. Un chat no
+ * es un canal seguro y el número puede no ser del paciente (DX-306, DX-468).
+ */
+export function reminderMessage({
+  clinicName,
+  amounts,
+}: {
+  clinicName: string | null;
+  /** Importes ya formateados («US$ 120,00»). */
+  amounts: readonly string[];
+}): string {
+  const clinic = clinicName ? clinicName : 'la clínica';
+  const balance = amounts.length > 0 ? ` Tienes un saldo vencido de ${joinAnd(amounts)}.` : ' Tienes un saldo vencido.';
+  return `Hola, te escribimos de ${clinic}.${balance} Si ya lo pagaste, ignora este mensaje. Puedes respondernos por aquí para ponerte al día.`;
+}
+
+/** `https://wa.me/…` del aviso, o `null` si el teléfono no sirve para WhatsApp. */
+export function reminderWhatsAppHref(
+  whatsApp: string | null,
+  clinicName: string | null,
+  amounts: readonly string[],
+): string | null {
+  if (!whatsApp) return null;
+  return whatsAppUrl(whatsApp, reminderMessage({ clinicName, amounts }));
+}
+
+/** «7, 30 y 60 días». */
+export function reminderDaysText(days: readonly number[]): string {
+  return `${joinAnd(days.map(String))} días`;
+}
