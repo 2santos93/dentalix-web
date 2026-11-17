@@ -30,10 +30,10 @@ describe('Índice de Ajustes (DX-282)', () => {
     ]);
   });
 
-  it('ADMIN ve las 40 pantallas de ajustes (Mi perfil incluido), cada una una sola vez', () => {
+  it('ADMIN ve las 41 pantallas de ajustes (Mi perfil incluido), cada una una sola vez', () => {
     const hrefs = hrefsFor('ADMIN');
-    expect(hrefs).toHaveLength(40);
-    expect(new Set(hrefs).size).toBe(40);
+    expect(hrefs).toHaveLength(41);
+    expect(new Set(hrefs).size).toBe(41);
   });
 
   it('la entrada de Historia clínica dice también el plazo de conservación (DX-330)', () => {
@@ -141,6 +141,16 @@ describe('Monedas (DX-517)', () => {
     expect(labels.indexOf('Monedas')).toBe(labels.indexOf('Tasa de cambio') + 1);
     for (const role of ['RECEPTION', 'DENTIST', 'ASSISTANT'] as const) {
       expect(hrefsFor(role)).not.toContain('/settings/monedas');
+    }
+  });
+});
+
+describe('Resumen semanal (DX-568)', () => {
+  it('solo ADMIN la ve, al final de «Clínica y sedes»', () => {
+    const clinic = visibleSettingsSections('ADMIN').find((section) => section.id === 'clinica');
+    expect(clinic?.entries.at(-1)).toMatchObject({ href: '/settings/resumen-semanal', label: 'Resumen semanal' });
+    for (const role of ['RECEPTION', 'DENTIST', 'ASSISTANT', null] as const) {
+      expect(hrefsFor(role)).not.toContain('/settings/resumen-semanal');
     }
   });
 });

@@ -173,6 +173,20 @@ describe('externalOrderDetail (DX-572)', () => {
   });
 });
 
+describe('resumen semanal (DX-568)', () => {
+  it('nombra el cambio de ajustes, la prueba y la baja desde el enlace', () => {
+    expect(
+      clinicSettingsDetail({ reason: 'WEEKLY_DIGEST_SETTINGS', changedFields: ['enabled', 'recipientMembershipIds'] }),
+    ).toBe('Resumen semanal por email');
+    expect(clinicSettingsDetail({ reason: 'WEEKLY_DIGEST_TEST_SENT' })).toBe(
+      'Prueba del resumen semanal enviada a su correo',
+    );
+    expect(
+      clinicSettingsDetail({ reason: 'WEEKLY_DIGEST_UNSUBSCRIBED', changedFields: ['recipientMembershipIds'] }),
+    ).toBe('Dejó de recibir el resumen semanal desde el enlace del email');
+  });
+});
+
 describe('chairDetail (DX-211)', () => {
   it('nombra el orden, la desactivación y la reactivación de un sillón', () => {
     expect(chairDetail({ reason: 'CHAIR_ORDER' })).toBe('Orden de los sillones');
