@@ -1,4 +1,5 @@
-import { apiErrorMessage } from '@/lib/api/error-message';
+import { apiErrorMessage, sedeCivilDateOption } from '@/lib/api/error-message';
+import type { RegionalFormat } from '@/lib/format/regional-format';
 
 // Copy como constantes (i18n-ready). La API responde estos errores en inglés
 // («amount must be…», «Insufficient role», «already has an active payment
@@ -20,16 +21,19 @@ const copy = {
 };
 
 /** El texto a enseñar cuando falla `POST /treatment-plans/:id/payments`. */
-export function recordPaymentErrorMessage(err: unknown): string {
+export function recordPaymentErrorMessage(err: unknown, fmt: RegionalFormat | null = null): string {
   return apiErrorMessage(err, {
+    // DX-091: el 409 `PERIOD_LOCKED` dice hasta qué día está cerrado.
+    ...sedeCivilDateOption(fmt),
     fallback: copy.recordGeneric,
     byStatus: { 400: copy.recordBadRequest, 403: copy.recordForbidden, 404: copy.planGone },
   });
 }
 
 /** El texto a enseñar cuando falla `POST /treatment-plans/:id/payment-plan`. */
-export function paymentPlanErrorMessage(err: unknown): string {
+export function paymentPlanErrorMessage(err: unknown, fmt: RegionalFormat | null = null): string {
   return apiErrorMessage(err, {
+    ...sedeCivilDateOption(fmt),
     fallback: copy.paymentPlanGeneric,
     byStatus: {
       409: copy.paymentPlanConflict,

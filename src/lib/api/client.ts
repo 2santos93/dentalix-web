@@ -332,6 +332,11 @@ export function apiErrorFromBody(
     // DX-559: la línea de la plantilla de plan (al guardarla, `position`; al aplicarla, `lineId`).
     position: index(data.position),
     lineId: text(data.lineId),
+    // DX-091: el último día cerrado del 409 `PERIOD_LOCKED`.
+    lockedThrough:
+      typeof data.lockedThrough === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.lockedThrough)
+        ? data.lockedThrough
+        : null,
   });
 }
 

@@ -11,6 +11,8 @@ import { ApiError, NetworkError } from './api-error';
  *    conexión»; `TimeoutError` → «tardó demasiado» (o `options.network` /
  *    `options.timeout`). Un `TypeError` cualquiera NO es «sin conexión»: suele
  *    ser un fallo al procesar la respuesta y va al `fallback`.
+ * 1b. 409 `PERIOD_LOCKED` (cierre contable, DX-091) → el texto del servidor
+ *    (o el propio) y, con `options.civilDate`, «Cerrado hasta el …».
  * 2. 5xx → `byStatus[status]`, o el `fallback` de la pantalla, o el genérico de
  *    servidor. El texto del servidor NUNCA se enseña en un 5xx, aunque venga en
  *    español: no aporta nada a quien lo lee y puede llevar detalles internos.
@@ -58,7 +60,14 @@ export const errorMessageCopy = {
   server: 'El servidor tuvo un problema. Si sigue pasando, espera unos minutos.',
   network: 'No hay conexión con el servidor. Revisa tu conexión a internet.',
   timeout: 'El servidor tardó demasiado en responder.',
+  // DX-091: el 409 `PERIOD_LOCKED` (cierre contable).
+  periodLocked:
+    'La operación toca un período contable cerrado. Elige una fecha posterior al cierre o pide a administración que lo revise.',
+  periodLockedThrough: (day: string) => `Cerrado hasta el ${day}, inclusive.`,
 };
+
+/** DX-091: código estable del 409 del cierre contable. */
+export const PERIOD_LOCKED = 'PERIOD_LOCKED';
 
 export interface ApiErrorMessageOptions {
   /** Texto de la pantalla para 5xx, errores desconocidos y 4xx sin texto propio. */
@@ -75,6 +84,12 @@ export interface ApiErrorMessageOptions {
    * la lista de alérgenos.
    */
   maxLength?: number;
+  /**
+   * DX-091: cómo se pinta un día civil (`YYYY-MM-DD`) en la pantalla (el
+   * formato de la sede). Con él, el 409 `PERIOD_LOCKED` añade «Cerrado hasta
+   * el …» con su `lockedThrough`; sin él, solo el mensaje.
+   */
+  civilDate?: (day: string) => string;
 }
 
 const MAX_HUMAN_LENGTH = 240;
@@ -220,7 +235,28 @@ export function apiErrorMessage(
     return fallback;
   }
 
+  // DX-091: el cierre contable gana a cualquier override de la pantalla para
+  // el 409 (p. ej. «ya tiene un plan de cuotas activo»): es otra causa.
+  if (err.status === 409 && err.code === PERIOD_LOCKED) return periodLockedMessage(err, options);
+
   const override = options.byStatus?.[err.status];
   if (err.status >= 500) return override ?? options.fallback ?? errorMessageCopy.server;
   return serverSpanish(err, options.maxLength) ?? override ?? statusMessage(err) ?? fallback;
+}
+
+/**
+ * DX-091: la opción `civilDate` con el formato de la sede (o nada sin él), para
+ * que el 409 `PERIOD_LOCKED` diga hasta qué día está cerrado.
+ */
+export function sedeCivilDateOption(
+  fmt: { civilDate: (day: string) => string } | null,
+): Pick<ApiErrorMessageOptions, 'civilDate'> {
+  return fmt ? { civilDate: (day) => fmt.civilDate(day) } : {};
+}
+
+/** DX-091: el 409 `PERIOD_LOCKED` en español, con el día del cierre si se sabe pintar. */
+function periodLockedMessage(err: ApiError, options: ApiErrorMessageOptions): string {
+  const base = serverSpanish(err, options.maxLength) ?? errorMessageCopy.periodLocked;
+  if (!err.lockedThrough || !options.civilDate) return base;
+  return `${withPeriod(base)} ${errorMessageCopy.periodLockedThrough(options.civilDate(err.lockedThrough))}`;
 }
