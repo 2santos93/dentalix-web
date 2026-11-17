@@ -16,8 +16,7 @@ export const agendaScheduledStripCopy = {
   title: 'Agendado',
   label: (range: string) => `Agendado ${range}`,
   withoutItems: (n: string) => `${n} sin tratamiento ligado`,
-  withoutItemsLink: (count: number) =>
-    `Ver ${count === 1 ? 'la cita' : `las ${count} citas`} sin tratamiento ligado en Reportes`,
+  withoutItemsLinkHint: ' · ver en Reportes',
   error: 'Agendado sin cargar',
   retry: 'Reintentar lo agendado',
   noValue: '—',
@@ -123,11 +122,12 @@ export function AgendaScheduledStrip({
       {withoutItems > 0 ? (
         <Link
           href={forecastReportHref({ from, to }, { locationId, providerId })}
-          aria-label={c.withoutItemsLink(withoutItems)}
           data-testid="agenda-scheduled-without-items"
           className="inline-flex min-h-8 items-center whitespace-nowrap tabular-nums text-primary-text underline decoration-dotted underline-offset-4 hover:decoration-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text max-sm:min-h-11 sm:ml-auto"
         >
           {c.withoutItems(fmt.number(withoutItems))}
+          {/* El nombre accesible empieza por el texto visible (axe label-content-name-mismatch). */}
+          <span className="sr-only">{c.withoutItemsLinkHint}</span>
         </Link>
       ) : null}
     </section>

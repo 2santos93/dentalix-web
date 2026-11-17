@@ -201,7 +201,7 @@ test('1440 px ADMIN: fórmula, 100 en el día y el profesional, la cita sin trat
   const strip = page.getByTestId('agenda-scheduled-strip');
   await expect(strip).toBeVisible({ timeout: 30_000 });
   await expect(strip.getByTestId('agenda-scheduled-row').filter({ hasText: admin.fullName })).toContainText(money(100));
-  await expect(strip.getByRole('link', { name: 'Ver la cita sin tratamiento ligado en Reportes', exact: true })).toHaveAttribute(
+  await expect(strip.getByRole('link', { name: '1 sin tratamiento ligado · ver en Reportes', exact: true })).toHaveAttribute(
     'href',
     new RegExp(`tab=prevision&periodo=custom&desde=${TOMORROW}&hasta=${TOMORROW}`),
   );

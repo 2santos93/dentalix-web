@@ -74,7 +74,7 @@ describe('AgendaScheduledStrip (DX-567)', () => {
   it('«N sin tratamiento ligado» enlaza a «Previsión» con el mismo rango y sede', async () => {
     mockedGet.mockResolvedValue(report());
     render(<AgendaScheduledStrip {...props} locationId="loc-1" />);
-    const link = await screen.findByRole('link', { name: 'Ver las 2 citas sin tratamiento ligado en Reportes' });
+    const link = await screen.findByRole('link', { name: '2 sin tratamiento ligado · ver en Reportes' });
     expect(link).toHaveTextContent('2 sin tratamiento ligado');
     expect(link).toHaveAttribute(
       'href',
