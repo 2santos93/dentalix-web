@@ -53,6 +53,8 @@ function view(overrides: Partial<PublicConfirmation> = {}): PublicConfirmation {
     // DX-469
     calendarAvailable: false,
     googleCalendarUrl: null,
+    // DX-564
+    preVisitInstructions: [],
     ...overrides,
   };
 }

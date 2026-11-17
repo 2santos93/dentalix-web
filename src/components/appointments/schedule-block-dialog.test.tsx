@@ -38,6 +38,7 @@ const typeOf = (id: string, name: string, isUrgent: boolean) => ({
   color: isUrgent ? '#DC2626' : '#16A34A',
   active: true,
   isUrgent,
+  preVisitInstructions: [],
   createdAt: '',
   updatedAt: '',
 });

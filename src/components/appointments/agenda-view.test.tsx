@@ -1115,6 +1115,8 @@ describe('AgendaView', () => {
       anamnesisPending: false,
       expiresAt: start,
       whatsappPhone: '584145550101',
+      patientLanguage: null,
+      preVisitInstructions: [],
       appointment: {
         patientFirstName: 'María',
         start,

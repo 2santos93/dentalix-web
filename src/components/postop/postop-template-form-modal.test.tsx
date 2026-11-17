@@ -56,6 +56,7 @@ function appointmentType(id: string, name: string): AppointmentType {
     color: '#7C3AED',
     active: true,
     isUrgent: false,
+    preVisitInstructions: [],
     createdAt: '2026-10-01T00:00:00.000Z',
     updatedAt: '2026-10-01T00:00:00.000Z',
   };

@@ -362,7 +362,7 @@ it('DX-247: una cita de 15 min con alerta lleva el icono, fuera del botón de la
 
 it.each(['SCHEDULED', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'ARRIVED', 'IN_CHAIR', 'READY_FOR_CHECKOUT'] as const)('DX-242: %s tiene estado visible y nombre accesible con tipo', (status) => {
   const labels = { SCHEDULED:'Agendada', CONFIRMED:'Confirmada', COMPLETED:'Completada', CANCELLED:'Cancelada', NO_SHOW:'No asistió', ARRIVED:'En espera', IN_CHAIR:'En sillón', READY_FOR_CHECKOUT:'Listo para cobrar' };
-  render(<WeekTimeGrid clock={CLOCK} appointments={[appointment({ id: status, status, appointmentType: { id:'t', name:'Control', color:'#123456', durationMinutes:30 } })]} weekStart={WEEK_START} onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop} />);
+  render(<WeekTimeGrid clock={CLOCK} appointments={[appointment({ id: status, status, appointmentType: { id:'t', name:'Control', color:'#123456', durationMinutes:30, hasPreVisitInstructions: false } })]} weekStart={WEEK_START} onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop} />);
   const card = screen.getByTestId('week-grid-appointment');
   expect(card).toHaveAccessibleName(expect.stringContaining(labels[status]));
   expect(card).toHaveAccessibleName(expect.stringContaining('Control'));
@@ -396,7 +396,7 @@ it('DX-297 audits all full and compact visible statuses while retaining clinical
       const view = render(<WeekTimeGrid clock={CLOCK} weekStart={WEEK_START}
         appointments={[appointment({ id: 'audit', status, patientFirstName: 'Ana', patientLastName: 'García',
           end: minutes === 15 ? '2026-03-09T09:15:00.000Z' : '2026-03-09T10:30:00.000Z',
-          appointmentType: { id: 'type', name: 'Endodoncia', durationMinutes: minutes, color: '#0E7490' },
+          appointmentType: { id: 'type', name: 'Endodoncia', durationMinutes: minutes, color: '#0E7490', hasPreVisitInstructions: false },
           balance: { hasOverdue: true, overdueDays: 40 }, attendance: { noShows: 2, lateCancellations: 1 },
           coverage: { status: 'EXPIRED', payerName: 'Synthetic payer', planName: null, validTo: '2026-01-01' },
           confirmationSentAt: '2026-03-01T00:00:00.000Z',
@@ -425,7 +425,7 @@ it('DX-297: rejilla estrecha conserva estado y paciente legibles junto al indica
         appointments={[appointment({ id: 'compact', status, patientFirstName: 'Estado 3', patientLastName: 'QA',
           end: '2026-03-09T09:15:00.000Z',
           medicalAlerts: { hasCriticalAlert: false, alerts: [], requiresPremedication: false, anamnesisStatus: 'MISSING', anamnesisReviewedAt: null },
-          appointmentType: { id: 'type', name: 'Control', durationMinutes: 15, color: '#0E7490' },
+          appointmentType: { id: 'type', name: 'Control', durationMinutes: 15, color: '#0E7490', hasPreVisitInstructions: false },
         })]} onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop} /></div>);
       const card = screen.getByTestId('week-grid-appointment');
       expect(card).toHaveAccessibleName(/09:00–09:15/);
