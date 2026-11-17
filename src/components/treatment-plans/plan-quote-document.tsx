@@ -10,6 +10,7 @@ import {
 } from '@/lib/treatment-plans/plan-quote-api';
 import { SURFACE_LABELS } from '@/lib/odontogram/surface-labels';
 import { documentTexts, type DocumentFormat } from '@/lib/format/document-format';
+import type { InstallmentScenario, InstallmentSimulation } from '@/lib/treatment-plans/installment-simulation';
 import { convertWithRate, paymentRateCopy, ratePairLabel } from '@/lib/payments/payment-rate';
 import {
   sedeListPriceFormat,
@@ -22,6 +23,19 @@ import {
 } from '@/lib/treatment-plans/list-price';
 
 const copy = {
+  // DX-041: opciones de pago en cuotas (las de «Financiar»).
+  paymentOptionsHeading: 'Opciones de pago',
+  paymentOptionsCaption: 'Opciones de pago en cuotas',
+  colOption: 'Opción',
+  colDown: 'Inicial',
+  colInstallments: 'Cuotas',
+  colFirstDue: 'Primera cuota',
+  colLastDue: 'Última cuota',
+  optionN: (n: number) => `Opción ${n}`,
+  installmentsValue: (n: number, periodicity: string, amount: string) => `${n} ${periodicity} de ${amount}`,
+  lastAdjust: (amount: string) => `la última de ${amount}`,
+  paymentOptionsNote: (total: string) =>
+    `Simulación sin intereses sobre ${total}: la inicial más las cuotas suman ese saldo y el ajuste de redondeo va en la última cuota. El plan de cuotas se fija al aceptar el presupuesto.`,
   title: 'Presupuesto de tratamiento',
   issuedOn: 'Fecha',
   validity: (days: number) => `Válido ${days} días`,
@@ -143,7 +157,15 @@ interface PlanQuoteDocumentProps {
    * del …»), o `'unknown'` si no se pudo leer («Resto de una aceptación parcial»).
    */
   partialRestOf?: string | null;
+  /** DX-041: hasta 3 opciones de pago en cuotas, en la moneda del plan; sin ellas, no hay bloque. */
+  paymentOptions?: InstallmentSimulation | null;
 }
+
+const PERIODICITY_PLURAL: Record<InstallmentScenario['periodicity'], string> = {
+  MONTHLY: 'mensuales',
+  BIWEEKLY: 'quincenales',
+  WEEKLY: 'semanales',
+};
 
 /**
  * El presupuesto como DOCUMENTO para papel o PDF (DX-012): cabecera de la
@@ -156,7 +178,13 @@ interface PlanQuoteDocumentProps {
  * papel blanco y tinta oscura explícitos, también en modo oscuro. En pantalla
  * estrecha la tabla se apila en tarjetas; en papel siempre es tabla.
  */
-export function PlanQuoteDocument({ quote, format, secondCurrency = null, partialRestOf = null }: PlanQuoteDocumentProps) {
+export function PlanQuoteDocument({
+  quote,
+  format,
+  secondCurrency = null,
+  partialRestOf = null,
+  paymentOptions = null,
+}: PlanQuoteDocumentProps) {
   // DX-354: fechas, horas e importes con el formato de la sede del presupuesto y el código ISO.
   const doc = documentTexts(format);
   const money = doc.amount;
@@ -388,6 +416,49 @@ export function PlanQuoteDocument({ quote, format, secondCurrency = null, partia
           </p>
         ) : null}
       </section>
+
+      {paymentOptions && paymentOptions.scenarios.length > 0 ? (
+        <section data-testid="quote-payment-options" aria-label={copy.paymentOptionsHeading} className="mt-8 break-inside-avoid">
+          <h2 className="mb-3 text-base font-semibold">{copy.paymentOptionsHeading}</h2>
+          <table className="w-full border-collapse text-sm">
+            <caption className="sr-only">{copy.paymentOptionsCaption}</caption>
+            <thead>
+              <tr className="border-b border-[#111827] text-left">
+                <th scope="col" className="py-2 pr-2 font-semibold">{copy.colOption}</th>
+                <th scope="col" className="py-2 pr-2 text-right font-semibold">{copy.colDown}</th>
+                <th scope="col" className="py-2 pr-2 font-semibold">{copy.colInstallments}</th>
+                <th scope="col" className="py-2 pr-2 font-semibold">{copy.colFirstDue}</th>
+                <th scope="col" className="py-2 font-semibold">{copy.colLastDue}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paymentOptions.scenarios.map((scenario, index) => {
+                const list = scenario.installments;
+                const base = list[0]?.amount ?? 0;
+                const last = list[list.length - 1]?.amount ?? 0;
+                const cur = paymentOptions.currency;
+                return (
+                  <tr key={index} data-testid={`quote-payment-option-${index + 1}`} className="border-b border-[#e5e7eb] align-top">
+                    <th scope="row" className="py-2 pr-2 text-left font-medium">{copy.optionN(index + 1)}</th>
+                    <td className="py-2 pr-2 text-right tabular-nums">{money(scenario.downPayment, cur)}</td>
+                    <td className="py-2 pr-2 tabular-nums">
+                      {copy.installmentsValue(scenario.installmentsCount, PERIODICITY_PLURAL[scenario.periodicity], money(base, cur))}
+                      {list.length > 1 && last !== base ? (
+                        <span className="block text-xs text-[#4b5563]">{copy.lastAdjust(money(last, cur))}</span>
+                      ) : null}
+                    </td>
+                    <td className="py-2 pr-2 tabular-nums">{doc.civilDate(list[0]?.dueDate.slice(0, 10) ?? '')}</td>
+                    <td className="py-2 tabular-nums">{doc.civilDate(list[list.length - 1]?.dueDate.slice(0, 10) ?? '')}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="mt-2 text-xs text-[#4b5563]">
+            {copy.paymentOptionsNote(money(paymentOptions.totalToFinance, paymentOptions.currency))}
+          </p>
+        </section>
+      ) : null}
 
       <section
         data-testid="quote-signature"
