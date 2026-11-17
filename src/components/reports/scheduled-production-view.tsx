@@ -717,7 +717,10 @@ export function ScheduledProductionView({
                         // Otros filtros: la lista vuelve a su primera página.
                         key={JSON.stringify(filters)}
                         token={token}
-                        filters={filters} total={data.totals.appointmentsWithoutItems} fmt={fmt} />
+                        filters={filters}
+                        total={data.totals.appointmentsWithoutItems}
+                        fmt={fmt}
+                      />
                     ) : null}
                   </div>
                 )}
