@@ -86,3 +86,19 @@ describe('RejectPlanModal (DX-040)', () => {
     expect(props.onRejected).not.toHaveBeenCalled();
   });
 });
+
+describe('RejectPlanModal · cierre contable (DX-091)', () => {
+  beforeEach(() => mockedReject.mockReset());
+
+  it('el 409 PERIOD_LOCKED (su plan de cuotas tiene cuotas en un período cerrado) sale en español', async () => {
+    const message =
+      'El plan de cuotas tiene cuotas vencidas en un período contable cerrado: ya no se puede cancelar. Pide a administración que lo revise.';
+    mockedReject.mockRejectedValue(new ApiError(409, message, { code: 'PERIOD_LOCKED', lockedThrough: '2026-09-30' }));
+    const user = userEvent.setup();
+    renderModal();
+    await user.click(screen.getByRole('radio', { name: 'Precio' }));
+    await user.click(screen.getByRole('button', { name: 'Marcar rechazado' }));
+    // Con el formato de la sede añade el día; sin él (aún cargando), el mensaje solo.
+    expect(await screen.findByText(new RegExp(`^${message.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))).toBeInTheDocument();
+  });
+});

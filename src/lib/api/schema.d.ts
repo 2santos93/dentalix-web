@@ -4346,6 +4346,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/clinic/settings/financial-lock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cierre contable de la clínica y sus últimas excepciones (DX-091) */
+        get: operations["FinancialLockSettingsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Cambia el cierre contable (DX-091)
+         * @description Fecha fija (cerrado ese día y lo anterior) y/o días abiertos hacia atrás; rige el cierre más tardío, en el día civil de la sede de cada abono. Con el cierre, crear un abono con fecha cerrada, anularlo o crear o cancelar un plan con cuotas en días cerrados responde 409 `PERIOD_LOCKED`. Con `adminExempt`, el ADMIN puede hacerlo indicando `lockOverrideReason`, y queda registrado. Solo cambian los campos enviados; null quita ese cierre. Auditado con el antes y el después.
+         */
+        patch: operations["FinancialLockSettingsController_update"];
+        trace?: never;
+    };
+    "/api/v1/payments/period-lock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cierre contable vigente en la sede (DX-091)
+         * @description El último día cerrado hoy en la sede donde se registra el abono (los días hasta él, inclusive, no admiten abonos ni anulaciones) y si quien pregunta puede saltarlo con motivo.
+         */
+        get: operations["PeriodLockController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/currencies": {
         parameters: {
             query?: never;
@@ -18511,6 +18552,90 @@ export interface components {
             /** @description DX-502-bis. Moneda del catálogo de precios: código ISO 4217 de una moneda admitida (GET /currencies). Es la que se congela en los ítems NUEVOS del plan, para mostrar el precio de lista y el ahorro por convenio; los ítems ya creados no cambian. Vacío o null = sin fijar: la moneda común de las sedes activas, o ninguna. */
             catalogCurrency?: string | null;
         };
+        /**
+         * @description Registrar un abono, anularlo, crear un plan de cuotas o cancelarlo.
+         * @enum {string}
+         */
+        FinancialLockOperation: "PAYMENT_CREATE" | "PAYMENT_VOID" | "PAYMENT_PLAN_CREATE" | "PAYMENT_PLAN_CANCEL";
+        FinancialLockActorDto: {
+            /** Format: uuid */
+            userId: string;
+            /** @description Nombre visible; null si ya no es miembro de la clínica. */
+            name: string | null;
+        };
+        FinancialLockLocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        FinancialLockOverrideDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: date-time
+             * @description Cuándo (hora del servidor).
+             */
+            createdAt: string;
+            /** @description Registrar un abono, anularlo, crear un plan de cuotas o cancelarlo. */
+            operation: components["schemas"]["FinancialLockOperation"];
+            /**
+             * Format: date
+             * @description El día cerrado que tocó (el del abono o la cuota más antigua).
+             */
+            businessDate: string;
+            /**
+             * Format: date
+             * @description El cierre vigente en ese momento (último día cerrado).
+             */
+            lockedThrough: string;
+            /** @description Por qué (lo escribió el ADMIN). */
+            reason: string;
+            /** @description Quién. */
+            actor: components["schemas"]["FinancialLockActorDto"];
+            /** Format: uuid */
+            paymentId: string | null;
+            /** Format: uuid */
+            paymentPlanId: string | null;
+            /** @description La sede del abono o del plan; null = la principal. */
+            location: components["schemas"]["FinancialLockLocationDto"] | null;
+        };
+        FinancialLockSettingsDto: {
+            /** Format: date */
+            lockDate: string | null;
+            lockDays: number | null;
+            adminExempt: boolean;
+            /**
+             * Format: date
+             * @description El último día cerrado hoy en la sede de la petición: el más tardío de la fecha fija y de hoy − días − 1. Null sin cierre.
+             */
+            lockedThrough: string | null;
+            /** @description Las últimas 50 excepciones (quién, cuándo y por qué), de la más reciente a la más antigua. */
+            overrides: components["schemas"]["FinancialLockOverrideDto"][];
+        };
+        UpdateFinancialLockDto: {
+            /**
+             * Format: date
+             * @description Cerrado este día civil y todo lo anterior. Tiene que ser anterior a hoy en la sede. Null = sin fecha fija; ausente = no cambia.
+             * @example 2026-09-30
+             */
+            lockDate?: string | null;
+            /**
+             * @description Días abiertos hacia atrás: con N quedan abiertos hoy y los N días anteriores, y cerrado todo lo de antes (0 = solo hoy). Null = sin cierre por días; ausente = no cambia. Si hay fecha fija y días, rige el cierre más tardío.
+             * @example 7
+             */
+            lockDays?: number | null;
+            /** @description El ADMIN puede registrar o anular en un período cerrado indicando un motivo, que queda registrado. Ausente = no cambia. */
+            adminExempt?: boolean;
+        };
+        PeriodLockDto: {
+            /**
+             * Format: date
+             * @description Último día cerrado hoy en la sede donde se registra (X-Location-Id o la de escritura). Null sin cierre.
+             */
+            lockedThrough: string | null;
+            /** @description Quien pregunta puede elegir un día cerrado indicando un motivo (ADMIN con la exención de la clínica). */
+            canOverride: boolean;
+        };
         CurrencyDto: {
             /**
              * @description Minor units de ISO 4217 según la List One de SIX (RSD 2, JPY 0). Dato normativo; no se usa para redondear.
@@ -18656,6 +18781,8 @@ export interface components {
             createdById: string | null;
             /** @description Si quien consulta puede anular este abono: ADMIN siempre; RECEPTION solo los que registró ella el mismo día (calendario de la sede del abono). Solo orienta a la interfaz: `DELETE /payments/:id` vuelve a aplicar la regla. */
             canVoid: boolean;
+            /** @description DX-091: el día del abono (en su sede) está en un período contable cerrado. Entonces `canVoid` es `false`, salvo para el ADMIN con la exención de la clínica, que anula indicando `lockOverrideReason`. */
+            periodLocked: boolean;
             /**
              * Format: date-time
              * @description Instante del pago. Un abono registrado solo con fecha (YYYY-MM-DD) se guarda al mediodía de la zona de su sede. Para mostrar el día, usar `paidOn`.
@@ -18848,6 +18975,11 @@ export interface components {
              */
             proofUploadId?: string;
             notes?: string;
+            /**
+             * @description DX-091: motivo para hacerlo en un período contable cerrado. Solo vale para ADMIN y si la clínica admite la exención (`financialLockAdminExempt`); entonces es obligatorio (3–300 caracteres, 400 sin él) y queda registrado con quién y cuándo. Para cualquier otro rol se ignora y el período cerrado da 409 `PERIOD_LOCKED`.
+             * @example Abono del 15/09 que recepción olvidó registrar; cuadrado con el extracto del banco
+             */
+            lockOverrideReason?: string;
         };
         FrozenExchangeRateDto: {
             /** @description Moneda de destino: la del plan (o la del saldo migrado) */
@@ -18988,6 +19120,11 @@ export interface components {
             /** @description Confirma que el total, si supera lo pendiente del plan, deja el excedente como saldo a favor (sin ella, 409 `SPLIT_PAYMENT_EXCEEDS_BALANCE`). */
             confirmCreditBalance?: boolean;
             notes?: string;
+            /**
+             * @description DX-091: motivo para hacerlo en un período contable cerrado. Solo vale para ADMIN y si la clínica admite la exención (`financialLockAdminExempt`); entonces es obligatorio (3–300 caracteres, 400 sin él) y queda registrado con quién y cuándo. Para cualquier otro rol se ignora y el período cerrado da 409 `PERIOD_LOCKED`.
+             * @example Abono del 15/09 que recepción olvidó registrar; cuadrado con el extracto del banco
+             */
+            lockOverrideReason?: string;
         };
         SplitPaymentDto: {
             /**
@@ -19133,6 +19270,11 @@ export interface components {
              * @example Cobro duplicado: el paciente pagó una sola vez
              */
             reason: string;
+            /**
+             * @description DX-091: motivo para hacerlo en un período contable cerrado. Solo vale para ADMIN y si la clínica admite la exención (`financialLockAdminExempt`); entonces es obligatorio (3–300 caracteres, 400 sin él) y queda registrado con quién y cuándo. Para cualquier otro rol se ignora y el período cerrado da 409 `PERIOD_LOCKED`.
+             * @example Abono del 15/09 que recepción olvidó registrar; cuadrado con el extracto del banco
+             */
+            lockOverrideReason?: string;
         };
         /**
          * @description FROZEN: congeló su tasa (rate y equivalentAmount presentes). MISSING: «sin tasa» de su día. LEGACY: anterior a la tasa congelada y aún sin congelar.
@@ -19768,6 +19910,11 @@ export interface components {
              */
             totalToFinance?: number;
             notes?: string;
+            /**
+             * @description DX-091: motivo para hacerlo en un período contable cerrado. Solo vale para ADMIN y si la clínica admite la exención (`financialLockAdminExempt`); entonces es obligatorio (3–300 caracteres, 400 sin él) y queda registrado con quién y cuándo. Para cualquier otro rol se ignora y el período cerrado da 409 `PERIOD_LOCKED`.
+             * @example Abono del 15/09 que recepción olvidó registrar; cuadrado con el extracto del banco
+             */
+            lockOverrideReason?: string;
         };
         TramoViewDto: {
             /**
@@ -19907,6 +20054,13 @@ export interface components {
              * @example false
              */
             isFullyPaid: boolean;
+        };
+        CancelPaymentPlanDto: {
+            /**
+             * @description DX-091: motivo para hacerlo en un período contable cerrado. Solo vale para ADMIN y si la clínica admite la exención (`financialLockAdminExempt`); entonces es obligatorio (3–300 caracteres, 400 sin él) y queda registrado con quién y cuándo. Para cualquier otro rol se ignora y el período cerrado da 409 `PERIOD_LOCKED`.
+             * @example Abono del 15/09 que recepción olvidó registrar; cuadrado con el extracto del banco
+             */
+            lockOverrideReason?: string;
         };
         AccountStatementClinicDto: {
             /** @example Clínica Sonrisas */
@@ -20157,8 +20311,10 @@ export interface components {
             createdById: string | null;
             /** @description Si quien consulta puede anular este abono: ADMIN cualquiera activo; RECEPTION solo los suyos registrados el mismo día (calendario de la sede del abono). `false` si ya está anulado. Solo orienta a la interfaz: `DELETE /payments/:id` vuelve a aplicar la regla. */
             canVoid: boolean;
-            /** @description DX-432: por qué este abono no se anula aunque su rol pueda (es referencia de una devolución, que no se deshace), con el texto del 409 de `DELETE /payments/:id`. `null` si nada lo impide. La interfaz lo pinta como «Anular» deshabilitado con esta explicación. */
+            /** @description DX-432: por qué este abono no se anula aunque su rol pueda (es referencia de una devolución, que no se deshace; DX-091: o es de un período contable cerrado), con el texto del 409 de `DELETE /payments/:id`. `null` si nada lo impide. La interfaz lo pinta como «Anular» deshabilitado con esta explicación. */
             voidBlockedReason: string | null;
+            /** @description DX-091: el día del abono (en su sede) está en un período contable cerrado. Entonces `canVoid` es `false` y `voidBlockedReason` lo explica, salvo para el ADMIN con la exención de la clínica, que anula indicando `lockOverrideReason`. */
+            periodLocked: boolean;
             /** @description Abono anulado: se lista pero no suma. */
             voided: boolean;
             /** Format: date-time */
@@ -39979,6 +40135,109 @@ export interface operations {
             };
         };
     };
+    FinancialLockSettingsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinancialLockSettingsDto"];
+                };
+            };
+            /** @description Solo administración configura el cierre contable. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code: LOCATION_TIMEZONE_REQUIRED` si la sede de la petición no tiene zona horaria válida. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    FinancialLockSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateFinancialLockDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinancialLockSettingsDto"];
+                };
+            };
+            /** @description Fecha que no es AAAA-MM-DD o no es anterior a hoy en la sede, días fuera de 0..365 o exención que no es sí/no */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración configura el cierre contable. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code: LOCATION_TIMEZONE_REQUIRED` si la sede de la petición no tiene zona horaria válida. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PeriodLockController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeriodLockDto"];
+                };
+            };
+            /** @description `code: LOCATION_TIMEZONE_REQUIRED` si la sede de la petición no tiene zona horaria válida. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     ReferenceController_currencies: {
         parameters: {
             query?: never;
@@ -40327,7 +40586,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description El plan está rechazado o cancelado: no admite abonos (DX-109). Un plan completado sí. DX-377: `code: PAYMENT_REFERENCE_DUPLICATE` si la referencia y el medio ya están en otro abono vivo de ±90 días (`matches`); se confirma repitiendo con `duplicateReferenceReason`. */
+            /** @description El plan está rechazado o cancelado: no admite abonos (DX-109). Un plan completado sí. DX-377: `code: PAYMENT_REFERENCE_DUPLICATE` si la referencia y el medio ya están en otro abono vivo de ±90 días (`matches`); se confirma repitiendo con `duplicateReferenceReason`. DX-091: `code: PERIOD_LOCKED` (con `lockedThrough`) si el día del abono en la sede está en un período contable cerrado. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -40381,7 +40640,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Plan rechazado o cancelado (DX-109). `code: PAYMENT_REFERENCE_DUPLICATE` con `line` (desde 0) si la referencia de una línea ya está en otro abono vivo de ±90 días: se confirma con su `duplicateReferenceReason`. `code: SPLIT_PAYMENT_EXCEEDS_BALANCE` (con `total`, `pending` —nunca bajo 0—, `excess` —lo que este cobro supera lo pendiente— y `currency`, la del plan) si el total supera lo pendiente: se confirma con `confirmCreditBalance`. `code: SPLIT_PAYMENT_BALANCE_CHANGED` si, sin esa confirmación, otro movimiento del plan (un abono, un traspaso o una devolución de saldo a favor) entró mientras se registraba el cobro: no se registra nada y se repite la petición (misma clave). Sin caja abierta, si la clínica la exige para el efectivo (DX-027). */
+            /** @description Plan rechazado o cancelado (DX-109). `code: PAYMENT_REFERENCE_DUPLICATE` con `line` (desde 0) si la referencia de una línea ya está en otro abono vivo de ±90 días: se confirma con su `duplicateReferenceReason`. `code: SPLIT_PAYMENT_EXCEEDS_BALANCE` (con `total`, `pending` —nunca bajo 0—, `excess` —lo que este cobro supera lo pendiente— y `currency`, la del plan) si el total supera lo pendiente: se confirma con `confirmCreditBalance`. `code: SPLIT_PAYMENT_BALANCE_CHANGED` si, sin esa confirmación, otro movimiento del plan (un abono, un traspaso o una devolución de saldo a favor) entró mientras se registraba el cobro: no se registra nada y se repite la petición (misma clave). Sin caja abierta, si la clínica la exige para el efectivo (DX-027). DX-091: `code: PERIOD_LOCKED` si el día del cobro está en un período contable cerrado. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -40554,7 +40813,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Id que no es UUID, o falta `reason` o no tiene 3–300 caracteres */
+            /** @description Id que no es UUID, o falta `reason` o no tiene 3–300 caracteres. DX-091: ADMIN con la exención activa anulando un abono de un período cerrado sin `lockOverrideReason` (3–300). */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -40575,7 +40834,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description DX-253: el abono (o una línea de su cobro dividido) es referencia de una devolución de saldo a favor, o del plan ya se traspasó o devolvió saldo a favor y sin este abono quedaría al descubierto */
+            /** @description DX-253: el abono (o una línea de su cobro dividido) es referencia de una devolución de saldo a favor, o del plan ya se traspasó o devolvió saldo a favor y sin este abono quedaría al descubierto. DX-091: `code: PERIOD_LOCKED` (con `lockedThrough`) si el día del abono en su sede está en un período contable cerrado (también para RECEPTION desde Caja o Estado de cuenta). El ADMIN lo salta con `lockOverrideReason` si la clínica lo admite. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -41184,7 +41443,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description El plan ya tiene un plan de cuotas activo, o está rechazado o cancelado y no se financia (DX-109). */
+            /** @description El plan ya tiene un plan de cuotas activo, o está rechazado o cancelado y no se financia (DX-109). DX-091: `code: PERIOD_LOCKED` si alguna cuota vence en un período contable cerrado. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -41202,7 +41461,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelPaymentPlanDto"];
+            };
+        };
         responses: {
             /** @description Payment plan cancelled */
             200: {
@@ -41213,6 +41476,13 @@ export interface operations {
             };
             /** @description Id que no es UUID */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description DX-091: `code: PERIOD_LOCKED` si el plan tiene cuotas vencidas en un período contable cerrado. El ADMIN lo salta con `lockOverrideReason` si la clínica admite la exención. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

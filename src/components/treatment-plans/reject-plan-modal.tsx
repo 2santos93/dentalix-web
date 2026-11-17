@@ -1,7 +1,8 @@
 'use client';
 import * as React from 'react';
 import { useId, useState } from 'react';
-import { apiErrorMessage } from '@/lib/api/error-message';
+import { apiErrorMessage, sedeCivilDateOption } from '@/lib/api/error-message';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { rejectPlan } from '@/lib/treatment-plans/plan-options-api';
 import {
   REJECTION_REASON_LABELS,
@@ -64,6 +65,9 @@ export function RejectPlanModal({
   const [reason, setReason] = useState<RejectionReason | null>(null);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // DX-091: el 409 `PERIOD_LOCKED` (su plan de cuotas tiene cuotas en un
+  // período cerrado) dice hasta qué día, con el formato de la sede.
+  const fmt = readyFormat(useSedeFormat(token));
   const [submitting, setSubmitting] = useState(false);
   // Con varios planes, los ya rechazados (si uno falla a medias, el reintento
   // no repite los hechos: un segundo rechazo sería un 409).
@@ -97,7 +101,7 @@ export function RejectPlanModal({
       if (rejected) onRejected(rejected);
     } catch (err) {
       setDoneIds(done);
-      const message = apiErrorMessage(err, copy.genericError);
+      const message = apiErrorMessage(err, { fallback: copy.genericError, ...sedeCivilDateOption(fmt) });
       setError(done.length > 0 ? copy.partial(done.length, planIds.length, message) : message);
     } finally {
       setSubmitting(false);

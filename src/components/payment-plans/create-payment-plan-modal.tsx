@@ -15,6 +15,17 @@ import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { roundAmount } from '@/lib/money/round';
 import { installmentSplit, MAX_INSTALLMENTS } from '@/lib/money/line-rounding';
 import { useCurrencyRoundingDigits } from '@/lib/reference/currency-rounding-digits';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { readyPeriodLock, usePeriodLock } from '@/components/payments/use-period-lock';
+import {
+  LockOverrideReasonField,
+  lockedDateError,
+  minDateAfterLock,
+  needsLockReason,
+  periodLockCopy,
+  periodLockHint,
+  validLockReason,
+} from '@/components/payments/period-lock-field';
 
 // Copy como constantes (i18n-ready). Los textos son los que ya tenía el modal
 // de «Plan de pagos» del plan de tratamiento, del que sale este componente.
@@ -111,7 +122,13 @@ export function CreatePaymentPlanModal({
   const [form, setForm] = useState<FormState>(initialForm);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<{ downPayment?: string; total?: string }>({});
+  const [fieldErrors, setFieldErrors] = useState<{ downPayment?: string; total?: string; startDate?: string }>({});
+  // DX-091: la 1ª cuota no puede vencer en un período contable cerrado (las
+  // demás vencen después); el ADMIN con la exención lo hace con motivo.
+  const fmt = readyFormat(useSedeFormat(token));
+  const periodLock = readyPeriodLock(usePeriodLock(token, open));
+  const [lockReason, setLockReason] = useState('');
+  const [lockReasonError, setLockReasonError] = useState<string | null>(null);
 
   // Ajuste durante el render (patrón de React para "estado que depende de una
   // prop"): al abrir se empieza de cero, y al cambiar de plan el total vuelve
@@ -124,6 +141,8 @@ export function CreatePaymentPlanModal({
       setForm(initialForm());
       setError(null);
       setFieldErrors({});
+      setLockReason('');
+      setLockReasonError(null);
     }
   }
   if ((plan?.id ?? null) !== prevPlanId) {
@@ -176,6 +195,24 @@ export function CreatePaymentPlanModal({
       setError(copy.missingStartDate);
       return;
     }
+    // DX-091: un día cerrado se dice junto al campo (la API respondería 409).
+    const closed = lockedDateError(periodLock, startDate, fmt);
+    if (closed) {
+      setFieldErrors((f) => ({ ...f, startDate: closed }));
+      document.getElementById('pp-start')?.querySelector<HTMLElement>('[role="spinbutton"]')?.focus();
+      return;
+    }
+    let lockOverrideReason: string | undefined;
+    if (needsLockReason(periodLock, startDate)) {
+      const valid = validLockReason(lockReason);
+      if (!valid) {
+        setLockReasonError(periodLockCopy.reasonMissing);
+        document.getElementById('pp-lock-reason')?.focus();
+        return;
+      }
+      lockOverrideReason = valid;
+    }
+    setLockReasonError(null);
     setCreating(true);
     try {
       await createPaymentPlan(token, plan.id, {
@@ -184,10 +221,11 @@ export function CreatePaymentPlanModal({
         startDate: new Date(startDate).toISOString(),
         downPayment: pie,
         totalToFinance: total,
+        ...(lockOverrideReason ? { lockOverrideReason } : {}),
       });
       await onCreated();
     } catch (err) {
-      setError(paymentPlanErrorMessage(err));
+      setError(paymentPlanErrorMessage(err, fmt));
     } finally {
       setCreating(false);
     }
@@ -258,7 +296,12 @@ export function CreatePaymentPlanModal({
           </FormField>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <FormField htmlFor="pp-start" label={copy.startDate}>
+          <FormField
+            htmlFor="pp-start"
+            label={copy.startDate}
+            error={fieldErrors.startDate}
+            hint={periodLockHint(periodLock, fmt, 'plan')}
+          >
             {zone.status === 'error' ? (
               <SedeConfigError kind="timeZone" variant="field" retryId="pp-start" description={zone.message} onRetry={zone.retry} />
             ) : (
@@ -266,7 +309,13 @@ export function CreatePaymentPlanModal({
                 id="pp-start"
                 name="pp-start"
                 value={startDate || null}
-                onChange={(next) => patch({ startDate: next ?? '' })}
+                min={minDateAfterLock(periodLock)}
+                aria-invalid={fieldErrors.startDate ? true : undefined}
+                aria-describedby={fieldErrors.startDate ? fieldErrorId('pp-start') : undefined}
+                onChange={(next) => {
+                  patch({ startDate: next ?? '' });
+                  setFieldErrors((f) => ({ ...f, startDate: undefined }));
+                }}
               />
             )}
           </FormField>
@@ -285,6 +334,19 @@ export function CreatePaymentPlanModal({
             />
           </FormField>
         </div>
+        {needsLockReason(periodLock, startDate) ? (
+          <LockOverrideReasonField
+            id="pp-lock-reason"
+            label={periodLockCopy.planReasonLabel}
+            value={lockReason}
+            error={lockReasonError}
+            disabled={creating}
+            onChange={(next) => {
+              setLockReason(next);
+              if (lockReasonError) setLockReasonError(null);
+            }}
+          />
+        ) : null}
         <FormField htmlFor="pp-total" label={copy.totalField} error={fieldErrors.total}>
           <MoneyInput
             money={money}

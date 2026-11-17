@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { notifySuccess } from '@/components/errors/notify';
-import { apiErrorMessage } from '@/lib/api/error-message';
+import { apiErrorMessage, sedeCivilDateOption } from '@/lib/api/error-message';
 import { parseMoneyInput } from '@/lib/format/money';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { SEDE_TIME_ZONE_ERROR, readyTimeZone, sedeToday, type SedeZoneState } from '@/lib/locations/use-sede-time-zone';
@@ -25,6 +25,16 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Textarea } from '@/components/ui/textarea';
 import { copy } from './treatment-plans-tab-copy';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
+import { readyPeriodLock, usePeriodLock } from '@/components/payments/use-period-lock';
+import {
+  LockOverrideReasonField,
+  lockedDateError,
+  minDateAfterLock,
+  needsLockReason,
+  periodLockCopy,
+  periodLockHint,
+  validLockReason,
+} from '@/components/payments/period-lock-field';
 
 interface PlanPaymentFormModalProps {
   token: string;
@@ -87,6 +97,10 @@ export function PlanPaymentFormModal({
   const [amountError, setAmountError] = useState<string | null>(null);
   const [dateError, setDateError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // DX-091: el cierre contable de la sede (días cerrados fuera del calendario).
+  const periodLock = readyPeriodLock(usePeriodLock(token, open));
+  const [lockReason, setLockReason] = useState('');
+  const [lockReasonError, setLockReasonError] = useState<string | null>(null);
 
   // DX-376: cobrar en otra moneda que la del plan enseña, antes de guardar, la
   // tasa del día del abono, cuánto cubre y lo que queda pendiente.
@@ -125,6 +139,24 @@ export function PlanPaymentFormModal({
       document.getElementById('tp-payment-date')?.querySelector<HTMLElement>('[role="spinbutton"]')?.focus();
       return;
     }
+    // DX-091: un día cerrado se dice junto al campo (la API respondería 409).
+    const closed = lockedDateError(periodLock, paymentDate, sedeFmt);
+    if (closed) {
+      setDateError(closed);
+      document.getElementById('tp-payment-date')?.querySelector<HTMLElement>('[role="spinbutton"]')?.focus();
+      return;
+    }
+    let lockOverrideReason: string | undefined;
+    if (needsLockReason(periodLock, paymentDate)) {
+      const valid = validLockReason(lockReason);
+      if (!valid) {
+        setLockReasonError(periodLockCopy.reasonMissing);
+        document.getElementById('tp-lock-reason')?.focus();
+        return;
+      }
+      lockOverrideReason = valid;
+    }
+    setLockReasonError(null);
     // DX-395: la referencia o el motivo que faltan se marcan en su campo,
     // que recibe el foco.
     if (!paymentMethodFields.validate()) return;
@@ -138,6 +170,7 @@ export function PlanPaymentFormModal({
         paidAt: paymentDate,
         ...paymentMethodFields.body(),
         ...(paymentNotes.trim() ? { notes: paymentNotes.trim() } : {}),
+        ...(lockOverrideReason ? { lockOverrideReason } : {}),
       };
       const saved = await recordPayment(token, plan.id, input, idempotencyKey);
       // Éxito con el sistema de avisos del repo (sonner): visible en cualquier
@@ -151,7 +184,9 @@ export function PlanPaymentFormModal({
       // DX-377: la referencia repetida se avisa junto al campo y pide motivo.
       if (paymentMethodFields.catchDuplicate(err)) return;
       // Un 400 técnico (importe/moneda) se dice en español (apiErrorMessage).
-      setSubmitError(apiErrorMessage(err, copy.genericAddPaymentError));
+      setSubmitError(
+        apiErrorMessage(err, { fallback: copy.genericAddPaymentError, ...sedeCivilDateOption(sedeFmt) }),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -214,7 +249,12 @@ export function PlanPaymentFormModal({
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <FormField htmlFor="tp-payment-date" label={copy.paymentDateLabel} error={dateError}>
+        <FormField
+          htmlFor="tp-payment-date"
+          label={copy.paymentDateLabel}
+          error={dateError}
+          hint={periodLockHint(periodLock, sedeFmt)}
+        >
           {sedeZone.status === 'error' && paymentDate === '' ? (
             <SedeConfigError kind="timeZone" variant="field" retryId="tp-payment-date" onRetry={sedeZone.retry} />
           ) : (
@@ -222,6 +262,7 @@ export function PlanPaymentFormModal({
               id="tp-payment-date"
               name="tp-payment-date"
               value={paymentDate || null}
+              min={minDateAfterLock(periodLock)}
               max={sedeTimeZone ? sedeToday(sedeTimeZone) : undefined}
               aria-invalid={dateError ? true : undefined}
               aria-describedby={dateError ? fieldErrorId('tp-payment-date') : undefined}
@@ -235,6 +276,20 @@ export function PlanPaymentFormModal({
 
         <PaymentMethodSelect fields={paymentMethodFields} id="tp-payment-method" label={copy.paymentMethodLabel} />
       </div>
+
+      {needsLockReason(periodLock, paymentDate) ? (
+        <LockOverrideReasonField
+          id="tp-lock-reason"
+          label={periodLockCopy.reasonLabel}
+          value={lockReason}
+          error={lockReasonError}
+          disabled={submitting}
+          onChange={(next) => {
+            setLockReason(next);
+            if (lockReasonError) setLockReasonError(null);
+          }}
+        />
+      ) : null}
 
       <PaymentReferenceFields fields={paymentMethodFields} idPrefix="tp-payment" />
 

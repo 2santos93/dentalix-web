@@ -128,10 +128,16 @@ export async function getPlanBalance(token: string, planId: string): Promise<Pla
  * — en vez de `apiFetch`, que fallaría al hacer `res.json()` de una respuesta
  * vacía.
  */
-export async function voidPayment(token: string, id: string, reason: string): Promise<void> {
+export async function voidPayment(
+  token: string,
+  id: string,
+  reason: string,
+  /** DX-091: motivo del ADMIN para anular en un período contable cerrado. */
+  lockOverrideReason?: string,
+): Promise<void> {
   await apiFetchOrNull<null>(`/payments/${id}`, {
     method: 'DELETE',
-    body: { reason } satisfies VoidPaymentInput,
+    body: { reason, ...(lockOverrideReason ? { lockOverrideReason } : {}) } satisfies VoidPaymentInput,
     token,
   });
 }

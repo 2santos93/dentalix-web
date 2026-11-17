@@ -155,7 +155,7 @@ export function TreatmentPlanModals({
   onAllocationCloseAutoFocus: (event: Event) => void;
   paymentToVoid: string | null;
   onVoidClose: () => void;
-  onVoidConfirm: (reason: string) => void | Promise<void>;
+  onVoidConfirm: (reason: string, lockOverrideReason?: string) => void | Promise<void>;
   voiding: boolean;
   paymentActionError: string | null;
 }) {
@@ -309,6 +309,9 @@ export function TreatmentPlanModals({
         // Pinta el aviso de la ventana de recepción; la regla la aplica la API.
         restrictedToOwnToday={role !== 'ADMIN'}
         splitLines={splitLinesOf(payments, paymentToVoid)}
+        // DX-091: el cierre contable del día del abono (motivo del ADMIN con la exención).
+        token={token}
+        paidOn={payments.find((p) => p.id === paymentToVoid)?.paidOn}
       />
     </>
   );

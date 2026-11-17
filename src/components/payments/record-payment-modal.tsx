@@ -38,6 +38,16 @@ import { usePaymentLocationHint } from './use-payment-location-hint';
 import { useExchangeRates } from './use-exchange-rates';
 import { PaymentRatePreview, ratePreviewCopy, type PreviewPlanBalance } from './payment-rate-preview';
 import { usePlanBalance } from './use-plan-balance';
+import { readyPeriodLock, usePeriodLock } from './use-period-lock';
+import {
+  LockOverrideReasonField,
+  lockedDateError,
+  minDateAfterLock,
+  needsLockReason,
+  periodLockCopy,
+  periodLockHint,
+  validLockReason,
+} from './period-lock-field';
 import { SEDE_TIME_ZONE_ERROR, readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import {
@@ -181,6 +191,11 @@ export function RecordPaymentModal({
   // La fecha de «Plan del …» en la zona y el formato de la sede (DX-354).
   const planDates = fmt && timeZone ? { fmt, timeZone } : null;
   const today = timeZone ? sedeToday(timeZone) : '';
+  // DX-091: el cierre contable de la sede: el calendario no ofrece días
+  // cerrados (salvo al ADMIN con la exención, que indica el motivo).
+  const periodLock = readyPeriodLock(usePeriodLock(token, open));
+  const [lockReason, setLockReason] = useState('');
+  const [lockReasonError, setLockReasonError] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(() => initialForm(today));
   // La clave y lo que identifica la petición que ya viajó con ella (como la
   // huella de la API: ni el motivo de una repetida ni la confirmación del
@@ -254,6 +269,8 @@ export function RecordPaymentModal({
       setError(null);
       setAmountError(null);
       setDateError(null);
+      setLockReason('');
+      setLockReasonError(null);
       methodFields.reset();
       split.reset();
       proofUpload.clear();
@@ -346,7 +363,7 @@ export function RecordPaymentModal({
    * importe en su moneda, su medio, su referencia y el motivo de una
    * repetida); el error va junto al campo, que recibe el foco.
    */
-  async function submitSplit(planId: string, paidAt: string, first: number) {
+  async function submitSplit(planId: string, paidAt: string, first: number, lockOverrideReason?: string) {
     const lines: SplitPaymentLineInput[] = [];
     let firstInvalid: string | null = null;
     for (const [index, line] of split.lines.entries()) {
@@ -424,6 +441,7 @@ export function RecordPaymentModal({
         {
           paidAt,
           ...(confirmCredit ? { confirmCreditBalance: true } : {}),
+          ...(lockOverrideReason ? { lockOverrideReason } : {}),
           lines: allLines,
         },
         key,
@@ -461,7 +479,7 @@ export function RecordPaymentModal({
         if (line && split.fields(line).catchDuplicate(err)) return;
       }
       if (methodFields.catchDuplicate(err)) return;
-      setError(recordPaymentErrorMessage(err));
+      setError(recordPaymentErrorMessage(err, fmt));
     } finally {
       setSubmitting(false);
     }
@@ -505,13 +523,31 @@ export function RecordPaymentModal({
       document.getElementById('rp-date')?.querySelector<HTMLElement>('[role="spinbutton"]')?.focus();
       return;
     }
+    // DX-091: un día cerrado se dice junto al campo (la API respondería 409).
+    const closed = lockedDateError(periodLock, form.date, fmt);
+    if (closed) {
+      setDateError(closed);
+      document.getElementById('rp-date')?.querySelector<HTMLElement>('[role="spinbutton"]')?.focus();
+      return;
+    }
     setDateError(null);
+    let lockOverrideReason: string | undefined;
+    if (needsLockReason(periodLock, form.date)) {
+      const valid = validLockReason(lockReason);
+      if (!valid) {
+        setLockReasonError(periodLockCopy.reasonMissing);
+        focusField('rp-lock-reason');
+        return;
+      }
+      lockOverrideReason = valid;
+    }
+    setLockReasonError(null);
     // DX-097: se manda el DÍA (`YYYY-MM-DD`), no la medianoche UTC: la API lo
     // guarda al mediodía de la sede, así cae en ese día de caja en su zona
     // (medianoche UTC sería la tarde del día anterior en una sede al oeste de UTC).
     const paidAt = form.date;
     if (isSplit && plan) {
-      await submitSplit(plan.id, paidAt, amount);
+      await submitSplit(plan.id, paidAt, amount, lockOverrideReason);
       return;
     }
     // DX-395: la referencia o el motivo que faltan se marcan en su campo,
@@ -544,6 +580,7 @@ export function RecordPaymentModal({
         paidAt,
         ...methodFields.body(),
         ...(proofUploadId ? { proofUploadId } : {}),
+        ...(lockOverrideReason ? { lockOverrideReason } : {}),
       };
       const key = keyFor([
         opening ? `ob:${opening.id}` : (plan as NonNullable<typeof plan>).id,
@@ -585,7 +622,7 @@ export function RecordPaymentModal({
         setProofError(copy.proofRejected);
         return;
       }
-      setError(recordPaymentErrorMessage(err));
+      setError(recordPaymentErrorMessage(err, fmt));
     } finally {
       setSubmitting(false);
     }
@@ -721,7 +758,7 @@ export function RecordPaymentModal({
                 ) : null}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <PaymentMethodSelect fields={methodFields} id="rp-method" disabled={submitting} />
-                  <FormField htmlFor="rp-date" label={copy.date} error={dateError}>
+                  <FormField htmlFor="rp-date" label={copy.date} error={dateError} hint={periodLockHint(periodLock, fmt)}>
                     {zone.status === 'error' && !dateTouched ? (
                       <SedeConfigError kind="timeZone" variant="field" retryId="rp-date" onRetry={zone.retry} />
                     ) : (
@@ -730,6 +767,7 @@ export function RecordPaymentModal({
                         name="rp-date"
                         value={form.date || null}
                         disabled={submitting}
+                        min={minDateAfterLock(periodLock)}
                         max={today || undefined}
                         aria-invalid={dateError ? true : undefined}
                         aria-describedby={dateError ? fieldErrorId('rp-date') : undefined}
@@ -742,6 +780,19 @@ export function RecordPaymentModal({
                     )}
                   </FormField>
                 </div>
+                {needsLockReason(periodLock, form.date) ? (
+                  <LockOverrideReasonField
+                    id="rp-lock-reason"
+                    label={periodLockCopy.reasonLabel}
+                    value={lockReason}
+                    error={lockReasonError}
+                    disabled={submitting}
+                    onChange={(next) => {
+                      setLockReason(next);
+                      if (lockReasonError) setLockReasonError(null);
+                    }}
+                  />
+                ) : null}
                 <PaymentReferenceFields fields={methodFields} idPrefix="rp" disabled={submitting} />
                 {/* DX-389: el comprobante del cobro, si el medio lo admite o lo exige. */}
                 {proofShown ? (

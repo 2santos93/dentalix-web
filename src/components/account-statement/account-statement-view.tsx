@@ -508,7 +508,10 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
         onOpenChange={(open) => {
           if (!open) voiding.close();
         }}
-        onConfirm={(reason) => void voiding.confirm(reason)}
+        onConfirm={(reason, lockOverrideReason) => void voiding.confirm(reason, lockOverrideReason)}
+        token={token}
+        paidOn={voiding.target?.paidOn}
+        periodLocked={voiding.target?.periodLocked}
         submitting={voiding.submitting}
         error={voiding.error}
         // Pinta el aviso de la ventana de recepción; la regla la aplica la API.
@@ -840,7 +843,8 @@ function StatementBody({
               ...(onViewProof && m.hasProof
                 ? [{ label: paymentProofViewerCopy.action, onSelect: () => onViewProof(m.id) }]
                 : []),
-              ...(m.canVoid
+              // DX-091: el de un período cerrado sale deshabilitado con su explicación.
+              ...(m.canVoid || (m.periodLocked && m.voidBlockedReason)
                 ? [
                     {
                       label: copy.voidAction,
@@ -855,6 +859,7 @@ function StatementBody({
                           currency: m.currency,
                           paidOn: m.paidOn,
                           splitLines: m.splitLines,
+                          periodLocked: m.periodLocked,
                         }),
                     },
                   ]
