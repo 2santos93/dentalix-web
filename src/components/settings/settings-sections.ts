@@ -37,6 +37,7 @@ import {
   ShieldCheck,
   UserCheck,
   Languages,
+  MailCheck,
   UserRound,
   Wallet,
   Smile,
@@ -78,6 +79,7 @@ import { canSearchImplantLots } from '@/lib/implants/implants-api';
 import { canReadSupportAccesses } from '@/lib/support-accesses/support-accesses-api';
 import { canReadAuditLog } from '@/lib/audit/audit-api';
 import { canManageClinicSettings } from '@/lib/clinic/clinic-settings-api';
+import { canManageWeeklyDigest } from '@/lib/clinic/weekly-digest-api';
 import { canManageSecurityPolicy } from '@/lib/auth/mfa-api';
 
 export interface SettingsEntry {
@@ -180,6 +182,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Los idiomas en que se puede escribir a cada paciente: recordatorio y página para confirmar la cita.',
         icon: Languages,
         visible: canManagePatientLanguages,
+      },
+      // DX-568: el email semanal con las cifras de cada sede.
+      {
+        href: '/settings/resumen-semanal',
+        label: 'Resumen semanal',
+        description: 'Un email cada semana con las cifras de cada sede frente a la anterior, para los administradores que elijas.',
+        icon: MailCheck,
+        visible: canManageWeeklyDigest,
       },
     ],
   },

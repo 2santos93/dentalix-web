@@ -11,6 +11,36 @@ const configChangeItems = (metadata: Parameters<typeof items_>[0]) =>
   items_(metadata, fmt);
 
 describe("configChangeItems (DX-360)", () => {
+  it("DX-568: el resumen semanal, con día, hora y cuántos destinatarios (no sus ids)", () => {
+    const items = configChangeItems({
+      reason: "WEEKLY_DIGEST_SETTINGS",
+      changedFields: ["enabled", "hour", "recipientMembershipIds", "weekday"],
+      configChange: {
+        before: { enabled: false, weekday: 1, hour: 7, recipientMembershipIds: [] },
+        after: { enabled: true, weekday: 5, hour: 18, recipientMembershipIds: ["m1", "m2"] },
+      },
+    });
+    expect(configChangeText(items!)).toBe(
+      "Resumen semanal activado: No → Sí · Día del envío: lunes → viernes · Hora del envío: 07:00 → 18:00 · Destinatarios: Nadie → 2 personas",
+    );
+  });
+
+  it("DX-568: sin formato de la sede, la hora sale «7 h»; «enabled» de otro ajuste conserva su etiqueta", () => {
+    const digest = items_(
+      {
+        reason: "WEEKLY_DIGEST_SETTINGS",
+        configChange: { before: { hour: 7 }, after: { hour: 8 } },
+      },
+      null,
+    );
+    expect(configChangeText(digest!)).toBe("Hora del envío: 7 h → 8 h");
+    const reminders = configChangeItems({
+      reason: "REMINDER_SETTINGS_UPDATED",
+      configChange: { before: { enabled: false }, after: { enabled: true } },
+    });
+    expect(configChangeText(reminders!)).toBe("Recordatorios activados: No → Sí");
+  });
+
   it("DX-497: la lista de idiomas de los pacientes, con el nombre de cada idioma", () => {
     const items = configChangeItems({
       reason: "PATIENT_LANGUAGES_SETTINGS",
