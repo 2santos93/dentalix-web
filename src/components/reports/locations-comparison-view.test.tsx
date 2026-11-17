@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { LocationsComparisonView } from './locations-comparison-view';
+import { comparisonPeriodFromParams, LocationsComparisonView } from './locations-comparison-view';
 import {
   downloadLocationsComparisonCsv,
   getLocationsComparison,
@@ -14,6 +14,15 @@ import { saveCsv } from '@/lib/files/save-csv';
 import { SEDE_TIME_ZONE_ERROR, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SEDE_LOCALE_ERROR, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { regionalFormat } from '@/lib/format/regional-format';
+
+// DX-568: el período vive en la URL (el enlace del resumen semanal).
+let search = new URLSearchParams('tab=comparar-sedes');
+const replace = jest.fn();
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ replace }),
+  usePathname: () => '/reportes',
+  useSearchParams: () => search,
+}));
 
 jest.mock('../../lib/reports/reports-api', () => ({
   getLocationsComparison: jest.fn(),
@@ -119,6 +128,7 @@ const table = () => screen.getByRole('table', { name: 'Indicadores por sede y to
 describe('LocationsComparisonView (DX-014)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    search = new URLSearchParams('tab=comparar-sedes');
     mockedZone.mockReturnValue({ status: 'ready', timeZone: 'America/Caracas' });
     mockedFormat.mockReturnValue({ status: 'ready', fmt: regionalFormat({ locale: 'es-ES', hourCycle: 'h23' }) });
     mockedGet.mockResolvedValue(report());
@@ -473,5 +483,64 @@ describe('LocationsComparisonView (DX-014)', () => {
     expect(mockedGet).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  describe('período desde la URL (DX-568)', () => {
+    it('el enlace del resumen semanal abre esa semana, comparada con la anterior', async () => {
+      search = new URLSearchParams('tab=comparar-sedes&periodo=custom&desde=2026-11-09&hasta=2026-11-15');
+      render(<LocationsComparisonView token="t" />);
+      await screen.findByRole('table');
+      expect(mockedGet).toHaveBeenCalledWith('t', { from: '2026-11-09', to: '2026-11-15', compare: 'previous' });
+      expect(mockedGet).not.toHaveBeenCalledWith('t', expect.objectContaining({ from: '2026-10-01' }));
+      expect(screen.getByLabelText('Período')).toHaveValue('custom');
+      const dates = screen.getByRole('group', { name: 'Fechas' });
+      const segments = (part: RegExp) =>
+        within(dates).getAllByRole('spinbutton', { name: part }).map((el) => el.textContent);
+      expect(segments(/Desde/)).toEqual(['09', '11', '2026']);
+      expect(segments(/Hasta/)).toEqual(['15', '11', '2026']);
+    });
+
+    it('sin parámetros sigue en «Este mes»', async () => {
+      render(<LocationsComparisonView token="t" />);
+      await screen.findByRole('table');
+      expect(mockedGet).toHaveBeenCalledWith('t', { from: '2026-10-01', to: '2026-10-24', compare: 'previous' });
+      expect(replace).not.toHaveBeenCalled();
+    });
+
+    it('un atajo de la URL vale; uno desconocido o un custom sin fechas válidas cae en «Este mes»', () => {
+      expect(comparisonPeriodFromParams(new URLSearchParams('periodo=last_month'))).toEqual({
+        preset: 'last_month',
+        custom: null,
+      });
+      expect(comparisonPeriodFromParams(new URLSearchParams('periodo=semana'))).toEqual({
+        preset: 'this_month',
+        custom: null,
+      });
+      expect(comparisonPeriodFromParams(new URLSearchParams('periodo=custom&desde=2026-02-30&hasta=2026-03-01'))).toEqual({
+        preset: 'custom',
+        custom: null,
+      });
+    });
+
+    it('un período al revés de la URL avisa junto a las fechas, sin pedir el reporte', async () => {
+      search = new URLSearchParams('tab=comparar-sedes&periodo=custom&desde=2026-11-15&hasta=2026-11-09');
+      render(<LocationsComparisonView token="t" />);
+      expect(await screen.findByRole('alert')).toHaveTextContent('El período no es válido');
+      expect(mockedGet).not.toHaveBeenCalled();
+    });
+
+    it('cambiar el período lo escribe en la URL y conserva la pestaña', async () => {
+      render(<LocationsComparisonView token="t" />);
+      await screen.findByRole('table');
+      await userEvent.selectOptions(screen.getByLabelText('Período'), 'last_month');
+      expect(replace).toHaveBeenLastCalledWith('/reportes?tab=comparar-sedes&periodo=last_month', { scroll: false });
+      await userEvent.selectOptions(screen.getByLabelText('Período'), 'custom');
+      expect(replace).toHaveBeenLastCalledWith(
+        '/reportes?tab=comparar-sedes&periodo=custom&desde=2026-09-01&hasta=2026-09-30',
+        { scroll: false },
+      );
+      await userEvent.selectOptions(screen.getByLabelText('Período'), 'this_month');
+      expect(replace).toHaveBeenLastCalledWith('/reportes?tab=comparar-sedes', { scroll: false });
+    });
   });
 });
