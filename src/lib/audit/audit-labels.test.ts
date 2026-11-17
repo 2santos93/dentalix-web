@@ -8,6 +8,7 @@ import {
   receiptsSummaryPeriodDetail,
   cancellationDetail,
   externalOrderDetail,
+  commissionPaymentDetail,
   dentalLabDetail,
   importBatchDetail,
   AUDIT_ACTION_LABELS,
@@ -146,6 +147,16 @@ describe('implantSearchDetail (DX-191)', () => {
     );
     expect(staffLoginDetail({ reason: 'REMINDER_OPT_OUT' })).toBeNull();
     expect(staffLoginDetail({})).toBeNull();
+  });
+});
+
+describe('commissionPaymentDetail (DX-464)', () => {
+  it('nombra el pago, su anulación, los PDF y la conformidad; el resto no es suyo', () => {
+    expect(commissionPaymentDetail({ reason: 'COMMISSION_PAYMENT_CREATED' })).toBe('Pago de la liquidación registrado');
+    expect(commissionPaymentDetail({ reason: 'COMMISSION_PAYMENT_VOIDED' })).toBe('Pago de la liquidación anulado');
+    expect(commissionPaymentDetail({ reason: 'COMMISSION_RECEIPT_SIGNED' })).toBe('Conformidad firmada por el profesional');
+    expect(commissionPaymentDetail({ reason: 'COMMISSION_PAYMENT' })).toBe('Gasto del pago de honorarios');
+    expect(commissionPaymentDetail({ reason: 'EXTERNAL_ORDER_ISSUED' })).toBeNull();
   });
 });
 
