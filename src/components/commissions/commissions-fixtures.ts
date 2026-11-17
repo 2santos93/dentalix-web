@@ -1,5 +1,7 @@
 import type {
   CommissionLine,
+  CommissionPayment,
+  CommissionSettlementSummary,
   CommissionPreview,
   CommissionSettlement,
   ProfessionalCommissionRule,
@@ -52,6 +54,7 @@ export function makeLine(over: Partial<CommissionLine> = {}): CommissionLine {
     base: 100,
     percent: 35,
     amount: 35,
+    paidInPaymentId: null,
     ...over,
   };
 }
@@ -113,6 +116,59 @@ export function makeSettlement(over: Partial<CommissionSettlement> = {}): Commis
     totals: preview.totals,
     categoryPercents: [{ category: 'Higiene', percent: 20 }],
     lines: preview.lines.map((l, i) => ({ ...l, id: `line-${i}` })),
+    payment: {
+      status: 'UNPAID',
+      currencies: [
+        { currency: 'USD', total: 17.5, paid: 0, pending: 17.5, pendingLines: 2 },
+        { currency: 'VES', total: 3650, paid: 0, pending: 3650, pendingLines: 1 },
+      ],
+    },
+    payments: [],
+    professionalEmail: 'ximena.rivas@example.com',
+    ...over,
+  };
+}
+
+/** DX-464: un pago de la liquidación s1 (USD, transferencia, Sede Centro). */
+export function makePayment(over: Partial<CommissionPayment> = {}): CommissionPayment {
+  return {
+    id: 'cp1',
+    settlementId: 's1',
+    currency: 'USD',
+    amount: 17.5,
+    method: 'TRANSFER',
+    paidOn: '2026-11-05',
+    reference: 'TRF-8841',
+    location: { id: 'loc1', name: 'Sede Centro' },
+    expenseId: 'exp1',
+    lineIds: ['line-0', 'line-2'],
+    createdAt: '2026-11-05T14:00:00.000Z',
+    createdBy: { userId: 'admin', name: 'Dr. Owner' },
+    voidedAt: null,
+    voidedBy: null,
+    voidReason: null,
+    receipt: { status: 'NONE', requestedAt: null, expiresAt: null, signedAt: null, signerName: null },
+    ...over,
+  };
+}
+
+/** DX-464: la fila de la lista de liquidaciones. */
+export function makeSettlementSummary(over: Partial<CommissionSettlementSummary> = {}): CommissionSettlementSummary {
+  const { id, professional, period, basis, releaseMode, percent, closedAt, closedBy, lockDateBefore, lockDateAfter, totals, payment } =
+    makeSettlement();
+  return {
+    id,
+    professional,
+    period,
+    basis,
+    releaseMode,
+    percent,
+    closedAt,
+    closedBy,
+    lockDateBefore,
+    lockDateAfter,
+    totals,
+    payment,
     ...over,
   };
 }

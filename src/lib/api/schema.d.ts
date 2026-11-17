@@ -8535,6 +8535,180 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/commissions/settlements/{id}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Registra un pago de la liquidación y su gasto en la sede
+         * @description Paga las líneas elegidas (o todas las pendientes) de UNA moneda, sin convertir: el importe es la suma de esas líneas. Crea en la misma transacción el gasto de la sede (categoría «Honorarios», proveedor = el profesional, descripción con el período y la referencia) ya pagado con el medio y el día indicados (o desde la caja abierta). La liquidación pasa a «Pagada parcialmente» o «Pagada». El día no puede caer en un período contable cerrado.
+         */
+        post: operations["CommissionPaymentsController_pay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/commissions/payments/{paymentId}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Anula un pago de la liquidación (con motivo)
+         * @description Anula el gasto de la sede (y su salida de caja, si la hubo), devuelve las líneas a pendientes y revoca el enlace de conformidad vivo. No si el día del pago cae en un período contable cerrado.
+         */
+        post: operations["CommissionPaymentsController_void"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/commissions/settlements/{id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * PDF de la liquidación para el profesional
+         * @description Iniciales del paciente (nunca el nombre), procedimiento, fecha, base, %, deducciones y totales por moneda, con lo pagado y lo pendiente. Sale de la clínica: auditado (EXPORT).
+         */
+        get: operations["CommissionPaymentsController_settlementPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/commissions/payments/{paymentId}/receipt/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * PDF del recibo del pago (firmado, si el profesional ya firmó)
+         * @description El recibo con las prestaciones pagadas (iniciales, procedimiento, fecha, base, %) y, si hay conformidad, la firma con fecha, IP, navegador y huellas SHA-256. Auditado (EXPORT).
+         */
+        get: operations["CommissionPaymentsController_receiptPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/commissions/payments/{paymentId}/receipt-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pide la conformidad del profesional («recibido conforme»)
+         * @description Crea un enlace de un solo uso que caduca a las 72 h con la foto del recibo (solo iniciales de los pacientes). Pedir otro revoca el anterior. La URL solo viene en esta respuesta: la web la envía por email (mailto) o WhatsApp (wa.me).
+         */
+        post: operations["CommissionPaymentsController_requestReceipt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/commission-receipts/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** El recibo del pago de honorarios que el profesional va a firmar */
+        get: operations["PublicCommissionReceiptsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/commission-receipts/{token}/opened": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * La página avisa de que el profesional la abrió
+         * @description Solo la primera vez; las siguientes no cambian nada.
+         */
+        post: operations["PublicCommissionReceiptsController_opened"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/commission-receipts/{token}/sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Firmar «recibido conforme» (una sola vez)
+         * @description Guarda el nombre, la firma, la IP, el navegador y la huella SHA-256 (recibo + nombre + firma); la hora la pone la BD. El PDF firmado queda adjunto al pago.
+         */
+        post: operations["PublicCommissionReceiptsController_sign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/commission-receipts/{token}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** La copia firmada del recibo (mientras el enlace no caduque) */
+        get: operations["PublicCommissionReceiptsController_pdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/documents": {
         parameters: {
             query?: never;
@@ -27365,6 +27539,11 @@ export interface components {
             percent: number;
             /** @description Honorario en la moneda de la línea (un ajuste, con signo). */
             amount: number;
+            /**
+             * Format: uuid
+             * @description DX-464: el pago vivo de la liquidación que cubre la línea; null en la vista previa o si está pendiente.
+             */
+            paidInPaymentId: string | null;
         };
         CommissionCurrencyTotalDto: {
             currency: string;
@@ -27411,6 +27590,71 @@ export interface components {
             userId: string;
             name: string | null;
         };
+        /** @enum {string} */
+        CommissionSettlementPaymentStatus: "UNPAID" | "PARTIALLY_PAID" | "PAID" | "NOTHING_TO_PAY";
+        CommissionCurrencyPaymentStateDto: {
+            currency: string;
+            /** @description A pagar: Σ de las líneas. */
+            total: number;
+            /** @description Σ de las líneas con pago vivo. */
+            paid: number;
+            /** @description total − pagado (≤ 0: nada más que pagar). */
+            pending: number;
+            pendingLines: number;
+        };
+        SettlementPaymentSummaryDto: {
+            status: components["schemas"]["CommissionSettlementPaymentStatus"];
+            currencies: components["schemas"]["CommissionCurrencyPaymentStateDto"][];
+        };
+        CommissionPaymentLocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        CommissionPaymentUserDto: {
+            /** Format: uuid */
+            userId: string;
+            name: string | null;
+        };
+        /** @enum {string} */
+        CommissionReceiptStatus: "NONE" | "PENDING" | "EXPIRED" | "SIGNED";
+        CommissionPaymentReceiptDto: {
+            status: components["schemas"]["CommissionReceiptStatus"];
+            /** Format: date-time */
+            requestedAt: string | null;
+            /** Format: date-time */
+            expiresAt: string | null;
+            /** Format: date-time */
+            signedAt: string | null;
+            signerName: string | null;
+        };
+        CommissionPaymentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            settlementId: string;
+            currency: string;
+            amount: number;
+            method: components["schemas"]["PaymentMethod"];
+            /** Format: date */
+            paidOn: string;
+            reference: string | null;
+            location: components["schemas"]["CommissionPaymentLocationDto"];
+            /**
+             * Format: uuid
+             * @description El gasto de la sede.
+             */
+            expenseId: string;
+            lineIds: string[];
+            /** Format: date-time */
+            createdAt: string;
+            createdBy: components["schemas"]["CommissionPaymentUserDto"];
+            /** Format: date-time */
+            voidedAt: string | null;
+            voidedBy: components["schemas"]["CommissionPaymentUserDto"] | null;
+            voidReason: string | null;
+            receipt: components["schemas"]["CommissionPaymentReceiptDto"];
+        };
         CommissionSettlementDto: {
             /** Format: uuid */
             id: string;
@@ -27433,8 +27677,13 @@ export interface components {
              */
             lockDateAfter: string;
             totals: components["schemas"]["CommissionCurrencyTotalDto"][];
+            payment: components["schemas"]["SettlementPaymentSummaryDto"];
             categoryPercents: components["schemas"]["CommissionCategoryPercentViewDto"][];
             lines: components["schemas"]["CommissionLineDto"][];
+            /** @description DX-464: pagos (vivos y anulados), del más reciente al más antiguo. */
+            payments: components["schemas"]["CommissionPaymentDto"][];
+            /** @description DX-464: email de la cuenta del profesional (para «Enviar»). */
+            professionalEmail: string | null;
         };
         CommissionSettlementSummaryDto: {
             /** Format: uuid */
@@ -27458,6 +27707,106 @@ export interface components {
              */
             lockDateAfter: string;
             totals: components["schemas"]["CommissionCurrencyTotalDto"][];
+            payment: components["schemas"]["SettlementPaymentSummaryDto"];
+        };
+        PayCommissionSettlementDto: {
+            /**
+             * @description Moneda del pago: cada moneda se paga aparte, sin convertir.
+             * @example USD
+             */
+            currency: string;
+            /** @description Líneas de la liquidación que se pagan (todas de esa moneda). Sin ellas, todas las pendientes de la moneda. */
+            lineIds?: string[];
+            /**
+             * @description Día del pago (AAAA-MM-DD).
+             * @example 2026-11-05
+             */
+            paidOn: string;
+            method: components["schemas"]["PaymentMethod"];
+            /** @description Referencia del pago (nº de transferencia…). */
+            reference?: string;
+            /**
+             * Format: uuid
+             * @description Sede del gasto. Sin ella, la sede activa de la petición o la sede por defecto de la clínica.
+             */
+            locationId?: string;
+            /** @description Sale de la caja abierta de quien paga (efectivo y hoy), como un gasto pagado desde la caja. */
+            fromCashSession?: boolean;
+        };
+        VoidCommissionPaymentDto: {
+            reason: string;
+        };
+        CommissionReceiptLinkDto: {
+            /** @description La URL con el token: solo en esta respuesta (no se guarda). */
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        /** @enum {string} */
+        PublicCommissionReceiptStatus: "PENDING" | "SIGNED";
+        PublicReceiptPeriodDto: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+        };
+        PublicReceiptPaymentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date */
+            paidOn: string;
+            method: components["schemas"]["PaymentMethod"];
+            reference: string | null;
+            currency: string;
+            amount: number;
+            locationName: string;
+        };
+        PublicReceiptLineDto: {
+            /** @enum {string} */
+            kind: "ACCRUAL" | "ADJUSTMENT";
+            /** @description Solo iniciales. */
+            patientInitials: string;
+            catalogCode: string;
+            catalogLabel: string;
+            toothNumber: string;
+            /** Format: date */
+            day: string | null;
+            base: number;
+            percent: number;
+            amount: number;
+        };
+        PublicReceiptFormatDto: {
+            locale: string | null;
+            hourCycle: string | null;
+        };
+        PublicReceiptContentDto: {
+            /** @enum {number} */
+            version: 1;
+            clinicName: string;
+            professionalName: string;
+            /** Format: uuid */
+            settlementId: string;
+            period: components["schemas"]["PublicReceiptPeriodDto"];
+            payment: components["schemas"]["PublicReceiptPaymentDto"];
+            lines: components["schemas"]["PublicReceiptLineDto"][];
+            format: components["schemas"]["PublicReceiptFormatDto"];
+        };
+        PublicCommissionReceiptDto: {
+            status: components["schemas"]["PublicCommissionReceiptStatus"];
+            content: components["schemas"]["PublicReceiptContentDto"];
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            signedAt: string | null;
+            signerName: string | null;
+        };
+        SignCommissionReceiptDto: {
+            /** @description Nombre completo de quien firma. */
+            signerName: string;
+            /** @description PNG (data:image/png;base64,… o base64), máx. 200 KB. */
+            signature: string;
+            /** @description «Recibido conforme» (debe ser true). */
+            accepted: boolean;
         };
         /** @enum {string} */
         PatientDocumentCategory: "XRAY" | "PHOTO" | "REFERRAL" | "SIGNED_CONSENT" | "REPORT" | "OTHER";
@@ -51649,6 +51998,396 @@ export interface operations {
             };
             /** @description Liquidación no encontrada. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CommissionPaymentsController_pay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description La liquidación. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PayCommissionSettlementDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommissionPaymentDto"];
+                };
+            };
+            /** @description Moneda, día, medio o referencia no válidos; `COMMISSION_PAYMENT_LINE_UNKNOWN`, `COMMISSION_PAYMENT_LINE_CURRENCY` o `COMMISSION_PAYMENT_NOT_POSITIVE`; reglas del gasto (fecha futura, sede, caja) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración paga las liquidaciones de honorarios. / Los honorarios son de toda la clínica: solo un administrador con acceso a todas las sedes los configura, liquida y consulta. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Liquidación no encontrada. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `COMMISSION_NOTHING_PENDING` (nada pendiente en esa moneda), `COMMISSION_LINE_ALREADY_PAID`, `COMMISSION_PAYMENT_EXCEEDS_PENDING` (con `pending`), `PERIOD_LOCKED`, o la caja (sin caja abierta / efectivo siempre en caja) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CommissionPaymentsController_void: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description El pago de la liquidación. */
+                paymentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidCommissionPaymentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommissionPaymentDto"];
+                };
+            };
+            /** @description Motivo de 5 a 500 caracteres */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración paga las liquidaciones de honorarios. / Los honorarios son de toda la clínica: solo un administrador con acceso a todas las sedes los configura, liquida y consulta. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pago de honorarios no encontrado. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `COMMISSION_PAYMENT_VOIDED` o `PERIOD_LOCKED` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CommissionPaymentsController_settlementPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description La liquidación. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El PDF (attachment). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Solo administración paga las liquidaciones de honorarios. / Los honorarios son de toda la clínica: solo un administrador con acceso a todas las sedes los configura, liquida y consulta. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Liquidación no encontrada. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CommissionPaymentsController_receiptPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description El pago de la liquidación. */
+                paymentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El PDF (attachment). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Solo administración paga las liquidaciones de honorarios. / Los honorarios son de toda la clínica: solo un administrador con acceso a todas las sedes los configura, liquida y consulta. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pago de honorarios no encontrado. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CommissionPaymentsController_requestReceipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description El pago de la liquidación. */
+                paymentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommissionReceiptLinkDto"];
+                };
+            };
+            /** @description No se pudo armar el enlace desde esta dirección. Abre Dentalix desde la dirección de tu clínica y vuelve a intentarlo. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración paga las liquidaciones de honorarios. / Los honorarios son de toda la clínica: solo un administrador con acceso a todas las sedes los configura, liquida y consulta. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pago de honorarios no encontrado. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `COMMISSION_PAYMENT_VOIDED` o `COMMISSION_RECEIPT_ALREADY_SIGNED` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicCommissionReceiptsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicCommissionReceiptDto"];
+                };
+            };
+            /** @description «Este enlace no es válido o ya caducó. Pide a la clínica uno nuevo.»: token malformado, desconocido, de otra clínica, caducado, revocado o de un pago anulado (la misma respuesta para todos). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicCommissionReceiptsController_opened: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Apertura registrada (idempotente). */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description «Este enlace no es válido o ya caducó. Pide a la clínica uno nuevo.»: token malformado, desconocido, de otra clínica, caducado, revocado o de un pago anulado (la misma respuesta para todos). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicCommissionReceiptsController_sign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignCommissionReceiptDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicCommissionReceiptDto"];
+                };
+            };
+            /** @description Nombre de 2 a 120 caracteres; firma en blanco, no PNG o de más de 200 KB; sin confirmar «recibido conforme» */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description «Este enlace no es válido o ya caducó. Pide a la clínica uno nuevo.»: token malformado, desconocido, de otra clínica, caducado, revocado o de un pago anulado (la misma respuesta para todos). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `COMMISSION_RECEIPT_ALREADY_SIGNED` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicCommissionReceiptsController_pdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description El PDF (attachment). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description «Este enlace no es válido o ya caducó. Pide a la clínica uno nuevo.»: token malformado, desconocido, de otra clínica, caducado, revocado o de un pago anulado (la misma respuesta para todos). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
