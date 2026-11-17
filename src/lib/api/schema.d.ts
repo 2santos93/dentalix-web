@@ -5519,7 +5519,7 @@ export interface paths {
         };
         /**
          * Citas sin tratamiento ligado del período
-         * @description Mismos filtros y alcance que la producción agendada: las citas que cuentan (ni canceladas ni inasistencias) sin ningún procedimiento de un presupuesto ligado, con paciente, tipo, profesional y sede, por inicio (asc; `page`/`pageSize`, 25 por defecto, máx. 100). Lleva el nombre del paciente: auditado (VIEW).
+         * @description Mismos filtros y alcance que la producción agendada: las citas que cuentan (ni canceladas ni inasistencias) sin ningún procedimiento de un presupuesto ligado, con paciente (`patientArchived`: archivado, sin enlace a su ficha), tipo, profesional y sede, por inicio (asc; `page`/`pageSize`, 25 por defecto, máx. 100). Lleva el nombre del paciente: auditado (VIEW).
          */
         get: operations["ScheduledProductionController_unlinked"];
         put?: never;
@@ -22020,11 +22020,13 @@ export interface components {
             status: components["schemas"]["AppointmentStatus"];
             /**
              * Format: uuid
-             * @description Paciente vivo o archivado (las citas de un paciente eliminado no cuentan)
+             * @description Paciente vivo o archivado (las citas de un archivado también cuentan)
              */
             patientId: string;
             /** @example María Fernández */
             patientName: string;
+            /** @description true = paciente archivado: se nombra, pero no se enlaza a su ficha */
+            patientArchived: boolean;
             /** @example Control */
             appointmentTypeName: string | null;
             /** Format: uuid */
