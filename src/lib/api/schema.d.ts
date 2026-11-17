@@ -22742,8 +22742,8 @@ export interface components {
             recipientMembershipIds: string[];
             /** @description Los ADMIN activos de la clínica, por nombre. */
             candidates: components["schemas"]["WeeklyDigestCandidateDto"][];
-            /** @description `NO_RECIPIENTS`: activado sin ningún destinatario (no sale nada). */
-            warnings: "NO_RECIPIENTS"[];
+            /** @description `NO_RECIPIENTS`: activado sin ningún destinatario (no sale nada). `PRINCIPAL_LOCATION_UNCONFIGURED`: la sede principal no tiene zona horaria o formato (o no hay sede activa); el resumen no sale hasta configurarla en Ajustes › Sedes. */
+            warnings: ("NO_RECIPIENTS" | "PRINCIPAL_LOCATION_UNCONFIGURED")[];
         };
         UpdateWeeklyDigestSettingsDto: {
             /**
