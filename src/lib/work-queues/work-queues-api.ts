@@ -22,14 +22,16 @@ export function getWorkQueuesSummary(token: string, keys?: readonly WorkQueueKey
 }
 
 /**
- * Las listas con contador en el menú, por rol: «Pendiente de cerrar»
- * (CLOSING_QUEUE_ROLES) y «Anamnesis por revisar» (CLINICAL_ROLES). Copian la
- * matriz de la API (`WORK_QUEUE_ROLES`); un rol sin ninguna no sondea.
+ * Las listas con contador fuera de Inicio, por rol: «Pendiente de cerrar»
+ * (CLOSING_QUEUE_ROLES) y «Anamnesis por revisar» (CLINICAL_ROLES) en el menú,
+ * y «Controles postoperatorios» (los 4 roles, DX-566) en la cabecera de la
+ * Agenda. Copian la matriz de la API (`WORK_QUEUE_ROLES`).
  */
 export function menuQueuesFor(role: ClinicRole | null): WorkQueueKey[] {
   if (!role) return [];
   const keys: WorkQueueKey[] = [];
   if (role !== 'ASSISTANT') keys.push('CLOSING_QUEUE');
   if (role !== 'RECEPTION') keys.push('ANAMNESIS_REVIEW');
+  keys.push('POST_OP_CHECKS');
   return keys;
 }

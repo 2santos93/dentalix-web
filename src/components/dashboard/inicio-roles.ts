@@ -18,6 +18,8 @@ const ACCESS = {
   closingQueue: ['ADMIN', 'DENTIST', 'RECEPTION'],
   /** `GET /medical-history/submissions/summary` (CLINICAL_ROLES). */
   anamnesis: ['ADMIN', 'DENTIST', 'ASSISTANT'],
+  /** `GET /post-op-checks/count` (POST_OP_CHECK_LIST_ROLES, DX-566): llama quien esté; recepción sin el detalle clínico. */
+  postOpChecks: ['ADMIN', 'DENTIST', 'ASSISTANT', 'RECEPTION'],
   /** `GET /treatment-plans/pending-follow-up/count` (TREATMENT_PLAN_FOLLOW_UP_ROLES). */
   followUp: ['ADMIN', 'RECEPTION'],
   /** `GET /treatment-plans/unscheduled/count` (los 4 roles en la API; lo agenda el mostrador). */
