@@ -13977,6 +13977,8 @@ export interface components {
             name: string;
             durationMinutes: number;
             color: string;
+            /** @description DX-564: el tipo tiene indicaciones previas en algún idioma. El texto está en `GET /appointment-types` (`preVisitInstructions`). */
+            hasPreVisitInstructions: boolean;
         };
         /**
          * @description DX-437: franja en la que el paciente quiere adelantar la cita (solo con wantsEarlier). null = cualquiera / lo marcó el personal.
@@ -15071,6 +15073,18 @@ export interface components {
             /** @description La semana COMPLETA. Un día sin tramos = cerrado. Lista vacía = sede sin restricción. */
             ranges: components["schemas"]["ScheduleRangeDto"][];
         };
+        PreVisitInstructionDto: {
+            /**
+             * @description Etiqueta BCP 47 de uno de los idiomas de los pacientes de la clínica (`tenants.patientLanguages`).
+             * @example es
+             */
+            language: string;
+            /**
+             * @description Texto plano de hasta 600 caracteres tras recortar, con saltos de línea; sin enlaces ni HTML. Vacío = sin indicaciones en ese idioma.
+             * @example Ven en ayunas de 6 horas y trae tus radiografías.
+             */
+            text: string;
+        };
         AppointmentTypeDto: {
             /** Format: uuid */
             id: string;
@@ -15085,6 +15099,8 @@ export interface components {
             active: boolean;
             /** @description DX-446: tipo de urgencia (p. ej. «Consulta de urgencia»): se ofrece primero al reservar huecos. */
             isUrgent: boolean;
+            /** @description DX-564: indicaciones previas a la cita, una por idioma con texto (español primero y luego por orden alfabético de etiqueta). Vacía = sin indicaciones. */
+            preVisitInstructions: components["schemas"]["PreVisitInstructionDto"][];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -15099,6 +15115,8 @@ export interface components {
             active?: boolean;
             /** @description DX-446: tipo de urgencia. Por defecto, false */
             isUrgent?: boolean;
+            /** @description DX-564: la lista ENTERA de indicaciones previas (un idioma que no viene se quita; vacía = sin indicaciones). Sin el campo, no se tocan. Idiomas de la lista de la clínica y sin repetir; una entrada con texto vacío se descarta. */
+            preVisitInstructions?: components["schemas"]["PreVisitInstructionDto"][];
         };
         UpdateAppointmentTypeDto: {
             name?: string;
@@ -15109,6 +15127,8 @@ export interface components {
             active?: boolean;
             /** @description DX-446: tipo de urgencia. Por defecto, false */
             isUrgent?: boolean;
+            /** @description DX-564: la lista ENTERA de indicaciones previas (un idioma que no viene se quita; vacía = sin indicaciones). Sin el campo, no se tocan. Idiomas de la lista de la clínica y sin repetir; una entrada con texto vacío se descarta. */
+            preVisitInstructions?: components["schemas"]["PreVisitInstructionDto"][];
         };
         /**
          * @description VACATION (vacaciones), MEETING (reunión o congreso), LUNCH (almuerzo), OTHER, RESERVED (DX-446: hueco reservado para `reservedForTypeIds`; exige sede).
@@ -17066,6 +17086,18 @@ export interface components {
             /** @description DX-437: se puede pedir (o quitar) ahora: cita agendada o confirmada, futura y de un día posterior a hoy en la sede. */
             earlierAllowed: boolean;
         };
+        PreVisitInstructionVariantDto: {
+            /**
+             * @description Idioma (BCP 47) del texto.
+             * @example es
+             */
+            language: string;
+            /**
+             * @description Texto plano de la clínica (hasta 600 caracteres, con saltos de línea; sin enlaces ni HTML).
+             * @example Ven en ayunas de 6 horas y trae tus radiografías.
+             */
+            text: string;
+        };
         ConfirmationLinkDto: {
             /** @description URL pública en el host de la clínica. Contiene el token en claro: se entrega solo aquí. */
             url: string;
@@ -17081,6 +17113,13 @@ export interface components {
             anamnesisUrl: string | null;
             /** @description DX-290: tocaba la anamnesis pero el paciente ya tiene un enlace vivo (de un recordatorio o de recepción): no se emite otro ni se anula; el mensaje puede recordarle que lo use. */
             anamnesisPending: boolean;
+            /**
+             * @description DX-564: idioma preferido del paciente (BCP 47); null = el de la clínica. La web compone el mensaje de WhatsApp en ese idioma (sin catálogo para él, en español).
+             * @example en
+             */
+            patientLanguage: string | null;
+            /** @description DX-564: indicaciones previas del tipo de la cita, todas sus variantes (español primero, luego alfabético). La web elige la del paciente (exacto → base → español; sin español ni coincidencia, ninguna) y la añade al mensaje («Antes de tu cita: …»). Vacía si el tipo no tiene. */
+            preVisitInstructions: components["schemas"]["PreVisitInstructionVariantDto"][];
         };
         PublicConfirmationClinicDto: {
             name: string;
@@ -17127,6 +17166,8 @@ export interface components {
             cancellationPolicy: components["schemas"]["PublicCancellationPolicyDto"] | null;
             /** @description DX-291: cancelar ahora tendría menos aviso que la política: cancelar exige `acknowledgePolicy`. */
             isLate: boolean;
+            /** @description DX-564: indicaciones previas del tipo de la cita, todas sus variantes (español primero, luego alfabético), para que la página elija por idioma (exacto → base → español) y siga al cambiar de idioma. Texto general de la clínica por tipo de cita, no dato del paciente. Vacía si el tipo no tiene, si el enlace caducó o si la cita está cancelada o ya pasó. */
+            preVisitInstructions: components["schemas"]["PreVisitInstructionVariantDto"][];
         };
         RespondAppointmentConfirmationDto: {
             /** @enum {string} */
@@ -35647,7 +35688,7 @@ export interface operations {
                     "application/json": components["schemas"]["AppointmentTypeDto"];
                 };
             };
-            /** @description Nombre vacío, duración fuera de rango o color no #RRGGBB */
+            /** @description Nombre vacío, duración fuera de rango, color no #RRGGBB o indicaciones previas inválidas (idioma no ofrecido o repetido, más de 600 caracteres, enlaces o HTML) */
             400: {
                 headers: {
                     [name: string]: unknown;
