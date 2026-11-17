@@ -5,6 +5,7 @@ import { act, configure, fireEvent, render, screen, waitFor, within } from '@tes
 import userEvent from '@testing-library/user-event';
 import { readDate, readTime, typeDate, typeTime } from './date-segments-for-tests';
 import { AGENDA_REFRESH_MS, AgendaView } from './agenda-view';
+import { getAppointmentType } from '@/lib/appointments/appointment-types-api';
 import { currentlyOffline } from '@/lib/offline/connectivity';
 import { Toaster } from '@/components/errors/toaster';
 import { toast } from 'sonner';
@@ -110,6 +111,7 @@ jest.mock('../../lib/cancellations/cancellation', () => ({
 }));
 jest.mock('../../lib/appointments/appointment-types-api', () => ({
   listAppointmentTypes: jest.fn().mockResolvedValue([]),
+  getAppointmentType: jest.fn(),
 }));
 jest.mock('../../lib/locations/locations-api', () => ({
   // DX-378: la agenda va en el reloj de la sede (aquí, UTC y 24 h: las horas de estas pruebas).
@@ -1115,6 +1117,8 @@ describe('AgendaView', () => {
       anamnesisPending: false,
       expiresAt: start,
       whatsappPhone: '584145550101',
+      patientLanguage: null,
+      preVisitInstructions: [],
       appointment: {
         patientFirstName: 'María',
         start,
@@ -1198,6 +1202,80 @@ describe('AgendaView', () => {
     expect(duplicateKeys).toEqual([]);
     consoleError.mockRestore();
   });
+
+  // DX-564: «Indicaciones previas» del tipo de la cita, para cualquier rol.
+  // El recorrido completo con RECEPTION; los otros tres roles, solo que la fila sale.
+  it.each([
+    ['RECEPTION', true],
+    ['ADMIN', false],
+    ['DENTIST', false],
+    ['ASSISTANT', false],
+  ] as const)(
+    '%s: el detalle de una cita con indicaciones las enseña con el idioma; su tipo se pide una vez',
+    async (role, full) => {
+      const roleToken = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role }))}.s`;
+      const future = new Date(Date.now() + 3 * 24 * 3600_000);
+      const day = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-${String(future.getDate()).padStart(2, '0')}`;
+      const at = (h: string) => new Date(`${day}T${h}:00`).toISOString();
+      const surgeryType = { id: 'type-s', name: 'Cirugía', durationMinutes: 30, color: '#7C3AED', hasPreVisitInstructions: true };
+      const controlType = { id: 'type-c', name: 'Control', durationMinutes: 30, color: '#0E7490', hasPreVisitInstructions: false };
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListAppointments.mockResolvedValue([
+        appointment({ id: 'apt-s', start: at('09:00'), end: at('09:30'), appointmentTypeId: 'type-s', appointmentType: surgeryType }),
+        appointment({ id: 'apt-c2', start: at('10:00'), end: at('10:30'), appointmentTypeId: 'type-c', appointmentType: controlType }),
+      ]);
+      const getType = getAppointmentType as jest.MockedFunction<typeof getAppointmentType>;
+      getType.mockReset();
+      getType.mockResolvedValue(
+        {
+          ...surgeryType,
+          tenantId: 't1',
+          active: true,
+          isUrgent: false,
+          preVisitInstructions: [
+            { language: 'es', text: 'Ven en ayunas.\nTrae tus radiografías.' },
+            { language: 'en', text: 'Come fasting.' },
+          ],
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      );
+      const user = userEvent.setup();
+
+      await renderAgenda(<AgendaView token={roleToken} />);
+      await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await goToDate(user, day);
+      if (full) {
+        // Una cita de un tipo sin indicaciones: ni fila ni petición.
+        const [control] = await screen.findAllByRole('button', { name: /^10:00–10:30.*detalle de la cita/i });
+        await user.click(control);
+        await screen.findByRole('dialog');
+        expect(screen.queryByText('Indicaciones previas')).not.toBeInTheDocument();
+        expect(getType).not.toHaveBeenCalled();
+        await user.keyboard('{Escape}');
+      }
+
+      const [surgery] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
+      await user.click(surgery);
+      const row = await screen.findByTestId('appointment-pre-visit-instructions');
+      expect(row).toHaveTextContent('Indicaciones previas');
+      expect(within(row).getByText('Español (es)')).toBeInTheDocument();
+      expect(within(row).getByText('English (en)')).toBeInTheDocument();
+      expect(within(row).getByText(/ven en ayunas/i)).toHaveClass('whitespace-pre-line', 'break-words');
+      expect(within(row).getByText('Come fasting.')).toBeInTheDocument();
+      expect(getType).toHaveBeenCalledTimes(1);
+      expect(getType).toHaveBeenCalledWith(roleToken, 'type-s');
+
+      if (!full) return;
+      // Otra vez: no se vuelve a pedir.
+      await user.keyboard('{Escape}');
+      const [again] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
+      await user.click(again);
+      await screen.findByTestId('appointment-pre-visit-instructions');
+      expect(getType).toHaveBeenCalledTimes(1);
+    },
+  );
 
   // DX-250: una cita de un día que aún no llega: ni se monta el panel ni se pide su lista.
   it('una cita SCHEDULED de un día posterior: el detalle no monta «Indicaciones» ni pide GET …/post-op-instructions', async () => {

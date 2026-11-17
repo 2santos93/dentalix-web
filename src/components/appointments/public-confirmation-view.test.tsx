@@ -53,6 +53,8 @@ function view(overrides: Partial<PublicConfirmation> = {}): PublicConfirmation {
     // DX-469
     calendarAvailable: false,
     googleCalendarUrl: null,
+    // DX-564
+    preVisitInstructions: [],
     ...overrides,
   };
 }
@@ -597,5 +599,55 @@ describe('PublicConfirmationView · idioma del paciente (DX-497)', () => {
     expect(get).toHaveBeenCalledTimes(1);
     expect(respond).not.toHaveBeenCalled();
     expect(setEarlier).not.toHaveBeenCalled();
+  });
+
+  describe('DX-564: «Antes de tu cita»', () => {
+    const VARIANTS = [
+      { language: 'es', text: 'Ven en ayunas.\nTrae tus radiografías.' },
+      { language: 'en', text: 'Come fasting.\nBring your X-rays.' },
+    ];
+
+    it('muestra la variante del idioma de la página y cambia con el selector', async () => {
+      get.mockResolvedValueOnce(view({ language: 'en', preVisitInstructions: VARIANTS }));
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      const block = await screen.findByTestId('public-pre-visit-instructions');
+      expect(block).toHaveTextContent('Before your appointment');
+      const text = screen.getByText(/come fasting/i);
+      expect(text.textContent).toBe('Come fasting.\nBring your X-rays.');
+      expect(text).toHaveClass('whitespace-pre-line', 'break-words');
+      fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'es' } });
+      expect(screen.getByTestId('public-pre-visit-instructions')).toHaveTextContent('Antes de tu cita');
+      expect(screen.getByText(/ven en ayunas/i)).toBeInTheDocument();
+      expect(screen.queryByText(/come fasting/i)).not.toBeInTheDocument();
+    });
+
+    it('sin variante en inglés, en la página en inglés sale el español (idioma de la clínica)', async () => {
+      get.mockResolvedValueOnce(view({ language: 'en', preVisitInstructions: [VARIANTS[0]] }));
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      const block = await screen.findByTestId('public-pre-visit-instructions');
+      expect(block).toHaveTextContent('Before your appointment');
+      expect(block).toHaveTextContent('Ven en ayunas.');
+    });
+
+    it('el texto se pinta como texto, nunca como HTML', async () => {
+      get.mockResolvedValueOnce(view({ preVisitInstructions: [{ language: 'es', text: '<img src=x onerror=alert(1)>' }] }));
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      const block = await screen.findByTestId('public-pre-visit-instructions');
+      expect(block.querySelector('img')).toBeNull();
+      expect(block).toHaveTextContent('<img src=x onerror=alert(1)>');
+    });
+
+    it('lista vacía (tipo sin texto, cita cancelada o pasada): no hay bloque', async () => {
+      get.mockResolvedValueOnce(view({ preVisitInstructions: [] }));
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      await screen.findByText(/hola ana/i);
+      expect(screen.queryByTestId('public-pre-visit-instructions')).not.toBeInTheDocument();
+    });
+
+    it('también tras responder (confirmada y futura)', async () => {
+      get.mockResolvedValueOnce(view({ status: 'RESPONDED', response: 'confirm', preVisitInstructions: VARIANTS }));
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      expect(await screen.findByTestId('public-pre-visit-instructions')).toHaveTextContent('Ven en ayunas.');
+    });
   });
 });

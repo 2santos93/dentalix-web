@@ -26,6 +26,15 @@ export async function listAppointmentTypes(
   return apiFetch<AppointmentType[]>(`/appointment-types${query}`, { token });
 }
 
+/**
+ * DX-564: `GET /appointment-types/:id`: un tipo, también desactivado o
+ * retirado (las citas lo conservan y sus indicaciones se siguen enviando). Los
+ * 4 roles. 404 si no es de esta clínica.
+ */
+export async function getAppointmentType(token: string, id: string): Promise<AppointmentType> {
+  return apiFetch<AppointmentType>(`/appointment-types/${encodeURIComponent(id)}`, { token });
+}
+
 export async function createAppointmentType(
   token: string,
   input: CreateAppointmentTypeInput,

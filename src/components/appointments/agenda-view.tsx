@@ -1,6 +1,10 @@
 'use client';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
+import {
+  AppointmentPreVisitInstructions,
+  useAppointmentTypeInstructions,
+} from './appointment-pre-visit-instructions';
 import { useSessionLocations } from '@/lib/session/session-store';
 import { useEffect, useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -1468,6 +1472,11 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   const liveDetailAppointment = detailAppointment
     ? appointments.find((a) => a.id === detailAppointment.id) ?? detailAppointment
     : null;
+  // DX-564: el tipo de la cita (con sus indicaciones) se pide solo al abrir una que las tiene.
+  const preVisitTypes = useAppointmentTypeInstructions(
+    token,
+    liveDetailAppointment?.appointmentType?.hasPreVisitInstructions ? liveDetailAppointment.appointmentType.id : null,
+  );
 
   const userId = getTokenUserId(token);
   // DX-567: la tira «Agendado» del rango visible (Día: el día; Semana: lunes a
@@ -2115,6 +2124,13 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                   ) : null}
                   {liveDetailAppointment.appointmentType ? (
                     <DescriptionItem label={copy.detailType}>{liveDetailAppointment.appointmentType.name}</DescriptionItem>
+                  ) : null}
+                  {/* DX-564: las indicaciones previas del tipo, en todos sus idiomas. */}
+                  {liveDetailAppointment.appointmentType?.hasPreVisitInstructions ? (
+                    <AppointmentPreVisitInstructions
+                      state={preVisitTypes.state}
+                      onRetry={preVisitTypes.retry}
+                    />
                   ) : null}
                   {liveDetailAppointment.reason ? (
                     <DescriptionItem label={copy.detailReason}>{liveDetailAppointment.reason}</DescriptionItem>

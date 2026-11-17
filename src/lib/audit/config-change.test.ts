@@ -123,6 +123,27 @@ describe("configChangeItems (DX-360)", () => {
     );
   });
 
+  it("DX-564: indicaciones previas: los idiomas con su nombre y el texto solo como «cambió»", () => {
+    const items = configChangeItems({
+      reason: "APPOINTMENT_TYPE_UPDATED",
+      changedFields: ["preVisitInstructionLanguages", "preVisitInstructions"],
+      configChange: {
+        before: { preVisitInstructionLanguages: ["es"] },
+        after: { preVisitInstructionLanguages: ["es", "en"] },
+      },
+    });
+    expect(items).toEqual([
+      {
+        field: "preVisitInstructionLanguages",
+        label: "Indicaciones previas (idiomas)",
+        kind: "changed",
+        before: "Español (es)",
+        after: "Español (es), English (en)",
+      },
+      { field: "preVisitInstructions", label: "Indicaciones previas", kind: "hidden" },
+    ]);
+  });
+
   it("alta: solo los valores nuevos; retiro: solo los anteriores", () => {
     expect(
       configChangeItems({
