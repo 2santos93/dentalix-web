@@ -99,6 +99,7 @@ function unlinked(overrides: Partial<UnlinkedAppointment> = {}): UnlinkedAppoint
     status: 'SCHEDULED',
     patientId: 'pat-1',
     patientName: 'Ana Pérez',
+    patientArchived: false,
     appointmentTypeName: 'Control',
     professionalId: 'u-1',
     professionalName: 'Dra. Marisol Rivas',
@@ -154,6 +155,36 @@ describe('ScheduledProductionView (DX-567)', () => {
       '/patients/pat-1?tab=treatment-plans',
     );
     expect(mockedUnlinked).toHaveBeenCalledWith('t', NOV, 1, 25);
+  });
+
+  it('paciente archivado: «(archivado)» sin enlace a la ficha; el enlace a la cita sí', async () => {
+    mockedUnlinked.mockResolvedValue({
+      items: [unlinked({ patientArchived: true, patientName: 'Luis Rangel' })],
+      total: 1,
+      page: 1,
+      pageSize: 25,
+    });
+    render(<ScheduledProductionView token="t" />);
+    expect(await screen.findByTestId('scheduled-production-archived-patient')).toHaveTextContent('Luis Rangel (archivado)');
+    expect(screen.queryByRole('link', { name: 'Plan de tratamiento de Luis Rangel' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Abrir la cita de Luis Rangel en la agenda' })).toHaveAttribute(
+      'href',
+      '/agenda?cita=apt-9',
+    );
+  });
+
+  it('pinta los importes de la API tal cual (byDay y totals se redondean por separado)', async () => {
+    mockedGet.mockResolvedValue(
+      report({
+        totals: { scheduledAmount: 100.01, appointments: 3, appointmentsWithoutItems: 1 },
+        byDay: [
+          { date: '2026-11-17', scheduledAmount: 33.33, appointments: 1, appointmentsWithoutItems: 0 },
+          { date: '2026-11-18', scheduledAmount: 66.67, appointments: 2, appointmentsWithoutItems: 1 },
+        ],
+      }),
+    );
+    render(<ScheduledProductionView token="t" />);
+    expect(flat((await screen.findByTestId('scheduled-production-total')).textContent)).toContain(flat(usd(100.01)));
   });
 
   it('sin citas sin tratamiento no pide la lista', async () => {

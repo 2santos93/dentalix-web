@@ -109,6 +109,7 @@ export const scheduledProductionCopy = {
   openAppointment: 'Abrir la cita',
   openAppointmentFor: (patient: string) => `Abrir la cita de ${patient} en la agenda`,
   openPlanFor: (patient: string) => `Plan de tratamiento de ${patient}`,
+  archivedPatient: (patient: string) => `${patient} (archivado)`,
   unlinkedError: 'No pudimos cargar las citas sin tratamiento ligado.',
   unattributed: 'Sin profesional',
   howTitle: 'Cómo se calcula',
@@ -375,16 +376,22 @@ function UnlinkedList({
     {
       id: 'patient',
       header: c.unlinkedColumns.patient,
-      cell: (r) => (
-        <Link
-          href={treatmentPlanHref(r.patientId)}
-          aria-label={c.openPlanFor(r.patientName)}
-          className="inline-flex min-h-8 items-center font-medium text-primary-text underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-primary-text max-sm:min-h-11"
-        >
-          {r.patientName}
-        </Link>
-      ),
-      mobileCell: (r) => r.patientName,
+      // Un paciente archivado se nombra, pero su ficha no se enlaza.
+      cell: (r) =>
+        r.patientArchived ? (
+          <span className="text-ink" data-testid="scheduled-production-archived-patient">
+            {c.archivedPatient(r.patientName)}
+          </span>
+        ) : (
+          <Link
+            href={treatmentPlanHref(r.patientId)}
+            aria-label={c.openPlanFor(r.patientName)}
+            className="inline-flex min-h-8 items-center font-medium text-primary-text underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-primary-text max-sm:min-h-11"
+          >
+            {r.patientName}
+          </Link>
+        ),
+      mobileCell: (r) => (r.patientArchived ? c.archivedPatient(r.patientName) : r.patientName),
     },
     { id: 'type', header: c.unlinkedColumns.type, cell: (r) => r.appointmentTypeName ?? c.noValue, mobileCell: (r) => r.appointmentTypeName, showFrom: 'lg' },
     {
