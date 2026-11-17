@@ -1,6 +1,6 @@
-'use client';
-import * as React from 'react';
-import type { CalendarDate } from '@internationalized/date';
+"use client";
+import * as React from "react";
+import type { CalendarDate } from "@internationalized/date";
 import {
   Button as AriaButton,
   Calendar as AriaCalendar,
@@ -26,11 +26,11 @@ import {
   RangeCalendar as AriaRangeCalendar,
   useSlottedContext,
   type CalendarCellRenderProps,
-} from 'react-aria-components';
-import { FocusScope } from '@radix-ui/react-focus-scope';
-import { CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { fieldLabelId } from '@/components/shared/form-field';
-import { DateI18n, useDateLocale } from '@/components/ui/date-locale';
+} from "react-aria-components";
+import { FocusScope } from "@radix-ui/react-focus-scope";
+import { CalendarDays, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { fieldLabelId } from "@/components/shared/form-field";
+import { DateI18n, useDateLocale } from "@/components/ui/date-locale";
 import {
   HiddenIso,
   SegmentKeys,
@@ -43,16 +43,16 @@ import {
   segmentClass,
   segmentGroupClass,
   type DateBaseProps,
-} from '@/components/ui/date-field';
+} from "@/components/ui/date-field";
 import {
   DEFAULT_RANGE_PRESETS,
   isoToCalendarDate,
   todayDate,
   type DateRangePreset,
   type IsoRange,
-} from '@/lib/dates/iso';
-import { useMediaQuery } from '@/lib/hooks/use-media-query';
-import { cn } from '@/lib/utils';
+} from "@/lib/dates/iso";
+import { useMediaQuery } from "@/lib/hooks/use-media-query";
+import { cn } from "@/lib/utils";
 
 /**
  * Selectores de fecha para agendar y filtrar: segmentos escritos (siempre se
@@ -61,27 +61,54 @@ import { cn } from '@/lib/utils';
  */
 
 const navButtonClass =
-  'inline-flex size-10 items-center justify-center rounded-lg text-ink outline-none transition-colors hover:bg-surface-sunken data-[focus-visible]:outline-2 data-[focus-visible]:outline-offset-2 data-[focus-visible]:outline-primary-text data-[disabled]:opacity-40 pointer-coarse:size-11 [&_svg]:size-4';
+  "inline-flex size-10 items-center justify-center rounded-lg text-ink outline-none transition-colors hover:bg-surface-sunken data-[focus-visible]:outline-2 data-[focus-visible]:outline-offset-2 data-[focus-visible]:outline-primary-text data-[disabled]:opacity-40 pointer-coarse:size-11 [&_svg]:size-4";
 
+/**
+ * El botón «Calendario» (DX-580): zona táctil de 44×44 px en teléfono
+ * (`max-sm:min-*-11`, también con ventana estrecha) y con puntero táctil
+ * (`pointer-coarse:size-11`), sin cambiar lo que se ve. La caja es invisible y
+ * crece hacia fuera del campo; el fondo al pasar, el anillo de foco y el icono
+ * los pinta la cara (`triggerFaceClass`), que conserva sus 32 px (40 táctil).
+ * En escritorio con ratón la caja y la cara coinciden.
+ */
 const triggerButtonClass =
-  '-mr-2 ml-auto inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted outline-none transition-colors hover:bg-surface-sunken hover:text-ink data-[focus-visible]:outline-2 data-[focus-visible]:outline-primary-text data-[disabled]:pointer-events-none pointer-coarse:size-10 [&_svg]:size-4';
+  "group/trigger -mr-2 ml-auto inline-flex size-8 shrink-0 items-center justify-center text-muted outline-none data-[disabled]:pointer-events-none max-sm:-mr-3 max-sm:min-h-11 max-sm:min-w-11 pointer-coarse:-mr-3 pointer-coarse:size-11";
+
+const triggerFaceClass =
+  "inline-flex size-8 items-center justify-center rounded-md transition-colors group-hover/trigger:bg-surface-sunken group-hover/trigger:text-ink group-data-[focus-visible]/trigger:outline-2 group-data-[focus-visible]/trigger:outline-primary-text pointer-coarse:size-10 [&_svg]:size-4";
 
 /** Clases de una celda del calendario: 40px (44px táctil), hoy con anillo, elegido en acento. */
 function cellClass(
-  { isSelected, isOutsideMonth, isDisabled, isUnavailable, isFocusVisible, isSelectionStart, isSelectionEnd }: CalendarCellRenderProps,
+  {
+    isSelected,
+    isOutsideMonth,
+    isDisabled,
+    isUnavailable,
+    isFocusVisible,
+    isSelectionStart,
+    isSelectionEnd,
+  }: CalendarCellRenderProps,
   { isToday, range }: { isToday: boolean; range: boolean },
 ): string {
   const edge = !range || isSelectionStart || isSelectionEnd;
   return cn(
-    'relative flex size-10 cursor-default items-center justify-center rounded-lg text-sm tabular-nums text-ink outline-none transition-colors pointer-coarse:size-11',
-    'hover:bg-surface-sunken',
-    isOutsideMonth && 'text-faint opacity-60 hover:bg-transparent',
-    isToday && !isSelected && 'font-semibold text-primary-text ring-1 ring-inset ring-primary-text',
-    isSelected && edge && 'bg-primary font-semibold text-primary-foreground hover:bg-primary-hover',
-    isSelected && !edge && 'rounded-none bg-primary-subtle text-primary-subtle-text hover:bg-primary-subtle',
+    "relative flex size-10 cursor-default items-center justify-center rounded-lg text-sm tabular-nums text-ink outline-none transition-colors pointer-coarse:size-11",
+    "hover:bg-surface-sunken",
+    isOutsideMonth && "text-faint opacity-60 hover:bg-transparent",
+    isToday &&
+      !isSelected &&
+      "font-semibold text-primary-text ring-1 ring-inset ring-primary-text",
+    isSelected &&
+      edge &&
+      "bg-primary font-semibold text-primary-foreground hover:bg-primary-hover",
+    isSelected &&
+      !edge &&
+      "rounded-none bg-primary-subtle text-primary-subtle-text hover:bg-primary-subtle",
     // react-aria también marca deshabilitados los días de otro mes: esos solo se atenúan.
-    !isOutsideMonth && (isDisabled || isUnavailable) && 'cursor-not-allowed text-faint line-through opacity-50 hover:bg-transparent',
-    isFocusVisible && 'outline-2 outline-offset-2 outline-primary-text',
+    !isOutsideMonth &&
+      (isDisabled || isUnavailable) &&
+      "cursor-not-allowed text-faint line-through opacity-50 hover:bg-transparent",
+    isFocusVisible && "outline-2 outline-offset-2 outline-primary-text",
   );
 }
 
@@ -104,7 +131,10 @@ function CalendarBody({ range }: { range: boolean }) {
   // «Hoy» en la zona de la sede, no en la del navegador.
   const today = React.useMemo(() => todayDate(timeZone).toString(), [timeZone]);
   return (
-    <CalendarGrid weekdayStyle="short" className="border-separate border-spacing-y-0.5">
+    <CalendarGrid
+      weekdayStyle="short"
+      className="border-separate border-spacing-y-0.5"
+    >
       <CalendarGridHeader>
         {(day) => (
           <CalendarHeaderCell className="size-10 text-xs font-medium text-muted first-letter:uppercase pointer-coarse:size-11">
@@ -116,7 +146,12 @@ function CalendarBody({ range }: { range: boolean }) {
         {(date) => (
           <CalendarCell
             date={date}
-            className={(state) => cellClass(state, { isToday: state.date.toString() === today, range })}
+            className={(state) =>
+              cellClass(state, {
+                isToday: state.date.toString() === today,
+                range,
+              })
+            }
           />
         )}
       </CalendarGridBody>
@@ -130,17 +165,31 @@ function CalendarBody({ range }: { range: boolean }) {
  */
 const noSubscription = () => () => {};
 
-function OverlayTitle({ field, fallback }: { field: DateBaseProps; fallback: string }) {
-  const own = field.label ?? field['aria-label'] ?? null;
-  const labelId = field['aria-labelledby'] ?? (field.id ? fieldLabelId(field.id) : null);
+function OverlayTitle({
+  field,
+  fallback,
+}: {
+  field: DateBaseProps;
+  fallback: string;
+}) {
+  const own = field.label ?? field["aria-label"] ?? null;
+  const labelId =
+    field["aria-labelledby"] ?? (field.id ? fieldLabelId(field.id) : null);
   // Lectura del DOM como fuente externa: React la vuelve a mirar al montar,
   // cuando la etiqueta del `FormField` ya existe.
   const fromDom = React.useSyncExternalStore(
     noSubscription,
-    () => (own || !labelId ? null : document.getElementById(labelId)?.textContent?.trim() || null),
+    () =>
+      own || !labelId
+        ? null
+        : document.getElementById(labelId)?.textContent?.trim() || null,
     () => null,
   );
-  return <p className="text-sm font-semibold first-letter:uppercase">{own ?? fromDom ?? fallback}</p>;
+  return (
+    <p className="text-sm font-semibold first-letter:uppercase">
+      {own ?? fromDom ?? fallback}
+    </p>
+  );
 }
 
 /**
@@ -165,7 +214,7 @@ function OverlayTitle({ field, fallback }: { field: DateBaseProps; fallback: str
  * react-aria ya intentó enfocar el día y la trampa se lo devolvió al botón:
  * en cuanto queda pausada, el foco vuelve al día del calendario.
  */
-const NESTED_LAYER_STYLE: React.CSSProperties = { pointerEvents: 'auto' };
+const NESTED_LAYER_STYLE: React.CSSProperties = { pointerEvents: "auto" };
 
 function PauseOuterFocusTrap() {
   const picker = React.useContext(DatePickerStateContext);
@@ -178,7 +227,9 @@ function OuterTrapPause() {
   React.useEffect(() => {
     // Este efecto corre después del de `FocusScope` (su hijo): ya está pausada.
     if (!node) return;
-    const layers = document.querySelectorAll<HTMLElement>('[data-nested-layer]');
+    const layers = document.querySelectorAll<HTMLElement>(
+      "[data-nested-layer]",
+    );
     const layer = layers[layers.length - 1];
     if (!layer || layer.contains(document.activeElement)) return;
     const target =
@@ -201,8 +252,14 @@ function OuterTrapPause() {
  * La capa del calendario: popover anclado al campo en escritorio; hoja
  * inferior con título y cierre en teléfonos.
  */
-function CalendarOverlay({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
-  const wide = useMediaQuery('(min-width: 640px)');
+function CalendarOverlay({
+  title,
+  children,
+}: {
+  title: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const wide = useMediaQuery("(min-width: 640px)");
   if (wide) {
     return (
       <>
@@ -232,7 +289,11 @@ function CalendarOverlay({ title, children }: { title: React.ReactNode; children
           <Dialog className="flex flex-col items-center gap-2 outline-none">
             <div className="flex w-full items-center justify-between">
               {title}
-              <AriaButton slot="close" aria-label="Cerrar" className={navButtonClass}>
+              <AriaButton
+                slot="close"
+                aria-label="Cerrar"
+                className={navButtonClass}
+              >
                 <X aria-hidden />
               </AriaButton>
             </div>
@@ -254,11 +315,28 @@ export interface DatePickerProps extends DateBaseProps {
 
 /** Un día para agendar o filtrar: escrito por segmentos o elegido en el calendario. */
 export function DatePicker(props: DatePickerProps) {
-  const { id, value, onChange, min, max, label, required, disabled, autoFocus, className } = props;
+  const {
+    id,
+    value,
+    onChange,
+    min,
+    max,
+    label,
+    required,
+    disabled,
+    autoFocus,
+    className,
+  } = props;
   const date = React.useMemo(() => isoToCalendarDate(value), [value]);
   const [draft, setDraft] = useDayDraft(value, onChange);
-  const minValue = React.useMemo(() => isoToCalendarDate(min) ?? undefined, [min]);
-  const maxValue = React.useMemo(() => isoToCalendarDate(max) ?? undefined, [max]);
+  const minValue = React.useMemo(
+    () => isoToCalendarDate(min) ?? undefined,
+    [min],
+  );
+  const maxValue = React.useMemo(
+    () => isoToCalendarDate(max) ?? undefined,
+    [max],
+  );
   return (
     <DateI18n>
       <SegmentKeys>
@@ -276,20 +354,28 @@ export function DatePicker(props: DatePickerProps) {
           shouldForceLeadingZeros
           granularity="day"
           autoFocus={autoFocus}
-          aria-describedby={props['aria-describedby']}
+          aria-describedby={props["aria-describedby"]}
           {...dateLabelling(props)}
-          className={cn('flex flex-col gap-1.5', className)}
+          className={cn("flex flex-col gap-1.5", className)}
         >
-          {label ? <AriaLabel className={dateLabelClass}>{label}</AriaLabel> : null}
+          {label ? (
+            <AriaLabel className={dateLabelClass}>{label}</AriaLabel>
+          ) : null}
           <Group className={segmentGroupClass}>
             <DateInput className="flex items-center">
-              {(segment) => <DateSegment segment={segment} className={segmentClass} />}
+              {(segment) => (
+                <DateSegment segment={segment} className={segmentClass} />
+              )}
             </DateInput>
             <AriaButton className={triggerButtonClass}>
-              <CalendarDays aria-hidden />
+              <span className={triggerFaceClass}>
+                <CalendarDays aria-hidden />
+              </span>
             </AriaButton>
           </Group>
-          <CalendarOverlay title={<OverlayTitle field={props} fallback="Elegir fecha" />}>
+          <CalendarOverlay
+            title={<OverlayTitle field={props} fallback="Elegir fecha" />}
+          >
             <AriaCalendar>
               <CalendarHeader />
               <CalendarBody range={false} />
@@ -307,23 +393,35 @@ export function DatePicker(props: DatePickerProps) {
  * genérico de react-aria («Fecha de inicio»): así lo leen el lector de
  * pantalla y `fillDateRange` en e2e.
  */
-function RangeInput({ slot, label }: { slot: 'start' | 'end'; label: string }) {
+function RangeInput({ slot, label }: { slot: "start" | "end"; label: string }) {
   const context = useSlottedContext(DateFieldContext, slot);
   return (
-    <DateFieldContext.Provider value={{ ...context, 'aria-label': label }}>
+    <DateFieldContext.Provider value={{ ...context, "aria-label": label }}>
       <DateInput className="flex items-center" data-range-part={slot}>
-        {(segment) => <DateSegment segment={segment} className={segmentClass} />}
+        {(segment) => (
+          <DateSegment segment={segment} className={segmentClass} />
+        )}
       </DateInput>
     </DateFieldContext.Provider>
   );
 }
 
 /** Los atajos de periodo, en la capa del calendario. Elegir uno aplica y cierra. */
-function RangePresets({ presets, onPick }: { presets: readonly DateRangePreset[]; onPick: (range: IsoRange) => void }) {
+function RangePresets({
+  presets,
+  onPick,
+}: {
+  presets: readonly DateRangePreset[];
+  onPick: (range: IsoRange) => void;
+}) {
   const state = React.useContext(DateRangePickerStateContext);
   const { timeZone } = useDateLocale();
   return (
-    <div role="group" aria-label="Atajos de periodo" className="flex flex-wrap gap-1.5 pb-2 sm:max-w-[18rem]">
+    <div
+      role="group"
+      aria-label="Atajos de periodo"
+      className="flex flex-wrap gap-1.5 pb-2 sm:max-w-[18rem]"
+    >
       {presets.map((preset) => (
         <AriaButton
           key={preset.id}
@@ -356,7 +454,7 @@ const rangeDraft = {
     const to = completeIso(next?.end);
     return from && to ? { from, to } : null;
   },
-  key: (iso: IsoRange | null) => (iso ? `${iso.from}/${iso.to}` : ''),
+  key: (iso: IsoRange | null) => (iso ? `${iso.from}/${iso.to}` : ""),
 };
 
 export interface DateRangePickerProps extends DateBaseProps {
@@ -391,14 +489,21 @@ export function DateRangePicker(props: DateRangePickerProps) {
     disabled,
     autoFocus,
     className,
-    startLabel = 'Desde',
-    endLabel = 'Hasta',
+    startLabel = "Desde",
+    endLabel = "Hasta",
   } = props;
   const range = React.useMemo(() => toRangeDraft(value), [value]);
   const [draft, setDraft] = useIsoDraft(value, onChange, rangeDraft);
-  const minValue = React.useMemo(() => isoToCalendarDate(min) ?? undefined, [min]);
-  const maxValue = React.useMemo(() => isoToCalendarDate(max) ?? undefined, [max]);
-  const presets = props.presets === true ? DEFAULT_RANGE_PRESETS : props.presets || null;
+  const minValue = React.useMemo(
+    () => isoToCalendarDate(min) ?? undefined,
+    [min],
+  );
+  const maxValue = React.useMemo(
+    () => isoToCalendarDate(max) ?? undefined,
+    [max],
+  );
+  const presets =
+    props.presets === true ? DEFAULT_RANGE_PRESETS : props.presets || null;
   return (
     <DateI18n>
       <SegmentKeys>
@@ -416,23 +521,31 @@ export function DateRangePicker(props: DateRangePickerProps) {
           shouldForceLeadingZeros
           granularity="day"
           autoFocus={autoFocus}
-          aria-describedby={props['aria-describedby']}
+          aria-describedby={props["aria-describedby"]}
           {...dateLabelling(props)}
-          className={cn('flex flex-col gap-1.5', className)}
+          className={cn("flex flex-col gap-1.5", className)}
         >
-          {label ? <AriaLabel className={dateLabelClass}>{label}</AriaLabel> : null}
-          <Group className={cn(segmentGroupClass, 'gap-1')}>
+          {label ? (
+            <AriaLabel className={dateLabelClass}>{label}</AriaLabel>
+          ) : null}
+          <Group className={cn(segmentGroupClass, "gap-1")}>
             <RangeInput slot="start" label={startLabel} />
             <span aria-hidden className="px-1 text-faint">
               –
             </span>
             <RangeInput slot="end" label={endLabel} />
             <AriaButton className={triggerButtonClass}>
-              <CalendarDays aria-hidden />
+              <span className={triggerFaceClass}>
+                <CalendarDays aria-hidden />
+              </span>
             </AriaButton>
           </Group>
-          <CalendarOverlay title={<OverlayTitle field={props} fallback="Elegir periodo" />}>
-            {presets ? <RangePresets presets={presets} onPick={onChange} /> : null}
+          <CalendarOverlay
+            title={<OverlayTitle field={props} fallback="Elegir periodo" />}
+          >
+            {presets ? (
+              <RangePresets presets={presets} onPick={onChange} />
+            ) : null}
             <AriaRangeCalendar>
               <CalendarHeader />
               <CalendarBody range />
