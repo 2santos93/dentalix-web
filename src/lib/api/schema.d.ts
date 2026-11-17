@@ -4959,6 +4959,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/treatment-plans/{id}/installment-simulation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Simula hasta 3 planes de cuotas del presupuesto (DX-041)
+         * @description Sin persistir nada. Cada escenario (cuota inicial, número de cuotas, periodicidad y fecha de la 1ª cuota) devuelve exactamente las cuotas y fechas que crearía POST …/payment-plan con los mismos datos, sobre el saldo que se financiaría al aceptar (lo cobrable del plan contando sus propuestos como aceptados). La inicial más las cuotas suman ese saldo; el ajuste de redondeo va en la última cuota. Para aceptar con uno: POST …/acceptance con `installmentPlan` (sus condiciones y `totalToFinance`).
+         */
+        post: operations["InstallmentSimulationController_simulateInstallments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/account-statement": {
         parameters: {
             query?: never;
@@ -8431,6 +8451,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/post-op-checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lista de llamadas de control postoperatorio
+         * @description Controles postoperatorios PENDIENTES cuyo día de llamada ya llegó en la zona de su sede (por defecto hoy y los vencidos), de pacientes no archivados, primero los más vencidos y luego por hora de la cita. Solo las sedes permitidas al usuario (DX-089). Fila: paciente, teléfono y WhatsApp, profesional, cita e intentos. Los roles clínicos ven además el procedimiento, los intentos con su nota y las indicaciones entregadas en la cita; RECEPTION, no (`clinicalHidden: true`). Deja un `audit_event` VIEW POST_OP_CHECK (POST_OP_CHECK_LIST).
+         */
+        get: operations["PostOpChecksController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/post-op-checks/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Contador de «Controles postoperatorios»
+         * @description Los mismos filtros y alcance que la lista, solo los números (sin pacientes, sin auditoría). Controles postoperatorios PENDIENTES cuyo día de llamada ya llegó en la zona de su sede (por defecto hoy y los vencidos), de pacientes no archivados, primero los más vencidos y luego por hora de la cita. Solo las sedes permitidas al usuario (DX-089).
+         */
+        get: operations["PostOpChecksController_count"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/post-op-checks/{id}/attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Registrar el resultado de una llamada de control
+         * @description Bloquea el control. FINE (Bien), DISCOMFORT (Molestias) y NEEDS_APPOINTMENT (Necesita cita) lo cierran (DONE) con ese desenlace; NO_ANSWER (No contesta) añade un intento y al tercero lo cierra como «No localizado» (UNREACHABLE). Al cerrar, en la misma transacción, el desenlace queda en la historia clínica: adenda a la evolución más reciente de la cita (motivo «Control postoperatorio») o, si la cita no tiene evolución (o no hay cita), una evolución nueva con ese motivo ligada a la cita y al paciente; autor = quien registra. Deja un `audit_event` UPDATE POST_OP_CHECK (POST_OP_CHECK_<resultado>, sin la nota). «Necesita cita» solo registra: la cita se agenda aparte.
+         */
+        post: operations["PostOpChecksController_recordAttempt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/commissions/rules": {
         parameters: {
             query?: never;
@@ -9547,7 +9627,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE" | "ORTHO_CASE" | "ORTHO_VISIT" | "DENTAL_LAB" | "DENTAL_LAB_ORDER" | "COMMISSION_SETTLEMENT";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE" | "ORTHO_CASE" | "ORTHO_VISIT" | "DENTAL_LAB" | "DENTAL_LAB_ORDER" | "COMMISSION_SETTLEMENT" | "POST_OP_CHECK";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -12025,6 +12105,16 @@ export interface components {
              * @default true
              */
             allowDiscount: boolean;
+            /**
+             * @description DX-566: al marcarlo hecho se crea un control postoperatorio (llamada al paciente). Solo en PROCEDURE: en un diagnóstico, 400.
+             * @default false
+             */
+            requiresPostOpCheck: boolean;
+            /**
+             * @description DX-566: días HÁBILES de la sede tras el procedimiento en los que se llama (1–30).
+             * @default 1
+             */
+            postOpCheckAfterDays: number;
             /** @default true */
             active: boolean;
             /**
@@ -12049,6 +12139,10 @@ export interface components {
             defaultPrice: number | null;
             /** @description DX-105: false = la prestación no admite descuentos (ni % de convenio ni discrecionales). */
             allowDiscount: boolean;
+            /** @description DX-566: al marcarlo hecho se crea un control postoperatorio (llamada al paciente). Solo en PROCEDURE. */
+            requiresPostOpCheck: boolean;
+            /** @description DX-566: días HÁBILES de la sede tras el procedimiento en los que se llama. */
+            postOpCheckAfterDays: number;
             /** @description DX-502-ter: moneda del `defaultPrice`, la del catálogo de la clínica; null si no se sabe. Solo la traen las lecturas (`GET /catalog/items`); es la misma en todos los ítems. */
             catalogCurrency?: string | null;
             active: boolean;
@@ -12090,6 +12184,10 @@ export interface components {
             defaultPrice?: number;
             /** @description DX-105: false = la prestación no admite descuentos. */
             allowDiscount?: boolean;
+            /** @description DX-566: al marcarlo hecho se crea un control postoperatorio (llamada al paciente). Solo en PROCEDURE: en un diagnóstico, 400. Un procedimiento que pasa a diagnóstico deja de pedirlo. */
+            requiresPostOpCheck?: boolean;
+            /** @description DX-566: días HÁBILES de la sede tras el procedimiento en los que se llama (1–30). */
+            postOpCheckAfterDays?: number;
             active?: boolean;
             /**
              * Format: uuid
@@ -18313,6 +18411,31 @@ export interface components {
             /** @description Ítems vivos de ESTE plan que se aceptan (404 si alguno no lo es). Al menos uno y no todos (todos: 400, que se acepte entero). Los ítems ya aceptados o realizados tienen que estar (400). */
             itemIds: string[];
         };
+        AcceptInstallmentPlanDto: {
+            /**
+             * @description Número de cuotas, entero entre 1 y 600
+             * @example 6
+             */
+            installmentsCount: number;
+            /** @enum {string} */
+            periodicity: "WEEKLY" | "BIWEEKLY" | "MONTHLY";
+            /**
+             * Format: date-time
+             * @description Fecha de la 1ª cuota
+             * @example 2026-12-01
+             */
+            startDate: string;
+            /**
+             * @description Cuota inicial (>= 0, como mucho 2 decimales, en la moneda del plan). Sin ella, 0.
+             * @example 300
+             */
+            downPayment?: number;
+            /**
+             * @description El `totalToFinance` de la simulación que se mostró al paciente.
+             * @example 1500
+             */
+            totalToFinance: number;
+        };
         AcceptTreatmentPlanDto: {
             /** @description Nombre de quien firma (el paciente o su representante) */
             signerName: string;
@@ -18324,6 +18447,57 @@ export interface components {
             expired?: components["schemas"]["ExpiredAcceptanceDto"];
             /** @description DX-417: aceptar solo estos procedimientos (presupuesto PRESENTED, sin abonos, plan de cuotas ni saldo a favor). Los demás pasan, con su mismo id, a un plan nuevo PRESENTED enlazado al original (`splitFromPlanId`). `contentHash` es entonces el de `accepted` en POST …/acceptance/partial-preview. Con `expired.mode = REPRICE` se recotiza TODO el plan y después se parte (la vista previa, con `reprice: true`). */
             partial?: components["schemas"]["PartialAcceptanceItemsDto"];
+            /** @description DX-041: aceptar con el plan de cuotas de un escenario de POST /treatment-plans/:id/installment-simulation (sus condiciones y su `totalToFinance`). El plan de cuotas se crea en la MISMA transacción que la aceptación, con las cuotas y fechas de la simulación; si el saldo ya no es el simulado, 409 `INSTALLMENT_SIMULATION_STALE` y no se acepta nada. No se combina con `partial` (400). Las cuotas en un período contable cerrado dan 409 `PERIOD_LOCKED` (sin excepción en la firma). */
+            installmentPlan?: components["schemas"]["AcceptInstallmentPlanDto"];
+        };
+        AcceptedPlanQuoteDocumentDto: {
+            /** @description Organización clínica actual; separada del contenido firmado. */
+            visitOrganization?: components["schemas"]["PlanQuoteVisitDto"][];
+            /**
+             * @description 4 = con la moneda de cada precio de lista (DX-502) y los datos fiscales congelados si la clínica los tiene; 3 = con datos fiscales congelados (DX-019); 2 = con convenio y ahorro (DX-105); 1 = foto firmada antes de DX-105 (sin convenio).
+             * @enum {number}
+             */
+            version: 1 | 2 | 3 | 4;
+            /** Format: uuid */
+            planId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** @enum {string} */
+            planStatus: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            clinicName: string;
+            clinicLogoUrl: string | null;
+            /** @description DX-019: datos fiscales. Aceptado: los congelados al firmar; null si no los llevaba (nunca los de hoy). */
+            clinicFiscal: components["schemas"]["ClinicFiscalDto"] | null;
+            location: components["schemas"]["PlanQuoteLocationDto"];
+            /** @description DX-354: zona, locale y reloj de la sede del presupuesto (la de la firma si ya se aceptó). null si le falta algo: el presupuesto se lee igual y la web pinta «—». No forma parte del contenido firmado. */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
+            patient: components["schemas"]["PlanQuotePatientDto"];
+            /** @description Profesional que creó el plan */
+            professionalName: string | null;
+            /** @description Convenio de los ítems; null si ninguno lo tiene */
+            agreement: components["schemas"]["PlanQuoteAgreementDto"] | null;
+            /**
+             * @description Fecha de emisión (zona de la sede)
+             * @example 2026-10-16
+             */
+            issuedOn: string;
+            /** @example 2026-11-15 */
+            validUntil: string;
+            /** @example 30 */
+            validityDays: number;
+            items: components["schemas"]["PlanQuoteItemDto"][];
+            /** @description Una fila por moneda */
+            totals: components["schemas"]["PlanQuoteTotalDto"][];
+            /** @description SHA-256 del contenido presentado */
+            contentHash: string;
+            acceptance: components["schemas"]["PlanQuoteAcceptanceDto"] | null;
+            /**
+             * Format: uuid
+             * @description El plan de cuotas creado en la aceptación (`installmentPlan`); null si se aceptó sin él.
+             */
+            paymentPlanId: string | null;
         };
         /**
          * @description De dónde sale la referencia; null en un ítem libre.
@@ -20451,6 +20625,70 @@ export interface components {
              * @example Abono del 15/09 que recepción olvidó registrar; cuadrado con el extracto del banco
              */
             lockOverrideReason?: string;
+        };
+        InstallmentTermsDto: {
+            /**
+             * @description Número de cuotas, entero entre 1 y 600
+             * @example 6
+             */
+            installmentsCount: number;
+            /** @enum {string} */
+            periodicity: "WEEKLY" | "BIWEEKLY" | "MONTHLY";
+            /**
+             * Format: date-time
+             * @description Fecha de la 1ª cuota
+             * @example 2026-12-01
+             */
+            startDate: string;
+            /**
+             * @description Cuota inicial (>= 0, como mucho 2 decimales, en la moneda del plan). Sin ella, 0.
+             * @example 300
+             */
+            downPayment?: number;
+        };
+        InstallmentSimulationRequestDto: {
+            /** @description Entre 1 y 3 escenarios */
+            scenarios: components["schemas"]["InstallmentTermsDto"][];
+        };
+        SimulatedInstallmentDto: {
+            /**
+             * @description Número de cuota (desde 1)
+             * @example 1
+             */
+            sequence: number;
+            /** Format: date-time */
+            dueDate: string;
+            /** @example 200 */
+            amount: number;
+        };
+        InstallmentScenarioDto: {
+            /**
+             * @description Saldo que se financia
+             * @example 1500
+             */
+            totalToFinance: number;
+            /** @example 300 */
+            downPayment: number;
+            /** @example 6 */
+            installmentsCount: number;
+            /** @enum {string} */
+            periodicity: "WEEKLY" | "BIWEEKLY" | "MONTHLY";
+            /** Format: date-time */
+            startDate: string;
+            /** @description Cuotas y fechas: la inicial más las cuotas suman `totalToFinance`; el ajuste de redondeo va en la última. */
+            installments: components["schemas"]["SimulatedInstallmentDto"][];
+        };
+        InstallmentSimulationDto: {
+            /** Format: uuid */
+            treatmentPlanId: string;
+            /** @description Moneda del plan (ISO 4217) */
+            currency: string;
+            /**
+             * @description Lo cobrable del plan una vez aceptado (la cuenta del saldo): lo que financian los escenarios
+             * @example 1500
+             */
+            totalToFinance: number;
+            scenarios: components["schemas"]["InstallmentScenarioDto"][];
         };
         AccountStatementClinicDto: {
             /** @example Clínica Sonrisas */
@@ -27261,6 +27499,125 @@ export interface components {
             /** Format: date-time */
             printedAt: string;
         };
+        /** @enum {string} */
+        PostOpAttemptOutcome: "FINE" | "DISCOMFORT" | "NEEDS_APPOINTMENT" | "NO_ANSWER";
+        PostOpCheckAttemptDto: {
+            /** Format: uuid */
+            id: string;
+            outcome: components["schemas"]["PostOpAttemptOutcome"];
+            note: string | null;
+            /** Format: uuid */
+            byId: string;
+            /** @example Dra. Carmen Rojas */
+            byName: string;
+            /** Format: date-time */
+            at: string;
+        };
+        PostOpInstructionDto: {
+            /**
+             * Format: uuid
+             * @description Id de la entrega: el documento está en GET /patients/:patientId/post-op-deliveries/:id.
+             */
+            deliveryId: string;
+            /** @example Cuidados tras una extracción */
+            title: string;
+            /** Format: date-time */
+            deliveredAt: string;
+        };
+        PostOpCheckListItemDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description Día de la llamada (zona de la sede).
+             * @example 2026-11-18
+             */
+            dueOn: string;
+            /** @description Días de retraso respecto a hoy en la sede (0 = vence hoy). */
+            overdueDays: number;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** @example Luisa Fernández */
+            patientName: string;
+            /** @description Teléfono del paciente (también para recepción y con baja de avisos: es una llamada clínica). */
+            patientPhone: string | null;
+            /**
+             * @description Dígitos para wa.me; null si el número no es válido.
+             * @example 584141234567
+             */
+            whatsAppDigits: string | null;
+            /** Format: uuid */
+            professionalId: string;
+            professionalName: string | null;
+            /** Format: uuid */
+            appointmentId: string | null;
+            /** Format: date-time */
+            appointmentStart: string | null;
+            attemptsCount: number;
+            /** @description true para RECEPTION: procedimiento, intentos (con sus notas) e indicaciones van a null. */
+            clinicalHidden: boolean;
+            /** @example Extracción simple */
+            procedureName: string | null;
+            attempts: components["schemas"]["PostOpCheckAttemptDto"][] | null;
+            /** @description Indicaciones postoperatorias entregadas en la cita del control. */
+            instructions: components["schemas"]["PostOpInstructionDto"][] | null;
+        };
+        PostOpCheckListDto: {
+            items: components["schemas"]["PostOpCheckListItemDto"][];
+            total: number;
+            /** @description De `total`, los vencidos antes de hoy. */
+            overdue: number;
+            page: number;
+            pageSize: number;
+        };
+        PostOpCheckCountDto: {
+            total: number;
+            /** @description De `total`, los vencidos antes de hoy. */
+            overdue: number;
+        };
+        RecordPostOpAttemptDto: {
+            /** @description FINE (Bien), DISCOMFORT (Molestias) y NEEDS_APPOINTMENT (Necesita cita) cierran el control; NO_ANSWER (No contesta) suma un intento y al tercero lo cierra como «No localizado» (UNREACHABLE). */
+            outcome: components["schemas"]["PostOpAttemptOutcome"];
+            /** @description Nota del intento (dato de salud). Queda en la historia al cerrar; nunca en la auditoría. */
+            note?: string | null;
+        };
+        /** @enum {string} */
+        PostOpCheckStatus: "PENDING" | "DONE" | "UNREACHABLE" | "CANCELLED";
+        /** @enum {string} */
+        PostOpCheckOutcome: "FINE" | "DISCOMFORT" | "NEEDS_APPOINTMENT";
+        PostOpCheckDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            locationId: string;
+            status: components["schemas"]["PostOpCheckStatus"];
+            outcome: components["schemas"]["PostOpCheckOutcome"] | null;
+            /** @example 2026-11-18 */
+            dueOn: string;
+            /** Format: date-time */
+            closedAt: string | null;
+            /** Format: uuid */
+            closedById: string | null;
+            /**
+             * Format: uuid
+             * @description Evolución donde quedó el desenlace (nueva o la que recibió la adenda).
+             */
+            clinicalEntryId: string | null;
+            /**
+             * Format: uuid
+             * @description La adenda, si el desenlace se añadió a una evolución de la cita.
+             */
+            addendumId: string | null;
+            /**
+             * Format: uuid
+             * @description El intento recién registrado.
+             */
+            attemptId: string;
+            attemptsCount: number;
+        };
         CommissionProfessionalDto: {
             /** Format: uuid */
             userId: string;
@@ -28419,7 +28776,7 @@ export interface components {
             catalogItemIds: string[];
         };
         /** @enum {string} */
-        WorkQueueKey: "CLOSING_QUEUE" | "PAYMENT_REPORTS" | "ANAMNESIS_REVIEW" | "QUOTE_FOLLOW_UP" | "ACCEPTED_UNSCHEDULED" | "WAITLIST" | "RECALL" | "RECEIVABLES" | "LOW_STOCK";
+        WorkQueueKey: "CLOSING_QUEUE" | "PAYMENT_REPORTS" | "ANAMNESIS_REVIEW" | "POST_OP_CHECKS" | "QUOTE_FOLLOW_UP" | "ACCEPTED_UNSCHEDULED" | "WAITLIST" | "RECALL" | "RECEIVABLES" | "LOW_STOCK";
         WorkQueueOverdueDto: {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
@@ -40049,16 +40406,16 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Plan aceptado: ACCEPTED, sus ítems propuestos pasan a aceptados y quedan congelados; las demás opciones abiertas de su grupo pasan a REJECTED (otra opción aceptada) en la misma transacción. DX-417: con `partial`, el plan queda ACCEPTED solo con los elegidos (lo firmado es su presupuesto) y los demás pasan a un plan nuevo PRESENTED, fuera del grupo de opciones, enlazado (`splitFromPlanId`) y con la misma presentación, validez, moneda y profesional; `acceptance.pendingPlanId`, `pendingItemIds` y `pendingTotal` lo dicen */
+            /** @description DX-041: con `installmentPlan`, el plan de cuotas nace en la misma transacción (`paymentPlanId`). Plan aceptado: ACCEPTED, sus ítems propuestos pasan a aceptados y quedan congelados; las demás opciones abiertas de su grupo pasan a REJECTED (otra opción aceptada) en la misma transacción. DX-417: con `partial`, el plan queda ACCEPTED solo con los elegidos (lo firmado es su presupuesto) y los demás pasan a un plan nuevo PRESENTED, fuera del grupo de opciones, enlazado (`splitFromPlanId`) y con la misma presentación, validez, moneda y profesional; `acceptance.pendingPlanId`, `pendingItemIds` y `pendingTotal` lo dicen */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PlanQuoteDocumentDto"];
+                    "application/json": components["schemas"]["AcceptedPlanQuoteDocumentDto"];
                 };
             };
-            /** @description Sin firma, firma no PNG o de más de 200 KB, sin nombre de quien firma, o plan sin ítems. DX-379 (C): `expired` con un presupuesto no vencido; ORIGINAL_PRICES sin motivo, OTHER sin nota, nota de más de 200; REPRICE sin `repricePreviewHash` o con motivo. DX-417: `partial` sin elegir ninguno, eligiendo todos («Has elegido todos los procedimientos: acéptalo entero.»), más de 100, o dejando fuera uno ya aceptado o realizado */
+            /** @description Sin firma, firma no PNG o de más de 200 KB, sin nombre de quien firma, o plan sin ítems. DX-379 (C): `expired` con un presupuesto no vencido; ORIGINAL_PRICES sin motivo, OTHER sin nota, nota de más de 200; REPRICE sin `repricePreviewHash` o con motivo. DX-417: `partial` sin elegir ninguno, eligiendo todos («Has elegido todos los procedimientos: acéptalo entero.»), más de 100, o dejando fuera uno ya aceptado o realizado. DX-041: `installmentPlan` con condiciones no válidas (cuotas, periodicidad, fecha, cuota inicial mayor que el saldo) o junto a `partial` */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -40079,7 +40436,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Ya estaba aceptado y firmado, el plan está rechazado, cancelado o completado, otra opción de su grupo ya está aceptada, o el presupuesto cambió desde que se mostró (contentHash). DX-379 (C): la sede de la presentación del plan sin zona válida → `LOCATION_TIMEZONE_REQUIRED` (también con un presupuesto no vencido si tiene validez guardada); `code: QUOTE_EXPIRED` («El presupuesto venció el {fecha}. Actualiza los precios o acepta con los precios originales indicando el motivo.», con `quoteValidUntil`) si está vencido y no llega `expired`; con REPRICE, `REPRICE_PREVIEW_STALE` (los precios vigentes cambiaron desde la vista previa), `REPRICE_INCOMPLETE` (algún propuesto sin precio vigente o sin tasa), `REPRICE_NOTHING_TO_APPLY` o el plan no se recotiza (abonos, plan de cuotas, saldo a favor); nada se escribe. DX-417 con `partial`: `PARTIAL_PLAN_NOT_PRESENTED` (solo un presupuesto presentado se acepta en parte), `PARTIAL_PLAN_ALREADY_ACCEPTED`, o el plan tiene abonos, plan de cuotas activo o saldo a favor */
+            /** @description Ya estaba aceptado y firmado, el plan está rechazado, cancelado o completado, otra opción de su grupo ya está aceptada, o el presupuesto cambió desde que se mostró (contentHash). DX-379 (C): la sede de la presentación del plan sin zona válida → `LOCATION_TIMEZONE_REQUIRED` (también con un presupuesto no vencido si tiene validez guardada); `code: QUOTE_EXPIRED` («El presupuesto venció el {fecha}. Actualiza los precios o acepta con los precios originales indicando el motivo.», con `quoteValidUntil`) si está vencido y no llega `expired`; con REPRICE, `REPRICE_PREVIEW_STALE` (los precios vigentes cambiaron desde la vista previa), `REPRICE_INCOMPLETE` (algún propuesto sin precio vigente o sin tasa), `REPRICE_NOTHING_TO_APPLY` o el plan no se recotiza (abonos, plan de cuotas, saldo a favor); nada se escribe. DX-417 con `partial`: `PARTIAL_PLAN_NOT_PRESENTED` (solo un presupuesto presentado se acepta en parte), `PARTIAL_PLAN_ALREADY_ACCEPTED`, o el plan tiene abonos, plan de cuotas activo o saldo a favor. DX-041 con `installmentPlan`: `INSTALLMENT_SIMULATION_STALE` (el saldo a financiar ya no es el simulado), el plan ya tiene un plan de cuotas activo, o `PERIOD_LOCKED` (alguna cuota vence en un período contable cerrado); nada se escribe */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -42357,6 +42714,66 @@ export interface operations {
             };
             /** @description DX-091: `code: PERIOD_LOCKED` si el plan tiene cuotas vencidas en un período contable cerrado. El ADMIN lo salta con `lockOverrideReason` si la clínica admite la exención. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    InstallmentSimulationController_simulateInstallments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstallmentSimulationRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstallmentSimulationDto"];
+                };
+            };
+            /** @description Id que no es UUID; ninguno o más de 3 escenarios; cuotas fuera de 1–600, periodicidad o fecha no válidas; cuota inicial negativa o mayor que el saldo; saldo 0 (plan sin importes) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso al presupuesto */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El plan está rechazado o cancelado (no se financia) o ya tiene un plan de cuotas activo */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La moneda del plan no está en el catálogo de monedas */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -51478,6 +51895,137 @@ export interface operations {
             };
             /** @description Orden de otra clínica o inexistente */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PostOpChecksController_list: {
+        parameters: {
+            query?: {
+                /** @description Solo los controles de esta sede (403 si no es de las del usuario). Sin ella, la sede activa (X-Location-Id) o, sin ella, todas las que ve el usuario. */
+                locationId?: string;
+                /** @description `overdue` (por defecto): los que vencen hoy y los vencidos. `today`: solo los que vencen hoy. «Hoy» es el día civil de la sede de cada control. */
+                include?: "overdue" | "today";
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostOpCheckListDto"];
+                };
+            };
+            /** @description Filtros o paginación inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PostOpChecksController_count: {
+        parameters: {
+            query?: {
+                /** @description Solo los controles de esta sede (403 si no es de las del usuario). Sin ella, la sede activa (X-Location-Id) o, sin ella, todas las que ve el usuario. */
+                locationId?: string;
+                /** @description `overdue` (por defecto): los que vencen hoy y los vencidos. `today`: solo los que vencen hoy. «Hoy» es el día civil de la sede de cada control. */
+                include?: "overdue" | "today";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostOpCheckCountDto"];
+                };
+            };
+            /** @description Filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PostOpChecksController_recordAttempt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordPostOpAttemptDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostOpCheckDto"];
+                };
+            };
+            /** @description Resultado fuera de la lista o nota de más de 1000 caracteres */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description RECEPTION (Solo el personal clínico (odontólogo, asistente o administrador) registra el resultado de un control postoperatorio) o control de una sede no permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Control postoperatorio no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Este control postoperatorio ya está cerrado: no admite más intentos */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
