@@ -1,5 +1,6 @@
 import { apiFetch } from '@/lib/api/client';
 import { ApiError } from '@/lib/api/api-error';
+import { whatsAppUrl } from '@/lib/appointments/confirmation-message';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 
@@ -110,4 +111,22 @@ export function postOpDueLabel(overdueDays: number): string {
 export function postOpAttemptsLabel(n: number): string {
   if (n === 0) return 'Sin intentos';
   return n === 1 ? '1 intento' : `${n} intentos`;
+}
+
+/**
+ * El mensaje de WhatsApp de la llamada de control: sin datos clínicos (ni el
+ * procedimiento ni la cita), solo quién escribe y para qué.
+ */
+export function postOpMessage(patientName: string, clinicName: string | null): string {
+  const firstName = patientName.trim().split(/\s+/)[0];
+  const greeting = firstName ? `Hola ${firstName}` : 'Hola';
+  return `${greeting}, te escribimos de ${clinicName ?? 'la clínica'} para saber cómo sigues después de tu última visita. ¿Cómo te has sentido?`;
+}
+
+export function postOpWhatsAppHref(
+  item: { patientName: string; whatsAppDigits: string | null },
+  clinicName: string | null,
+): string | null {
+  if (!item.whatsAppDigits) return null;
+  return whatsAppUrl(item.whatsAppDigits, postOpMessage(item.patientName, clinicName));
 }

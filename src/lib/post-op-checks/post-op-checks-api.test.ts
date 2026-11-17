@@ -8,6 +8,7 @@ import {
   listPostOpChecks,
   postOpAttemptsLabel,
   postOpDueLabel,
+  postOpWhatsAppHref,
   registerPostOpAttempt,
 } from './post-op-checks-api';
 import { apiFetch } from '../api/client';
@@ -72,5 +73,15 @@ describe('post-op-checks-api (DX-566)', () => {
     expect(postOpAttemptsLabel(0)).toBe('Sin intentos');
     expect(postOpAttemptsLabel(1)).toBe('1 intento');
     expect(postOpAttemptsLabel(2)).toBe('2 intentos');
+  });
+
+  it('el WhatsApp saluda por el nombre y no dice qué se le hizo', () => {
+    const href = postOpWhatsAppHref({ patientName: 'Jorge Eduardo Ramírez', whatsAppDigits: '584141234567' }, 'Clínica Ávila');
+    expect(href).toMatch(/^https:\/\/wa\.me\/584141234567\?text=/);
+    const text = decodeURIComponent(href!.split('text=')[1]);
+    expect(text).toContain('Hola Jorge');
+    expect(text).toContain('Clínica Ávila');
+    expect(text).not.toMatch(/extracci|procedimiento/i);
+    expect(postOpWhatsAppHref({ patientName: 'Ana', whatsAppDigits: null }, null)).toBeNull();
   });
 });
