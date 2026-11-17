@@ -14,6 +14,7 @@ export type PatientDetailTabKey =
   | 'prescriptions'
   | 'certificates'
   | 'external-orders'
+  | 'lab-orders'
   | 'implants'
   | 'documents'
   | 'data-consents'
@@ -55,6 +56,8 @@ interface PatientDetailTabsProps {
   certificatesLabel?: string;
   /** «Órdenes» (DX-572): los cuatro roles (emiten DENTIST y ADMIN; lo decide la pestaña). */
   externalOrdersLabel?: string;
+  /** «Laboratorio» (DX-017): los cuatro roles. Sin etiqueta no existe. */
+  labOrdersLabel?: string;
   /** «Implantes» (DX-191): los cuatro roles (recepción entrega la tarjeta). */
   implantsLabel?: string;
   /** «Documentos» (DX-151): los cuatro roles leen y suben. */
@@ -76,6 +79,7 @@ const TAB_ORDER: PatientDetailTabKey[] = [
   'prescriptions',
   'certificates',
   'external-orders',
+  'lab-orders',
   'implants',
   'documents',
   'data-consents',
@@ -124,6 +128,7 @@ export function PatientDetailTabs({
   prescriptionsLabel,
   certificatesLabel,
   externalOrdersLabel,
+  labOrdersLabel,
   implantsLabel,
   documentsLabel,
   accessLogLabel,
@@ -141,6 +146,7 @@ export function PatientDetailTabs({
     prescriptions: prescriptionsLabel,
     certificates: certificatesLabel,
     'external-orders': externalOrdersLabel,
+    'lab-orders': labOrdersLabel,
     implants: implantsLabel,
     documents: documentsLabel,
     'access-log': accessLogLabel,

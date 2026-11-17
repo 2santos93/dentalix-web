@@ -46,6 +46,7 @@ export function PlanItemsSection({
   updatingItemId,
   odontogramHref,
   implantHref,
+  labOrderHref,
   onItemStatusChange,
   onRemoveItem,
   sessionUserId,
@@ -78,6 +79,7 @@ export function PlanItemsSection({
   updatingItemId: string | null;
   odontogramHref?: (toothNumber: string) => string;
   implantHref?: (item: TreatmentPlanItem) => string;
+  labOrderHref?: (item: TreatmentPlanItem) => string;
   onItemStatusChange: (itemId: string, status: TreatmentPlanItemStatus) => void;
   onRemoveItem: (itemId: string) => void;
   sessionUserId: string | null;
@@ -176,6 +178,7 @@ export function PlanItemsSection({
                 focusedTooth={focusedToothOnPlan}
                 odontogramHref={odontogramHref}
                 implantHref={implantHref}
+                labOrderHref={labOrderHref}
                 onStatusChange={onItemStatusChange}
                 onRemove={onRemoveItem}
                 canLeaveDone={(item) => role === 'ADMIN' || item.performedById === sessionUserId}

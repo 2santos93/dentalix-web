@@ -328,6 +328,30 @@ export function externalOrderDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && EXTERNAL_ORDER_REASONS[metadata.reason]) ?? null;
 }
 
+/**
+ * DX-017: qué se hizo con una orden de laboratorio dental o con un laboratorio
+ * (y sus servicios). La metadata solo trae campos cambiados, el paso y las
+ * fechas: nunca instrucciones, color, descripción ni motivo de anulación.
+ */
+const DENTAL_LAB_REASONS: Record<string, string> = {
+  DENTAL_LAB_ORDER_SENT: 'Orden de laboratorio enviada',
+  DENTAL_LAB_ORDER_RECEIVED: 'Orden de laboratorio recibida',
+  DENTAL_LAB_ORDER_CHECKED: 'Orden de laboratorio revisada',
+  DENTAL_LAB_ORDER_CANCELLED: 'Orden de laboratorio anulada',
+  DENTAL_LAB_ORDER_UPDATED: 'Orden de laboratorio cambiada',
+  DENTAL_LAB_ORDER_PRINTED: 'Orden de laboratorio impresa',
+  DENTAL_LAB_ORDER_LIST: 'Trabajos de laboratorio de la sede consultados',
+  DENTAL_LAB_CREATED: 'Laboratorio dental creado',
+  DENTAL_LAB_UPDATED: 'Laboratorio dental cambiado',
+  DENTAL_LAB_SERVICE_CREATED: 'Servicio del laboratorio creado',
+  DENTAL_LAB_SERVICE_UPDATED: 'Servicio del laboratorio cambiado',
+};
+
+/** DX-017: el paso de la orden de laboratorio o del laboratorio, o null si no es de ellos. */
+export function dentalLabDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && DENTAL_LAB_REASONS[metadata.reason]) ?? null;
+}
+
 const STAFF_LOGIN_REASONS: Record<string, string> = {
   LOGIN_UNLOCKED: 'Desbloqueo del inicio de sesión',
   LOGIN_UNLOCK_REFUSED: 'Desbloqueo del inicio de sesión rechazado (sin cambios)',

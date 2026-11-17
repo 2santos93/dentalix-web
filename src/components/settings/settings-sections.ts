@@ -39,8 +39,10 @@ import {
   UserRound,
   Wallet,
   Smile,
+  Factory,
 } from 'lucide-react';
 import { canManageOrthoSettings } from '@/lib/ortho/ortho-roles';
+import { canManageDentalLabs } from '@/lib/lab-orders/lab-orders-roles';
 import type { ClinicRole } from '@/lib/me/me-api';
 import { canManagePatientLanguages } from '@/lib/patients/patient-languages';
 import { canManageCertificateSettings } from '@/lib/certificates/certificates-api';
@@ -386,6 +388,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Plantillas de órdenes de estudios y referencias, y el plazo para darlas por vencidas.',
         icon: ClipboardPlus,
         visible: canManageExternalOrderSettings,
+      },
+      // DX-017.
+      {
+        href: '/settings/laboratorios',
+        label: 'Laboratorios dentales',
+        description: 'Los laboratorios a los que se mandan coronas y prótesis, con sus servicios y plazos.',
+        icon: Factory,
+        visible: canManageDentalLabs,
       },
       // DX-222.
       {

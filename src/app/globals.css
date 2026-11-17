@@ -451,6 +451,34 @@
 }
 
 /*
+ * Print CSS de la orden de laboratorio dental (DX-017, /print/lab-orders/[id]).
+ * Mismo criterio que la receta: página A4 con nombre en `html` (ninguna caja
+ * posterior abre una hoja en blanco), documento en flujo y la visibilidad
+ * reabierta frente a la base de impresión. Ni el trabajo ni la firma se parten
+ * entre dos hojas. El papel es blanco con tinta oscura también en modo oscuro.
+ */
+@page lab-order {
+  size: A4;
+  margin: 16mm 16mm;
+}
+.lab-order-print-root {
+  color-scheme: light;
+}
+@media print {
+  html:has(.lab-order-print-page) {
+    page: lab-order;
+  }
+  .lab-order-print-root,
+  .lab-order-print-root * {
+    visibility: visible !important;
+  }
+  .lab-order-print-root .lab-order-work,
+  .lab-order-print-root .lab-order-signature {
+    break-inside: avoid;
+  }
+}
+
+/*
  * Print CSS de la copia de la historia clínica (DX-456, /print/patients/[id]/
  * clinical-record-copies/[copyId]). Página con nombre en `html` (ninguna caja
  * posterior abre una hoja en blanco) y SIN `size`: sale en el papel de la

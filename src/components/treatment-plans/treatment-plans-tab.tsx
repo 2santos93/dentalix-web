@@ -93,6 +93,12 @@ interface TreatmentPlansTabProps {
    */
   implantHref?: (item: TreatmentPlanItem) => string;
   /**
+   * DX-017: href de «Orden de laboratorio» para un ítem (sección «Laboratorio»
+   * con «Nueva orden» abierta desde él). Sin él (rol que no crea órdenes) no se
+   * pinta.
+   */
+  labOrderHref?: (item: TreatmentPlanItem) => string;
+  /**
    * DX-558: el plan de `?planId=` (p. ej. desde el embudo de presupuestos):
    * llega elegido en el selector al cargar. Si no es de este paciente o ya no
    * está, el primero, como sin él.
@@ -145,6 +151,7 @@ export function TreatmentPlansTab({
   focusedTooth: focusedToothOnPlan = null,
   odontogramHref,
   implantHref,
+  labOrderHref,
   initialPlanId = null,
 }: TreatmentPlansTabProps) {
   // DX-097: la fecha por defecto del abono es hoy en la zona de la sede. Sin
@@ -1132,6 +1139,7 @@ export function TreatmentPlansTab({
                 updatingItemId={updatingItemId}
                 odontogramHref={odontogramHref}
                 implantHref={implantHref}
+                labOrderHref={labOrderHref}
                 onItemStatusChange={handleItemStatusChange}
                 onRemoveItem={openRemoveConfirm}
                 sessionUserId={sessionUserId}

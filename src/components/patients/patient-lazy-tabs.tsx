@@ -121,6 +121,11 @@ export const AuditLogView = dynamic(() => import('@/components/audit/audit-log-v
   ssr: false,
   loading: () => <SectionSkeleton />,
 });
+// DX-017: «Laboratorio» (sus diálogos llegan en trozos aparte, al abrirlos).
+export const PatientLabOrdersTab = dynamic(
+  () => import('@/components/lab-orders/patient-lab-orders-tab').then((m) => m.PatientLabOrdersTab),
+  { ssr: false, loading: () => <SectionSkeleton /> },
+);
 
 // Diálogos (cerrados al pintar la ficha).
 export const PatientEditModal = dynamic(

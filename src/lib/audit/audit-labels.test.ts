@@ -8,6 +8,7 @@ import {
   receiptsSummaryPeriodDetail,
   cancellationDetail,
   externalOrderDetail,
+  dentalLabDetail,
   importBatchDetail,
   AUDIT_ACTION_LABELS,
   AUDIT_ACTION_OPTIONS,
@@ -1075,5 +1076,16 @@ describe('recallViaDetail (DX-015-bis)', () => {
   it('sin `via` o con uno desconocido, nada', () => {
     expect(recallViaDetail({})).toBeNull();
     expect(recallViaDetail({ via: 'OTRO' as never })).toBeNull();
+  });
+});
+
+describe('dentalLabDetail (DX-017)', () => {
+  it('nombra cada paso de la orden de laboratorio y del laboratorio, sin texto clínico', () => {
+    expect(dentalLabDetail({ reason: 'DENTAL_LAB_ORDER_SENT' })).toBe('Orden de laboratorio enviada');
+    expect(dentalLabDetail({ reason: 'DENTAL_LAB_ORDER_RECEIVED' })).toBe('Orden de laboratorio recibida');
+    expect(dentalLabDetail({ reason: 'DENTAL_LAB_ORDER_CANCELLED' })).toBe('Orden de laboratorio anulada');
+    expect(dentalLabDetail({ reason: 'DENTAL_LAB_SERVICE_CREATED' })).toBe('Servicio del laboratorio creado');
+    expect(dentalLabDetail({ reason: 'EXTERNAL_ORDER_ISSUED' })).toBeNull();
+    expect(dentalLabDetail({})).toBeNull();
   });
 });

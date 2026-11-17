@@ -59,6 +59,8 @@ export interface ItemsTableProps {
   focusedTooth?: string | null;
   odontogramHref?: (toothNumber: string) => string;
   implantHref?: (item: TreatmentPlanItem) => string;
+  /** DX-017: «Orden de laboratorio» desde el ítem (sin ella, no se pinta). */
+  labOrderHref?: (item: TreatmentPlanItem) => string;
   onStatusChange: (itemId: string, status: TreatmentPlanItemStatus) => void;
   onRemove: (itemId: string) => void;
   /**
@@ -288,6 +290,24 @@ function OdontogramLink({
 }
 
 /**
+ * DX-017: «Orden de laboratorio» desde el ítem del plan: la sección
+ * «Laboratorio» de la ficha con «Nueva orden» abierta y el diente y la
+ * prestación puestos. Un `<Link>` como `OdontogramLink`: no trae el diálogo a
+ * este trozo.
+ */
+function LabOrderLink({ item, href }: { item: TreatmentPlanItem; href: (item: TreatmentPlanItem) => string }) {
+  return (
+    <Link
+      href={href(item)}
+      aria-label={item.toothNumber ? copy.labOrderFor(item.toothNumber) : undefined}
+      className="text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+    >
+      {copy.labOrder}
+    </Link>
+  );
+}
+
+/**
  * DX-191: «Registrar implante» desde el ítem del plan que se ejecuta. Un
  * `<Link>` por la misma razón que `OdontogramLink`; el nombre accesible empieza
  * por el texto visible y lleva el diente (WCAG 2.5.3).
@@ -321,6 +341,7 @@ export function ItemsTable({
   focusedTooth,
   odontogramHref,
   implantHref,
+  labOrderHref,
   onStatusChange,
   onRemove,
   canLeaveDone = () => true,
@@ -349,6 +370,10 @@ export function ItemsTable({
   const removable = (item: TreatmentPlanItem) => !locked && !closed && !isFee(item);
   // DX-191: el implante se registra al ejecutar un ítem aceptado (o ya
   // realizado); no en uno solo propuesto ni en un plan cancelado o rechazado.
+  // DX-017: la orden de laboratorio sale de un ítem de tratamiento (no de un
+  // cargo) de un plan vivo.
+  const labOrderLinkFor = (item: TreatmentPlanItem) =>
+    labOrderHref && !isFee(item) && (!closed || markDoneOnly) ? labOrderHref : undefined;
   const implantLinkFor = (item: TreatmentPlanItem) =>
     implantHref && (item.status === 'ACCEPTED' || item.status === 'DONE') && (!closed || markDoneOnly)
       ? implantHref
@@ -403,6 +428,7 @@ export function ItemsTable({
               const updating = updatingItemId === item.id;
               const focused = focusedTooth === item.toothNumber;
               const implantLink = implantLinkFor(item);
+              const labOrderLink = labOrderLinkFor(item);
               const ref = refOf(item);
               return (
                 <TableRow
@@ -468,6 +494,7 @@ export function ItemsTable({
                     <div className="flex flex-wrap items-center gap-3">
                       <OdontogramLink toothNumber={item.toothNumber} href={odontogramHref} />
                       {implantLink && item.toothNumber ? <RegisterImplantLink item={item} href={implantLink} /> : null}
+                      {labOrderLink ? <LabOrderLink item={item} href={labOrderLink} /> : null}
                       {item.toothNumber && odontogramHref && removable(item) ? <Separator orientation="vertical" className="h-5" /> : null}
                       {!removable(item) ? null : (
                         <Button
@@ -498,6 +525,7 @@ export function ItemsTable({
           const updating = updatingItemId === item.id;
           const focused = focusedTooth === item.toothNumber;
           const implantLink = implantLinkFor(item);
+          const labOrderLink = labOrderLinkFor(item);
           const ref = refOf(item);
           return (
             <li
@@ -564,10 +592,11 @@ export function ItemsTable({
                   </Button>
                 )}
               </div>
-              {item.toothNumber && (odontogramHref || implantLink) ? (
+              {(item.toothNumber && (odontogramHref || implantLink)) || labOrderLink ? (
                 <p className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
-                  <OdontogramLink toothNumber={item.toothNumber} href={odontogramHref} />
+                  {item.toothNumber ? <OdontogramLink toothNumber={item.toothNumber} href={odontogramHref} /> : null}
                   {implantLink && item.toothNumber ? <RegisterImplantLink item={item} href={implantLink} /> : null}
+                  {labOrderLink ? <LabOrderLink item={item} href={labOrderLink} /> : null}
                 </p>
               ) : null}
             </li>
