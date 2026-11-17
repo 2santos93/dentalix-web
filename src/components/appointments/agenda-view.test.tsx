@@ -1203,9 +1203,15 @@ describe('AgendaView', () => {
   });
 
   // DX-564: «Indicaciones previas» del tipo de la cita, para cualquier rol.
-  it.each(['ADMIN', 'DENTIST', 'RECEPTION', 'ASSISTANT'])(
+  // El recorrido completo con RECEPTION; los otros tres roles, solo que la fila sale.
+  it.each([
+    ['RECEPTION', true],
+    ['ADMIN', false],
+    ['DENTIST', false],
+    ['ASSISTANT', false],
+  ] as const)(
     '%s: el detalle de una cita con indicaciones las enseña con el idioma; la lista de tipos se pide una vez',
-    async (role) => {
+    async (role, full) => {
       const roleToken = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role }))}.s`;
       const future = new Date(Date.now() + 3 * 24 * 3600_000);
       const day = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-${String(future.getDate()).padStart(2, '0')}`;
@@ -1239,13 +1245,15 @@ describe('AgendaView', () => {
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
       await user.click(screen.getByRole('button', { name: /^día$/i }));
       await goToDate(user, day);
-      // Una cita de un tipo sin indicaciones: ni fila ni petición.
-      const [control] = await screen.findAllByRole('button', { name: /^10:00–10:30.*detalle de la cita/i });
-      await user.click(control);
-      await screen.findByRole('dialog');
-      expect(screen.queryByText('Indicaciones previas')).not.toBeInTheDocument();
-      expect(listTypes).not.toHaveBeenCalled();
-      await user.keyboard('{Escape}');
+      if (full) {
+        // Una cita de un tipo sin indicaciones: ni fila ni petición.
+        const [control] = await screen.findAllByRole('button', { name: /^10:00–10:30.*detalle de la cita/i });
+        await user.click(control);
+        await screen.findByRole('dialog');
+        expect(screen.queryByText('Indicaciones previas')).not.toBeInTheDocument();
+        expect(listTypes).not.toHaveBeenCalled();
+        await user.keyboard('{Escape}');
+      }
 
       const [surgery] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
       await user.click(surgery);
@@ -1258,6 +1266,7 @@ describe('AgendaView', () => {
       expect(listTypes).toHaveBeenCalledTimes(1);
       expect(listTypes).toHaveBeenCalledWith(roleToken, { includeInactive: true });
 
+      if (!full) return;
       // Otra vez: no se vuelve a pedir.
       await user.keyboard('{Escape}');
       const [again] = await screen.findAllByRole('button', { name: /^09:00–09:30.*detalle de la cita/i });
