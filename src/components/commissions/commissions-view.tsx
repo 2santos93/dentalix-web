@@ -37,6 +37,7 @@ import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { DatePicker } from '@/components/ui/date-picker';
 import { NativeSelect } from '@/components/ui/native-select';
 import { SectionHeader } from '@/components/ui/section-header';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { CommissionLines, CommissionTotals } from './commission-lines';
 
 export const commissionsViewCopy = {
@@ -76,6 +77,7 @@ export const commissionsViewCopy = {
   colProfessional: 'Profesional',
   colClosed: 'Cerrada',
   colTotal: 'A pagar',
+  colPayment: 'Pago',
   nothing: 'Sin movimientos',
   period: (from: string, to: string) => `${from} – ${to}`,
   invalidPeriod: '«Desde» no puede ser posterior a «Hasta».',
@@ -232,6 +234,12 @@ export function CommissionsView({ token }: { token: string }) {
       cell: (s) => <span className="tabular-nums">{stamp.date(s.closedAt)}</span>,
       mobileCell: (s) => stamp.maybe.date(s.closedAt),
       showFrom: 'md',
+    },
+    {
+      // DX-464: el estado de pago de cada liquidación.
+      id: 'payment',
+      header: copy.colPayment,
+      cell: (s) => <StatusBadge kind="commissionPayment" status={s.payment.status} />,
     },
     {
       id: 'total',

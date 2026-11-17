@@ -5,6 +5,7 @@ import { percentText, type CommissionLine, type CommissionTotal } from '@/lib/co
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
 import { SectionHeader } from '@/components/ui/section-header';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { cn } from '@/lib/utils';
 
 export const commissionLinesCopy = {
@@ -59,7 +60,7 @@ export function CommissionTotals({ totals, stamp }: { totals: readonly Commissio
   );
 }
 
-function lineColumns(stamp: SedeStamp): DataListColumn<CommissionLine>[] {
+function lineColumns(stamp: SedeStamp, showPayment: boolean): DataListColumn<CommissionLine>[] {
   return [
     {
       id: 'patient',
@@ -123,8 +124,12 @@ function lineColumns(stamp: SedeStamp): DataListColumn<CommissionLine>[] {
       align: 'end',
       mobile: 'trailing',
       cell: (l) => (
-        <span className={cn('font-medium tabular-nums', l.amount < 0 && 'text-danger-text')}>
-          {stamp.money(l.amount, l.currency, l.locationId)}
+        <span className="flex flex-col items-end gap-1">
+          <span className={cn('font-medium tabular-nums', l.amount < 0 && 'text-danger-text')}>
+            {stamp.money(l.amount, l.currency, l.locationId)}
+          </span>
+          {/* DX-464: la línea que cubre un pago vivo. */}
+          {showPayment && l.paidInPaymentId ? <StatusBadge kind="commissionPayment" status="PAID" /> : null}
         </span>
       ),
     },
@@ -132,10 +137,19 @@ function lineColumns(stamp: SedeStamp): DataListColumn<CommissionLine>[] {
 }
 
 /** El detalle (vista previa o congelado): devengos y, aparte, los ajustes. */
-export function CommissionLines({ lines, stamp }: { lines: readonly CommissionLine[]; stamp: SedeStamp }) {
+export function CommissionLines({
+  lines,
+  stamp,
+  showPayment = false,
+}: {
+  lines: readonly CommissionLine[];
+  stamp: SedeStamp;
+  /** DX-464: en la liquidación cerrada, marca las líneas ya pagadas. */
+  showPayment?: boolean;
+}) {
   const accruals = lines.filter((l) => l.kind === 'ACCRUAL');
   const adjustments = lines.filter((l) => l.kind === 'ADJUSTMENT');
-  const columns = lineColumns(stamp);
+  const columns = lineColumns(stamp, showPayment);
   const key = (l: CommissionLine, i: number) =>
     l.id ?? `${l.kind}-${l.treatmentPlanItemId}-${l.payment?.id ?? 'p'}-${l.adjustsLineId ?? i}`;
   return (
