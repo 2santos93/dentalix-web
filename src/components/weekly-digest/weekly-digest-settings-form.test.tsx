@@ -124,7 +124,7 @@ describe('WeeklyDigestSettingsForm (DX-568)', () => {
 
   it('PRINCIPAL_LOCATION_UNCONFIGURED: avisa de que no se enviará y lleva a Ajustes › Sedes', async () => {
     jest.mocked(getWeeklyDigestSettings).mockResolvedValue(
-      settings({ enabled: true, warnings: ['PRINCIPAL_LOCATION_UNCONFIGURED' as 'NO_RECIPIENTS'] }),
+      settings({ enabled: true, warnings: ['PRINCIPAL_LOCATION_UNCONFIGURED'] }),
     );
     render(<WeeklyDigestSettingsForm token="tok" />);
     const callout = await screen.findByTestId('weekly-digest-principal-unconfigured');

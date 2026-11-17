@@ -23,10 +23,11 @@ import { SettingRows } from '@/components/settings/settings-page';
 import { cn } from '@/lib/utils';
 
 /**
- * Aviso de la API: la sede principal no tiene zona horaria o formato regional, así que no se
- * envía nada. Aún no está en `schema.d.ts` (llega con el JSON regenerado).
+ * Aviso de la API: la sede principal no tiene zona horaria o formato regional
+ * (o no hay sede activa), así que no se envía nada hasta configurarla.
  */
-export const WEEKLY_DIGEST_PRINCIPAL_LOCATION_UNCONFIGURED = 'PRINCIPAL_LOCATION_UNCONFIGURED';
+export const WEEKLY_DIGEST_PRINCIPAL_LOCATION_UNCONFIGURED = 'PRINCIPAL_LOCATION_UNCONFIGURED' satisfies
+  WeeklyDigestSettings['warnings'][number];
 
 /** La semana del resumen va de lunes a domingo: el selector empieza por el lunes. */
 export const WEEKLY_DIGEST_WEEKDAYS = [1, 2, 3, 4, 5, 6, 0] as const;
@@ -207,10 +208,7 @@ export function WeeklyDigestSettingsForm({ token }: { token: string }) {
   }
 
   const noRecipients = draft.enabled && draft.recipients.length === 0;
-  // El tipo de `warnings` aún no lo incluye: se compara como texto.
-  const principalUnconfigured = (settings.warnings as readonly string[]).includes(
-    WEEKLY_DIGEST_PRINCIPAL_LOCATION_UNCONFIGURED,
-  );
+  const principalUnconfigured = settings.warnings.includes(WEEKLY_DIGEST_PRINCIPAL_LOCATION_UNCONFIGURED);
 
   return (
     <form id={formId} onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
