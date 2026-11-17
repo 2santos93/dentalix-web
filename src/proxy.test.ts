@@ -99,6 +99,15 @@ describe('proxy (DX-062: CSP con nonce por petición)', () => {
     expect(other.headers.get('x-robots-tag')).toBeNull();
   });
 
+  it('DX-568: la baja del resumen semanal sale sin Referer, sin caché y sin indexar (no Ajustes › Resumen semanal)', () => {
+    const res = run('http://demo.localhost:3001/resumen/baja/abc', { host: 'demo.localhost:3001' });
+    expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(res.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+    const settings = run('http://demo.localhost:3001/settings/resumen-semanal', { host: 'demo.localhost:3001' });
+    expect(settings.headers.get('x-robots-tag')).toBeNull();
+  });
+
   it('genera un nonce distinto en cada petición', () => {
     const a = run('http://demo.localhost:3001/').headers.get('content-security-policy');
     const b = run('http://demo.localhost:3001/').headers.get('content-security-policy');
