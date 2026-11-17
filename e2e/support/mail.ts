@@ -11,7 +11,7 @@ import { expect } from '@playwright/test';
  */
 export const MAIL_DIR = process.env.E2E_MAIL_DIR;
 
-interface SavedEmail {
+export interface SavedEmail {
   to: string;
   subject: string;
   text: string;
@@ -44,9 +44,27 @@ function writtenAt(file: string): number {
 
 /** Primer grupo de `pattern` en el ÚLTIMO email a `to` que lo contenga. */
 export async function linkFromMail(to: string, pattern: RegExp, options: LinkFromMailOptions = {}): Promise<string> {
+  const { match } = await findMail(to, pattern, options);
+  return match;
+}
+
+/**
+ * DX-568: el ÚLTIMO email a `to` cuyo texto cumple `pattern`, entero (asunto
+ * incluido), para comprobar lo que lleva y lo que no.
+ */
+export async function mailFor(to: string, pattern: RegExp, options: LinkFromMailOptions = {}): Promise<SavedEmail> {
+  const { email } = await findMail(to, pattern, options);
+  return email;
+}
+
+async function findMail(
+  to: string,
+  pattern: RegExp,
+  options: LinkFromMailOptions,
+): Promise<{ email: SavedEmail; match: string }> {
   expect(MAIL_DIR, 'E2E_MAIL_DIR no definido: usa scripts/e2e-ci.sh').toBeTruthy();
   const { since } = options;
-  let found = '';
+  let found: { email: SavedEmail; match: string } | null = null;
   await expect
     .poll(
       async () => {
@@ -60,8 +78,8 @@ export async function linkFromMail(to: string, pattern: RegExp, options: LinkFro
           if (!email) continue;
           const match = email.to === to ? pattern.exec(email.text) : null;
           if (match) {
-            found = match[1] ?? match[0];
-            return found;
+            found = { email, match: match[1] ?? match[0] };
+            return found.match;
           }
         }
         return '';
@@ -72,7 +90,7 @@ export async function linkFromMail(to: string, pattern: RegExp, options: LinkFro
       },
     )
     .not.toBe('');
-  return found;
+  return found!;
 }
 
 /** Token del enlace de verificación del registro enviado a `to`. */
