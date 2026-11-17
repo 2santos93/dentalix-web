@@ -69,7 +69,7 @@ describe('WeeklyDigestSettingsForm (DX-568)', () => {
     expect(hour).toHaveValue('7');
     expect(within(hour).getAllByRole('option')).toHaveLength(24);
     expect(screen.getByTestId('weekly-digest-when')).toHaveTextContent(
-      /^Llega cada lunes a las 7:00\sa\.\sm\., hora de Sede Caracas \(America\/Caracas\), con las cifras de la semana anterior completa \(de lunes a domingo\)\.$/,
+      /^Llega cada lunes a las 7:00\sa\.\sm\., hora de Sede Caracas \(America\/Caracas\)\. Trae siempre la semana anterior completa, de lunes a domingo: también si eliges el domingo, no la semana que termina ese día\.$/,
     );
     expect(screen.getByText(/Solo cifras: ningún dato de pacientes\./)).toBeInTheDocument();
     // Sin cambios no hay barra de guardar.
@@ -122,6 +122,24 @@ describe('WeeklyDigestSettingsForm (DX-568)', () => {
     expect(await screen.findByTestId('weekly-digest-no-recipients')).toBeInTheDocument();
   });
 
+  it('PRINCIPAL_LOCATION_UNCONFIGURED: avisa de que no se enviará y lleva a Ajustes › Sedes', async () => {
+    jest.mocked(getWeeklyDigestSettings).mockResolvedValue(
+      settings({ enabled: true, warnings: ['PRINCIPAL_LOCATION_UNCONFIGURED' as 'NO_RECIPIENTS'] }),
+    );
+    render(<WeeklyDigestSettingsForm token="tok" />);
+    const callout = await screen.findByTestId('weekly-digest-principal-unconfigured');
+    expect(callout).toHaveTextContent(
+      'La sede principal no tiene zona horaria o formato regional: el resumen no se enviará hasta configurarla.',
+    );
+    expect(within(callout).getByRole('link', { name: 'Configurar sedes' })).toHaveAttribute('href', '/settings/sedes');
+  });
+
+  it('sin ese aviso no hay Callout de la sede principal', async () => {
+    render(<WeeklyDigestSettingsForm token="tok" />);
+    await screen.findByLabelText('Enviar el resumen semanal', { exact: true });
+    expect(screen.queryByTestId('weekly-digest-principal-unconfigured')).not.toBeInTheDocument();
+  });
+
   it('el 400 de la API se dice en la barra y relee los candidatos', async () => {
     const user = setupUser();
     jest
@@ -149,7 +167,7 @@ describe('WeeklyDigestSettingsForm (DX-568)', () => {
     const hour = await screen.findByLabelText('Hora', { exact: true });
     expect(within(hour).getByRole('option', { name: '7 h' })).toBeInTheDocument();
     expect(screen.getByTestId('weekly-digest-when')).toHaveTextContent(
-      'Llega cada lunes a la hora elegida en la zona de la sede principal',
+      'Llega cada lunes a la hora elegida, en la zona de la sede principal.',
     );
   });
 

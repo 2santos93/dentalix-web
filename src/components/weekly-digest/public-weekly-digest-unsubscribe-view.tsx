@@ -23,9 +23,11 @@ export const publicWeeklyDigestUnsubscribeCopy = {
     'Es el correo con las cifras de la semana de cada sede frente a la anterior. Solo dejará de llegarte a ti: el resto de destinatarios lo sigue recibiendo.',
   confirm: 'Dejar de recibir el resumen',
   confirmError: 'No pudimos registrar tu baja. Revisa tu conexión e intenta de nuevo.',
-  doneTitle: 'Ya no lo recibes',
+  doneTitle: 'Ya no recibes este resumen',
+  // Vale para quien se dio de baja y para quien ya no es administrador (la API
+  // responde `ALREADY_OUT` en los dos casos).
   doneMessage:
-    'No te enviaremos más el resumen semanal. Si quieres volver a recibirlo, un administrador puede añadirte en Ajustes › Resumen semanal.',
+    'No te enviaremos más el resumen semanal de esta clínica. Si quieres volver a recibirlo, pide a un administrador que te añada en Ajustes › Resumen semanal.',
   invalidTitle: 'El enlace no existe o caducó',
   invalidMessage:
     'Los enlaces para dejar de recibir el resumen valen 60 días. Usa el del último resumen que te llegó, o pide a un administrador que te quite en Ajustes › Resumen semanal.',
@@ -43,7 +45,8 @@ type LoadState =
  * Página pública `/resumen/baja/[token]` (DX-568): un miembro del personal deja
  * de recibir el resumen semanal desde el enlace del email. Abrir el enlace
  * solo pregunta (los antivirus y previsualizadores de correo abren los enlaces
- * solos); la baja exige el botón. Repetirla es inofensivo (`ALREADY_OUT`).
+ * solos); la baja exige el botón. Repetirla es inofensivo (`ALREADY_OUT`, que
+ * llega también si la persona ya no es administradora).
  * Móvil primero, como `/baja/[token]`.
  */
 export function PublicWeeklyDigestUnsubscribeView({ unsubscribeToken }: { unsubscribeToken: string }) {

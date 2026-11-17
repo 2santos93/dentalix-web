@@ -36,15 +36,15 @@ describe('PublicWeeklyDigestUnsubscribeView (DX-568)', () => {
     render(<PublicWeeklyDigestUnsubscribeView unsubscribeToken="tok" />);
     await user.click(await screen.findByRole('button', { name: 'Dejar de recibir el resumen' }));
     expect(mockedConfirm).toHaveBeenCalledWith('tok');
-    expect(await screen.findByRole('heading', { name: 'Ya no lo recibes' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Ya no recibes este resumen' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Dejar de recibir el resumen' })).not.toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
   });
 
-  it('un enlace ya usado dice «Ya no lo recibes» sin botón', async () => {
+  it('un enlace ya usado (o de quien ya no es administrador) dice «Ya no recibes este resumen» sin botón', async () => {
     mockedGet.mockResolvedValue({ clinicName: 'Clínica Dental Sonrisas', status: 'ALREADY_OUT' });
     render(<PublicWeeklyDigestUnsubscribeView unsubscribeToken="tok" />);
-    expect(await screen.findByRole('heading', { name: 'Ya no lo recibes' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Ya no recibes este resumen' })).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 

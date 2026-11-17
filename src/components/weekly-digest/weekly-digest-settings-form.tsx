@@ -1,5 +1,6 @@
 'use client';
 import * as React from 'react';
+import Link from 'next/link';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -21,6 +22,12 @@ import { SaveBar, useSettingsDraft } from '@/components/settings/save-bar';
 import { SettingRows } from '@/components/settings/settings-page';
 import { cn } from '@/lib/utils';
 
+/**
+ * Aviso de la API: la sede principal no tiene zona horaria o formato regional, así que no se
+ * envía nada. Aún no está en `schema.d.ts` (llega con el JSON regenerado).
+ */
+export const WEEKLY_DIGEST_PRINCIPAL_LOCATION_UNCONFIGURED = 'PRINCIPAL_LOCATION_UNCONFIGURED';
+
 /** La semana del resumen va de lunes a domingo: el selector empieza por el lunes. */
 export const WEEKLY_DIGEST_WEEKDAYS = [1, 2, 3, 4, 5, 6, 0] as const;
 export const WEEKLY_DIGEST_HOURS = Array.from({ length: 24 }, (_, h) => h);
@@ -36,10 +43,14 @@ export const weeklyDigestSettingsCopy = {
   noCandidates: 'No hay administradores activos con quien compartirlo.',
   unverified: 'Sin verificar: no lo recibirá hasta confirmar su correo.',
   noRecipients: 'Está activado pero sin destinatarios: no saldrá ningún resumen hasta que elijas al menos uno.',
-  when: (weekday: string, at: string, sede: string) =>
-    `Llega cada ${weekday} ${at}, hora de ${sede}, con las cifras de la semana anterior completa (de lunes a domingo).`,
-  whenNoSede: (weekday: string) =>
-    `Llega cada ${weekday} a la hora elegida en la zona de la sede principal, con las cifras de la semana anterior completa (de lunes a domingo).`,
+  when: (weekday: string, at: string, sede: string) => `Llega cada ${weekday} ${at}, hora de ${sede}.`,
+  whenNoSede: (weekday: string) => `Llega cada ${weekday} a la hora elegida, en la zona de la sede principal.`,
+  // Lo que trae, sea cual sea el día: nunca la semana en curso.
+  whichWeek:
+    'Trae siempre la semana anterior completa, de lunes a domingo: también si eliges el domingo, no la semana que termina ese día.',
+  principalUnconfigured:
+    'La sede principal no tiene zona horaria o formato regional: el resumen no se enviará hasta configurarla.',
+  principalUnconfiguredAction: 'Configurar sedes',
   sedeName: (name: string, timeZone: string) => `${name} (${timeZone})`,
   save: 'Guardar',
   saved: 'Resumen semanal guardado.',
@@ -196,9 +207,30 @@ export function WeeklyDigestSettingsForm({ token }: { token: string }) {
   }
 
   const noRecipients = draft.enabled && draft.recipients.length === 0;
+  // El tipo de `warnings` aún no lo incluye: se compara como texto.
+  const principalUnconfigured = (settings.warnings as readonly string[]).includes(
+    WEEKLY_DIGEST_PRINCIPAL_LOCATION_UNCONFIGURED,
+  );
 
   return (
     <form id={formId} onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+      {/* Antes de los ajustes: sin esto no sale nada, se elija lo que se elija. */}
+      {principalUnconfigured ? (
+        <Callout
+          tone="warning"
+          data-testid="weekly-digest-principal-unconfigured"
+          action={
+            <Link
+              href="/settings/sedes"
+              className="rounded-sm text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
+            >
+              {copy.principalUnconfiguredAction}
+            </Link>
+          }
+        >
+          {copy.principalUnconfigured}
+        </Callout>
+      ) : null}
       <SettingRows>
         <div className="px-4 py-4 sm:px-6">
           <Checkbox
@@ -242,7 +274,7 @@ export function WeeklyDigestSettingsForm({ token }: { token: string }) {
             </FormField>
           </div>
           <p className="text-sm text-muted" data-testid="weekly-digest-when">
-            {when}
+            {when} {copy.whichWeek}
           </p>
         </div>
         <fieldset className="m-0 flex min-w-0 flex-col gap-3 border-0 px-4 py-4 sm:px-6" aria-describedby={recipientsHintId}>
