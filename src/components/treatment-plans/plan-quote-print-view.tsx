@@ -19,6 +19,12 @@ import { documentFormat } from '@/lib/format/document-format';
 import { DocumentFormatNote } from '@/components/documents/document-format-note';
 import { quoteFromRates, ratePerBase } from '@/lib/payments/payment-rate';
 import { usePrintDocumentTitle } from '@/lib/print/use-print-document-title';
+import {
+  simulateInstallments,
+  type InstallmentSimulation,
+  type InstallmentTerms,
+} from '@/lib/treatment-plans/installment-simulation';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 const copy = {
   toolbar: 'Acciones del presupuesto',
@@ -35,6 +41,9 @@ const copy = {
   secondCurrency: 'Segunda moneda (opcional)',
   secondNone: 'Sin segunda moneda',
   secondLoading: 'Consultando la tasa de hoy…',
+  // DX-041: las opciones de pago no se pudieron simular: se imprime sin ellas.
+  financingError: (message: string) => `Sin opciones de pago: ${message}`,
+  financingFallback: 'no pudimos calcular las cuotas.',
   secondMissing: (currency: string) =>
     `No hay tasa de ${currency} para hoy: el presupuesto se imprime sin la segunda moneda.`,
 };
@@ -71,6 +80,12 @@ interface PlanQuotePrintViewProps {
    * se imprime sin su línea: el presupuesto no dice de dónde viene.
    */
   canReadPlan?: boolean;
+  /**
+   * DX-041: las opciones de «Financiar» (de `?cuotas=`). Se simulan otra vez
+   * (nada se guarda) y salen en el bloque «Opciones de pago»; el diálogo de
+   * impresión espera a que estén.
+   */
+  financing?: InstallmentTerms[] | null;
 }
 
 /**
@@ -91,6 +106,7 @@ export function PlanQuotePrintView({
   backHref,
   allowed = true,
   canReadPlan = false,
+  financing = null,
 }: PlanQuotePrintViewProps) {
   const [data, setData] = useState<PlanQuote | null>(null);
   // DX-417: el instante en que se aceptó el original si este es su presupuesto pendiente.
@@ -112,8 +128,31 @@ export function PlanQuotePrintView({
   const secondResult = data && second ? secondCurrencyOf(rates, data.currency, second, today) : null;
   // DX-502: el precio de lista ya trae su moneda (la del catálogo congelada
   // en cada ítem, `listPriceCurrency`): no hace falta leer las sedes.
+  // DX-041: las opciones de pago; `undefined` mientras se piden.
+  const financingKey = financing ? JSON.stringify(financing) : null;
+  const [paymentOptions, setPaymentOptions] = useState<InstallmentSimulation | null | undefined>(
+    financing ? undefined : null,
+  );
+  const [financingError, setFinancingError] = useState<string | null>(null);
   const ready = data !== null;
-  const autoPrint = data !== null && format !== null;
+  const autoPrint = data !== null && format !== null && paymentOptions !== undefined;
+
+  useEffect(() => {
+    if (!allowed || !financingKey) return;
+    let cancelled = false;
+    simulateInstallments(token, planId, JSON.parse(financingKey) as InstallmentTerms[])
+      .then((res) => {
+        if (!cancelled) setPaymentOptions(res);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setFinancingError(copy.financingError(apiErrorMessage(err, copy.financingFallback)));
+        setPaymentOptions(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, planId, financingKey, allowed]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -204,6 +243,11 @@ export function PlanQuotePrintView({
           </Button>
         </div>
       </div>
+      {financingError ? (
+        <p role="status" className="px-4 pt-3 text-sm text-muted print:hidden">
+          {financingError}
+        </p>
+      ) : null}
       {data && second ? (
         <div role="status" aria-live="polite" className="px-4 pt-3 text-sm text-ink print:hidden">
           {zone.status === 'error' ? (
@@ -238,6 +282,7 @@ export function PlanQuotePrintView({
                 format={format}
                 partialRestOf={partialRestOf}
                 secondCurrency={secondResult && 'value' in secondResult ? secondResult.value : null}
+                paymentOptions={data.acceptance ? null : (paymentOptions ?? null)}
               />
             </div>
           </>
