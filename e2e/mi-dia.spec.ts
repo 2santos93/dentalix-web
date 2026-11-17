@@ -71,6 +71,8 @@ test('ADMIN: los números son los de la API, lo que está a 0 se pliega y cada f
     // DX-569: los pagos que reportan los pacientes, justo detrás del cierre.
     'PAYMENT_REPORTS',
     'ANAMNESIS_REVIEW',
+    // DX-566: las llamadas de control postoperatorio.
+    'POST_OP_CHECKS',
     'QUOTE_FOLLOW_UP',
     'ACCEPTED_UNSCHEDULED',
     'WAITLIST',
@@ -79,10 +81,10 @@ test('ADMIN: los números son los de la API, lo que está a 0 se pliega y cada f
     'LOW_STOCK',
   ]);
   const zero = body.items.filter((i) => i.count === 0).length;
-  expect(zero).toBe(7);
+  expect(zero).toBe(8);
 
   // Las listas a 0, plegadas; se despliegan con el teclado.
-  const toggle = pending.getByRole('button', { name: /Al día: 7 listas/ });
+  const toggle = pending.getByRole('button', { name: /Al día: 8 listas/ });
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(pending.getByTestId('pending-follow-up')).toBeHidden();
   await toggle.focus();
