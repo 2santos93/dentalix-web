@@ -15,7 +15,9 @@ import {
   type DentalCatalogItem,
   type CreateCatalogItemInput,
 } from '@/lib/odontogram/catalog-api';
-import { Plus, Pencil, Eye, EyeOff } from 'lucide-react';
+import { Plus, Pencil, Eye, EyeOff, History, TrendingUp } from 'lucide-react';
+import { PriceChangeWizard } from '@/components/catalog/price-change-wizard';
+import { PriceHistoryDialog } from '@/components/catalog/price-history-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -54,6 +56,9 @@ const copy = {
   clinicWideNote:
     'El catálogo es de toda la clínica: estos procedimientos y diagnósticos son los mismos en todas las sedes.',
   addToggle: 'Agregar ítem',
+  // DX-205: subir precios en bloque e historial de precios (solo ADMIN).
+  priceChange: 'Actualizar precios',
+  priceHistoryAction: 'Historial de precios',
   createTitle: 'Agregar ítem',
   editTitle: 'Editar ítem',
   // La descripción dice QUÉ crea esta pantalla; la distinción entre los dos
@@ -284,6 +289,10 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
   // A failure surfaces as a background toast (escalón 3) — the table stays
   // correct and on screen, so nothing needs to block it.
   const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  // DX-205: asistente «Actualizar precios» e historial de precios de un ítem.
+  const [priceChangeOpen, setPriceChangeOpen] = useState(false);
+  const [historyItem, setHistoryItem] = useState<DentalCatalogItem | null>(null);
 
   // Búsqueda y filtros del SERVIDOR (`GET /catalog/items/directory`). Antes se
   // filtraba en memoria sobre el catálogo entero, lo cual funcionaba mientras
@@ -640,6 +649,11 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
         onSelect: () => openEdit(item),
       },
       {
+        label: copy.priceHistoryAction,
+        icon: <History />,
+        onSelect: () => setHistoryItem(item),
+      },
+      {
         // No hay DELETE en el catálogo a propósito: un ítem referenciado por un
         // odontograma o un plan no puede desaparecer sin romper esa historia.
         // Desactivar lo saca de los selectores y conserva el registro; por eso
@@ -674,9 +688,14 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
           onChange={setSearchInput}
           action={
             canWrite ? (
-              <Button type="button" onClick={openCreate}>
-                <Plus /> {copy.addToggle}
-              </Button>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button type="button" variant="outline" onClick={() => setPriceChangeOpen(true)}>
+                  <TrendingUp /> {copy.priceChange}
+                </Button>
+                <Button type="button" onClick={openCreate}>
+                  <Plus /> {copy.addToggle}
+                </Button>
+              </div>
             ) : undefined
           }
         >
@@ -847,6 +866,29 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
             />
           ) : null}
         </FormModal>
+
+        {canWrite ? (
+          <>
+            <PriceChangeWizard
+              open={priceChangeOpen}
+              onOpenChange={setPriceChangeOpen}
+              token={token}
+              currency={currency}
+              stamp={stamp}
+              onApplied={() => void refreshInPlace()}
+            />
+            <PriceHistoryDialog
+              open={historyItem !== null}
+              onOpenChange={(next) => {
+                if (!next) setHistoryItem(null);
+              }}
+              token={token}
+              item={historyItem}
+              currency={currency}
+              stamp={stamp}
+            />
+          </>
+        ) : null}
 
         {currencyUnknown ? (
           // Los precios siguen siendo correctos (sin símbolo): una nota, no una sección rota.

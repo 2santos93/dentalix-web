@@ -1,3 +1,4 @@
+import { listCatalogPriceHistory } from '@/lib/catalog/price-changes-api';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { clearSessionStore } from '@/lib/session/session-store';
 import { tokenForRole } from '@/lib/test/data-consents';
@@ -41,6 +42,10 @@ const mockedTemplates = listNoteTemplates as jest.MockedFunction<typeof listNote
 // Las sedes deciden la moneda base de la clínica (DX-063): una clínica con
 // la moneda del fixture por defecto.
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+jest.mock('../../lib/catalog/price-changes-api', () => ({
+  ...jest.requireActual('../../lib/catalog/price-changes-api'),
+  listCatalogPriceHistory: jest.fn(),
+}));
 const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 
 function clinicIn(country: ClinicLocation['country']): ClinicLocation[] {
@@ -105,6 +110,7 @@ async function openRowMenu(
 }
 
 const ADMIN_TOKEN = tokenForRole('ADMIN');
+const mockedHistory = jest.mocked(listCatalogPriceHistory);
 
 describe('CatalogView', () => {
   beforeEach(() => {
@@ -125,6 +131,8 @@ describe('CatalogView', () => {
     const table = await screen.findByRole('table', { name: /catálogo/i });
     expect(within(table).getByText(item1.labelEs)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Agregar ítem' })).not.toBeInTheDocument();
+    // DX-205: «Actualizar precios» y el historial de precios son solo de ADMIN.
+    expect(screen.queryByRole('button', { name: 'Actualizar precios' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /acciones de/i })).not.toBeInTheDocument();
     // Ni la fila ni `?item=` abren el formulario de edición.
     fireEvent.click(within(table).getByText(item1.labelEs));
@@ -136,7 +144,33 @@ describe('CatalogView', () => {
     render(<CatalogView token={ADMIN_TOKEN} />);
     await screen.findByRole('table', { name: /catálogo/i });
     expect(screen.getByRole('button', { name: 'Agregar ítem' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Actualizar precios' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /acciones de/i })).toBeInTheDocument();
+  });
+
+  it('DX-205: el menú de la fila abre el historial de precios del ítem', async () => {
+    mockedList.mockResolvedValue(page([item1]));
+    mockedHistory.mockResolvedValue([
+      {
+        id: 'h1',
+        previousPrice: 40,
+        newPrice: 42,
+        batchId: 'b1',
+        actorUserId: 'u1',
+        actorName: 'Dra. Admin',
+        createdAt: '2027-01-05T15:00:00.000Z',
+      },
+    ]);
+    const user = setupUser();
+    render(<CatalogView token={ADMIN_TOKEN} />);
+    await screen.findByRole('table', { name: /catálogo/i });
+    const menu = await openRowMenu(user, /acciones de/i);
+    await user.click(within(menu).getByRole('menuitem', { name: 'Historial de precios' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(`Historial de precios · ${item1.labelEs}`)).toBeInTheDocument();
+    expect(await within(dialog).findByText('Dra. Admin')).toBeInTheDocument();
+    expect(within(dialog).getByText('Actualización en bloque')).toBeInTheDocument();
+    expect(mockedHistory).toHaveBeenCalledWith(ADMIN_TOKEN, item1.id);
   });
 
   it('pinta las filas de la página que devuelve el directorio', async () => {
