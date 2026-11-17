@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { hasUnsavedChanges, requestNavigation } from '@/components/settings/unsaved-changes';
-import { Cake, CalendarPlus, ClipboardList, CornerDownLeft, ListTodo, Phone, PhoneCall, Search, UserPlus, UserRound, UsersRound, Factory } from 'lucide-react';
+import { Cake, CalendarPlus, ClipboardList, CornerDownLeft, ListTodo, Phone, PhoneCall, Search, UserPlus, UserRound, UsersRound, Factory, Percent } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
@@ -18,6 +18,7 @@ import { canReviewMajority, COMING_OF_AGE_HREF } from '@/lib/patients/majority-r
 import { canManageDuplicates, DUPLICATES_HREF } from '@/lib/patients/patient-merge-api';
 import { canReadExternalOrders, PENDING_EXTERNAL_ORDERS_HREF } from '@/lib/external-orders/external-orders-api';
 import { canReadLabOrders, LAB_ORDERS_HREF } from '@/lib/lab-orders/lab-orders-roles';
+import { canViewCommissions, COMMISSIONS_HREF } from '@/lib/commissions/commissions-api';
 import { canSee, ALL_NAV_ITEMS } from './nav-config';
 import { useEffectivePermissions } from '@/lib/auth/permissions';
 import { useCloseOnBack } from './use-shell-media';
@@ -39,6 +40,8 @@ const copy = {
   pendingOrdersHint: 'Estudios y referencias emitidos que esperan su resultado',
   labOrders: 'Laboratorio dental',
   labOrdersHint: 'Trabajos de laboratorio: coronas y prótesis enviadas, atrasadas y recibidas',
+  commissions: 'Honorarios',
+  commissionsHint: 'Liquidación de honorarios de los odontólogos: comisiones del período y cierre',
   actions: 'Acciones',
   searching: 'Buscando pacientes…',
   searchFailed: 'No se pudo buscar pacientes. Revisa la conexión e inténtalo de nuevo.',
@@ -251,6 +254,18 @@ export function CommandPalette({
         hint: copy.labOrdersHint,
         icon: Factory,
         run: () => go(LAB_ORDERS_HREF),
+      });
+    }
+    // DX-018: tampoco gasta entrada en la barra; ADMIN y DENTIST (lo suyo).
+    // Se llega también desde Reportes y Ajustes › Honorarios.
+    if (q && canViewCommissions(role) && matches(copy.commissions, copy.commissionsHint)) {
+      result.push({
+        id: 'nav-commissions',
+        group: 'goto',
+        label: copy.commissions,
+        hint: copy.commissionsHint,
+        icon: Percent,
+        run: () => go(COMMISSIONS_HREF),
       });
     }
     // Las pantallas de Ajustes solo al escribir: sin texto, la lista es corta.

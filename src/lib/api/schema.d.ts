@@ -8431,6 +8431,110 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/commissions/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Profesionales con su regla de honorarios (solo ADMIN)
+         * @description Odontólogos y administradores vigentes (y quien ya tenga regla), con su regla o null, las categorías del catálogo y qué descuentos se pueden activar hoy.
+         */
+        get: operations["CommissionsController_listRules"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/commissions/rules/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Crea o cambia la regla de honorarios de un profesional (solo ADMIN)
+         * @description Base (lo cobrado o lo producido), cuándo se libera (por prestación o con el plan completo y pagado), % general y % por categoría. No cambia las liquidaciones ya cerradas (guardan su foto de la regla).
+         */
+        put: operations["CommissionsController_saveRule"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/commissions/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vista previa de la liquidación de un período
+         * @description Devengos del período con el detalle por paciente, ítem y abono, más los ajustes de liquidaciones anteriores (abonos anulados después del cierre…), con los totales por moneda. Dice si se puede cerrar y, si no, por qué. ADMIN, de cualquier profesional; un DENTIST, solo la suya. Lleva nombres de pacientes: auditado (VIEW).
+         */
+        get: operations["CommissionsController_preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/commissions/settlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Liquidaciones cerradas, de la más reciente a la más antigua
+         * @description Cabecera y totales por moneda (sin pacientes). ADMIN, todas o las de un profesional; un DENTIST, solo las suyas.
+         */
+        get: operations["CommissionsController_listSettlements"];
+        put?: never;
+        /**
+         * Cierra la liquidación de un período (solo ADMIN)
+         * @description Congela el detalle (no cambia nunca más: lo que se anule después sale como ajuste en la siguiente) y sube el cierre contable de la clínica hasta el último día del período (nunca lo retrocede). El período tiene que haber terminado, no solaparse con otra liquidación del profesional y empezar el día siguiente a la última.
+         */
+        post: operations["CommissionsController_close"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/commissions/settlements/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Una liquidación cerrada con su detalle congelado
+         * @description ADMIN, cualquiera; un DENTIST, solo las suyas (otra → 404). Lleva nombres de pacientes: auditado (VIEW).
+         */
+        get: operations["CommissionsController_getSettlement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/documents": {
         parameters: {
             query?: never;
@@ -9443,7 +9547,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE" | "ORTHO_CASE" | "ORTHO_VISIT" | "DENTAL_LAB" | "DENTAL_LAB_ORDER";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE" | "ORTHO_CASE" | "ORTHO_VISIT" | "DENTAL_LAB" | "DENTAL_LAB_ORDER" | "COMMISSION_SETTLEMENT";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -27115,6 +27219,245 @@ export interface components {
             patient: components["schemas"]["LabOrderPrintPatientDto"];
             /** Format: date-time */
             printedAt: string;
+        };
+        CommissionProfessionalDto: {
+            /** Format: uuid */
+            userId: string;
+            /** Format: uuid */
+            membershipId: string;
+            name: string;
+            role: components["schemas"]["ClinicRole"];
+            /** @description false = ya no está en la clínica. */
+            active: boolean;
+        };
+        /** @enum {string} */
+        CommissionBasis: "COLLECTED" | "PRODUCED";
+        /** @enum {string} */
+        CommissionReleaseMode: "PER_ITEM" | "PER_PLAN";
+        CommissionCategoryPercentViewDto: {
+            category: string;
+            percent: number;
+        };
+        CommissionRuleDto: {
+            /** Format: uuid */
+            id: string;
+            basis: components["schemas"]["CommissionBasis"];
+            releaseMode: components["schemas"]["CommissionReleaseMode"];
+            percent: number;
+            categories: components["schemas"]["CommissionCategoryPercentViewDto"][];
+            active: boolean;
+            deductLabCost: boolean;
+            deductCardFee: boolean;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ProfessionalCommissionRuleDto: {
+            professional: components["schemas"]["CommissionProfessionalDto"];
+            rule: components["schemas"]["CommissionRuleDto"] | null;
+        };
+        CommissionDeductionsDto: {
+            /** @description Se puede descontar el costo de laboratorio (hoy no: sin datos). */
+            labCost: boolean;
+            /** @description Se puede descontar la comisión de la pasarela (hoy no: sin datos). */
+            cardFee: boolean;
+        };
+        CommissionRulesDto: {
+            professionals: components["schemas"]["ProfessionalCommissionRuleDto"][];
+            /** @description Categorías del catálogo de la clínica. */
+            categories: string[];
+            deductionsAvailable: components["schemas"]["CommissionDeductionsDto"];
+        };
+        CommissionCategoryPercentDto: {
+            /** @example Endodoncia */
+            category: string;
+            /** @example 40 */
+            percent: number;
+        };
+        SaveCommissionRuleDto: {
+            /** @description COLLECTED: % de lo cobrado (imputaciones de abonos a los ítems que realizó). PRODUCED: % de lo producido (precio − descuento de los ítems realizados). */
+            basis: components["schemas"]["CommissionBasis"];
+            /** @description PER_ITEM: se libera cada prestación al realizarse (y cobrarse, si la base es lo cobrado). PER_PLAN: solo con el plan completo y pagado. */
+            releaseMode: components["schemas"]["CommissionReleaseMode"];
+            /**
+             * @description % general (hasta 2 decimales).
+             * @example 35
+             */
+            percent: number;
+            /** @description % propio por categoría del catálogo (sin distinguir mayúsculas); el resto usa el general. Reemplaza la lista guardada. */
+            categories?: components["schemas"]["CommissionCategoryPercentDto"][];
+            /**
+             * @description false = regla desactivada (no se liquida).
+             * @default true
+             */
+            active: boolean;
+            /**
+             * @description Descontar el costo de laboratorio. Aún no disponible (las órdenes de laboratorio no guardan su costo): true → 400.
+             * @default false
+             */
+            deductLabCost: boolean;
+            /**
+             * @description Descontar la comisión de la pasarela del medio de pago. Aún no disponible (los medios de pago no guardan ese %): true → 400.
+             * @default false
+             */
+            deductCardFee: boolean;
+        };
+        CommissionPeriodDto: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+        };
+        /** @enum {string} */
+        CommissionLineKind: "ACCRUAL" | "ADJUSTMENT";
+        CommissionLinePatientDto: {
+            /** Format: uuid */
+            id: string;
+            name: string | null;
+        };
+        CommissionLinePaymentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            paidAt: string;
+            /** @description Importe del abono tal como se cobró. */
+            amount: number;
+            /** @description Moneda del abono. */
+            currency: string;
+        };
+        CommissionLineDto: {
+            /**
+             * Format: uuid
+             * @description null en la vista previa.
+             */
+            id: string | null;
+            kind: components["schemas"]["CommissionLineKind"];
+            /**
+             * Format: uuid
+             * @description La línea de una liquidación anterior que ajusta.
+             */
+            adjustsLineId: string | null;
+            patient: components["schemas"]["CommissionLinePatientDto"];
+            /** Format: uuid */
+            treatmentPlanId: string;
+            /** Format: uuid */
+            treatmentPlanItemId: string;
+            /**
+             * Format: uuid
+             * @description Sede donde se realizó el ítem (la de sus fechas e importes).
+             */
+            locationId: string | null;
+            catalogCode: string;
+            catalogLabel: string;
+            category: string | null;
+            toothNumber: string;
+            /** Format: date-time */
+            completedAt: string | null;
+            payment: components["schemas"]["CommissionLinePaymentDto"] | null;
+            /**
+             * Format: date-time
+             * @description Cuándo se liberó (devengos).
+             */
+            releasedAt: string | null;
+            /** @description Moneda de la línea (la del plan). */
+            currency: string;
+            /** @description Base en la moneda de la línea (un ajuste, con signo). */
+            base: number;
+            percent: number;
+            /** @description Honorario en la moneda de la línea (un ajuste, con signo). */
+            amount: number;
+        };
+        CommissionCurrencyTotalDto: {
+            currency: string;
+            /** @description Devengado del período. */
+            accrued: number;
+            /** @description Ajustes de liquidaciones anteriores (con signo). */
+            adjustments: number;
+            /** @description A pagar: devengado + ajustes. */
+            total: number;
+            lines: number;
+        };
+        CommissionPreviewDto: {
+            professional: components["schemas"]["CommissionProfessionalDto"];
+            period: components["schemas"]["CommissionPeriodDto"];
+            rule: components["schemas"]["CommissionRuleDto"] | null;
+            lines: components["schemas"]["CommissionLineDto"][];
+            totals: components["schemas"]["CommissionCurrencyTotalDto"][];
+            /** Format: date */
+            lastClosedTo: string | null;
+            /**
+             * Format: date
+             * @description Desde dónde empieza la siguiente liquidación.
+             */
+            nextFrom: string | null;
+            canClose: boolean;
+            /** @enum {string|null} */
+            blocker: "NO_RULE" | "RULE_INACTIVE" | "PERIOD_NOT_ENDED" | "OVERLAPS_PREVIOUS" | "GAP_AFTER_PREVIOUS" | null;
+            blockerMessage: string | null;
+            deductionsAvailable: components["schemas"]["CommissionDeductionsDto"];
+        };
+        CloseCommissionSettlementDto: {
+            /**
+             * Format: uuid
+             * @description El profesional (usuario).
+             */
+            userId: string;
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+        };
+        CommissionClosedByDto: {
+            /** Format: uuid */
+            userId: string;
+            name: string | null;
+        };
+        CommissionSettlementDto: {
+            /** Format: uuid */
+            id: string;
+            professional: components["schemas"]["CommissionProfessionalDto"];
+            period: components["schemas"]["CommissionPeriodDto"];
+            basis: components["schemas"]["CommissionBasis"];
+            releaseMode: components["schemas"]["CommissionReleaseMode"];
+            percent: number;
+            /** Format: date-time */
+            closedAt: string;
+            closedBy: components["schemas"]["CommissionClosedByDto"];
+            /**
+             * Format: date
+             * @description Cierre contable antes de liquidar.
+             */
+            lockDateBefore: string | null;
+            /**
+             * Format: date
+             * @description Cierre contable tras liquidar (≥ «hasta»).
+             */
+            lockDateAfter: string;
+            totals: components["schemas"]["CommissionCurrencyTotalDto"][];
+            categoryPercents: components["schemas"]["CommissionCategoryPercentViewDto"][];
+            lines: components["schemas"]["CommissionLineDto"][];
+        };
+        CommissionSettlementSummaryDto: {
+            /** Format: uuid */
+            id: string;
+            professional: components["schemas"]["CommissionProfessionalDto"];
+            period: components["schemas"]["CommissionPeriodDto"];
+            basis: components["schemas"]["CommissionBasis"];
+            releaseMode: components["schemas"]["CommissionReleaseMode"];
+            percent: number;
+            /** Format: date-time */
+            closedAt: string;
+            closedBy: components["schemas"]["CommissionClosedByDto"];
+            /**
+             * Format: date
+             * @description Cierre contable antes de liquidar.
+             */
+            lockDateBefore: string | null;
+            /**
+             * Format: date
+             * @description Cierre contable tras liquidar (≥ «hasta»).
+             */
+            lockDateAfter: string;
+            totals: components["schemas"]["CommissionCurrencyTotalDto"][];
         };
         /** @enum {string} */
         PatientDocumentCategory: "XRAY" | "PHOTO" | "REFERRAL" | "SIGNED_CONSENT" | "REPORT" | "OTHER";
@@ -51064,6 +51407,247 @@ export interface operations {
                 content?: never;
             };
             /** @description Orden de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CommissionsController_listRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommissionRulesDto"];
+                };
+            };
+            /** @description Los honorarios solo los ve administración y, lo suyo, cada odontólogo. / Los honorarios son de toda la clínica: solo un administrador con acceso a todas las sedes los configura, liquida y consulta. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CommissionsController_saveRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveCommissionRuleDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfessionalCommissionRuleDto"];
+                };
+            };
+            /** @description % fuera de 0–100 o con más de 2 decimales, categoría vacía o repetida, profesional que no es odontólogo ni administrador o ya retirado, o un descuento aún no disponible */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Los honorarios solo los ve administración y, lo suyo, cada odontólogo. / Los honorarios son de toda la clínica: solo un administrador con acceso a todas las sedes los configura, liquida y consulta. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Profesional no encontrado en esta clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CommissionsController_preview: {
+        parameters: {
+            query: {
+                /** @description El profesional (usuario). Un DENTIST solo el suyo (otro → 404); sin él, el propio. */
+                userId?: string;
+                /** @description Primer día del período (como mucho 366 días). */
+                from: string;
+                /** @description Último día (inclusive). */
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommissionPreviewDto"];
+                };
+            };
+            /** @description Período inválido o de más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Los honorarios solo los ve administración y, lo suyo, cada odontólogo. / Los honorarios son de toda la clínica: solo un administrador con acceso a todas las sedes los configura, liquida y consulta. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Profesional no encontrado en esta clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code: LOCATION_TIMEZONE_REQUIRED` si una sede implicada no tiene zona horaria válida. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CommissionsController_listSettlements: {
+        parameters: {
+            query?: {
+                /** @description Solo las de este profesional. Un DENTIST ve siempre solo las suyas. */
+                userId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommissionSettlementSummaryDto"][];
+                };
+            };
+            /** @description Los honorarios solo los ve administración y, lo suyo, cada odontólogo. / Los honorarios son de toda la clínica: solo un administrador con acceso a todas las sedes los configura, liquida y consulta. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CommissionsController_close: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseCommissionSettlementDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommissionSettlementDto"];
+                };
+            };
+            /** @description Período inválido o de más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Los honorarios solo los ve administración y, lo suyo, cada odontólogo. / Los honorarios son de toda la clínica: solo un administrador con acceso a todas las sedes los configura, liquida y consulta. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Profesional no encontrado en esta clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code: COMMISSION_CANNOT_CLOSE` con `blocker` (sin regla, regla desactivada, período sin terminar, solapado o con hueco tras la anterior); `COMMISSION_PERIOD_OVERLAP`; `code: LOCATION_TIMEZONE_REQUIRED` si una sede implicada no tiene zona horaria válida. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CommissionsController_getSettlement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommissionSettlementDto"];
+                };
+            };
+            /** @description Los honorarios solo los ve administración y, lo suyo, cada odontólogo. / Los honorarios son de toda la clínica: solo un administrador con acceso a todas las sedes los configura, liquida y consulta. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Liquidación no encontrada. */
             404: {
                 headers: {
                     [name: string]: unknown;
