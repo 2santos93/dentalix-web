@@ -1010,6 +1010,21 @@ describe('apiFetch — cuerpo de error (DX-063)', () => {
     const err = await caught();
     expect(err.retryAfterSeconds).toBe(42);
   });
+
+  it('DX-568: sin cabecera, lee `retryAfterSeconds` del cuerpo del 429 (topes del email)', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      headers: new Headers(),
+      json: async () => ({
+        statusCode: 429,
+        message: 'Ya te enviamos una prueba hace un momento. Espera 4 minutos para pedir otra.',
+        retryAfterSeconds: 200,
+      }),
+    }) as unknown as typeof fetch;
+    const err = await caught();
+    expect(err.retryAfterSeconds).toBe(200);
+  });
 });
 
 // Revisión D-2: solo un fallo del propio `fetch` es «sin conexión».
