@@ -1,12 +1,13 @@
 'use client';
 import { useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { useSessionBootstrap } from '@/lib/auth/use-session-bootstrap';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { patientTabAccess } from '@/lib/patients/patient-tab-access';
 import { canPrintPlanQuote } from '@/lib/treatment-plans/plan-quote-api';
 import { PlanQuotePrintView } from '@/components/treatment-plans/plan-quote-print-view';
+import { decodeFinancing, FINANCING_PARAM } from '@/lib/treatment-plans/installment-simulation';
 
 const copy = {
   checkingSession: 'Verificando sesión…',
@@ -22,6 +23,8 @@ const copy = {
 export default function PlanQuotePrintPage() {
   const router = useRouter();
   const params = useParams<{ id: string; planId: string }>();
+  // DX-041: las opciones de «Financiar» que se imprimen con el presupuesto.
+  const financing = decodeFinancing(useSearchParams().get(FINANCING_PARAM));
   const accessToken = useAuthStore((s) => s.accessToken);
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
   // Pestaña nueva: la sesión se recupera de la cookie HttpOnly (DX-062).
@@ -56,6 +59,7 @@ export default function PlanQuotePrintPage() {
       backHref={`/patients/${encodeURIComponent(params.id)}?tab=${tab}`}
       allowed={canPrintPlanQuote(role)}
       canReadPlan={access['treatment-plans']}
+      financing={financing}
     />
   );
 }

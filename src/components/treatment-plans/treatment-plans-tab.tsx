@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage, sedeCivilDateOption } from '@/lib/api/error-message';
-import { QUOTE_EXPIRED, type PlanQuote } from '@/lib/treatment-plans/plan-quote-api';
+import { QUOTE_EXPIRED, canPrintPlanQuote, isPlanAcceptable, type PlanQuote } from '@/lib/treatment-plans/plan-quote-api';
 import {
   createPlan,
   getPlan,
@@ -51,6 +51,7 @@ import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 import { bulkDiscountCopy } from '@/components/discounts/bulk-discount-modal';
+import dynamic from 'next/dynamic';
 import { PlanQuoteActions } from './plan-quote-actions';
 import { planPrimaryAction } from '@/lib/treatment-plans/plan-primary-action';
 import { canRepricePlan, isPlanRepriceable } from '@/lib/treatment-plans/plan-repricing-api';
@@ -64,6 +65,13 @@ import { PlanItemsSection } from './treatment-plan-items';
 import { PlanBillingSection } from './treatment-plan-payments';
 import { TreatmentPlanModals } from './treatment-plan-modals';
 import { PAYMENTS_TRIGGER_ID, copy, procedureName } from './treatment-plans-tab-copy';
+
+// DX-041: «Financiar» llega en su propio trozo, solo con un presupuesto que se
+// puede aceptar (la ficha tiene presupuesto de bundle, DX-266).
+const PlanFinancing = dynamic(() => import('./plan-financing').then((m) => m.PlanFinancing), {
+  ssr: false,
+  loading: () => null,
+});
 
 /*
  * La pestaña «Plan de tratamiento» de la ficha. Aquí viven el estado, las
@@ -1079,6 +1087,19 @@ export function TreatmentPlansTab({
                 repricePrimary={primary === 'reprice'}
                 onPartiallyAccepted={handlePlanPartiallyAccepted}
               />
+
+              {/* DX-041: opciones de pago en cuotas del presupuesto (simular,
+                  imprimir, WhatsApp y aceptar con una). */}
+              {canPrintPlanQuote(role) && isPlanAcceptable(planDetail) && isPlanBillable(planDetail.status) ? (
+                <PlanFinancing
+                  token={token}
+                  patientId={patientId}
+                  plan={planDetail}
+                  role={role}
+                  stamp={stamp}
+                  onAccepted={handlePlanAccepted}
+                />
+              ) : null}
 
               {/* La opción que se le presenta al paciente (DX-040): presentar,
                   rechazar, crear alternativa y comparar. */}

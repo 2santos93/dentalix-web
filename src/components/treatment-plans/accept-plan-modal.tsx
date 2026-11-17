@@ -21,6 +21,10 @@ import {
   type PlanQuote,
 } from '@/lib/treatment-plans/plan-quote-api';
 import { REPRICE_PREVIEW_STALE } from '@/lib/treatment-plans/plan-repricing-api';
+import {
+  INSTALLMENT_SIMULATION_STALE,
+  type AcceptInstallmentPlan,
+} from '@/lib/treatment-plans/installment-simulation';
 import { getPlan } from '@/lib/treatment-plans/treatment-plans-api';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import type { RegionalFormat } from '@/lib/format/regional-format';
@@ -85,6 +89,9 @@ export const acceptPlanCopy = {
   originalSummary: (reason: string) => `Se acepta con los precios del presupuesto vencido. Motivo: ${reason}.`,
   notExpiredAnymore: 'El presupuesto ya no está vencido: revísalo con el paciente y fírmalo.',
   cannotAccept: 'No se puede aceptar ahora',
+  // DX-041: aceptar con una opción de «Financiar».
+  installmentsTitle: 'Plan de cuotas',
+  installmentsNote: 'Se crea al firmar, con estas cuotas y fechas.',
 };
 
 /** 409: la sede de la presentación no tiene zona horaria válida (ninguna forma de aceptar sirve). */
@@ -119,6 +126,14 @@ interface AcceptPlanModalProps {
   role: ClinicRole | null;
   /** La sede de la presentación (los importes y la validez de la recotización). */
   locationId?: string | null;
+  /**
+   * DX-041: la opción de «Financiar» elegida: el plan de cuotas nace en la
+   * misma aceptación. Si el saldo ya no es el simulado, la API responde 409
+   * `INSTALLMENT_SIMULATION_STALE` y no se acepta nada.
+   */
+  installmentPlan?: AcceptInstallmentPlan | null;
+  /** DX-041: la línea de esa opción («Inicial de … y 6 cuotas mensuales de …»). */
+  installmentSummary?: string;
 }
 
 /**
@@ -144,6 +159,8 @@ export function AcceptPlanModal({
   quoteExpired = false,
   role,
   locationId = null,
+  installmentPlan = null,
+  installmentSummary,
 }: AcceptPlanModalProps) {
   // DX-522: importes con el formato de la sede y el código ISO; cargando, «—».
   const fmt = readyFormat(useSedeFormat(token));
@@ -373,6 +390,7 @@ export function AcceptPlanModal({
         signature,
         contentHash: shown.contentHash,
         ...(expiredChoice ? { expired: expiredChoice } : {}),
+        ...(installmentPlan ? { installmentPlan } : {}),
       });
       onAccepted(accepted);
       handleOpenChange(false);
@@ -382,6 +400,9 @@ export function AcceptPlanModal({
         // DX-091: aceptar cancela el plan de cuotas de otra opción y tiene
         // cuotas vencidas en un período cerrado: no se arregla recotizando ni
         // recargando; se dice y la firma se queda.
+        setSubmitError(message);
+      } else if (err instanceof ApiError && err.code === INSTALLMENT_SIMULATION_STALE) {
+        // DX-041: el saldo cambió desde la simulación: se vuelve a simular fuera del modal.
         setSubmitError(message);
       } else if (err instanceof ApiError && err.code === LOCATION_TIMEZONE_REQUIRED) {
         // Ni con los precios originales: la sede tiene que configurarse antes.
@@ -568,6 +589,14 @@ export function AcceptPlanModal({
       ) : (
         <>
           <QuoteSummary quote={quote} fmt={fmt} label={copy.summary} patientId={patientId} planId={planId} />
+          {installmentPlan ? (
+            <Callout tone="info" title={copy.installmentsTitle} role="note">
+              <p data-testid="accept-installments" className="tabular-nums">
+                {installmentSummary}
+              </p>
+              <p className="text-muted">{copy.installmentsNote}</p>
+            </Callout>
+          ) : null}
           <SedeStampNote stamp={stamp} />
           <SignFields
             signerName={signerName}
