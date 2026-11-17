@@ -102,7 +102,11 @@ async function openDetail(page: Page, time: string) {
   await page.getByRole('button', { name: 'Día', exact: true }).click();
   await page.getByRole('button', { name: 'Lista', exact: true }).click();
   await fillDate(page, 'Fecha', day);
-  const row = page.locator('table tr', { hasText: `Grace ${lastName}` }).filter({ hasText: time });
+  // Escritorio: fila de la tabla; 390 px: tarjeta de la lista (la tabla se oculta).
+  const row = page
+    .locator('table tr, ul > li', { hasText: `Grace ${lastName}` })
+    .filter({ hasText: time })
+    .locator('visible=true');
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.getByRole('button', { name: /Detalle de la cita/ }).click();
   const sheet = page.getByRole('dialog');
