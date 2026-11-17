@@ -6,7 +6,12 @@ import { regionalFormat } from '@/lib/format/regional-format';
 jest.mock('../../lib/payment-plans/payment-plan-api', () => ({
   ...jest.requireActual('../../lib/payment-plans/payment-plan-api'),
   getPaymentPlan: jest.fn(),
+  listCancelledPaymentPlans: jest.fn(() => Promise.resolve([])),
   deletePaymentPlan: jest.fn(),
+}));
+jest.mock('../../lib/locations/locations-api', () => ({
+  ...jest.requireActual('../../lib/locations/locations-api'),
+  listLocations: jest.fn(() => Promise.resolve([])),
 }));
 const mockedGet = getPaymentPlan as jest.MockedFunction<typeof getPaymentPlan>;
 
