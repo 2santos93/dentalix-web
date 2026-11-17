@@ -27710,10 +27710,7 @@ export interface components {
             payment: components["schemas"]["SettlementPaymentSummaryDto"];
         };
         PayCommissionSettlementDto: {
-            /**
-             * @description Moneda del pago: cada moneda se paga aparte, sin convertir.
-             * @example USD
-             */
+            /** @description Moneda del pago: cada moneda se paga aparte, sin convertir. */
             currency: string;
             /** @description Líneas de la liquidación que se pagan (todas de esa moneda). Sin ellas, todas las pendientes de la moneda. */
             lineIds?: string[];
@@ -27778,6 +27775,8 @@ export interface components {
         PublicReceiptFormatDto: {
             locale: string | null;
             hourCycle: string | null;
+            /** @description Zona IANA de la sede principal (caducidad y hora de la firma). */
+            timeZone: string | null;
         };
         PublicReceiptContentDto: {
             /** @enum {number} */

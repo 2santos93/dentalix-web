@@ -47,7 +47,7 @@ function receipt(over: Partial<PublicCommissionReceipt> = {}): PublicCommissionR
         { kind: 'ACCRUAL', patientInitials: 'C. P.', catalogCode: 'END-01', catalogLabel: 'Endodoncia unirradicular', toothNumber: '11', day: '2026-10-06', base: 100, percent: 35, amount: 35 },
         { kind: 'ADJUSTMENT', patientInitials: 'C. P.', catalogCode: 'COR-01', catalogLabel: 'Corona', toothNumber: '11', day: null, base: -50, percent: 35, amount: -17.5 },
       ],
-      format: { locale: 'es-VE', hourCycle: 'h12' },
+      format: { locale: 'es-VE', hourCycle: 'h12', timeZone: 'America/Caracas' },
     },
     expiresAt: '2026-11-08T14:00:00.000Z',
     signedAt: null,
