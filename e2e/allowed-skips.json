@@ -325,7 +325,7 @@
     },
     {
       "file": "e2e/post-op-checks.spec.ts",
-      "title": "1440 px: la odontóloga registra «No contesta» y luego «Bien»; sale, «Mi día» baja y la evolución lleva la adenda",
+      "title": "1440 px: la odontóloga registra «No contesta» y luego «Bien»; sale, «Mi día» baja y queda en la historia",
       "annotation": "E2E_DATABASE_URL no definido: no se puede poner hoy la cita ni el día del control",
       "requiresUnset": "E2E_DATABASE_URL",
       "reason": "Sin E2E_DATABASE_URL no se puede mover a hoy la cita atendida ni poner para hoy el día de la llamada del control (la API no agenda en el pasado y el control nace para el siguiente día hábil)."

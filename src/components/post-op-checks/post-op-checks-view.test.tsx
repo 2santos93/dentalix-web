@@ -13,6 +13,7 @@ import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
 import { tokenForRole } from '@/lib/test/data-consents';
 import { WORK_QUEUES_CHANGED_EVENT } from '@/components/work-queues/work-queues-context';
+import { useAuthStore } from '@/lib/auth/auth-store';
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('../../lib/clinic-branding', () => ({ fetchClinicName: jest.fn().mockResolvedValue('Clínica Ávila') }));
@@ -242,5 +243,36 @@ describe('PostOpChecksView (DX-566)', () => {
     );
     expect(await screen.findByText(copy.emptyTitle)).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: 'Registrar resultado' })).not.toBeInTheDocument();
+  });
+
+  it('409 de sede sin formato regional: el diálogo sigue abierto con el aviso y, para ADMIN, «Configurar sede»', async () => {
+    const ADMIN = tokenForRole('ADMIN');
+    useAuthStore.setState({ accessToken: ADMIN });
+    try {
+      mockedList.mockResolvedValue(page([item()]));
+      mockedRegister.mockRejectedValue(
+        new ApiError(409, 'La sede no tiene formato regional', { code: 'LOCATION_LOCALE_REQUIRED', locationId: 'l9' }),
+      );
+      render(<PostOpChecksView token={ADMIN} />);
+      const row = await rowOf('Jorge Eduardo Ramírez Ortega');
+      await userEvent.click(within(row).getByRole('button', { name: 'Acciones de Jorge Eduardo Ramírez Ortega' }));
+      await userEvent.click(await screen.findByRole('menuitem', { name: copy.register }));
+      const dialog = await screen.findByRole('dialog', { name: 'Registrar resultado' });
+      await userEvent.click(within(dialog).getByRole('radio', { name: /^Bien/ }));
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar resultado' }));
+      expect(await within(dialog).findByText(/no tiene formato regional configurado/)).toBeInTheDocument();
+      expect(within(dialog).getByRole('link', { name: 'Configurar sede' })).toHaveAttribute(
+        'href',
+        '/settings/sedes?sede=l9',
+      );
+      expect(notifyError).not.toHaveBeenCalled();
+      // «Reintentar» vuelve a mandar el mismo resultado.
+      mockedRegister.mockResolvedValueOnce(check());
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Reintentar' }));
+      await waitFor(() => expect(mockedRegister).toHaveBeenCalledTimes(2));
+      expect(mockedRegister).toHaveBeenLastCalledWith(ADMIN, 'k1', { outcome: 'FINE' });
+    } finally {
+      useAuthStore.setState({ accessToken: null });
+    }
   });
 });

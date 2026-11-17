@@ -21,8 +21,8 @@ import { API_URL } from './support/urls';
  *     lo pone para hoy (la guarda deja cambiar la fecha de un PENDING).
  *  3. Recepción ve la lista sin procedimiento ni «Registrar resultado».
  *  4. 1440 px: la odontóloga registra «No contesta» (1 intento) y luego
- *     «Bien»: la fila sale, «Mi día» baja al releer y la evolución de la cita
- *     muestra la adenda «Control postoperatorio».
+ *     «Bien»: la fila sale, «Mi día» baja al releer y la historia del
+ *     paciente muestra el desenlace «Control postoperatorio».
  *  5. 390 px: «Necesita cita» abre el formulario de cita con el paciente, la
  *     odontóloga y el motivo «Revisión postoperatoria» puestos.
  * Sin E2E_DATABASE_URL los pasos 2–5 se saltan (e2e/allowed-skips.json).
@@ -222,7 +222,7 @@ test('RECEPTION ve a quién llamar, sin procedimiento ni «Registrar resultado»
   await expectNoHorizontalScroll(page);
 });
 
-test('1440 px: la odontóloga registra «No contesta» y luego «Bien»; sale, «Mi día» baja y la evolución lleva la adenda', async ({
+test('1440 px: la odontóloga registra «No contesta» y luego «Bien»; sale, «Mi día» baja y queda en la historia', async ({
   page,
 }) => {
   test.skip(!process.env.E2E_DATABASE_URL, DB_SKIP);
@@ -260,11 +260,15 @@ test('1440 px: la odontóloga registra «No contesta» y luego «Bien»; sale, �
     await expect(page.getByTestId('pending-post-op-checks-value')).toHaveText('1', { timeout: 5_000 });
   }).toPass({ timeout: 90_000, intervals: [5_000] });
 
-  // La evolución de la cita lleva la adenda con el desenlace.
+  // El desenlace queda en la historia del paciente: como adenda de la
+  // evolución (la cita tenía una) o como evolución propia «Control
+  // postoperatorio» (sin ligar a la cita, para no tapar «Falta evolución»).
   await page.goto(`${session.origin}/patients/${s.patientId}?tab=clinical-history`);
-  const addenda = page.getByRole('list', { name: /Adendas de la evolución del/ }).locator('visible=true');
-  await expect(addenda.getByText('Motivo: Control postoperatorio')).toBeVisible({ timeout: 20_000 });
-  await expect(addenda).toContainText('Sin dolor ni sangrado.');
+  const history = page.locator('#tabpanel-clinical-history');
+  await expect(history.getByText(/Control postoperatorio/).locator('visible=true').first()).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(history.getByText(/Sin dolor ni sangrado\./).locator('visible=true').first()).toBeVisible();
 });
 
 test('390 px: «Necesita cita» cierra el control y abre la cita con el paciente, la odontóloga y el motivo', async ({

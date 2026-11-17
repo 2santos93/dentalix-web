@@ -1,7 +1,10 @@
 'use client';
 import * as React from 'react';
 import { useState } from 'react';
+import { ApiError } from '@/lib/api/api-error';
+import { getTokenRole } from '@/lib/auth/token-role';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import {
   POST_OP_MAX_NO_ANSWER,
   POST_OP_NOTE_MAX,
@@ -39,7 +42,19 @@ export const outcomeDialogCopy = {
   submit: 'Guardar resultado',
   submitBook: 'Guardar y agendar cita',
   saveError: 'No pudimos guardar el resultado. Intenta de nuevo.',
+  // 409 LOCATION_LOCALE_REQUIRED (G1-B §10): sin el formato de la sede no se escribe la historia.
+  localeMissing: (isAdmin: boolean) =>
+    `La sede del control no tiene formato regional configurado: sin él no se puede escribir el resultado en la historia clínica. ${
+      isAdmin
+        ? 'Configúralo en Ajustes → Sedes y vuelve a intentarlo.'
+        : 'Pide a quien administra la clínica que lo configure en Ajustes → Sedes y vuelve a intentarlo.'
+    }`,
 };
+
+/** El 409 de la sede sin formato regional: un dato que falta, no un fallo. */
+function isLocaleMissing(err: unknown): err is ApiError {
+  return err instanceof ApiError && err.status === 409 && err.code === 'LOCATION_LOCALE_REQUIRED';
+}
 const copy = outcomeDialogCopy;
 
 /**
@@ -69,6 +84,8 @@ export function PostOpOutcomeDialog({
   const [errors, setErrors] = useState<{ outcome?: string; note?: string }>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // La sede a la que le falta el formato regional (409 LOCATION_LOCALE_REQUIRED).
+  const [localeMissing, setLocaleMissing] = useState<{ locationId: string } | null>(null);
 
   // Cada apertura empieza en blanco.
   const [prevOpen, setPrevOpen] = useState(open);
@@ -79,11 +96,16 @@ export function PostOpOutcomeDialog({
       setNote('');
       setErrors({});
       setSubmitError(null);
+      setLocaleMissing(null);
     }
   }
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    await save();
+  }
+
+  async function save() {
     const trimmed = note.trim();
     const next: typeof errors = {};
     if (!outcome) next.outcome = copy.outcomeRequired;
@@ -92,12 +114,15 @@ export function PostOpOutcomeDialog({
     if (Object.keys(next).length > 0 || !outcome) return;
     setSubmitting(true);
     setSubmitError(null);
+    setLocaleMissing(null);
     try {
       const check = await registerPostOpAttempt(token, item.id, { outcome, ...(trimmed ? { note: trimmed } : {}) });
       onOpenChange(false);
       onSaved(check, outcome);
     } catch (err) {
-      if (isPostOpCheckClosedError(err)) {
+      if (isLocaleMissing(err)) {
+        setLocaleMissing({ locationId: err.locationId ?? item.locationId });
+      } else if (isPostOpCheckClosedError(err)) {
         onOpenChange(false);
         onClosedElsewhere(apiErrorMessage(err, { fallback: copy.saveError }));
       } else {
@@ -142,6 +167,15 @@ export function PostOpOutcomeDialog({
           />
         ))}
       </RadioGroup>
+      {localeMissing ? (
+        <SedeConfigError
+          kind="locale"
+          variant="note"
+          description={copy.localeMissing(getTokenRole(token) === 'ADMIN')}
+          locationId={localeMissing.locationId}
+          onRetry={() => void save()}
+        />
+      ) : null}
       {lastTry ? (
         <p role="status" className="text-sm text-warning-text">
           {copy.noAnswerLast}
