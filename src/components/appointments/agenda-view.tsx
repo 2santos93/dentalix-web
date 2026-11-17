@@ -21,6 +21,7 @@ import { NEW_APPOINTMENT_EVENT, NEW_APPOINTMENT_PARAM } from '@/lib/ui/new-appoi
 import { useEffectivePermissions } from '@/lib/auth/permissions';
 import {
   APPOINTMENT_PARAM,
+  appointmentIdFromParam,
   canSeeScheduledProduction,
   scheduledProductionOwnByRole,
 } from '@/lib/reports/scheduled-production-api';
@@ -1258,19 +1259,22 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   // DX-567: `?cita=<id>` (desde «Previsión» en Reportes) abre esa cita: su día
   // en la zona de su sede, la vista Día y su detalle. El parámetro se retira
   // de la URL (recargar no la reabre); si no existe o no se puede ver, aviso y
-  // la agenda normal. Se lee una vez al montar, como `?nueva=cita`.
+  // la agenda normal. Se lee una vez al montar, como `?nueva=cita`. Solo un
+  // UUID: otro valor (`../payments/…`) se quita de la URL sin pedir nada.
   const [linkedAppointmentId, setLinkedAppointmentId] = useState<string | null>(() =>
-    typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get(APPOINTMENT_PARAM),
+    typeof window === 'undefined'
+      ? null
+      : appointmentIdFromParam(new URLSearchParams(window.location.search).get(APPOINTMENT_PARAM)),
   );
   const [linkedAppointmentAttempt, setLinkedAppointmentAttempt] = useState(0);
   useEffect(() => {
-    if (!linkedAppointmentId) return;
     const params = new URLSearchParams(window.location.search);
     if (params.has(APPOINTMENT_PARAM)) {
       params.delete(APPOINTMENT_PARAM);
       const rest = params.toString();
       window.history.replaceState(window.history.state, '', `${window.location.pathname}${rest ? `?${rest}` : ''}`);
     }
+    if (!linkedAppointmentId) return;
     let cancelled = false;
     async function openLinked(id: string) {
       try {

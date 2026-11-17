@@ -132,6 +132,16 @@ export function isValidScheduledPeriod({ from, to }: { from: string; to: string 
 
 /** El enlace que abre una cita en la agenda (DX-567: `?cita=`). */
 export const APPOINTMENT_PARAM = 'cita';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * El id de `?cita=` solo si es un UUID: cualquier otra cosa (`../payments/…`)
+ * se ignora y no se pide (va interpolado en la ruta de la API).
+ */
+export function appointmentIdFromParam(value: string | null | undefined): string | null {
+  return value && UUID.test(value) ? value : null;
+}
 export function appointmentHref(appointmentId: string): string {
   return `/agenda?${APPOINTMENT_PARAM}=${encodeURIComponent(appointmentId)}`;
 }

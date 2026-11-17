@@ -2419,7 +2419,7 @@ describe('DX-567: tira «Agendado» y enlace ?cita=', () => {
 
   it('?cita=<id> abre esa cita: su día, la vista Día y su detalle; quita el parámetro', async () => {
     const linked = appointment({
-      id: 'apt-9',
+      id: '9b2f4c1e-3a5d-4e6f-8a7b-1c2d3e4f5a6b',
       start: '2026-03-12T15:00:00.000Z',
       end: '2026-03-12T15:30:00.000Z',
       patientFirstName: 'María',
@@ -2427,9 +2427,9 @@ describe('DX-567: tira «Agendado» y enlace ?cita=', () => {
     });
     mockedGetAppointment.mockResolvedValue({ ...linked, notes: null });
     mockedListAppointments.mockResolvedValue([linked]);
-    window.history.replaceState(null, '', '/agenda?cita=apt-9&x=1');
+    window.history.replaceState(null, '', '/agenda?cita=9b2f4c1e-3a5d-4e6f-8a7b-1c2d3e4f5a6b&x=1');
     await renderAgenda(<AgendaView token={tokenFor('ADMIN')} />);
-    await waitFor(() => expect(mockedGetAppointment).toHaveBeenCalledWith(expect.any(String), 'apt-9'));
+    await waitFor(() => expect(mockedGetAppointment).toHaveBeenCalledWith(expect.any(String), '9b2f4c1e-3a5d-4e6f-8a7b-1c2d3e4f5a6b'));
     expect(window.location.search).toBe('?x=1');
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText(/María López/)).toBeInTheDocument();
@@ -2440,7 +2440,7 @@ describe('DX-567: tira «Agendado» y enlace ?cita=', () => {
 
   it('?cita= de una cita que no existe o no se puede ver: aviso y la agenda normal', async () => {
     mockedGetAppointment.mockRejectedValue(new ApiError(404, 'No existe'));
-    window.history.replaceState(null, '', '/agenda?cita=nope');
+    window.history.replaceState(null, '', '/agenda?cita=0d1e2f3a-4b5c-4d6e-8f7a-9b0c1d2e3f4a');
     await renderAgenda(<AgendaView token={tokenFor('ADMIN')} />);
     await waitFor(() =>
       expect(notifyError).toHaveBeenCalledWith('No encontramos esa cita o no tienes acceso a ella.'),
@@ -2448,5 +2448,15 @@ describe('DX-567: tira «Agendado» y enlace ?cita=', () => {
     expect(window.location.search).toBe('');
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.getByRole('button', { name: /nueva cita/i })).toBeInTheDocument();
+  });
+
+  it('?cita= que no es un UUID (`../x`): no se pide nada y se quita de la URL', async () => {
+    window.history.replaceState(null, '', '/agenda?cita=../payments/x&x=1');
+    await renderAgenda(<AgendaView token={tokenFor('ADMIN')} />);
+    await waitFor(() => expect(window.location.search).toBe('?x=1'));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mockedGetAppointment).not.toHaveBeenCalled();
+    expect(notifyError).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

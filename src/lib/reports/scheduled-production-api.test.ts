@@ -1,5 +1,6 @@
 import {
   appointmentHref,
+  appointmentIdFromParam,
   canSeeScheduledProduction,
   forecastReportHref,
   getScheduledProduction,
@@ -90,5 +91,13 @@ describe('scheduled-production-api (DX-567)', () => {
     expect(forecastReportHref({ from: '2026-11-17', to: '2026-11-17' }, { locationId: 'loc-1', providerId: 'u-1' })).toBe(
       '/reportes?tab=prevision&periodo=custom&desde=2026-11-17&hasta=2026-11-17&sede=loc-1&profesional=u-1',
     );
+  });
+
+  it('?cita= solo acepta un UUID', () => {
+    expect(appointmentIdFromParam('9B2F4C1E-3A5D-4E6F-8A7B-1C2D3E4F5A6B')).toBe('9B2F4C1E-3A5D-4E6F-8A7B-1C2D3E4F5A6B');
+    expect(appointmentIdFromParam('../payments/x')).toBeNull();
+    expect(appointmentIdFromParam('9b2f4c1e-3a5d-4e6f-8a7b-1c2d3e4f5a6b/../x')).toBeNull();
+    expect(appointmentIdFromParam('')).toBeNull();
+    expect(appointmentIdFromParam(null)).toBeNull();
   });
 });
