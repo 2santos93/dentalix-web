@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   canMoveAppointments,
+  getAppointment,
   listAppointments,
   updateAppointment,
   type Appointment,
@@ -17,6 +18,14 @@ import { getRoster, type MinuteRangeDto, type Roster } from '@/lib/locations/pro
 import { hiddenProviderIds, rosterDayOf } from '@/lib/locations/provider-schedule';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { NEW_APPOINTMENT_EVENT, NEW_APPOINTMENT_PARAM } from '@/lib/ui/new-appointment';
+import { useEffectivePermissions } from '@/lib/auth/permissions';
+import {
+  APPOINTMENT_PARAM,
+  appointmentIdFromParam,
+  canSeeScheduledProduction,
+  scheduledProductionOwnByRole,
+} from '@/lib/reports/scheduled-production-api';
+import { AgendaScheduledStrip } from '@/components/appointments/agenda-scheduled-strip';
 import { canWriteOrtho } from '@/lib/ortho/ortho-roles';
 import dynamic from 'next/dynamic';
 
@@ -210,6 +219,9 @@ const copy = {
   genericAppointmentsError: 'No pudimos cargar la agenda.',
   // Escalón 3 (segundo plano): sin "Intenta de nuevo." — el toast trae acción.
   genericRefreshError: 'No pudimos actualizar la agenda.',
+  // DX-567: `?cita=<id>`. Escalón 3: la agenda sigue correcta debajo.
+  linkedAppointmentMissing: 'No encontramos esa cita o no tienes acceso a ella.',
+  linkedAppointmentError: 'No pudimos abrir la cita.',
   genericStatusChangeError: 'No pudimos cambiar el estado de la cita.',
   /** DX-509: reactivada a sabiendas en sobrecupo. */
   reactivatedOverbooked: 'Cita reactivada. Sigue en sobrecupo.',
@@ -478,6 +490,11 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   } | null>(null);
   const role = getTokenRole(token);
   const canMove = canMoveAppointments(role);
+  // DX-567: tira «Agendado» (ADMIN, DENTIST con lo suyo, FINANCIAL_REPORTS_VIEW).
+  // RECEPTION y ASSISTANT sin el permiso no la ven ni piden el endpoint.
+  const permissions = useEffectivePermissions();
+  const showScheduledStrip = canSeeScheduledProduction(role, permissions);
+  const scheduledOwnOnly = scheduledProductionOwnByRole(role, permissions);
   // DX-122: bloqueos de agenda (Día y Semana) y «Pendientes por agendar».
   const canWriteBlocks = canWriteScheduleBlocks(role);
   const ownBlocksOnly = blocksOwnAgendaOnly(role);
@@ -1239,6 +1256,60 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
     return () => window.removeEventListener(NEW_APPOINTMENT_EVENT, open);
   }, []);
 
+  // DX-567: `?cita=<id>` (desde «Previsión» en Reportes) abre esa cita: su día
+  // en la zona de su sede, la vista Día y su detalle. El parámetro se retira
+  // de la URL (recargar no la reabre); si no existe o no se puede ver, aviso y
+  // la agenda normal. Se lee una vez al montar, como `?nueva=cita`. Solo un
+  // UUID: otro valor (`../payments/…`) se quita de la URL sin pedir nada.
+  const [linkedAppointmentId, setLinkedAppointmentId] = useState<string | null>(() =>
+    typeof window === 'undefined'
+      ? null
+      : appointmentIdFromParam(new URLSearchParams(window.location.search).get(APPOINTMENT_PARAM)),
+  );
+  const [linkedAppointmentAttempt, setLinkedAppointmentAttempt] = useState(0);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has(APPOINTMENT_PARAM)) {
+      params.delete(APPOINTMENT_PARAM);
+      const rest = params.toString();
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${rest ? `?${rest}` : ''}`);
+    }
+    if (!linkedAppointmentId) return;
+    let cancelled = false;
+    async function openLinked(id: string) {
+      try {
+        const found = await getAppointment(token, id);
+        if (cancelled) return;
+        const zone = clock.of(found.locationId)?.timeZone ?? timeZone;
+        setSelectedDate(wallDay(found.start, zone));
+        setPickedView('day');
+        setDayPanelOpen(false);
+        setDetailAppointment(found);
+        setLinkedAppointmentId(null);
+      } catch (err) {
+        if (cancelled) return;
+        setLinkedAppointmentId(null);
+        const missing = err instanceof ApiError && (err.status === 404 || err.status === 403 || err.status === 400);
+        if (missing) {
+          notifyError(copy.linkedAppointmentMissing);
+        } else {
+          notifyError(apiErrorMessage(err, copy.linkedAppointmentError), {
+            onRetry: () => {
+              setLinkedAppointmentId(id);
+              setLinkedAppointmentAttempt((n) => n + 1);
+            },
+          });
+        }
+      }
+    }
+    void openLinked(linkedAppointmentId);
+    return () => {
+      cancelled = true;
+    };
+    // `clock` y `timeZone` son los de la pantalla ya resuelta: solo cuenta el id pedido.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedAppointmentId, linkedAppointmentAttempt, token]);
+
   // The selected day's appointments, derived from the month's fetched set —
   // no extra request; the panel and the calendar share one source of truth.
   const selectedDayAppointments = appointments.filter(
@@ -1399,6 +1470,24 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
     : null;
 
   const userId = getTokenUserId(token);
+  // DX-567: la tira «Agendado» del rango visible (Día: el día; Semana: lunes a
+  // domingo), en la sede activa y, fuera de columnas, con el profesional del
+  // filtro (nunca en «solo lo suyo»: la API ya acota). Se vuelve a pedir
+  // cuando cambian las citas en pantalla.
+  const scheduledWeekStart = civilWeekStart(selectedDate);
+  const scheduledStrip =
+    showScheduledStrip && viewMode !== 'month' ? (
+      <AgendaScheduledStrip
+        token={token}
+        from={viewMode === 'week' ? scheduledWeekStart : selectedDate}
+        to={viewMode === 'week' ? addCivilDays(scheduledWeekStart, 6) : selectedDate}
+        rangeLabel={viewMode === 'week' ? `de la semana ${weekRangeLabel(selectedDate)}` : `del ${longDayLabel(selectedDate)}`}
+        locationId={activeLocationId}
+        providerId={scheduledOwnOnly || columnsMode ? null : providerId || null}
+        fmt={clock.fmt}
+        refreshKey={appointments.map((a) => `${a.id}:${a.status}:${a.start}`).join('|')}
+      />
+    ) : null;
   // DX-378: «Ocupar este hueco» habla con el reloj de la sede del hueco.
   const fillClock = fillSlot ? clock.of(fillSlot.locationId) : null;
   // «Mover a…» elige la fecha y la hora en el reloj de la sede de la cita.
@@ -1713,6 +1802,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
           </div>
         ) : viewMode === 'week' ? (
           <div className="flex flex-col gap-3">
+            {scheduledStrip}
             {/* `WeekTimeGrid` is purely presentational (no loading/error props,
                 unlike `DayAgenda`) — mirror `DayAgenda`'s own loading/error
                 branches here so Semana still surfaces the feedback the grid
@@ -1744,6 +1834,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
           </div>
         ) : (
           <div className="flex flex-col gap-3">
+            {scheduledStrip}
             {columnsMode && offToday.length > 0 ? (
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                 <span className="text-muted">{copy.hiddenProviders(offToday.length)}</span>

@@ -11,7 +11,8 @@ import { toast } from 'sonner';
 import { ApiError } from '@/lib/api/client';
 import { wallDayRange, wallWeekRange } from '@/lib/time/wall-clock';
 import { caracasSede, utcSede } from '@/lib/test/sede-clock';
-import { createAppointment, listAppointments, updateAppointment } from '@/lib/appointments/appointments-api';
+import { createAppointment, getAppointment, listAppointments, updateAppointment } from '@/lib/appointments/appointments-api';
+import { getScheduledProduction } from '@/lib/reports/scheduled-production-api';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { listPatients } from '@/lib/patients/patients-api';
 import { createConfirmationLink } from '@/lib/appointments/confirmations-api';
@@ -68,6 +69,17 @@ jest.mock('../../lib/appointments/appointments-api', () => ({
   createAppointment: jest.fn(),
   listAppointments: jest.fn(),
   updateAppointment: jest.fn(),
+  // DX-567: `?cita=`; por defecto, la real (solo la piden las pruebas del enlace).
+  getAppointment: jest.fn((...args: unknown[]) =>
+    (jest.requireActual('../../lib/appointments/appointments-api').getAppointment as (...a: unknown[]) => unknown)(...args),
+  ),
+}));
+// DX-567: la tira «Agendado» pide su propio endpoint (solo ADMIN, DENTIST y
+// FINANCIAL_REPORTS_VIEW): no entra en los conteos de `listAppointments`.
+jest.mock('../../lib/reports/scheduled-production-api', () => ({
+  ...jest.requireActual('../../lib/reports/scheduled-production-api'),
+  getScheduledProduction: jest.fn(() => new Promise(() => {})),
+  getScheduledProductionUnlinked: jest.fn(),
 }));
 // DX-279: la vista previa del aviso del diálogo de cancelar.
 // DX-211: el aviso de fondo sigue siendo el real; se espía para comprobarlo.
@@ -2351,5 +2363,100 @@ describe('DX-046: la agenda relee de fondo (respuesta del paciente por el enlace
     expect(notifyError).not.toHaveBeenCalled();
     expect(screen.getByRole('table', { name: /agenda del día/i })).toBe(table);
     expect(within(table).getByRole('combobox')).toHaveTextContent('Agendada');
+  });
+});
+
+describe('DX-567: tira «Agendado» y enlace ?cita=', () => {
+  const tokenFor = (role: string) => `h.${btoa(JSON.stringify({ sub: 'staff-1', tenantId: 't1', role }))}.s`;
+  const mockedGetScheduled = getScheduledProduction as jest.MockedFunction<typeof getScheduledProduction>;
+  const mockedGetAppointment = getAppointment as jest.MockedFunction<typeof getAppointment>;
+
+  beforeEach(() => {
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockReset();
+    mockedListAppointments.mockResolvedValue([]);
+    mockedGetScheduled.mockReset();
+    mockedGetScheduled.mockReturnValue(new Promise(() => {}));
+    mockedGetAppointment.mockReset();
+    (notifyError as jest.Mock).mockClear();
+    mockedListPatients.mockResolvedValue(patientsPage);
+    (getAppointmentReminders as jest.Mock).mockResolvedValue({ enabled: true, leadHours: [48, 2], items: [] });
+  });
+  afterEach(() => {
+    clearSessionStore();
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('ADMIN: en Día pide lo agendado del día visible; en Mes no', async () => {
+    const user = userEvent.setup();
+    await renderAgenda(<AgendaView token={tokenFor('ADMIN')} />);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+    expect(mockedGetScheduled).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await goToDate(user, '2026-03-10');
+    await waitFor(() =>
+      expect(mockedGetScheduled).toHaveBeenLastCalledWith(expect.any(String), { from: '2026-03-10', to: '2026-03-10' }),
+    );
+    await user.click(screen.getByRole('button', { name: /^semana$/i }));
+    await waitFor(() =>
+      expect(mockedGetScheduled).toHaveBeenLastCalledWith(expect.any(String), { from: '2026-03-09', to: '2026-03-15' }),
+    );
+  });
+
+  it('RECEPTION y ASSISTANT no piden el endpoint', async () => {
+    const user = userEvent.setup();
+    for (const role of ['RECEPTION', 'ASSISTANT']) {
+      const { unmount } = await renderAgenda(<AgendaView token={tokenFor(role)} />);
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await user.click(screen.getByRole('button', { name: /^semana$/i }));
+      await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+      unmount();
+      clearSessionStore();
+    }
+    expect(mockedGetScheduled).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('agenda-scheduled-strip')).toBeNull();
+  });
+
+  it('?cita=<id> abre esa cita: su día, la vista Día y su detalle; quita el parámetro', async () => {
+    const linked = appointment({
+      id: '9b2f4c1e-3a5d-4e6f-8a7b-1c2d3e4f5a6b',
+      start: '2026-03-12T15:00:00.000Z',
+      end: '2026-03-12T15:30:00.000Z',
+      patientFirstName: 'María',
+      patientLastName: 'López',
+    });
+    mockedGetAppointment.mockResolvedValue({ ...linked, notes: null });
+    mockedListAppointments.mockResolvedValue([linked]);
+    window.history.replaceState(null, '', '/agenda?cita=9b2f4c1e-3a5d-4e6f-8a7b-1c2d3e4f5a6b&x=1');
+    await renderAgenda(<AgendaView token={tokenFor('ADMIN')} />);
+    await waitFor(() => expect(mockedGetAppointment).toHaveBeenCalledWith(expect.any(String), '9b2f4c1e-3a5d-4e6f-8a7b-1c2d3e4f5a6b'));
+    expect(window.location.search).toBe('?x=1');
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/María López/)).toBeInTheDocument();
+    // Detrás del detalle (modal), la agenda ya está en el Día de la cita.
+    await waitFor(() => expect(mockedListAppointments.mock.calls.at(-1)![1]).toMatchObject(wallDayRange('2026-03-12', 'UTC')));
+    expect(screen.getByRole('button', { name: /^día$/i, hidden: true })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('?cita= de una cita que no existe o no se puede ver: aviso y la agenda normal', async () => {
+    mockedGetAppointment.mockRejectedValue(new ApiError(404, 'No existe'));
+    window.history.replaceState(null, '', '/agenda?cita=0d1e2f3a-4b5c-4d6e-8f7a-9b0c1d2e3f4a');
+    await renderAgenda(<AgendaView token={tokenFor('ADMIN')} />);
+    await waitFor(() =>
+      expect(notifyError).toHaveBeenCalledWith('No encontramos esa cita o no tienes acceso a ella.'),
+    );
+    expect(window.location.search).toBe('');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('button', { name: /nueva cita/i })).toBeInTheDocument();
+  });
+
+  it('?cita= que no es un UUID (`../x`): no se pide nada y se quita de la URL', async () => {
+    window.history.replaceState(null, '', '/agenda?cita=../payments/x&x=1');
+    await renderAgenda(<AgendaView token={tokenFor('ADMIN')} />);
+    await waitFor(() => expect(window.location.search).toBe('?x=1'));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mockedGetAppointment).not.toHaveBeenCalled();
+    expect(notifyError).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
