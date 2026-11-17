@@ -187,6 +187,12 @@ test('ADMIN marca en el catálogo una extracción con control a 1 día', async (
   const created = items.find((i) => i.labelEs === PROCEDURE);
   expect(created).toMatchObject({ requiresPostOpCheck: true, postOpCheckAfterDays: 1 });
   catalogId = created!.id;
+  // El alta por la pantalla no pone precio; sin él no entra en un presupuesto.
+  const priced = await request.patch(`${API_URL}/catalog/items/${catalogId}`, {
+    headers: session.headers,
+    data: { defaultPrice: 40 },
+  });
+  expect(priced.ok(), await priced.text()).toBeTruthy();
 });
 
 test('RECEPTION ve a quién llamar, sin procedimiento ni «Registrar resultado» (390 y 1440 px)', async ({
