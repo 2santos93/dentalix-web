@@ -137,8 +137,12 @@ export function appointmentHref(appointmentId: string): string {
 }
 
 /** La pestaña «Previsión» de Reportes con un rango (desde la tira de la agenda). */
-export function forecastReportHref(range: { from: string; to: string }, providerId?: string): string {
+export function forecastReportHref(
+  range: { from: string; to: string },
+  filters: { locationId?: string | null; providerId?: string | null } = {},
+): string {
   const p = new URLSearchParams({ tab: 'prevision', periodo: 'custom', desde: range.from, hasta: range.to });
-  if (providerId) p.set('profesional', providerId);
+  if (filters.locationId) p.set('sede', filters.locationId);
+  if (filters.providerId) p.set('profesional', filters.providerId);
   return `/reportes?${p.toString()}`;
 }

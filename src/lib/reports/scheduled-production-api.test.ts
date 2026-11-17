@@ -87,6 +87,8 @@ describe('scheduled-production-api (DX-567)', () => {
     expect(forecastReportHref({ from: '2026-11-16', to: '2026-11-22' })).toBe(
       '/reportes?tab=prevision&periodo=custom&desde=2026-11-16&hasta=2026-11-22',
     );
-    expect(forecastReportHref({ from: '2026-11-17', to: '2026-11-17' }, 'u-1')).toContain('&profesional=u-1');
+    expect(forecastReportHref({ from: '2026-11-17', to: '2026-11-17' }, { locationId: 'loc-1', providerId: 'u-1' })).toBe(
+      '/reportes?tab=prevision&periodo=custom&desde=2026-11-17&hasta=2026-11-17&sede=loc-1&profesional=u-1',
+    );
   });
 });
