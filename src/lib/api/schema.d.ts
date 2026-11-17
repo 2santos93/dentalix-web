@@ -1421,6 +1421,66 @@ export interface paths {
         patch: operations["DentalCatalogController_update"];
         trace?: never;
     };
+    "/api/v1/catalog/items/{id}/price-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Historial del precio por defecto de un ítem del catálogo
+         * @description Cada cambio (edición suelta o lote de «Actualizar precios») con el precio anterior, el nuevo, el lote, el autor y la fecha, del más reciente al más antiguo (como mucho 200).
+         */
+        get: operations["DentalCatalogController_listPriceHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/price-changes/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vista previa de «Actualizar precios» del catálogo, sin escribir
+         * @description Los ítems vivos que cumplen los filtros (categoría, tipo, solo activos, «solo si el precio es menor que X»), ordenados por código, con su precio de ahora, el nuevo (% o importe fijo, redondeo a 1/10/100/1.000 unidades de la moneda del catálogo, nunca por debajo de 0, incremento mínimo en subidas) y la diferencia; los omitidos y por qué; los totales; y la huella que exige `/apply`. Lista vacía = ningún ítem cumple el filtro.
+         */
+        post: operations["CatalogPriceChangesController_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/price-changes/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Aplica «Actualizar precios» con la huella de la vista previa
+         * @description Recalcula el lote con el catálogo bloqueado (la MISMA función que la vista previa) y, si su huella es `previewHash`, escribe en UNA transacción los precios nuevos (un UPDATE por conjuntos), el lote y una fila de historial por ítem. Los planes y presupuestos ya creados no cambian: cada ítem congela su precio.
+         */
+        post: operations["CatalogPriceChangesController_apply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/locations": {
         parameters: {
             query?: never;
@@ -11830,6 +11890,129 @@ export interface components {
              * @description DX-455: plantilla de evolución que se sugiere al marcar hecho el procedimiento; null = ninguna (quitarla no cambia las evoluciones guardadas). Debe ser de esta clínica (404) y estar activa (400); solo en procedimientos (400 en un diagnóstico).
              */
             clinicalNoteTemplateId?: string | null;
+        };
+        CatalogPriceHistoryEntryDto: {
+            /** Format: uuid */
+            id: string;
+            previousPrice: number | null;
+            newPrice: number | null;
+            /**
+             * Format: uuid
+             * @description El lote de «Actualizar precios»; null = edición suelta.
+             */
+            batchId: string | null;
+            /** Format: uuid */
+            actorUserId: string;
+            actorName: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CatalogPriceChangeDto: {
+            /** @description Solo los ítems de esta categoría (exacta, sin distinguir mayúsculas). Sin ella, todas. */
+            category?: string;
+            /** @enum {string} */
+            kind?: "DIAGNOSIS" | "PROCEDURE";
+            /** @description Solo los ítems activos. */
+            activeOnly?: boolean;
+            /** @description Solo si el precio por defecto es MENOR que este importe (los ítems sin precio no entran). */
+            priceBelow?: number;
+            /**
+             * @description PERCENT = porcentaje; AMOUNT = importe fijo.
+             * @enum {string}
+             */
+            mode: "PERCENT" | "AMOUNT";
+            /** @description Con signo: +5 sube un 5 % (o 5 unidades), −10 baja. Distinto de 0; un % entre −100 y 1000. */
+            value: number;
+            /**
+             * @description Redondea al múltiplo más cercano de 1, 10, 100 o 1.000 unidades de la moneda del catálogo. Sin él (o null), a céntimos.
+             * @enum {number|null}
+             */
+            roundTo?: 1 | 10 | 100 | 1000 | null;
+            /** @description Solo en subidas: lo mínimo que sube cada precio (si el cambio sube menos, sube esto, redondeado hacia arriba). */
+            minIncrement?: number;
+        };
+        CatalogPriceChangeLineDto: {
+            /** Format: uuid */
+            itemId: string;
+            code: string;
+            labelEs: string;
+            category: string | null;
+            /** @enum {string} */
+            kind: "DIAGNOSIS" | "PROCEDURE";
+            active: boolean;
+            /** @description Precio por defecto de ahora. */
+            before: number;
+            /** @description Precio nuevo. */
+            after: number;
+            /** @description after − before. */
+            difference: number;
+        };
+        CatalogPriceChangeSkipDto: {
+            /** Format: uuid */
+            itemId: string;
+            code: string;
+            labelEs: string;
+            category: string | null;
+            /** @enum {string} */
+            kind: "DIAGNOSIS" | "PROCEDURE";
+            active: boolean;
+            before: number | null;
+            /**
+             * @description NO_PRICE: sin precio por defecto; UNCHANGED: el precio nuevo es el mismo (p. ej. por el redondeo); OUT_OF_RANGE: pasaría del máximo.
+             * @enum {string}
+             */
+            reason: "NO_PRICE" | "UNCHANGED" | "OUT_OF_RANGE";
+        };
+        CatalogPriceChangeTotalsDto: {
+            before: number;
+            after: number;
+            difference: number;
+        };
+        CatalogPriceChangePreviewDto: {
+            /** @description Moneda del catálogo (null si la clínica no la tiene definida). */
+            currency: string | null;
+            /** @description Huella que exige `/apply`. */
+            previewHash: string;
+            lines: components["schemas"]["CatalogPriceChangeLineDto"][];
+            skipped: components["schemas"]["CatalogPriceChangeSkipDto"][];
+            totals: components["schemas"]["CatalogPriceChangeTotalsDto"];
+        };
+        ApplyCatalogPriceChangeDto: {
+            /** @description Solo los ítems de esta categoría (exacta, sin distinguir mayúsculas). Sin ella, todas. */
+            category?: string;
+            /** @enum {string} */
+            kind?: "DIAGNOSIS" | "PROCEDURE";
+            /** @description Solo los ítems activos. */
+            activeOnly?: boolean;
+            /** @description Solo si el precio por defecto es MENOR que este importe (los ítems sin precio no entran). */
+            priceBelow?: number;
+            /**
+             * @description PERCENT = porcentaje; AMOUNT = importe fijo.
+             * @enum {string}
+             */
+            mode: "PERCENT" | "AMOUNT";
+            /** @description Con signo: +5 sube un 5 % (o 5 unidades), −10 baja. Distinto de 0; un % entre −100 y 1000. */
+            value: number;
+            /**
+             * @description Redondea al múltiplo más cercano de 1, 10, 100 o 1.000 unidades de la moneda del catálogo. Sin él (o null), a céntimos.
+             * @enum {number|null}
+             */
+            roundTo?: 1 | 10 | 100 | 1000 | null;
+            /** @description Solo en subidas: lo mínimo que sube cada precio (si el cambio sube menos, sube esto, redondeado hacia arriba). */
+            minIncrement?: number;
+            /** @description La huella (`previewHash`) que devolvió la vista previa. */
+            previewHash: string;
+        };
+        AppliedCatalogPriceChangeDto: {
+            /** Format: uuid */
+            batchId: string;
+            /** Format: date-time */
+            appliedAt: string;
+            /** @description true si es la repetición de un lote ya aplicado con la misma Idempotency-Key (no cambió nada). */
+            replayed: boolean;
+            currency: string | null;
+            itemCount: number;
+            totals: components["schemas"]["CatalogPriceChangeTotalsDto"];
         };
         LocationDto: {
             /** Format: uuid */
@@ -31454,6 +31637,146 @@ export interface operations {
             };
             /** @description Id que no es UUID */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DentalCatalogController_listPriceHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogPriceHistoryEntryDto"][];
+                };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El ítem no existe en el catálogo de esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CatalogPriceChangesController_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogPriceChangeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogPriceChangePreviewDto"];
+                };
+            };
+            /** @description Cambio 0, % fuera de −100…1000, redondeo no admitido, incremento mínimo en una bajada o importes inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN actualiza precios del catálogo en bloque (DX-205). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `PRICE_CHANGE_TOO_LARGE`: más de 2.000 precios en un lote */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CatalogPriceChangesController_apply: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description UUID por intento (uno por vista previa). Repetir la MISMA petición con la misma clave devuelve el lote ya aplicado (`replayed: true`) sin volver a escribir ni auditar; otra petición con la misma clave es 422 `IDEMPOTENCY_KEY_REUSED`. Por clínica. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyCatalogPriceChangeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppliedCatalogPriceChangeDto"];
+                };
+            };
+            /** @description Falta la cabecera Idempotency-Key o no es un UUID; `previewHash` no es una huella; criterios inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN actualiza precios del catálogo en bloque (DX-205). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `PRICE_CHANGE_PREVIEW_STALE`: el catálogo cambió desde la vista previa (nada cambia); `PRICE_CHANGE_NOTHING_TO_APPLY`: ningún precio cambia */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `IDEMPOTENCY_KEY_REUSED`: la clave ya se usó con otra petición; `PRICE_CHANGE_TOO_LARGE`: más de 2.000 precios */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
