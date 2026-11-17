@@ -25,6 +25,7 @@ import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-s
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { notifySuccess } from '@/components/errors/notify';
+import { InlineError } from '@/components/errors/inline-error';
 import { FieldError } from '@/components/errors/field-error';
 import { AsyncSection, SectionSkeleton, TableSkeleton } from '@/components/shared/async-section';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -346,9 +347,7 @@ export function CommissionsView({ token }: { token: string }) {
               ) : null}
             </div>
             {invalidPeriod ? (
-              <p role="alert" className="text-sm text-danger-text">
-                {copy.invalidPeriod}
-              </p>
+              <InlineError>{copy.invalidPeriod}</InlineError>
             ) : null}
 
             <SedeStampNote stamp={stamp} />

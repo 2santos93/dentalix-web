@@ -1,7 +1,6 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { FileX, Printer } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -80,11 +79,13 @@ export function CommissionSettlementView({ token, id }: { token: string; id: str
         back={{ href: COMMISSIONS_HREF, label: copy.back }}
         actions={
           data ? (
-            <Button asChild variant="secondary">
-              <Link href={commissionSettlementPrintHref(data.id)} target="_blank" rel="noopener">
-                <Printer aria-hidden />
-                {copy.print}
-              </Link>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => window.open(commissionSettlementPrintHref(data.id), '_blank', 'noopener')}
+            >
+              <Printer aria-hidden />
+              {copy.print}
             </Button>
           ) : undefined
         }

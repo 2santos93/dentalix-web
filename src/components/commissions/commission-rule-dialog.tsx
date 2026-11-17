@@ -13,6 +13,7 @@ import {
   type CommissionReleaseMode,
   type ProfessionalCommissionRule,
 } from '@/lib/commissions/commissions-api';
+import { InlineError } from '@/components/errors/inline-error';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Button } from '@/components/ui/button';
@@ -302,9 +303,7 @@ export function CommissionRuleDialog({
                 </Button>
               </div>
               {rowError ? (
-                <p id={fieldErrorId(selectId)} role="alert" className="text-sm text-danger-text">
-                  {rowError}
-                </p>
+                <InlineError id={fieldErrorId(selectId)}>{rowError}</InlineError>
               ) : null}
             </div>
           );
