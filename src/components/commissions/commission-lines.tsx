@@ -20,6 +20,7 @@ export const commissionLinesCopy = {
   colPercent: '%',
   colAmount: 'Honorario',
   produced: 'Realizado',
+  baseAt: (base: string, percent: string) => `Base ${base} al ${percent}`,
   tooth: (t: string) => `Diente ${t}`,
   paid: (date: string, amount: string) => `${date} · ${amount}`,
   patientUnknown: 'Paciente sin nombre',
@@ -104,13 +105,16 @@ function lineColumns(stamp: SedeStamp): DataListColumn<CommissionLine>[] {
       numeric: true,
       align: 'end',
       cell: (l) => stamp.money(l.base, l.currency, l.locationId),
+      // En la tarjeta, base y % juntos: «Base USD 200,00 al 35 %».
+      mobileCell: (l) => copy.baseAt(stamp.money(l.base, l.currency, l.locationId), percentText(l.percent)),
     },
     {
       id: 'percent',
       header: copy.colPercent,
       numeric: true,
       align: 'end',
-      cell: (l) => percentText(l.percent),
+      mobile: 'hidden',
+      cell: (l) => <span className="whitespace-nowrap">{percentText(l.percent)}</span>,
     },
     {
       id: 'amount',

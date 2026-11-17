@@ -56,9 +56,9 @@ export const COMMISSION_RELEASE_LABELS: Record<CommissionReleaseMode, string> = 
   PER_PLAN: 'Con el plan completo y pagado',
 };
 
-/** «35 % de lo cobrado, por prestación» (el % con coma decimal). */
+/** «35 %» con coma decimal; el espacio no se parte (el % nunca queda solo en otra línea). */
 export function percentText(percent: number): string {
-  return `${String(percent).replace('.', ',')} %`;
+  return `${String(percent).replace('.', ',')}\u00a0%`;
 }
 
 export function ruleSummary(rule: Pick<CommissionRule, 'basis' | 'releaseMode' | 'percent' | 'categories'>): string {
