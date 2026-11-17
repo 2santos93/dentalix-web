@@ -186,7 +186,7 @@ export async function getAppointment(
   token: string,
   id: string,
 ): Promise<AppointmentDetail> {
-  return apiFetch<AppointmentDetail>(`/appointments/${id}`, {
+  return apiFetch<AppointmentDetail>(`/appointments/${encodeURIComponent(id)}`, {
     token,
   });
 }
@@ -218,7 +218,7 @@ export async function updateAppointment(
   id: string,
   patch: UpdateAppointmentInput,
 ): Promise<AppointmentWriteDetail> {
-  return apiFetch<AppointmentWriteDetail>(`/appointments/${id}`, {
+  return apiFetch<AppointmentWriteDetail>(`/appointments/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: patch,
     token,

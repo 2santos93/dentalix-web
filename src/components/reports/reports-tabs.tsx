@@ -9,7 +9,8 @@ import { TabBar } from '@/components/ui/tabs';
  * suya), «Cobrado sin imputar» (DX-399: ADMIN y recepción) y «Huecos
  * recuperados» (DX-436: ADMIN), «Ocupación por sillón» (DX-481: ADMIN) y
  * «Enlaces del paciente» (DX-424: ADMIN) y «Presupuestos» (DX-558: ADMIN,
- * DENTIST, que ve los que elaboró, y FINANCIAL_REPORTS_VIEW). Las siguientes son una línea más en `REPORT_TABS` y su vista en la
+ * DENTIST, que ve los que elaboró, y FINANCIAL_REPORTS_VIEW) y «Previsión» (DX-567: los mismos, el
+ * DENTIST con lo suyo). Las siguientes son una línea más en `REPORT_TABS` y su vista en la
  * página. Patrón ARIA de pestañas con activación manual, como la Caja: las
  * flechas mueven el foco y Enter/Espacio (o el clic) eligen.
  */
@@ -23,6 +24,13 @@ export const REPORT_TABS = [
   {
     key: 'presupuestos',
     label: 'Presupuestos',
+    roles: ['ADMIN', 'DENTIST'],
+    permissions: ['FINANCIAL_REPORTS_VIEW'],
+  },
+  // DX-567: lo agendado y la previsión del mes; ADMIN y FINANCIAL_REPORTS_VIEW, toda la clínica; DENTIST, lo suyo (SCHEDULED_PRODUCTION_REPORT_ROLES).
+  {
+    key: 'prevision',
+    label: 'Previsión',
     roles: ['ADMIN', 'DENTIST'],
     permissions: ['FINANCIAL_REPORTS_VIEW'],
   },
