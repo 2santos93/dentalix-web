@@ -2585,7 +2585,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["AppointmentTypesController_get"];
         put?: never;
         post?: never;
         delete: operations["AppointmentTypesController_remove"];
@@ -35704,6 +35704,35 @@ export interface operations {
             };
             /** @description Ya existe un tipo con ese nombre */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AppointmentTypesController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description DX-564: un tipo por id, también desactivado o retirado (las citas lo conservan y sus indicaciones previas se siguen enviando). Los 4 roles. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentTypeDto"];
+                };
+            };
+            /** @description Tipo no encontrado en esta clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
