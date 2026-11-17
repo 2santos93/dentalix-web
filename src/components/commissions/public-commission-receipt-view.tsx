@@ -12,6 +12,7 @@ import {
   percentText,
   signPublicCommissionReceipt,
   type PublicCommissionReceipt,
+  type PublicCommissionReceiptLine,
 } from '@/lib/commissions/commissions-api';
 import { saveBlob } from '@/lib/files/save-blob';
 import { regionalFormat, type RegionalFormat } from '@/lib/format/regional-format';
@@ -26,6 +27,7 @@ import { PublicNotice, publicBrandStyle } from '@/components/shared/public-page'
 import { SignaturePad } from '@/components/shared/signature-pad';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -50,6 +52,7 @@ export const publicCommissionReceiptCopy = {
   colAmount: 'Honorario',
   adjustment: 'Ajuste',
   tooth: (t: string) => `Diente ${t}`,
+  baseAt: (base: string, percent: string) => `Base ${base} al ${percent}`,
   total: 'Total pagado',
   signerName: 'Tu nombre completo',
   signature: 'Tu firma',
@@ -89,6 +92,61 @@ function receiptFormat(format: PublicCommissionReceipt['content']['format']): Re
     if (e instanceof RangeError) return null;
     throw e;
   }
+}
+
+function lineColumns(
+  civil: (day: string | null) => string,
+  amount: (value: number) => string,
+): DataListColumn<PublicCommissionReceiptLine>[] {
+  return [
+    { id: 'patient', header: copy.colPatient, mobile: 'hidden', cell: (l) => <span className="font-medium">{l.patientInitials}</span> },
+    {
+      id: 'item',
+      header: copy.colItem,
+      mobile: 'primary',
+      cell: (l) => (
+        <span className="flex min-w-0 flex-col">
+          <span className="[overflow-wrap:anywhere]">
+            {l.kind === 'ADJUSTMENT' ? `${copy.adjustment}: ${l.catalogLabel}` : l.catalogLabel}
+          </span>
+          <span className="t-caption text-muted">{copy.tooth(l.toothNumber)}</span>
+        </span>
+      ),
+      mobileCell: (l) => (l.kind === 'ADJUSTMENT' ? `${copy.adjustment}: ${l.catalogLabel}` : l.catalogLabel),
+    },
+    {
+      id: 'day',
+      header: copy.colDay,
+      cell: (l) => <span className="tabular-nums">{civil(l.day)}</span>,
+      mobileCell: (l) => `${l.patientInitials} · ${copy.tooth(l.toothNumber)} · ${civil(l.day)}`,
+    },
+    {
+      id: 'base',
+      header: copy.colBase,
+      numeric: true,
+      align: 'end',
+      cell: (l) => amount(l.base),
+      mobileCell: (l) => copy.baseAt(amount(l.base), percentText(l.percent)),
+    },
+    {
+      id: 'percent',
+      header: copy.colPercent,
+      numeric: true,
+      align: 'end',
+      mobile: 'hidden',
+      cell: (l) => <span className="whitespace-nowrap">{percentText(l.percent)}</span>,
+    },
+    {
+      id: 'amount',
+      header: copy.colAmount,
+      numeric: true,
+      align: 'end',
+      mobile: 'trailing',
+      cell: (l) => (
+        <span className={cn('font-medium tabular-nums', l.amount < 0 && 'text-danger-text')}>{amount(l.amount)}</span>
+      ),
+    },
+  ];
 }
 
 /**
@@ -230,50 +288,17 @@ export function PublicCommissionReceiptView({ linkToken }: { linkToken: string }
                 <DescriptionItem label={copy.location}>{data.content.payment.locationName}</DescriptionItem>
               </DescriptionList>
 
-              <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-                <table className="w-full min-w-[34rem] text-sm" aria-label={copy.linesLabel}>
-                  <thead>
-                    <tr className="border-b border-border text-left text-muted">
-                      <th scope="col" className="py-2 pr-3 font-medium">{copy.colPatient}</th>
-                      <th scope="col" className="py-2 pr-3 font-medium">{copy.colItem}</th>
-                      <th scope="col" className="py-2 pr-3 font-medium">{copy.colDay}</th>
-                      <th scope="col" className="py-2 pr-3 text-right font-medium">{copy.colBase}</th>
-                      <th scope="col" className="py-2 pr-3 text-right font-medium">{copy.colPercent}</th>
-                      <th scope="col" className="py-2 text-right font-medium">{copy.colAmount}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.content.lines.map((l, i) => (
-                      <tr key={i} className="border-b border-border-subtle align-top">
-                        <td className="py-2 pr-3 font-medium">{l.patientInitials}</td>
-                        <td className="py-2 pr-3">
-                          <span className="flex flex-col">
-                            <span className="[overflow-wrap:anywhere]">
-                              {l.kind === 'ADJUSTMENT' ? `${copy.adjustment}: ${l.catalogLabel}` : l.catalogLabel}
-                            </span>
-                            <span className="t-caption text-muted">{copy.tooth(l.toothNumber)}</span>
-                          </span>
-                        </td>
-                        <td className="py-2 pr-3 tabular-nums">{civil(l.day)}</td>
-                        <td className="py-2 pr-3 text-right tabular-nums">{money(l.base, data.content.payment.currency)}</td>
-                        <td className="py-2 pr-3 text-right whitespace-nowrap tabular-nums">{percentText(l.percent)}</td>
-                        <td className={cn('py-2 text-right font-medium tabular-nums', l.amount < 0 && 'text-danger-text')}>
-                          {money(l.amount, data.content.payment.currency)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <th scope="row" colSpan={5} className="pt-3 pr-3 text-right font-semibold">
-                        {copy.total}
-                      </th>
-                      <td className="pt-3 text-right text-base font-semibold tabular-nums" data-testid="receipt-total">
-                        {money(data.content.payment.amount, data.content.payment.currency)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
+              <DataList
+                label={copy.linesLabel}
+                rows={data.content.lines}
+                columns={lineColumns(civil, (amount) => money(amount, data.content.payment.currency))}
+                getRowKey={(l) => `${l.catalogCode}-${l.toothNumber}-${l.kind}-${data.content.lines.indexOf(l)}`}
+              />
+              <div className="flex items-baseline justify-end gap-3 border-t border-border pt-3">
+                <span className="text-sm font-semibold text-ink">{copy.total}</span>
+                <span className="text-base font-semibold tabular-nums text-ink" data-testid="receipt-total">
+                  {money(data.content.payment.amount, data.content.payment.currency)}
+                </span>
               </div>
             </section>
 

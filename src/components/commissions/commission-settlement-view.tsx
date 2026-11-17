@@ -144,7 +144,8 @@ export function CommissionSettlementView({ token, id }: { token: string; id: str
         back={{ href: COMMISSIONS_HREF, label: copy.back }}
         actions={
           data ? (
-            <>
+            // Cuatro acciones: en el móvil bajan a otra fila en vez de salirse de la pantalla.
+            <div className="flex flex-wrap gap-2">
               {isAdmin && payableCurrencies(data.payment).length > 0 ? (
                 <Button
                   type="button"
@@ -177,7 +178,7 @@ export function CommissionSettlementView({ token, id }: { token: string; id: str
                 <Printer aria-hidden />
                 {copy.print}
               </Button>
-            </>
+            </div>
           ) : undefined
         }
       />

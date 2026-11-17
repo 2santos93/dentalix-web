@@ -202,15 +202,15 @@ export function CommissionPayDialog({ token, settlement, open, onOpenChange, onP
             </p>
             <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border">
               {pending.map((l) => (
-                <li key={l.id} className="flex items-start justify-between gap-3 px-3 py-1">
+                <li key={l.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 px-3 py-1">
                   <Checkbox
                     id={id(`line-${l.id}`)}
                     checked={chosen.has(l.id!)}
                     disabled={submitting}
                     onChange={(e) => toggle(l.id!, e.target.checked)}
                     label={<span className="[overflow-wrap:anywhere]">{lineLabel(l)}</span>}
-                    description={l.patient.name ?? copy.patientUnknown}
-                    className="min-w-0 flex-1"
+                    description={<span className="[overflow-wrap:anywhere]">{l.patient.name ?? copy.patientUnknown}</span>}
+                    className="min-w-0"
                   />
                   <span
                     className={cn(
