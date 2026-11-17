@@ -1,3 +1,4 @@
+import { canManageCommissions } from '@/lib/commissions/commissions-api';
 import type { ComponentType } from 'react';
 import {
   Armchair,
@@ -41,6 +42,7 @@ import {
   Wallet,
   Smile,
   Factory,
+  Percent,
 } from 'lucide-react';
 import { canManageOrthoSettings } from '@/lib/ortho/ortho-roles';
 import { canManageDentalLabs } from '@/lib/lab-orders/lab-orders-roles';
@@ -398,6 +400,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Plantillas de órdenes de estudios y referencias, y el plazo para darlas por vencidas.',
         icon: ClipboardPlus,
         visible: canManageExternalOrderSettings,
+      },
+      // DX-018.
+      {
+        href: '/settings/honorarios',
+        label: 'Honorarios',
+        description: 'Qué porcentaje cobra cada odontólogo: sobre lo cobrado o lo producido, y cuándo se libera.',
+        icon: Percent,
+        visible: canManageCommissions,
       },
       // DX-017.
       {

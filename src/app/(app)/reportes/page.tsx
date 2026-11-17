@@ -2,7 +2,11 @@
 import { Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { Percent } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth/auth-store';
+import { COMMISSIONS_HREF, canViewCommissions } from '@/lib/commissions/commissions-api';
+import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/shared/page-header';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canViewFinancialReports, useEffectivePermissions } from '@/lib/auth/permissions';
@@ -46,6 +50,8 @@ const copy = {
   description: 'Cómo van tus sedes: producción, cobros, rentabilidad, citas y ocupación, y qué procedimientos sostienen la clínica.',
   descriptionOwn:
     'Solo lo tuyo: qué procedimientos realizaste y a qué honorario frente al de catálogo, qué pasó con los presupuestos que elaboraste y cuánto tienes agendado.',
+  // DX-018: los honorarios viven en su pantalla; aquí, el enlace.
+  commissions: 'Honorarios',
   descriptionCollections: 'Los abonos con algo sin imputar a ítems del plan: cuánto está imputado y cuánto queda a cuenta, descontado lo ya devuelto o traspasado.',
 };
 
@@ -111,7 +117,20 @@ function ReportesRoute() {
     );
   return (
     <>
-      <PageHeader title={copy.title} description={ownOnly ? copy.descriptionOwn : collectionsOnly ? copy.descriptionCollections : copy.description} />
+      <PageHeader
+        title={copy.title}
+        description={ownOnly ? copy.descriptionOwn : collectionsOnly ? copy.descriptionCollections : copy.description}
+        actions={
+          canViewCommissions(role) ? (
+            <Button asChild variant="secondary">
+              <Link href={COMMISSIONS_HREF}>
+                <Percent aria-hidden />
+                {copy.commissions}
+              </Link>
+            </Button>
+          ) : undefined
+        }
+      />
       {/* Una barra con una sola pestaña promete secciones que no hay (critique-ops §11): sin ella si el rol ve un informe. */}
       {tabs.length > 1 ? (
         <>

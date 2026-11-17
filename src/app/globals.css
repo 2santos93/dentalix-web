@@ -703,3 +703,30 @@
 /* Keep long patient and professional fields within the document columns. */
 .prescription-print-root dl > div { min-width: 0; }
 .prescription-print-root dd { overflow-wrap: anywhere; }
+
+/*
+ * Print CSS de la liquidación de honorarios (DX-018, /print/commission-
+ * settlements/[id]). Como la orden de laboratorio: A4 con nombre en `html`,
+ * visibilidad reabierta frente a la base de impresión y papel blanco también
+ * en modo oscuro. Los totales no se parten entre dos hojas.
+ */
+@page commission-settlement {
+  size: A4;
+  margin: 14mm 14mm;
+}
+.commission-print-root {
+  color-scheme: light;
+}
+@media print {
+  html:has(.commission-print-page) {
+    page: commission-settlement;
+  }
+  .commission-print-root,
+  .commission-print-root * {
+    visibility: visible !important;
+  }
+  .commission-print-root .commission-totals,
+  .commission-print-root tr {
+    break-inside: avoid;
+  }
+}
