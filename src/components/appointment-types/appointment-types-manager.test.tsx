@@ -17,6 +17,10 @@ jest.mock('../../lib/appointments/appointment-types-api', () => ({
   deleteAppointmentType: jest.fn(),
 }));
 jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
+jest.mock('../../lib/patients/patient-languages', () => ({
+  ...jest.requireActual('../../lib/patients/patient-languages'),
+  getPatientLanguages: jest.fn().mockResolvedValue({ languages: ['es'], clinicLanguage: 'es' }),
+}));
 
 const mockedList = listAppointmentTypes as jest.MockedFunction<typeof listAppointmentTypes>;
 const mockedCreate = createAppointmentType as jest.MockedFunction<typeof createAppointmentType>;
@@ -31,6 +35,7 @@ const endo = {
   color: '#7C3AED',
   active: true,
   isUrgent: false,
+  preVisitInstructions: [],
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-01T00:00:00.000Z',
 };
@@ -99,6 +104,7 @@ describe('AppointmentTypesManager (DX-121)', () => {
         durationMinutes: 30,
         color: '#DC2626',
         isUrgent: true,
+        preVisitInstructions: [],
       }),
     );
     expect((await screen.findAllByText('Urgencia')).length).toBeGreaterThan(0);
@@ -122,5 +128,19 @@ describe('AppointmentTypesManager (DX-121)', () => {
     await user.click(await screen.findByRole('button', { name: 'Eliminar tipo' }));
     await waitFor(() => expect(mockedDelete).toHaveBeenCalledWith('tok', 'type-1'));
     await waitFor(() => expect(screen.queryByRole('table', { name: 'Tipos de cita' })).not.toBeInTheDocument());
+  });
+
+  it('DX-564: marca discreta en los tipos con indicaciones previas', async () => {
+    mockedList.mockResolvedValue([
+      endo,
+      { ...endo, id: 'type-2', name: 'Cirugía', preVisitInstructions: [{ language: 'es', text: 'Ven en ayunas.' }] },
+    ]);
+    render(<AppointmentTypesManager token="tok" allowed />);
+    const table = await screen.findByRole('table', { name: 'Tipos de cita' });
+    const [, endoRow, surgeryRow] = within(table).getAllByRole('row');
+    expect(within(endoRow).queryByText('Con indicaciones')).not.toBeInTheDocument();
+    expect(within(surgeryRow).getByText('Con indicaciones')).toBeInTheDocument();
+    // El texto no se enseña en la lista.
+    expect(within(table).queryByText('Ven en ayunas.')).not.toBeInTheDocument();
   });
 });

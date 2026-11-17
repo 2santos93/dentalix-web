@@ -9,6 +9,7 @@ import {
   Clock,
   FileText,
   LinkIcon,
+  ListChecks,
   MapPin,
   Phone,
   UserRound,
@@ -38,6 +39,7 @@ import { InlineError } from '@/components/errors/inline-error';
 import { ClinicBrand } from '@/components/brand/clinic-brand';
 import { ExternalLink } from '@/components/shared/external-link';
 import { API_PROXY_PATH } from '@/lib/api/api-base';
+import { resolvePreVisitInstruction, type PreVisitInstruction } from '@/lib/appointments/pre-visit-instructions';
 import {
   PAGE_LANGUAGES,
   PUBLIC_CONFIRMATION_COPY,
@@ -76,6 +78,40 @@ function cancelNeedsClinic(data: PublicConfirmation): boolean {
   if (!policy || !appointment || !data.isLate) return false;
   const hasFee = policy.suggestedFee !== null && policy.suggestedFee > 0 && Boolean(policy.currency);
   return hasFee && appointmentFormat(appointment) === null;
+}
+
+/**
+ * DX-564: «Antes de tu cita»: las indicaciones previas del tipo de la cita en
+ * el idioma de la página (exacta → base → español); cambia con el selector.
+ * Texto general de la clínica, pintado como texto (nunca HTML). Sin variantes
+ * (o la API no las manda: cita cancelada, pasada o enlace caducado), nada.
+ */
+function PreVisitInstructionsNotice({
+  t,
+  language,
+  variants,
+}: {
+  t: PublicConfirmationCopy;
+  language: PageLanguage;
+  variants: readonly PreVisitInstruction[] | undefined;
+}) {
+  const instruction = resolvePreVisitInstruction(variants, language);
+  if (!instruction) return null;
+  return (
+    <section
+      aria-labelledby="pre-visit-instructions-title"
+      data-testid="public-pre-visit-instructions"
+      className="flex flex-col gap-2 rounded-xl border border-border bg-surface px-4 py-4"
+    >
+      <h2 id="pre-visit-instructions-title" className="t-title flex items-center gap-2 text-ink">
+        <ListChecks aria-hidden className="size-4 shrink-0 text-muted" />
+        {t.preVisitTitle}
+      </h2>
+      <p lang={instruction.language} className="whitespace-pre-line break-words text-sm text-ink">
+        {instruction.text}
+      </p>
+    </section>
+  );
 }
 
 function AppointmentSummary({
@@ -553,6 +589,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                     t={t}
                   />
                 )}
+                <PreVisitInstructionsNotice t={t} language={language} variants={state.data.preVisitInstructions} />
                 {calendarSection}
                 {earlierSection}
               </section>
@@ -571,6 +608,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                   format={appointmentFormat(state.data.appointment)}
                   t={t}
                 />
+                <PreVisitInstructionsNotice t={t} language={language} variants={state.data.preVisitInstructions} />
                 {calendarSection}
                 {earlierSection}
                 {state.data.cancellationPolicy ? (

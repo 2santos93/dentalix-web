@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { CalendarClock, Eye, EyeOff, Lock, Pencil, Plus, Trash2 } from 'lucide-react';
+import { CalendarClock, Eye, EyeOff, ListChecks, Lock, Pencil, Plus, Trash2 } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   deleteAppointmentType,
@@ -37,6 +37,8 @@ const copy = {
   active: 'Activo',
   inactive: 'Inactivo',
   urgent: 'Urgencia',
+  // DX-564: marca discreta de los tipos con indicaciones previas.
+  withInstructions: 'Con indicaciones',
   edit: 'Editar',
   deactivate: 'Desactivar',
   activate: 'Activar',
@@ -199,6 +201,12 @@ export function AppointmentTypesManager({ token, allowed }: AppointmentTypesMana
           <Badge variant="neutral">{copy.inactive}</Badge>
         )}
         {type.isUrgent ? <Badge variant="danger">{copy.urgent}</Badge> : null}
+        {type.preVisitInstructions.length > 0 ? (
+          <span data-testid="type-has-instructions" className="inline-flex items-center gap-1 text-xs text-muted">
+            <ListChecks aria-hidden className="size-3.5 shrink-0" />
+            {copy.withInstructions}
+          </span>
+        ) : null}
       </span>
     );
   }

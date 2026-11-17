@@ -58,7 +58,7 @@ function appointment(overrides: Partial<Appointment> & { id: string }): Appointm
     notes: null,
     createdById: null,
     appointmentTypeId: 'type-1',
-    appointmentType: { id: 'type-1', name: 'Endodoncia', durationMinutes: 90, color: '#7C3AED' },
+    appointmentType: { id: 'type-1', name: 'Endodoncia', durationMinutes: 90, color: '#7C3AED', hasPreVisitInstructions: false },
     confirmationSentAt: null,
     callbackRequestedAt: null,
     wantsEarlier: false,
@@ -75,7 +75,7 @@ const light = appointment({
   patientFirstName: 'Juan',
   start: new Date(`${DATE}T11:00:00`).toISOString(),
   end: new Date(`${DATE}T11:30:00`).toISOString(),
-  appointmentType: { id: 'type-2', name: 'Ortodoncia', durationMinutes: 30, color: '#FBBF24' },
+  appointmentType: { id: 'type-2', name: 'Ortodoncia', durationMinutes: 30, color: '#FBBF24', hasPreVisitInstructions: false },
 });
 
 function renderColumns(props: Partial<React.ComponentProps<typeof DayColumns>> = {}) {
@@ -144,7 +144,7 @@ describe('DayColumns (DX-121)', () => {
           appointment({
             id: 'apt-off',
             status,
-            appointmentType: { id: 't', name: 'Endodoncia', durationMinutes: 30, color: '#7C3AED' },
+            appointmentType: { id: 't', name: 'Endodoncia', durationMinutes: 30, color: '#7C3AED', hasPreVisitInstructions: false },
           }),
         ],
       });
@@ -171,7 +171,7 @@ describe('DayColumns (DX-121)', () => {
       appointments: [
         appointment({
           id: 'apt-x',
-          appointmentType: { id: 't', name: 'Raro', durationMinutes: 30, color: 'red;background:url(x)' },
+          appointmentType: { id: 't', name: 'Raro', durationMinutes: 30, color: 'red;background:url(x)', hasPreVisitInstructions: false },
         }),
       ],
     });
