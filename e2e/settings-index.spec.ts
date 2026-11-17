@@ -214,7 +214,7 @@ test('ADMIN: el menú de cuenta cabe en 1366×768, 1440×900 y 390×844, tambié
   await page.getByRole('button', { name: 'Expandir menú' }).click();
 });
 
-test('ADMIN: Ajustes agrupa las 40 pantallas; de ahí a Horarios y Sedes y de vuelta con «← Ajustes»', async ({
+test('ADMIN: Ajustes agrupa las 41 pantallas; de ahí a Horarios y Sedes y de vuelta con «← Ajustes»', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
@@ -231,8 +231,8 @@ test('ADMIN: Ajustes agrupa las 40 pantallas; de ahí a Horarios y Sedes y de vu
     'Datos y seguridad',
     'Herramientas y registros',
   ]);
-  // 40: «Equipos biomédicos» (DX-542) fue la 30.ª (TST-060) y «Presupuestos» (DX-379) la 31.ª, «Ofertas de hueco» (DX-448) la 32.ª, «Recall» (DX-015-bis) la 33.ª, «Idiomas de los pacientes» (DX-497) la 34.ª «Certificados» (DX-306) la 35.ª «Anestésicos» (DX-408) la 36.ª «Plantillas de plan» (DX-559) la 37.ª y «Órdenes externas» (DX-572) la 38.ª y «Ortodoncia» (DX-190) la 39.ª y «Laboratorios dentales» (DX-017) la 40.ª.
-  await expect(main.getByRole('listitem').getByRole('link')).toHaveCount(40);
+  // 41: «Equipos biomédicos» (DX-542) fue la 30.ª (TST-060) y «Presupuestos» (DX-379) la 31.ª, «Ofertas de hueco» (DX-448) la 32.ª, «Recall» (DX-015-bis) la 33.ª, «Idiomas de los pacientes» (DX-497) la 34.ª «Certificados» (DX-306) la 35.ª «Anestésicos» (DX-408) la 36.ª «Plantillas de plan» (DX-559) la 37.ª y «Órdenes externas» (DX-572) la 38.ª y «Ortodoncia» (DX-190) la 39.ª y «Laboratorios dentales» (DX-017) la 40.ª y «Honorarios» (DX-018) la 41.ª.
+  await expect(main.getByRole('listitem').getByRole('link')).toHaveCount(41);
 
   await main.getByRole('list', { name: 'Agenda' }).getByRole('link', { name: 'Horarios' }).click();
   await expect(page).toHaveURL(`${origin}/settings/horarios`);
@@ -255,8 +255,8 @@ test('ADMIN a 390 px: filas del índice y «← Ajustes» de 44 px, sin scroll h
   await signIn(page, admin.email);
   await openSettings(page, admin.fullName);
   const links = page.getByRole('main').getByRole('listitem').getByRole('link');
-  // 40: «Equipos biomédicos» (DX-542) fue la 30.ª (TST-060) y «Presupuestos» (DX-379) la 31.ª, «Ofertas de hueco» (DX-448) la 32.ª, «Recall» (DX-015-bis) la 33.ª, «Idiomas de los pacientes» (DX-497) la 34.ª «Certificados» (DX-306) la 35.ª «Anestésicos» (DX-408) la 36.ª «Plantillas de plan» (DX-559) la 37.ª y «Órdenes externas» (DX-572) la 38.ª y «Ortodoncia» (DX-190) la 39.ª y «Laboratorios dentales» (DX-017) la 40.ª.
-  await expect(links).toHaveCount(40, { timeout: 15_000 });
+  // 41: «Equipos biomédicos» (DX-542) fue la 30.ª (TST-060) y «Presupuestos» (DX-379) la 31.ª, «Ofertas de hueco» (DX-448) la 32.ª, «Recall» (DX-015-bis) la 33.ª, «Idiomas de los pacientes» (DX-497) la 34.ª «Certificados» (DX-306) la 35.ª «Anestésicos» (DX-408) la 36.ª «Plantillas de plan» (DX-559) la 37.ª y «Órdenes externas» (DX-572) la 38.ª y «Ortodoncia» (DX-190) la 39.ª y «Laboratorios dentales» (DX-017) la 40.ª y «Honorarios» (DX-018) la 41.ª.
+  await expect(links).toHaveCount(41, { timeout: 15_000 });
   await expectTouchTargets(links, '/settings a 390');
   await expectNoHorizontalScroll(page);
 
@@ -343,8 +343,8 @@ test('axe: /settings y el menú abierto, a 390 y 1440 px, en claro y oscuro', as
       // Mismo documento: cambian la ventana y el esquema, sin recargar.
       await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
       await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${colorScheme}\\b`));
-      // 40: «Equipos biomédicos» (DX-542) fue la 30.ª (TST-060) y «Presupuestos» (DX-379) la 31.ª, «Ofertas de hueco» (DX-448) la 32.ª, «Recall» (DX-015-bis) la 33.ª, «Idiomas de los pacientes» (DX-497) la 34.ª «Certificados» (DX-306) la 35.ª «Anestésicos» (DX-408) la 36.ª «Plantillas de plan» (DX-559) la 37.ª y «Órdenes externas» (DX-572) la 38.ª y «Ortodoncia» (DX-190) la 39.ª y «Laboratorios dentales» (DX-017) la 40.ª.
-      await expect(page.getByRole('main').getByRole('listitem').getByRole('link')).toHaveCount(40);
+      // 41: «Equipos biomédicos» (DX-542) fue la 30.ª (TST-060) y «Presupuestos» (DX-379) la 31.ª, «Ofertas de hueco» (DX-448) la 32.ª, «Recall» (DX-015-bis) la 33.ª, «Idiomas de los pacientes» (DX-497) la 34.ª «Certificados» (DX-306) la 35.ª «Anestésicos» (DX-408) la 36.ª «Plantillas de plan» (DX-559) la 37.ª y «Órdenes externas» (DX-572) la 38.ª y «Ortodoncia» (DX-190) la 39.ª y «Laboratorios dentales» (DX-017) la 40.ª y «Honorarios» (DX-018) la 41.ª.
+      await expect(page.getByRole('main').getByRole('listitem').getByRole('link')).toHaveCount(41);
       expect.soft(await serious(`settings-${width}-${colorScheme}`), `/settings ${width} ${colorScheme}`).toEqual([]);
 
       await openAccountMenu(page, admin.fullName);
