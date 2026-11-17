@@ -63,7 +63,8 @@ function proxyToApi(req: NextRequest): NextResponse {
  * DX-306: y la copia de un certificado (`/certificado/copia/<token>`).
  * DX-569: y el enlace de pago (`/pago/<token>`), con los datos para pagar.
  * DX-572: y la copia de la orden de estudios o referencia (`/orden/copia/<token>`),
- * de un solo uso.
+ * de un solo uso. DX-568: y la baja del resumen semanal (`/resumen/baja/<token>`),
+ * cuyo token da de baja a un miembro del personal.
  */
 export const HEALTH_FORM_HEADERS: Record<string, string> = {
   'Referrer-Policy': 'no-referrer',
@@ -71,7 +72,7 @@ export const HEALTH_FORM_HEADERS: Record<string, string> = {
   'X-Robots-Tag': 'noindex, nofollow',
 };
 
-const HEALTH_FORM_PREFIXES = ['/anamnesis', '/firmar', '/hueco', '/copia', '/receta', '/certificado', '/pago', '/orden'];
+const HEALTH_FORM_PREFIXES = ['/anamnesis', '/firmar', '/hueco', '/copia', '/receta', '/certificado', '/pago', '/orden', '/resumen'];
 
 function isHealthFormPath(pathname: string): boolean {
   return HEALTH_FORM_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
