@@ -37,6 +37,9 @@ const FIELD_LABELS: Record<string, string> = {
   durationMinutes: "Duración",
   color: "Color",
   isUrgent: "Urgencia",
+  // DX-564: el texto no entra en la auditoría; solo qué idiomas tienen indicaciones.
+  preVisitInstructionLanguages: "Indicaciones previas (idiomas)",
+  preVisitInstructions: "Indicaciones previas",
   type: "Tipo",
   quantity: "Cantidad",
   sku: "SKU",
@@ -128,7 +131,7 @@ const NULL_LABELS: Record<string, string> = {
 };
 
 /** DX-497: campos cuyo valor es una etiqueta de idioma (BCP 47). */
-const LANGUAGE_FIELDS = new Set(["patientLanguages", "preferredLanguage"]);
+const LANGUAGE_FIELDS = new Set(["patientLanguages", "preferredLanguage", "preVisitInstructionLanguages"]);
 
 const DOMAIN_STATUS_LABELS: Record<string, string> = {
   PENDING: "Pendiente",
