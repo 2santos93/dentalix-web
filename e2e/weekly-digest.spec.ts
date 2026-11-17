@@ -117,9 +117,12 @@ test.describe('Resumen semanal por email (DX-568)', () => {
     expect(email.text).not.toContain(patientLast);
     // La prueba no lleva enlace de baja.
     expect(email.text).not.toContain('/resumen/baja/');
-    expect(new URL(link).origin).toBe(origin);
-
+    // El resumen (también la prueba) arma sus enlaces sin petición, con el
+    // primer dominio base de la API (`TenantLinkBaseService.forTenant`): en la
+    // CI es `<sub>.dentalix.app`, no el host:puerto de la web de pruebas. Se
+    // comprueba el subdominio de la clínica y se abre la misma ruta aquí.
     const url = new URL(link);
+    expect(url.hostname.startsWith(`${new URL(origin).hostname.split('.')[0]}.`)).toBe(true);
     const from = url.searchParams.get('desde')!;
     const to = url.searchParams.get('hasta')!;
     const report = page.waitForResponse(
@@ -129,7 +132,7 @@ test.describe('Resumen semanal por email (DX-568)', () => {
         new URL(res.url()).searchParams.get('to') === to,
       { timeout: 20_000 },
     );
-    await page.goto(link);
+    await page.goto(`${origin}${url.pathname}${url.search}`);
     expect((await report).ok()).toBeTruthy();
     await expect(page.getByLabel('Período', { exact: true })).toHaveValue('custom');
     await expect(page.getByRole('group', { name: 'Fechas' })).toBeVisible();
