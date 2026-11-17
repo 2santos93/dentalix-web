@@ -1,6 +1,8 @@
 import {
+  CONFIRMATION_MESSAGE_MAX,
   confirmationIndicator,
   confirmationMessage,
+  confirmationMessageLanguage,
   longAppointmentDay,
   whatsAppUrl,
 } from './confirmation-message';
@@ -127,6 +129,103 @@ describe('confirmationMessage', () => {
       'Hola, te recordamos tu cita del martes, 20 de octubre a las 10:00 a. m. en Sede principal. ' +
         'Confírmala, cancélala o pide que te llamemos aquí: u',
     );
+  });
+});
+
+describe('confirmationMessage — DX-564 idioma e indicaciones previas', () => {
+  const APT = {
+    patientFirstName: 'Ana',
+    start: '2026-10-20T14:00:00.000Z',
+    end: '2026-10-20T14:30:00.000Z',
+    providerName: 'Dra. Pérez',
+    locationName: 'Sede Norte',
+    locationAddress: null,
+    wantsEarlier: false,
+    earlierWindow: null,
+    earlierAllowed: true,
+    ...PUBLIC_REGIONAL_VE,
+  };
+  const URL_ = 'https://demo.dentalix.app/confirmar/tok';
+  const VARIANTS = [
+    { language: 'es', text: 'Ven en ayunas.\nTrae tus radiografías.' },
+    { language: 'en', text: 'Come fasting.' },
+  ];
+
+  it('sin indicaciones, el mensaje en español no cambia', () => {
+    const before = confirmationMessage({ url: URL_, appointment: APT, clock: CLOCK });
+    expect(confirmationMessage({ url: URL_, appointment: APT, clock: CLOCK, preVisitInstructions: [] })).toBe(before);
+    expect(before).not.toMatch(/Antes de tu cita/);
+  });
+
+  it('paciente sin preferencia: español y «Antes de tu cita:» con los saltos de línea', () => {
+    const text = confirmationMessage({ url: URL_, appointment: APT, clock: CLOCK, preVisitInstructions: VARIANTS });
+    expect(text).toMatch(/^Hola Ana, te recordamos tu cita/);
+    expect(text.endsWith(`${URL_}\n\nAntes de tu cita: Ven en ayunas.\nTrae tus radiografías.`)).toBe(true);
+  });
+
+  it('paciente en inglés: el mensaje y las indicaciones en inglés', () => {
+    const text = confirmationMessage({
+      url: URL_,
+      appointment: APT,
+      clock: CLOCK,
+      patientLanguage: 'en',
+      preVisitInstructions: VARIANTS,
+    });
+    expect(text).toMatch(/^Hello Ana, this is a reminder of your appointment on /);
+    expect(text).toContain(' with Dra. Pérez at Sede Norte. Confirm it, cancel it or ask us to call you here: ');
+    expect(text.endsWith('\n\nBefore your appointment: Come fasting.')).toBe(true);
+  });
+
+  it('en-GB cae a la variante base «en»; paciente en inglés con texto solo en español recibe el español', () => {
+    const gb = confirmationMessage({
+      url: URL_, appointment: APT, clock: CLOCK, patientLanguage: 'en-GB', preVisitInstructions: VARIANTS,
+    });
+    expect(gb.endsWith('Before your appointment: Come fasting.')).toBe(true);
+    const onlyEs = confirmationMessage({
+      url: URL_, appointment: APT, clock: CLOCK, patientLanguage: 'en', preVisitInstructions: [VARIANTS[0]],
+    });
+    expect(onlyEs).toMatch(/^Hello Ana/);
+    expect(onlyEs).toContain('Before your appointment: Ven en ayunas.');
+  });
+
+  it('idioma sin catálogo (catalán): mensaje en español; su variante si la hay', () => {
+    const text = confirmationMessage({
+      url: URL_, appointment: APT, clock: CLOCK, patientLanguage: 'ca',
+      preVisitInstructions: [...VARIANTS, { language: 'ca', text: 'Vine en dejú.' }],
+    });
+    expect(text).toMatch(/^Hola Ana, te recordamos/);
+    expect(text.endsWith('Antes de tu cita: Vine en dejú.')).toBe(true);
+  });
+
+  it('sin variante en su idioma ni en español: no se añade nada', () => {
+    const text = confirmationMessage({
+      url: URL_, appointment: APT, clock: CLOCK, patientLanguage: 'fr',
+      preVisitInstructions: [{ language: 'en', text: 'Come fasting.' }],
+    });
+    expect(text).not.toMatch(/Antes de tu cita|Before your appointment/);
+  });
+
+  it(`el mensaje entero no pasa de ${CONFIRMATION_MESSAGE_MAX} caracteres: recorta las indicaciones con «…»`, () => {
+    const long = 'á'.repeat(600);
+    const anamnesisUrl = `https://demo.dentalix.app/anamnesis/${'x'.repeat(700)}`;
+    const text = confirmationMessage({
+      url: URL_, appointment: APT, clock: CLOCK, anamnesisUrl,
+      preVisitInstructions: [{ language: 'es', text: long }],
+    });
+    expect([...text].length).toBe(CONFIRMATION_MESSAGE_MAX);
+    expect(text.endsWith('…')).toBe(true);
+    expect(text).toContain(anamnesisUrl);
+    // Sin pasarse, el texto va entero.
+    const short = confirmationMessage({ url: URL_, appointment: APT, clock: CLOCK, preVisitInstructions: [{ language: 'es', text: long }] });
+    expect(short.endsWith(long)).toBe(true);
+  });
+
+  it('confirmationMessageLanguage: exacta o base con catálogo; si no, español', () => {
+    expect(confirmationMessageLanguage(null)).toBe('es');
+    expect(confirmationMessageLanguage('en')).toBe('en');
+    expect(confirmationMessageLanguage('en-US')).toBe('en');
+    expect(confirmationMessageLanguage('es-419')).toBe('es');
+    expect(confirmationMessageLanguage('ca')).toBe('es');
   });
 });
 

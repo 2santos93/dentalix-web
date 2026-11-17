@@ -66,6 +66,8 @@ export interface PublicConfirmationCopy {
   cancelConfirmYes: string;
   cancelConfirmBack: string;
   close: string;
+  /** DX-564: indicaciones previas del tipo de cita (texto de la clínica). */
+  preVisitTitle: string;
 }
 
 const es: PublicConfirmationCopy = {
@@ -142,6 +144,7 @@ const es: PublicConfirmationCopy = {
   cancelConfirmYes: 'Sí, cancelar',
   cancelConfirmBack: 'Volver',
   close: 'Cerrar',
+  preVisitTitle: 'Antes de tu cita',
 };
 
 const en: PublicConfirmationCopy = {
@@ -212,6 +215,7 @@ const en: PublicConfirmationCopy = {
   cancelConfirmYes: 'Yes, cancel',
   cancelConfirmBack: 'Go back',
   close: 'Close',
+  preVisitTitle: 'Before your appointment',
 };
 
 export const PUBLIC_CONFIRMATION_COPY = { es, en } as const;

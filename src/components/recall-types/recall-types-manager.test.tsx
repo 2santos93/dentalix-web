@@ -43,6 +43,7 @@ const apptType = (id: string, name: string, active = true): AppointmentType => (
   color: '#0E7490',
   active,
   isUrgent: false,
+  preVisitInstructions: [],
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-01T00:00:00.000Z',
 });
