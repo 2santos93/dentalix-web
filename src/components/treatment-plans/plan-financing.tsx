@@ -422,7 +422,8 @@ export function PlanFinancing({
             </div>
           ))}
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-            <Button type="submit" disabled={simulating}>
+            {/* Una sola primaria en la vista: la de aceptar el presupuesto. */}
+            <Button type="submit" variant="secondary" disabled={simulating}>
               <Calculator aria-hidden />
               {simulating ? copy.simulating : copy.simulate}
             </Button>

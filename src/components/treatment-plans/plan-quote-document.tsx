@@ -420,7 +420,7 @@ export function PlanQuoteDocument({
       {paymentOptions && paymentOptions.scenarios.length > 0 ? (
         <section data-testid="quote-payment-options" aria-label={copy.paymentOptionsHeading} className="mt-8 break-inside-avoid">
           <h2 className="mb-3 text-base font-semibold">{copy.paymentOptionsHeading}</h2>
-          <table className="w-full border-collapse text-sm">
+          <table className="hidden w-full border-collapse text-sm sm:table print:table">
             <caption className="sr-only">{copy.paymentOptionsCaption}</caption>
             <thead>
               <tr className="border-b border-[#111827] text-left">
@@ -454,6 +454,33 @@ export function PlanQuoteDocument({
               })}
             </tbody>
           </table>
+          {/* En pantalla estrecha, una ficha por opción; en papel siempre es tabla. */}
+          <ul className="flex flex-col gap-3 sm:hidden print:hidden" aria-label={copy.paymentOptionsCaption}>
+            {paymentOptions.scenarios.map((scenario, index) => {
+              const list = scenario.installments;
+              const base = list[0]?.amount ?? 0;
+              const last = list[list.length - 1]?.amount ?? 0;
+              const cur = paymentOptions.currency;
+              return (
+                <li key={index} data-testid={`quote-payment-card-${index + 1}`} className="border-b border-[#e5e7eb] pb-3 text-sm">
+                  <p className="font-medium">{copy.optionN(index + 1)}</p>
+                  <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 tabular-nums">
+                    <dt className="text-[#4b5563]">{copy.colDown}</dt>
+                    <dd>{money(scenario.downPayment, cur)}</dd>
+                    <dt className="text-[#4b5563]">{copy.colInstallments}</dt>
+                    <dd className="min-w-0 break-words">
+                      {copy.installmentsValue(scenario.installmentsCount, PERIODICITY_PLURAL[scenario.periodicity], money(base, cur))}
+                      {list.length > 1 && last !== base ? ` (${copy.lastAdjust(money(last, cur))})` : null}
+                    </dd>
+                    <dt className="text-[#4b5563]">{copy.colFirstDue}</dt>
+                    <dd>{doc.civilDate(list[0]?.dueDate.slice(0, 10) ?? '')}</dd>
+                    <dt className="text-[#4b5563]">{copy.colLastDue}</dt>
+                    <dd>{doc.civilDate(list[list.length - 1]?.dueDate.slice(0, 10) ?? '')}</dd>
+                  </dl>
+                </li>
+              );
+            })}
+          </ul>
           <p className="mt-2 text-xs text-[#4b5563]">
             {copy.paymentOptionsNote(money(paymentOptions.totalToFinance, paymentOptions.currency))}
           </p>
