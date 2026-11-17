@@ -34,6 +34,12 @@ const QuoteFunnelView = dynamic(
   { ssr: false, loading: () => <SectionSkeleton /> },
 );
 
+// DX-567: «Previsión», igual.
+const ScheduledProductionView = dynamic(
+  () => import('@/components/reports/scheduled-production-view').then((m) => m.ScheduledProductionView),
+  { ssr: false, loading: () => <SectionSkeleton /> },
+);
+
 // «Reportes» (DX-014). Mismo guard de sesión que la Caja; la pestaña va en
 // `?tab=` (la primera del rol, sin parámetro). Cada rol ve las pestañas que
 // su API le deja abrir (DX-423 y DX-558: el odontólogo, «Producción por
@@ -43,7 +49,7 @@ const copy = {
   title: 'Reportes',
   description: 'Cómo van tus sedes: producción, cobros, rentabilidad, citas y ocupación, y qué procedimientos sostienen la clínica.',
   descriptionOwn:
-    'Solo lo tuyo: qué procedimientos realizaste y a qué honorario frente al de catálogo, y qué pasó con los presupuestos que elaboraste.',
+    'Solo lo tuyo: qué procedimientos realizaste y a qué honorario frente al de catálogo, qué pasó con los presupuestos que elaboraste y cuánto tienes agendado.',
   // DX-018: los honorarios viven en su pantalla; aquí, el enlace.
   commissions: 'Honorarios',
   descriptionCollections: 'Los abonos con algo sin imputar a ítems del plan: cuánto está imputado y cuánto queda a cuenta, descontado lo ya devuelto o traspasado.',
@@ -80,7 +86,7 @@ function ReportesRoute() {
   }
 
   // El odontólogo sin FINANCIAL_REPORTS_VIEW: solo pestañas con «lo suyo» (scope OWN en la API).
-  const ownOnly = tabs.every((t) => t.key === 'produccion' || t.key === 'presupuestos');
+  const ownOnly = tabs.every((t) => t.key === 'produccion' || t.key === 'presupuestos' || t.key === 'prevision');
   const collectionsOnly = tabs.length === 1 && tabs[0].key === 'sin-imputar';
   const view =
     tab === 'produccion' ? (
@@ -97,6 +103,11 @@ function ReportesRoute() {
       <QuoteFunnelView
         token={accessToken}
         isAdmin={role === 'ADMIN'}
+        ownByRole={role === 'DENTIST' && !canViewFinancialReports(role, permissions)}
+      />
+    ) : tab === 'prevision' ? (
+      <ScheduledProductionView
+        token={accessToken}
         ownByRole={role === 'DENTIST' && !canViewFinancialReports(role, permissions)}
       />
     ) : tab === 'sin-imputar' ? (

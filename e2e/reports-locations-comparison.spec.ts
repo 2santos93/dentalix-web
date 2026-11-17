@@ -271,7 +271,7 @@ test('DENTIST: «Reportes» solo con lo suyo, sin «Comparar sedes» (DX-423, DX
   await page.goto(`${origin}/reportes?tab=comparar-sedes`);
   // DX-558: sus dos informes (Producción y Presupuestos, los dos con lo suyo); cae en el primero.
   await expect(page.getByText('Solo tu producción', { exact: false })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole('tab')).toHaveText(['Producción por procedimiento', 'Presupuestos']);
+  await expect(page.getByRole('tab')).toHaveText(['Producción por procedimiento', 'Presupuestos', 'Previsión']);
   await expect(page.getByRole('table', { name: 'Indicadores por sede y total de la clínica' })).toHaveCount(0);
 });
 
