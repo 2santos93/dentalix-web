@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { apiErrorMessage } from '@/lib/api/error-message';
+import { apiErrorMessage, sedeCivilDateOption } from '@/lib/api/error-message';
 import {
   deletePaymentPlan,
   getPaymentPlan,
@@ -15,6 +15,10 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CreatePaymentPlanModal } from '@/components/payment-plans/create-payment-plan-modal';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { Callout } from '@/components/ui/callout';
+import { readyPeriodLock, usePeriodLock } from '@/components/payments/use-period-lock';
+import { LockOverrideReasonField, periodLockCopy, validLockReason } from '@/components/payments/period-lock-field';
+import { isDayLocked } from '@/lib/financial-lock/financial-lock-api';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
 import { RateProviderNotice, rateProviderCopy } from '@/components/payments/rate-provider-notice';
@@ -34,6 +38,9 @@ const copy = {
   cancelPlan: 'Cancelar plan',
   cancelConfirmTitle: '¿Cancelar el plan de pagos?',
   cancelConfirmDescription: 'Se cancelará el calendario de cuotas. Los abonos registrados no se ven afectados. Podrás crear uno nuevo.',
+  // DX-091: cuotas vencidas en un período contable cerrado.
+  cancelLocked:
+    'Este plan tiene cuotas vencidas en un período contable cerrado: ya no se puede cancelar. Pide a administración que lo revise.',
   cancelConfirm: 'Sí, cancelar',
   totalToFinance: 'Total a financiar',
   paid: 'Pagado',
@@ -88,6 +95,13 @@ export function PaymentPlanSection({
   const [showCancel, setShowCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  // DX-091: con cuotas vencidas en un período contable cerrado, solo el ADMIN
+  // con la exención lo cancela, indicando el motivo.
+  const periodLock = readyPeriodLock(usePeriodLock(token, showCancel));
+  const lockedInstallments =
+    plan !== null && plan.installments.some((i) => isDayLocked(i.dueDate.slice(0, 10), periodLock?.lockedThrough));
+  const [lockReason, setLockReason] = useState('');
+  const [lockReasonError, setLockReasonError] = useState<string | null>(null);
 
   // Fetch on plan change AND whenever the parent bumps refreshSignal (after an
   // abono is recorded/voided) so installment coverage stays in sync.
@@ -120,13 +134,26 @@ export function PaymentPlanSection({
 
   async function handleCancel() {
     setCancelError(null);
+    let lockOverrideReason: string | undefined;
+    if (lockedInstallments && periodLock?.canOverride) {
+      const valid = validLockReason(lockReason);
+      if (!valid) {
+        setLockReasonError(periodLockCopy.reasonMissing);
+        document.getElementById('pp-cancel-lock-reason')?.focus();
+        return;
+      }
+      lockOverrideReason = valid;
+    }
+    setLockReasonError(null);
     setCancelling(true);
     try {
-      await deletePaymentPlan(token, planId);
+      await deletePaymentPlan(token, planId, lockOverrideReason);
       setShowCancel(false);
       await refetch();
     } catch (err) {
-      setCancelError(apiErrorMessage(err, 'No pudimos cancelar el plan de pagos.'));
+      setCancelError(
+        apiErrorMessage(err, { fallback: 'No pudimos cancelar el plan de pagos.', ...sedeCivilDateOption(fmt) }),
+      );
     } finally {
       setCancelling(false);
     }
@@ -140,7 +167,12 @@ export function PaymentPlanSection({
         </h3>
         {plan ? (
           // Abre su confirmación: destructiva en forma «ghost» (DESIGN.md).
-          <Button type="button" variant="destructive-ghost" size="sm" onClick={() => setShowCancel(true)}>
+          <Button type="button" variant="destructive-ghost" size="sm" onClick={() => {
+              setLockReason('');
+              setLockReasonError(null);
+              setCancelError(null);
+              setShowCancel(true);
+            }}>
             {copy.cancelPlan}
           </Button>
         ) : null}
@@ -204,7 +236,27 @@ export function PaymentPlanSection({
         onConfirm={handleCancel}
         confirming={cancelling}
         error={cancelError}
-      />
+      >
+        {lockedInstallments && periodLock ? (
+          periodLock.canOverride ? (
+            <LockOverrideReasonField
+              id="pp-cancel-lock-reason"
+              label={periodLockCopy.planCancelReasonLabel}
+              value={lockReason}
+              error={lockReasonError}
+              disabled={cancelling}
+              onChange={(next) => {
+                setLockReason(next);
+                if (lockReasonError) setLockReasonError(null);
+              }}
+            />
+          ) : (
+            <Callout tone="warning" role="note">
+              {copy.cancelLocked}
+            </Callout>
+          )
+        ) : null}
+      </ConfirmDialog>
     </section>
   );
 }

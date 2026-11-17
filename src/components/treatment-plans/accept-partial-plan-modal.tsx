@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ApiError } from '@/lib/api/client';
-import { apiErrorMessage } from '@/lib/api/error-message';
+import { PERIOD_LOCKED, apiErrorMessage, sedeCivilDateOption } from '@/lib/api/error-message';
 import type { ClinicRole } from '@/lib/me/me-api';
 import {
   acceptPlan,
@@ -435,8 +435,10 @@ export function AcceptPartialPlanModal({
   }
 
   async function handleSubmitError(err: unknown) {
-    const message = apiErrorMessage(err, copy.genericError);
-    if (!(err instanceof ApiError)) {
+    const message = apiErrorMessage(err, { fallback: copy.genericError, ...sedeCivilDateOption(fmt) });
+    // DX-091: el plan de cuotas que se cancelaría tiene cuotas en un período
+    // cerrado: ni recotizar ni recargar lo arregla; se dice en el paso.
+    if (!(err instanceof ApiError) || err.code === PERIOD_LOCKED) {
       setSubmitError(message);
       return;
     }

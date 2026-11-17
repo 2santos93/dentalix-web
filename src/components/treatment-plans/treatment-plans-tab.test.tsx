@@ -987,6 +987,21 @@ describe('TreatmentPlansTab', () => {
     await waitFor(() => expect(planStatusSelect.value).toBe('CANCELLED'));
   });
 
+  it('DX-091: cancelar el plan con cuotas vencidas en un período cerrado enseña el 409 PERIOD_LOCKED en español', async () => {
+    mockedListPlans.mockResolvedValue([plan1]);
+    mockedGetPlan.mockResolvedValue(plan1Detail);
+    const message =
+      'El plan de cuotas tiene cuotas vencidas en un período contable cerrado: ya no se puede cancelar. Pide a administración que lo revise.';
+    mockedUpdatePlan.mockRejectedValueOnce(
+      new ApiError(409, message, { code: 'PERIOD_LOCKED', lockedThrough: '2026-09-30' }),
+    );
+    const user = userEvent.setup();
+    render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+    await screen.findByRole('table', { name: /ítems de la visita/i });
+    await user.selectOptions(screen.getByLabelText<HTMLSelectElement>(/^estado del plan$/i), 'CANCELLED');
+    expect(await screen.findByText(new RegExp(`^${message.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))).toBeInTheDocument();
+  });
+
   it('shows the balance figures (A pagar, Pagado, Saldo) formatted in the plan currency, and lists abonos in their own currency', async () => {
     mockedListPlans.mockResolvedValue([plan1]);
     mockedGetPlan.mockResolvedValue(plan1Detail);

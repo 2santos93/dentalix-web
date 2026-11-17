@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { ExternalLink as ExternalLinkIcon } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
-import { apiErrorMessage } from '@/lib/api/error-message';
+import { PERIOD_LOCKED, apiErrorMessage, sedeCivilDateOption } from '@/lib/api/error-message';
 import type { ClinicRole } from '@/lib/me/me-api';
 import {
   acceptPlan,
@@ -377,8 +377,13 @@ export function AcceptPlanModal({
       onAccepted(accepted);
       handleOpenChange(false);
     } catch (err) {
-      const message = apiErrorMessage(err, copy.genericError);
-      if (err instanceof ApiError && err.code === LOCATION_TIMEZONE_REQUIRED) {
+      const message = apiErrorMessage(err, { fallback: copy.genericError, ...sedeCivilDateOption(fmt) });
+      if (err instanceof ApiError && err.code === PERIOD_LOCKED) {
+        // DX-091: aceptar cancela el plan de cuotas de otra opción y tiene
+        // cuotas vencidas en un período cerrado: no se arregla recotizando ni
+        // recargando; se dice y la firma se queda.
+        setSubmitError(message);
+      } else if (err instanceof ApiError && err.code === LOCATION_TIMEZONE_REQUIRED) {
         // Ni con los precios originales: la sede tiene que configurarse antes.
         setFatalError(message);
       } else if (expired && err instanceof ApiError && err.status === 400) {

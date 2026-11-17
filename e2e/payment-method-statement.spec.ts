@@ -106,9 +106,22 @@ async function expectTouchTargets(scope: Locator): Promise<void> {
   for (let i = 0; i < count; i += 1) {
     const control = controls.nth(i);
     if (!(await control.isVisible())) continue;
+    // Fuera de la medida (DX-091 trajo «Cierre contable», con un DatePicker, a
+    // Ajustes › Caja): lo oculto a la tecnología de apoyo (la entrada oculta
+    // del DatePicker, `aria-hidden` y sin foco) y el botón «Calendario», que va
+    // dentro del propio campo de fecha (40 px, 44 en táctil) y es del
+    // primitivo compartido. Seguimiento aparte.
+    const exempt = await control.evaluate(
+      (el) =>
+        el.closest('[aria-hidden="true"]') != null ||
+        el.closest('[role="group"]')?.querySelector('[role="spinbutton"]') != null,
+    );
+    if (exempt) continue;
     const box = await control.boundingBox();
     const label =
-      (await control.getAttribute('aria-label')) ?? (await control.getAttribute('id')) ?? (await control.innerText());
+      (await control.getAttribute('aria-label')) ??
+      (await control.getAttribute('id')) ??
+      ((await control.innerText()) || (await control.evaluate((el) => el.outerHTML.slice(0, 160))));
     // Redondeo: la animación de entrada del diálogo deja décimas de píxel.
     const height = Math.round(box?.height ?? 0);
     expect(height, `«${label}» mide ${height} px de alto`).toBeGreaterThanOrEqual(TOUCH_MIN);

@@ -10,16 +10,18 @@ import { ReceiptSettingsForm } from '@/components/payments/receipt-settings-form
 import { CreditPolicyForm } from '@/components/patient-credit/credit-policy-form';
 import { canManageCreditPolicy } from '@/lib/patient-credit/patient-credit-api';
 import { canManageReceiptSettings } from '@/lib/payments/receipt-settings-api';
+import { FinancialLockForm } from '@/components/financial-lock/financial-lock-form';
+import { canManageFinancialLock } from '@/lib/financial-lock/financial-lock-api';
 
 const copy = {
   title: 'Caja',
   description:
-    'Cómo se abre y se cierra la caja por turno, con qué medios se cobra y qué dice el recibo.',
+    'Cómo se abre y se cierra la caja por turno, con qué medios se cobra, qué dice el recibo y hasta qué día está cerrado el período contable.',
   sessionsTitle: 'Turnos de caja',
   sessionsHint: 'Cada cambio se aplica al momento.',
 };
 
-/** Ajustes de caja de la clínica (DX-027), sus medios de pago (DX-377) su recibo (DX-515) y el tope de recepción del saldo a favor (DX-432). Solo ADMIN. */
+/** Ajustes de caja de la clínica (DX-027), sus medios de pago (DX-377) su recibo (DX-515), el tope de recepción del saldo a favor (DX-432) y el cierre contable (DX-091). Solo ADMIN. */
 export default function CashSettingsPage() {
   const accessToken = useAuthStore((s) => s.accessToken);
 
@@ -40,6 +42,8 @@ export default function CashSettingsPage() {
       {canManageReceiptSettings(getTokenRole(accessToken)) ? <ReceiptSettingsForm token={accessToken} /> : null}
       {/* DX-432: tope de recepción del saldo a favor (solo ADMIN). */}
       {canManageCreditPolicy(getTokenRole(accessToken)) ? <CreditPolicyForm token={accessToken} /> : null}
+      {/* DX-091: cierre contable de abonos, anulaciones y planes de cuotas (solo ADMIN). */}
+      {canManageFinancialLock(getTokenRole(accessToken)) ? <FinancialLockForm token={accessToken} /> : null}
     </SettingsPage>
   );
 }

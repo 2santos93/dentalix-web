@@ -51,9 +51,15 @@ export async function createPaymentPlan(
 }
 
 /** `DELETE /treatment-plans/:id/payment-plan` — cancels the active plan (204, empty body → apiFetchOrNull). */
-export async function deletePaymentPlan(token: string, planId: string): Promise<void> {
+export async function deletePaymentPlan(
+  token: string,
+  planId: string,
+  /** DX-091: motivo del ADMIN para cancelarlo con cuotas vencidas en un período cerrado. */
+  lockOverrideReason?: string,
+): Promise<void> {
   await apiFetchOrNull<null>(`/treatment-plans/${planId}/payment-plan`, {
     method: 'DELETE',
+    ...(lockOverrideReason ? { body: { lockOverrideReason } } : {}),
     token,
   });
 }
