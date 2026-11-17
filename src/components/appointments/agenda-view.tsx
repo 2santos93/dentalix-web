@@ -3,7 +3,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
 import {
   AppointmentPreVisitInstructions,
-  useAppointmentTypesOnDemand,
+  useAppointmentTypeInstructions,
 } from './appointment-pre-visit-instructions';
 import { useSessionLocations } from '@/lib/session/session-store';
 import { useEffect, useRef, useState } from 'react';
@@ -1472,10 +1472,10 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   const liveDetailAppointment = detailAppointment
     ? appointments.find((a) => a.id === detailAppointment.id) ?? detailAppointment
     : null;
-  // DX-564: la lista de tipos solo se pide al abrir una cita con indicaciones.
-  const preVisitTypes = useAppointmentTypesOnDemand(
+  // DX-564: el tipo de la cita (con sus indicaciones) se pide solo al abrir una que las tiene.
+  const preVisitTypes = useAppointmentTypeInstructions(
     token,
-    liveDetailAppointment?.appointmentType?.hasPreVisitInstructions === true,
+    liveDetailAppointment?.appointmentType?.hasPreVisitInstructions ? liveDetailAppointment.appointmentType.id : null,
   );
 
   const userId = getTokenUserId(token);
@@ -2128,7 +2128,6 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                   {/* DX-564: las indicaciones previas del tipo, en todos sus idiomas. */}
                   {liveDetailAppointment.appointmentType?.hasPreVisitInstructions ? (
                     <AppointmentPreVisitInstructions
-                      typeId={liveDetailAppointment.appointmentType.id}
                       state={preVisitTypes.state}
                       onRetry={preVisitTypes.retry}
                     />
