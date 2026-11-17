@@ -4959,6 +4959,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/treatment-plans/{id}/installment-simulation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Simula hasta 3 planes de cuotas del presupuesto (DX-041)
+         * @description Sin persistir nada. Cada escenario (cuota inicial, número de cuotas, periodicidad y fecha de la 1ª cuota) devuelve exactamente las cuotas y fechas que crearía POST …/payment-plan con los mismos datos, sobre el saldo que se financiaría al aceptar (lo cobrable del plan contando sus propuestos como aceptados). La inicial más las cuotas suman ese saldo; el ajuste de redondeo va en la última cuota. Para aceptar con uno: POST …/acceptance con `installmentPlan` (sus condiciones y `totalToFinance`).
+         */
+        post: operations["InstallmentSimulationController_simulateInstallments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/account-statement": {
         parameters: {
             query?: never;
@@ -18313,6 +18333,31 @@ export interface components {
             /** @description Ítems vivos de ESTE plan que se aceptan (404 si alguno no lo es). Al menos uno y no todos (todos: 400, que se acepte entero). Los ítems ya aceptados o realizados tienen que estar (400). */
             itemIds: string[];
         };
+        AcceptInstallmentPlanDto: {
+            /**
+             * @description Número de cuotas, entero entre 1 y 600
+             * @example 6
+             */
+            installmentsCount: number;
+            /** @enum {string} */
+            periodicity: "WEEKLY" | "BIWEEKLY" | "MONTHLY";
+            /**
+             * Format: date-time
+             * @description Fecha de la 1ª cuota
+             * @example 2026-12-01
+             */
+            startDate: string;
+            /**
+             * @description Cuota inicial (>= 0, como mucho 2 decimales, en la moneda del plan). Sin ella, 0.
+             * @example 300
+             */
+            downPayment?: number;
+            /**
+             * @description El `totalToFinance` de la simulación que se mostró al paciente.
+             * @example 1500
+             */
+            totalToFinance: number;
+        };
         AcceptTreatmentPlanDto: {
             /** @description Nombre de quien firma (el paciente o su representante) */
             signerName: string;
@@ -18324,6 +18369,57 @@ export interface components {
             expired?: components["schemas"]["ExpiredAcceptanceDto"];
             /** @description DX-417: aceptar solo estos procedimientos (presupuesto PRESENTED, sin abonos, plan de cuotas ni saldo a favor). Los demás pasan, con su mismo id, a un plan nuevo PRESENTED enlazado al original (`splitFromPlanId`). `contentHash` es entonces el de `accepted` en POST …/acceptance/partial-preview. Con `expired.mode = REPRICE` se recotiza TODO el plan y después se parte (la vista previa, con `reprice: true`). */
             partial?: components["schemas"]["PartialAcceptanceItemsDto"];
+            /** @description DX-041: aceptar con el plan de cuotas de un escenario de POST /treatment-plans/:id/installment-simulation (sus condiciones y su `totalToFinance`). El plan de cuotas se crea en la MISMA transacción que la aceptación, con las cuotas y fechas de la simulación; si el saldo ya no es el simulado, 409 `INSTALLMENT_SIMULATION_STALE` y no se acepta nada. No se combina con `partial` (400). Las cuotas en un período contable cerrado dan 409 `PERIOD_LOCKED` (sin excepción en la firma). */
+            installmentPlan?: components["schemas"]["AcceptInstallmentPlanDto"];
+        };
+        AcceptedPlanQuoteDocumentDto: {
+            /** @description Organización clínica actual; separada del contenido firmado. */
+            visitOrganization?: components["schemas"]["PlanQuoteVisitDto"][];
+            /**
+             * @description 4 = con la moneda de cada precio de lista (DX-502) y los datos fiscales congelados si la clínica los tiene; 3 = con datos fiscales congelados (DX-019); 2 = con convenio y ahorro (DX-105); 1 = foto firmada antes de DX-105 (sin convenio).
+             * @enum {number}
+             */
+            version: 1 | 2 | 3 | 4;
+            /** Format: uuid */
+            planId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** @enum {string} */
+            planStatus: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            clinicName: string;
+            clinicLogoUrl: string | null;
+            /** @description DX-019: datos fiscales. Aceptado: los congelados al firmar; null si no los llevaba (nunca los de hoy). */
+            clinicFiscal: components["schemas"]["ClinicFiscalDto"] | null;
+            location: components["schemas"]["PlanQuoteLocationDto"];
+            /** @description DX-354: zona, locale y reloj de la sede del presupuesto (la de la firma si ya se aceptó). null si le falta algo: el presupuesto se lee igual y la web pinta «—». No forma parte del contenido firmado. */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
+            patient: components["schemas"]["PlanQuotePatientDto"];
+            /** @description Profesional que creó el plan */
+            professionalName: string | null;
+            /** @description Convenio de los ítems; null si ninguno lo tiene */
+            agreement: components["schemas"]["PlanQuoteAgreementDto"] | null;
+            /**
+             * @description Fecha de emisión (zona de la sede)
+             * @example 2026-10-16
+             */
+            issuedOn: string;
+            /** @example 2026-11-15 */
+            validUntil: string;
+            /** @example 30 */
+            validityDays: number;
+            items: components["schemas"]["PlanQuoteItemDto"][];
+            /** @description Una fila por moneda */
+            totals: components["schemas"]["PlanQuoteTotalDto"][];
+            /** @description SHA-256 del contenido presentado */
+            contentHash: string;
+            acceptance: components["schemas"]["PlanQuoteAcceptanceDto"] | null;
+            /**
+             * Format: uuid
+             * @description El plan de cuotas creado en la aceptación (`installmentPlan`); null si se aceptó sin él.
+             */
+            paymentPlanId: string | null;
         };
         /**
          * @description De dónde sale la referencia; null en un ítem libre.
@@ -20451,6 +20547,70 @@ export interface components {
              * @example Abono del 15/09 que recepción olvidó registrar; cuadrado con el extracto del banco
              */
             lockOverrideReason?: string;
+        };
+        InstallmentTermsDto: {
+            /**
+             * @description Número de cuotas, entero entre 1 y 600
+             * @example 6
+             */
+            installmentsCount: number;
+            /** @enum {string} */
+            periodicity: "WEEKLY" | "BIWEEKLY" | "MONTHLY";
+            /**
+             * Format: date-time
+             * @description Fecha de la 1ª cuota
+             * @example 2026-12-01
+             */
+            startDate: string;
+            /**
+             * @description Cuota inicial (>= 0, como mucho 2 decimales, en la moneda del plan). Sin ella, 0.
+             * @example 300
+             */
+            downPayment?: number;
+        };
+        InstallmentSimulationRequestDto: {
+            /** @description Entre 1 y 3 escenarios */
+            scenarios: components["schemas"]["InstallmentTermsDto"][];
+        };
+        SimulatedInstallmentDto: {
+            /**
+             * @description Número de cuota (desde 1)
+             * @example 1
+             */
+            sequence: number;
+            /** Format: date-time */
+            dueDate: string;
+            /** @example 200 */
+            amount: number;
+        };
+        InstallmentScenarioDto: {
+            /**
+             * @description Saldo que se financia
+             * @example 1500
+             */
+            totalToFinance: number;
+            /** @example 300 */
+            downPayment: number;
+            /** @example 6 */
+            installmentsCount: number;
+            /** @enum {string} */
+            periodicity: "WEEKLY" | "BIWEEKLY" | "MONTHLY";
+            /** Format: date-time */
+            startDate: string;
+            /** @description Cuotas y fechas: la inicial más las cuotas suman `totalToFinance`; el ajuste de redondeo va en la última. */
+            installments: components["schemas"]["SimulatedInstallmentDto"][];
+        };
+        InstallmentSimulationDto: {
+            /** Format: uuid */
+            treatmentPlanId: string;
+            /** @description Moneda del plan (ISO 4217) */
+            currency: string;
+            /**
+             * @description Lo cobrable del plan una vez aceptado (la cuenta del saldo): lo que financian los escenarios
+             * @example 1500
+             */
+            totalToFinance: number;
+            scenarios: components["schemas"]["InstallmentScenarioDto"][];
         };
         AccountStatementClinicDto: {
             /** @example Clínica Sonrisas */
@@ -40049,16 +40209,16 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Plan aceptado: ACCEPTED, sus ítems propuestos pasan a aceptados y quedan congelados; las demás opciones abiertas de su grupo pasan a REJECTED (otra opción aceptada) en la misma transacción. DX-417: con `partial`, el plan queda ACCEPTED solo con los elegidos (lo firmado es su presupuesto) y los demás pasan a un plan nuevo PRESENTED, fuera del grupo de opciones, enlazado (`splitFromPlanId`) y con la misma presentación, validez, moneda y profesional; `acceptance.pendingPlanId`, `pendingItemIds` y `pendingTotal` lo dicen */
+            /** @description DX-041: con `installmentPlan`, el plan de cuotas nace en la misma transacción (`paymentPlanId`). Plan aceptado: ACCEPTED, sus ítems propuestos pasan a aceptados y quedan congelados; las demás opciones abiertas de su grupo pasan a REJECTED (otra opción aceptada) en la misma transacción. DX-417: con `partial`, el plan queda ACCEPTED solo con los elegidos (lo firmado es su presupuesto) y los demás pasan a un plan nuevo PRESENTED, fuera del grupo de opciones, enlazado (`splitFromPlanId`) y con la misma presentación, validez, moneda y profesional; `acceptance.pendingPlanId`, `pendingItemIds` y `pendingTotal` lo dicen */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PlanQuoteDocumentDto"];
+                    "application/json": components["schemas"]["AcceptedPlanQuoteDocumentDto"];
                 };
             };
-            /** @description Sin firma, firma no PNG o de más de 200 KB, sin nombre de quien firma, o plan sin ítems. DX-379 (C): `expired` con un presupuesto no vencido; ORIGINAL_PRICES sin motivo, OTHER sin nota, nota de más de 200; REPRICE sin `repricePreviewHash` o con motivo. DX-417: `partial` sin elegir ninguno, eligiendo todos («Has elegido todos los procedimientos: acéptalo entero.»), más de 100, o dejando fuera uno ya aceptado o realizado */
+            /** @description Sin firma, firma no PNG o de más de 200 KB, sin nombre de quien firma, o plan sin ítems. DX-379 (C): `expired` con un presupuesto no vencido; ORIGINAL_PRICES sin motivo, OTHER sin nota, nota de más de 200; REPRICE sin `repricePreviewHash` o con motivo. DX-417: `partial` sin elegir ninguno, eligiendo todos («Has elegido todos los procedimientos: acéptalo entero.»), más de 100, o dejando fuera uno ya aceptado o realizado. DX-041: `installmentPlan` con condiciones no válidas (cuotas, periodicidad, fecha, cuota inicial mayor que el saldo) o junto a `partial` */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -40079,7 +40239,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Ya estaba aceptado y firmado, el plan está rechazado, cancelado o completado, otra opción de su grupo ya está aceptada, o el presupuesto cambió desde que se mostró (contentHash). DX-379 (C): la sede de la presentación del plan sin zona válida → `LOCATION_TIMEZONE_REQUIRED` (también con un presupuesto no vencido si tiene validez guardada); `code: QUOTE_EXPIRED` («El presupuesto venció el {fecha}. Actualiza los precios o acepta con los precios originales indicando el motivo.», con `quoteValidUntil`) si está vencido y no llega `expired`; con REPRICE, `REPRICE_PREVIEW_STALE` (los precios vigentes cambiaron desde la vista previa), `REPRICE_INCOMPLETE` (algún propuesto sin precio vigente o sin tasa), `REPRICE_NOTHING_TO_APPLY` o el plan no se recotiza (abonos, plan de cuotas, saldo a favor); nada se escribe. DX-417 con `partial`: `PARTIAL_PLAN_NOT_PRESENTED` (solo un presupuesto presentado se acepta en parte), `PARTIAL_PLAN_ALREADY_ACCEPTED`, o el plan tiene abonos, plan de cuotas activo o saldo a favor */
+            /** @description Ya estaba aceptado y firmado, el plan está rechazado, cancelado o completado, otra opción de su grupo ya está aceptada, o el presupuesto cambió desde que se mostró (contentHash). DX-379 (C): la sede de la presentación del plan sin zona válida → `LOCATION_TIMEZONE_REQUIRED` (también con un presupuesto no vencido si tiene validez guardada); `code: QUOTE_EXPIRED` («El presupuesto venció el {fecha}. Actualiza los precios o acepta con los precios originales indicando el motivo.», con `quoteValidUntil`) si está vencido y no llega `expired`; con REPRICE, `REPRICE_PREVIEW_STALE` (los precios vigentes cambiaron desde la vista previa), `REPRICE_INCOMPLETE` (algún propuesto sin precio vigente o sin tasa), `REPRICE_NOTHING_TO_APPLY` o el plan no se recotiza (abonos, plan de cuotas, saldo a favor); nada se escribe. DX-417 con `partial`: `PARTIAL_PLAN_NOT_PRESENTED` (solo un presupuesto presentado se acepta en parte), `PARTIAL_PLAN_ALREADY_ACCEPTED`, o el plan tiene abonos, plan de cuotas activo o saldo a favor. DX-041 con `installmentPlan`: `INSTALLMENT_SIMULATION_STALE` (el saldo a financiar ya no es el simulado), el plan ya tiene un plan de cuotas activo, o `PERIOD_LOCKED` (alguna cuota vence en un período contable cerrado); nada se escribe */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -42357,6 +42517,66 @@ export interface operations {
             };
             /** @description DX-091: `code: PERIOD_LOCKED` si el plan tiene cuotas vencidas en un período contable cerrado. El ADMIN lo salta con `lockOverrideReason` si la clínica admite la exención. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    InstallmentSimulationController_simulateInstallments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstallmentSimulationRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstallmentSimulationDto"];
+                };
+            };
+            /** @description Id que no es UUID; ninguno o más de 3 escenarios; cuotas fuera de 1–600, periodicidad o fecha no válidas; cuota inicial negativa o mayor que el saldo; saldo 0 (plan sin importes) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso al presupuesto */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El plan está rechazado o cancelado (no se financia) o ya tiene un plan de cuotas activo */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La moneda del plan no está en el catálogo de monedas */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
