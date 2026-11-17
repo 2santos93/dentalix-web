@@ -166,6 +166,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   // DX-017: laboratorios dentales (y sus servicios) y órdenes de laboratorio.
   DENTAL_LAB: 'Laboratorio dental',
   DENTAL_LAB_ORDER: 'Orden de laboratorio',
+  // DX-018: liquidación de honorarios (cierre, detalle y vista previa).
+  COMMISSION_SETTLEMENT: 'Liquidación de honorarios',
   // DX-572: órdenes de estudios y referencias externas, y sus plantillas.
   EXTERNAL_ORDER: 'Orden externa',
   EXTERNAL_ORDER_TEMPLATE: 'Plantilla de orden externa',
@@ -1084,6 +1086,8 @@ const RECEIPT_REASONS: Record<string, string> = {
   CLINIC_LOGO: 'Logo de la clínica',
   RECEIPT_SETTINGS: 'Título y leyenda del recibo',
   FINANCIAL_LOCK: 'Cierre contable',
+  // DX-018: regla de honorarios de un profesional.
+  COMMISSION_RULE: 'Regla de honorarios',
   RECEIPT_LEGEND: 'Leyenda del recibo de la sede',
   EXTERNAL_INVOICE_NUMBER: 'Nº de factura externa del abono',
   // DX-516: ajustes por medio de pago (sobre el medio).
