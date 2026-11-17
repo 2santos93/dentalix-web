@@ -56,7 +56,7 @@ const copy = {
   // DX-564: indicaciones previas a la cita.
   instructionsTitle: 'Indicaciones previas a la cita',
   instructionsHint:
-    'Texto general para todos los pacientes de este tipo de cita: no escribas datos de un paciente. Sin enlaces, direcciones web ni correos, ni HTML.',
+    'Texto general para todos los pacientes de este tipo de cita: no escribas datos de un paciente. Sin enlaces, direcciones web, correos ni HTML.',
   instructionsPlaceholder: 'Por ejemplo, Ven en ayunas de 6 horas y trae tus radiografías.',
   counter: (n: number) => `${n}/${PRE_VISIT_TEXT_MAX}`,
   counterLabel: (n: number) => `${n} de ${PRE_VISIT_TEXT_MAX} caracteres`,

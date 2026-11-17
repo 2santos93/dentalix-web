@@ -53,7 +53,7 @@ describe('AppointmentTypeFormModal — indicaciones previas (DX-564)', () => {
   it('un campo por idioma de la clínica (español primero), con ayuda y contador 0/600', async () => {
     const { dialog } = renderModal();
     const group = within(dialog).getByRole('group', { name: /indicaciones previas a la cita/i });
-    expect(group).toHaveTextContent('no escribas datos de un paciente. Sin enlaces, direcciones web ni correos, ni HTML.');
+    expect(group).toHaveTextContent('no escribas datos de un paciente. Sin enlaces, direcciones web, correos ni HTML.');
     const es = within(group).getByLabelText('Español (es)', { exact: true });
     const en = await within(group).findByLabelText('English (en)', { exact: true });
     expect(es.compareDocumentPosition(en) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

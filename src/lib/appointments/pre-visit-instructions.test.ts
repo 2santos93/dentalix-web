@@ -34,21 +34,60 @@ describe('pre-visit-instructions (DX-564)', () => {
     expect(preVisitTextError('ñ'.repeat(601))).toBe(PRE_VISIT_MESSAGES.tooLong);
   });
 
-  it('también dominios sin http, IPv4 y emails (mismo mensaje); el texto corriente con punto pegado vale', () => {
-    for (const bad of [
-      'Entra en ejemplo.com para más datos',
-      'EJEMPLO.COM',
-      'Ver bit.ly/abc',
-      'tienda.com.ve',
-      'Escríbenos a citas@clinica.com',
-      'Panel en 192.168.0.1/login',
-      'Mira www.ejemplo.net',
-    ]) {
-      expect(preVisitTextError(bad)).toBe(PRE_VISIT_MESSAGES.noLinks);
-    }
-    for (const ok of ['Ven 6h.Trae la tarjeta', 'Con el Dr.Pérez', 'p.ej. a las 8 a.m.', 'Toma 1.5 ml a las 10.30 h']) {
-      expect(preVisitTextError(ok)).toBeNull();
-    }
+  // Los mismos casos que la API (`dentalix-api: appointment-type-rules.spec.ts`).
+  it.each([
+    'Lee https://example.com antes',
+    'Mira http://example.com',
+    'Entra en www.example.com',
+    'Ven en <b>ayunas</b>',
+    'Trae esto </p>',
+    '<a href="x">aquí</a>',
+    '<script>alert(1)</script>',
+    '<!-- nota -->',
+    'Ven <br/> en ayunas',
+    'Entra en ejemplo.com/login',
+    'Mira bit.ly',
+    'Más en ejemplo.com.ve, gracias',
+    'Escribe a recepcion@ejemplo.com',
+    'Correo: x@evil.com.',
+    'Escribe a x@y.com',
+    'Entra en EJEMPLO.COM',
+    'Entra en Ejemplo.Com/login',
+    'Síguenos en x.com',
+    'Abre 192.168.0.1/login',
+    'Abre 10.0.0.1',
+    'Tienda: tienda.com.VE.',
+    'Puerto: ejemplo.io:8080',
+  ])('rechaza enlaces, dominios, IPv4, emails y HTML con el mensaje de la API: %j', (text) => {
+    expect(preVisitTextError(text)).toBe(PRE_VISIT_MESSAGES.noLinks);
+  });
+
+  it.each([
+    'Ven 15 min antes: si la presión es < 140 o > 90 avisa',
+    'Toma 1 comprimido 2 h antes (< 1 g).',
+    'Escribe a recepción@clínica si tienes dudas',
+    'Ven en ayunas de 6h.Trae tus radiografías.',
+    'Te atiende el Dr.Pérez.',
+    'Llega a las 10.30 h.',
+    'Ven a las 9 a.m. en punto.',
+    'Trae, p.ej. tus radiografías.',
+    'Te atiende el Sr.García.',
+    'Toma 1.5 ml del jarabe.',
+    'Llega a las 10.30 h y trae 2.5 cm de gasa.',
+    'Ven a las 9 p.m.',
+    'Si la presión es < 140 avísanos.',
+  ])('no marca texto corriente: %j', (text) => {
+    expect(preVisitTextError(text)).toBeNull();
+  });
+
+  it.each([
+    ['espacio de ancho cero', 0x200b],
+    ['guion suave', 0xad],
+    ['inversión de dirección (U+202E)', 0x202e],
+  ])('quita %s y detecta el dominio que partía', (_label, code) => {
+    const ch = String.fromCharCode(code);
+    expect(preVisitTextError(`Entra en ejemplo${ch}.com`)).toBe(PRE_VISIT_MESSAGES.noLinks);
+    expect(normalizePreVisitText(`Ven${ch} en ayunas`)).toBe('Ven en ayunas');
   });
 
   it('normaliza como la API: \\r\\n, tabuladores y controles', () => {

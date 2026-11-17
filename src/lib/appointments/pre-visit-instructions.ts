@@ -28,7 +28,11 @@ export const PRE_VISIT_MESSAGES = {
 } as const;
 
 /**
- * Lo mismo que rechaza la API (`appointment-type-rules.ts`), con el mismo
+ * COPIA EXACTA de la regla de la API: `dentalix-api:
+ * src/modules/appointment-types/domain/appointment-type-rules.ts`
+ * (`LINK_OR_HTML`, `DOT_WORD`, `IPV4`, `EMAIL_ADDRESS`,
+ * `normalizePreVisitInstructionText`) y la lista `link-tlds.ts`. Si cambian
+ * allí, cambian aquí. Lo mismo que rechaza la API, con el mismo
  * mensaje: `http://`, `https://`, `www.`, algo con aspecto de etiqueta, un
  * dominio sin `http` con un TLD de la lista cerrada («ejemplo.com», «bit.ly»),
  * una IPv4 o un email.
