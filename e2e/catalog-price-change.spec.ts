@@ -160,7 +160,7 @@ test('el ADMIN sube un 5 % la categoría «Prevención» con vista previa y la a
     await page.getByRole('button', { name: `Acciones de ${first.item.labelEs}` }).click();
     await page.getByRole('menuitem', { name: 'Historial de precios' }).click();
     const history = page.getByRole('dialog', { name: `Historial de precios · ${first.item.labelEs}` });
-    await expect(history.getByText(admin.fullName)).toBeVisible({ timeout: 15_000 });
+    await expect(history.getByText(admin.fullName, { exact: false }).first()).toBeVisible({ timeout: 15_000 });
     await expect(history.getByText('Actualización en bloque')).toBeVisible();
     if (width === 390) await expectNoHorizontalScroll(page);
     await shoot(page, 'precios-historial', width, history);
