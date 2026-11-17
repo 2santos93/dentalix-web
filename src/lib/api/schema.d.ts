@@ -5771,6 +5771,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/clinic/weekly-digest-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ajustes del resumen semanal por email y los ADMIN candidatos (DX-568) */
+        get: operations["WeeklyDigestSettingsController_settings"];
+        /**
+         * Cambia el resumen semanal: activado, día, hora y destinatarios (DX-568)
+         * @description Sustituye los destinatarios entre los ADMIN activos y lo audita (CLINIC_SETTINGS, WEEKLY_DIGEST_SETTINGS, antes y después); sin evento si nada cambia. Activado sin destinatarios se permite y avisa con `NO_RECIPIENTS`.
+         */
+        put: operations["WeeklyDigestSettingsController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clinic/weekly-digest/send-test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Envía ahora una prueba del resumen semanal a quien la pide (DX-568)
+         * @description El resumen de la semana anterior completa, solo a tu correo (confirmado), con «[Prueba]» en el asunto y sin enlace de baja. No cuenta como el envío semanal. Una cada 5 minutos por persona; queda en la auditoría (VIEW de CLINIC_SETTINGS, WEEKLY_DIGEST_TEST_SENT).
+         */
+        post: operations["WeeklyDigestSettingsController_test"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/weekly-digest-unsubscribe/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ver el enlace para dejar de recibir el resumen semanal (DX-568) */
+        get: operations["PublicWeeklyDigestUnsubscribeController_get"];
+        put?: never;
+        /**
+         * Dejar de recibir el resumen semanal (idempotente, DX-568)
+         * @description Quita a la persona del enlace de los destinatarios, marca el enlace usado y lo audita (UPDATE de CLINIC_SETTINGS, WEEKLY_DIGEST_UNSUBSCRIBED, origen LINK, con esa persona como actor). Repetirlo responde lo mismo sin escribir.
+         */
+        post: operations["PublicWeeklyDigestUnsubscribeController_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cash-sessions/settings": {
         parameters: {
             query?: never;
@@ -22656,6 +22718,82 @@ export interface components {
              * @example 18
              */
             appointmentCount: number | null;
+        };
+        WeeklyDigestCandidateDto: {
+            /** Format: uuid */
+            membershipId: string;
+            /** @example María Pérez */
+            name: string;
+            /**
+             * @description Enmascarado.
+             * @example ma***@clinica.com
+             */
+            email: string;
+            /** @description Correo confirmado. Solo los confirmados reciben el resumen (la web avisa de los demás). */
+            verified: boolean;
+        };
+        WeeklyDigestSettingsDto: {
+            enabled: boolean;
+            /** @example 1 */
+            weekday: number;
+            /** @example 7 */
+            hour: number;
+            /** @description Destinatarios que hoy son ADMIN activos (ordenados). La fila de quien dejó de ser ADMIN se conserva, no se lista, y vuelve a contar si lo vuelve a ser. */
+            recipientMembershipIds: string[];
+            /** @description Los ADMIN activos de la clínica, por nombre. */
+            candidates: components["schemas"]["WeeklyDigestCandidateDto"][];
+            /** @description `NO_RECIPIENTS`: activado sin ningún destinatario (no sale nada). `PRINCIPAL_LOCATION_UNCONFIGURED`: la sede principal no tiene zona horaria o formato (o no hay sede activa); el resumen no sale hasta configurarla en Ajustes › Sedes. */
+            warnings: ("NO_RECIPIENTS" | "PRINCIPAL_LOCATION_UNCONFIGURED")[];
+        };
+        UpdateWeeklyDigestSettingsDto: {
+            /**
+             * @description Activado. Desactivado por defecto.
+             * @example true
+             */
+            enabled: boolean;
+            /**
+             * @description Día en que sale: 0 = domingo … 6 = sábado (1 = lunes por defecto), en la zona de la sede principal.
+             * @example 1
+             */
+            weekday: number;
+            /**
+             * @description Hora en que sale (0 a 23, hora de la sede principal).
+             * @example 7
+             */
+            hour: number;
+            /**
+             * @description Membresías ADMIN activas de la clínica que lo reciben (las de `candidates`). Vacío se permite: no sale nada y la respuesta avisa con `NO_RECIPIENTS`.
+             * @example [
+             *       "0193b2a4-5c6d-7e8f-9a0b-1c2d3e4f5a6b"
+             *     ]
+             */
+            recipientMembershipIds: string[];
+        };
+        WeeklyDigestTestResultDto: {
+            /**
+             * @description A quién salió (enmascarado).
+             * @example ma***@clinica.com
+             */
+            sentTo: string;
+            /**
+             * @description Lunes de la semana del resumen.
+             * @example 2026-11-09
+             */
+            weekStart: string;
+            /**
+             * @description Domingo de la semana del resumen.
+             * @example 2026-11-15
+             */
+            weekEnd: string;
+        };
+        PublicWeeklyDigestUnsubscribeDto: {
+            /** @example Clínica Dental Sonrisas */
+            clinicName: string;
+            /**
+             * @description ACTIVE: lo sigue recibiendo. ALREADY_OUT: ya no (tras el POST, siempre).
+             * @enum {string}
+             */
+            status: "ACTIVE" | "ALREADY_OUT";
         };
         CashSettingsDto: {
             /** @description «Exigir caja abierta»: sin caja abierta en la sede no se registra un abono en efectivo (409). */
@@ -43688,6 +43826,179 @@ export interface operations {
             };
             /** @description La sede no existe en esta clínica (otra clínica, retirada o desactivada), o la sede aún no tiene copia nocturna */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    WeeklyDigestSettingsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeeklyDigestSettingsDto"];
+                };
+            };
+            /** @description Solo un administrador puede ver y cambiar el resumen semanal. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    WeeklyDigestSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWeeklyDigestSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeeklyDigestSettingsDto"];
+                };
+            };
+            /** @description Día fuera de 0..6, hora fuera de 0..23, ids mal formados o «Los destinatarios tienen que ser administradores activos de la clínica.» */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar el resumen semanal. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    WeeklyDigestSettingsController_test: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeeklyDigestTestResultDto"];
+                };
+            };
+            /** @description Solo un administrador puede ver y cambiar el resumen semanal. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description EMAIL_NOT_VERIFIED: «Confirma tu correo antes de pedir una prueba: el resumen solo se envía a correos confirmados.»; LOCATION_REQUIRED: sin sede principal con zona y formato */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya pediste una prueba hace menos de 5 minutos (o se alcanzó el tope de correos); `retryAfterSeconds` dice cuánto esperar. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicWeeklyDigestUnsubscribeController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicWeeklyDigestUnsubscribeDto"];
+                };
+            };
+            /** @description El enlace para dejar de recibir el resumen no existe o caducó. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicWeeklyDigestUnsubscribeController_confirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicWeeklyDigestUnsubscribeDto"];
+                };
+            };
+            /** @description El enlace para dejar de recibir el resumen no existe o caducó. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -961,6 +961,12 @@ export function clinicSettingsDetail(metadata: AuditMetadata): string | null {
   if (metadata.reason === 'PATIENT_LANGUAGES_SETTINGS') return 'Idiomas de los pacientes';
   // DX-572: solo el campo cambiado; el plazo no viaja en la metadata.
   if (metadata.reason === 'EXTERNAL_ORDER_SETTINGS') return 'Plazo de las órdenes externas sin resultado';
+  // DX-568: el antes y el después del resumen semanal los pinta `configChangeItems`.
+  if (metadata.reason === 'WEEKLY_DIGEST_SETTINGS') return 'Resumen semanal por email';
+  if (metadata.reason === 'WEEKLY_DIGEST_TEST_SENT') return 'Prueba del resumen semanal enviada a su correo';
+  if (metadata.reason === 'WEEKLY_DIGEST_UNSUBSCRIBED') {
+    return 'Dejó de recibir el resumen semanal desde el enlace del email';
+  }
   if (!metadata.statusChange) return null;
   const { from, to } = metadata.statusChange;
   if (metadata.reason === 'PRESCRIPTION_SETTINGS') return prescriptionSettingsDetail(from, to);

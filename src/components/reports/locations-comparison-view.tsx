@@ -1,6 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowDown, ArrowUp, ArrowUpDown, Building2, Download, Lock } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -9,7 +10,14 @@ import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { saveCsv } from '@/lib/files/save-csv';
-import { isValidPeriod, PERIOD_PRESETS, periodFor, type PeriodPresetKey } from '@/lib/reports/period-presets';
+import {
+  isValidPeriod,
+  PERIOD_PRESETS,
+  periodFor,
+  type CivilPeriod,
+  type PeriodPresetKey,
+} from '@/lib/reports/period-presets';
+import { isCivilDate } from '@/lib/reports/chair-occupancy-api';
 import {
   comparisonCurrencies,
   formatMetric,
@@ -277,6 +285,24 @@ function SedeCharts({ data, fmt, chosen }: { data: LocationsComparison; fmt: Reg
 }
 
 /**
+ * DX-568: el período de la URL (`?periodo=`, y `?desde=`/`?hasta=` con
+ * `custom`), como Rentabilidad y Presupuestos. El enlace del resumen semanal
+ * abre así la misma semana. Sin parámetros (o con uno que no vale), «Este mes».
+ * Un `custom` sin fechas válidas parte de «Este mes», como al elegirlo a mano.
+ */
+export function comparisonPeriodFromParams(params: { get(name: string): string | null }): {
+  preset: PeriodPresetKey;
+  custom: CivilPeriod | null;
+} {
+  const raw = params.get('periodo');
+  const preset: PeriodPresetKey = PERIOD_PRESETS.some((p) => p.key === raw) ? (raw as PeriodPresetKey) : 'this_month';
+  const from = params.get('desde');
+  const to = params.get('hasta');
+  const custom = preset === 'custom' && isCivilDate(from) && isCivilDate(to) ? { from, to } : null;
+  return { preset, custom };
+}
+
+/**
  * «Comparar sedes» (DX-014, solo ADMIN): una fila por sede y el «Total
  * clínica», con los ocho indicadores de la API (`kpis`, su definición y su
  * dirección «mejor») frente al período anterior o al del año anterior. Cada
@@ -296,8 +322,22 @@ export function LocationsComparisonView({ token }: { token: string }) {
   const sedeFormat = useSedeFormat(token);
   const fmt = readyFormat(sedeFormat);
   const today = timeZone ? sedeToday(timeZone) : null;
-  const [preset, setPreset] = useState<PeriodPresetKey>('this_month');
-  const [custom, setCustom] = useState<{ from: string; to: string } | null>(null);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // DX-568: el período sale de la URL al abrir (el enlace del resumen semanal)
+  // y vuelve a ella al cambiarlo. Si la URL cambia (otro enlace con la pestaña
+  // abierta, atrás), se relee: ajuste en el render, sin efecto.
+  const urlPeriodKey = ['periodo', 'desde', 'hasta'].map((k) => searchParams.get(k) ?? '').join('|');
+  const [seenUrlPeriodKey, setSeenUrlPeriodKey] = useState(urlPeriodKey);
+  const [preset, setPreset] = useState<PeriodPresetKey>(() => comparisonPeriodFromParams(searchParams).preset);
+  const [custom, setCustom] = useState<CivilPeriod | null>(() => comparisonPeriodFromParams(searchParams).custom);
+  if (urlPeriodKey !== seenUrlPeriodKey) {
+    const fromUrl = comparisonPeriodFromParams(searchParams);
+    setSeenUrlPeriodKey(urlPeriodKey);
+    setPreset(fromUrl.preset);
+    setCustom(fromUrl.custom);
+  }
   const [compare, setCompare] = useState<CompareMode>('previous');
   const [sort, setSort] = useState<SortState | null>(null);
   const [currencyChoice, setCurrencyChoice] = useState<string | null>(null);
@@ -367,9 +407,33 @@ export function LocationsComparisonView({ token }: { token: string }) {
     }
   }
 
+  /** Reescribe el período en la URL sin navegar (conserva `?tab=`). */
+  function writePeriodToUrl(next: PeriodPresetKey, range: CivilPeriod | null) {
+    const params = new URLSearchParams(searchParams.toString());
+    const values: Record<'periodo' | 'desde' | 'hasta', string> =
+      next === 'custom' && range
+        ? { periodo: 'custom', desde: range.from, hasta: range.to }
+        : { periodo: next === 'this_month' ? '' : next, desde: '', hasta: '' };
+    for (const [key, value] of Object.entries(values)) {
+      if (value) params.set(key, value);
+      else params.delete(key);
+    }
+    const qs = params.toString();
+    // Cuando la URL cambie, se releerá lo mismo que ya está en pantalla.
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
+
   function choosePreset(next: PeriodPresetKey) {
-    if (next === 'custom' && period) setCustom(period);
+    // Al pasar a «Personalizado» se parte de las fechas que se veían.
+    const range = next === 'custom' ? period : null;
+    if (range) setCustom(range);
     setPreset(next);
+    writePeriodToUrl(next, range);
+  }
+
+  function chooseCustomRange(range: CivilPeriod) {
+    setCustom(range);
+    writePeriodToUrl('custom', range);
   }
 
   const showLoading = !invalidPeriod && (loading || !filters);
@@ -445,7 +509,7 @@ export function LocationsComparisonView({ token }: { token: string }) {
                 id={`${ids}-dates`}
                 value={period}
                 onChange={(range) => {
-                  if (range) setCustom(range);
+                  if (range) chooseCustomRange(range);
                 }}
                 startLabel={copy.from}
                 endLabel={copy.to}

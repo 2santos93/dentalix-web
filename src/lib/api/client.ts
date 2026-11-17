@@ -317,7 +317,9 @@ export function apiErrorFromBody(
   const message = messages.length > 0 ? messages.join('; ') : `HTTP ${status}`;
   return new ApiError(status, message, {
     messages,
-    retryAfterSeconds: parseRetryAfter(retryAfterHeader),
+    // DX-568: los 429 de los topes del email (y la prueba del resumen semanal)
+    // dicen la espera en el cuerpo, sin cabecera `Retry-After`.
+    retryAfterSeconds: parseRetryAfter(retryAfterHeader) ?? index(data.retryAfterSeconds),
     code: text(data.code),
     field: text(data.field),
     locationId: text(data.locationId),

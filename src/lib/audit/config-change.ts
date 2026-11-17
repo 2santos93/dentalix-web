@@ -2,7 +2,7 @@ import type { AuditEvent } from "@/lib/audit/audit-api";
 import { payerTypeLabel } from "@/components/payers/payer-labels";
 import { CLINIC_LANGUAGE_LABEL, languageName } from "@/lib/patients/patient-languages";
 import { MOVEMENT_TYPE_LABELS } from "@/components/inventory/movement-format";
-import type { RegionalFormat } from "@/lib/format/regional-format";
+import { weekdayName, type RegionalFormat } from "@/lib/format/regional-format";
 import { sedeNumber } from "@/lib/format/sede-number";
 import {
   PAYMENT_ADJUSTMENT_CALCULATION_LABELS as ADJUSTMENT_CALCULATION_LABELS,
@@ -141,6 +141,35 @@ const HOUR_CYCLE_LABELS: Record<string, string> = {
   h24: "24 horas",
 };
 
+/**
+ * DX-568: el resumen semanal comparte nombres de campo genéricos (`enabled`,
+ * `hour`) con otros ajustes; sus etiquetas y valores van por su `reason`.
+ */
+const WEEKLY_DIGEST_REASON = "WEEKLY_DIGEST_SETTINGS";
+const WEEKLY_DIGEST_LABELS: Record<string, string> = {
+  enabled: "Resumen semanal activado",
+  weekday: "Día del envío",
+  hour: "Hora del envío",
+  recipientMembershipIds: "Destinatarios",
+};
+const WEEKLY_DIGEST_ORDER = Object.keys(WEEKLY_DIGEST_LABELS);
+
+/** El valor de un campo del resumen semanal en palabras; `null` si no es suyo. */
+function weeklyDigestValue(
+  field: string,
+  value: ConfigValue | undefined,
+  fmt: RegionalFormat | null,
+): string | null {
+  if (field === "weekday" && typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 6)
+    return weekdayName(value);
+  if (field === "hour" && typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 23)
+    return fmt ? fmt.clock(value, 0) : `${value} h`;
+  // Los ids de las membresías no se leen: cuántas personas.
+  if (field === "recipientMembershipIds" && Array.isArray(value))
+    return value.length === 0 ? "Nadie" : value.length === 1 ? "1 persona" : `${value.length} personas`;
+  return null;
+}
+
 /** Eventos de configuración de DX-360 (también los que solo traen `changedFields`). */
 const CONFIG_REASON =
   /^(LOCATION_CREATED|DOMAIN_REGISTERED|PRIVACY_POLICY_PUBLISHED|REMINDER_SETTINGS_UPDATED|INVENTORY_MOVEMENT_RECORDED|RECALL_TYPE_TRIGGERS_UPDATED|(APPOINTMENT_TYPE|RECALL_TYPE|PAYER|CONSENT_TEMPLATE|PRESCRIPTION_TEMPLATE|INVENTORY_ITEM)_(CREATED|UPDATED|DELETED))$/;
@@ -207,6 +236,14 @@ function withUnit(field: string, text: string | null): string {
   return unit ? `${text} ${unit}` : text;
 }
 
+function byDigestOrder(a: string, b: string): number {
+  const rank = (f: string) => {
+    const i = WEEKLY_DIGEST_ORDER.indexOf(f);
+    return i === -1 ? WEEKLY_DIGEST_ORDER.length : i;
+  };
+  return rank(a) - rank(b);
+}
+
 function byScreenOrder(a: string, b: string): number {
   const rank = (f: string) => {
     const i = FIELD_ORDER.indexOf(f);
@@ -231,15 +268,19 @@ export function configChangeItems(
   if (!isConfig) return null;
   const before = change?.before;
   const after = change?.after;
+  const digest = metadata.reason === WEEKLY_DIGEST_REASON;
   const fields = [
     ...new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})]),
-  ].sort(byScreenOrder);
+  ].sort(digest ? byDigestOrder : byScreenOrder);
+  const valueOf = (field: string, value: ConfigValue | undefined) =>
+    (digest ? weeklyDigestValue(field, value, fmt) : null) ?? bare(field, value, fmt);
+  const labelOf = (field: string) => (digest ? WEEKLY_DIGEST_LABELS[field] : undefined) ?? fieldLabel(field);
 
   const items: ConfigChangeItem[] = fields.map((field) => {
-    const label = fieldLabel(field);
+    const label = labelOf(field);
     if (before && after) {
-      const from = bare(field, before[field], fmt);
-      const to = bare(field, after[field], fmt);
+      const from = valueOf(field, before[field]);
+      const to = valueOf(field, after[field]);
       // La unidad va una sola vez, tras el después («60 → 75 min»).
       return {
         field,
@@ -254,16 +295,16 @@ export function configChangeItems(
       field,
       label,
       kind: after ? "added" : "removed",
-      value: withUnit(field, bare(field, side[field], fmt)),
+      value: withUnit(field, valueOf(field, side[field])),
     };
   });
 
   // Lo que la API no guarda (texto libre o largo) figura solo en changedFields.
   const hidden = (metadata.changedFields ?? [])
     .filter((f) => !fields.includes(f))
-    .sort(byScreenOrder);
+    .sort(digest ? byDigestOrder : byScreenOrder);
   for (const field of hidden)
-    items.push({ field, label: fieldLabel(field), kind: "hidden" });
+    items.push({ field, label: labelOf(field), kind: "hidden" });
 
   return items.length > 0 ? items : null;
 }
