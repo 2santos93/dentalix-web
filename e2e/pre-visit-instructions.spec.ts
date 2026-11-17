@@ -117,7 +117,7 @@ test('ADMIN escribe las indicaciones de «Cirugía» en es y en; un enlace da el
   await loginAs(page, origin, admin.email, password);
   const dialog = await openSurgeryType(page);
   const group = dialog.getByRole('group', { name: /Indicaciones previas a la cita/ });
-  await expect(group).toContainText('no escribas datos de un paciente. Sin enlaces ni HTML.');
+  await expect(group).toContainText('no escribas datos de un paciente. Sin enlaces, direcciones web ni correos, ni HTML.');
   const es = group.getByLabel('Español (es)', { exact: true });
   const en = group.getByLabel('English (en)', { exact: true });
   await expect(en).toBeVisible({ timeout: 15_000 });

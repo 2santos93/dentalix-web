@@ -1,3 +1,5 @@
+import { LINK_TLDS } from './link-tlds';
+
 /**
  * DX-564: indicaciones previas a la cita por tipo de cita («Ven en ayunas…»).
  * Texto general de la clínica por tipo de cita (no dato del paciente), una
@@ -25,15 +27,44 @@ export const PRE_VISIT_MESSAGES = {
   tooLarge: 'Las indicaciones son demasiado largas en conjunto: acorta alguno de los idiomas.',
 } as const;
 
-/** `http://`, `https://`, `www.` o algo con aspecto de etiqueta: la misma expresión que la API. */
+/**
+ * Lo mismo que rechaza la API (`appointment-type-rules.ts`), con el mismo
+ * mensaje: `http://`, `https://`, `www.`, algo con aspecto de etiqueta, un
+ * dominio sin `http` con un TLD de la lista cerrada («ejemplo.com», «bit.ly»),
+ * una IPv4 o un email.
+ */
 const LINK_OR_HTML = /https?:\/\/|www\.|<\s*\/?\s*[a-z!][^<>]*>/i;
+const DOT_WORD = /(?<=[\p{L}\p{N}])\.(\p{L}{2,})(?=$|[\s/:#?.,;!)\]}"'»…])/gu;
+const IPV4 = /\b\d{1,3}(?:\.\d{1,3}){3}\b/;
+const EMAIL_ADDRESS = /\S+@\S+\.\S+/;
+/** U+200D (une los emojis compuestos): el único carácter de formato que se queda. */
+const ZERO_WIDTH_JOINER = String.fromCharCode(0x200d);
 
-/** El texto como lo guarda la API: `\n`, tabuladores como espacio, sin controles, recortado. */
+function hasBareDomain(text: string): boolean {
+  for (const match of text.matchAll(DOT_WORD)) {
+    if (LINK_TLDS.has(match[1].toLowerCase())) return true;
+  }
+  return false;
+}
+
+/** ¿El texto (ya normalizado) lleva un enlace, una dirección web, un email o HTML? */
+export function hasLinkOrHtml(text: string): boolean {
+  return LINK_OR_HTML.test(text) || hasBareDomain(text) || IPV4.test(text) || EMAIL_ADDRESS.test(text);
+}
+
+/**
+ * El texto como lo guarda la API: `\n` (como mucho una línea en blanco
+ * seguida), tabuladores como espacio, sin controles ni formato invisible
+ * (salvo U+200D), sin espacios al final de línea y recortado.
+ */
 export function normalizePreVisitText(text: string): string {
   return text
     .replace(/\r\n?/g, '\n')
     .replace(/\t/g, ' ')
     .replace(/[\p{Cc}\u2028\u2029]/gu, (c) => (c === '\n' ? c : ''))
+    .replace(/\p{Cf}/gu, (c) => (c === ZERO_WIDTH_JOINER ? c : ''))
+    .replace(/[ \xa0]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
@@ -50,7 +81,7 @@ export function preVisitTextError(text: string): string | null {
   const normalized = normalizePreVisitText(text);
   if (normalized === '') return null;
   if (preVisitTextLength(normalized) > PRE_VISIT_TEXT_MAX) return PRE_VISIT_MESSAGES.tooLong;
-  if (LINK_OR_HTML.test(normalized)) return PRE_VISIT_MESSAGES.noLinks;
+  if (hasLinkOrHtml(normalized)) return PRE_VISIT_MESSAGES.noLinks;
   return null;
 }
 

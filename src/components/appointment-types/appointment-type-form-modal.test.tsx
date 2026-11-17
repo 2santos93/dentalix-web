@@ -53,7 +53,7 @@ describe('AppointmentTypeFormModal — indicaciones previas (DX-564)', () => {
   it('un campo por idioma de la clínica (español primero), con ayuda y contador 0/600', async () => {
     const { dialog } = renderModal();
     const group = within(dialog).getByRole('group', { name: /indicaciones previas a la cita/i });
-    expect(group).toHaveTextContent('no escribas datos de un paciente. Sin enlaces ni HTML.');
+    expect(group).toHaveTextContent('no escribas datos de un paciente. Sin enlaces, direcciones web ni correos, ni HTML.');
     const es = within(group).getByLabelText('Español (es)', { exact: true });
     const en = await within(group).findByLabelText('English (en)', { exact: true });
     expect(es.compareDocumentPosition(en) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -177,6 +177,34 @@ describe('AppointmentTypeFormModal — indicaciones previas (DX-564)', () => {
         }),
       ),
     );
+  });
+
+  it('cambiar solo el nombre reenvía tal cual las variantes de idiomas retirados (si no, la API las borraría)', async () => {
+    const user = setupUser();
+    const { dialog } = renderModal({
+      ...surgery,
+      preVisitInstructions: [
+        { language: 'es', text: 'Ven en ayunas.\n\nTrae tus radiografías.' },
+        { language: 'en', text: 'Come fasting.' },
+        { language: 'ca', text: 'Vine en dejú.' },
+        { language: 'pt', text: 'Venha em jejum.' },
+      ],
+    });
+    // Los idiomas de la clínica ya han llegado: ca y pt quedan en solo lectura.
+    expect(await within(dialog).findAllByTestId('pre-visit-retired')).toHaveLength(2);
+    const name = within(dialog).getByLabelText('Nombre');
+    await user.clear(name);
+    await user.type(name, 'Cirugía oral');
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    const [, , input] = mockedUpdate.mock.calls[0];
+    expect(input.name).toBe('Cirugía oral');
+    expect(input.preVisitInstructions).toEqual([
+      { language: 'es', text: 'Ven en ayunas.\n\nTrae tus radiografías.' },
+      { language: 'en', text: 'Come fasting.' },
+      { language: 'ca', text: 'Vine en dejú.' },
+      { language: 'pt', text: 'Venha em jejum.' },
+    ]);
   });
 
   it('quitar la variante retirada la deja fuera de la lista', async () => {
