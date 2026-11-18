@@ -1,4 +1,4 @@
-import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
+import { ApiError, apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 
 export type PatientAccessScope = components['schemas']['PatientAccessScope'];
@@ -8,6 +8,7 @@ export type PatientPortal = components['schemas']['PatientPortalDto'];
 export type PortalAppointment = components['schemas']['PortalAppointmentDto'];
 export type PortalPlan = components['schemas']['PortalPlanDto'];
 export type PatientAccessSession = components['schemas']['PatientAccessSessionDto'];
+export type AcceptPortalQuoteInput = components['schemas']['AcceptPortalQuoteDto'];
 
 /** Los apartados en el orden canónico de la API (citas, presupuestos, cuenta). */
 export const PATIENT_ACCESS_SCOPES: readonly PatientAccessScope[] = ['APPOINTMENTS', 'PLANS', 'ACCOUNT'];
@@ -29,6 +30,10 @@ export const PATIENT_ACCESS_INVALID = 'PATIENT_ACCESS_INVALID';
 export const PATIENT_ACCESS_LOCKED = 'PATIENT_ACCESS_LOCKED';
 export const PATIENT_ACCESS_SESSION_REQUIRED = 'PATIENT_ACCESS_SESSION_REQUIRED';
 export const PATIENT_ACCESS_GONE = 'PATIENT_ACCESS_GONE';
+/** DX-101-bis: 409 de aceptar desde el portal (no dice si estaba aceptado, rechazado o vencido). */
+export const PORTAL_QUOTE_NOT_ACCEPTABLE = 'PORTAL_QUOTE_NOT_ACCEPTABLE';
+/** DX-101-bis: 409 de aceptar: el presupuesto cambió desde que el portal lo mostró. */
+export const PORTAL_QUOTE_CHANGED = 'PORTAL_QUOTE_CHANGED';
 
 // --- Personal (ADMIN y recepción, como el estado de cuenta) ------------------
 
@@ -85,6 +90,41 @@ export async function confirmPortalAppointment(appointmentId: string): Promise<{
     `/public/patient-access/me/appointments/${encodeURIComponent(appointmentId)}/confirm`,
     { method: 'POST' },
   );
+}
+
+/**
+ * DX-101-bis · `POST /public/patient-access/me/plans/:planId/accept` — el
+ * paciente (o su responsable) acepta el presupuesto con su firma. Devuelve el
+ * plan del portal ya ACCEPTED (misma lista blanca que `GET me`). El
+ * `contentHash` es el del presupuesto que se le mostró: si cambió, 409.
+ */
+export async function acceptPortalPlan(planId: string, body: AcceptPortalQuoteInput): Promise<PortalPlan> {
+  return apiFetch<PortalPlan>(`/public/patient-access/me/plans/${encodeURIComponent(planId)}/accept`, {
+    method: 'POST',
+    body,
+  });
+}
+
+/**
+ * Qué hacer con un fallo de `acceptPortalPlan` (la pantalla elige el texto):
+ * - `session`: 401/410, lo trata el portal como en el resto de acciones.
+ * - `changed`: 409 `PORTAL_QUOTE_CHANGED`, se recargan los datos.
+ * - `notAcceptable`: cualquier otro 409 (o un 404/403): el texto de la API y se recargan los datos.
+ * - `rateLimited`: 429, demasiados intentos seguidos.
+ * - `invalid`: 400 de validación (nombre o firma): el texto de la API, en el diálogo.
+ * - `failed`: red, 5xx o lo inesperado: reintentar.
+ */
+export type PortalAcceptFailure = 'session' | 'changed' | 'notAcceptable' | 'rateLimited' | 'invalid' | 'failed';
+
+export function portalAcceptFailure(err: unknown): PortalAcceptFailure {
+  if (!(err instanceof ApiError)) return 'failed';
+  if (err.status === 401 || err.status === 410) return 'session';
+  if (err.status === 409) return err.code === PORTAL_QUOTE_CHANGED ? 'changed' : 'notAcceptable';
+  // 404 (no es suyo / no existe) y 403 (el enlace no comparte presupuestos): tampoco se puede.
+  if (err.status === 404 || err.status === 403) return 'notAcceptable';
+  if (err.status === 429) return 'rateLimited';
+  if (err.status === 400) return 'invalid';
+  return 'failed';
 }
 
 /** `POST /public/patient-access/me/logout` — borra la cookie (204). */
