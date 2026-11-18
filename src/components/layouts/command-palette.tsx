@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { hasUnsavedChanges, requestNavigation } from '@/components/settings/unsaved-changes';
-import { Cake, CalendarPlus, ClipboardList, CornerDownLeft, ListTodo, Phone, PhoneCall, Search, UserPlus, UserRound, UsersRound, Factory, Percent } from 'lucide-react';
+import { Cake, CalendarPlus, CalendarCheck2, ClipboardList, CornerDownLeft, ListTodo, Phone, PhoneCall, Search, UserPlus, UserRound, UsersRound, Factory, Percent } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
@@ -19,6 +19,7 @@ import { canManageDuplicates, DUPLICATES_HREF } from '@/lib/patients/patient-mer
 import { canReadExternalOrders, PENDING_EXTERNAL_ORDERS_HREF } from '@/lib/external-orders/external-orders-api';
 import { canReadLabOrders, LAB_ORDERS_HREF } from '@/lib/lab-orders/lab-orders-roles';
 import { canViewCommissions, COMMISSIONS_HREF } from '@/lib/commissions/commissions-api';
+import { canReviewOnlineRequests, ONLINE_REQUESTS_HREF } from '@/lib/online-booking/online-booking-api';
 import { canSee, ALL_NAV_ITEMS } from './nav-config';
 import { useEffectivePermissions } from '@/lib/auth/permissions';
 import { useCloseOnBack } from './use-shell-media';
@@ -42,6 +43,8 @@ const copy = {
   labOrdersHint: 'Trabajos de laboratorio: coronas y prótesis enviadas, atrasadas y recibidas',
   commissions: 'Honorarios',
   commissionsHint: 'Liquidación de honorarios de los odontólogos: comisiones del período y cierre',
+  onlineRequests: 'Solicitudes online',
+  onlineRequestsHint: 'Citas pedidas por los pacientes desde la reserva online',
   actions: 'Acciones',
   searching: 'Buscando pacientes…',
   searchFailed: 'No se pudo buscar pacientes. Revisa la conexión e inténtalo de nuevo.',
@@ -266,6 +269,18 @@ export function CommandPalette({
         hint: copy.commissionsHint,
         icon: Percent,
         run: () => go(COMMISSIONS_HREF),
+      });
+    }
+    // DX-016: la bandeja de la reserva online no gasta entrada en la barra
+    // (presupuesto de 900 px); se llega desde Pendientes de Inicio y desde aquí.
+    if (q && canReviewOnlineRequests(role) && matches(copy.onlineRequests, copy.onlineRequestsHint, 'reserva')) {
+      result.push({
+        id: 'nav-online-requests',
+        group: 'goto',
+        label: copy.onlineRequests,
+        hint: copy.onlineRequestsHint,
+        icon: CalendarCheck2,
+        run: () => go(ONLINE_REQUESTS_HREF),
       });
     }
     // Las pantallas de Ajustes solo al escribir: sin texto, la lista es corta.

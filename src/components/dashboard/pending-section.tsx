@@ -10,6 +10,7 @@ import { getCurrentCashSession, type CurrentCashSession } from '@/lib/cash-sessi
 import type { WorkQueueItem, WorkQueueKey } from '@/lib/work-queues/work-queues-api';
 import { useWorkQueuesView } from '@/components/work-queues/work-queues-context';
 import { POST_OP_CHECKS_HREF } from '@/lib/post-op-checks/post-op-checks-api';
+import { getOnlinePendingCount, ONLINE_REQUESTS_HREF } from '@/lib/online-booking/online-booking-api';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
 import { SectionHeader } from '@/components/ui/section-header';
@@ -40,6 +41,8 @@ export const pendingCopy = {
   receivablesNone: 'Nadie debe',
   patients: (n: string, one: boolean) => (one ? `${n} paciente` : `${n} pacientes`),
   cash: { label: 'Tu caja', hint: 'La caja del mostrador en la sede activa' },
+  // DX-016: lo que piden los pacientes desde la reserva online.
+  onlineRequests: { label: 'Solicitudes online', hint: 'Citas pedidas desde la reserva online, por aceptar o rechazar' },
   cashOpen: (time: string) => `Abierta desde ${time}`,
   cashClosed: 'Sin abrir',
   cashNeedsSede: 'Elige una sede',
@@ -180,6 +183,7 @@ export function PendingSection({
     document.getElementById(PENDING_ANCHOR)?.scrollIntoView({ block: 'start' });
   }, []);
   const showCash = canSeeBlock('cash', role);
+  const showOnline = canSeeBlock('onlineRequests', role);
   const scopeKey = `${activeLocationId ?? 'all'}|${fmt ? 'fmt' : 'raw'}`;
 
   const items = view.status === 'ready' ? view.items : [];
@@ -195,6 +199,7 @@ export function PendingSection({
     <section id={PENDING_ANCHOR} aria-labelledby="inicio-pending-title" className="flex scroll-mt-6 flex-col gap-3">
       <SectionHeader titleId="inicio-pending-title" title={copy.heading} description={copy.description} />
       {cash ? <ul aria-label={copy.cash.label} className={listClass}>{cash}</ul> : null}
+      {showOnline ? <OnlineRequestsRow token={token} scopeKey={scopeKey} fmt={fmt} /> : null}
       {view.status === 'error' ? (
         <SectionError description={copy.sectionError} onRetry={view.retry} />
       ) : view.status === 'loading' ? (
@@ -283,6 +288,28 @@ function CashRow({
       state={state.status === 'ready' ? { ready: state.data } : state.status === 'error' ? 'error' : 'loading'}
       onRetry={load.reload}
     />
+  );
+}
+
+/**
+ * DX-016: «Solicitudes online» por revisar (`GET /online-booking/requests/pending-count`).
+ * Aparte de las listas de `GET /work-queues/summary` (la API de colas no la
+ * cuenta): solo se pinta con algo pendiente o si no se pudo contar; a 0 no
+ * ocupa sitio (la bandeja sigue a mano en ⌘K).
+ */
+function OnlineRequestsRow({ token, scopeKey, fmt }: { token: string; scopeKey: string; fmt: RegionalFormat | null }) {
+  const load = useLoad(() => getOnlinePendingCount(token), `online|${scopeKey}`, true, copy.rowError);
+  if (load.status === 'ready' && load.data === 0) return null;
+  if (load.status !== 'ready' && load.status !== 'error') return null;
+  const row = { id: 'online-requests', ...copy.onlineRequests, href: ONLINE_REQUESTS_HREF };
+  return (
+    <ul aria-label={copy.onlineRequests.label} className={listClass}>
+      <PendingRow
+        row={row}
+        state={load.status === 'ready' ? { ready: count(load.data, fmt) } : 'error'}
+        onRetry={load.reload}
+      />
+    </ul>
   );
 }
 
