@@ -15,6 +15,7 @@ import {
   LEAD_REPORT_PERIODS,
   getLeadReport,
   leadReportRange,
+  NO_OWNER,
   reportFigureHref,
   type LeadChannel,
   type LeadReached,
@@ -43,7 +44,6 @@ export const leadReportCopy = {
   noOwner: 'Sin responsable',
   colChannel: 'Canal',
   colOwner: 'Responsable',
-  noOwnerHint: 'Los prospectos sin responsable no tienen filtro propio en la lista: su cifra no lleva enlace.',
   colLeads: 'Prospectos',
   colScheduled: 'Con cita',
   colScheduledRate: '% con cita',
@@ -191,8 +191,8 @@ export function LeadReportView({ token }: { token: string }) {
         ...l,
         rowLabel: l.key ? (l.label ?? copy.noOwner) : copy.noOwner,
         channel: null,
-        ownerId: l.key,
-        linkable: Boolean(l.key),
+        ownerId: l.key ?? NO_OWNER,
+        linkable: true,
       }))
     : [];
 
@@ -241,7 +241,6 @@ export function LeadReportView({ token }: { token: string }) {
               <SectionHeader
                 title={copy.byOwner}
                 titleId="lead-report-owner"
-                description={byOwner.some((r) => !r.linkable) ? copy.noOwnerHint : undefined}
               />
               <DataList
                 label={copy.byOwner}

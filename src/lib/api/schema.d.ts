@@ -13883,12 +13883,8 @@ export interface components {
             lostRetentionMonths: number;
         };
         CreateLeadDto: {
-            /** @example María Pérez */
             fullName: string;
-            /**
-             * @description En cualquier formato; sin «+», con el prefijo de la sede. Se guarda en E.164. Si ya es de un paciente o de otro prospecto: 409 `LEAD_PHONE_TAKEN` con `existing`.
-             * @example +58 412 1234567
-             */
+            /** @description En cualquier formato; sin «+», con el prefijo de la sede. Se guarda en E.164. Si ya es de un paciente o de otro prospecto: 409 `LEAD_PHONE_TAKEN` con `existing`. */
             phone: string;
             channel: components["schemas"]["LeadChannel"];
             /** @description Motivo de interés del catálogo (predefinido o propio). */
@@ -36172,6 +36168,8 @@ export interface operations {
                 locationId?: string;
                 channel?: components["schemas"]["LeadChannel"];
                 ownerId?: string;
+                /** @description Solo los que no tienen responsable (la fila «Sin responsable» del informe). Se ignora con `ownerId`. */
+                unowned?: boolean;
                 /** @description Nombre (sin tildes ni mayúsculas) o 3+ dígitos del teléfono. */
                 q?: string;
                 /** @description Alta desde este instante (incluido). */
@@ -36267,6 +36265,8 @@ export interface operations {
                 locationId?: string;
                 channel?: components["schemas"]["LeadChannel"];
                 ownerId?: string;
+                /** @description Solo los que no tienen responsable (la fila «Sin responsable» del informe). Se ignora con `ownerId`. */
+                unowned?: boolean;
                 /** @description Nombre (sin tildes ni mayúsculas) o 3+ dígitos del teléfono. */
                 q?: string;
                 /** @description Alta desde este instante (incluido). */

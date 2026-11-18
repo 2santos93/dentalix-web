@@ -10,6 +10,7 @@ import {
   leadReportRange,
   leadWhatsAppHref,
   listLeads,
+  NO_OWNER,
   manualStageTargets,
   parseLeadFilters,
   phoneTakenOf,
@@ -157,6 +158,12 @@ describe('leads-api (DX-556)', () => {
         '/leads?channel=WHATSAPP&createdFrom=2026-11-01T04%3A00%3A00.000Z&createdTo=2026-12-01T04%3A00%3A00.000Z&reached=ATTENDED&page=1&pageSize=25',
         { token: 'tok' },
       );
+    });
+
+    it('«Sin responsable» (ownerId=none) se pide a la API como unowned=true', async () => {
+      await listLeads('tok', { ...EMPTY_LEAD_FILTERS, view: 'lista', ownerId: NO_OWNER });
+      expect(mockedFetch).toHaveBeenLastCalledWith('/leads?unowned=true&page=1&pageSize=25', { token: 'tok' });
+      expect(reportFigureHref({ from: 'a', to: 'b' }, { ownerId: NO_OWNER }, 'SCHEDULED')).toContain('ownerId=none');
     });
   });
 

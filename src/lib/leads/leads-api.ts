@@ -241,9 +241,20 @@ function query(params: Record<string, string | number | boolean | null | undefin
   return q ? `?${q}` : '';
 }
 
+/** `ownerId` de la URL que significa «sin responsable» (la API lo pide como `unowned=true`). */
+export const NO_OWNER = 'none';
+
 /** Los filtros comunes del tablero y la lista, como parámetros de la API. */
 function scopeParams(f: Pick<LeadFilters, 'q' | 'channel' | 'ownerId' | 'createdFrom' | 'createdTo'>) {
-  return { q: f.q, channel: f.channel, ownerId: f.ownerId, createdFrom: f.createdFrom, createdTo: f.createdTo };
+  const unowned = f.ownerId === NO_OWNER;
+  return {
+    q: f.q,
+    channel: f.channel,
+    ownerId: unowned ? null : f.ownerId,
+    unowned,
+    createdFrom: f.createdFrom,
+    createdTo: f.createdTo,
+  };
 }
 
 // ── Llamadas ────────────────────────────────────────────────────────────────

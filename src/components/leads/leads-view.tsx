@@ -16,6 +16,7 @@ import {
   getLeadBoard,
   hasLeadFilters,
   leadFiltersHref,
+  NO_OWNER,
   leadHref,
   listLeads,
   manualStageTargets,
@@ -514,13 +515,17 @@ export function LeadsView({ token }: { token: string }) {
               className="sm:w-56"
             >
               <option value="">{copy.allOwners}</option>
+              <option value={NO_OWNER}>{copy.noOwner}</option>
               {(owners.items ?? []).map((o) => (
                 <option key={o.userId} value={o.userId}>
                   {o.fullName}
                 </option>
               ))}
               {/* Un responsable del informe que ya no está en la lista: se conserva el filtro. */}
-              {filters.ownerId && owners.items && !owners.items.some((o) => o.userId === filters.ownerId) ? (
+              {filters.ownerId &&
+              filters.ownerId !== NO_OWNER &&
+              owners.items &&
+              !owners.items.some((o) => o.userId === filters.ownerId) ? (
                 <option value={filters.ownerId}>{copy.owner}</option>
               ) : null}
             </NativeSelect>
