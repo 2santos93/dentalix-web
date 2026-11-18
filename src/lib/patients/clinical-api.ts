@@ -1,3 +1,4 @@
+import { idempotencyHeaders } from '@/lib/api/idempotency-key';
 import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import type { ClinicalHistoryValue, MedicalHistory } from '@/lib/clinical/clinical-types';
@@ -121,11 +122,14 @@ export async function saveMedicalHistory(
   token: string,
   patientId: string,
   input: SaveMedicalHistoryInput,
+  /** DX-574: la API devuelve la misma versión si el reintento repite la clave. */
+  idempotencyKey?: string,
 ): Promise<MedicalHistory> {
   return apiFetch<MedicalHistory>(`/patients/${patientId}/medical-history`, {
     method: 'PUT',
     body: input,
     token,
+    ...idempotencyHeaders(idempotencyKey),
   });
 }
 
@@ -143,11 +147,14 @@ export async function createClinicalEntry(
   token: string,
   patientId: string,
   input: CreateClinicalEntryInput,
+  /** DX-574: la API devuelve la misma evolución si el reintento repite la clave. */
+  idempotencyKey?: string,
 ): Promise<CreatedClinicalEntry> {
   return apiFetch<CreatedClinicalEntry>(`/patients/${patientId}/clinical-entries`, {
     method: 'POST',
     body: input,
     token,
+    ...idempotencyHeaders(idempotencyKey),
   });
 }
 

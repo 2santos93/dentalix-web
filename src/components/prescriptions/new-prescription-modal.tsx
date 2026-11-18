@@ -35,6 +35,9 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import { useFormDraft } from '@/lib/drafts/use-form-draft';
+import { useResilientSubmit } from '@/lib/drafts/use-resilient-submit';
+import { DraftRecoveryCallout, OfflineSaveNotice } from '@/components/drafts/draft-notices';
 import { PrescriptionItemFields } from './prescription-item-fields';
 import { PrescriptionSafetyPanel, type SafetyState } from './prescription-safety-panel';
 
@@ -88,6 +91,21 @@ function blockingKey(alerts: readonly SafetyAlert[]): string | null {
     ? blocking.map((alert) => `${alert.code}|${alert.activeIngredient ?? ''}|${alert.message}`).join(';')
     : null;
 }
+
+/**
+ * DX-574: lo que guarda el borrador local de la receta. La confirmación de los
+ * avisos de seguridad NO se guarda: al recuperar hay que volver a confirmarlos.
+ */
+interface PrescriptionDraftValue {
+  templateId: string;
+  items: ItemDraft[];
+  dispensationDate: string;
+  notes: string;
+  license: string;
+  reason: string;
+}
+
+const EMPTY_ITEM_JSON = JSON.stringify(emptyItemDraft());
 
 interface NewPrescriptionModalProps {
   open: boolean;
@@ -163,6 +181,55 @@ function NewPrescriptionForm({
   }, []);
   const [itemErrors, setItemErrors] = useState<ItemDraftErrors[]>([]);
   const [licenseError, setLicenseError] = useState<string | null>(null);
+
+  // DX-574: borrador cifrado en el equipo y emisión que no se pierde sin red.
+  const draft = useFormDraft<PrescriptionDraftValue>({
+    token,
+    patientId,
+    form: 'prescription',
+    value: { templateId, items, dispensationDate, notes, license, reason },
+    isEmpty: (v) =>
+      !v.templateId &&
+      v.items.every((item) => JSON.stringify(item) === EMPTY_ITEM_JSON) &&
+      !v.dispensationDate &&
+      !v.notes.trim() &&
+      !v.license.trim() &&
+      !v.reason.trim(),
+    enabled: open,
+  });
+  const resilient = useResilientSubmit(draft, { onRetryError: (err) => handleIssueError(err) });
+
+  function restoreDraft(saved: PrescriptionDraftValue) {
+    setTemplateId(saved.templateId ?? '');
+    setItems(saved.items?.length ? saved.items.map((item) => ({ ...emptyItemDraft(), ...item })) : [emptyItemDraft()]);
+    setDispensationDate(saved.dispensationDate ?? '');
+    setNotes(saved.notes ?? '');
+    setLicense(saved.license ?? '');
+    setReason(saved.reason ?? '');
+    setConfirmedKey(null);
+    setItemErrors([]);
+    setLicenseError(null);
+    setReasonError(null);
+    setError(null);
+  }
+
+  function handleIssueError(err: unknown) {
+    if (err instanceof ApiError && err.status === 409) {
+      // La anamnesis cambió entre la vista previa y la emisión: la API dice
+      // qué avisos faltan por confirmar y se vuelven a pedir.
+      setError(
+        apiErrorMessage(err, {
+          fallback: copy.serverSafetyFallback,
+          byStatus: { 409: copy.serverSafetyFallback },
+          maxLength: SERVER_SAFETY_MAX_LENGTH,
+        }),
+      );
+      setConfirmedKey(null);
+      setSafetyRetry((k) => k + 1);
+    } else {
+      setError(apiErrorMessage(err, copy.genericError));
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -359,25 +426,17 @@ function NewPrescriptionForm({
         : {}),
     };
     try {
-      const issued = await issuePrescription(token, patientId, input);
-      onOpenChange(false);
-      onIssued(issued);
+      // DX-574: sin red no se cierra ni se pierde; se emite al volver la
+      // conexión con la misma Idempotency-Key (una sola receta).
+      await resilient.run(
+        (key) => issuePrescription(token, patientId, input, key),
+        (issued) => {
+          onOpenChange(false);
+          onIssued(issued);
+        },
+      );
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        // La anamnesis cambió entre la vista previa y la emisión: la API dice
-        // qué avisos faltan por confirmar y se vuelven a pedir.
-        setError(
-          apiErrorMessage(err, {
-            fallback: copy.serverSafetyFallback,
-            byStatus: { 409: copy.serverSafetyFallback },
-            maxLength: SERVER_SAFETY_MAX_LENGTH,
-          }),
-        );
-        setConfirmedKey(null);
-        setSafetyRetry((k) => k + 1);
-      } else {
-        setError(apiErrorMessage(err, copy.genericError));
-      }
+      handleIssueError(err);
     } finally {
       setSubmitting(false);
     }
@@ -393,12 +452,14 @@ function NewPrescriptionForm({
       description={copy.description}
       onSubmit={handleSubmit}
       submitLabel={copy.submit}
-      submitting={submitting}
+      submitting={submitting || resilient.retrying}
       submitDisabled={!ready || tooMany || safetyBlocksSubmit}
       submitHint={submitHint}
       error={error}
       size="lg"
     >
+      <DraftRecoveryCallout draft={draft} onRestore={restoreDraft} />
+      <OfflineSaveNotice submit={resilient} />
       {issuerError && !ready ? (
         <SectionError
           description={issuerError}

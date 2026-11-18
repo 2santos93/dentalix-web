@@ -24,6 +24,9 @@ import {
   type ClinicalHistoryValue,
   type Habits,
 } from '@/lib/clinical/clinical-types';
+import { useFormDraft } from '@/lib/drafts/use-form-draft';
+import { useResilientSubmit } from '@/lib/drafts/use-resilient-submit';
+import { DraftRecoveryCallout, OfflineSaveNotice } from '@/components/drafts/draft-notices';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -215,6 +218,21 @@ export function MedicalHistoryPanel({ token, patientId, headingId, onSaved }: Me
   const stamp = useSedeStamp(token);
   // Bumped by the retry action to re-run the load effect below.
   const [reloadKey, setReloadKey] = useState(0);
+  // DX-574: borrador cifrado en el equipo mientras se edita y guardado que no
+  // se pierde sin red (cada PUT crea una versión: el reintento lleva la misma
+  // Idempotency-Key y no la duplica). Lo que difiere de la versión vigente.
+  const latestValue = useMemo(() => valueFromHistory(latest), [latest]);
+  const draft = useFormDraft<ClinicalHistoryValue>({
+    token,
+    patientId,
+    form: 'anamnesis',
+    value,
+    baseline: latestValue,
+    enabled: editing && !loading && !loadError,
+  });
+  const resilient = useResilientSubmit(draft, {
+    onRetryError: (err) => setSaveError(apiErrorMessage(err, copy.genericSaveError)),
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -282,14 +300,19 @@ export function MedicalHistoryPanel({ token, patientId, headingId, onSaved }: Me
     if (valueEqualsHistory(value, latest)) return;
     setSaveError(null);
     setSubmitting(true);
+    const input = value;
     try {
-      const saved = await saveMedicalHistory(token, patientId, value);
-      setLatest(saved);
-      // Re-sync from the just-saved version (not an empty value) so the
-      // next edit still carries forward whatever wasn't just changed.
-      setValue(valueFromHistory(saved));
-      setEditing(false);
-      onSaved?.();
+      await resilient.run(
+        (key) => saveMedicalHistory(token, patientId, input, key),
+        (saved) => {
+          setLatest(saved);
+          // Re-sync from the just-saved version (not an empty value) so the
+          // next edit still carries forward whatever wasn't just changed.
+          setValue(valueFromHistory(saved));
+          setEditing(false);
+          onSaved?.();
+        },
+      );
     } catch (err) {
       setSaveError(apiErrorMessage(err, copy.genericSaveError));
     } finally {
@@ -309,6 +332,9 @@ export function MedicalHistoryPanel({ token, patientId, headingId, onSaved }: Me
   }
 
   function stopEditing() {
+    // Descartar los cambios (confirmado) también borra su borrador; sin
+    // cambios, un borrador aún sin decidir se conserva.
+    if (!isUnchanged) draft.discard();
     setValue(valueFromHistory(latest));
     setSaveError(null);
     setConfirmDiscard(false);
@@ -431,8 +457,11 @@ export function MedicalHistoryPanel({ token, patientId, headingId, onSaved }: Me
               {latest ? <p className="text-sm text-muted">{copy.formHint}</p> : null}
             </div>
 
+            <DraftRecoveryCallout draft={draft} onRestore={(saved) => setValue(saved)} />
+
             <ClinicalHistoryFields value={value} onChange={setValue} />
 
+            <OfflineSaveNotice submit={resilient} />
             {saveError && <InlineError variant="summary">{saveError}</InlineError>}
 
             {/* Barra de acción pegajosa: el formulario es largo y el botón no
@@ -441,7 +470,12 @@ export function MedicalHistoryPanel({ token, patientId, headingId, onSaved }: Me
               <Button type="button" variant="ghost" onClick={handleCancel} className="w-full sm:w-auto">
                 {copy.cancel}
               </Button>
-              <Button type="submit" loading={submitting} disabled={isUnchanged} className="w-full sm:w-auto">
+              <Button
+                type="submit"
+                loading={submitting || resilient.retrying}
+                disabled={isUnchanged}
+                className="w-full sm:w-auto"
+              >
                 {latest ? copy.submit : copy.submitFirst}
               </Button>
             </div>

@@ -1,11 +1,12 @@
 'use client';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
-import { ChevronUp, LogOut, Moon, Settings, UserRound } from 'lucide-react';
+import { ChevronUp, LogOut, Monitor, Moon, Settings, UserRound } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { forgetOfflineSession } from '@/lib/offline/offline-agenda';
+import { setSharedDevice, useSharedDevice } from '@/lib/drafts/drafts-runtime';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { logout } from '@/lib/auth/auth-api';
 import type { ClinicRole, MyProfile } from '@/lib/me/me-api';
@@ -81,6 +82,9 @@ const copy = {
   // DX-282: los ajustes de la clínica viven en /settings, agrupados por tema.
   settings: 'Ajustes',
   darkTheme: 'Tema oscuro',
+  // DX-574
+  sharedDevice: 'Este equipo es compartido',
+  sharedDeviceHint: 'No se guardan borradores en este equipo; al marcarlo se borran los que haya.',
   logout: 'Cerrar sesión',
   loggingOut: 'Cerrando sesión…',
 };
@@ -155,6 +159,56 @@ function ThemeItem() {
           className={cn(
             'inline-block h-5 w-5 rounded-full bg-surface transition-transform',
             isDark ? 'translate-x-5' : 'translate-x-0.5',
+          )}
+        />
+      </span>
+    </DropdownMenuPrimitive.CheckboxItem>
+  );
+}
+
+/**
+ * DX-574: «Este equipo es compartido» (`menuitemcheckbox`, como el tema). En
+ * un equipo marcado no se guardan borradores de formularios clínicos y, al
+ * marcarlo, se borran los de todos los usuarios del equipo. La marca vive en
+ * IndexedDB (almacén `device`) y no es un dato de salud.
+ */
+function SharedDeviceItem() {
+  const shared = useSharedDevice();
+  const checked = shared === true;
+  const hintId = useId();
+  return (
+    <DropdownMenuPrimitive.CheckboxItem
+      checked={checked}
+      disabled={shared === null}
+      aria-describedby={hintId}
+      onSelect={(event) => {
+        event.preventDefault();
+        void setSharedDevice(!checked);
+      }}
+      className={cn(
+        'flex cursor-pointer select-none items-start gap-2.5 rounded-lg px-2.5 py-2 text-sm text-ink outline-none transition-colors',
+        'data-[highlighted]:bg-surface-sunken data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        ITEM,
+      )}
+    >
+      <Monitor className="mt-0.5 size-4 shrink-0 text-muted" aria-hidden />
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span>{copy.sharedDevice}</span>
+        <span id={hintId} className="text-xs text-muted">
+          {copy.sharedDeviceHint}
+        </span>
+      </span>
+      <span
+        aria-hidden
+        className={cn(
+          'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
+          checked ? 'bg-primary' : 'bg-border-input',
+        )}
+      >
+        <span
+          className={cn(
+            'inline-block h-5 w-5 rounded-full bg-surface transition-transform',
+            checked ? 'translate-x-5' : 'translate-x-0.5',
           )}
         />
       </span>
@@ -240,6 +294,7 @@ export function UserMenu({
       </DropdownMenuItem>
       <DropdownMenuSeparator />
       <ThemeItem />
+      <SharedDeviceItem />
       <DropdownMenuSeparator />
       {/* El menú se queda abierto mientras se revoca la sesión (hasta 3 s si
           la red no responde): el ítem pasa a «Cerrando sesión…», ocupado y
