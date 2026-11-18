@@ -1,4 +1,5 @@
 'use client';
+import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -8,6 +9,10 @@ import { notifyError } from '@/components/errors/notify';
 import { Callout } from '@/components/ui/callout';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
+import { Button } from '@/components/ui/button';
+import { NativeSelect } from '@/components/ui/native-select';
+import { FormField } from '@/components/shared/form-field';
+import { FormModal } from '@/components/shared/form-modal';
 import { SettingRow, SettingRows } from '@/components/settings/settings-page';
 
 const copy = {
@@ -22,7 +27,23 @@ const copy = {
   savedOff: 'La verificación en dos pasos ya no es obligatoria para los administradores.',
   savedAllOn: 'Ahora todo el equipo necesita la verificación en dos pasos.',
   savedAllOff: 'La verificación en dos pasos ya no es obligatoria para todo el equipo.',
+  // DX-137
+  idleLabel: 'Cierre de sesión por inactividad',
+  idleHint: 'Si nadie usa la pantalla durante este tiempo, la sesión se cierra y hay que volver a entrar.',
+  idleValue: (m: number) => (m % 60 === 0 ? `${m / 60} ${m === 60 ? 'hora' : 'horas'}` : `${m} minutos`),
+  idleChange: 'Cambiar',
+  idleChangeLabel: 'Cambiar el cierre de sesión por inactividad',
+  idleTitle: 'Cierre de sesión por inactividad',
+  idleDescription:
+    'Se aplica a todo el equipo en esta clínica. En recepción, donde el ordenador se comparte, conviene un tiempo corto.',
+  idleField: 'Cerrar la sesión tras',
+  idleSaved: (m: string) => `Listo: la sesión se cerrará tras ${m} sin uso.`,
+  idleSaveError: 'No pudimos cambiar el cierre por inactividad. Intenta de nuevo.',
 };
+
+/** DX-137: valores que se ofrecen (la API acepta 15–240 min). */
+const IDLE_OPTIONS = [15, 30, 45, 60, 90, 120, 180, 240] as const;
+const IDLE_DEFAULT = 60;
 
 /** Política de seguridad de la clínica (DX-021). Se aplica al momento: Switch. */
 export function ClinicSecuritySettings({ token, allowed }: { token: string; allowed: boolean }) {
@@ -30,6 +51,10 @@ export function ClinicSecuritySettings({ token, allowed }: { token: string; allo
   const [loadError, setLoadError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [idleOpen, setIdleOpen] = useState(false);
+  const [idleDraft, setIdleDraft] = useState(IDLE_DEFAULT);
+  const [idleSaving, setIdleSaving] = useState(false);
+  const [idleError, setIdleError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!allowed) return;
@@ -61,6 +86,27 @@ export function ClinicSecuritySettings({ token, allowed }: { token: string; allo
     }
   }
 
+  async function saveIdle(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!policy) return;
+    setIdleSaving(true);
+    setIdleError(null);
+    try {
+      const next = await updateSecurityPolicy(token, {
+        requireAdminMfa: policy.requireAdminMfa,
+        requireAllMfa: policy.requireAllMfa,
+        sessionIdleMinutes: idleDraft,
+      });
+      setPolicy(next);
+      setIdleOpen(false);
+      toast.success(copy.idleSaved(copy.idleValue(next.sessionIdleMinutes ?? idleDraft)));
+    } catch (err) {
+      setIdleError(apiErrorMessage(err, copy.idleSaveError));
+    } finally {
+      setIdleSaving(false);
+    }
+  }
+
   if (!allowed) return <Callout tone="info">{copy.notAllowed}</Callout>;
   if (loadError) {
     return (
@@ -73,6 +119,7 @@ export function ClinicSecuritySettings({ token, allowed }: { token: string; allo
   }
   if (policy === null) return <Skeleton className="h-20 w-full" />;
   const all = policy.requireAllMfa === true;
+  const idleMinutes = policy.sessionIdleMinutes ?? IDLE_DEFAULT;
 
   return (
     <SettingRows>
@@ -102,6 +149,50 @@ export function ClinicSecuritySettings({ token, allowed }: { token: string; allo
           }
         />
       </SettingRow>
+      <SettingRow
+        label={copy.idleLabel}
+        description={copy.idleHint}
+        value={copy.idleValue(idleMinutes)}
+        isDefault={idleMinutes === IDLE_DEFAULT}
+        action={
+          <Button
+            type="button"
+            variant="secondary"
+            aria-label={copy.idleChangeLabel}
+            onClick={() => {
+              setIdleDraft(idleMinutes);
+              setIdleError(null);
+              setIdleOpen(true);
+            }}
+          >
+            {copy.idleChange}
+          </Button>
+        }
+      />
+      <FormModal
+        open={idleOpen}
+        onOpenChange={setIdleOpen}
+        title={copy.idleTitle}
+        description={copy.idleDescription}
+        onSubmit={(e) => void saveIdle(e)}
+        submitting={idleSaving}
+        error={idleError}
+        fullScreenOnMobile={false}
+      >
+        <FormField htmlFor="session-idle-minutes" label={copy.idleField}>
+          <NativeSelect
+            id="session-idle-minutes"
+            value={String(idleDraft)}
+            onChange={(e) => setIdleDraft(Number(e.target.value))}
+          >
+            {IDLE_OPTIONS.map((m) => (
+              <option key={m} value={m}>
+                {copy.idleValue(m)}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
+      </FormModal>
     </SettingRows>
   );
 }

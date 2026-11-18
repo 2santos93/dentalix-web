@@ -2,6 +2,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
+import { IDLE_LOGIN_PATH, takeIdleLogout } from '@/lib/auth/idle-logout';
 import { useOffline } from '@/lib/offline/connectivity';
 import { isOfflineCapable, useSessionReconnect } from '@/lib/offline/offline-session';
 
@@ -65,7 +66,8 @@ export function RequireSession({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (open || offlineCopy || reconnecting || !hasHydrated || accessToken) return;
-    router.replace('/login');
+    // DX-137: si la sesión se cerró por inactividad, el login lo dice.
+    router.replace(takeIdleLogout() ? IDLE_LOGIN_PATH : '/login');
   }, [open, offlineCopy, reconnecting, hasHydrated, accessToken, router]);
 
   if (open || offlineCopy || (hasHydrated && accessToken)) return <>{children}</>;

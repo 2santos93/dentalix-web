@@ -8,6 +8,7 @@ import { apiBaseUrl } from './api-base';
 import { ApiError, NetworkError, type ExistingPatientRef, type AffectedAppointmentsRef } from './api-error';
 import { reportNetworkFailure, reportNetworkSuccess } from '@/lib/offline/connectivity';
 import { parseRetryAfter } from './error-message';
+import { rememberIdleLogout } from '@/lib/auth/idle-logout';
 
 export { ApiError, NetworkError };
 
@@ -199,6 +200,9 @@ async function refreshUnderLock(hasLocks: boolean): Promise<string | null> {
         if (!isUnauthorized(retryErr)) return null;
       }
     }
+    // DX-137: la API cerró la sesión por inactividad (`SESSION_IDLE`): el
+    // próximo /login lo dice.
+    if (err instanceof ApiError && err.code === 'SESSION_IDLE') rememberIdleLogout();
     useAuthStore.getState().clear();
     // DX-405: sesión muerta → fuera la copia cifrada de la agenda y su clave.
     void import('@/lib/offline/offline-agenda').then((m) => m.forgetOfflineSession()).catch(() => undefined);
