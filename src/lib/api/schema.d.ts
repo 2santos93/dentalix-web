@@ -3679,6 +3679,207 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/booking": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lo que ofrece la reserva online de la clínica del host
+         * @description Sedes, tipos de cita reservables, profesionales, modos, antelaciones y la política de datos vigente, más el `formToken` que acompaña a cada envío. Nada de la agenda.
+         */
+        get: operations["PublicBookingController_config"];
+        put?: never;
+        /**
+         * Reservar (directa) o pedir (solicitud) un hueco
+         * @description Paciente nuevo: `newPatient` con su consentimiento. Existente: cabecera X-Booking-Session. El inicio tiene que ser uno de los huecos ofrecidos; dos reservas del mismo hueco a la vez: solo una lo consigue y la otra recibe 409 `ONLINE_SLOT_TAKEN` (con `sessionToken` si ya se creó la ficha nueva).
+         */
+        post: operations["PublicBookingController_book"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/booking/slots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Huecos libres (solo instantes) de un tipo en una sede
+         * @description Dentro del horario de la sede y del profesional, sin festivos, bloqueos ni citas, con la antelación mínima y máxima. Hasta 14 días por consulta. Nunca nombres ni datos de otras citas.
+         */
+        get: operations["PublicBookingController_slots"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/booking/verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pedir el código de un solo uso (paciente existente)
+         * @description Nombre, apellido, fecha de nacimiento y email. Si casan con UNA ficha, se envía el código a ese email (10 min, 5 intentos, 5 por hora). La respuesta es SIEMPRE la misma: no dice si la ficha existe.
+         */
+        post: operations["PublicBookingController_code"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/booking/verification/{id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verificar el código: abre una sesión de 30 minutos */
+        post: operations["PublicBookingController_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/online-booking/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ajustes de la reserva online (por defecto, desactivada) */
+        get: operations["OnlineBookingController_getSettings"];
+        /** Activa o desactiva la reserva online y fija modos y antelaciones; queda en la auditoría */
+        put: operations["OnlineBookingController_updateSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/online-booking/types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tipos de cita del catálogo y su configuración online */
+        get: operations["OnlineBookingController_listTypes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/online-booking/types/{appointmentTypeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Ofrece (o no) un tipo de cita online, con su duración, profesionales y sedes; queda en la auditoría */
+        put: operations["OnlineBookingController_updateType"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/online-booking/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bandeja «Solicitudes online» (y reservas directas) de las sedes permitidas */
+        get: operations["OnlineBookingController_listRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/online-booking/requests/pending-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cuántas solicitudes online quedan por revisar (para Pendientes y ⌘K) */
+        get: operations["OnlineBookingController_pendingCount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/online-booking/requests/{id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Aceptar una solicitud: crea la cita (marca «Online») con las reglas de siempre y avisa al paciente */
+        post: operations["OnlineBookingController_accept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/online-booking/requests/{id}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rechazar una solicitud online */
+        post: operations["OnlineBookingController_decline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/appointments/{id}/confirmation-link": {
         parameters: {
             query?: never;
@@ -10060,7 +10261,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE" | "ORTHO_CASE" | "ORTHO_VISIT" | "DENTAL_LAB" | "DENTAL_LAB_ORDER" | "COMMISSION_SETTLEMENT" | "POST_OP_CHECK";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE" | "ORTHO_CASE" | "ORTHO_VISIT" | "DENTAL_LAB" | "DENTAL_LAB_ORDER" | "COMMISSION_SETTLEMENT" | "POST_OP_CHECK" | "ONLINE_BOOKING";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -10110,7 +10311,7 @@ export interface components {
          * @description DX-128: de dónde salió un cambio de canal, opt-in o baja de recordatorios (en persona, enlace, mensaje del paciente o anotado por el personal). DX-361: en la confirmación de cita por enlace, STAFF = recepción generó o reenvió el enlace; LINK = el paciente respondió desde él.
          * @enum {string}
          */
-        AuditOrigin: "IN_PERSON" | "LINK" | "MESSAGE" | "STAFF" | "JOB" | "PUBLIC_LINK";
+        AuditOrigin: "IN_PERSON" | "LINK" | "MESSAGE" | "STAFF" | "JOB" | "PUBLIC_LINK" | "ONLINE_BOOKING";
         AuditSearchDto: {
             /** @example LOT-AB12 */
             lot?: string;
@@ -14587,6 +14788,11 @@ export interface components {
          * @enum {string}
          */
         TriageFlag: "PAIN" | "SWELLING" | "INFECTION" | "FEVER" | "BLEEDING" | "TRAUMA";
+        /**
+         * @description DX-016: STAFF = la agendó el personal; ONLINE = reserva online del paciente (marca «Online» en la agenda).
+         * @enum {string}
+         */
+        AppointmentOrigin: "STAFF" | "ONLINE";
         ChairSummaryDto: {
             /** Format: uuid */
             id: string;
@@ -14784,6 +14990,8 @@ export interface components {
             triageNote: string | null;
             /** @description DX-470: nació en «Atender sin cita». */
             walkIn: boolean;
+            /** @description DX-016: STAFF = la agendó el personal; ONLINE = reserva online del paciente (marca «Online» en la agenda). */
+            origin: components["schemas"]["AppointmentOrigin"];
             /** @description DX-470: sobrecupo anotado (sin hueco reservado libre). No ocupa el hueco del profesional: otra cita puede solaparse con ella. */
             overbooked: boolean;
             /**
@@ -14924,6 +15132,8 @@ export interface components {
             policyVersionId: string | null;
             /** @description DX-470: nació en «Atender sin cita». */
             walkIn: boolean;
+            /** @description DX-016: STAFF = la agendó el personal; ONLINE = reserva online del paciente (marca «Online» en la agenda). */
+            origin: components["schemas"]["AppointmentOrigin"];
             /** @description DX-470: sobrecupo anotado (sin hueco reservado libre). No ocupa el hueco del profesional: otra cita puede solaparse con ella. */
             overbooked: boolean;
             /**
@@ -15081,6 +15291,8 @@ export interface components {
             triageNote: string | null;
             /** @description DX-470: nació en «Atender sin cita». */
             walkIn: boolean;
+            /** @description DX-016: STAFF = la agendó el personal; ONLINE = reserva online del paciente (marca «Online» en la agenda). */
+            origin: components["schemas"]["AppointmentOrigin"];
             /** @description DX-470: sobrecupo anotado (sin hueco reservado libre). No ocupa el hueco del profesional: otra cita puede solaparse con ella. */
             overbooked: boolean;
             /**
@@ -15353,6 +15565,8 @@ export interface components {
             triageNote: string | null;
             /** @description DX-470: nació en «Atender sin cita». */
             walkIn: boolean;
+            /** @description DX-016: STAFF = la agendó el personal; ONLINE = reserva online del paciente (marca «Online» en la agenda). */
+            origin: components["schemas"]["AppointmentOrigin"];
             /** @description DX-470: sobrecupo anotado (sin hueco reservado libre). No ocupa el hueco del profesional: otra cita puede solaparse con ella. */
             overbooked: boolean;
             /**
@@ -17635,6 +17849,333 @@ export interface components {
              * @example 20
              */
             minLeadMinutes: number;
+        };
+        /** @enum {string} */
+        OnlineBookingMode: "REQUEST" | "DIRECT";
+        PublicLocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            address: string | null;
+            /** @example America/Caracas */
+            timeZone: string;
+            /**
+             * @description Idioma y región del formato de la sede (BCP 47).
+             * @example es-VE
+             */
+            locale: string | null;
+            /**
+             * @description Reloj de la sede.
+             * @enum {string|null}
+             */
+            hourCycle: "h12" | "h23" | null;
+        };
+        PublicTypeDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            durationNewMinutes: number;
+            durationExistingMinutes: number;
+            locationIds: string[];
+            providerIds: string[];
+        };
+        PublicProviderDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            locationIds: string[];
+        };
+        PublicPrivacyPolicyDto: {
+            /** Format: uuid */
+            id: string;
+            version: number;
+            policyText: string;
+            /** @description Lo que autoriza la casilla del formulario. */
+            generalText: string;
+        };
+        PublicBookingConfigDto: {
+            clinicName: string;
+            newPatientMode: components["schemas"]["OnlineBookingMode"];
+            existingPatientMode: components["schemas"]["OnlineBookingMode"];
+            /** @description Sin política de datos publicada, un paciente nuevo no puede reservar online. */
+            newPatientsAllowed: boolean;
+            minLeadMinutesNew: number;
+            minLeadMinutesExisting: number;
+            maxAdvanceDays: number;
+            locations: components["schemas"]["PublicLocationDto"][];
+            types: components["schemas"]["PublicTypeDto"][];
+            providers: components["schemas"]["PublicProviderDto"][];
+            privacyPolicy: components["schemas"]["PublicPrivacyPolicyDto"] | null;
+            /** @description Se devuelve en cada envío (tiempo mínimo de rellenado). */
+            formToken: string;
+        };
+        /** @enum {string} */
+        OnlineBookingPatientKind: "NEW" | "EXISTING";
+        PublicSlotDto: {
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /**
+             * Format: uuid
+             * @description El profesional libre en ese hueco.
+             */
+            providerId: string;
+        };
+        PublicSlotsDto: {
+            /** @example America/Caracas */
+            timeZone: string;
+            durationMinutes: number;
+            slots: components["schemas"]["PublicSlotDto"][];
+            truncated: boolean;
+        };
+        RequestBookingCodeDto: {
+            /** @description Campo trampa: SIEMPRE vacío (oculto para las personas). */
+            website?: string;
+            /** @description El `formToken` de GET /public/booking (mide el tiempo de rellenado). */
+            formToken: string;
+            /** @description Reservado para el desafío anti-bots de un proveedor (pendiente; hoy no se exige). */
+            challengeToken?: string | null;
+            /** @example María */
+            firstName: string;
+            /** @example Pérez */
+            lastName: string;
+            /** @example 1990-05-14 */
+            birthDate: string;
+            /** @example maria.perez@example.com */
+            email: string;
+        };
+        BookingCodeSentDto: {
+            /**
+             * Format: uuid
+             * @description Se devuelve SIEMPRE (también si los datos no casan con ninguna ficha).
+             */
+            verificationId: string;
+            /** Format: date-time */
+            expiresAt: string;
+            message: string;
+        };
+        VerifyBookingCodeDto: {
+            /** @example 123456 */
+            code: string;
+        };
+        BookingSessionDto: {
+            /** @description Va en la cabecera X-Booking-Session de los huecos y de la reserva. */
+            sessionToken: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        NewPatientDto: {
+            /** @example Luis */
+            firstName: string;
+            /** @example Rodríguez */
+            lastName: string;
+            /** @example 1988-02-03 */
+            birthDate: string;
+            /** @example luis.rodriguez@example.com */
+            email: string;
+            /** @description Teléfono de contacto (con prefijo internacional si es de otro país). */
+            phone: string;
+            /**
+             * Format: uuid
+             * @description La política vigente que se le mostró.
+             */
+            consentPolicyVersionId: string;
+            /** @description Acepta el tratamiento de sus datos (obligatorio). */
+            consentAccepted: boolean;
+        };
+        CreatePublicBookingDto: {
+            /** @description Campo trampa: SIEMPRE vacío (oculto para las personas). */
+            website?: string;
+            /** @description El `formToken` de GET /public/booking (mide el tiempo de rellenado). */
+            formToken: string;
+            /** @description Reservado para el desafío anti-bots de un proveedor (pendiente; hoy no se exige). */
+            challengeToken?: string | null;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: uuid */
+            appointmentTypeId: string;
+            /**
+             * Format: uuid
+             * @description Sin él, el primero libre a esa hora.
+             */
+            providerId?: string | null;
+            /**
+             * Format: date-time
+             * @description Inicio de uno de los huecos de GET /public/booking/slots.
+             */
+            start: string;
+            /** @description Paciente nuevo. Para uno existente, la cabecera X-Booking-Session. */
+            newPatient?: components["schemas"]["NewPatientDto"];
+        };
+        PublicBookingResultDto: {
+            /**
+             * @description BOOKED = cita reservada; REQUESTED = solicitud por confirmar.
+             * @enum {string}
+             */
+            status: "BOOKED" | "REQUESTED";
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** @example America/Caracas */
+            timeZone: string;
+            locationName: string;
+            providerName: string;
+            appointmentTypeName: string;
+            /** @example es-VE */
+            locale: string | null;
+            /** @enum {string|null} */
+            hourCycle: "h12" | "h23" | null;
+            /** @description Enlace para confirmar o cancelar la cita (DX-005). */
+            manageUrl: string | null;
+        };
+        OnlineBookingSettingsDto: {
+            /** @description Activa la página pública /reservar (por defecto, desactivada). */
+            enabled: boolean;
+            /** @description Pacientes nuevos: SOLICITUD (recepción la acepta) o reserva DIRECTA. */
+            newPatientMode: components["schemas"]["OnlineBookingMode"];
+            /** @description Pacientes existentes (identificados con el código del email). */
+            existingPatientMode: components["schemas"]["OnlineBookingMode"];
+            /**
+             * @description Antelación mínima (minutos) para pacientes nuevos.
+             * @example 120
+             */
+            minLeadMinutesNew: number;
+            /**
+             * @description Antelación mínima (minutos) para pacientes existentes.
+             * @example 120
+             */
+            minLeadMinutesExisting: number;
+            /**
+             * @description Hasta cuántos días adelante se ofrecen huecos.
+             * @example 60
+             */
+            maxAdvanceDays: number;
+            /**
+             * @description Cada cuántos minutos empieza un hueco (múltiplo de 5).
+             * @example 15
+             */
+            slotStepMinutes: number;
+            /**
+             * Format: date-time
+             * @description Último cambio; null = nunca configurada.
+             */
+            updatedAt: string | null;
+        };
+        UpdateOnlineBookingSettingsDto: {
+            /** @description Activa la página pública /reservar (por defecto, desactivada). */
+            enabled: boolean;
+            /** @description Pacientes nuevos: SOLICITUD (recepción la acepta) o reserva DIRECTA. */
+            newPatientMode: components["schemas"]["OnlineBookingMode"];
+            /** @description Pacientes existentes (identificados con el código del email). */
+            existingPatientMode: components["schemas"]["OnlineBookingMode"];
+            /**
+             * @description Antelación mínima (minutos) para pacientes nuevos.
+             * @example 120
+             */
+            minLeadMinutesNew: number;
+            /**
+             * @description Antelación mínima (minutos) para pacientes existentes.
+             * @example 120
+             */
+            minLeadMinutesExisting: number;
+            /**
+             * @description Hasta cuántos días adelante se ofrecen huecos.
+             * @example 60
+             */
+            maxAdvanceDays: number;
+            /**
+             * @description Cada cuántos minutos empieza un hueco (múltiplo de 5).
+             * @example 15
+             */
+            slotStepMinutes: number;
+        };
+        OnlineTypeDto: {
+            /** @description Se ofrece en la página pública. */
+            visibleOnline: boolean;
+            /** @description Duración para pacientes nuevos (null = la del tipo). */
+            durationNewMinutes: number | null;
+            /** @description Duración para pacientes existentes (null = la del tipo). */
+            durationExistingMinutes: number | null;
+            /** @description Profesionales que lo atienden online (vacío = todos los que atienden en la sede). */
+            providerIds: string[];
+            /** @description Sedes en que se ofrece (vacío = todas). */
+            locationIds: string[];
+            /** Format: uuid */
+            appointmentTypeId: string;
+            name: string;
+            /** @example #0E7490 */
+            color: string;
+            /** @description Duración del tipo en el catálogo. */
+            durationMinutes: number;
+            /** @description Activo en el catálogo (uno inactivo no se ofrece). */
+            active: boolean;
+        };
+        UpdateOnlineTypeDto: {
+            /** @description Se ofrece en la página pública. */
+            visibleOnline: boolean;
+            /** @description Duración para pacientes nuevos (null = la del tipo). */
+            durationNewMinutes: number | null;
+            /** @description Duración para pacientes existentes (null = la del tipo). */
+            durationExistingMinutes: number | null;
+            /** @description Profesionales que lo atienden online (vacío = todos los que atienden en la sede). */
+            providerIds: string[];
+            /** @description Sedes en que se ofrece (vacío = todas). */
+            locationIds: string[];
+        };
+        /** @enum {string} */
+        OnlineBookingStatus: "PENDING" | "BOOKED" | "ACCEPTED" | "DECLINED";
+        RequestLocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            timeZone: string | null;
+        };
+        FullNameRefDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+        };
+        RequestTypeDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            color: string;
+        };
+        OnlineRequestDto: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["OnlineBookingStatus"];
+            mode: components["schemas"]["OnlineBookingMode"];
+            patientKind: components["schemas"]["OnlineBookingPatientKind"];
+            /** @description Un «nuevo» parecido a una ficha: no se creó otra; comprueba antes de aceptar. */
+            possibleDuplicate: boolean;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            decidedAt: string | null;
+            /** @description Lo que escribió en la página (no cambia la ficha). */
+            contactEmail: string | null;
+            contactPhone: string | null;
+            /** Format: uuid */
+            appointmentId: string | null;
+            location: components["schemas"]["RequestLocationDto"];
+            provider: components["schemas"]["FullNameRefDto"];
+            appointmentType: components["schemas"]["RequestTypeDto"];
+            patient: components["schemas"]["FullNameRefDto"];
+        };
+        OnlineRequestPageDto: {
+            items: components["schemas"]["OnlineRequestDto"][];
+            total: number;
+        };
+        OnlinePendingCountDto: {
+            /** @description Solicitudes online por revisar en las sedes permitidas. */
+            pending: number;
         };
         /**
          * @description DX-354: reloj de la sede de la cita, en crudo. null si la sede no lo tiene: la página pinta «—» y pide llamar a la clínica.
@@ -40225,6 +40766,498 @@ export interface operations {
             };
             /** @description Solo un administrador puede cambiar los ajustes de las ofertas de hueco. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicBookingController_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicBookingConfigDto"];
+                };
+            };
+            /** @description «La reserva online no está disponible en esta clínica.»: reserva desactivada, host sin clínica o desconocido (la misma respuesta). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicBookingController_book: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sesión del paciente existente (POST …/verify) o de reintento tras un 409. */
+                "X-Booking-Session"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePublicBookingDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicBookingResultDto"];
+                };
+            };
+            /** @description Datos inválidos o protección anti-bots */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu verificación caducó. Vuelve a identificarte para reservar. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description «La reserva online no está disponible en esta clínica.»: reserva desactivada, host sin clínica o desconocido (la misma respuesta). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `ONLINE_SLOT_TAKEN` (otro lo ganó), `ONLINE_SLOT_GONE` (ya no se ofrece), `ONLINE_PATIENT_BUSY` o `PRIVACY_POLICY_OUTDATED`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicBookingController_slots: {
+        parameters: {
+            query: {
+                locationId: string;
+                appointmentTypeId: string;
+                /** @description Sin él, cualquiera de los profesionales del tipo. */
+                providerId?: string;
+                /** @description Decide la duración y la antelación (con sesión manda la sesión). */
+                patientKind: components["schemas"]["OnlineBookingPatientKind"];
+                /** @description Primer día (YYYY-MM-DD) en la zona de la sede. */
+                from: string;
+                days?: number;
+            };
+            header?: {
+                /** @description Sesión del paciente existente (POST …/verify) o de reintento tras un 409. */
+                "X-Booking-Session"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSlotsDto"];
+                };
+            };
+            /** @description Fecha o número de días inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description «La reserva online no está disponible en esta clínica.»: reserva desactivada, host sin clínica o desconocido (la misma respuesta). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicBookingController_code: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestBookingCodeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookingCodeSentDto"];
+                };
+            };
+            /** @description Datos inválidos o protección anti-bots */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description «La reserva online no está disponible en esta clínica.»: reserva desactivada, host sin clínica o desconocido (la misma respuesta). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicBookingController_verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyBookingCodeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookingSessionDto"];
+                };
+            };
+            /** @description «El código no es correcto o caducó. Revísalo o pide uno nuevo.» (incorrecto, caducado, usado o bloqueado: la misma respuesta) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description «La reserva online no está disponible en esta clínica.»: reserva desactivada, host sin clínica o desconocido (la misma respuesta). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OnlineBookingController_getSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnlineBookingSettingsDto"];
+                };
+            };
+        };
+    };
+    OnlineBookingController_updateSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateOnlineBookingSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnlineBookingSettingsDto"];
+                };
+            };
+            /** @description Un valor fuera de rango */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar la reserva online. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OnlineBookingController_listTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnlineTypeDto"][];
+                };
+            };
+        };
+    };
+    OnlineBookingController_updateType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                appointmentTypeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateOnlineTypeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnlineTypeDto"];
+                };
+            };
+            /** @description Duración, profesional o sede inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar la reserva online. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tipo de cita no encontrado (o de otra clínica) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El tipo está desactivado en el catálogo */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OnlineBookingController_listRequests: {
+        parameters: {
+            query?: {
+                /** @description Sin él, todas. */
+                status?: components["schemas"]["OnlineBookingStatus"];
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnlineRequestPageDto"];
+                };
+            };
+        };
+    };
+    OnlineBookingController_pendingCount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnlinePendingCountDto"];
+                };
+            };
+        };
+    };
+    OnlineBookingController_accept: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnlineRequestDto"];
+                };
+            };
+            /** @description La solicitud es de una sede no permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solicitud no encontrada (o de otra clínica) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya resuelta, o la hora ya está ocupada */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OnlineBookingController_decline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnlineRequestDto"];
+                };
+            };
+            /** @description La solicitud es de una sede no permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solicitud no encontrada (o de otra clínica) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya resuelta */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
