@@ -131,7 +131,7 @@ describe('PublicBudgetSummary · DX-560 presentación', () => {
 
   it('con presentación: visitas, odontograma compacto, textos con su idioma, total y segunda moneda congelada', () => {
     render(<PublicBudgetSummary budget={budget} clock={CLOCK} presentation={presentation} />);
-    expect(screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['Visita 1', 'Visita 2 · Cirugía']);
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['Visita 1', 'Visita 2 · Cirugía']);
     expect(screen.getByRole('img', { name: 'Dientes de esta visita: 16' })).toBeInTheDocument();
     expect(screen.getByText('Filling on the molar')).toHaveAttribute('lang', 'en');
     expect(screen.getByText('Implante para reponer la muela')).toHaveAttribute('lang', 'es');
@@ -183,7 +183,7 @@ describe('PublicBudgetSummary · DX-560 presentación', () => {
     const { secondCurrency: _omit, ...rest } = presentation;
     void _omit;
     render(<PublicBudgetSummary budget={budget} clock={CLOCK} presentation={rest} />);
-    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(2);
+    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(2);
     expect(screen.queryByTestId('public-budget-second-total')).not.toBeInTheDocument();
   });
 });
