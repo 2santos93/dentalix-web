@@ -12555,6 +12555,18 @@ export interface components {
             /** @description false = sale de la resolución de precios. */
             active?: boolean;
         };
+        PatientDescriptionDto: {
+            /**
+             * @description Etiqueta BCP 47 de uno de los idiomas de los pacientes de la clínica (`tenants.patientLanguages`).
+             * @example es
+             */
+            language: string;
+            /**
+             * @description Texto plano para el paciente, de hasta 300 caracteres tras recortar; sin enlaces ni HTML. Vacío = sin descripción en ese idioma.
+             * @example Limpieza profunda de las encías para frenar la inflamación y el sangrado.
+             */
+            text: string;
+        };
         CreateCatalogItemDto: {
             /** @description Unique code within the tenant */
             code: string;
@@ -12593,6 +12605,8 @@ export interface components {
              * @description DX-455: plantilla de evolución que se sugiere al marcar hecho el procedimiento; null = ninguna (quitarla no cambia las evoluciones guardadas). Debe ser de esta clínica (404) y estar activa (400); solo en procedimientos (400 en un diagnóstico).
              */
             clinicalNoteTemplateId?: string | null;
+            /** @description DX-560: la lista ENTERA de la descripción para el paciente (un idioma que no viene se quita; vacía = sin descripción). Sin el campo, no se toca. Idiomas de la lista de la clínica y sin repetir; una entrada con texto vacío se descarta. */
+            patientDescription?: components["schemas"]["PatientDescriptionDto"][];
         };
         DentalCatalogItemDto: {
             /** Format: uuid */
@@ -12614,6 +12628,8 @@ export interface components {
             requiresPostOpCheck: boolean;
             /** @description DX-566: días HÁBILES de la sede tras el procedimiento en los que se llama. */
             postOpCheckAfterDays: number;
+            /** @description DX-560: descripción para el paciente por idioma, el español primero y luego en orden alfabético. Vacía = sin descripción: el paciente lee el nombre del catálogo en su idioma. */
+            patientDescription: components["schemas"]["PatientDescriptionDto"][];
             /** @description DX-502-ter: moneda del `defaultPrice`, la del catálogo de la clínica; null si no se sabe. Solo la traen las lecturas (`GET /catalog/items`); es la misma en todos los ítems. */
             catalogCurrency?: string | null;
             active: boolean;
@@ -12665,6 +12681,8 @@ export interface components {
              * @description DX-455: plantilla de evolución que se sugiere al marcar hecho el procedimiento; null = ninguna (quitarla no cambia las evoluciones guardadas). Debe ser de esta clínica (404) y estar activa (400); solo en procedimientos (400 en un diagnóstico).
              */
             clinicalNoteTemplateId?: string | null;
+            /** @description DX-560: la lista ENTERA de la descripción para el paciente (un idioma que no viene se quita; vacía = sin descripción). Sin el campo, no se toca. Idiomas de la lista de la clínica y sin repetir; una entrada con texto vacío se descarta. */
+            patientDescription?: components["schemas"]["PatientDescriptionDto"][];
         };
         CatalogPriceHistoryEntryDto: {
             /** Format: uuid */
@@ -18704,6 +18722,30 @@ export interface components {
             label: string | null;
             minDaysAfterPrevious: number;
         };
+        PlanPresentationItemDto: {
+            /** Format: uuid */
+            itemId: string;
+            visit: number;
+            /**
+             * @description Texto para el paciente. Orden: descripción en su idioma exacto → descripción en su idioma base → nombre del catálogo en ese idioma (labelEn/labelPt) si existe → descripción en español → labelEs → «Procedimiento». Nunca un código ni un id.
+             * @example Limpieza profunda de las encías.
+             */
+            label: string;
+            /**
+             * @description Idioma en que sale `label` (BCP 47); puede ser `es` aunque el paciente prefiera otro.
+             * @example es
+             */
+            language: string;
+        };
+        PlanPresentationDto: {
+            /**
+             * @description Idioma PREFERIDO del paciente (`patients.preferredLanguage`) o, sin él, `es`. El de cada texto va en `items[].language`.
+             * @example es
+             */
+            language: string;
+            /** @description Un elemento por ítem del presupuesto, en su orden. */
+            items: components["schemas"]["PlanPresentationItemDto"][];
+        };
         ClinicFiscalDto: {
             legalName: string | null;
             /** @description Null = el nombre genérico («Id. fiscal»). */
@@ -18841,6 +18883,8 @@ export interface components {
         PlanQuoteDocumentDto: {
             /** @description Organización clínica actual; separada del contenido firmado. */
             visitOrganization?: components["schemas"]["PlanQuoteVisitDto"][];
+            /** @description DX-560: texto para el paciente de cada ítem en su idioma, separado del contenido firmado (no cambia `contentHash`). Presentarlo no emite el presupuesto. */
+            presentation: components["schemas"]["PlanPresentationDto"];
             /**
              * @description 4 = con la moneda de cada precio de lista (DX-502) y los datos fiscales congelados si la clínica los tiene; 3 = con datos fiscales congelados (DX-019); 2 = con convenio y ahorro (DX-105); 1 = foto firmada antes de DX-105 (sin convenio).
              * @enum {number}
@@ -18941,6 +18985,8 @@ export interface components {
         AcceptedPlanQuoteDocumentDto: {
             /** @description Organización clínica actual; separada del contenido firmado. */
             visitOrganization?: components["schemas"]["PlanQuoteVisitDto"][];
+            /** @description DX-560: texto para el paciente de cada ítem en su idioma, separado del contenido firmado (no cambia `contentHash`). Presentarlo no emite el presupuesto. */
+            presentation: components["schemas"]["PlanPresentationDto"];
             /**
              * @description 4 = con la moneda de cada precio de lista (DX-502) y los datos fiscales congelados si la clínica los tiene; 3 = con datos fiscales congelados (DX-019); 2 = con convenio y ahorro (DX-105); 1 = foto firmada antes de DX-105 (sin convenio).
              * @enum {number}
@@ -24001,6 +24047,8 @@ export interface components {
              * @description Profesional que nombra el texto y firmará después en la app. Por defecto, quien envía si tiene rol clínico (recepción debe elegirlo).
              */
             professionalId?: string;
+            /** @description DX-560 (solo BUDGET): segunda moneda orientativa del enlace (ISO 4217), que elige quien envía. Regla: (a) esta, si viene: distinta de la moneda del plan (400 «La segunda moneda debe ser distinta de la del presupuesto.») y del catálogo de monedas (400 «La segunda moneda no está en el catálogo de monedas.»); (b) sin ella, la moneda de la sede del envío si es distinta de la del plan; (c) si no, sin segunda moneda. La tasa es la que la clínica ya tiene guardada ese día en la zona de la sede (nunca el proveedor); sin tasa guardada, el enlace va sin segunda moneda. En CONSENT, 400. Los avisos del seguimiento automático (DX-561) solo usan (b)/(c). */
+            secondCurrency?: string;
         };
         SignatureRequestCreatedDto: {
             /** Format: uuid */
@@ -24176,6 +24224,55 @@ export interface components {
             items: components["schemas"]["PublicBudgetItemDto"][];
             totals: components["schemas"]["PublicBudgetTotalDto"][];
         };
+        PublicPresentationItemDto: {
+            /** @description Posición del ítem en `budget.items` */
+            index: number;
+            visit: number;
+            /**
+             * @description Texto para el paciente (descripción en su idioma, nombre del catálogo en su idioma, descripción en español o labelEs); nunca un código ni un id.
+             * @example Limpieza profunda de las encías.
+             */
+            label: string;
+            /**
+             * @description Idioma en que sale `label` (BCP 47)
+             * @example es
+             */
+            language: string;
+        };
+        PublicPresentationVisitDto: {
+            visit: number;
+            label: string | null;
+            minDaysAfterPrevious: number;
+        };
+        PublicPresentationSecondCurrencyDto: {
+            /** @description Moneda ISO 4217 */
+            currency: string;
+            /** @description Unidades de la moneda del plan por 1 USD */
+            fromPerBase: number;
+            /** @description Unidades de `currency` por 1 USD */
+            toPerBase: number;
+            /**
+             * @description Fuente de la tasa (ExchangeRateSource)
+             * @example MANUAL
+             */
+            source: string;
+            /**
+             * @description Día de la tasa (YYYY-MM-DD)
+             * @example 2026-11-18
+             */
+            date: string;
+        };
+        PublicBudgetPresentationDto: {
+            /**
+             * @description Idioma preferido del paciente; el de cada texto va en `items[].language`.
+             * @example es
+             */
+            language: string;
+            items: components["schemas"]["PublicPresentationItemDto"][];
+            visitOrganization: components["schemas"]["PublicPresentationVisitDto"][];
+            /** @description Solo si la sede tiene una segunda moneda con tasa guardada ese día. */
+            secondCurrency?: components["schemas"]["PublicPresentationSecondCurrencyDto"];
+        };
         PublicSignatureDocumentDto: {
             type: components["schemas"]["SignatureRequestType"];
             title: string;
@@ -24195,6 +24292,8 @@ export interface components {
             location: components["schemas"]["PublicSignatureLocationDto"];
             /** @description BUDGET: el presupuesto que se acepta (el texto `body` son sus condiciones); CONSENT: null */
             budget: components["schemas"]["PublicBudgetDto"] | null;
+            /** @description DX-560 (BUDGET): cómo se presenta al paciente (visitas, textos para el paciente y la segunda moneda), congelado al enviarlo; null en CONSENT y en los enlaces anteriores a DX-560. */
+            presentation: components["schemas"]["PublicBudgetPresentationDto"] | null;
         };
         SignPublicSignatureDto: {
             /** @description PNG (data:image/png;base64,… o base64), máx. 200 KB. */
@@ -24223,6 +24322,8 @@ export interface components {
             location: components["schemas"]["PublicSignatureLocationDto"];
             /** @description BUDGET: el presupuesto que se acepta (el texto `body` son sus condiciones); CONSENT: null */
             budget: components["schemas"]["PublicBudgetDto"] | null;
+            /** @description DX-560 (BUDGET): cómo se presenta al paciente (visitas, textos para el paciente y la segunda moneda), congelado al enviarlo; null en CONSENT y en los enlaces anteriores a DX-560. */
+            presentation: components["schemas"]["PublicBudgetPresentationDto"] | null;
             signerDocument: string | null;
             /**
              * Format: date-time
