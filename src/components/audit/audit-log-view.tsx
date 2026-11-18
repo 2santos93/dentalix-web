@@ -53,6 +53,7 @@ import {
   treatmentPlanAcceptanceDetail,
   externalOrderDetail,
   dentalLabDetail,
+  postOpCheckDetail,
 } from '@/lib/audit/audit-labels';
 import { configChangeItems, type ConfigChangeItem } from '@/lib/audit/config-change';
 import { auditTime, auditZoneHint, type AuditSedeTime, type AuditTime } from '@/lib/audit/audit-time';
@@ -591,7 +592,8 @@ function eventDetail(
     signatureRequestDetail(event.metadata) ??
     treatmentPlanAcceptanceDetail(event.metadata) ??
     externalOrderDetail(event.metadata) ??
-    dentalLabDetail(event.metadata)
+    dentalLabDetail(event.metadata) ??
+    postOpCheckDetail(event.metadata)
   );
 }
 

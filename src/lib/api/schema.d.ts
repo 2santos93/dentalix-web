@@ -8476,6 +8476,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/post-op-checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lista de llamadas de control postoperatorio
+         * @description Controles postoperatorios PENDIENTES cuyo día de llamada ya llegó en la zona de su sede (por defecto hoy y los vencidos), de pacientes no archivados, primero los más vencidos y luego por hora de la cita. Solo las sedes permitidas al usuario (DX-089). Fila: paciente, teléfono y WhatsApp, profesional, cita e intentos. Los roles clínicos ven además el procedimiento, los intentos con su nota y las indicaciones entregadas en la cita; RECEPTION, no (`clinicalHidden: true`). Deja un `audit_event` VIEW POST_OP_CHECK (POST_OP_CHECK_LIST).
+         */
+        get: operations["PostOpChecksController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/post-op-checks/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Contador de «Controles postoperatorios»
+         * @description Los mismos filtros y alcance que la lista, solo los números (sin pacientes, sin auditoría). Controles postoperatorios PENDIENTES cuyo día de llamada ya llegó en la zona de su sede (por defecto hoy y los vencidos), de pacientes no archivados, primero los más vencidos y luego por hora de la cita. Solo las sedes permitidas al usuario (DX-089).
+         */
+        get: operations["PostOpChecksController_count"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/post-op-checks/{id}/attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Registrar el resultado de una llamada de control
+         * @description Bloquea el control. FINE (Bien), DISCOMFORT (Molestias) y NEEDS_APPOINTMENT (Necesita cita) lo cierran (DONE) con ese desenlace; NO_ANSWER (No contesta) añade un intento y al tercero lo cierra como «No localizado» (UNREACHABLE). Al cerrar, en la misma transacción, el desenlace queda en la historia clínica: adenda a la evolución más reciente de la cita (motivo «Control postoperatorio») o, si la cita no tiene evolución (o no hay cita), una evolución nueva con ese motivo ligada a la cita y al paciente; autor = quien registra. Deja un `audit_event` UPDATE POST_OP_CHECK (POST_OP_CHECK_<resultado>, sin la nota). «Necesita cita» solo registra: la cita se agenda aparte.
+         */
+        post: operations["PostOpChecksController_recordAttempt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/commissions/rules": {
         parameters: {
             query?: never;
@@ -9592,7 +9652,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE" | "ORTHO_CASE" | "ORTHO_VISIT" | "DENTAL_LAB" | "DENTAL_LAB_ORDER" | "COMMISSION_SETTLEMENT";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE" | "ORTHO_CASE" | "ORTHO_VISIT" | "DENTAL_LAB" | "DENTAL_LAB_ORDER" | "COMMISSION_SETTLEMENT" | "POST_OP_CHECK";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -12070,6 +12130,16 @@ export interface components {
              * @default true
              */
             allowDiscount: boolean;
+            /**
+             * @description DX-566: al marcarlo hecho se crea un control postoperatorio (llamada al paciente). Solo en PROCEDURE: en un diagnóstico, 400.
+             * @default false
+             */
+            requiresPostOpCheck: boolean;
+            /**
+             * @description DX-566: días HÁBILES de la sede tras el procedimiento en los que se llama (1–30).
+             * @default 1
+             */
+            postOpCheckAfterDays: number;
             /** @default true */
             active: boolean;
             /**
@@ -12094,6 +12164,10 @@ export interface components {
             defaultPrice: number | null;
             /** @description DX-105: false = la prestación no admite descuentos (ni % de convenio ni discrecionales). */
             allowDiscount: boolean;
+            /** @description DX-566: al marcarlo hecho se crea un control postoperatorio (llamada al paciente). Solo en PROCEDURE. */
+            requiresPostOpCheck: boolean;
+            /** @description DX-566: días HÁBILES de la sede tras el procedimiento en los que se llama. */
+            postOpCheckAfterDays: number;
             /** @description DX-502-ter: moneda del `defaultPrice`, la del catálogo de la clínica; null si no se sabe. Solo la traen las lecturas (`GET /catalog/items`); es la misma en todos los ítems. */
             catalogCurrency?: string | null;
             active: boolean;
@@ -12135,6 +12209,10 @@ export interface components {
             defaultPrice?: number;
             /** @description DX-105: false = la prestación no admite descuentos. */
             allowDiscount?: boolean;
+            /** @description DX-566: al marcarlo hecho se crea un control postoperatorio (llamada al paciente). Solo en PROCEDURE: en un diagnóstico, 400. Un procedimiento que pasa a diagnóstico deja de pedirlo. */
+            requiresPostOpCheck?: boolean;
+            /** @description DX-566: días HÁBILES de la sede tras el procedimiento en los que se llama (1–30). */
+            postOpCheckAfterDays?: number;
             active?: boolean;
             /**
              * Format: uuid
@@ -27489,6 +27567,125 @@ export interface components {
             /** Format: date-time */
             printedAt: string;
         };
+        /** @enum {string} */
+        PostOpAttemptOutcome: "FINE" | "DISCOMFORT" | "NEEDS_APPOINTMENT" | "NO_ANSWER";
+        PostOpCheckAttemptDto: {
+            /** Format: uuid */
+            id: string;
+            outcome: components["schemas"]["PostOpAttemptOutcome"];
+            note: string | null;
+            /** Format: uuid */
+            byId: string;
+            /** @example Dra. Carmen Rojas */
+            byName: string;
+            /** Format: date-time */
+            at: string;
+        };
+        PostOpInstructionDto: {
+            /**
+             * Format: uuid
+             * @description Id de la entrega: el documento está en GET /patients/:patientId/post-op-deliveries/:id.
+             */
+            deliveryId: string;
+            /** @example Cuidados tras una extracción */
+            title: string;
+            /** Format: date-time */
+            deliveredAt: string;
+        };
+        PostOpCheckListItemDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description Día de la llamada (zona de la sede).
+             * @example 2026-11-18
+             */
+            dueOn: string;
+            /** @description Días de retraso respecto a hoy en la sede (0 = vence hoy). */
+            overdueDays: number;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** @example Luisa Fernández */
+            patientName: string;
+            /** @description Teléfono del paciente (también para recepción y con baja de avisos: es una llamada clínica). */
+            patientPhone: string | null;
+            /**
+             * @description Dígitos para wa.me; null si el número no es válido.
+             * @example 584141234567
+             */
+            whatsAppDigits: string | null;
+            /** Format: uuid */
+            professionalId: string;
+            professionalName: string | null;
+            /** Format: uuid */
+            appointmentId: string | null;
+            /** Format: date-time */
+            appointmentStart: string | null;
+            attemptsCount: number;
+            /** @description true para RECEPTION: procedimiento, intentos (con sus notas) e indicaciones van a null. */
+            clinicalHidden: boolean;
+            /** @example Extracción simple */
+            procedureName: string | null;
+            attempts: components["schemas"]["PostOpCheckAttemptDto"][] | null;
+            /** @description Indicaciones postoperatorias entregadas en la cita del control. */
+            instructions: components["schemas"]["PostOpInstructionDto"][] | null;
+        };
+        PostOpCheckListDto: {
+            items: components["schemas"]["PostOpCheckListItemDto"][];
+            total: number;
+            /** @description De `total`, los vencidos antes de hoy. */
+            overdue: number;
+            page: number;
+            pageSize: number;
+        };
+        PostOpCheckCountDto: {
+            total: number;
+            /** @description De `total`, los vencidos antes de hoy. */
+            overdue: number;
+        };
+        RecordPostOpAttemptDto: {
+            /** @description FINE (Bien), DISCOMFORT (Molestias) y NEEDS_APPOINTMENT (Necesita cita) cierran el control; NO_ANSWER (No contesta) suma un intento y al tercero lo cierra como «No localizado» (UNREACHABLE). */
+            outcome: components["schemas"]["PostOpAttemptOutcome"];
+            /** @description Nota del intento (dato de salud). Queda en la historia al cerrar; nunca en la auditoría. */
+            note?: string | null;
+        };
+        /** @enum {string} */
+        PostOpCheckStatus: "PENDING" | "DONE" | "UNREACHABLE" | "CANCELLED";
+        /** @enum {string} */
+        PostOpCheckOutcome: "FINE" | "DISCOMFORT" | "NEEDS_APPOINTMENT";
+        PostOpCheckDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            locationId: string;
+            status: components["schemas"]["PostOpCheckStatus"];
+            outcome: components["schemas"]["PostOpCheckOutcome"] | null;
+            /** @example 2026-11-18 */
+            dueOn: string;
+            /** Format: date-time */
+            closedAt: string | null;
+            /** Format: uuid */
+            closedById: string | null;
+            /**
+             * Format: uuid
+             * @description Evolución donde quedó el desenlace (nueva o la que recibió la adenda).
+             */
+            clinicalEntryId: string | null;
+            /**
+             * Format: uuid
+             * @description La adenda, si el desenlace se añadió a una evolución de la cita.
+             */
+            addendumId: string | null;
+            /**
+             * Format: uuid
+             * @description El intento recién registrado.
+             */
+            attemptId: string;
+            attemptsCount: number;
+        };
         CommissionProfessionalDto: {
             /** Format: uuid */
             userId: string;
@@ -28647,7 +28844,7 @@ export interface components {
             catalogItemIds: string[];
         };
         /** @enum {string} */
-        WorkQueueKey: "CLOSING_QUEUE" | "PAYMENT_REPORTS" | "ANAMNESIS_REVIEW" | "QUOTE_FOLLOW_UP" | "ACCEPTED_UNSCHEDULED" | "WAITLIST" | "RECALL" | "RECEIVABLES" | "LOW_STOCK";
+        WorkQueueKey: "CLOSING_QUEUE" | "PAYMENT_REPORTS" | "ANAMNESIS_REVIEW" | "POST_OP_CHECKS" | "QUOTE_FOLLOW_UP" | "ACCEPTED_UNSCHEDULED" | "WAITLIST" | "RECALL" | "RECEIVABLES" | "LOW_STOCK";
         WorkQueueOverdueDto: {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
@@ -51816,6 +52013,137 @@ export interface operations {
             };
             /** @description Orden de otra clínica o inexistente */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PostOpChecksController_list: {
+        parameters: {
+            query?: {
+                /** @description Solo los controles de esta sede (403 si no es de las del usuario). Sin ella, la sede activa (X-Location-Id) o, sin ella, todas las que ve el usuario. */
+                locationId?: string;
+                /** @description `overdue` (por defecto): los que vencen hoy y los vencidos. `today`: solo los que vencen hoy. «Hoy» es el día civil de la sede de cada control. */
+                include?: "overdue" | "today";
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostOpCheckListDto"];
+                };
+            };
+            /** @description Filtros o paginación inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PostOpChecksController_count: {
+        parameters: {
+            query?: {
+                /** @description Solo los controles de esta sede (403 si no es de las del usuario). Sin ella, la sede activa (X-Location-Id) o, sin ella, todas las que ve el usuario. */
+                locationId?: string;
+                /** @description `overdue` (por defecto): los que vencen hoy y los vencidos. `today`: solo los que vencen hoy. «Hoy» es el día civil de la sede de cada control. */
+                include?: "overdue" | "today";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostOpCheckCountDto"];
+                };
+            };
+            /** @description Filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PostOpChecksController_recordAttempt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordPostOpAttemptDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostOpCheckDto"];
+                };
+            };
+            /** @description Resultado fuera de la lista o nota de más de 1000 caracteres */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description RECEPTION (Solo el personal clínico (odontólogo, asistente o administrador) registra el resultado de un control postoperatorio) o control de una sede no permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Control postoperatorio no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Este control postoperatorio ya está cerrado: no admite más intentos */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

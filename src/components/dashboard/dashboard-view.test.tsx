@@ -82,6 +82,7 @@ const QUEUES_BY_ROLE: Record<string, WorkQueueKey[]> = {
     'CLOSING_QUEUE',
     'PAYMENT_REPORTS',
     'ANAMNESIS_REVIEW',
+    'POST_OP_CHECKS',
     'QUOTE_FOLLOW_UP',
     'ACCEPTED_UNSCHEDULED',
     'WAITLIST',
@@ -89,13 +90,14 @@ const QUEUES_BY_ROLE: Record<string, WorkQueueKey[]> = {
     'RECEIVABLES',
     'LOW_STOCK',
   ],
-  DENTIST: ['CLOSING_QUEUE', 'ANAMNESIS_REVIEW'],
-  RECEPTION: ['CLOSING_QUEUE', 'PAYMENT_REPORTS', 'QUOTE_FOLLOW_UP', 'ACCEPTED_UNSCHEDULED', 'WAITLIST', 'RECALL', 'RECEIVABLES'],
-  ASSISTANT: ['ANAMNESIS_REVIEW', 'LOW_STOCK'],
+  DENTIST: ['CLOSING_QUEUE', 'ANAMNESIS_REVIEW', 'POST_OP_CHECKS'],
+  RECEPTION: ['CLOSING_QUEUE', 'PAYMENT_REPORTS', 'POST_OP_CHECKS', 'QUOTE_FOLLOW_UP', 'ACCEPTED_UNSCHEDULED', 'WAITLIST', 'RECALL', 'RECEIVABLES'],
+  ASSISTANT: ['ANAMNESIS_REVIEW', 'POST_OP_CHECKS', 'LOW_STOCK'],
 };
 const QUEUE_ITEMS: Record<WorkQueueKey, WorkQueueItem> = {
   CLOSING_QUEUE: { key: 'CLOSING_QUEUE', status: 'OK', count: 3 },
   ANAMNESIS_REVIEW: { key: 'ANAMNESIS_REVIEW', status: 'OK', count: 5 },
+  POST_OP_CHECKS: { key: 'POST_OP_CHECKS', status: 'OK', count: 1 },
   QUOTE_FOLLOW_UP: { key: 'QUOTE_FOLLOW_UP', status: 'OK', count: 2 },
   ACCEPTED_UNSCHEDULED: { key: 'ACCEPTED_UNSCHEDULED', status: 'OK', count: 0 },
   WAITLIST: { key: 'WAITLIST', status: 'OK', count: 1 },
@@ -487,7 +489,7 @@ describe('Inicio · ADMIN', () => {
     }));
     render(<DashboardView token={tokenForRole('ADMIN')} />);
     expect(await screen.findByText('Todo al día')).toBeInTheDocument();
-    expect(screen.getByTestId('pending-folded-toggle')).toHaveTextContent('Al día: 9 listas');
+    expect(screen.getByTestId('pending-folded-toggle')).toHaveTextContent('Al día: 10 listas');
     expect(screen.queryByRole('list', { name: 'Pendientes' })).not.toBeInTheDocument();
   });
 

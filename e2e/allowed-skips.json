@@ -315,6 +315,27 @@
       "annotation": "E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)",
       "requiresUnset": "E2E_MAIL_DIR",
       "reason": "Sin E2E_MAIL_DIR no se pueden registrar la clínica ni leer el enlace de la oferta por email."
+    },
+    {
+      "file": "e2e/post-op-checks.spec.ts",
+      "title": "RECEPTION ve a quién llamar, sin procedimiento ni «Registrar resultado» (390 y 1440 px)",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede poner hoy la cita ni el día del control",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede mover a hoy la cita atendida ni poner para hoy el día de la llamada del control (la API no agenda en el pasado y el control nace para el siguiente día hábil)."
+    },
+    {
+      "file": "e2e/post-op-checks.spec.ts",
+      "title": "1440 px: la odontóloga registra «No contesta» y luego «Bien»; sale, «Mi día» baja y queda en la historia",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede poner hoy la cita ni el día del control",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede mover a hoy la cita atendida ni poner para hoy el día de la llamada del control (la API no agenda en el pasado y el control nace para el siguiente día hábil)."
+    },
+    {
+      "file": "e2e/post-op-checks.spec.ts",
+      "title": "390 px: «Necesita cita» cierra el control y abre la cita con el paciente, la odontóloga y el motivo",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede poner hoy la cita ni el día del control",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede mover a hoy la cita atendida ni poner para hoy el día de la llamada del control (la API no agenda en el pasado y el control nace para el siguiente día hábil)."
     }
   ]
 }
