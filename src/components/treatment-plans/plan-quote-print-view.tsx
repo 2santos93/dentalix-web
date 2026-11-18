@@ -8,16 +8,16 @@ import { getPlan } from '@/lib/treatment-plans/treatment-plans-api';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Button } from '@/components/ui/button';
-import { PlanQuoteDocument, type QuoteSecondCurrency } from './plan-quote-document';
+import { PlanQuoteDocument } from './plan-quote-document';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { FieldError } from '@/components/errors/field-error';
-import { useExchangeRates, type ExchangeRatesState } from '@/components/payments/use-exchange-rates';
+import { useExchangeRates } from '@/components/payments/use-exchange-rates';
+import { secondCurrencyOf } from './quote-second-currency';
 import { ratePreviewCopy } from '@/components/payments/payment-rate-preview';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { documentFormat } from '@/lib/format/document-format';
 import { DocumentFormatNote } from '@/components/documents/document-format-note';
-import { quoteFromRates, ratePerBase } from '@/lib/payments/payment-rate';
 import { usePrintDocumentTitle } from '@/lib/print/use-print-document-title';
 import {
   simulateInstallments,
@@ -47,24 +47,6 @@ const copy = {
   secondMissing: (currency: string) =>
     `No hay tasa de ${currency} para hoy: el presupuesto se imprime sin la segunda moneda.`,
 };
-
-/** La 2.ª moneda lista para el documento, o el motivo de que no la haya. */
-function secondCurrencyOf(
-  state: ExchangeRatesState,
-  planCurrency: string,
-  second: string,
-  date: string,
-): { value: QuoteSecondCurrency } | { missing: string } | null {
-  if (state.status !== 'ready') return null;
-  // La misma tasa que congelaría un abono de hoy (8 decimales, DX-375).
-  const quote = quoteFromRates(state.rates, planCurrency, second);
-  if (quote === null) {
-    return { missing: ratePerBase(state.rates, planCurrency) === null ? planCurrency : second };
-  }
-  const { fromPerBase, toPerBase } = quote;
-  const { source } = state.rates;
-  return { value: { currency: second, fromPerBase, toPerBase, source, date } };
-}
 
 interface PlanQuotePrintViewProps {
   token: string;
