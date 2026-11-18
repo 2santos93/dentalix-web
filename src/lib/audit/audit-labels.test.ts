@@ -11,6 +11,7 @@ import {
   commissionPaymentDetail,
   dentalLabDetail,
   postOpCheckDetail,
+  patientAccessDetail,
   importBatchDetail,
   AUDIT_ACTION_LABELS,
   AUDIT_ACTION_OPTIONS,
@@ -1126,5 +1127,19 @@ describe('postOpCheckDetail (DX-566)', () => {
     );
     expect(postOpCheckDetail({ reason: 'CHAIR_ORDER' })).toBeNull();
     expect(postOpCheckDetail({})).toBeNull();
+  });
+});
+
+describe('patientAccessDetail (DX-101)', () => {
+  it('nombra cada paso del enlace de acceso del paciente', () => {
+    expect(AUDIT_RESOURCE_LABELS.PATIENT_ACCESS_LINK).toBe('Enlace de acceso del paciente');
+    expect(patientAccessDetail({ reason: 'PATIENT_ACCESS_LINK_CREATED' })).toBe('Enlace de acceso del paciente creado');
+    expect(patientAccessDetail({ reason: 'PATIENT_ACCESS_LINK_REVOKED' })).toBe('Enlace de acceso del paciente revocado');
+    expect(patientAccessDetail({ reason: 'PATIENT_ACCESS_VERIFIED' })).toBe('El paciente abrió su enlace de acceso');
+    expect(patientAccessDetail({ reason: 'PATIENT_ACCESS_LOCKED' })).toBe(
+      'Enlace de acceso bloqueado 30 min por intentos fallidos',
+    );
+    expect(patientAccessDetail({ reason: 'POST_OP_CHECK_LIST' })).toBeNull();
+    expect(patientAccessDetail({})).toBeNull();
   });
 });

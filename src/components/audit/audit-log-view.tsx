@@ -55,6 +55,7 @@ import {
   commissionPaymentDetail,
   dentalLabDetail,
   postOpCheckDetail,
+  patientAccessDetail,
 } from '@/lib/audit/audit-labels';
 import { configChangeItems, type ConfigChangeItem } from '@/lib/audit/config-change';
 import { auditTime, auditZoneHint, type AuditSedeTime, type AuditTime } from '@/lib/audit/audit-time';
@@ -597,7 +598,8 @@ function eventDetail(
     externalOrderDetail(event.metadata) ??
     commissionPaymentDetail(event.metadata) ??
     dentalLabDetail(event.metadata) ??
-    postOpCheckDetail(event.metadata)
+    postOpCheckDetail(event.metadata) ??
+    patientAccessDetail(event.metadata)
   );
 }
 

@@ -9779,6 +9779,127 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{id}/access-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Enlaces de acceso vivos del paciente
+         * @description DX-101. Ni revocados ni caducados, del más reciente al más antiguo (hasta 50), con el último acceso verificado y el bloqueo si lo hay. Sin URL: el token no se guarda.
+         */
+        get: operations["PatientAccessLinksController_list"];
+        put?: never;
+        /**
+         * Crea el enlace de acceso del paciente (solo lectura)
+         * @description DX-101. Apartados elegidos (citas, presupuestos, estado de cuenta) y validez de 1 a 30 días (14 por defecto). Para abrirlo se pide la fecha de nacimiento del paciente. La URL (con el token) solo viene en esta respuesta. `whatsapp` trae el número y el texto para wa.me, sin importes. Auditado como CREATE de PATIENT_ACCESS_LINK.
+         */
+        post: operations["PatientAccessLinksController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/access-links/{linkId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoca el enlace (corta también la sesión abierta)
+         * @description DX-101. La siguiente petición del paciente con ese enlace da 410. Revocar uno ya revocado es 204. Auditado como DELETE de PATIENT_ACCESS_LINK.
+         */
+        delete: operations["PatientAccessLinksController_revoke"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/patient-access/{token}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verificar la fecha de nacimiento y abrir la sesión (30 min)
+         * @description Si la fecha casa con la del paciente del enlace, devuelve 200 y la cookie HttpOnly `dentalix_pa` (SameSite=Strict, Path=/api/v1/public/patient-access). 5 fallos bloquean el enlace 30 min (429). Auditado: el acceso verificado (con los fallos previos agregados) y el bloqueo; nunca la fecha.
+         */
+        post: operations["PublicPatientAccessController_verifyBirthDate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/patient-access/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Citas, presupuestos y estado de cuenta compartidos
+         * @description Solo los apartados del enlace (los demás, null) y solo del paciente del enlace. El estado de cuenta tiene los mismos importes que el del personal (DX-011).
+         */
+        get: operations["PublicPatientAccessController_me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/patient-access/me/appointments/{appointmentId}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirmar una cita (flujo de DX-005)
+         * @description Solo una cita futura y agendada del paciente del enlace, con el apartado de citas compartido. Queda en la auditoría como CONFIRMATION_LINK_CONFIRMED.
+         */
+        post: operations["PublicPatientAccessController_confirmAppointment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/patient-access/me/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cerrar la sesión del portal (borra la cookie) */
+        post: operations["PublicPatientAccessController_logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/onboarding/status": {
         parameters: {
             query?: never;
@@ -9826,7 +9947,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE" | "ORTHO_CASE" | "ORTHO_VISIT" | "DENTAL_LAB" | "DENTAL_LAB_ORDER" | "COMMISSION_SETTLEMENT" | "POST_OP_CHECK";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE" | "ORTHO_CASE" | "ORTHO_VISIT" | "DENTAL_LAB" | "DENTAL_LAB_ORDER" | "COMMISSION_SETTLEMENT" | "POST_OP_CHECK" | "PATIENT_ACCESS_LINK";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -11522,6 +11643,8 @@ export interface components {
             paymentLinks: number;
             /** @description Enlaces de un solo uso de la copia de una orden externa sin usar ni caducar (DX-572) */
             externalOrderCopies: number;
+            /** @description Enlaces de acceso del paciente (citas, presupuestos y cuenta) sin revocar ni caducar (DX-101) */
+            patientAccessLinks: number;
             /** @description Suma de todos los tipos */
             total: number;
         };
@@ -29528,6 +29651,143 @@ export interface components {
             report: components["schemas"]["PaymentReportDto"];
             /** @description Se encoló el aviso al email del paciente (sin el motivo). */
             patientNotified: boolean;
+        };
+        /**
+         * @description Apartados que verá el paciente: citas futuras, presupuestos (presentados o aceptados) y estado de cuenta.
+         * @enum {string}
+         */
+        PatientAccessScope: "APPOINTMENTS" | "PLANS" | "ACCOUNT";
+        CreateAccessLinkDto: {
+            /**
+             * @description Apartados que verá el paciente: citas futuras, presupuestos (presentados o aceptados) y estado de cuenta.
+             * @example [
+             *       "APPOINTMENTS",
+             *       "PLANS",
+             *       "ACCOUNT"
+             *     ]
+             */
+            scopes: components["schemas"]["PatientAccessScope"][];
+            /**
+             * @description Días de validez del enlace (por defecto 14).
+             * @default 14
+             */
+            ttlDays: number;
+        };
+        AccessLinkWhatsAppDto: {
+            /** @description Dígitos para wa.me (sin +). */
+            phone: string;
+            /** @description Mensaje prellenado: nombre de pila, clínica, apartados, caducidad y URL; sin importes. */
+            text: string;
+        };
+        CreatedAccessLinkDto: {
+            /** Format: uuid */
+            id: string;
+            /** @description URL con el token: SOLO en esta respuesta (la BD guarda su hash). Copiarla o enviarla ahora. */
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+            scopes: components["schemas"]["PatientAccessScope"][];
+            whatsapp: components["schemas"]["AccessLinkWhatsAppDto"] | null;
+            /** @description El paciente es menor de edad: el enlace debe recibirlo su responsable (aviso en la UI). */
+            minor: boolean;
+        };
+        AccessLinkCreatorDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string | null;
+        };
+        AccessLinkDto: {
+            /** Format: uuid */
+            id: string;
+            scopes: components["schemas"]["PatientAccessScope"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /**
+             * Format: date-time
+             * @description Último acceso verificado (fecha correcta); null si nunca.
+             */
+            lastViewedAt: string | null;
+            /**
+             * Format: date-time
+             * @description Bloqueado por 5 fechas erróneas hasta esta hora; null si no.
+             */
+            lockedUntil: string | null;
+            createdBy: components["schemas"]["AccessLinkCreatorDto"];
+        };
+        VerifyPatientAccessDto: {
+            /**
+             * @description Fecha de nacimiento del paciente (AAAA-MM-DD).
+             * @example 1990-05-21
+             */
+            birthDate: string;
+        };
+        PatientAccessSessionDto: {
+            /**
+             * Format: date-time
+             * @description Fin de la sesión (30 min, o antes si el enlace caduca). La sesión va en la cookie HttpOnly `dentalix_pa`, nunca en el body.
+             */
+            sessionExpiresAt: string;
+            scopes: components["schemas"]["PatientAccessScope"][];
+        };
+        PortalLocationDto: {
+            name: string;
+            address: string | null;
+            /** @example America/Caracas */
+            timeZone: string | null;
+            /** @example es-VE */
+            locale: string | null;
+            hourCycle: components["schemas"]["HourCycle"] | null;
+        };
+        PortalAppointmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            status: components["schemas"]["AppointmentStatus"];
+            typeName: string | null;
+            providerName: string | null;
+            location: components["schemas"]["PortalLocationDto"];
+            /** @description Agendada sin confirmar y futura: la página ofrece «Confirmar». */
+            confirmable: boolean;
+        };
+        PortalPlanDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "PRESENTED" | "ACCEPTED";
+            /**
+             * Format: uuid
+             * @description Grupo de alternativas (DX-040): los planes con el mismo grupo son opciones A/B.
+             */
+            optionGroupId: string | null;
+            /** @example A */
+            optionLabel: string | null;
+            /** @description El presupuesto de DX-012 (ítems y totales), el mismo del PDF. */
+            quote: components["schemas"]["PlanQuoteDocumentDto"];
+        };
+        PatientPortalDto: {
+            clinicName: string;
+            /** @description Solo el nombre de pila. */
+            patientFirstName: string;
+            /** @description Paciente menor de edad: lo consulta su responsable (aviso en la página). */
+            minor: boolean;
+            scopes: components["schemas"]["PatientAccessScope"][];
+            /** Format: date-time */
+            sessionExpiresAt: string;
+            /** @description Citas futuras (agendadas o confirmadas); null si no se compartió. */
+            appointments: components["schemas"]["PortalAppointmentDto"][] | null;
+            /** @description Presupuestos presentados o aceptados; null si no se compartió. */
+            plans: components["schemas"]["PortalPlanDto"][] | null;
+            /** @description El estado de cuenta de DX-011 con los mismos importes que ve el personal, sin datos internos (quién registró o anuló, si se puede anular); null si no se compartió. */
+            account: components["schemas"]["AccountStatementDto"] | null;
+        };
+        PortalAppointmentConfirmedDto: {
+            /** @enum {string} */
+            status: "CONFIRMED";
         };
         /**
          * @description BUSINESS_HOURS: horario de alguna sede guardado por la clínica (el sembrado no cuenta). APPOINTMENT_TYPES: algún tipo de cita activo. CATALOG_PRICES: algún precio en el catálogo o en una lista de precios. STAFF: alguna invitación no revocada o algún miembro además del que creó la clínica. FIRST_APPOINTMENT: alguna cita. PATIENT_IMPORT (opcional): alguna importación de pacientes terminada.
@@ -55681,6 +55941,287 @@ export interface operations {
             };
             /** @description `code: PAYMENT_REPORT_NOT_PENDING`: ya confirmado o rechazado */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientAccessLinksController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description El paciente */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessLinkDto"][];
+                };
+            };
+            /** @description Rol sin acceso al estado de cuenta */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientAccessLinksController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description El paciente */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAccessLinkDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedAccessLinkDto"];
+                };
+            };
+            /** @description Apartados vacíos, repetidos o no válidos, validez fuera de 1–30, o el host no sirve para armar el enlace */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso al estado de cuenta */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El paciente no tiene fecha de nacimiento (es el segundo factor) o está archivado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientAccessLinksController_revoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description El paciente */
+                id: string;
+                linkId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso al estado de cuenta */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Enlace inexistente, de otro paciente o de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicPatientAccessController_verifyBirthDate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyPatientAccessDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientAccessSessionDto"];
+                };
+            };
+            /** @description «Datos incorrectos» (code PATIENT_ACCESS_INVALID): token malformado, desconocido, de otra clínica, caducado o revocado, paciente archivado o fecha errónea; la MISMA respuesta y el mismo tiempo para todos. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description PATIENT_ACCESS_LOCKED con retryAfterSeconds: el quinto fallo bloquea 30 min (también para un token que no existe: no lo revela).
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicPatientAccessController_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientPortalDto"];
+                };
+            };
+            /** @description PATIENT_ACCESS_SESSION_REQUIRED: sin la cookie `dentalix_pa`, con una de otra clínica o caducada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description PATIENT_ACCESS_GONE: la clínica revocó el enlace, caducó o el paciente se archivó (se borra la cookie). Sin ningún dato. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicPatientAccessController_confirmAppointment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                appointmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalAppointmentConfirmedDto"];
+                };
+            };
+            /** @description PATIENT_ACCESS_SESSION_REQUIRED: sin la cookie `dentalix_pa`, con una de otra clínica o caducada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cita inexistente, de otro paciente, pasada, ya confirmada o sin el apartado de citas */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description PATIENT_ACCESS_GONE: la clínica revocó el enlace, caducó o el paciente se archivó (se borra la cookie). Sin ningún dato. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicPatientAccessController_logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

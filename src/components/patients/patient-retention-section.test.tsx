@@ -120,6 +120,7 @@ const NO_LINKS = {
   certificateCopies: 0,
   externalOrderCopies: 0,
   paymentLinks: 0,
+  patientAccessLinks: 0,
   total: 0,
 };
 
