@@ -11,6 +11,15 @@ import {
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
 import { makeIssuer, makePrescription, postExodoncia } from '@/lib/test/prescriptions';
+import { NetworkError } from '@/lib/api/api-error';
+import { emptyItemDraft } from '@/lib/prescriptions/prescription-draft';
+import {
+  draftTestToken,
+  dropAndRestoreNetwork,
+  installMemoryDraftStore,
+  resetConnectivityForTests,
+  uninstallDraftStore,
+} from '@/lib/test/draft-store';
 
 jest.mock('../../lib/prescriptions/prescriptions-api', () => ({
   ...jest.requireActual('../../lib/prescriptions/prescriptions-api'),
@@ -138,7 +147,7 @@ describe('NewPrescriptionModal', () => {
             quantityUnit: 'cápsulas',
           },
         ],
-      }),
+      }, expect.any(String)),
     );
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(onIssued).toHaveBeenCalled();
@@ -210,7 +219,7 @@ describe('NewPrescriptionModal', () => {
         expect.objectContaining({
           safetyOverride: true,
           safetyOverrideReason: 'Prueba cutánea negativa',
-        }),
+        }), expect.any(String),
       ),
     );
   });
@@ -597,7 +606,7 @@ describe('NewPrescriptionModal', () => {
       expect(mockedIssue).toHaveBeenCalledWith(
         'tok',
         'p1',
-        expect.objectContaining({ professionalLicense: 'TP-55' }),
+        expect.objectContaining({ professionalLicense: 'TP-55' }), expect.any(String),
       ),
     );
   });
@@ -666,5 +675,67 @@ describe('NewPrescriptionModal', () => {
     mockedTemplates.mockRejectedValue(new Error('x'));
     renderModal();
     expect(await screen.findByText('Plantillas no disponibles')).toBeInTheDocument();
+  });
+});
+
+describe('NewPrescriptionModal · borradores sin conexión (DX-574)', () => {
+  const DENTIST = draftTestToken('u-me', 't1', 'DENTIST');
+  const SCOPE = { owner: 'u-me|t1', patientId: 'p1', form: 'prescription' as const };
+  let drafts: Awaited<ReturnType<typeof installMemoryDraftStore>>;
+
+  beforeEach(async () => {
+    resetConnectivityForTests();
+    mockedIssuer.mockReset().mockResolvedValue(makeIssuer());
+    mockedIssue.mockReset();
+    mockedTemplates.mockReset().mockResolvedValue([postExodoncia]);
+    mockedCheck.mockReset().mockResolvedValue(preview());
+    drafts = await installMemoryDraftStore();
+  });
+  afterEach(() => uninstallDraftStore());
+
+  function renderWithOwner(onIssued = jest.fn(), onOpenChange = jest.fn()) {
+    render(<NewPrescriptionModal open onOpenChange={onOpenChange} token={DENTIST} patientId="p1" onIssued={onIssued} />);
+    return { onIssued, onOpenChange };
+  }
+
+  it('Recuperar rellena los medicamentos y no emite nada hasta «Emitir receta»', async () => {
+    const item = { ...emptyItemDraft(), activeIngredient: 'Ibuprofeno', concentration: '400 mg' };
+    await drafts.seed(
+      SCOPE,
+      { templateId: '', items: [item], dispensationDate: '', notes: 'Tomar con comida', license: '', reason: '' },
+      'clave-receta',
+    );
+    const user = setupUser();
+    renderWithOwner();
+    expect(await screen.findByText('Recuperar borrador de las 14:05')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Recuperar' }));
+    const dialog = screen.getByRole('dialog');
+    expect(await within(dialog).findByLabelText(/principio activo/i)).toHaveValue('Ibuprofeno');
+    expect(within(dialog).getByLabelText(/indicaciones generales/i)).toHaveValue('Tomar con comida');
+    expect(mockedIssue).not.toHaveBeenCalled();
+  });
+
+  it('sin red: no cierra, avisa y al volver la red emite UNA receta con la misma clave', async () => {
+    mockedIssue
+      .mockRejectedValueOnce(new NetworkError(new TypeError('Failed to fetch')))
+      .mockResolvedValueOnce(makePrescription());
+    const user = setupUser();
+    const { onIssued, onOpenChange } = renderWithOwner();
+    await screen.findByText('Se emite desde Sede Principal · válida 30 días.');
+    fillAmoxicilina();
+    await submit(user);
+    expect(await screen.findByText('Sin conexión; se guardó en este dispositivo.')).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    expect((await drafts.read(SCOPE))?.payload.value).toMatchObject({
+      items: [expect.objectContaining({ activeIngredient: 'Amoxicilina' })],
+    });
+
+    dropAndRestoreNetwork();
+    await waitFor(() => expect(mockedIssue).toHaveBeenCalledTimes(2));
+    expect(mockedIssue.mock.calls[1][3]).toBe(mockedIssue.mock.calls[0][3]);
+    await waitFor(() => expect(onIssued).toHaveBeenCalledTimes(1));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    await waitFor(async () => expect(await drafts.store.has(SCOPE)).toBe(false));
   });
 });
