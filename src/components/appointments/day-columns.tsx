@@ -45,6 +45,7 @@ import { appointmentTypeTextColor, isAppointmentTypeColor } from '@/lib/color/co
 import { freeGaps } from '@/lib/appointments/opening-candidates';
 import { WantsEarlierChip, wantsEarlierText } from '@/components/appointments/wants-earlier-chip';
 import { OVERBOOKED_LABEL, OverbookedChip, showsOverbooked } from '@/components/appointments/overbooked-chip';
+import { ONLINE_LABEL, OnlineChip } from '@/components/appointments/online-chip';
 import {
   STATUS_LABELS,
   patientLabel,
@@ -742,6 +743,7 @@ export function DayColumns({
                             // Visible card words first; append supporting context after them.
                             range,
                             showsOverbooked(a) ? OVERBOOKED_LABEL : null,
+                            a.origin === 'ONLINE' ? ONLINE_LABEL : null,
                             wantsEarlier ? wantsEarlierText(a) : null,
                             patient,
                             a.appointmentType?.name,
@@ -773,6 +775,8 @@ export function DayColumns({
                             <span className="shrink-0 text-xs font-medium tabular-nums">{range}</span>{' '}
                             {/* DX-509: solo mientras es sobrecupo. */}
                             <OverbookedChip overbooked={a.overbooked} status={a.status} className="min-w-0 py-0" />{' '}
+                            {/* DX-016: la reservó el paciente online. */}
+                            <OnlineChip origin={a.origin} className="min-w-0 py-0" />{' '}
                             <WantsEarlierChip
                               wantsEarlier={wantsEarlier}
                               earlierWindow={a.earlierWindow}

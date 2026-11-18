@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { AttendanceBadge } from '@/components/appointments/attendance-badge';
 import { OverbookedChip } from '@/components/appointments/overbooked-chip';
+import { OnlineChip } from '@/components/appointments/online-chip';
 import type { Appointment } from '@/lib/appointments/appointments-api';
 import {
   ROW_HEIGHT_PX,
@@ -367,6 +368,8 @@ export function WeekTimeGrid({
                     <AttendanceBadge counts={a.attendance} compact className="mt-0.5 px-1" />{' '}
                     {/* DX-509: solo mientras es sobrecupo. */}
                     <OverbookedChip overbooked={a.overbooked} status={a.status} className="mt-0.5 px-1 py-0" />{' '}
+                    {/* DX-016: la reservó el paciente online. */}
+                    <OnlineChip origin={a.origin} className="mt-0.5 px-1 py-0" />{' '}
                     {heightPx < 60 && <span className="sr-only">{STATUS_LABELS[a.status]}</span>}
                     {a.appointmentType?.name && <span className="sr-only">{a.appointmentType.name}</span>}
                   </button>

@@ -88,6 +88,11 @@ export interface Appointment {
    * dobles de los tests a llevarlo.
    */
   overbooked?: boolean;
+  /**
+   * DX-016: quién la agendó — `ONLINE` = el paciente desde la reserva online
+   * (marca «Online» en la agenda). Opcional aquí solo para los dobles de los tests.
+   */
+  origin?: components['schemas']['AppointmentOrigin'];
   createdAt: string;
   updatedAt: string;
   /**
