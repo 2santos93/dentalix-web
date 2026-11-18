@@ -10,6 +10,7 @@ import {
   externalOrderDetail,
   commissionPaymentDetail,
   dentalLabDetail,
+  postOpCheckDetail,
   importBatchDetail,
   AUDIT_ACTION_LABELS,
   AUDIT_ACTION_OPTIONS,
@@ -1112,5 +1113,18 @@ describe('dentalLabDetail (DX-017)', () => {
     expect(dentalLabDetail({ reason: 'DENTAL_LAB_SERVICE_CREATED' })).toBe('Servicio del laboratorio creado');
     expect(dentalLabDetail({ reason: 'EXTERNAL_ORDER_ISSUED' })).toBeNull();
     expect(dentalLabDetail({})).toBeNull();
+  });
+});
+
+describe('postOpCheckDetail (DX-566)', () => {
+  it('nombra el recurso y cada paso del control postoperatorio', () => {
+    expect(AUDIT_RESOURCE_LABELS.POST_OP_CHECK).toBe('Control postoperatorio');
+    expect(postOpCheckDetail({ reason: 'POST_OP_CHECK_LIST' })).toBe('Controles postoperatorios de la sede consultados');
+    expect(postOpCheckDetail({ reason: 'POST_OP_CHECK_NO_ANSWER' })).toBe('Control postoperatorio: no contesta');
+    expect(postOpCheckDetail({ reason: 'POST_OP_CHECK_ITEM_DELETED' })).toBe(
+      'Control postoperatorio anulado: se borró el ítem del plan',
+    );
+    expect(postOpCheckDetail({ reason: 'CHAIR_ORDER' })).toBeNull();
+    expect(postOpCheckDetail({})).toBeNull();
   });
 });

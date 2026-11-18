@@ -129,7 +129,7 @@ describe('WorkQueuesProvider (DX-503)', () => {
       </WorkQueuesProvider>,
     );
     await waitFor(() => expect(screen.getByTestId('badge-ANAMNESIS_REVIEW')).toHaveTextContent('1'));
-    for (const call of summary.mock.calls) expect(call[1]).toEqual(['CLOSING_QUEUE', 'ANAMNESIS_REVIEW']);
+    for (const call of summary.mock.calls) expect(call[1]).toEqual(['CLOSING_QUEUE', 'ANAMNESIS_REVIEW', 'POST_OP_CHECKS']);
   });
 
   it('al cambiar de sede, lo de la otra sede no vale: vuelve a cargar', async () => {

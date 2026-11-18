@@ -6,6 +6,7 @@ import { useOfflineAgendaSync } from '@/components/appointments/use-offline-agen
 import { OfflineCopyControl } from '@/components/appointments/offline-copy';
 import { PageHeader } from '@/components/shared/page-header';
 import { ClosingQueueLink } from '@/components/appointments/closing-queue-link';
+import { PostOpChecksLink } from '@/components/post-op-checks/post-op-checks-link';
 import { useOffline } from '@/lib/offline/connectivity';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
@@ -41,7 +42,13 @@ export default function AgendaPage() {
       <PageHeader
         title={copy.title}
         description={copy.description}
-        meta={<ClosingQueueLink token={accessToken} />}
+        meta={
+          // DX-566: «Controles postoperatorios» junto a «Pendiente de cerrar», con su contador.
+          <div className="flex flex-wrap items-start gap-x-5">
+            <ClosingQueueLink token={accessToken} />
+            <PostOpChecksLink />
+          </div>
+        }
         // DX-405: activar (con PIN), desbloquear o quitar la copia sin conexión.
         actions={<OfflineCopyControl token={accessToken} />}
       />

@@ -171,6 +171,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   // DX-572: órdenes de estudios y referencias externas, y sus plantillas.
   EXTERNAL_ORDER: 'Orden externa',
   EXTERNAL_ORDER_TEMPLATE: 'Plantilla de orden externa',
+  // DX-566: control postoperatorio (alta al marcar hecho, intentos y cierre).
+  POST_OP_CHECK: 'Control postoperatorio',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
@@ -366,6 +368,27 @@ const DENTAL_LAB_REASONS: Record<string, string> = {
   DENTAL_LAB_SERVICE_CREATED: 'Servicio del laboratorio creado',
   DENTAL_LAB_SERVICE_UPDATED: 'Servicio del laboratorio cambiado',
 };
+
+/**
+ * DX-566: qué pasó con un control postoperatorio. La metadata solo trae el
+ * intento, la evolución o adenda y el cambio de estado: nunca la nota.
+ */
+const POST_OP_CHECK_REASONS: Record<string, string> = {
+  POST_OP_CHECK_CREATED: 'Control postoperatorio creado',
+  POST_OP_CHECK_LIST: 'Controles postoperatorios de la sede consultados',
+  POST_OP_CHECK_FINE: 'Control postoperatorio: bien',
+  POST_OP_CHECK_DISCOMFORT: 'Control postoperatorio: molestias',
+  POST_OP_CHECK_NEEDS_APPOINTMENT: 'Control postoperatorio: necesita cita',
+  POST_OP_CHECK_NO_ANSWER: 'Control postoperatorio: no contesta',
+  POST_OP_CHECK_PROCEDURE_REVERTED: 'Control postoperatorio anulado: el procedimiento dejó de estar hecho',
+  POST_OP_CHECK_ITEM_DELETED: 'Control postoperatorio anulado: se borró el ítem del plan',
+  POST_OP_CHECK_RESCHEDULED: 'Control postoperatorio recalculado',
+};
+
+/** DX-566: el paso del control postoperatorio, o null si no es de él. */
+export function postOpCheckDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && POST_OP_CHECK_REASONS[metadata.reason]) ?? null;
+}
 
 /** DX-017: el paso de la orden de laboratorio o del laboratorio, o null si no es de ellos. */
 export function dentalLabDetail(metadata: AuditMetadata): string | null {
