@@ -772,6 +772,26 @@ describe('NewEvolutionModal · borradores sin conexión (DX-574)', () => {
     await waitFor(async () => expect(await drafts.store.has(SCOPE)).toBe(false));
   });
 
+  it('la API ya no da la clave a esta sesión (401: tokenVersion vieja o sesión revocada): sin borrador, sin error, y se borra', async () => {
+    await drafts.seed(SCOPE, DRAFT_VALUE, 'clave-original');
+    drafts.failKey(() => new ApiError(401, 'La sesión ya no es válida para guardar borradores.'));
+    renderModal({ token: DENTIST });
+    await waitFor(async () => expect(await drafts.store.has(SCOPE)).toBe(false));
+    expect(screen.queryByText(/recuperar borrador/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/se podrá recuperar cuando vuelva la conexión/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    drafts.failKey(null);
+  });
+
+  it('sin red al abrir: avisa de que hay un borrador y lo conserva', async () => {
+    await drafts.seed(SCOPE, DRAFT_VALUE, 'clave-original');
+    drafts.failKey(() => new NetworkError(new TypeError('Failed to fetch')));
+    renderModal({ token: DENTIST });
+    expect(await screen.findByText(/se podrá recuperar cuando vuelva la conexión/i)).toBeInTheDocument();
+    expect(await drafts.store.has(SCOPE)).toBe(true);
+    drafts.failKey(null);
+  });
+
   it('Descartar borra el borrador y deja el formulario vacío', async () => {
     await drafts.seed(SCOPE, DRAFT_VALUE, 'clave-original');
     const user = userEvent.setup();

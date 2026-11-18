@@ -1,4 +1,5 @@
 'use client';
+import { ApiError, NetworkError } from '@/lib/api/api-error';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { newIdempotencyKey } from '@/lib/api/idempotency-key';
 import { onReconnect } from '@/lib/offline/connectivity';
@@ -148,10 +149,22 @@ export function useFormDraft<T>(options: UseFormDraftOptions<T>): FormDraft<T> {
         const usable = loaded && loaded.payload && loaded.payload.v === 1 ? loaded : null;
         payloadRef.current = usable ? usable.payload : null;
         setCheck({ key: sessionKey, pending: usable ? { savedAt: usable.savedAt } : null, locked: null });
-      } catch {
-        // Sin clave (sin red o sin sesión): se avisa y se reintenta al volver la red.
+      } catch (err) {
         if (cancelled) return;
-        setCheck({ key: sessionKey, pending: null, locked: found });
+        // Sin red: se avisa y se reintenta al volver la red.
+        if (err instanceof NetworkError) {
+          setCheck({ key: sessionKey, pending: null, locked: found });
+          return;
+        }
+        // La API no da la clave a esta sesión (revocada, `tokenVersion` vieja,
+        // sin membresía: 401/403): el borrador ya no se podrá descifrar, se
+        // trata como «sin borrador» y se borra. Otro fallo (p. ej. 503), sin
+        // borrador pero sin borrarlo.
+        payloadRef.current = null;
+        if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+          void store.remove(scope).catch(() => undefined);
+        }
+        setCheck({ key: sessionKey, pending: null, locked: null });
       }
     })();
     return () => {

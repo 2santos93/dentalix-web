@@ -161,6 +161,19 @@ describe('almacén cifrado de borradores (DX-574)', () => {
     expect(kv.tables.drafts.size).toBe(1);
   });
 
+  it('la clave cambió (tokenVersion nueva tras cambiar la contraseña o el MFA): sin borrador, sin error, y se borra', async () => {
+    const { kv, store, getKey } = await setup();
+    await store.save(EVOLUTION, NOTE);
+    expect(kv.tables.drafts.size).toBe(1);
+    // La sesión nueva recibe OTRA clave del servidor para el mismo dueño.
+    const rotated = await importDraftKey(subtle, Buffer.from(webcrypto.getRandomValues(new Uint8Array(32))).toString('base64'));
+    getKey.mockResolvedValue(rotated);
+
+    await expect(store.load(EVOLUTION)).resolves.toBeNull();
+    expect(kv.tables.drafts.size).toBe(0);
+    expect(await store.has(EVOLUTION)).toBe(false);
+  });
+
   it('remove borra el borrador del alcance', async () => {
     const { store } = await setup();
     await store.save(EVOLUTION, NOTE);

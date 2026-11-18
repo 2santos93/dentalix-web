@@ -23,12 +23,17 @@ export async function installMemoryDraftStore() {
     subtle,
     random: (bytes) => webcrypto.getRandomValues(bytes),
     now: () => DRAFT_SAVED_AT,
-    getKey: async () => key,
+    getKey: async (owner: string) => (keyFailure ? Promise.reject(keyFailure(owner)) : key),
   });
   setDraftRuntimeForTests({ kv, store });
+  let keyFailure: ((owner: string) => unknown) | null = null;
   return {
     kv,
     store,
+    /** A partir de ahora la API no da la clave (`null`: vuelve a darla). */
+    failKey: (failure: ((owner: string) => unknown) | null) => {
+      keyFailure = failure;
+    },
     /** Un borrador ya guardado, como lo deja `useFormDraft`. */
     seed: <T>(scope: DraftScope, value: T, idempotencyKey: string) =>
       store.save(scope, { v: 1, value, idempotencyKey }),
