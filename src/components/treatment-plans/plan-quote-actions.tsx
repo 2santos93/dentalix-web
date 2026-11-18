@@ -1,7 +1,8 @@
 'use client';
 import * as React from 'react';
-import { useState } from 'react';
-import { CircleCheck, ListChecks, PenLine, Printer, RefreshCw } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { CircleCheck, ListChecks, PenLine, Presentation, Printer, RefreshCw } from 'lucide-react';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { TreatmentPlan, TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
 import { canRepricePlan, isPlanRepriceable, type AppliedRepricing } from '@/lib/treatment-plans/plan-repricing-api';
@@ -15,6 +16,7 @@ import {
   type PlanQuote,
 } from '@/lib/treatment-plans/plan-quote-api';
 import type { SedePainters } from '@/lib/locations/sede-stamp';
+import { planPresentHref } from '@/lib/treatment-plans/plan-presentation-href';
 import { Button } from '@/components/ui/button';
 import { AcceptPartialPlanModal } from './accept-partial-plan-modal';
 import { AcceptPlanModal } from './accept-plan-modal';
@@ -24,6 +26,11 @@ import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
   print: 'Imprimir presupuesto',
+  // DX-560: el plan a pantalla completa para enseñárselo al paciente.
+  present: 'Presentar',
+  presentHint: 'Enseñar el plan al paciente a pantalla completa',
+  // Sin el ítem en el catálogo: nunca el id.
+  procedureFallback: 'Procedimiento',
   accept: 'Aceptar con firma',
   acceptPartial: 'Aceptar en parte',
   acceptedBy: (name: string, when: string) => `Aceptado y firmado por ${name} el ${when}`,
@@ -60,6 +67,15 @@ interface PlanQuoteActionsProps {
    * cuando otra firma ganó (`null`): el padre recarga. Sin él, no se ofrece.
    */
   onPartiallyAccepted?: (quote: PlanQuote | null) => void;
+  /** DX-560: el `?cuotas=` (ya codificado) de lo simulado en «Financiar», para «Presentar». */
+  presentFinancing?: string | null;
+  /**
+   * DX-560: abrir «Aceptar con firma» al montar (desde «Elegir esta opción» de
+   * «Presentar», `?aceptar=1`). Se avisa con `onAutoAcceptHandled` para que el
+   * padre quite el parámetro y no se vuelva a abrir.
+   */
+  autoAccept?: boolean;
+  onAutoAcceptHandled?: () => void;
 }
 
 /**
@@ -81,6 +97,9 @@ export function PlanQuoteActions({
   onRepriced,
   repricePrimary = false,
   onPartiallyAccepted,
+  presentFinancing = null,
+  autoAccept = false,
+  onAutoAcceptHandled,
 }: PlanQuoteActionsProps) {
   const [accepting, setAccepting] = useState(false);
   const [acceptingPartial, setAcceptingPartial] = useState(false);
@@ -92,6 +111,17 @@ export function PlanQuoteActions({
   const acceptable = mayAccept && isPlanAcceptable(plan);
   // DX-417: solo un presentado sin aceptar con dos o más propuestos (abonos y cuotas: el 409 en el modal).
   const partiallyAcceptable = Boolean(onPartiallyAccepted) && mayAccept && isPlanPartiallyAcceptable(plan);
+  // DX-560: «Elegir esta opción» en «Presentar» vuelve con `?aceptar=1`: se abre una vez.
+  // Se ajusta durante el render (patrón de React para derivar estado de una prop).
+  const [autoAccepted, setAutoAccepted] = useState(false);
+  if (autoAccept && !autoAccepted) {
+    setAutoAccepted(true);
+    if (acceptable) setAccepting(true);
+  }
+  // Quitar `?aceptar=1` de la URL es del padre (un sistema externo: el router).
+  useEffect(() => {
+    if (autoAccepted && autoAccept) onAutoAcceptHandled?.();
+  }, [autoAccepted, autoAccept, onAutoAcceptHandled]);
   const needsItems =
     mayAccept &&
     !acceptance &&
@@ -119,6 +149,14 @@ export function PlanQuoteActions({
       ) : null}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        {canPrintPlanQuote(role) && (plan.items?.length ?? 0) > 0 ? (
+          <Button asChild variant="secondary">
+            <Link href={planPresentHref(patientId, plan.id, { financing: presentFinancing })} title={copy.presentHint}>
+              <Presentation aria-hidden />
+              {copy.present}
+            </Link>
+          </Button>
+        ) : null}
         {canPrintPlanQuote(role) ? (
           <Button asChild variant="secondary">
             <ExternalLink href={planQuotePrintHref(patientId, plan.id)}>
@@ -189,7 +227,7 @@ export function PlanQuoteActions({
           patientId={patientId}
           plan={plan}
           role={role}
-          procedureOf={procedureOf ?? ((item) => item.catalogItemId)}
+          procedureOf={procedureOf ?? (() => copy.procedureFallback)}
           stamp={stamp}
           onRepriced={onRepriced}
         />

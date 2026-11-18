@@ -657,7 +657,7 @@ describe('TreatmentPlansTab', () => {
     expect(screen.queryByRole('link', { name: /registrar implante/i })).not.toBeInTheDocument();
   });
 
-  it("falls back to the raw catalogItemId when the item's procedure isn't in the catalog map", async () => {
+  it("DX-560: sin el procedimiento en el catálogo dice «Procedimiento», nunca el id", async () => {
     mockedListPlans.mockResolvedValue([plan1]);
     const orphanItem = { ...item1, id: 'item-orphan', catalogItemId: 'cat-missing' };
     mockedGetPlan.mockResolvedValue({ ...plan1, items: [orphanItem], total: orphanItem.price });
@@ -665,7 +665,8 @@ describe('TreatmentPlansTab', () => {
     render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
 
     const table = await screen.findByRole('table', { name: /ítems de la visita/i });
-    expect(within(table).getByText('cat-missing')).toBeInTheDocument();
+    expect(within(table).getByRole('cell', { name: 'Procedimiento' })).toBeInTheDocument();
+    expect(within(table).queryByText('cat-missing')).not.toBeInTheDocument();
   });
 
   it('DX-502-ter: el selector de procedimiento muestra el precio con la moneda del catálogo; sin moneda no lo muestra', async () => {

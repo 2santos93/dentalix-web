@@ -16,6 +16,8 @@ export type PublicSignatureDocument = Schemas['PublicSignatureDocumentDto'];
 export type PublicSignedCopy = Schemas['PublicSignedCopyDto'];
 export type SignatureSession = Schemas['SignatureSessionDto'];
 export type PublicBudget = Schemas['PublicBudgetDto'];
+/** DX-560: cómo se presenta el presupuesto al paciente, congelado al enviarlo (null en los anteriores). */
+export type PublicBudgetPresentation = Schemas['PublicBudgetPresentationDto'];
 
 /**
  * DX-415: la última solicitud de aceptación a distancia del presupuesto

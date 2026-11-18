@@ -23,6 +23,8 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { InlineError } from '@/components/errors/inline-error';
 import { SectionError } from '@/components/errors/section-error';
+import { FormField } from '@/components/shared/form-field';
+import { CurrencySelect } from '@/components/shared/currency-select';
 
 export const sendBudgetCopy = {
   title: 'Enviar a aceptar',
@@ -40,7 +42,17 @@ export const sendBudgetCopy = {
   send: 'Enviar a aceptar',
   sendBlocked: (reason: string) => `No se puede enviar: ${reason}`,
   sendError: 'No pudimos enviar el enlace. Intenta de nuevo.',
+  // DX-560: la segunda moneda orientativa del enlace (la tasa de hoy queda congelada en él).
+  secondCurrency: 'Segunda moneda en el enlace (opcional)',
+  secondCurrencyDefault: 'La de la sede, si es otra',
+  secondCurrencyHint:
+    'El paciente verá el total también en esta moneda, como referencia, con la tasa guardada de hoy. Sin tasa de hoy, el enlace sale sin ella.',
 };
+
+/** Los 400 de la API sobre la segunda moneda van junto a su campo. */
+function isSecondCurrencyError(message: string): boolean {
+  return /segunda moneda/i.test(message);
+}
 
 const copy = sendBudgetCopy;
 
@@ -50,6 +62,8 @@ interface SendBudgetModalProps {
   token: string;
   patientId: string;
   planId: string;
+  /** DX-560: la moneda del plan (no se ofrece como segunda). */
+  planCurrency: string;
   /** Hay un enlace anterior del mismo plan aún sin usar (se anulará). */
   replacesPending: boolean;
   onSent: (created: SignatureRequestCreated) => void;
@@ -67,6 +81,7 @@ export function SendBudgetModal({
   token,
   patientId,
   planId,
+  planCurrency,
   replacesPending,
   onSent,
 }: SendBudgetModalProps) {
@@ -75,6 +90,9 @@ export function SendBudgetModal({
   const [optionsKey, setOptionsKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // '' = sin elegir: la API usa la de la sede si es distinta de la del plan.
+  const [secondCurrency, setSecondCurrency] = useState('');
+  const [secondCurrencyError, setSecondCurrencyError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -97,16 +115,24 @@ export function SendBudgetModal({
   async function send() {
     setSubmitting(true);
     setError(null);
+    setSecondCurrencyError(null);
     try {
       const created = await createSignatureRequest(token, patientId, {
         type: 'BUDGET',
         channel: 'EMAIL',
         treatmentPlanId: planId,
+        ...(secondCurrency ? { secondCurrency } : {}),
       });
       onOpenChange(false);
       onSent(created);
     } catch (err) {
-      setError(apiErrorMessage(err, copy.sendError));
+      const message = apiErrorMessage(err, copy.sendError);
+      if (isSecondCurrencyError(message)) {
+        setSecondCurrencyError(message);
+        document.getElementById('send-budget-second-currency')?.focus();
+      } else {
+        setError(message);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -157,6 +183,25 @@ export function SendBudgetModal({
                 </Callout>
               )}
             </section>
+            <FormField
+              htmlFor="send-budget-second-currency"
+              label={copy.secondCurrency}
+              hint={copy.secondCurrencyHint}
+              error={secondCurrencyError}
+            >
+              <CurrencySelect
+                id="send-budget-second-currency"
+                token={token}
+                value={secondCurrency}
+                onChange={(code) => {
+                  setSecondCurrency(code);
+                  setSecondCurrencyError(null);
+                }}
+                exclude={[planCurrency]}
+                noneLabel={copy.secondCurrencyDefault}
+                invalid={Boolean(secondCurrencyError)}
+              />
+            </FormField>
             <p className="text-sm text-muted">{copy.changes}</p>
             {replacesPending ? (
               <Callout tone="warning" role="status" className="py-2">

@@ -112,6 +112,13 @@ interface TreatmentPlansTabProps {
    * está, el primero, como sin él.
    */
   initialPlanId?: string | null;
+  /**
+   * DX-560: `?aceptar=1` (desde «Elegir esta opción» de «Presentar»): abre
+   * «Aceptar con firma» del plan de `initialPlanId` al cargarlo, una vez;
+   * `onInitialAcceptHandled` quita el parámetro.
+   */
+  initialAccept?: boolean;
+  onInitialAcceptHandled?: () => void;
 }
 
 /**
@@ -161,7 +168,11 @@ export function TreatmentPlansTab({
   implantHref,
   labOrderHref,
   initialPlanId = null,
+  initialAccept = false,
+  onInitialAcceptHandled,
 }: TreatmentPlansTabProps) {
+  // DX-560: lo simulado en «Financiar» (`?cuotas=` ya codificado) viaja a «Presentar».
+  const [presentFinancing, setPresentFinancing] = useState<{ planId: string; value: string } | null>(null);
   // DX-097: la fecha por defecto del abono es hoy en la zona de la sede. Sin
   // su zona, la fecha empieza vacía (nunca se cuenta en otra zona).
   const sedeZone = useSedeTimeZone(token);
@@ -1086,6 +1097,9 @@ export function TreatmentPlansTab({
                 onRepriced={handlePlanRepriced}
                 repricePrimary={primary === 'reprice'}
                 onPartiallyAccepted={handlePlanPartiallyAccepted}
+                presentFinancing={presentFinancing?.planId === planDetail.id ? presentFinancing.value : null}
+                autoAccept={initialAccept && planDetail.id === initialPlanId}
+                onAutoAcceptHandled={onInitialAcceptHandled}
               />
 
               {/* DX-041: opciones de pago en cuotas del presupuesto (simular,
@@ -1098,6 +1112,9 @@ export function TreatmentPlansTab({
                   role={role}
                   stamp={stamp}
                   onAccepted={handlePlanAccepted}
+                  onFinancingChange={(value) =>
+                    setPresentFinancing(value ? { planId: planDetail.id, value } : null)
+                  }
                 />
               ) : null}
 
