@@ -55,6 +55,29 @@ describe('useIdleLogout (DX-137)', () => {
     expect(clear).toHaveBeenCalled();
   });
 
+  it.each([
+    ['la rueda o el trackpad', () => new WheelEvent('wheel', { deltaY: 120 })],
+    ['tocar con el dedo', () => new Event('touchstart')],
+    ['deslizar el dedo', () => new Event('touchmove')],
+    ['AvPág', () => new KeyboardEvent('keydown', { key: 'PageDown' })],
+    ['una flecha', () => new KeyboardEvent('keydown', { key: 'ArrowDown' })],
+    ['pulsar', () => new Event('pointerdown')],
+  ])('leer desplazándose con %s reinicia la cuenta', async (_label, makeEvent) => {
+    renderHook(() => useIdleLogout('tok'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    act(() => jest.advanceTimersByTime(14 * MINUTE));
+    act(() => {
+      window.dispatchEvent(makeEvent());
+    });
+    act(() => jest.advanceTimersByTime(14 * MINUTE));
+    expect(clear).not.toHaveBeenCalled();
+    // Y sin más actividad, a los 15 min de la última, se cierra.
+    act(() => jest.advanceTimersByTime(MINUTE + 15_000));
+    expect(clear).toHaveBeenCalled();
+  });
+
   it('tocar la pantalla en cualquier momento reinicia la cuenta', async () => {
     renderHook(() => useIdleLogout('tok'));
     await act(async () => {

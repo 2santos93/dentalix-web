@@ -24,11 +24,12 @@ export const IDLE_CHECK_INTERVAL_MS = 15_000;
 export const ACTIVITY_WRITE_THROTTLE_MS = 5_000;
 
 /**
- * Lo que cuenta como actividad: tocar, teclear, la rueda. Mover el ratón no, y
+ * Lo que cuenta como actividad: tocar y deslizar el dedo, teclear (también
+ * flechas y AvPág), la rueda o el trackpad, pulsar. Mover el ratón no, y
  * `scroll` tampoco: lo disparan también los desplazamientos que hace la propia
  * app (y el teclado, la rueda y el dedo ya cuentan por su cuenta).
  */
-export const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
+export const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart', 'touchmove'] as const;
 
 let memoryLastActivity = 0;
 
