@@ -253,7 +253,7 @@ describe('Enviar a aceptar el presupuesto (DX-415)', () => {
       plan({
         status: 'ACCEPTED',
         partialPendingPlanId: 'plan-2',
-        acceptance: { signerName: 'Ana Pérez', acceptedAt: '2026-10-20T15:00:00.000Z', remote: null },
+        acceptance: { signerName: 'Ana Pérez', acceptedAt: '2026-10-20T15:00:00.000Z', remote: null, portal: null },
       });
 
     it('con un enlace pendiente del original: avisa de que ya no sirve, sin botón de enviar', async () => {
@@ -306,6 +306,7 @@ describe('Enviar a aceptar el presupuesto (DX-415)', () => {
             verifiedAt: '2026-10-30T14:06:00.000Z',
             ipAddress: '203.0.113.7',
           },
+          portal: null,
         },
       }),
     );

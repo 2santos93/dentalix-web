@@ -103,7 +103,7 @@ describe('PlanQuoteActions (DX-012)', () => {
     renderActions(
       plan({
         status: 'ACCEPTED',
-        acceptance: { signerName: 'Ana Pérez', acceptedAt: '2026-10-16T15:30:00.000Z', remote: null },
+        acceptance: { signerName: 'Ana Pérez', acceptedAt: '2026-10-16T15:30:00.000Z', remote: null, portal: null },
       }),
     );
     expect(screen.getByRole('status')).toHaveTextContent(
@@ -120,7 +120,7 @@ describe('PlanQuoteActions (DX-012)', () => {
       plan({
         status: 'ACCEPTED',
         acceptedLocationId: STAMP_SEDES.berlin.id,
-        acceptance: { signerName: 'Ana Pérez', acceptedAt, remote: null },
+        acceptance: { signerName: 'Ana Pérez', acceptedAt, remote: null, portal: null },
       }),
     );
     expect(screen.getByRole('status')).toHaveTextContent(`el ${dateTimeIn('berlin', acceptedAt)}`);
@@ -141,7 +141,7 @@ describe('PlanQuoteActions (DX-012)', () => {
       plan({
         status: 'ACCEPTED',
         acceptedLocationId: STAMP_SEDES.caracas.id,
-        acceptance: { signerName: 'Marta Ríos', acceptedAt, remote },
+        acceptance: { signerName: 'Marta Ríos', acceptedAt, remote, portal: null },
       }),
       'DENTIST',
       testStamp([STAMP_SEDES.miami, STAMP_SEDES.caracas]),
@@ -163,7 +163,7 @@ describe('PlanQuoteActions (DX-012)', () => {
     renderActions(
       plan({
         status: 'ACCEPTED',
-        acceptance: { signerName: 'Ana Pérez', acceptedAt: '2026-10-16T15:30:00.000Z', remote: null },
+        acceptance: { signerName: 'Ana Pérez', acceptedAt: '2026-10-16T15:30:00.000Z', remote: null, portal: null },
       }),
       'DENTIST',
       stampPainters(null),
@@ -202,7 +202,7 @@ describe('PlanQuoteActions · «Actualizar precios» (DX-379 B)', () => {
   });
 
   it('un plan aceptado (con o sin firma), rechazado o sin propuestos no la ofrece', () => {
-    const signed = { signerName: 'Ana', acceptedAt: '2026-10-16T15:00:00Z', remote: null };
+    const signed = { signerName: 'Ana', acceptedAt: '2026-10-16T15:00:00Z', remote: null, portal: null };
     for (const p of [
       plan({ status: 'ACCEPTED' }),
       plan({ status: 'PRESENTED', acceptance: signed }),
@@ -261,7 +261,7 @@ describe('PlanQuoteActions · «Aceptar en parte» (DX-417)', () => {
   });
 
   it('un borrador, un aceptado, uno firmado o uno con un solo propuesto no la ofrecen', () => {
-    const signed = { signerName: 'Ana', acceptedAt: '2026-10-16T15:00:00Z', remote: null };
+    const signed = { signerName: 'Ana', acceptedAt: '2026-10-16T15:00:00Z', remote: null, portal: null };
     for (const p of [
       plan({ status: 'DRAFT', items: two }),
       plan({ status: 'ACCEPTED', items: two }),

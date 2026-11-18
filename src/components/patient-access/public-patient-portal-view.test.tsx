@@ -100,6 +100,10 @@ function plan(over: Partial<PortalPlan> = {}): PortalPlan {
     status: 'PRESENTED',
     optionGroupId: null,
     optionLabel: null,
+    acceptable: false,
+    validUntil: '2026-11-15',
+    contentHash: 'c'.repeat(64),
+    acceptedAt: null,
     quote: planQuoteFixture({ currency: 'USD' }),
     ...over,
   };
