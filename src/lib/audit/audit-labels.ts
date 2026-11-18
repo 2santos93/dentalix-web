@@ -173,6 +173,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   EXTERNAL_ORDER_TEMPLATE: 'Plantilla de orden externa',
   // DX-566: control postoperatorio (alta al marcar hecho, intentos y cierre).
   POST_OP_CHECK: 'Control postoperatorio',
+  // DX-101: el enlace de acceso del paciente (crear, revocar, verificar, bloqueo).
+  PATIENT_ACCESS_LINK: 'Enlace de acceso del paciente',
   // DX-016: reserva online (código, solicitud, reserva, aceptar y rechazar).
   ONLINE_BOOKING: 'Reserva online',
 };
@@ -397,6 +399,22 @@ const POST_OP_CHECK_REASONS: Record<string, string> = {
 /** DX-566: el paso del control postoperatorio, o null si no es de él. */
 export function postOpCheckDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && POST_OP_CHECK_REASONS[metadata.reason]) ?? null;
+}
+
+/**
+ * DX-101: qué pasó con el enlace de acceso del paciente. La metadata trae los
+ * apartados, la caducidad y los fallos agregados: nunca el token ni la fecha.
+ */
+const PATIENT_ACCESS_REASONS: Record<string, string> = {
+  PATIENT_ACCESS_LINK_CREATED: 'Enlace de acceso del paciente creado',
+  PATIENT_ACCESS_LINK_REVOKED: 'Enlace de acceso del paciente revocado',
+  PATIENT_ACCESS_VERIFIED: 'El paciente abrió su enlace de acceso',
+  PATIENT_ACCESS_LOCKED: 'Enlace de acceso bloqueado 30 min por intentos fallidos',
+};
+
+/** DX-101: el paso del enlace de acceso del paciente, o null si no es de él. */
+export function patientAccessDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && PATIENT_ACCESS_REASONS[metadata.reason]) ?? null;
 }
 
 /** DX-017: el paso de la orden de laboratorio o del laboratorio, o null si no es de ellos. */

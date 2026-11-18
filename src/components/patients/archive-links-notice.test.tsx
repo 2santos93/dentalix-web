@@ -23,6 +23,7 @@ function links(overrides: Partial<LivePublicLinks> = {}): LivePublicLinks {
     certificateCopies: 0,
     externalOrderCopies: 0,
     paymentLinks: 0,
+    patientAccessLinks: 0,
     ...overrides,
   };
   return {
@@ -36,7 +37,8 @@ function links(overrides: Partial<LivePublicLinks> = {}): LivePublicLinks {
       base.prescriptionCopies +
       base.certificateCopies +
       base.externalOrderCopies +
-      base.paymentLinks,
+      base.paymentLinks +
+      base.patientAccessLinks,
   };
 }
 
@@ -104,6 +106,23 @@ test('DX-569: los enlaces de pago vivos también se anulan', async () => {
     '1 cuestionario de salud',
     '2 enlaces de pago',
   ]);
+});
+
+test('DX-101: los enlaces de acceso del paciente vivos también se anulan', async () => {
+  mockedCount.mockResolvedValue(links({ patientAccessLinks: 1, paymentLinks: 1 }));
+  render(<ArchiveLinksNotice token="tok" patientId="p1" />);
+  expect(await screen.findByText('Se anularán 2 enlaces enviados')).toBeInTheDocument();
+  const list = screen.getByRole('list', { name: 'Enlaces que se anularán' });
+  expect(within(list).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+    '1 enlace de pago',
+    '1 enlace de acceso del paciente',
+  ]);
+});
+
+test('DX-101: en plural, «enlaces de acceso del paciente»', async () => {
+  mockedCount.mockResolvedValue(links({ patientAccessLinks: 2 }));
+  render(<ArchiveLinksNotice token="tok" patientId="p1" />);
+  expect(await screen.findByText('2 enlaces de acceso del paciente')).toBeInTheDocument();
 });
 
 test('sin enlaces vivos lo dice en una línea, sin aviso', async () => {
