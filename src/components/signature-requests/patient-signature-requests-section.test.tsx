@@ -49,6 +49,7 @@ function request(overrides: Partial<SignatureRequest> = {}): SignatureRequest {
     locationId: caracasSede({ id: 'loc-1' }).id,
     type: 'CONSENT',
     channel: 'EMAIL',
+    origin: 'STAFF',
     templateId: 'tpl-1',
     templateVersion: 2,
     treatmentPlanId: null,

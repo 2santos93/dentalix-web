@@ -75,6 +75,7 @@ function budgetRequest(overrides: Partial<SignatureRequest> = {}): SignatureRequ
     locationId: 'loc-1',
     type: 'BUDGET',
     channel: 'EMAIL',
+    origin: 'STAFF',
     templateId: null,
     templateVersion: null,
     treatmentPlanId: 'plan-1',

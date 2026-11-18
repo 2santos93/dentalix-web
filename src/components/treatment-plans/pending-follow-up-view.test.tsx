@@ -48,6 +48,7 @@ function item(overrides: Partial<PendingFollowUpItem> = {}): PendingFollowUpItem
     currency: 'USD',
     total: 5300000,
     itemCount: 2,
+    followUp: { lastStep: null, lastSentAt: null, lastStatus: null, lastReason: null, paused: false },
     ...overrides,
   };
 }
