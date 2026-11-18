@@ -24,6 +24,7 @@ import { rateProviderCopy } from '@/components/payments/rate-provider-notice';
 import { withoutRateCopy } from '@/components/payments/without-rate-notice';
 import { getWorkQueuesSummary, type WorkQueueItem, type WorkQueueKey } from '@/lib/work-queues/work-queues-api';
 import { WorkQueuesProvider } from '@/components/work-queues/work-queues-context';
+import { getOnlinePendingCount } from '@/lib/online-booking/online-booking-api';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { getMaintenanceDue } from '@/lib/equipment/equipment-api';
 import { maintenanceDueFixture } from '@/lib/test/equipment';
@@ -45,6 +46,11 @@ jest.mock('../../lib/equipment/equipment-api', () => ({
   getMaintenanceDue: jest.fn(),
 }));
 jest.mock('../../lib/cash-sessions/cash-sessions-api', () => ({ getCurrentCashSession: jest.fn() }));
+// DX-016: las solicitudes de la reserva online por revisar (fuera de /work-queues).
+jest.mock('../../lib/online-booking/online-booking-api', () => ({
+  ...jest.requireActual('../../lib/online-booking/online-booking-api'),
+  getOnlinePendingCount: jest.fn(),
+}));
 jest.mock('../../lib/inventory/inventory-api', () => ({ listInventoryItems: jest.fn() }));
 jest.mock('../../lib/reports/reports-api', () => ({
   getLocationsComparison: jest.fn(),
@@ -74,6 +80,7 @@ const m = {
   receivables: jest.mocked(getReceivablesSummary),
   workQueues: jest.mocked(getWorkQueuesSummary),
   equipmentDue: jest.mocked(getMaintenanceDue),
+  onlineCount: jest.mocked(getOnlinePendingCount),
 };
 
 /** Lo que devuelve la API por rol (WORK_QUEUE_ROLES): la API reparte, la web pinta. */
@@ -313,6 +320,7 @@ beforeEach(() => {
   m.getDashboard.mockResolvedValue(dashboard());
   m.comparison.mockResolvedValue(comparison());
   m.workQueues.mockImplementation(async (token, keys) => queuesFor(token, keys));
+  m.onlineCount.mockResolvedValue(1);
   m.receivables.mockResolvedValue(receivables);
   m.equipmentDue.mockResolvedValue({
     generatedAt: FROZEN_NOW.toISOString(),
@@ -487,10 +495,21 @@ describe('Inicio · ADMIN', () => {
         i.key === 'RECEIVABLES' ? { ...i, count: 0, overdue: [] } : { ...i, count: 0 },
       ),
     }));
+    m.onlineCount.mockResolvedValue(0);
     render(<DashboardView token={tokenForRole('ADMIN')} />);
     expect(await screen.findByText('Todo al día')).toBeInTheDocument();
-    expect(screen.getByTestId('pending-folded-toggle')).toHaveTextContent('Al día: 10 listas');
+    // Las 10 colas y la bandeja de la reserva online (DX-016).
+    await waitFor(() => expect(screen.getByTestId('pending-folded-toggle')).toHaveTextContent('Al día: 11 listas'));
     expect(screen.queryByRole('list', { name: 'Pendientes' })).not.toBeInTheDocument();
+  });
+
+  it('DX-016: las solicitudes online por revisar son una fila más de Pendientes y llevan a la bandeja', async () => {
+    m.onlineCount.mockResolvedValue(2);
+    render(<DashboardView token={tokenForRole('ADMIN')} />);
+    expect(await pendingValue('online-requests')).toHaveTextContent('2');
+    const row = screen.getByTestId('pending-online-requests');
+    expect(within(row).getByRole('link', { name: 'Solicitudes online' })).toHaveAttribute('href', '/solicitudes-online');
+    expect(within(screen.getByRole('list', { name: 'Pendientes' })).getByTestId('pending-online-requests')).toBe(row);
   });
 
   it('una sola lectura completa alimenta «Mi día» (sin un /count por lista)', async () => {

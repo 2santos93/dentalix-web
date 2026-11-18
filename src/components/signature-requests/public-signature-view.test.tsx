@@ -83,6 +83,9 @@ function documentFixture(overrides: Partial<PublicSignatureDocument> = {}): Publ
     clinic: CLINIC,
     location: LOCATION,
     budget: null,
+    // DX-560 (API): sin presentación del plan (ajuste mínimo de DX-016 para
+    // compilar con el esquema de main hasta que entre la web de DX-560).
+    presentation: null,
     ...overrides,
   };
 }
