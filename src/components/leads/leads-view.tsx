@@ -218,11 +218,13 @@ function Board({
             data-testid={`lead-column-${stage}`}
             className="flex min-w-0 flex-col gap-2 rounded-xl border border-border bg-surface-sunken/40 p-3"
           >
-            <header className="flex items-center justify-between gap-2">
+            <header className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
               <h2 id={headingId} className="text-sm font-semibold text-ink">
                 <StatusBadge kind="lead" status={stage} />
               </h2>
-              <span className="text-xs text-muted tabular-nums">{copy.columnCount(column.total)}</span>
+              <span className="whitespace-nowrap text-xs text-muted tabular-nums">
+                {copy.columnCount(column.total)}
+              </span>
             </header>
             {column.items.length === 0 ? (
               <p className="py-2 text-xs text-muted">{copy.columnEmpty}</p>

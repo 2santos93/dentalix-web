@@ -6,6 +6,7 @@ import { ChartColumn } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { civilDateInZone } from '@/lib/format/date';
 import type { RegionalFormat } from '@/lib/format/regional-format';
+import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { PERIOD_PRESETS } from '@/lib/reports/period-presets';
 import {
@@ -49,7 +50,7 @@ export const leadReportCopy = {
   colAttended: 'Asistieron',
   colAttendedRate: '% asistió',
   colConversion: 'Conversión',
-  figureLabel: (n: number, what: string, row: string) => `${n} ${what} · ${row}: ver en la lista`,
+  figureLabel: (n: number, what: string, row: string) => `${row}, ${what}: ${n}. Ver en la lista`,
   emptyTitle: 'Sin prospectos en el período',
   emptyDescription: 'Elige otro período o da de alta prospectos desde la bandeja.',
   openLeads: 'Ir a Prospectos',
@@ -70,7 +71,7 @@ type Row = LeadReportLine & {
 };
 
 function rate(value: number, fmt: RegionalFormat | null): string {
-  return fmt ? fmt.percent(value * 100, 1) : `${Math.round(value * 1000) / 10} %`;
+  return fmt ? fmt.percent(value * 100, 1) : NO_SEDE_FORMAT;
 }
 
 /**
