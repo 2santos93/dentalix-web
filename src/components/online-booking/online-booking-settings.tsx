@@ -29,7 +29,7 @@ import { notifyError } from '@/components/errors/notify';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
 import { SaveBar, useSettingsDraft } from '@/components/settings/save-bar';
-import { SettingRow, SettingRows, SettingsSection } from '@/components/settings/settings-page';
+import { SettingRows, SettingsSection } from '@/components/settings/settings-page';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -268,38 +268,34 @@ function PublicPageSection({ enabled }: { enabled: boolean }) {
   return (
     <SettingsSection title={copy.pageSection} description={copy.pageSectionHint}>
       <SettingRows className="max-w-[720px]">
-        <SettingRow
-          labelId={labelId}
-          label={
-            <span className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-col gap-3 px-4 py-3 sm:px-6 sm:py-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span id={labelId} className="font-medium text-ink">
               {copy.urlLabel}
-              <Badge variant={enabled ? 'success' : 'neutral'} data-testid="online-booking-status">
-                {enabled ? copy.statusOn : copy.statusOff}
-              </Badge>
             </span>
-          }
-          description={enabled ? undefined : copy.offHint}
-        >
-          <span className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-            <code
-              aria-labelledby={labelId}
-              className="t-id min-w-0 select-all break-all rounded-md bg-surface-sunken px-2 py-1.5 text-sm text-ink"
-              data-testid="online-booking-url"
-            >
-              {url}
-            </code>
-            <span className="flex gap-2">
-              <Button type="button" variant="secondary" size="sm" className="max-sm:min-h-11" disabled={!url} onClick={() => void copyUrl()}>
-                <Copy aria-hidden /> {copy.copyUrl}
-              </Button>
-              <Button asChild variant="ghost" size="sm" className="max-sm:min-h-11">
-                <ExternalLink href={PUBLIC_BOOKING_PATH}>
-                  <ExternalLinkIcon aria-hidden /> {copy.openUrl}
-                </ExternalLink>
-              </Button>
-            </span>
-          </span>
-        </SettingRow>
+            <Badge variant={enabled ? 'success' : 'neutral'} data-testid="online-booking-status">
+              {enabled ? copy.statusOn : copy.statusOff}
+            </Badge>
+          </div>
+          {enabled ? null : <p className="max-w-[60ch] text-sm text-muted">{copy.offHint}</p>}
+          <code
+            aria-labelledby={labelId}
+            className="t-id min-w-0 select-all break-all rounded-md bg-surface-sunken px-3 py-2 text-sm text-ink"
+            data-testid="online-booking-url"
+          >
+            {url}
+          </code>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="secondary" size="sm" className="max-sm:min-h-11" disabled={!url} onClick={() => void copyUrl()}>
+              <Copy aria-hidden /> {copy.copyUrl}
+            </Button>
+            <Button asChild variant="ghost" size="sm" className="max-sm:min-h-11">
+              <ExternalLink href={PUBLIC_BOOKING_PATH}>
+                <ExternalLinkIcon aria-hidden /> {copy.openUrl}
+              </ExternalLink>
+            </Button>
+          </div>
+        </div>
       </SettingRows>
     </SettingsSection>
   );

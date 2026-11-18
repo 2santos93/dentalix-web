@@ -120,6 +120,12 @@ test('ADMIN activa la reserva online → paciente NUEVO reserva en /reservar (di
   await expect(page.getByText(`«${TYPE_NAME}» guardado.`)).toBeVisible();
   expect(await axeViolations(page, page.locator('main'))).toEqual([]);
   await shot(page, 'dx016-settings', 1440);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('heading', { level: 1, name: 'Reserva online' }).scrollIntoViewIfNeeded();
+  await shot(page, 'dx016-settings', 390);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole('heading', { level: 1, name: 'Reserva online' }).scrollIntoViewIfNeeded();
+  await shot(page, 'dx016-settings-top', 1440);
 
   // --- Paciente: móvil, sin sesión, en el host de la clínica ---
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -134,6 +140,9 @@ test('ADMIN activa la reserva online → paciente NUEVO reserva en /reservar (di
   await patient.getByRole('radio', { name: /Sí, es mi primera vez/ }).check();
   expect(await axeViolations(patient, patient.locator('main'))).toEqual([]);
   await shot(patient, 'dx016-reservar-servicio', 390);
+  await patient.setViewportSize({ width: 1440, height: 900 });
+  await shot(patient, 'dx016-reservar-servicio', 1440);
+  await patient.setViewportSize({ width: 390, height: 844 });
   await patient.getByRole('button', { name: 'Continuar' }).click();
 
   await expect(patient.getByRole('heading', { name: 'Elige día y hora' })).toBeFocused();
@@ -141,6 +150,9 @@ test('ADMIN activa la reserva online → paciente NUEVO reserva en /reservar (di
   await expect(firstTime).toBeVisible({ timeout: 15_000 });
   expect(await axeViolations(patient, patient.locator('main'))).toEqual([]);
   await shot(patient, 'dx016-reservar-horas', 390);
+  await patient.setViewportSize({ width: 1440, height: 900 });
+  await shot(patient, 'dx016-reservar-horas', 1440);
+  await patient.setViewportSize({ width: 390, height: 844 });
   const timeText = ((await firstTime.textContent()) ?? '').trim();
   await firstTime.click();
 
@@ -255,10 +267,21 @@ test('modo solicitud: paciente NUEVO pide una hora → «Recibimos tu solicitud�
   await shot(patient, 'dx016-reservar-codigo', 390);
   await ctx.close();
 
-  // --- Recepción (el ADMIN) acepta en la bandeja ---
+  // --- Recepción (el ADMIN): Pendientes de Inicio lleva a la bandeja ---
   await page.setViewportSize({ width: 1440, height: 900 });
   await loginAs(page, origin, email, password);
-  await page.goto(`${origin}/solicitudes-online`);
+  await page.goto(`${origin}/dashboard`);
+  const pending = page.getByTestId('pending-online-requests');
+  await expect(pending).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('pending-online-requests-value')).toHaveText('1');
+  await pending.scrollIntoViewIfNeeded();
+  await shot(page, 'dx016-pendientes', 1440);
+  await pending.getByRole('link', { name: 'Solicitudes online' }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole('heading', { level: 1, name: 'Solicitudes online' })).toBeVisible();
+  await expect(page.getByText(`Gabriel Rondón${suffix}`)).toBeVisible({ timeout: 15_000 });
+  await shot(page, 'dx016-bandeja', 390);
+  await page.setViewportSize({ width: 1440, height: 900 });
   await expect(page.getByRole('heading', { level: 1, name: 'Solicitudes online' })).toBeVisible();
   const row = page.getByRole('row', { name: new RegExp(`Gabriel Rondón${suffix}`) });
   await expect(row).toBeVisible({ timeout: 15_000 });

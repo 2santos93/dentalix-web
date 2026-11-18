@@ -43,7 +43,7 @@ export const onlineRequestsCopy = {
   colType: 'Tratamiento',
   colProvider: 'Profesional',
   colLocation: 'Sede',
-  colKind: 'Paciente',
+  colKind: 'Tipo de paciente',
   colStatus: 'Estado',
   kindNew: 'Nuevo',
   kindExisting: 'Con ficha',

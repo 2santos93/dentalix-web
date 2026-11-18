@@ -231,7 +231,6 @@ export function BookingSlotStep({
                   key={d.day}
                   type="button"
                   aria-pressed={active}
-                  aria-label={empty ? `${dayWords(d.day)}, ${slotStepCopy.noDayChip}` : dayWords(d.day)}
                   data-testid={`booking-day-${d.day}`}
                   onClick={() => setChosenDay(d.day)}
                   className={cn(
@@ -243,9 +242,11 @@ export function BookingSlotStep({
                     empty && !active && 'text-muted',
                   )}
                 >
-                  <span className="t-caption first-letter:uppercase">{civilDateLabel(d.day, { weekday: 'short' })}</span>
-                  <span className="text-base font-semibold tabular-nums">{civilDateLabel(d.day, { day: 'numeric' })}</span>
-                  <span className="t-caption">{civilDateLabel(d.day, { month: 'short' })}</span>
+                  {/* Lo visible es corto; el nombre accesible, el día entero (sin aria-label: axe exige que contenga lo visible). */}
+                  <span aria-hidden className="t-caption first-letter:uppercase">{civilDateLabel(d.day, { weekday: 'short' })}</span>
+                  <span aria-hidden className="text-base font-semibold tabular-nums">{civilDateLabel(d.day, { day: 'numeric' })}</span>
+                  <span aria-hidden className="t-caption">{civilDateLabel(d.day, { month: 'short' })}</span>
+                  <span className="sr-only">{empty ? `${dayWords(d.day)}, ${slotStepCopy.noDayChip}` : dayWords(d.day)}</span>
                 </button>
               );
             })}

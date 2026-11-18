@@ -183,8 +183,19 @@ export function PendingSection({
     document.getElementById(PENDING_ANCHOR)?.scrollIntoView({ block: 'start' });
   }, []);
   const showCash = canSeeBlock('cash', role);
-  const showOnline = canSeeBlock('onlineRequests', role);
   const scopeKey = `${activeLocationId ?? 'all'}|${fmt ? 'fmt' : 'raw'}`;
+  const showOnline = canSeeBlock('onlineRequests', role);
+  // DX-016: la bandeja de la reserva online no es una cola de `/work-queues`:
+  // su recuento va aparte, pero se pinta como una lista más (activa o «Al día»).
+  const online = useLoad(() => getOnlinePendingCount(token), `online|${scopeKey}`, showOnline, copy.rowError);
+  const onlineActive = online.status === 'error' || (online.status === 'ready' && online.data > 0);
+  const onlineClear = online.status === 'ready' && online.data === 0;
+  const onlineRow = (
+    <OnlineRequestsRow
+      state={online.status === 'ready' ? { ready: count(online.data, fmt) } : 'error'}
+      onRetry={online.reload}
+    />
+  );
 
   const items = view.status === 'ready' ? view.items : [];
   const active = items.filter((i) => i.status === 'ERROR' || (i.count ?? 0) > 0);
@@ -199,7 +210,6 @@ export function PendingSection({
     <section id={PENDING_ANCHOR} aria-labelledby="inicio-pending-title" className="flex scroll-mt-6 flex-col gap-3">
       <SectionHeader titleId="inicio-pending-title" title={copy.heading} description={copy.description} />
       {cash ? <ul aria-label={copy.cash.label} className={listClass}>{cash}</ul> : null}
-      {showOnline ? <OnlineRequestsRow token={token} scopeKey={scopeKey} fmt={fmt} /> : null}
       {view.status === 'error' ? (
         <SectionError description={copy.sectionError} onRetry={view.retry} />
       ) : view.status === 'loading' ? (
@@ -216,7 +226,7 @@ export function PendingSection({
         </ul>
       ) : (
         <>
-          {active.length === 0 ? (
+          {active.length === 0 && !onlineActive ? (
             <EmptyState
               role="status"
               icon={<CheckCircle2 aria-hidden />}
@@ -225,12 +235,13 @@ export function PendingSection({
             />
           ) : (
             <ul aria-label={copy.listLabel} className={listClass}>
+              {onlineActive ? onlineRow : null}
               {active.map((item) => (
                 <QueueListRow key={item.key} row={queueRow(item.key, role)} item={item} fmt={fmt} onRetry={view.retry} />
               ))}
             </ul>
           )}
-          {clear.length > 0 ? (
+          {clear.length + (onlineClear ? 1 : 0) > 0 ? (
             <div className="flex flex-col gap-2">
               <button
                 type="button"
@@ -240,13 +251,14 @@ export function PendingSection({
                 className="flex min-h-11 items-center justify-between gap-3 rounded-md px-1 text-left text-sm text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-primary-text sm:min-h-9"
                 data-testid="pending-folded-toggle"
               >
-                <span>{copy.folded(clear.length)}</span>
+                <span>{copy.folded(clear.length + (onlineClear ? 1 : 0))}</span>
                 <span className="flex items-center gap-1 text-xs">
                   {unfolded ? copy.foldedHide : copy.foldedShow}
                   <ChevronDown aria-hidden className={cn('size-4 transition-transform', unfolded && 'rotate-180')} />
                 </span>
               </button>
               <ul id={foldId} hidden={!unfolded} aria-label={copy.upToDate} className={listClass}>
+                {onlineClear ? onlineRow : null}
                 {clear.map((item) => (
                   <QueueListRow key={item.key} row={queueRow(item.key, role)} item={item} fmt={fmt} onRetry={view.retry} />
                 ))}
@@ -291,25 +303,14 @@ function CashRow({
   );
 }
 
-/**
- * DX-016: «Solicitudes online» por revisar (`GET /online-booking/requests/pending-count`).
- * Aparte de las listas de `GET /work-queues/summary` (la API de colas no la
- * cuenta): solo se pinta con algo pendiente o si no se pudo contar; a 0 no
- * ocupa sitio (la bandeja sigue a mano en ⌘K).
- */
-function OnlineRequestsRow({ token, scopeKey, fmt }: { token: string; scopeKey: string; fmt: RegionalFormat | null }) {
-  const load = useLoad(() => getOnlinePendingCount(token), `online|${scopeKey}`, true, copy.rowError);
-  if (load.status === 'ready' && load.data === 0) return null;
-  if (load.status !== 'ready' && load.status !== 'error') return null;
-  const row = { id: 'online-requests', ...copy.onlineRequests, href: ONLINE_REQUESTS_HREF };
+/** DX-016: la fila «Solicitudes online» (`GET /online-booking/requests/pending-count`). */
+function OnlineRequestsRow({ state, onRetry }: { state: { ready: RowValue } | 'error'; onRetry: () => void }) {
   return (
-    <ul aria-label={copy.onlineRequests.label} className={listClass}>
-      <PendingRow
-        row={row}
-        state={load.status === 'ready' ? { ready: count(load.data, fmt) } : 'error'}
-        onRetry={load.reload}
-      />
-    </ul>
+    <PendingRow
+      row={{ id: 'online-requests', ...copy.onlineRequests, href: ONLINE_REQUESTS_HREF }}
+      state={state}
+      onRetry={onRetry}
+    />
   );
 }
 
