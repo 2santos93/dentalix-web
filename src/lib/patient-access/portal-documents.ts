@@ -25,6 +25,8 @@ export function printableQuote(plan: PortalPlan): PlanQuote {
       address: quote.location.address,
     },
     items: quote.items.map((item, index) => ({ ...item, id: `item-${index}` })),
+    // DX-560: el portal no recibe la presentación; el documento usa sus líneas.
+    presentation: { language: 'es', items: [] },
     acceptance: quote.acceptance
       ? {
           signerName: quote.acceptance.signerName,
