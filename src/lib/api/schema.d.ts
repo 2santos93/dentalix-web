@@ -32246,7 +32246,7 @@ export interface operations {
                     "application/json": components["schemas"]["DraftKeyDto"];
                 };
             };
-            /** @description Sin sesión de clínica */
+            /** @description Sin sesión de clínica, o la sesión ya no está viva: revocada o caducada, `tokenVersion` cambiada (contraseña o MFA), membresía retirada o clínica dada de baja */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -32255,6 +32255,13 @@ export interface operations {
             };
             /** @description Acceso de soporte (break-glass): sin borradores locales */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El servidor no tiene DEVICE_DRAFT_KEY_SECRET (fuera de producción) */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
