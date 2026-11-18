@@ -39,6 +39,11 @@ export interface DentalCatalogItem {
   /** DX-566: días hábiles de la sede entre el procedimiento y la llamada (1–30). */
   postOpCheckAfterDays?: number;
   /**
+   * DX-560: descripción para el paciente por idioma (español primero, luego
+   * alfabético). Vacía = sin descripción (el paciente lee el nombre del catálogo).
+   */
+  patientDescription?: PatientDescriptionEntry[];
+  /**
    * DX-502-ter: moneda de `defaultPrice` (la del catálogo de la clínica), `null` si no se
    * sabe. La traen las lecturas de `GET /catalog/items`; no las altas ni las ediciones.
    */
@@ -131,6 +136,12 @@ export async function listCatalogDirectory(
  * `listCatalogItems` above / `createPatient`). Guarded by `CATALOG_WRITE_ROLES`
  * (ADMIN) on the backend.
  */
+/** DX-560: un idioma de la descripción para el paciente. */
+export interface PatientDescriptionEntry {
+  language: string;
+  text: string;
+}
+
 export interface CreateCatalogItemInput {
   code: string;
   kind: 'DIAGNOSIS' | 'PROCEDURE';
@@ -149,6 +160,8 @@ export interface CreateCatalogItemInput {
   active?: boolean;
   /** DX-455: `null` la desliga; ausente, no cambia. Solo procedimientos. */
   clinicalNoteTemplateId?: string | null;
+  /** DX-560: la lista ENTERA (un idioma que no viene se quita); ausente, no cambia. */
+  patientDescription?: PatientDescriptionEntry[];
 }
 
 export async function createCatalogItem(
@@ -184,6 +197,7 @@ export interface UpdateCatalogItemInput {
   postOpCheckAfterDays?: number;
   active?: boolean;
   clinicalNoteTemplateId?: string | null;
+  patientDescription?: PatientDescriptionEntry[];
 }
 
 export async function updateCatalogItem(
