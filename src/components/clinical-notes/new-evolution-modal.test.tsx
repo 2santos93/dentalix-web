@@ -845,6 +845,18 @@ describe('NewEvolutionModal · borradores sin conexión (DX-574)', () => {
     expect(mockedCreate.mock.calls[2][3]).not.toBe(firstKey);
   });
 
+  it('cerrar el modal antes del debounce no pierde lo último escrito', async () => {
+    const user = userEvent.setup();
+    const view = render(
+      <NewEvolutionModal open onOpenChange={jest.fn()} token={DENTIST} patientId="p1" onCreated={jest.fn()} />,
+    );
+    await user.type(await screen.findByLabelText(/texto de la evolución/i), 'Sutura retirada');
+    view.unmount();
+    await waitFor(async () =>
+      expect((await drafts.read(SCOPE))?.payload.value).toMatchObject({ manualNotes: 'Sutura retirada' }),
+    );
+  });
+
   it('el borrador de otro usuario del mismo navegador no se ofrece', async () => {
     await drafts.seed({ ...SCOPE, owner: 'u-otro|t1' }, DRAFT_VALUE, 'k');
     renderModal({ token: DENTIST });

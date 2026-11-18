@@ -107,6 +107,8 @@ export function useFormDraft<T>(options: UseFormDraftOptions<T>): FormDraft<T> {
   // Lo último que se guardó (o que no hace falta guardar).
   const lastSavedRef = useRef<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Valor programado para guardar y aún no guardado (se guarda al cerrar el formulario).
+  const dirtyRef = useRef<string | null>(null);
   const valueRef = useRef(serialized);
   useLayoutEffect(() => {
     valueRef.current = serialized;
@@ -164,10 +166,15 @@ export function useFormDraft<T>(options: UseFormDraftOptions<T>): FormDraft<T> {
     return onReconnect(() => setCheckAttempt((n) => n + 1));
   }, [locked]);
 
-  const cancelTimer = () => {
+  const cancelTimer = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = null;
-  };
+  }, []);
+  /** Ya no hay nada pendiente de guardar (se guardó, se descartó o se envió). */
+  const settle = useCallback(() => {
+    cancelTimer();
+    dirtyRef.current = null;
+  }, [cancelTimer]);
 
   const persist = useCallback(
     async (text: string): Promise<boolean> => {
@@ -197,20 +204,22 @@ export function useFormDraft<T>(options: UseFormDraftOptions<T>): FormDraft<T> {
       return;
     }
     cancelTimer();
+    dirtyRef.current = serialized;
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
+      dirtyRef.current = null;
       void persist(serialized);
     }, debounceMs);
     return cancelTimer;
-  }, [active, checked, pending, locked, store, scope, serialized, isEmpty, debounceMs, persist]);
+  }, [active, checked, pending, locked, store, scope, serialized, isEmpty, debounceMs, persist, cancelTimer]);
 
   // Al ocultar o cerrar la pestaña, lo pendiente se guarda ya (sin esperar al debounce).
   useEffect(() => {
     if (!active) return;
     const flush = () => {
-      if (!timerRef.current) return;
-      cancelTimer();
-      void persist(valueRef.current);
+      const text = dirtyRef.current;
+      settle();
+      if (text !== null) void persist(text);
     };
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') flush();
@@ -220,8 +229,10 @@ export function useFormDraft<T>(options: UseFormDraftOptions<T>): FormDraft<T> {
     return () => {
       window.removeEventListener('pagehide', flush);
       document.removeEventListener('visibilitychange', onVisibility);
+      // Se cierra el formulario (o se desmonta) antes del debounce: lo último escrito no se pierde.
+      flush();
     };
-  }, [active, persist]);
+  }, [active, persist, settle]);
 
   const restore = useCallback((): T | null => {
     const payload = payloadRef.current;
@@ -239,28 +250,28 @@ export function useFormDraft<T>(options: UseFormDraftOptions<T>): FormDraft<T> {
     payloadRef.current = null;
     setCheck((c) => (c ? { ...c, pending: null, locked: null } : c));
     lastSavedRef.current = valueRef.current;
-    cancelTimer();
+    settle();
     if (store && scope) void store.remove(scope).catch(() => undefined);
-  }, [store, scope]);
+  }, [store, scope, settle]);
 
   const clear = useCallback(async () => {
-    cancelTimer();
+    settle();
     payloadRef.current = null;
     setCheck((c) => (c ? { ...c, pending: null, locked: null } : c));
     lastSavedRef.current = valueRef.current;
     if (store && scope) await store.remove(scope).catch(() => undefined);
-  }, [store, scope]);
+  }, [store, scope, settle]);
 
   const renewKey = useCallback(() => setKey(newIdempotencyKey()), [setKey]);
 
   const saveNow = useCallback(async () => {
-    cancelTimer();
+    settle();
     if (!active) return false;
     // Se pulsó «Guardar» con lo que hay en pantalla: eso es ya el borrador.
     payloadRef.current = null;
     setCheck((c) => (c ? { ...c, pending: null } : c));
     return persist(valueRef.current);
-  }, [active, persist]);
+  }, [active, persist, settle]);
 
   const getIdempotencyKey = useCallback(() => keyRef.current, []);
 
