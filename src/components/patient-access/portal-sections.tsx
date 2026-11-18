@@ -1,6 +1,18 @@
 'use client';
 import * as React from 'react';
-import { CalendarCheck, CalendarX, Clock, Download, FileText, MapPin, Stethoscope, UserRound, Wallet } from 'lucide-react';
+import {
+  CalendarCheck,
+  CalendarX,
+  CircleCheck,
+  Clock,
+  Download,
+  FileSignature,
+  FileText,
+  MapPin,
+  Stethoscope,
+  UserRound,
+  Wallet,
+} from 'lucide-react';
 import type { AccountStatement } from '@/lib/account-statement/account-statement-api';
 import {
   installmentLabel,
@@ -49,6 +61,13 @@ export const portalSectionsCopy = {
   discounts: 'Descuentos',
   pdf: 'Descargar PDF',
   pdfQuoteLabel: (location: string) => `Descargar PDF del presupuesto de ${location}`,
+  // DX-101-bis: aceptar con firma desde el portal.
+  accept: 'Aceptar presupuesto',
+  chooseOption: 'Elegir esta opción',
+  chooseOptionLabel: (option: string) => `Elegir esta opción: ${option}`,
+  validUntil: (date: string) => `Válido hasta el ${date}`,
+  acceptedOn: (date: string) => `Aceptado el ${date}`,
+  accepted: 'Presupuesto aceptado. La clínica ya recibió tu aceptación.',
   accountHeading: 'Tu estado de cuenta',
   upToDate: 'Está al día',
   upToDateHint: 'No tienes saldo pendiente con la clínica.',
@@ -211,19 +230,30 @@ export function groupPlans(plans: PortalPlan[]): PortalPlan[][] {
   return groups;
 }
 
+/** El id del título de la tarjeta de un plan: recibe el foco tras aceptarlo. */
+export function portalPlanTitleId(planId: string): string {
+  return `portal-plan-${planId}`;
+}
+
 function PlanCard({
   plan,
   optionLabel,
+  inGroup,
   onPrint,
+  onAccept,
 }: {
   plan: PortalPlan;
   optionLabel: string | null;
+  /** Una de las alternativas A/B: el botón dice «Elegir esta opción». */
+  inGroup: boolean;
   onPrint: (planId: string) => void;
+  onAccept: (plan: PortalPlan, optionLabel: string | null) => void;
 }) {
   const { quote } = plan;
   const format = documentFormat(quote.regional);
   const doc = documentTexts(format);
-  const titleId = `portal-plan-${plan.id}`;
+  const titleId = portalPlanTitleId(plan.id);
+  const validId = `${titleId}-valid`;
   return (
     <article
       aria-labelledby={titleId}
@@ -232,7 +262,7 @@ function PlanCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 id={titleId} className="t-title break-words text-ink">
+          <h3 id={titleId} tabIndex={-1} className="t-title break-words text-ink focus-visible:outline-none">
             {optionLabel ? `${optionLabel} · ` : ''}
             {copy.quoteTitle(quote.location.name)}
           </h3>
@@ -281,21 +311,60 @@ function PlanCard({
           </React.Fragment>
         ))}
       </dl>
-      <Button
-        type="button"
-        variant="secondary"
-        className="w-full sm:w-auto sm:self-start max-sm:min-h-11"
-        aria-label={copy.pdfQuoteLabel(quote.location.name)}
-        disabled={format === null}
-        onClick={() => onPrint(plan.id)}
-      >
-        <Download aria-hidden /> {copy.pdf}
-      </Button>
+      {plan.status === 'ACCEPTED' && plan.acceptedAt ? (
+        <p data-testid="portal-plan-accepted" className="flex items-start gap-2 text-sm font-medium text-ink">
+          <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-success-text" />
+          <span className="tabular-nums">{copy.acceptedOn(doc.date(plan.acceptedAt))}</span>
+        </p>
+      ) : null}
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        {plan.acceptable ? (
+          <Button
+            type="button"
+            className="w-full sm:w-auto max-sm:min-h-11"
+            aria-label={inGroup && optionLabel ? copy.chooseOptionLabel(optionLabel) : undefined}
+            aria-describedby={validId}
+            onClick={() => onAccept(plan, optionLabel)}
+          >
+            <FileSignature aria-hidden /> {inGroup ? copy.chooseOption : copy.accept}
+          </Button>
+        ) : null}
+        <Button
+          type="button"
+          variant="secondary"
+          className="w-full sm:w-auto max-sm:min-h-11"
+          aria-label={copy.pdfQuoteLabel(quote.location.name)}
+          disabled={format === null}
+          onClick={() => onPrint(plan.id)}
+        >
+          <Download aria-hidden /> {copy.pdf}
+        </Button>
+      </div>
+      {plan.acceptable ? (
+        <p id={validId} className="t-caption tabular-nums text-muted">
+          {copy.validUntil(doc.civilDate(plan.validUntil))}
+        </p>
+      ) : null}
     </article>
   );
 }
 
-export function PortalPlans({ plans, onPrint }: { plans: PortalPlan[]; onPrint: (planId: string) => void }) {
+export function PortalPlans({
+  plans,
+  onPrint,
+  onAccept,
+  accepted = false,
+  acceptError = null,
+}: {
+  plans: PortalPlan[];
+  onPrint: (planId: string) => void;
+  /** DX-101-bis: abre la aceptación con firma de un plan `acceptable`. */
+  onAccept: (plan: PortalPlan, optionLabel: string | null) => void;
+  /** Recién aceptado uno: la confirmación (región `role="status"` montada siempre). */
+  accepted?: boolean;
+  /** No se pudo aceptar (409, 404…): el texto de la API, ya con los datos recargados. */
+  acceptError?: string | null;
+}) {
   if (plans.length === 0) {
     return <SectionEmpty icon={FileText} title={copy.plansEmpty} hint={copy.plansEmptyHint} />;
   }
@@ -304,9 +373,24 @@ export function PortalPlans({ plans, onPrint }: { plans: PortalPlan[]; onPrint: 
       <h2 id="portal-plans-heading" className="t-title text-ink">
         {copy.plansHeading}
       </h2>
+      <p role="status" data-testid="portal-plan-accepted-notice" className={accepted ? 'text-sm text-success-text' : 'sr-only'}>
+        {accepted ? copy.accepted : ''}
+      </p>
+      {acceptError ? (
+        <Callout tone="warning" role="alert" data-testid="portal-accept-error">
+          {acceptError}
+        </Callout>
+      ) : null}
       {groupPlans(plans).map((group) =>
         group.length === 1 && !group[0].optionGroupId ? (
-          <PlanCard key={group[0].id} plan={group[0]} optionLabel={null} onPrint={onPrint} />
+          <PlanCard
+            key={group[0].id}
+            plan={group[0]}
+            optionLabel={null}
+            inGroup={false}
+            onPrint={onPrint}
+            onAccept={onAccept}
+          />
         ) : (
           <section
             key={group[0].optionGroupId ?? group[0].id}
@@ -319,7 +403,14 @@ export function PortalPlans({ plans, onPrint }: { plans: PortalPlan[]; onPrint: 
               <p className="text-sm text-muted">{copy.alternativesHint}</p>
             </div>
             {group.map((plan, i) => (
-              <PlanCard key={plan.id} plan={plan} optionLabel={copy.option(plan.optionLabel, i)} onPrint={onPrint} />
+              <PlanCard
+                key={plan.id}
+                plan={plan}
+                optionLabel={copy.option(plan.optionLabel, i)}
+                inGroup
+                onPrint={onPrint}
+                onAccept={onAccept}
+              />
             ))}
           </section>
         ),

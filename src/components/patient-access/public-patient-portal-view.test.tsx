@@ -4,7 +4,9 @@ import userEvent from '@testing-library/user-event';
 import { PublicPatientPortalView, publicPortalCopy as copy, visibleScopes } from './public-patient-portal-view';
 import { groupPlans, portalSectionsCopy } from './portal-sections';
 import { ApiError, NetworkError } from '@/lib/api/api-error';
+import { portalAcceptCopy } from './portal-accept-dialog';
 import {
+  acceptPortalPlan,
   confirmPortalAppointment,
   getPatientPortal,
   logoutPatientPortal,
@@ -21,6 +23,7 @@ jest.mock('../../lib/patient-access/patient-access-api', () => ({
   verifyPatientAccess: jest.fn(),
   getPatientPortal: jest.fn(),
   confirmPortalAppointment: jest.fn(),
+  acceptPortalPlan: jest.fn(),
   logoutPatientPortal: jest.fn(),
 }));
 
@@ -28,6 +31,22 @@ const mockedVerify = verifyPatientAccess as jest.MockedFunction<typeof verifyPat
 const mockedMe = getPatientPortal as jest.MockedFunction<typeof getPatientPortal>;
 const mockedConfirm = confirmPortalAppointment as jest.MockedFunction<typeof confirmPortalAppointment>;
 const mockedLogout = logoutPatientPortal as jest.MockedFunction<typeof logoutPatientPortal>;
+const mockedAccept = acceptPortalPlan as jest.MockedFunction<typeof acceptPortalPlan>;
+
+// jsdom no implementa canvas: la firma «Escribir mi nombre» se genera en uno.
+// En `beforeEach`: el `resetAllMocks` de abajo también vacía los espías.
+function mockCanvas() {
+  jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
+    () =>
+      ({
+        measureText: () => ({ width: 200 }),
+        fillText: jest.fn(),
+        setTransform: jest.fn(),
+        clearRect: jest.fn(),
+      }) as unknown as CanvasRenderingContext2D,
+  );
+  jest.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockImplementation(() => 'data:image/png;base64,ESCRITA');
+}
 
 /** El estado de cuenta del personal tal como lo proyecta la API del portal (lista blanca). */
 function asPortal(statement: AccountStatement): NonNullable<PatientPortal['account']> {
@@ -149,6 +168,7 @@ async function enter(user: ReturnType<typeof userEvent.setup>) {
 
 beforeEach(() => {
   jest.resetAllMocks();
+  mockCanvas();
   mockedLogout.mockResolvedValue(undefined);
   window.print = jest.fn();
 });
@@ -371,4 +391,129 @@ test('«Salir» cierra la sesión y vuelve a la verificación sin datos', async 
   expect(mockedLogout).toHaveBeenCalled();
   expect(screen.getByTestId('portal-verify-notice')).toHaveTextContent(copy.loggedOut);
   expect(screen.queryByText('Sede Chacao')).not.toBeInTheDocument();
+});
+
+// --- DX-101-bis: aceptar con firma desde el portal ---------------------------
+
+function abPortal(acceptedB = false): PatientPortal {
+  return portal({
+    plans: [
+      plan({ id: 'a', optionGroupId: 'g1', optionLabel: 'A', acceptable: !acceptedB }),
+      plan({
+        id: 'b',
+        optionGroupId: 'g1',
+        optionLabel: 'B',
+        acceptable: !acceptedB,
+        contentHash: 'b'.repeat(64),
+        ...(acceptedB ? { status: 'ACCEPTED' as const, acceptedAt: '2026-11-18T14:00:00.000Z' } : {}),
+      }),
+    ],
+  });
+}
+
+async function openPlans(user: ReturnType<typeof userEvent.setup>, first: PatientPortal) {
+  mockedVerify.mockResolvedValue({ sessionExpiresAt: 'x', scopes: [] });
+  mockedMe.mockResolvedValueOnce(first);
+  await enter(user);
+  await user.click(await screen.findByRole('tab', { name: 'Presupuestos' }));
+}
+
+async function signTyped(user: ReturnType<typeof userEvent.setup>, name = 'María José Pérez') {
+  const dialog = await screen.findByRole('dialog');
+  await user.click(within(dialog).getByRole('checkbox', { name: portalAcceptCopy.consent }));
+  await user.type(within(dialog).getByLabelText(portalAcceptCopy.signerName, { exact: true }), name);
+  await user.click(within(dialog).getByRole('button', { name: portalAcceptCopy.submit }));
+}
+
+test('un presupuesto aceptable ofrece «Aceptar presupuesto» con su validez; uno aceptado, no', async () => {
+  const user = userEvent.setup();
+  await openPlans(
+    user,
+    portal({
+      plans: [
+        plan({ id: 'p1', acceptable: true, validUntil: '2026-12-18' }),
+        plan({ id: 'p2', status: 'ACCEPTED', acceptedAt: '2026-11-10T15:00:00.000Z' }),
+      ],
+    }),
+  );
+  const [open, accepted] = screen.getAllByTestId('portal-plan');
+  const button = within(open).getByRole('button', { name: portalSectionsCopy.accept });
+  expect(button).toHaveAccessibleDescription('Válido hasta el 18/12/2026');
+  expect(within(accepted).queryByRole('button', { name: portalSectionsCopy.accept })).not.toBeInTheDocument();
+  expect(within(accepted).getByTestId('portal-plan-accepted')).toHaveTextContent('Aceptado el 10/11/2026');
+});
+
+test('A/B: «Elegir esta opción» en cada una; elegir la B con firma escrita la acepta y relee los datos', async () => {
+  const user = userEvent.setup();
+  await openPlans(user, abPortal());
+  mockedAccept.mockResolvedValue({
+    ...abPortal(true).plans![1],
+  });
+  mockedMe.mockResolvedValueOnce(abPortal(true));
+  expect(screen.getByRole('button', { name: 'Elegir esta opción: Opción A' })).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Elegir esta opción: Opción B' }));
+  expect(await screen.findByRole('dialog', { name: 'Elegir la opción B' })).toBeInTheDocument();
+  await signTyped(user);
+  expect(mockedAccept).toHaveBeenCalledWith('b', {
+    signerName: 'María José Pérez',
+    signature: 'data:image/png;base64,ESCRITA',
+    contentHash: 'b'.repeat(64),
+    consent: true,
+  });
+  expect(await screen.findByText(portalSectionsCopy.accepted)).toBeInTheDocument();
+  expect(screen.getByTestId('portal-plan-accepted-notice')).toHaveAttribute('role', 'status');
+  await waitFor(() => expect(mockedMe).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(screen.queryByRole('button', { name: /Elegir esta opción/ })).not.toBeInTheDocument();
+  expect(screen.getByTestId('portal-plan-accepted')).toHaveTextContent('Aceptado el 18/11/2026');
+});
+
+test('409 PORTAL_QUOTE_CHANGED: cierra, dice que cambió y vuelve a leer los datos', async () => {
+  const user = userEvent.setup();
+  const message = 'El presupuesto ha cambiado. Recarga la página para ver la versión actual.';
+  await openPlans(user, portal({ plans: [plan({ acceptable: true })] }));
+  mockedAccept.mockRejectedValue(new ApiError(409, message, { code: 'PORTAL_QUOTE_CHANGED', messages: [message] }));
+  mockedMe.mockResolvedValueOnce(portal({ plans: [plan({ acceptable: true, contentHash: 'd'.repeat(64) })] }));
+  await user.click(screen.getByRole('button', { name: portalSectionsCopy.accept }));
+  await signTyped(user);
+  expect(await screen.findByTestId('portal-accept-error')).toHaveTextContent(message);
+  await waitFor(() => expect(mockedMe).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+});
+
+test('409 genérico: el texto de la API, sin decir por qué, y recarga', async () => {
+  const user = userEvent.setup();
+  const message = 'Este presupuesto ya no se puede aceptar desde aquí. Contacta con la clínica.';
+  await openPlans(user, portal({ plans: [plan({ acceptable: true })] }));
+  mockedAccept.mockRejectedValue(
+    new ApiError(409, message, { code: 'PORTAL_QUOTE_NOT_ACCEPTABLE', messages: [message] }),
+  );
+  mockedMe.mockResolvedValueOnce(portal({ plans: [plan({ acceptable: false })] }));
+  await user.click(screen.getByRole('button', { name: portalSectionsCopy.accept }));
+  await signTyped(user);
+  expect(await screen.findByTestId('portal-accept-error')).toHaveTextContent(message);
+  await waitFor(() => expect(screen.queryByRole('button', { name: portalSectionsCopy.accept })).not.toBeInTheDocument());
+});
+
+test('429: el diálogo sigue abierto con el aviso y se puede volver a intentar', async () => {
+  const user = userEvent.setup();
+  await openPlans(user, portal({ plans: [plan({ acceptable: true })] }));
+  mockedAccept.mockRejectedValue(new ApiError(429, 'x', { retryAfterSeconds: 60 }));
+  await user.click(screen.getByRole('button', { name: portalSectionsCopy.accept }));
+  await signTyped(user);
+  const dialog = screen.getByRole('dialog');
+  expect(await within(dialog).findByText(copy.acceptRateLimited)).toBeInTheDocument();
+  expect(within(dialog).getByRole('button', { name: portalAcceptCopy.submit })).toBeEnabled();
+  expect(mockedMe).toHaveBeenCalledTimes(1);
+});
+
+test('410 al aceptar: el aviso de enlace caducado, sin datos ni diálogo', async () => {
+  const user = userEvent.setup();
+  await openPlans(user, portal({ plans: [plan({ acceptable: true })] }));
+  mockedAccept.mockRejectedValue(new ApiError(410, 'x', { code: 'PATIENT_ACCESS_GONE' }));
+  await user.click(screen.getByRole('button', { name: portalSectionsCopy.accept }));
+  await signTyped(user);
+  expect(await screen.findByRole('heading', { level: 1, name: copy.goneTitle })).toBeInTheDocument();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.queryByText(/María/)).not.toBeInTheDocument();
 });
