@@ -44,8 +44,13 @@ export function useIdleLogout(token: string | null): void {
     };
   }, [token]);
 
+  // El token se renueva cada pocos minutos (también por los sondeos en segundo
+  // plano): el temporizador depende de HABER sesión, no del token, o cada
+  // renovación contaría como actividad y la sesión no caducaría nunca.
+  const signedIn = token !== null;
+
   useEffect(() => {
-    if (!token) return;
+    if (!signedIn) return;
     closing.current = false;
     // Abrir (o recargar) la app cuenta como actividad.
     writeLastActivity(Date.now());
@@ -90,5 +95,5 @@ export function useIdleLogout(token: string | null): void {
       document.removeEventListener('visibilitychange', onVisibility);
       window.clearInterval(timer);
     };
-  }, [token, minutes]);
+  }, [signedIn, minutes]);
 }
