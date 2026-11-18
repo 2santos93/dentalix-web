@@ -173,6 +173,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   EXTERNAL_ORDER_TEMPLATE: 'Plantilla de orden externa',
   // DX-566: control postoperatorio (alta al marcar hecho, intentos y cierre).
   POST_OP_CHECK: 'Control postoperatorio',
+  // DX-016: reserva online (código, solicitud, reserva, aceptar y rechazar).
+  ONLINE_BOOKING: 'Reserva online',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
@@ -206,6 +208,8 @@ const ORIGIN_LABELS: Record<AuditOrigin, string> = {
   JOB: 'proceso automático',
   // DX-435: el paciente desde el enlace público de la oferta de hueco.
   PUBLIC_LINK: 'desde el enlace de la oferta',
+  // DX-016: el paciente desde la página pública de reserva online.
+  ONLINE_BOOKING: 'desde la reserva online',
 };
 
 /**
