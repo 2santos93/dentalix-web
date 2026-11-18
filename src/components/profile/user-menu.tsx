@@ -175,11 +175,13 @@ function ThemeItem() {
 function SharedDeviceItem() {
   const shared = useSharedDevice();
   const checked = shared === true;
+  const labelId = useId();
   const hintId = useId();
   return (
     <DropdownMenuPrimitive.CheckboxItem
       checked={checked}
       disabled={shared === null}
+      aria-labelledby={labelId}
       aria-describedby={hintId}
       onSelect={(event) => {
         event.preventDefault();
@@ -193,7 +195,7 @@ function SharedDeviceItem() {
     >
       <Monitor className="mt-0.5 size-4 shrink-0 text-muted" aria-hidden />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span>{copy.sharedDevice}</span>
+        <span id={labelId}>{copy.sharedDevice}</span>
         <span id={hintId} className="text-xs text-muted">
           {copy.sharedDeviceHint}
         </span>
