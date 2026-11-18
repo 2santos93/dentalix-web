@@ -52,6 +52,8 @@ export function makeLine(over: Partial<CommissionLine> = {}): CommissionLine {
     base: 100,
     percent: 35,
     amount: 35,
+    // DX-464 (API): campo nuevo del esquema; la web de DX-464 lo usa.
+    paidInPaymentId: null,
     ...over,
   };
 }
@@ -113,6 +115,10 @@ export function makeSettlement(over: Partial<CommissionSettlement> = {}): Commis
     totals: preview.totals,
     categoryPercents: [{ category: 'Higiene', percent: 20 }],
     lines: preview.lines.map((l, i) => ({ ...l, id: `line-${i}` })),
+    // DX-464 (API): campos nuevos del esquema; la web de DX-464 los usa.
+    professionalEmail: null,
+    payment: { status: 'NOTHING_TO_PAY', currencies: [] },
+    payments: [],
     ...over,
   };
 }
