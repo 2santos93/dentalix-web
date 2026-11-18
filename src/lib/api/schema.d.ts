@@ -5505,7 +5505,7 @@ export interface paths {
         };
         /**
          * Enlaces del paciente: enviados, abiertos, completados y caducados sin abrir por tipo y sede
-         * @description Por tipo de enlace y sede: los ENVIADOS en el período (fecha de envío en la zona de la sede del enlace, DX-097) y, de esos mismos, los abiertos, los completados y los caducados sin abrir, mirados ahora (`asOf`). Tasas = parte ÷ enviados, en % con 1 decimal; sin envíos, null. Mediana de horas del envío al completado. Anamnesis: abierta = la página avisó de la apertura o se envió; completada = enviada. Firma (consentimiento o presupuesto): abierta = pidió el código, lo verificó o firmó; completada = firmada. Confirmación de cita: completada = respondida (confirmar, cancelar o «llámenme»); no guarda la apertura, así que abiertos y caducados sin abrir van en null. Indicaciones postoperatorias (solo email y WhatsApp): abierta = primera apertura; no tienen paso de completar (null). Caducado sin abrir: pasó su caducidad sin abrirse ni completarse; un enlace anulado o reemplazado no cuenta. Sede: la del enlace; en la confirmación, la de la cita. Solo ADMIN; un miembro restringido (DX-089) solo ve sus sedes. Sin datos de pacientes.
+         * @description Por tipo de enlace y sede: los ENVIADOS en el período (fecha de envío en la zona de la sede del enlace, DX-097) y, de esos mismos, los abiertos, los completados y los caducados sin abrir, mirados ahora (`asOf`). Tasas = parte ÷ enviados, en % con 1 decimal; sin envíos, null. Mediana de horas del envío al completado. Anamnesis: abierta = la página avisó de la apertura o se envió; completada = enviada. Firma (consentimiento o presupuesto): solo las que envió la clínica (las del seguimiento automático de presupuestos tienen su informe, DX-561); abierta = pidió el código, lo verificó o firmó; completada = firmada. Confirmación de cita: completada = respondida (confirmar, cancelar o «llámenme»); no guarda la apertura, así que abiertos y caducados sin abrir van en null. Indicaciones postoperatorias (solo email y WhatsApp): abierta = primera apertura; no tienen paso de completar (null). Caducado sin abrir: pasó su caducidad sin abrirse ni completarse; un enlace anulado o reemplazado no cuenta. Sede: la del enlace; en la confirmación, la de la cita. Solo ADMIN; un miembro restringido (DX-089) solo ve sus sedes. Sin datos de pacientes.
          */
         get: operations["PatientLinksController_get"];
         put?: never;
@@ -5972,79 +5972,6 @@ export interface paths {
         get: operations["QuoteFollowUpReportController_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/reminder-settings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["ReminderSettingsController_findAll"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/reminder-settings/{locationId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Reemplaza los ajustes de recordatorio de una sede
-         * @description Queda en la auditoría (REMINDER_SETTINGS_UPDATED) con activado, antelaciones, alarma del calendario y «enviar la anamnesis» antes y después, en esa sede. Guardar lo mismo no deja evento.
-         */
-        put: operations["ReminderSettingsController_replace"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/appointments/{id}/reminders": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["AppointmentRemindersController_find"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/public/reminder-opt-outs/{token}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Ver el enlace de baja de los recordatorios */
-        get: operations["PublicReminderOptOutsController_get"];
-        put?: never;
-        /**
-         * Darse de baja de los recordatorios (idempotente)
-         * @description Registra la baja del paciente (`reminderOptOutAt`, origen LINK) y la audita sin actor. Repetirlo responde lo mismo sin escribir.
-         */
-        post: operations["PublicReminderOptOutsController_confirm"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9430,6 +9357,79 @@ export interface paths {
          * @description Retira en blando SOLO los pacientes que creó el lote, revierte los campos que rellenó (si siguen con el valor del lote), retira sus saldos migrados (DX-262) y sus citas importadas que siguen programadas (DX-263; las que cambiaron de estado se quedan). Se niega (409) si alguno de los creados ya tiene otras citas (o una importada que cambió de estado), historia clínica, planes, pagos, saldos de otra importación u otros datos, o si algún saldo migrado del lote tiene abonos imputados.
          */
         post: operations["PatientImportsController_undo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reminder-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ReminderSettingsController_findAll"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reminder-settings/{locationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Reemplaza los ajustes de recordatorio de una sede
+         * @description Queda en la auditoría (REMINDER_SETTINGS_UPDATED) con activado, antelaciones, alarma del calendario y «enviar la anamnesis» antes y después, en esa sede. Guardar lo mismo no deja evento.
+         */
+        put: operations["ReminderSettingsController_replace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/{id}/reminders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AppointmentRemindersController_find"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/reminder-opt-outs/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ver el enlace de baja de los recordatorios */
+        get: operations["PublicReminderOptOutsController_get"];
+        put?: never;
+        /**
+         * Darse de baja de los recordatorios (idempotente)
+         * @description Registra la baja del paciente (`reminderOptOutAt`, origen LINK) y la audita sin actor. Repetirlo responde lo mismo sin escribir.
+         */
+        post: operations["PublicReminderOptOutsController_confirm"];
         delete?: never;
         options?: never;
         head?: never;
@@ -22556,12 +22556,12 @@ export interface components {
             locations: components["schemas"]["LocationChairOccupancyDto"][];
         };
         /**
-         * @description ANAMNESIS = cuestionario de salud por enlace; CONSENT_SIGNATURE = firma a distancia de un consentimiento; BUDGET_SIGNATURE = aceptación a distancia de un presupuesto; APPOINTMENT_CONFIRMATION = confirmar, cancelar o «llámenme» de una cita; POST_OP_INSTRUCTIONS = indicaciones postoperatorias por email o WhatsApp (las impresas no cuentan).
+         * @description ANAMNESIS = cuestionario de salud por enlace; CONSENT_SIGNATURE = firma a distancia de un consentimiento; BUDGET_SIGNATURE = aceptación a distancia de un presupuesto enviada por la clínica (las del seguimiento automático, DX-561, no cuentan); APPOINTMENT_CONFIRMATION = confirmar, cancelar o «llámenme» de una cita; POST_OP_INSTRUCTIONS = indicaciones postoperatorias por email o WhatsApp (las impresas no cuentan).
          * @enum {string}
          */
         PatientLinkType: "ANAMNESIS" | "CONSENT_SIGNATURE" | "BUDGET_SIGNATURE" | "APPOINTMENT_CONFIRMATION" | "POST_OP_INSTRUCTIONS";
         PatientLinkMetricsDto: {
-            /** @description ANAMNESIS = cuestionario de salud por enlace; CONSENT_SIGNATURE = firma a distancia de un consentimiento; BUDGET_SIGNATURE = aceptación a distancia de un presupuesto; APPOINTMENT_CONFIRMATION = confirmar, cancelar o «llámenme» de una cita; POST_OP_INSTRUCTIONS = indicaciones postoperatorias por email o WhatsApp (las impresas no cuentan). */
+            /** @description ANAMNESIS = cuestionario de salud por enlace; CONSENT_SIGNATURE = firma a distancia de un consentimiento; BUDGET_SIGNATURE = aceptación a distancia de un presupuesto enviada por la clínica (las del seguimiento automático, DX-561, no cuentan); APPOINTMENT_CONFIRMATION = confirmar, cancelar o «llámenme» de una cita; POST_OP_INSTRUCTIONS = indicaciones postoperatorias por email o WhatsApp (las impresas no cuentan). */
             linkType: components["schemas"]["PatientLinkType"];
             /** @description El tipo registra la apertura. false (confirmación de cita): opened, expiredUnopened y sus tasas van en null. */
             tracksOpened: boolean;
@@ -23660,164 +23660,6 @@ export interface components {
             skipped: components["schemas"]["FollowUpSkipCountDto"][];
             definitions: components["schemas"]["FollowUpReportDefinitionDto"][];
             options: components["schemas"]["FollowUpReportOptionsDto"];
-        };
-        LocationReminderSettingsDto: {
-            /** Format: uuid */
-            locationId: string;
-            /** @example Sede principal */
-            locationName: string;
-            /** @description Por defecto, false (sede sin configurar) */
-            enabled: boolean;
-            /**
-             * @description Horas antes del inicio en que sale cada email, de mayor a menor (máx. 3, 1..168)
-             * @example [
-             *       48,
-             *       2
-             *     ]
-             */
-            leadHours: number[];
-            /**
-             * @description DX-469: horas antes de la cita de la alarma del evento «Añadir a mi calendario» (0 = sin alarma). Por defecto 24.
-             * @example 24
-             */
-            calendarAlarmHours: number;
-            /** @description DX-290: el recordatorio lleva el enlace de anamnesis a los pacientes nuevos (sin anamnesis) o con la anamnesis caducada el día de la cita (vigencia de la clínica, 12 meses por defecto). Por defecto, false. */
-            sendAnamnesis: boolean;
-            /**
-             * Format: date-time
-             * @description null = la sede nunca se configuró
-             */
-            updatedAt: string | null;
-        };
-        UpdateReminderSettingsDto: {
-            /** @description Activar o desactivar los recordatorios de la sede */
-            enabled: boolean;
-            /**
-             * @description Horas antes (enteros 1..168, sin repetir). Activo exige al menos una.
-             * @example [
-             *       48,
-             *       2
-             *     ]
-             */
-            leadHours: number[];
-            /**
-             * @description DX-469: horas antes de la alarma de «Añadir a mi calendario» (0 la quita). Sin el campo, se conserva.
-             * @example 24
-             */
-            calendarAlarmHours?: number;
-            /**
-             * @description DX-290: enviar el enlace de anamnesis con el recordatorio a pacientes nuevos o con la anamnesis caducada. Sin el campo, se conserva.
-             * @example true
-             */
-            sendAnamnesis?: boolean;
-        };
-        /**
-         * @description DX-128: por qué el paciente no recibe el email automático (se dio de baja, o su canal es NONE o WHATSAPP). Con él no hay recordatorios pendientes.
-         * @enum {string}
-         */
-        PatientReminderBlocker: "OPTED_OUT" | "CHANNEL_NONE" | "CHANNEL_WHATSAPP";
-        /**
-         * @description SENT: dejado en el outbox de email (sentAt). SKIPPED: omitido (skipReason). FAILED: agotó los intentos (failureReason). SENDING: entregándose. PENDING: saldrá en dueAt. MISSED: su hora pasó sin enviarse (la cita se agendó después).
-         * @enum {string}
-         */
-        AppointmentReminderState: "SENT" | "SKIPPED" | "SENDING" | "PENDING" | "MISSED" | "FAILED";
-        /**
-         * @description NO_EMAIL sin email · OPTED_OUT el paciente se dio de baja · CHANNEL_NONE / CHANNEL_WHATSAPP su canal no es el email (DX-128) · CANCELLED/COMPLETED/NO_SHOW estado de la cita · IN_CLINIC el paciente ya llegó (DX-200) · RESCHEDULED a otra hora · DELETED retirada · DISABLED la sede los desactivó · TOO_LATE fuera de plazo (la cita ya había empezado o su hora pasó hace más de 1 h)
-         * @enum {string}
-         */
-        AppointmentReminderSkipReason: "NO_EMAIL" | "CANCELLED" | "COMPLETED" | "NO_SHOW" | "RESCHEDULED" | "DELETED" | "DISABLED" | "TOO_LATE" | "OPTED_OUT" | "CHANNEL_NONE" | "CHANNEL_WHATSAPP" | "IN_CLINIC";
-        /**
-         * @description Entrega del email por el proveedor (solo si se envió)
-         * @enum {string}
-         */
-        ReminderEmailDelivery: "PENDING" | "SENT" | "FAILED";
-        AppointmentReminderItemDto: {
-            /** @example 48 */
-            leadHours: number;
-            /**
-             * Format: date-time
-             * @description Hora de inicio de la cita para la que es este recordatorio
-             */
-            appointmentStart: string;
-            /**
-             * Format: date-time
-             * @description Inicio menos la antelación
-             */
-            dueAt: string;
-            /** @description SENT: dejado en el outbox de email (sentAt). SKIPPED: omitido (skipReason). FAILED: agotó los intentos (failureReason). SENDING: entregándose. PENDING: saldrá en dueAt. MISSED: su hora pasó sin enviarse (la cita se agendó después). */
-            state: components["schemas"]["AppointmentReminderState"];
-            /** Format: date-time */
-            sentAt: string | null;
-            /** @description NO_EMAIL sin email · OPTED_OUT el paciente se dio de baja · CHANNEL_NONE / CHANNEL_WHATSAPP su canal no es el email (DX-128) · CANCELLED/COMPLETED/NO_SHOW estado de la cita · IN_CLINIC el paciente ya llegó (DX-200) · RESCHEDULED a otra hora · DELETED retirada · DISABLED la sede los desactivó · TOO_LATE fuera de plazo (la cita ya había empezado o su hora pasó hace más de 1 h) */
-            skipReason: components["schemas"]["AppointmentReminderSkipReason"] | null;
-            /** @description Motivo técnico del fallo definitivo: solo tipo y código de describeJobError, sin datos del paciente. */
-            failureReason: string | null;
-            /** @description Entrega del email por el proveedor (solo si se envió) */
-            emailDelivery: components["schemas"]["ReminderEmailDelivery"] | null;
-            /** @description DX-203: salió al email del responsable del paciente (un menor o un paciente sin email): «Recordatorio enviado al responsable». */
-            sentToResponsible: boolean;
-            /**
-             * @description DX-497: idioma (BCP 47) en que salió el email, del registro de envíos. null si no salió o es anterior a DX-497.
-             * @example en
-             */
-            language: string | null;
-            /**
-             * @description DX-497: el idioma del paciente no tenía traducción y el email salió en `language` (el de la clínica): «sin traducción: ca → es». null si no hubo caída.
-             * @example ca
-             */
-            languageFallbackFrom: string | null;
-            /** @description false = de una hora de inicio anterior (la cita se reprogramó) */
-            current: boolean;
-        };
-        AppointmentAnamnesisLinkDto: {
-            /** @description REMINDER: salió con el recordatorio automático («Anamnesis enviada con el recordatorio»). STAFF: la envió recepción. */
-            origin: components["schemas"]["MedicalHistorySubmissionOrigin"];
-            /** @description Estado efectivo: un enlace sin usar cuya caducidad pasó es EXPIRED. */
-            status: components["schemas"]["MedicalHistorySubmissionStatus"];
-            /** Format: date-time */
-            sentAt: string;
-            /** Format: date-time */
-            expiresAt: string;
-            /** Format: date-time */
-            submittedAt: string | null;
-        };
-        AppointmentRemindersDto: {
-            /** @description Recordatorios activos en la sede de la cita */
-            enabled: boolean;
-            /**
-             * @example [
-             *       48,
-             *       2
-             *     ]
-             */
-            leadHours: number[];
-            /** @description DX-128: por qué el paciente no recibe el email automático (se dio de baja, o su canal es NONE o WHATSAPP). Con él no hay recordatorios pendientes. */
-            patientBlocker: components["schemas"]["PatientReminderBlocker"] | null;
-            items: components["schemas"]["AppointmentReminderItemDto"][];
-            /** @description DX-290: el último enlace de anamnesis ligado a la cita, o null si no se envió ninguno. */
-            anamnesis: components["schemas"]["AppointmentAnamnesisLinkDto"] | null;
-        };
-        /**
-         * @description ACTIVE: el paciente sigue recibiendo recordatorios (puede darse de baja). OPTED_OUT: ya no los recibe (ver `optedOutAt`).
-         * @enum {string}
-         */
-        PublicReminderOptOutStatus: "ACTIVE" | "OPTED_OUT";
-        PublicReminderOptOutClinicDto: {
-            name: string;
-            /** @example #0E7490 */
-            primaryColor: string;
-            logoUrl: string | null;
-        };
-        PublicReminderOptOutDto: {
-            /** @description ACTIVE: el paciente sigue recibiendo recordatorios (puede darse de baja). OPTED_OUT: ya no los recibe (ver `optedOutAt`). */
-            status: components["schemas"]["PublicReminderOptOutStatus"];
-            /** @description Solo el nombre de pila. */
-            patientFirstName: string | null;
-            /** Format: date-time */
-            optedOutAt: string | null;
-            clinic: components["schemas"]["PublicReminderOptOutClinicDto"] | null;
-            /** @description DX-354: zona, locale y reloj de la sede principal de la clínica (la activa más antigua), para pintar `optedOutAt`. null si le falta algo: la página pinta «—» y pide llamar a la clínica. */
-            regional: components["schemas"]["DocumentRegionalDto"] | null;
         };
         SignatureTemplateOptionDto: {
             /** Format: uuid */
@@ -29106,6 +28948,164 @@ export interface components {
         ConfirmPatientImportDto: {
             /** @description SKIP: no tocar a los pacientes que ya existen · FILL_EMPTY: rellenar solo sus campos vacíos (nunca pisa un dato) */
             duplicateMode: components["schemas"]["PatientImportDuplicateMode"];
+        };
+        LocationReminderSettingsDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sede principal */
+            locationName: string;
+            /** @description Por defecto, false (sede sin configurar) */
+            enabled: boolean;
+            /**
+             * @description Horas antes del inicio en que sale cada email, de mayor a menor (máx. 3, 1..168)
+             * @example [
+             *       48,
+             *       2
+             *     ]
+             */
+            leadHours: number[];
+            /**
+             * @description DX-469: horas antes de la cita de la alarma del evento «Añadir a mi calendario» (0 = sin alarma). Por defecto 24.
+             * @example 24
+             */
+            calendarAlarmHours: number;
+            /** @description DX-290: el recordatorio lleva el enlace de anamnesis a los pacientes nuevos (sin anamnesis) o con la anamnesis caducada el día de la cita (vigencia de la clínica, 12 meses por defecto). Por defecto, false. */
+            sendAnamnesis: boolean;
+            /**
+             * Format: date-time
+             * @description null = la sede nunca se configuró
+             */
+            updatedAt: string | null;
+        };
+        UpdateReminderSettingsDto: {
+            /** @description Activar o desactivar los recordatorios de la sede */
+            enabled: boolean;
+            /**
+             * @description Horas antes (enteros 1..168, sin repetir). Activo exige al menos una.
+             * @example [
+             *       48,
+             *       2
+             *     ]
+             */
+            leadHours: number[];
+            /**
+             * @description DX-469: horas antes de la alarma de «Añadir a mi calendario» (0 la quita). Sin el campo, se conserva.
+             * @example 24
+             */
+            calendarAlarmHours?: number;
+            /**
+             * @description DX-290: enviar el enlace de anamnesis con el recordatorio a pacientes nuevos o con la anamnesis caducada. Sin el campo, se conserva.
+             * @example true
+             */
+            sendAnamnesis?: boolean;
+        };
+        /**
+         * @description DX-128: por qué el paciente no recibe el email automático (se dio de baja, o su canal es NONE o WHATSAPP). Con él no hay recordatorios pendientes.
+         * @enum {string}
+         */
+        PatientReminderBlocker: "OPTED_OUT" | "CHANNEL_NONE" | "CHANNEL_WHATSAPP";
+        /**
+         * @description SENT: dejado en el outbox de email (sentAt). SKIPPED: omitido (skipReason). FAILED: agotó los intentos (failureReason). SENDING: entregándose. PENDING: saldrá en dueAt. MISSED: su hora pasó sin enviarse (la cita se agendó después).
+         * @enum {string}
+         */
+        AppointmentReminderState: "SENT" | "SKIPPED" | "SENDING" | "PENDING" | "MISSED" | "FAILED";
+        /**
+         * @description NO_EMAIL sin email · OPTED_OUT el paciente se dio de baja · CHANNEL_NONE / CHANNEL_WHATSAPP su canal no es el email (DX-128) · CANCELLED/COMPLETED/NO_SHOW estado de la cita · IN_CLINIC el paciente ya llegó (DX-200) · RESCHEDULED a otra hora · DELETED retirada · DISABLED la sede los desactivó · TOO_LATE fuera de plazo (la cita ya había empezado o su hora pasó hace más de 1 h)
+         * @enum {string}
+         */
+        AppointmentReminderSkipReason: "NO_EMAIL" | "CANCELLED" | "COMPLETED" | "NO_SHOW" | "RESCHEDULED" | "DELETED" | "DISABLED" | "TOO_LATE" | "OPTED_OUT" | "CHANNEL_NONE" | "CHANNEL_WHATSAPP" | "IN_CLINIC";
+        /**
+         * @description Entrega del email por el proveedor (solo si se envió)
+         * @enum {string}
+         */
+        ReminderEmailDelivery: "PENDING" | "SENT" | "FAILED";
+        AppointmentReminderItemDto: {
+            /** @example 48 */
+            leadHours: number;
+            /**
+             * Format: date-time
+             * @description Hora de inicio de la cita para la que es este recordatorio
+             */
+            appointmentStart: string;
+            /**
+             * Format: date-time
+             * @description Inicio menos la antelación
+             */
+            dueAt: string;
+            /** @description SENT: dejado en el outbox de email (sentAt). SKIPPED: omitido (skipReason). FAILED: agotó los intentos (failureReason). SENDING: entregándose. PENDING: saldrá en dueAt. MISSED: su hora pasó sin enviarse (la cita se agendó después). */
+            state: components["schemas"]["AppointmentReminderState"];
+            /** Format: date-time */
+            sentAt: string | null;
+            /** @description NO_EMAIL sin email · OPTED_OUT el paciente se dio de baja · CHANNEL_NONE / CHANNEL_WHATSAPP su canal no es el email (DX-128) · CANCELLED/COMPLETED/NO_SHOW estado de la cita · IN_CLINIC el paciente ya llegó (DX-200) · RESCHEDULED a otra hora · DELETED retirada · DISABLED la sede los desactivó · TOO_LATE fuera de plazo (la cita ya había empezado o su hora pasó hace más de 1 h) */
+            skipReason: components["schemas"]["AppointmentReminderSkipReason"] | null;
+            /** @description Motivo técnico del fallo definitivo: solo tipo y código de describeJobError, sin datos del paciente. */
+            failureReason: string | null;
+            /** @description Entrega del email por el proveedor (solo si se envió) */
+            emailDelivery: components["schemas"]["ReminderEmailDelivery"] | null;
+            /** @description DX-203: salió al email del responsable del paciente (un menor o un paciente sin email): «Recordatorio enviado al responsable». */
+            sentToResponsible: boolean;
+            /**
+             * @description DX-497: idioma (BCP 47) en que salió el email, del registro de envíos. null si no salió o es anterior a DX-497.
+             * @example en
+             */
+            language: string | null;
+            /**
+             * @description DX-497: el idioma del paciente no tenía traducción y el email salió en `language` (el de la clínica): «sin traducción: ca → es». null si no hubo caída.
+             * @example ca
+             */
+            languageFallbackFrom: string | null;
+            /** @description false = de una hora de inicio anterior (la cita se reprogramó) */
+            current: boolean;
+        };
+        AppointmentAnamnesisLinkDto: {
+            /** @description REMINDER: salió con el recordatorio automático («Anamnesis enviada con el recordatorio»). STAFF: la envió recepción. */
+            origin: components["schemas"]["MedicalHistorySubmissionOrigin"];
+            /** @description Estado efectivo: un enlace sin usar cuya caducidad pasó es EXPIRED. */
+            status: components["schemas"]["MedicalHistorySubmissionStatus"];
+            /** Format: date-time */
+            sentAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            submittedAt: string | null;
+        };
+        AppointmentRemindersDto: {
+            /** @description Recordatorios activos en la sede de la cita */
+            enabled: boolean;
+            /**
+             * @example [
+             *       48,
+             *       2
+             *     ]
+             */
+            leadHours: number[];
+            /** @description DX-128: por qué el paciente no recibe el email automático (se dio de baja, o su canal es NONE o WHATSAPP). Con él no hay recordatorios pendientes. */
+            patientBlocker: components["schemas"]["PatientReminderBlocker"] | null;
+            items: components["schemas"]["AppointmentReminderItemDto"][];
+            /** @description DX-290: el último enlace de anamnesis ligado a la cita, o null si no se envió ninguno. */
+            anamnesis: components["schemas"]["AppointmentAnamnesisLinkDto"] | null;
+        };
+        /**
+         * @description ACTIVE: el paciente sigue recibiendo recordatorios (puede darse de baja). OPTED_OUT: ya no los recibe (ver `optedOutAt`).
+         * @enum {string}
+         */
+        PublicReminderOptOutStatus: "ACTIVE" | "OPTED_OUT";
+        PublicReminderOptOutClinicDto: {
+            name: string;
+            /** @example #0E7490 */
+            primaryColor: string;
+            logoUrl: string | null;
+        };
+        PublicReminderOptOutDto: {
+            /** @description ACTIVE: el paciente sigue recibiendo recordatorios (puede darse de baja). OPTED_OUT: ya no los recibe (ver `optedOutAt`). */
+            status: components["schemas"]["PublicReminderOptOutStatus"];
+            /** @description Solo el nombre de pila. */
+            patientFirstName: string | null;
+            /** Format: date-time */
+            optedOutAt: string | null;
+            clinic: components["schemas"]["PublicReminderOptOutClinicDto"] | null;
+            /** @description DX-354: zona, locale y reloj de la sede principal de la clínica (la activa más antigua), para pintar `optedOutAt`. null si le falta algo: la página pinta «—» y pide llamar a la clínica. */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
         };
         RecallUnconfiguredItemDto: {
             /** Format: uuid */
@@ -45761,176 +45761,6 @@ export interface operations {
             };
         };
     };
-    ReminderSettingsController_findAll: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocationReminderSettingsDto"][];
-                };
-            };
-            /** @description Solo un administrador puede ver y cambiar los recordatorios. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ReminderSettingsController_replace: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                locationId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateReminderSettingsDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocationReminderSettingsDto"];
-                };
-            };
-            /** @description Antelaciones inválidas (mensaje en español) */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Solo un administrador puede ver y cambiar los recordatorios. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Sede no encontrada en esta clínica */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    AppointmentRemindersController_find: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AppointmentRemindersDto"];
-                };
-            };
-            /** @description Cita no encontrada en esta clínica */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PublicReminderOptOutsController_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PublicReminderOptOutDto"];
-                };
-            };
-            /** @description Token desconocido o de otra clínica. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PublicReminderOptOutsController_confirm: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PublicReminderOptOutDto"];
-                };
-            };
-            /** @description Token desconocido o de otra clínica. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     PatientSignatureRequestsController_options: {
         parameters: {
             query?: never;
@@ -55014,6 +54844,176 @@ export interface operations {
             };
             /** @description El lote no está terminado o hay pacientes con actividad */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReminderSettingsController_findAll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationReminderSettingsDto"][];
+                };
+            };
+            /** @description Solo un administrador puede ver y cambiar los recordatorios. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReminderSettingsController_replace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateReminderSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationReminderSettingsDto"];
+                };
+            };
+            /** @description Antelaciones inválidas (mensaje en español) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar los recordatorios. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AppointmentRemindersController_find: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentRemindersDto"];
+                };
+            };
+            /** @description Cita no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicReminderOptOutsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicReminderOptOutDto"];
+                };
+            };
+            /** @description Token desconocido o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicReminderOptOutsController_confirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicReminderOptOutDto"];
+                };
+            };
+            /** @description Token desconocido o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
