@@ -2,8 +2,18 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Building2, Lock, MessageCircle, Phone } from 'lucide-react';
+import { Building2, Lock, MessageCircle, Pause, Phone, Play } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
+import {
+  followUpStatus,
+  pauseQuoteFollowUp,
+  resumeQuoteFollowUp,
+  type FollowUpStatusTone,
+} from '@/lib/treatment-plans/quote-follow-up-api';
+import { notifyError } from '@/components/errors/notify';
+import { Tooltip } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import {
   listPendingFollowUp,
   type PendingFollowUpPage,
@@ -48,6 +58,16 @@ export const pendingFollowUpCopy = {
   colAmount: 'Monto',
   colPresented: 'Presentado',
   colPhone: 'Teléfono',
+  // DX-561: el seguimiento automático de la presentación.
+  colFollowUp: 'Último aviso',
+  followUpOn: (status: string, date: string) => `${status} · ${date}`,
+  lastSent: (date: string) => `Último enviado: ${date}`,
+  pause: 'Pausar seguimiento',
+  resume: 'Reanudar seguimiento',
+  paused: (name: string) => `Seguimiento automático en pausa para ${name}: no sale ningún aviso hasta reanudarlo.`,
+  resumed: (name: string) => `Seguimiento automático reanudado para ${name}.`,
+  pauseError: 'No pudimos pausar el seguimiento automático.',
+  resumeError: 'No pudimos reanudar el seguimiento automático.',
   colActions: 'Acciones',
   noOption: 'Plan único',
   optionCount: (n: number) => `${n} opciones`,
@@ -108,6 +128,8 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
     null,
   );
   const [notice, setNotice] = useState<string | null>(null);
+  // DX-561: la presentación cuyo seguimiento se está pausando o reanudando.
+  const [pausing, setPausing] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -169,6 +191,50 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
     token,
     groups.map((g) => g.presentedLocationId),
   );
+
+  /**
+   * DX-561: pausa o reanuda el seguimiento de la presentación (la API lo
+   * aplica a todas sus opciones). Un 409 (ya en pausa, ya reanudado, o el
+   * presupuesto dejó de estar abierto) dice el porqué y relee la lista.
+   */
+  async function togglePause(group: FollowUpGroup) {
+    const resume = group.followUp.paused;
+    setNotice(null);
+    setPausing(group.key);
+    try {
+      const res = await (resume ? resumeQuoteFollowUp : pauseQuoteFollowUp)(token, group.options[0].planId);
+      const planIds = new Set(group.options.map((o) => o.planId));
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              items: prev.items.map((item) =>
+                planIds.has(item.planId) ? { ...item, followUp: { ...item.followUp, paused: res.paused } } : item,
+              ),
+            }
+          : prev,
+      );
+      setNotice(res.paused ? copy.paused(group.patientName) : copy.resumed(group.patientName));
+    } catch (err) {
+      notifyError(apiErrorMessage(err, { fallback: resume ? copy.resumeError : copy.pauseError }));
+      if (err instanceof ApiError && err.status === 409) setReloadKey((k) => k + 1);
+    } finally {
+      setPausing(null);
+    }
+  }
+
+  function rowActions(group: FollowUpGroup) {
+    const paused = group.followUp.paused;
+    return [
+      {
+        label: paused ? copy.resume : copy.pause,
+        icon: paused ? <Play aria-hidden /> : <Pause aria-hidden />,
+        disabled: pausing !== null,
+        onSelect: () => void togglePause(group),
+      },
+      ...rejectActions(group).map((action, i) => (i === 0 ? { ...action, separatorBefore: true } : action)),
+    ];
+  }
 
   function rejectActions(group: FollowUpGroup) {
     const open = (planIds: string[], subject: string) => () => {
@@ -299,6 +365,12 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
       },
     },
     {
+      id: 'followUp',
+      header: copy.colFollowUp,
+      cell: (row) => <FollowUpCell row={row} stamp={stamp} />,
+      mobileCell: (row) => <FollowUpCell row={row} stamp={stamp} compact />,
+    },
+    {
       id: 'contact',
       header: copy.colPhone,
       cell: (row) => <ContactLinks row={row} clinicName={clinicName} stamp={stamp} />,
@@ -362,7 +434,7 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
                 columns={columns}
                 getRowKey={(row) => row.key}
                 getRowLabel={(row) => row.patientName}
-                rowActions={rejectActions}
+                rowActions={rowActions}
               />
             </AsyncSection>
 
@@ -403,6 +475,50 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
         />
       ) : null}
     </>
+  );
+}
+
+const TONE_CLASS: Record<FollowUpStatusTone, string> = {
+  neutral: 'text-muted',
+  info: 'text-ink',
+  warning: 'text-warning-text',
+  success: 'text-success-text',
+};
+
+/**
+ * DX-561: la columna «Último aviso»: «Aviso 2 · 12/11/2026», «En pausa»,
+ * «Sin avisos» o por qué no salió el último (con la explicación al pasar o
+ * enfocar). En el teléfono, sin tooltip: la explicación no cabe en la tarjeta
+ * y el texto corto ya dice lo esencial.
+ */
+function FollowUpCell({ row, stamp, compact = false }: { row: FollowUpGroup; stamp: SedePainters; compact?: boolean }) {
+  const status = followUpStatus(row.followUp);
+  const sent = status.lastSentAt ? stamp.maybe.date(status.lastSentAt, row.presentedLocationId) : null;
+  const isSent = row.followUp.lastStatus === 'SENT' && !row.followUp.paused;
+  const main = isSent && sent ? copy.followUpOn(status.text, sent) : status.text;
+  const label = (
+    <span data-testid="follow-up-status" className={cn('t-caption sm:text-sm', TONE_CLASS[status.tone])}>
+      {main}
+    </span>
+  );
+  if (compact) return label;
+  return (
+    <span className="flex flex-col gap-0.5">
+      {status.hint ? (
+        <Tooltip content={status.hint}>
+          <span
+            tabIndex={0}
+            className="self-start rounded-sm underline decoration-dotted underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
+          >
+            {label}
+            <span className="sr-only">. {status.hint}</span>
+          </span>
+        </Tooltip>
+      ) : (
+        label
+      )}
+      {!isSent && sent ? <span className="t-caption text-muted tabular-nums">{copy.lastSent(sent)}</span> : null}
+    </span>
   );
 }
 

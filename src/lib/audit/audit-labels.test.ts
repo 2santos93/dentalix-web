@@ -422,6 +422,21 @@ describe('healthRegistrationDetail (DX-319)', () => {
 });
 
 describe('clinicSettingsDetail (DX-328)', () => {
+  it('DX-561: el seguimiento automático de presupuestos (ajustes, pausa, reanudación y aviso)', () => {
+    expect(clinicSettingsDetail({ reason: 'QUOTE_FOLLOW_UP_SETTINGS_UPDATED', changedFields: ['enabled'] })).toBe(
+      'Seguimiento automático de presupuestos',
+    );
+    expect(treatmentPlanAcceptanceDetail({ reason: 'QUOTE_FOLLOW_UP_PAUSED' })).toBe(
+      'Seguimiento automático del presupuesto pausado',
+    );
+    expect(treatmentPlanAcceptanceDetail({ reason: 'QUOTE_FOLLOW_UP_RESUMED' })).toBe(
+      'Seguimiento automático del presupuesto reanudado',
+    );
+    expect(signatureRequestDetail({ reason: 'QUOTE_FOLLOW_UP_SENT', origin: 'JOB' })).toBe(
+      'Aviso de seguimiento del presupuesto enviado con un enlace para aceptarlo',
+    );
+  });
+
   it('clinicSettingsDetail renders Mayoría de edad: 18 → 16 años', () => {
     expect(
       clinicSettingsDetail({

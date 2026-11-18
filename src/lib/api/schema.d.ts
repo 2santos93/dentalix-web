@@ -5505,7 +5505,7 @@ export interface paths {
         };
         /**
          * Enlaces del paciente: enviados, abiertos, completados y caducados sin abrir por tipo y sede
-         * @description Por tipo de enlace y sede: los ENVIADOS en el período (fecha de envío en la zona de la sede del enlace, DX-097) y, de esos mismos, los abiertos, los completados y los caducados sin abrir, mirados ahora (`asOf`). Tasas = parte ÷ enviados, en % con 1 decimal; sin envíos, null. Mediana de horas del envío al completado. Anamnesis: abierta = la página avisó de la apertura o se envió; completada = enviada. Firma (consentimiento o presupuesto): abierta = pidió el código, lo verificó o firmó; completada = firmada. Confirmación de cita: completada = respondida (confirmar, cancelar o «llámenme»); no guarda la apertura, así que abiertos y caducados sin abrir van en null. Indicaciones postoperatorias (solo email y WhatsApp): abierta = primera apertura; no tienen paso de completar (null). Caducado sin abrir: pasó su caducidad sin abrirse ni completarse; un enlace anulado o reemplazado no cuenta. Sede: la del enlace; en la confirmación, la de la cita. Solo ADMIN; un miembro restringido (DX-089) solo ve sus sedes. Sin datos de pacientes.
+         * @description Por tipo de enlace y sede: los ENVIADOS en el período (fecha de envío en la zona de la sede del enlace, DX-097) y, de esos mismos, los abiertos, los completados y los caducados sin abrir, mirados ahora (`asOf`). Tasas = parte ÷ enviados, en % con 1 decimal; sin envíos, null. Mediana de horas del envío al completado. Anamnesis: abierta = la página avisó de la apertura o se envió; completada = enviada. Firma (consentimiento o presupuesto): solo las que envió la clínica (las del seguimiento automático de presupuestos tienen su informe, DX-561); abierta = pidió el código, lo verificó o firmó; completada = firmada. Confirmación de cita: completada = respondida (confirmar, cancelar o «llámenme»); no guarda la apertura, así que abiertos y caducados sin abrir van en null. Indicaciones postoperatorias (solo email y WhatsApp): abierta = primera apertura; no tienen paso de completar (null). Caducado sin abrir: pasó su caducidad sin abrirse ni completarse; un enlace anulado o reemplazado no cuenta. Sede: la del enlace; en la confirmación, la de la cita. Solo ADMIN; un miembro restringido (DX-089) solo ve sus sedes. Sin datos de pacientes.
          */
         get: operations["PatientLinksController_get"];
         put?: never;
@@ -5872,6 +5872,430 @@ export interface paths {
          * @description Quita a la persona del enlace de los destinatarios, marca el enlace usado y lo audita (UPDATE de CLINIC_SETTINGS, WEEKLY_DIGEST_UNSUBSCRIBED, origen LINK, con esa persona como actor). Repetirlo responde lo mismo sin escribir.
          */
         post: operations["PublicWeeklyDigestUnsubscribeController_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quote-follow-up-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ajustes del seguimiento automático de cada sede
+         * @description Una fila por sede viva. Sin configurar: apagado, avisos a los 3, 10 y 21 días, de 9 a 19 (hora de la sede).
+         */
+        get: operations["QuoteFollowUpSettingsController_findAll"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quote-follow-up-settings/{locationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Reemplaza los ajustes del seguimiento automático de una sede
+         * @description Queda en la auditoría (QUOTE_FOLLOW_UP_SETTINGS_UPDATED) con activado, días de los avisos y franja horaria antes y después, en esa sede. Guardar lo mismo no deja evento. El aviso solo lleva el nombre de la clínica, un saludo, un texto neutro, los enlaces de aceptación y la baja: ni importes ni tratamientos.
+         */
+        put: operations["QuoteFollowUpSettingsController_replace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/treatment-plans/{id}/follow-up/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pausa el seguimiento automático del presupuesto (todas sus opciones)
+         * @description Mientras está en pausa no sale ningún aviso y no se consume ningún paso. Auditado (UPDATE TREATMENT_PLAN, QUOTE_FOLLOW_UP_PAUSED).
+         */
+        post: operations["QuoteFollowUpPauseController_pauseFollowUp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/treatment-plans/{id}/follow-up/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reanuda el seguimiento automático del presupuesto
+         * @description Sale el paso que toque en la siguiente pasada dentro de la franja (los atrasados no se acumulan: SUPERSEDED / TOO_LATE). Auditado (UPDATE TREATMENT_PLAN, QUOTE_FOLLOW_UP_RESUMED).
+         */
+        post: operations["QuoteFollowUpPauseController_resumeFollowUp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/quote-follow-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Efectividad del seguimiento automático: enviados, abiertos y aceptados en 14 días por aviso
+         * @description Avisos registrados en el período (día civil de la sede de la presentación): por paso 1..3 y en total, enviados, abiertos (alguna solicitud del aviso con openedAt), aceptados en los 14 días siguientes al envío (acceptedAt de cualquier opción del grupo en [sentAt, sentAt + 14 d]) y la tasa (aceptados ÷ enviados, en %); omitidos por motivo. ADMIN o FINANCIAL_REPORTS_VIEW: toda la clínica (scope CLINIC); un DENTIST, solo los presupuestos que elaboró (scope OWN). Solo las sedes que ve quien consulta (DX-089). `definitions` trae «Cómo se calcula». Sin datos de pacientes.
+         */
+        get: operations["QuoteFollowUpReportController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/signature-requests/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lo que necesita el modal «Enviar a firmar»
+         * @description Plantillas activas (título y versión), profesionales que pueden firmar y a quién iría el enlace (enmascarado) o por qué no se puede enviar.
+         */
+        get: operations["PatientSignatureRequestsController_options"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/signature-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Solicitudes de firma a distancia del paciente (estado y evidencias) */
+        get: operations["PatientSignatureRequestsController_list"];
+        put?: never;
+        /**
+         * Enviar un consentimiento a firmar o un presupuesto a aceptar a distancia (email)
+         * @description Congela el texto (plantilla, paciente, plan, profesional) y envía por email un enlace de un solo uso que caduca a las 72 h; el documento solo se ve tras un código de 6 dígitos. Un menor (mayoría de la clínica) firma por medio de su responsable. Anula la solicitud anterior del mismo paciente y plantilla aún sin firmar. BUDGET (DX-415): solo odontólogo o ADMIN; congela la foto del presupuesto de un plan «Presentado» y su hash, y anula el enlace anterior del mismo plan; si el plan cambia después, el enlace deja de servir.
+         */
+        post: operations["PatientSignatureRequestsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/signature-requests/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Anular un enlace sin firmar
+         * @description Desde ese momento el enlace responde «Enlace no válido». Cancela el email si aún no salió.
+         */
+        post: operations["PatientSignatureRequestsController_revoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/sign/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Estado mínimo del enlace (sin documento ni datos del paciente) */
+        get: operations["PublicSignatureController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/sign/{token}/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pedir (o reenviar) el código de 6 dígitos al destino del enlace
+         * @description La primera vez cuenta como apertura. Hasta 5 envíos, con 60 s entre uno y otro (429 con retryAfterSeconds). Pedir otro código no devuelve intentos.
+         */
+        post: operations["PublicSignatureController_code"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/sign/{token}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verificar el código (5 fallos bloquean el enlace) */
+        post: operations["PublicSignatureController_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/sign/{token}/document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** El documento completo (tras verificar el código) */
+        get: operations["PublicSignatureController_document"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/sign/{token}/sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Firmar (una sola vez)
+         * @description Guarda la firma en el consentimiento con su hash y las evidencias (canal, destino enmascarado, horas, IP, navegador). Queda pendiente de la firma del profesional en la app.
+         */
+        post: operations["PublicSignatureController_sign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/consent-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ConsentTemplatesController_list"];
+        put?: never;
+        post: operations["ConsentTemplatesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/consent-templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["ConsentTemplatesController_update"];
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/consents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PatientConsentsController_list"];
+        put?: never;
+        post: operations["PatientConsentsController_sign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/consents/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PatientConsentsController_preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/consents/{id}/countersign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PatientConsentsController_countersign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/consents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PatientConsentsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/consents/{id}/signed-pdf/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PatientConsentsController_retrySignedPdfGeneration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/consents/{id}/signed-pdf/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reenviar la copia del PDF firmado al paciente
+         * @description Envía por email (outbox de DX-088, sin nada clínico) un enlace NUEVO de un solo uso para descargar el PDF firmado, al email de la firma a distancia; el anterior deja de servir en la misma transacción. Auditado como SEND de CONSENT, reason SIGNED_PDF_COPY_RESENT. Sin el token ni la URL en la respuesta.
+         */
+        post: operations["PatientConsentsController_resendSignedPdfCopy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/signed-consent-copies/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * El paciente abre el enlace de su copia del PDF firmado
+         * @description Estado del enlace y la marca de la clínica; ni el título del documento ni nada clínico.
+         */
+        get: operations["PublicSignedPdfCopiesController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/signed-consent-copies/{token}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Descarga la copia (una sola vez)
+         * @description Gasta el enlace y devuelve una URL firmada de 60 s del PDF archivado (attachment). Queda en la auditoría como EXPORT de CONSENT, origen PUBLIC_LINK, reason SIGNED_PDF_COPY_DOWNLOADED, en la misma transacción. Una segunda vez: 410 `SIGNED_PDF_COPY_LINK_USED` («Este enlace ya se usó»).
+         */
+        post: operations["PublicSignedPdfCopiesController_download"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6857,178 +7281,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/consent-templates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["ConsentTemplatesController_list"];
-        put?: never;
-        post: operations["ConsentTemplatesController_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/consent-templates/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch: operations["ConsentTemplatesController_update"];
-        trace?: never;
-    };
-    "/api/v1/patients/{patientId}/consents": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["PatientConsentsController_list"];
-        put?: never;
-        post: operations["PatientConsentsController_sign"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/patients/{patientId}/consents/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["PatientConsentsController_preview"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/patients/{patientId}/consents/{id}/countersign": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["PatientConsentsController_countersign"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/patients/{patientId}/consents/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["PatientConsentsController_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/patients/{patientId}/consents/{id}/signed-pdf/retry": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["PatientConsentsController_retrySignedPdfGeneration"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/patients/{patientId}/consents/{id}/signed-pdf/copy": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Reenviar la copia del PDF firmado al paciente
-         * @description Envía por email (outbox de DX-088, sin nada clínico) un enlace NUEVO de un solo uso para descargar el PDF firmado, al email de la firma a distancia; el anterior deja de servir en la misma transacción. Auditado como SEND de CONSENT, reason SIGNED_PDF_COPY_RESENT. Sin el token ni la URL en la respuesta.
-         */
-        post: operations["PatientConsentsController_resendSignedPdfCopy"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/public/signed-consent-copies/{token}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * El paciente abre el enlace de su copia del PDF firmado
-         * @description Estado del enlace y la marca de la clínica; ni el título del documento ni nada clínico.
-         */
-        get: operations["PublicSignedPdfCopiesController_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/public/signed-consent-copies/{token}/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Descarga la copia (una sola vez)
-         * @description Gasta el enlace y devuelve una URL firmada de 60 s del PDF archivado (attachment). Queda en la auditoría como EXPORT de CONSENT, origen PUBLIC_LINK, reason SIGNED_PDF_COPY_DOWNLOADED, en la misma transacción. Una segunda vez: 410 `SIGNED_PDF_COPY_LINK_USED` («Este enlace ya se usó»).
-         */
-        post: operations["PublicSignedPdfCopiesController_download"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/post-op-templates": {
         parameters: {
             query?: never;
@@ -7184,158 +7436,6 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["PublicPostOpInstructionsController_opened"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/patients/{patientId}/signature-requests/options": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Lo que necesita el modal «Enviar a firmar»
-         * @description Plantillas activas (título y versión), profesionales que pueden firmar y a quién iría el enlace (enmascarado) o por qué no se puede enviar.
-         */
-        get: operations["PatientSignatureRequestsController_options"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/patients/{patientId}/signature-requests": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Solicitudes de firma a distancia del paciente (estado y evidencias) */
-        get: operations["PatientSignatureRequestsController_list"];
-        put?: never;
-        /**
-         * Enviar un consentimiento a firmar o un presupuesto a aceptar a distancia (email)
-         * @description Congela el texto (plantilla, paciente, plan, profesional) y envía por email un enlace de un solo uso que caduca a las 72 h; el documento solo se ve tras un código de 6 dígitos. Un menor (mayoría de la clínica) firma por medio de su responsable. Anula la solicitud anterior del mismo paciente y plantilla aún sin firmar. BUDGET (DX-415): solo odontólogo o ADMIN; congela la foto del presupuesto de un plan «Presentado» y su hash, y anula el enlace anterior del mismo plan; si el plan cambia después, el enlace deja de servir.
-         */
-        post: operations["PatientSignatureRequestsController_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/patients/{patientId}/signature-requests/{id}/revoke": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Anular un enlace sin firmar
-         * @description Desde ese momento el enlace responde «Enlace no válido». Cancela el email si aún no salió.
-         */
-        post: operations["PatientSignatureRequestsController_revoke"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/public/sign/{token}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Estado mínimo del enlace (sin documento ni datos del paciente) */
-        get: operations["PublicSignatureController_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/public/sign/{token}/code": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Pedir (o reenviar) el código de 6 dígitos al destino del enlace
-         * @description La primera vez cuenta como apertura. Hasta 5 envíos, con 60 s entre uno y otro (429 con retryAfterSeconds). Pedir otro código no devuelve intentos.
-         */
-        post: operations["PublicSignatureController_code"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/public/sign/{token}/verify": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Verificar el código (5 fallos bloquean el enlace) */
-        post: operations["PublicSignatureController_verify"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/public/sign/{token}/document": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** El documento completo (tras verificar el código) */
-        get: operations["PublicSignatureController_document"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/public/sign/{token}/sign": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Firmar (una sola vez)
-         * @description Guarda la firma en el consentimiento con su hash y las evidencias (canal, destino enmascarado, horas, IP, navegador). Queda pendiente de la firma del profesional en la app.
-         */
-        post: operations["PublicSignatureController_sign"];
         delete?: never;
         options?: never;
         head?: never;
@@ -18028,6 +18128,21 @@ export interface components {
                 [key: string]: number;
             };
         };
+        PendingFollowUpStateDto: {
+            /** @description Último paso registrado (1..3); null si aún no hubo ninguno */
+            lastStep: number | null;
+            /**
+             * Format: date-time
+             * @description Cuándo salió el último aviso ENVIADO; null si ninguno
+             */
+            lastSentAt: string | null;
+            /** @enum {string|null} */
+            lastStatus: "SENT" | "SKIPPED" | null;
+            /** @description Motivo si el último paso se omitió (QuoteFollowUpReason: OPTED_OUT, NO_EMAIL, STOPPED_ACCEPTED…) */
+            lastReason: string | null;
+            /** @description El seguimiento del presupuesto está en pausa */
+            paused: boolean;
+        };
         PendingFollowUpItemDto: {
             /** Format: uuid */
             planId: string;
@@ -18062,6 +18177,8 @@ export interface components {
             /** @description Σ (precio − descuento) de los ítems vivos, en `currency` */
             total: number;
             itemCount: number;
+            /** @description DX-561: el seguimiento automático del grupo (el mismo en todas sus opciones) */
+            followUp: components["schemas"]["PendingFollowUpStateDto"];
         };
         PendingFollowUpPageDto: {
             /** @description Las opciones de los grupos de esta página: las de un mismo grupo (`optionGroupId`) salen seguidas y nunca se parten entre páginas */
@@ -22562,12 +22679,12 @@ export interface components {
             locations: components["schemas"]["LocationChairOccupancyDto"][];
         };
         /**
-         * @description ANAMNESIS = cuestionario de salud por enlace; CONSENT_SIGNATURE = firma a distancia de un consentimiento; BUDGET_SIGNATURE = aceptación a distancia de un presupuesto; APPOINTMENT_CONFIRMATION = confirmar, cancelar o «llámenme» de una cita; POST_OP_INSTRUCTIONS = indicaciones postoperatorias por email o WhatsApp (las impresas no cuentan).
+         * @description ANAMNESIS = cuestionario de salud por enlace; CONSENT_SIGNATURE = firma a distancia de un consentimiento; BUDGET_SIGNATURE = aceptación a distancia de un presupuesto enviada por la clínica (las del seguimiento automático, DX-561, no cuentan); APPOINTMENT_CONFIRMATION = confirmar, cancelar o «llámenme» de una cita; POST_OP_INSTRUCTIONS = indicaciones postoperatorias por email o WhatsApp (las impresas no cuentan).
          * @enum {string}
          */
         PatientLinkType: "ANAMNESIS" | "CONSENT_SIGNATURE" | "BUDGET_SIGNATURE" | "APPOINTMENT_CONFIRMATION" | "POST_OP_INSTRUCTIONS";
         PatientLinkMetricsDto: {
-            /** @description ANAMNESIS = cuestionario de salud por enlace; CONSENT_SIGNATURE = firma a distancia de un consentimiento; BUDGET_SIGNATURE = aceptación a distancia de un presupuesto; APPOINTMENT_CONFIRMATION = confirmar, cancelar o «llámenme» de una cita; POST_OP_INSTRUCTIONS = indicaciones postoperatorias por email o WhatsApp (las impresas no cuentan). */
+            /** @description ANAMNESIS = cuestionario de salud por enlace; CONSENT_SIGNATURE = firma a distancia de un consentimiento; BUDGET_SIGNATURE = aceptación a distancia de un presupuesto enviada por la clínica (las del seguimiento automático, DX-561, no cuentan); APPOINTMENT_CONFIRMATION = confirmar, cancelar o «llámenme» de una cita; POST_OP_INSTRUCTIONS = indicaciones postoperatorias por email o WhatsApp (las impresas no cuentan). */
             linkType: components["schemas"]["PatientLinkType"];
             /** @description El tipo registra la apertura. false (confirmación de cita): opened, expiredUnopened y sus tasas van en null. */
             tracksOpened: boolean;
@@ -23540,6 +23657,808 @@ export interface components {
              * @enum {string}
              */
             status: "ACTIVE" | "ALREADY_OUT";
+        };
+        LocationQuoteFollowUpSettingsDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sede principal */
+            locationName: string;
+            /** @description Por defecto, false (sede sin configurar) */
+            enabled: boolean;
+            /**
+             * @description Días tras presentar el presupuesto en que sale cada aviso (1–3, de 1 a 90, estrictamente crecientes). Sin configurar: 3, 10 y 21.
+             * @example [
+             *       3,
+             *       10,
+             *       21
+             *     ]
+             */
+            offsetsDays: number[];
+            /**
+             * @description Hora local (de la sede) desde la que salen. Sin configurar: 9.
+             * @example 9
+             */
+            sendFromHour: number;
+            /**
+             * @description Hora local hasta la que salen (sin incluirla; 24 = medianoche). Sin configurar: 19.
+             * @example 19
+             */
+            sendUntilHour: number;
+            /**
+             * Format: date-time
+             * @description null = la sede nunca se configuró
+             */
+            updatedAt: string | null;
+        };
+        UpdateQuoteFollowUpSettingsDto: {
+            /** @description Activar o desactivar el seguimiento en la sede */
+            enabled: boolean;
+            /**
+             * @description Días tras presentar (enteros 1..90, de menor a mayor y sin repetir).
+             * @example [
+             *       3,
+             *       10,
+             *       21
+             *     ]
+             */
+            offsetsDays: number[];
+            /** @example 9 */
+            sendFromHour: number;
+            /** @example 19 */
+            sendUntilHour: number;
+        };
+        QuoteFollowUpPauseDto: {
+            /** Format: uuid */
+            planId: string;
+            /**
+             * Format: uuid
+             * @description El grupo de opciones (plan raíz): la pausa vale para todas
+             */
+            groupId: string;
+            paused: boolean;
+            /** Format: date-time */
+            pausedAt: string | null;
+            /** Format: uuid */
+            pausedById: string | null;
+        };
+        FollowUpReportPeriodDto: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+        };
+        FollowUpReportFiltersDto: {
+            /** Format: uuid */
+            locationId: string | null;
+        };
+        FollowUpStepStatsDto: {
+            /** @description 1..3; null en el total */
+            step: number | null;
+            sent: number;
+            opened: number;
+            /** @description Enviados con alguna opción aceptada en los 14 días siguientes */
+            acceptedWithin14Days: number;
+            /** @description abiertos ÷ enviados, en % (1 decimal) */
+            openRate: number | null;
+            /** @description aceptados en 14 días ÷ enviados, en % (1 decimal) */
+            acceptanceRate: number | null;
+        };
+        /**
+         * @description SUPERSEDED = había un aviso posterior ya vencido (solo sale el último); TOO_LATE = vencido hace más de 7 días; STOPPED_ACCEPTED / STOPPED_REJECTED / STOPPED_SCHEDULED = aceptado, rechazado o con cita (la secuencia se detiene); EXPIRED = presupuesto vencido; OPTED_OUT = baja de los avisos; CHANNEL_NONE / CHANNEL_WHATSAPP = el canal del paciente no es el email; NO_EMAIL = sin email (o un menor sin responsable con email); NO_CONSENT = consentimiento de datos revocado; NO_LINK_HOST = la clínica no tiene dirección web para los enlaces; NO_PROFESSIONAL = ningún odontólogo o administrador activo elaboró el plan.
+         * @enum {string}
+         */
+        QuoteFollowUpReason: "SUPERSEDED" | "TOO_LATE" | "STOPPED_ACCEPTED" | "STOPPED_REJECTED" | "STOPPED_SCHEDULED" | "EXPIRED" | "OPTED_OUT" | "CHANNEL_NONE" | "CHANNEL_WHATSAPP" | "NO_EMAIL" | "NO_CONSENT" | "NO_LINK_HOST" | "NO_PROFESSIONAL";
+        FollowUpSkipCountDto: {
+            /** @description SUPERSEDED = había un aviso posterior ya vencido (solo sale el último); TOO_LATE = vencido hace más de 7 días; STOPPED_ACCEPTED / STOPPED_REJECTED / STOPPED_SCHEDULED = aceptado, rechazado o con cita (la secuencia se detiene); EXPIRED = presupuesto vencido; OPTED_OUT = baja de los avisos; CHANNEL_NONE / CHANNEL_WHATSAPP = el canal del paciente no es el email; NO_EMAIL = sin email (o un menor sin responsable con email); NO_CONSENT = consentimiento de datos revocado; NO_LINK_HOST = la clínica no tiene dirección web para los enlaces; NO_PROFESSIONAL = ningún odontólogo o administrador activo elaboró el plan. */
+            reason: components["schemas"]["QuoteFollowUpReason"];
+            count: number;
+        };
+        FollowUpReportDefinitionDto: {
+            /** @enum {string} */
+            key: "sent" | "opened" | "acceptedWithin14Days" | "acceptanceRate" | "skipped";
+            label: string;
+            howItIsCalculated: string[];
+        };
+        FollowUpReportLocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        FollowUpReportOptionsDto: {
+            locations: components["schemas"]["FollowUpReportLocationDto"][];
+        };
+        QuoteFollowUpReportDto: {
+            period: components["schemas"]["FollowUpReportPeriodDto"];
+            /**
+             * @description CLINIC = toda la clínica visible; OWN = solo los presupuestos que elaboró quien consulta
+             * @enum {string}
+             */
+            scope: "CLINIC" | "OWN";
+            restrictedToLocations: boolean;
+            filters: components["schemas"]["FollowUpReportFiltersDto"];
+            /** @description Pasos 1, 2 y 3, siempre los tres */
+            steps: components["schemas"]["FollowUpStepStatsDto"][];
+            total: components["schemas"]["FollowUpStepStatsDto"];
+            /** @description Omitidos por motivo, de más a menos */
+            skipped: components["schemas"]["FollowUpSkipCountDto"][];
+            definitions: components["schemas"]["FollowUpReportDefinitionDto"][];
+            options: components["schemas"]["FollowUpReportOptionsDto"];
+        };
+        SignatureTemplateOptionDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            version: number;
+            /** @description El texto usa {{tratamiento}}: sin plan, el documento dirá «No especificado» */
+            usesTreatment: boolean;
+            /**
+             * Format: date-time
+             * @description Última vez que el paciente lo firmó y quedó completo (con la firma del profesional)
+             */
+            lastCompletedAt: string | null;
+        };
+        SignatureProfessionalOptionDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+            role: components["schemas"]["ClinicRole"];
+        };
+        SignaturePlanOptionDto: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["TreatmentPlanStatus"];
+            /** @description Nombre de la alternativa (DX-040) */
+            optionLabel: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        SignatureRecipientOptionDto: {
+            allowed: boolean;
+            /** @description Por qué no se puede enviar (en español) */
+            reason: string | null;
+            destinationMasked: string | null;
+            signerType: components["schemas"]["ConsentSignerType"] | null;
+            signerName: string | null;
+            /** @description Menor según la mayoría de edad de la clínica: firma su responsable */
+            minor: boolean;
+        };
+        SignatureRequestOptionsDto: {
+            templates: components["schemas"]["SignatureTemplateOptionDto"][];
+            /** @description Quienes pueden firmar un consentimiento como profesional (la regla de la firma en la clínica: odontólogo, asistente, administrador) */
+            professionals: components["schemas"]["SignatureProfessionalOptionDto"][];
+            /**
+             * Format: uuid
+             * @description Quien envía, solo si está en `professionals`
+             */
+            defaultProfessionalId: string | null;
+            /** @description Planes del paciente sin cancelar (para {{tratamiento}}), más recientes primero */
+            plans: components["schemas"]["SignaturePlanOptionDto"][];
+            recipient: components["schemas"]["SignatureRecipientOptionDto"];
+        };
+        /**
+         * @description CONSENT = consentimiento informado. BUDGET = presupuesto de un plan «Presentado» para que el paciente lo acepte a distancia (DX-415).
+         * @enum {string}
+         */
+        SignatureRequestType: "CONSENT" | "BUDGET";
+        /**
+         * @description SENT = enviado; OPENED = abierto (pidió el código); LOCKED = bloqueado tras 5 fallos; EXPIRED = caducado; REVOKED = anulado; SIGNED_BY_PATIENT = falta la firma del profesional; COMPLETE = completo.
+         * @enum {string}
+         */
+        SignatureRequestStatus: "SENT" | "OPENED" | "LOCKED" | "EXPIRED" | "REVOKED" | "SIGNED_BY_PATIENT" | "COMPLETE";
+        /**
+         * @description DX-561: STAFF = la envió la clínica; FOLLOW_UP = el seguimiento automático de presupuestos (sin usuario)
+         * @enum {string}
+         */
+        SignatureRequestOrigin: "STAFF" | "FOLLOW_UP";
+        /**
+         * @description DX-422: PDF firmado del consentimiento completo (PENDING generándose o reintentando, READY archivado en los documentos del paciente, FAILED)
+         * @enum {string}
+         */
+        SignedConsentPdfStatus: "PENDING" | "READY" | "FAILED";
+        SignatureRequestDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /**
+             * Format: uuid
+             * @description Sede desde la que se envió (sus horas, con su reloj)
+             */
+            locationId: string;
+            /** @description CONSENT = consentimiento informado. BUDGET = presupuesto de un plan «Presentado» para que el paciente lo acepte a distancia (DX-415). */
+            type: components["schemas"]["SignatureRequestType"];
+            channel: components["schemas"]["SignatureRequestChannel"];
+            /** Format: uuid */
+            templateId: string | null;
+            templateVersion: number | null;
+            /**
+             * Format: uuid
+             * @description BUDGET: el plan cuyo presupuesto se envió. CONSENT: el plan de {{tratamiento}}, si lo hubo.
+             */
+            treatmentPlanId: string | null;
+            title: string;
+            /** @description Destino enmascarado (an***@dominio) */
+            destinationMasked: string;
+            signerType: components["schemas"]["ConsentSignerType"];
+            /** @description Quien firma: el paciente o su responsable */
+            signerName: string;
+            /** Format: uuid */
+            professionalUserId: string;
+            professionalName: string;
+            /** @description SENT = enviado; OPENED = abierto (pidió el código); LOCKED = bloqueado tras 5 fallos; EXPIRED = caducado; REVOKED = anulado; SIGNED_BY_PATIENT = falta la firma del profesional; COMPLETE = completo. */
+            status: components["schemas"]["SignatureRequestStatus"];
+            /** Format: date-time */
+            sentAt: string;
+            /** @description Quién la envió; null en las del seguimiento automático (origin FOLLOW_UP) */
+            sentByName: string | null;
+            /** @description DX-561: STAFF = la envió la clínica; FOLLOW_UP = el seguimiento automático de presupuestos (sin usuario) */
+            origin: components["schemas"]["SignatureRequestOrigin"];
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            openedAt: string | null;
+            /** Format: date-time */
+            verifiedAt: string | null;
+            /** Format: date-time */
+            lockedAt: string | null;
+            failedAttempts: number;
+            /** Format: date-time */
+            signedAt: string | null;
+            /** Format: date-time */
+            revokedAt: string | null;
+            /** Format: uuid */
+            consentId: string | null;
+            /** @description IP desde la que firmó el paciente (evidencia) */
+            signedIpAddress: string | null;
+            /**
+             * Format: uuid
+             * @description BUDGET (DX-415): la aceptación del plan que produjo la firma del paciente
+             */
+            budgetAcceptanceId: string | null;
+            /**
+             * Format: date-time
+             * @description Firma del profesional en la app (Completo)
+             */
+            countersignedAt: string | null;
+            /** @description DX-422: PDF firmado del consentimiento completo (PENDING generándose o reintentando, READY archivado en los documentos del paciente, FAILED) */
+            signedPdfStatus: components["schemas"]["SignedConsentPdfStatus"] | null;
+            /**
+             * Format: uuid
+             * @description DX-422: documento del paciente con el PDF firmado (READY): se descarga con GET /patients/:patientId/documents/:id/url/download
+             */
+            signedPdfDocumentId: string | null;
+            /**
+             * Format: date-time
+             * @description DX-443: último envío de la copia del PDF firmado al paciente (o a su responsable) por email, con un enlace de un solo uso; null si aún no se envió (o es de antes de DX-443). Se reenvía con POST /patients/:patientId/consents/:consentId/signed-pdf/copy
+             */
+            signedPdfCopySentAt: string | null;
+        };
+        CreateSignatureRequestDto: {
+            /** @description CONSENT = consentimiento informado. BUDGET = presupuesto de un plan «Presentado» para que el paciente lo acepte a distancia (DX-415). */
+            type: components["schemas"]["SignatureRequestType"];
+            channel: components["schemas"]["SignatureRequestChannel"];
+            /**
+             * Format: uuid
+             * @description Plantilla del consentimiento (obligatoria en CONSENT).
+             */
+            templateId?: string;
+            /**
+             * Format: uuid
+             * @description Plan del paciente. CONSENT: rellena {{tratamiento}} (opcional). BUDGET: el plan «Presentado» cuyo presupuesto se envía (obligatorio).
+             */
+            treatmentPlanId?: string;
+            /**
+             * Format: uuid
+             * @description Profesional que nombra el texto y firmará después en la app. Por defecto, quien envía si tiene rol clínico (recepción debe elegirlo).
+             */
+            professionalId?: string;
+        };
+        SignatureRequestCreatedDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /**
+             * Format: uuid
+             * @description Sede desde la que se envió (sus horas, con su reloj)
+             */
+            locationId: string;
+            /** @description CONSENT = consentimiento informado. BUDGET = presupuesto de un plan «Presentado» para que el paciente lo acepte a distancia (DX-415). */
+            type: components["schemas"]["SignatureRequestType"];
+            channel: components["schemas"]["SignatureRequestChannel"];
+            /** Format: uuid */
+            templateId: string | null;
+            templateVersion: number | null;
+            /**
+             * Format: uuid
+             * @description BUDGET: el plan cuyo presupuesto se envió. CONSENT: el plan de {{tratamiento}}, si lo hubo.
+             */
+            treatmentPlanId: string | null;
+            title: string;
+            /** @description Destino enmascarado (an***@dominio) */
+            destinationMasked: string;
+            signerType: components["schemas"]["ConsentSignerType"];
+            /** @description Quien firma: el paciente o su responsable */
+            signerName: string;
+            /** Format: uuid */
+            professionalUserId: string;
+            professionalName: string;
+            /** @description SENT = enviado; OPENED = abierto (pidió el código); LOCKED = bloqueado tras 5 fallos; EXPIRED = caducado; REVOKED = anulado; SIGNED_BY_PATIENT = falta la firma del profesional; COMPLETE = completo. */
+            status: components["schemas"]["SignatureRequestStatus"];
+            /** Format: date-time */
+            sentAt: string;
+            /** @description Quién la envió; null en las del seguimiento automático (origin FOLLOW_UP) */
+            sentByName: string | null;
+            /** @description DX-561: STAFF = la envió la clínica; FOLLOW_UP = el seguimiento automático de presupuestos (sin usuario) */
+            origin: components["schemas"]["SignatureRequestOrigin"];
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            openedAt: string | null;
+            /** Format: date-time */
+            verifiedAt: string | null;
+            /** Format: date-time */
+            lockedAt: string | null;
+            failedAttempts: number;
+            /** Format: date-time */
+            signedAt: string | null;
+            /** Format: date-time */
+            revokedAt: string | null;
+            /** Format: uuid */
+            consentId: string | null;
+            /** @description IP desde la que firmó el paciente (evidencia) */
+            signedIpAddress: string | null;
+            /**
+             * Format: uuid
+             * @description BUDGET (DX-415): la aceptación del plan que produjo la firma del paciente
+             */
+            budgetAcceptanceId: string | null;
+            /**
+             * Format: date-time
+             * @description Firma del profesional en la app (Completo)
+             */
+            countersignedAt: string | null;
+            /** @description DX-422: PDF firmado del consentimiento completo (PENDING generándose o reintentando, READY archivado en los documentos del paciente, FAILED) */
+            signedPdfStatus: components["schemas"]["SignedConsentPdfStatus"] | null;
+            /**
+             * Format: uuid
+             * @description DX-422: documento del paciente con el PDF firmado (READY): se descarga con GET /patients/:patientId/documents/:id/url/download
+             */
+            signedPdfDocumentId: string | null;
+            /**
+             * Format: date-time
+             * @description DX-443: último envío de la copia del PDF firmado al paciente (o a su responsable) por email, con un enlace de un solo uso; null si aún no se envió (o es de antes de DX-443). Se reenvía con POST /patients/:patientId/consents/:consentId/signed-pdf/copy
+             */
+            signedPdfCopySentAt: string | null;
+            /** @description false si el email no se pudo encolar: la solicitud queda registrada; anúlala y envía otra. */
+            emailQueued: boolean;
+        };
+        PublicSignatureClinicDto: {
+            name: string;
+            logoUrl: string | null;
+            primaryColor: string | null;
+        };
+        PublicSignatureLocationDto: {
+            /** @description Zona IANA de la sede */
+            timeZone: string;
+            locale: string | null;
+            /** @enum {string|null} */
+            hourCycle: "h12" | "h23" | null;
+        };
+        PublicSignatureDto: {
+            type: components["schemas"]["SignatureRequestType"];
+            clinic: components["schemas"]["PublicSignatureClinicDto"];
+            location: components["schemas"]["PublicSignatureLocationDto"];
+            /** @description Adónde va el código (an***@dominio) */
+            destinationMasked: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @description Hay un código vigente enviado */
+            codeSent: boolean;
+            /**
+             * Format: date-time
+             * @description Desde cuándo se puede pedir otro código (null = ya)
+             */
+            resendAvailableAt: string | null;
+            codeSendsLeft: number;
+        };
+        VerifySignatureCodeDto: {
+            /**
+             * @description 6 dígitos
+             * @example 012345
+             */
+            code: string;
+        };
+        SignatureSessionDto: {
+            /** @description Sesión de este navegador: se manda en la cabecera X-Signature-Session para ver y firmar el documento. Solo se guarda su hash. */
+            sessionToken: string;
+            /** Format: date-time */
+            sessionExpiresAt: string;
+        };
+        PublicBudgetLocationDto: {
+            name: string;
+            address: string | null;
+        };
+        PublicBudgetPatientDto: {
+            name: string;
+            document: string | null;
+        };
+        PublicBudgetAgreementDto: {
+            name: string;
+            payerName: string;
+        };
+        PublicBudgetItemDto: {
+            toothNumber: string;
+            surfaces: components["schemas"]["ToothSurface"][];
+            procedure: string;
+            quantity: number;
+            unitPrice: number;
+            discount: number;
+            subtotal: number;
+            listPrice: number | null;
+            agreementName: string | null;
+            /** @description DX-502: moneda ISO 4217 de `listPrice`: la del catálogo, congelada en la foto enviada (en un enlace anterior a DX-502, v2/v3, la congelada en los ítems del plan). Puede no ser la del plan: no se convierte. Null si no se sabe (sedes sin moneda común): no se muestra la cifra. */
+            listPriceCurrency: string | null;
+        };
+        PublicBudgetTotalDto: {
+            currency: string;
+            gross: number;
+            discount: number;
+            net: number;
+            /** @description Ahorro por convenio en `currency`. Desde DX-502 no suma los ítems cuyo precio de lista está en otra moneda (o en una desconocida). */
+            agreementSaving: number;
+        };
+        PublicBudgetDto: {
+            /** @description Moneda ISO 4217 del plan */
+            currency: string;
+            clinicName: string;
+            location: components["schemas"]["PublicBudgetLocationDto"];
+            patient: components["schemas"]["PublicBudgetPatientDto"];
+            professionalName: string | null;
+            agreement: components["schemas"]["PublicBudgetAgreementDto"] | null;
+            /**
+             * @description YYYY-MM-DD (sede)
+             * @example 2026-10-31
+             */
+            issuedOn: string;
+            /** @example 2026-11-30 */
+            validUntil: string;
+            validityDays: number;
+            items: components["schemas"]["PublicBudgetItemDto"][];
+            totals: components["schemas"]["PublicBudgetTotalDto"][];
+        };
+        PublicSignatureDocumentDto: {
+            type: components["schemas"]["SignatureRequestType"];
+            title: string;
+            /** @description El texto exacto que se firma */
+            body: string;
+            templateVersion: number | null;
+            signerType: components["schemas"]["ConsentSignerType"];
+            signerName: string;
+            /** @description Firma un responsable sin documento registrado: debe escribirlo al firmar */
+            signerDocumentRequired: boolean;
+            professionalName: string;
+            /** Format: date-time */
+            sentAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            clinic: components["schemas"]["PublicSignatureClinicDto"];
+            location: components["schemas"]["PublicSignatureLocationDto"];
+            /** @description BUDGET: el presupuesto que se acepta (el texto `body` son sus condiciones); CONSENT: null */
+            budget: components["schemas"]["PublicBudgetDto"] | null;
+        };
+        SignPublicSignatureDto: {
+            /** @description PNG (data:image/png;base64,… o base64), máx. 200 KB. */
+            signature: string;
+            /** @description Documento del responsable si el enlace no lo trae */
+            signerDocument?: string;
+            /** @description Confirma que leyó el documento completo (debe ser true) */
+            accepted: boolean;
+        };
+        PublicSignedCopyDto: {
+            type: components["schemas"]["SignatureRequestType"];
+            title: string;
+            /** @description El texto exacto que se firma */
+            body: string;
+            templateVersion: number | null;
+            signerType: components["schemas"]["ConsentSignerType"];
+            signerName: string;
+            /** @description Firma un responsable sin documento registrado: debe escribirlo al firmar */
+            signerDocumentRequired: boolean;
+            professionalName: string;
+            /** Format: date-time */
+            sentAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            clinic: components["schemas"]["PublicSignatureClinicDto"];
+            location: components["schemas"]["PublicSignatureLocationDto"];
+            /** @description BUDGET: el presupuesto que se acepta (el texto `body` son sus condiciones); CONSENT: null */
+            budget: components["schemas"]["PublicBudgetDto"] | null;
+            signerDocument: string | null;
+            /**
+             * Format: date-time
+             * @description Hora del servidor
+             */
+            signedAt: string;
+            /** @description SHA-256 de lo firmado y sus evidencias */
+            contentHash: string;
+        };
+        ConsentTemplateDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            title: string;
+            /** @description Texto con variables {{paciente}}, {{documento}}, {{profesional}}, {{clinica}}, {{fecha}} y {{tratamiento}}. */
+            body: string;
+            active: boolean;
+            /** @description Sube en 1 con cada cambio de título o texto. El consentimiento firmado guarda la versión de la que salió. */
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateConsentTemplateDto: {
+            title: string;
+            /** @description Variables admitidas: {{paciente}}, {{documento}}, {{profesional}}, {{clinica}}, {{fecha}}, {{tratamiento}}. Otra variable da 400. */
+            body: string;
+            /** @description Por defecto, true */
+            active?: boolean;
+        };
+        UpdateConsentTemplateDto: {
+            title?: string;
+            body?: string;
+            /** @description false = desactivar la plantilla */
+            active?: boolean;
+        };
+        RemoteConsentEvidenceDto: {
+            /** Format: uuid */
+            signatureRequestId: string;
+            channel: components["schemas"]["SignatureRequestChannel"];
+            /** @description Destino enmascarado (an***@dominio) */
+            destinationMasked: string;
+            /** Format: date-time */
+            sentAt: string;
+            /** Format: date-time */
+            openedAt: string;
+            /**
+             * Format: date-time
+             * @description Código verificado
+             */
+            verifiedAt: string;
+            /**
+             * Format: uuid
+             * @description El profesional que debe firmar en la app (y que nombra el texto)
+             */
+            professionalUserId: string;
+        };
+        PatientConsentSummaryDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            templateId: string;
+            templateVersion: number;
+            /** Format: uuid */
+            treatmentPlanId: string | null;
+            title: string;
+            /** @enum {string} */
+            signerType: "PATIENT" | "GUARDIAN";
+            signerName: string;
+            signerDocument: string | null;
+            professionalName: string;
+            /** @description SHA-256 (hex) de texto + firmante + firmas + signedAt */
+            contentHash: string;
+            /**
+             * Format: date-time
+             * @description Hora del servidor
+             */
+            signedAt: string;
+            /** Format: uuid */
+            recordedById: string;
+            /** @description DX-243: firmado a distancia por enlace; null si en pantalla */
+            remote: components["schemas"]["RemoteConsentEvidenceDto"] | null;
+            /**
+             * Format: date-time
+             * @description Firma del profesional: la misma hora en pantalla; a distancia, la de su firma en la app (null si falta)
+             */
+            professionalSignedAt: string | null;
+            /** @description Completo: con la firma del paciente Y la del profesional. Solo así cuenta como válido. */
+            complete: boolean;
+        };
+        ConsentPreviewDto: {
+            /** Format: uuid */
+            templateId: string;
+            templateVersion: number;
+            title: string;
+            /** @description Texto con las variables ya resueltas */
+            body: string;
+            professionalName: string;
+        };
+        SignPatientConsentDto: {
+            /** Format: uuid */
+            templateId: string;
+            /** @description La versión de la plantilla que se mostró en la vista previa; si cambió, 409. */
+            templateVersion: number;
+            /** Format: uuid */
+            treatmentPlanId?: string;
+            /** @enum {string} */
+            signerType: "PATIENT" | "GUARDIAN";
+            /** @description Obligatorio si signerType=GUARDIAN */
+            guardianName?: string;
+            /** @description Obligatorio si signerType=GUARDIAN */
+            guardianDocument?: string;
+            /** @description PNG (data:image/png;base64,… o base64), máx. 200 KB. Del paciente o del tutor. */
+            patientSignature: string;
+            /** @description PNG (data:image/png;base64,… o base64), máx. 200 KB. */
+            professionalSignature: string;
+        };
+        PatientConsentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            templateId: string;
+            templateVersion: number;
+            /** Format: uuid */
+            treatmentPlanId: string | null;
+            title: string;
+            /** @enum {string} */
+            signerType: "PATIENT" | "GUARDIAN";
+            signerName: string;
+            signerDocument: string | null;
+            professionalName: string;
+            /** @description SHA-256 (hex) de texto + firmante + firmas + signedAt */
+            contentHash: string;
+            /**
+             * Format: date-time
+             * @description Hora del servidor
+             */
+            signedAt: string;
+            /** Format: uuid */
+            recordedById: string;
+            /** @description DX-243: firmado a distancia por enlace; null si en pantalla */
+            remote: components["schemas"]["RemoteConsentEvidenceDto"] | null;
+            /**
+             * Format: date-time
+             * @description Firma del profesional: la misma hora en pantalla; a distancia, la de su firma en la app (null si falta)
+             */
+            professionalSignedAt: string | null;
+            /** @description Completo: con la firma del paciente Y la del profesional. Solo así cuenta como válido. */
+            complete: boolean;
+            /** @description Texto renderizado tal como se firmó */
+            body: string;
+            /** @description data:image/png;base64,… */
+            patientSignature: string;
+            /** @description data:image/png;base64,…; null en uno firmado a distancia hasta que firma el profesional */
+            professionalSignature: string | null;
+        };
+        CountersignPatientConsentDto: {
+            /** @description PNG (data:image/png;base64,… o base64), máx. 200 KB. */
+            professionalSignature: string;
+        };
+        ConsentClinicDto: {
+            name: string;
+            logoUrl: string | null;
+        };
+        ConsentPatientDto: {
+            /** Format: uuid */
+            id: string;
+            firstName: string;
+            lastName: string;
+            docType: components["schemas"]["DocType"];
+            /** @description Nombre libre del documento que escribe la clínica (hasta 40 caracteres). Null = sin nombre propio. */
+            docTypeLabel: string | null;
+            /** @description Nombre visible del tipo de documento: el nombre libre, si no el nombre local de la clínica para ese tipo, si no el genérico. */
+            docTypeName: string;
+            docNumber: string | null;
+        };
+        PatientConsentDocumentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            templateId: string;
+            templateVersion: number;
+            /** Format: uuid */
+            treatmentPlanId: string | null;
+            title: string;
+            /** @enum {string} */
+            signerType: "PATIENT" | "GUARDIAN";
+            signerName: string;
+            signerDocument: string | null;
+            professionalName: string;
+            /** @description SHA-256 (hex) de texto + firmante + firmas + signedAt */
+            contentHash: string;
+            /**
+             * Format: date-time
+             * @description Hora del servidor
+             */
+            signedAt: string;
+            /** Format: uuid */
+            recordedById: string;
+            /** @description DX-243: firmado a distancia por enlace; null si en pantalla */
+            remote: components["schemas"]["RemoteConsentEvidenceDto"] | null;
+            /**
+             * Format: date-time
+             * @description Firma del profesional: la misma hora en pantalla; a distancia, la de su firma en la app (null si falta)
+             */
+            professionalSignedAt: string | null;
+            /** @description Completo: con la firma del paciente Y la del profesional. Solo así cuenta como válido. */
+            complete: boolean;
+            /** @description Texto renderizado tal como se firmó */
+            body: string;
+            /** @description data:image/png;base64,… */
+            patientSignature: string;
+            /** @description data:image/png;base64,…; null en uno firmado a distancia hasta que firma el profesional */
+            professionalSignature: string | null;
+            clinic: components["schemas"]["ConsentClinicDto"];
+            /** @description DX-354: zona, locale y reloj de la sede del documento (la de la firma a distancia, o la sede en contexto). null si le falta algo: el documento se lee igual y la web pinta «—». */
+            regional: components["schemas"]["DocumentRegionalDto"] | null;
+            patient: components["schemas"]["ConsentPatientDto"];
+            /** @description true si el hash guardado coincide con el recalculado al leer */
+            integrityOk: boolean;
+            /** @description DX-243: IP desde la que firmó el paciente a distancia (evidencia); null si se firmó en pantalla */
+            remoteIpAddress: string | null;
+        };
+        /** @enum {string} */
+        SignedConsentPdfRetryStatus: "PENDING";
+        SignedConsentPdfRetryDto: {
+            status: components["schemas"]["SignedConsentPdfRetryStatus"];
+        };
+        SignedPdfCopyResentDto: {
+            /**
+             * Format: date-time
+             * @description Hora del envío: «Copia enviada al paciente el …».
+             */
+            sentAt: string;
+            /**
+             * Format: date-time
+             * @description Hasta cuándo vale el enlace nuevo (SIGNED_PDF_COPY_LINK_TTL_HOURS; 168 h por defecto). El anterior ya no sirve.
+             */
+            expiresAt: string;
+            /**
+             * @description Adónde se envió (el email de la firma a distancia), enmascarado.
+             * @example la***@example.com
+             */
+            destinationMasked: string;
+        };
+        /**
+         * @description `AVAILABLE`: se puede descargar una vez. `USED`: el enlace ya se usó. Caducado, invalidado (al reenviar), inventado o de otra clínica: 404.
+         * @enum {string}
+         */
+        PublicSignedPdfCopyState: "AVAILABLE" | "USED";
+        PublicSignedPdfCopyClinicDto: {
+            name: string;
+            primaryColor: string | null;
+            logoUrl: string | null;
+        };
+        PublicSignedPdfCopyDto: {
+            /** @description `AVAILABLE`: se puede descargar una vez. `USED`: el enlace ya se usó. Caducado, invalidado (al reenviar), inventado o de otra clínica: 404. */
+            state: components["schemas"]["PublicSignedPdfCopyState"];
+            /** @example Tu copia del documento firmado está lista para descargar */
+            message: string;
+            clinic: components["schemas"]["PublicSignedPdfCopyClinicDto"] | null;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        SignedPdfCopyDownloadDto: {
+            /** @description URL firmada de 60 s del PDF archivado, como attachment (ábrela de inmediato). */
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @example Consentimiento firmado - Exodoncia - 2026-10-31.pdf */
+            fileName: string;
         };
         CashSettingsDto: {
             /** @description «Exigir caja abierta»: sin caja abierta en la sede no se registra un abono en efectivo (409). */
@@ -25096,283 +26015,6 @@ export interface components {
              */
             patientCount: number;
         };
-        ConsentTemplateDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            tenantId: string;
-            title: string;
-            /** @description Texto con variables {{paciente}}, {{documento}}, {{profesional}}, {{clinica}}, {{fecha}} y {{tratamiento}}. */
-            body: string;
-            active: boolean;
-            /** @description Sube en 1 con cada cambio de título o texto. El consentimiento firmado guarda la versión de la que salió. */
-            version: number;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        CreateConsentTemplateDto: {
-            title: string;
-            /** @description Variables admitidas: {{paciente}}, {{documento}}, {{profesional}}, {{clinica}}, {{fecha}}, {{tratamiento}}. Otra variable da 400. */
-            body: string;
-            /** @description Por defecto, true */
-            active?: boolean;
-        };
-        UpdateConsentTemplateDto: {
-            title?: string;
-            body?: string;
-            /** @description false = desactivar la plantilla */
-            active?: boolean;
-        };
-        RemoteConsentEvidenceDto: {
-            /** Format: uuid */
-            signatureRequestId: string;
-            channel: components["schemas"]["SignatureRequestChannel"];
-            /** @description Destino enmascarado (an***@dominio) */
-            destinationMasked: string;
-            /** Format: date-time */
-            sentAt: string;
-            /** Format: date-time */
-            openedAt: string;
-            /**
-             * Format: date-time
-             * @description Código verificado
-             */
-            verifiedAt: string;
-            /**
-             * Format: uuid
-             * @description El profesional que debe firmar en la app (y que nombra el texto)
-             */
-            professionalUserId: string;
-        };
-        PatientConsentSummaryDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            tenantId: string;
-            /** Format: uuid */
-            patientId: string;
-            /** Format: uuid */
-            templateId: string;
-            templateVersion: number;
-            /** Format: uuid */
-            treatmentPlanId: string | null;
-            title: string;
-            /** @enum {string} */
-            signerType: "PATIENT" | "GUARDIAN";
-            signerName: string;
-            signerDocument: string | null;
-            professionalName: string;
-            /** @description SHA-256 (hex) de texto + firmante + firmas + signedAt */
-            contentHash: string;
-            /**
-             * Format: date-time
-             * @description Hora del servidor
-             */
-            signedAt: string;
-            /** Format: uuid */
-            recordedById: string;
-            /** @description DX-243: firmado a distancia por enlace; null si en pantalla */
-            remote: components["schemas"]["RemoteConsentEvidenceDto"] | null;
-            /**
-             * Format: date-time
-             * @description Firma del profesional: la misma hora en pantalla; a distancia, la de su firma en la app (null si falta)
-             */
-            professionalSignedAt: string | null;
-            /** @description Completo: con la firma del paciente Y la del profesional. Solo así cuenta como válido. */
-            complete: boolean;
-        };
-        ConsentPreviewDto: {
-            /** Format: uuid */
-            templateId: string;
-            templateVersion: number;
-            title: string;
-            /** @description Texto con las variables ya resueltas */
-            body: string;
-            professionalName: string;
-        };
-        SignPatientConsentDto: {
-            /** Format: uuid */
-            templateId: string;
-            /** @description La versión de la plantilla que se mostró en la vista previa; si cambió, 409. */
-            templateVersion: number;
-            /** Format: uuid */
-            treatmentPlanId?: string;
-            /** @enum {string} */
-            signerType: "PATIENT" | "GUARDIAN";
-            /** @description Obligatorio si signerType=GUARDIAN */
-            guardianName?: string;
-            /** @description Obligatorio si signerType=GUARDIAN */
-            guardianDocument?: string;
-            /** @description PNG (data:image/png;base64,… o base64), máx. 200 KB. Del paciente o del tutor. */
-            patientSignature: string;
-            /** @description PNG (data:image/png;base64,… o base64), máx. 200 KB. */
-            professionalSignature: string;
-        };
-        PatientConsentDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            tenantId: string;
-            /** Format: uuid */
-            patientId: string;
-            /** Format: uuid */
-            templateId: string;
-            templateVersion: number;
-            /** Format: uuid */
-            treatmentPlanId: string | null;
-            title: string;
-            /** @enum {string} */
-            signerType: "PATIENT" | "GUARDIAN";
-            signerName: string;
-            signerDocument: string | null;
-            professionalName: string;
-            /** @description SHA-256 (hex) de texto + firmante + firmas + signedAt */
-            contentHash: string;
-            /**
-             * Format: date-time
-             * @description Hora del servidor
-             */
-            signedAt: string;
-            /** Format: uuid */
-            recordedById: string;
-            /** @description DX-243: firmado a distancia por enlace; null si en pantalla */
-            remote: components["schemas"]["RemoteConsentEvidenceDto"] | null;
-            /**
-             * Format: date-time
-             * @description Firma del profesional: la misma hora en pantalla; a distancia, la de su firma en la app (null si falta)
-             */
-            professionalSignedAt: string | null;
-            /** @description Completo: con la firma del paciente Y la del profesional. Solo así cuenta como válido. */
-            complete: boolean;
-            /** @description Texto renderizado tal como se firmó */
-            body: string;
-            /** @description data:image/png;base64,… */
-            patientSignature: string;
-            /** @description data:image/png;base64,…; null en uno firmado a distancia hasta que firma el profesional */
-            professionalSignature: string | null;
-        };
-        CountersignPatientConsentDto: {
-            /** @description PNG (data:image/png;base64,… o base64), máx. 200 KB. */
-            professionalSignature: string;
-        };
-        ConsentClinicDto: {
-            name: string;
-            logoUrl: string | null;
-        };
-        ConsentPatientDto: {
-            /** Format: uuid */
-            id: string;
-            firstName: string;
-            lastName: string;
-            docType: components["schemas"]["DocType"];
-            /** @description Nombre libre del documento que escribe la clínica (hasta 40 caracteres). Null = sin nombre propio. */
-            docTypeLabel: string | null;
-            /** @description Nombre visible del tipo de documento: el nombre libre, si no el nombre local de la clínica para ese tipo, si no el genérico. */
-            docTypeName: string;
-            docNumber: string | null;
-        };
-        PatientConsentDocumentDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            tenantId: string;
-            /** Format: uuid */
-            patientId: string;
-            /** Format: uuid */
-            templateId: string;
-            templateVersion: number;
-            /** Format: uuid */
-            treatmentPlanId: string | null;
-            title: string;
-            /** @enum {string} */
-            signerType: "PATIENT" | "GUARDIAN";
-            signerName: string;
-            signerDocument: string | null;
-            professionalName: string;
-            /** @description SHA-256 (hex) de texto + firmante + firmas + signedAt */
-            contentHash: string;
-            /**
-             * Format: date-time
-             * @description Hora del servidor
-             */
-            signedAt: string;
-            /** Format: uuid */
-            recordedById: string;
-            /** @description DX-243: firmado a distancia por enlace; null si en pantalla */
-            remote: components["schemas"]["RemoteConsentEvidenceDto"] | null;
-            /**
-             * Format: date-time
-             * @description Firma del profesional: la misma hora en pantalla; a distancia, la de su firma en la app (null si falta)
-             */
-            professionalSignedAt: string | null;
-            /** @description Completo: con la firma del paciente Y la del profesional. Solo así cuenta como válido. */
-            complete: boolean;
-            /** @description Texto renderizado tal como se firmó */
-            body: string;
-            /** @description data:image/png;base64,… */
-            patientSignature: string;
-            /** @description data:image/png;base64,…; null en uno firmado a distancia hasta que firma el profesional */
-            professionalSignature: string | null;
-            clinic: components["schemas"]["ConsentClinicDto"];
-            /** @description DX-354: zona, locale y reloj de la sede del documento (la de la firma a distancia, o la sede en contexto). null si le falta algo: el documento se lee igual y la web pinta «—». */
-            regional: components["schemas"]["DocumentRegionalDto"] | null;
-            patient: components["schemas"]["ConsentPatientDto"];
-            /** @description true si el hash guardado coincide con el recalculado al leer */
-            integrityOk: boolean;
-            /** @description DX-243: IP desde la que firmó el paciente a distancia (evidencia); null si se firmó en pantalla */
-            remoteIpAddress: string | null;
-        };
-        /** @enum {string} */
-        SignedConsentPdfRetryStatus: "PENDING";
-        SignedConsentPdfRetryDto: {
-            status: components["schemas"]["SignedConsentPdfRetryStatus"];
-        };
-        SignedPdfCopyResentDto: {
-            /**
-             * Format: date-time
-             * @description Hora del envío: «Copia enviada al paciente el …».
-             */
-            sentAt: string;
-            /**
-             * Format: date-time
-             * @description Hasta cuándo vale el enlace nuevo (SIGNED_PDF_COPY_LINK_TTL_HOURS; 168 h por defecto). El anterior ya no sirve.
-             */
-            expiresAt: string;
-            /**
-             * @description Adónde se envió (el email de la firma a distancia), enmascarado.
-             * @example la***@example.com
-             */
-            destinationMasked: string;
-        };
-        /**
-         * @description `AVAILABLE`: se puede descargar una vez. `USED`: el enlace ya se usó. Caducado, invalidado (al reenviar), inventado o de otra clínica: 404.
-         * @enum {string}
-         */
-        PublicSignedPdfCopyState: "AVAILABLE" | "USED";
-        PublicSignedPdfCopyClinicDto: {
-            name: string;
-            primaryColor: string | null;
-            logoUrl: string | null;
-        };
-        PublicSignedPdfCopyDto: {
-            /** @description `AVAILABLE`: se puede descargar una vez. `USED`: el enlace ya se usó. Caducado, invalidado (al reenviar), inventado o de otra clínica: 404. */
-            state: components["schemas"]["PublicSignedPdfCopyState"];
-            /** @example Tu copia del documento firmado está lista para descargar */
-            message: string;
-            clinic: components["schemas"]["PublicSignedPdfCopyClinicDto"] | null;
-            /** Format: date-time */
-            expiresAt: string;
-        };
-        SignedPdfCopyDownloadDto: {
-            /** @description URL firmada de 60 s del PDF archivado, como attachment (ábrela de inmediato). */
-            url: string;
-            /** Format: date-time */
-            expiresAt: string;
-            /** @example Consentimiento firmado - Exodoncia - 2026-10-31.pdf */
-            fileName: string;
-        };
         PostOpTemplateCatalogItemDto: {
             /** Format: uuid */
             id: string;
@@ -25596,394 +26238,6 @@ export interface components {
             renderedText: string;
             /** Format: date-time */
             deliveredAt: string;
-        };
-        SignatureTemplateOptionDto: {
-            /** Format: uuid */
-            id: string;
-            title: string;
-            version: number;
-            /** @description El texto usa {{tratamiento}}: sin plan, el documento dirá «No especificado» */
-            usesTreatment: boolean;
-            /**
-             * Format: date-time
-             * @description Última vez que el paciente lo firmó y quedó completo (con la firma del profesional)
-             */
-            lastCompletedAt: string | null;
-        };
-        SignatureProfessionalOptionDto: {
-            /** Format: uuid */
-            id: string;
-            fullName: string;
-            role: components["schemas"]["ClinicRole"];
-        };
-        SignaturePlanOptionDto: {
-            /** Format: uuid */
-            id: string;
-            status: components["schemas"]["TreatmentPlanStatus"];
-            /** @description Nombre de la alternativa (DX-040) */
-            optionLabel: string | null;
-            /** Format: date-time */
-            createdAt: string;
-        };
-        SignatureRecipientOptionDto: {
-            allowed: boolean;
-            /** @description Por qué no se puede enviar (en español) */
-            reason: string | null;
-            destinationMasked: string | null;
-            signerType: components["schemas"]["ConsentSignerType"] | null;
-            signerName: string | null;
-            /** @description Menor según la mayoría de edad de la clínica: firma su responsable */
-            minor: boolean;
-        };
-        SignatureRequestOptionsDto: {
-            templates: components["schemas"]["SignatureTemplateOptionDto"][];
-            /** @description Quienes pueden firmar un consentimiento como profesional (la regla de la firma en la clínica: odontólogo, asistente, administrador) */
-            professionals: components["schemas"]["SignatureProfessionalOptionDto"][];
-            /**
-             * Format: uuid
-             * @description Quien envía, solo si está en `professionals`
-             */
-            defaultProfessionalId: string | null;
-            /** @description Planes del paciente sin cancelar (para {{tratamiento}}), más recientes primero */
-            plans: components["schemas"]["SignaturePlanOptionDto"][];
-            recipient: components["schemas"]["SignatureRecipientOptionDto"];
-        };
-        /**
-         * @description CONSENT = consentimiento informado. BUDGET = presupuesto de un plan «Presentado» para que el paciente lo acepte a distancia (DX-415).
-         * @enum {string}
-         */
-        SignatureRequestType: "CONSENT" | "BUDGET";
-        /**
-         * @description SENT = enviado; OPENED = abierto (pidió el código); LOCKED = bloqueado tras 5 fallos; EXPIRED = caducado; REVOKED = anulado; SIGNED_BY_PATIENT = falta la firma del profesional; COMPLETE = completo.
-         * @enum {string}
-         */
-        SignatureRequestStatus: "SENT" | "OPENED" | "LOCKED" | "EXPIRED" | "REVOKED" | "SIGNED_BY_PATIENT" | "COMPLETE";
-        /**
-         * @description DX-422: PDF firmado del consentimiento completo (PENDING generándose o reintentando, READY archivado en los documentos del paciente, FAILED)
-         * @enum {string}
-         */
-        SignedConsentPdfStatus: "PENDING" | "READY" | "FAILED";
-        SignatureRequestDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            patientId: string;
-            /**
-             * Format: uuid
-             * @description Sede desde la que se envió (sus horas, con su reloj)
-             */
-            locationId: string;
-            /** @description CONSENT = consentimiento informado. BUDGET = presupuesto de un plan «Presentado» para que el paciente lo acepte a distancia (DX-415). */
-            type: components["schemas"]["SignatureRequestType"];
-            channel: components["schemas"]["SignatureRequestChannel"];
-            /** Format: uuid */
-            templateId: string | null;
-            templateVersion: number | null;
-            /**
-             * Format: uuid
-             * @description BUDGET: el plan cuyo presupuesto se envió. CONSENT: el plan de {{tratamiento}}, si lo hubo.
-             */
-            treatmentPlanId: string | null;
-            title: string;
-            /** @description Destino enmascarado (an***@dominio) */
-            destinationMasked: string;
-            signerType: components["schemas"]["ConsentSignerType"];
-            /** @description Quien firma: el paciente o su responsable */
-            signerName: string;
-            /** Format: uuid */
-            professionalUserId: string;
-            professionalName: string;
-            /** @description SENT = enviado; OPENED = abierto (pidió el código); LOCKED = bloqueado tras 5 fallos; EXPIRED = caducado; REVOKED = anulado; SIGNED_BY_PATIENT = falta la firma del profesional; COMPLETE = completo. */
-            status: components["schemas"]["SignatureRequestStatus"];
-            /** Format: date-time */
-            sentAt: string;
-            sentByName: string | null;
-            /** Format: date-time */
-            expiresAt: string;
-            /** Format: date-time */
-            openedAt: string | null;
-            /** Format: date-time */
-            verifiedAt: string | null;
-            /** Format: date-time */
-            lockedAt: string | null;
-            failedAttempts: number;
-            /** Format: date-time */
-            signedAt: string | null;
-            /** Format: date-time */
-            revokedAt: string | null;
-            /** Format: uuid */
-            consentId: string | null;
-            /** @description IP desde la que firmó el paciente (evidencia) */
-            signedIpAddress: string | null;
-            /**
-             * Format: uuid
-             * @description BUDGET (DX-415): la aceptación del plan que produjo la firma del paciente
-             */
-            budgetAcceptanceId: string | null;
-            /**
-             * Format: date-time
-             * @description Firma del profesional en la app (Completo)
-             */
-            countersignedAt: string | null;
-            /** @description DX-422: PDF firmado del consentimiento completo (PENDING generándose o reintentando, READY archivado en los documentos del paciente, FAILED) */
-            signedPdfStatus: components["schemas"]["SignedConsentPdfStatus"] | null;
-            /**
-             * Format: uuid
-             * @description DX-422: documento del paciente con el PDF firmado (READY): se descarga con GET /patients/:patientId/documents/:id/url/download
-             */
-            signedPdfDocumentId: string | null;
-            /**
-             * Format: date-time
-             * @description DX-443: último envío de la copia del PDF firmado al paciente (o a su responsable) por email, con un enlace de un solo uso; null si aún no se envió (o es de antes de DX-443). Se reenvía con POST /patients/:patientId/consents/:consentId/signed-pdf/copy
-             */
-            signedPdfCopySentAt: string | null;
-        };
-        CreateSignatureRequestDto: {
-            /** @description CONSENT = consentimiento informado. BUDGET = presupuesto de un plan «Presentado» para que el paciente lo acepte a distancia (DX-415). */
-            type: components["schemas"]["SignatureRequestType"];
-            channel: components["schemas"]["SignatureRequestChannel"];
-            /**
-             * Format: uuid
-             * @description Plantilla del consentimiento (obligatoria en CONSENT).
-             */
-            templateId?: string;
-            /**
-             * Format: uuid
-             * @description Plan del paciente. CONSENT: rellena {{tratamiento}} (opcional). BUDGET: el plan «Presentado» cuyo presupuesto se envía (obligatorio).
-             */
-            treatmentPlanId?: string;
-            /**
-             * Format: uuid
-             * @description Profesional que nombra el texto y firmará después en la app. Por defecto, quien envía si tiene rol clínico (recepción debe elegirlo).
-             */
-            professionalId?: string;
-        };
-        SignatureRequestCreatedDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            patientId: string;
-            /**
-             * Format: uuid
-             * @description Sede desde la que se envió (sus horas, con su reloj)
-             */
-            locationId: string;
-            /** @description CONSENT = consentimiento informado. BUDGET = presupuesto de un plan «Presentado» para que el paciente lo acepte a distancia (DX-415). */
-            type: components["schemas"]["SignatureRequestType"];
-            channel: components["schemas"]["SignatureRequestChannel"];
-            /** Format: uuid */
-            templateId: string | null;
-            templateVersion: number | null;
-            /**
-             * Format: uuid
-             * @description BUDGET: el plan cuyo presupuesto se envió. CONSENT: el plan de {{tratamiento}}, si lo hubo.
-             */
-            treatmentPlanId: string | null;
-            title: string;
-            /** @description Destino enmascarado (an***@dominio) */
-            destinationMasked: string;
-            signerType: components["schemas"]["ConsentSignerType"];
-            /** @description Quien firma: el paciente o su responsable */
-            signerName: string;
-            /** Format: uuid */
-            professionalUserId: string;
-            professionalName: string;
-            /** @description SENT = enviado; OPENED = abierto (pidió el código); LOCKED = bloqueado tras 5 fallos; EXPIRED = caducado; REVOKED = anulado; SIGNED_BY_PATIENT = falta la firma del profesional; COMPLETE = completo. */
-            status: components["schemas"]["SignatureRequestStatus"];
-            /** Format: date-time */
-            sentAt: string;
-            sentByName: string | null;
-            /** Format: date-time */
-            expiresAt: string;
-            /** Format: date-time */
-            openedAt: string | null;
-            /** Format: date-time */
-            verifiedAt: string | null;
-            /** Format: date-time */
-            lockedAt: string | null;
-            failedAttempts: number;
-            /** Format: date-time */
-            signedAt: string | null;
-            /** Format: date-time */
-            revokedAt: string | null;
-            /** Format: uuid */
-            consentId: string | null;
-            /** @description IP desde la que firmó el paciente (evidencia) */
-            signedIpAddress: string | null;
-            /**
-             * Format: uuid
-             * @description BUDGET (DX-415): la aceptación del plan que produjo la firma del paciente
-             */
-            budgetAcceptanceId: string | null;
-            /**
-             * Format: date-time
-             * @description Firma del profesional en la app (Completo)
-             */
-            countersignedAt: string | null;
-            /** @description DX-422: PDF firmado del consentimiento completo (PENDING generándose o reintentando, READY archivado en los documentos del paciente, FAILED) */
-            signedPdfStatus: components["schemas"]["SignedConsentPdfStatus"] | null;
-            /**
-             * Format: uuid
-             * @description DX-422: documento del paciente con el PDF firmado (READY): se descarga con GET /patients/:patientId/documents/:id/url/download
-             */
-            signedPdfDocumentId: string | null;
-            /**
-             * Format: date-time
-             * @description DX-443: último envío de la copia del PDF firmado al paciente (o a su responsable) por email, con un enlace de un solo uso; null si aún no se envió (o es de antes de DX-443). Se reenvía con POST /patients/:patientId/consents/:consentId/signed-pdf/copy
-             */
-            signedPdfCopySentAt: string | null;
-            /** @description false si el email no se pudo encolar: la solicitud queda registrada; anúlala y envía otra. */
-            emailQueued: boolean;
-        };
-        PublicSignatureClinicDto: {
-            name: string;
-            logoUrl: string | null;
-            primaryColor: string | null;
-        };
-        PublicSignatureLocationDto: {
-            /** @description Zona IANA de la sede */
-            timeZone: string;
-            locale: string | null;
-            /** @enum {string|null} */
-            hourCycle: "h12" | "h23" | null;
-        };
-        PublicSignatureDto: {
-            type: components["schemas"]["SignatureRequestType"];
-            clinic: components["schemas"]["PublicSignatureClinicDto"];
-            location: components["schemas"]["PublicSignatureLocationDto"];
-            /** @description Adónde va el código (an***@dominio) */
-            destinationMasked: string;
-            /** Format: date-time */
-            expiresAt: string;
-            /** @description Hay un código vigente enviado */
-            codeSent: boolean;
-            /**
-             * Format: date-time
-             * @description Desde cuándo se puede pedir otro código (null = ya)
-             */
-            resendAvailableAt: string | null;
-            codeSendsLeft: number;
-        };
-        VerifySignatureCodeDto: {
-            /**
-             * @description 6 dígitos
-             * @example 012345
-             */
-            code: string;
-        };
-        SignatureSessionDto: {
-            /** @description Sesión de este navegador: se manda en la cabecera X-Signature-Session para ver y firmar el documento. Solo se guarda su hash. */
-            sessionToken: string;
-            /** Format: date-time */
-            sessionExpiresAt: string;
-        };
-        PublicBudgetLocationDto: {
-            name: string;
-            address: string | null;
-        };
-        PublicBudgetPatientDto: {
-            name: string;
-            document: string | null;
-        };
-        PublicBudgetAgreementDto: {
-            name: string;
-            payerName: string;
-        };
-        PublicBudgetItemDto: {
-            toothNumber: string;
-            surfaces: components["schemas"]["ToothSurface"][];
-            procedure: string;
-            quantity: number;
-            unitPrice: number;
-            discount: number;
-            subtotal: number;
-            listPrice: number | null;
-            agreementName: string | null;
-            /** @description DX-502: moneda ISO 4217 de `listPrice`: la del catálogo, congelada en la foto enviada (en un enlace anterior a DX-502, v2/v3, la congelada en los ítems del plan). Puede no ser la del plan: no se convierte. Null si no se sabe (sedes sin moneda común): no se muestra la cifra. */
-            listPriceCurrency: string | null;
-        };
-        PublicBudgetTotalDto: {
-            currency: string;
-            gross: number;
-            discount: number;
-            net: number;
-            /** @description Ahorro por convenio en `currency`. Desde DX-502 no suma los ítems cuyo precio de lista está en otra moneda (o en una desconocida). */
-            agreementSaving: number;
-        };
-        PublicBudgetDto: {
-            /** @description Moneda ISO 4217 del plan */
-            currency: string;
-            clinicName: string;
-            location: components["schemas"]["PublicBudgetLocationDto"];
-            patient: components["schemas"]["PublicBudgetPatientDto"];
-            professionalName: string | null;
-            agreement: components["schemas"]["PublicBudgetAgreementDto"] | null;
-            /**
-             * @description YYYY-MM-DD (sede)
-             * @example 2026-10-31
-             */
-            issuedOn: string;
-            /** @example 2026-11-30 */
-            validUntil: string;
-            validityDays: number;
-            items: components["schemas"]["PublicBudgetItemDto"][];
-            totals: components["schemas"]["PublicBudgetTotalDto"][];
-        };
-        PublicSignatureDocumentDto: {
-            type: components["schemas"]["SignatureRequestType"];
-            title: string;
-            /** @description El texto exacto que se firma */
-            body: string;
-            templateVersion: number | null;
-            signerType: components["schemas"]["ConsentSignerType"];
-            signerName: string;
-            /** @description Firma un responsable sin documento registrado: debe escribirlo al firmar */
-            signerDocumentRequired: boolean;
-            professionalName: string;
-            /** Format: date-time */
-            sentAt: string;
-            /** Format: date-time */
-            expiresAt: string;
-            clinic: components["schemas"]["PublicSignatureClinicDto"];
-            location: components["schemas"]["PublicSignatureLocationDto"];
-            /** @description BUDGET: el presupuesto que se acepta (el texto `body` son sus condiciones); CONSENT: null */
-            budget: components["schemas"]["PublicBudgetDto"] | null;
-        };
-        SignPublicSignatureDto: {
-            /** @description PNG (data:image/png;base64,… o base64), máx. 200 KB. */
-            signature: string;
-            /** @description Documento del responsable si el enlace no lo trae */
-            signerDocument?: string;
-            /** @description Confirma que leyó el documento completo (debe ser true) */
-            accepted: boolean;
-        };
-        PublicSignedCopyDto: {
-            type: components["schemas"]["SignatureRequestType"];
-            title: string;
-            /** @description El texto exacto que se firma */
-            body: string;
-            templateVersion: number | null;
-            signerType: components["schemas"]["ConsentSignerType"];
-            signerName: string;
-            /** @description Firma un responsable sin documento registrado: debe escribirlo al firmar */
-            signerDocumentRequired: boolean;
-            professionalName: string;
-            /** Format: date-time */
-            sentAt: string;
-            /** Format: date-time */
-            expiresAt: string;
-            clinic: components["schemas"]["PublicSignatureClinicDto"];
-            location: components["schemas"]["PublicSignatureLocationDto"];
-            /** @description BUDGET: el presupuesto que se acepta (el texto `body` son sus condiciones); CONSENT: null */
-            budget: components["schemas"]["PublicBudgetDto"] | null;
-            signerDocument: string | null;
-            /**
-             * Format: date-time
-             * @description Hora del servidor
-             */
-            signedAt: string;
-            /** @description SHA-256 de lo firmado y sus evidencias */
-            contentHash: string;
         };
         /** @enum {string} */
         PerioExamStatus: "DRAFT" | "FINAL";
@@ -45562,6 +45816,1101 @@ export interface operations {
             };
         };
     };
+    QuoteFollowUpSettingsController_findAll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationQuoteFollowUpSettingsDto"][];
+                };
+            };
+            /** @description Solo un administrador puede ver y cambiar el seguimiento automático de presupuestos. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    QuoteFollowUpSettingsController_replace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateQuoteFollowUpSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationQuoteFollowUpSettingsDto"];
+                };
+            };
+            /** @description Días o franja inválidos (mensaje en español): de 1 a 3 avisos, días de 1 a 90 de menor a mayor, franja de 0–23 a 1–24 con el final después del inicio */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar el seguimiento automático de presupuestos. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    QuoteFollowUpPauseController_pauseFollowUp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Cualquier opción del grupo */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteFollowUpPauseDto"];
+                };
+            };
+            /** @description Solo ADMIN y RECEPTION; o No tienes acceso a esta sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan de tratamiento no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo se pausa el seguimiento de un presupuesto presentado y sin aceptar. / El seguimiento automático de este presupuesto ya está en pausa. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    QuoteFollowUpPauseController_resumeFollowUp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Cualquier opción del grupo */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteFollowUpPauseDto"];
+                };
+            };
+            /** @description Solo ADMIN y RECEPTION; o No tienes acceso a esta sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan de tratamiento no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El seguimiento automático de este presupuesto no está en pausa. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    QuoteFollowUpReportController_get: {
+        parameters: {
+            query: {
+                /** @description Desde (AAAA-MM-DD) */
+                from: string;
+                /** @description Hasta (AAAA-MM-DD, incluido) */
+                to: string;
+                /** @description Solo una sede */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteFollowUpReportDto"];
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 366 días. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración, los odontólogos y quien tenga acceso a los reportes financieros ven el seguimiento de presupuestos. / No tienes acceso a esta sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sede no tiene zona horaria: configúrala en Ajustes › Sedes para ver el seguimiento. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientSignatureRequestsController_options: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureRequestOptionsDto"];
+                };
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientSignatureRequestsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureRequestDto"][];
+                };
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientSignatureRequestsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSignatureRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureRequestCreatedDto"];
+                };
+            };
+            /** @description BUDGET sin plan o sin ítems, sin plantilla, plantilla desactivada, profesional no válido o host no válido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description BUDGET enviado por un rol que no decide el plan (asistente o recepción), o desde una sede no permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sede no tiene formato regional, o BUDGET de un plan que no está «Presentado» (o ya aceptado). DX-379 (C): BUDGET de un presupuesto vencido: code QUOTE_EXPIRED («El presupuesto venció el {fecha}: actualiza sus precios antes de enviarlo a firmar a distancia.», con quoteValidUntil) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sin email, menor sin responsable o paciente dado de baja de los envíos */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientSignatureRequestsController_revoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureRequestDto"];
+                };
+            };
+            /** @description Enviada desde una sede no permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya está firmada o anulada */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSignatureController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSignatureDto"];
+                };
+            };
+            /** @description «Enlace no válido»: token malformado, desconocido, de otra clínica, caducado, usado, anulado o bloqueado (la misma respuesta para todos). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSignatureController_code: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSignatureDto"];
+                };
+            };
+            /** @description «Enlace no válido»: token malformado, desconocido, de otra clínica, caducado, usado, anulado o bloqueado (la misma respuesta para todos). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No se pudo encolar el email */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSignatureController_verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifySignatureCodeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureSessionDto"];
+                };
+            };
+            /** @description SIGNATURE_CODE_INVALID (con attemptsLeft), SIGNATURE_CODE_EXPIRED o SIGNATURE_LINK_LOCKED (el quinto fallo) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description «Enlace no válido»: token malformado, desconocido, de otra clínica, caducado, usado, anulado o bloqueado (la misma respuesta para todos). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSignatureController_document: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description La sesión que devolvió POST …/verify */
+                "X-Signature-Session": string;
+            };
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSignatureDocumentDto"];
+                };
+            };
+            /** @description SIGNATURE_SESSION_REQUIRED: falta la sesión o caducó */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description «Enlace no válido»: token malformado, desconocido, de otra clínica, caducado, usado, anulado o bloqueado (la misma respuesta para todos). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSignatureController_sign: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description La sesión que devolvió POST …/verify */
+                "X-Signature-Session": string;
+            };
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignPublicSignatureDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSignedCopyDto"];
+                };
+            };
+            /** @description Firma en blanco, no PNG o de más de 200 KB; sin confirmar la lectura; falta el documento del responsable */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description SIGNATURE_SESSION_REQUIRED: falta la sesión o caducó */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description «Enlace no válido»: token malformado, desconocido, de otra clínica, caducado, usado, anulado o bloqueado (la misma respuesta para todos). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ConsentTemplatesController_list: {
+        parameters: {
+            query?: {
+                /** @description true = solo activas; false = solo inactivas; sin él, todas */
+                active?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentTemplateDto"][];
+                };
+            };
+        };
+    };
+    ConsentTemplatesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateConsentTemplateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentTemplateDto"];
+                };
+            };
+            /** @description Texto vacío o variables desconocidas */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe una plantilla con ese título */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ConsentTemplatesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateConsentTemplateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentTemplateDto"];
+                };
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plantilla no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientConsentsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientConsentSummaryDto"][];
+                };
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientConsentsController_sign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignPatientConsentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientConsentDto"];
+                };
+            };
+            /** @description Falta una firma, no es PNG, supera 200 KB, o falta el tutor; plantilla desactivada */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente, plantilla o plan no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La plantilla cambió desde la vista previa (templateVersion) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientConsentsController_preview: {
+        parameters: {
+            query: {
+                templateId: string;
+                /** @description Plan del paciente que resuelve {{tratamiento}} */
+                treatmentPlanId?: string;
+            };
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentPreviewDto"];
+                };
+            };
+            /** @description Plantilla desactivada */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente, plantilla o plan no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientConsentsController_countersign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CountersignPatientConsentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientConsentSummaryDto"];
+                };
+            };
+            /** @description Falta la firma, no es PNG o supera 200 KB */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo el profesional que se eligió al enviarlo a firmar (y que nombra el texto) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Consentimiento no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Se firmó en la clínica (ya lleva la firma del profesional) o el profesional ya firmó */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientConsentsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientConsentDocumentDto"];
+                };
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Consentimiento no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientConsentsController_retrySignedPdfGeneration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignedConsentPdfRetryDto"];
+                };
+            };
+            /** @description Sin un rol de esta clínica (los cuatro roles pueden reintentar) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Consentimiento no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El PDF firmado ya está archivado o se está generando */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientConsentsController_resendSignedPdfCopy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignedPdfCopyResentDto"];
+                };
+            };
+            /** @description Sin un rol de esta clínica (los cuatro roles pueden reenviar) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Consentimiento no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El PDF firmado todavía no está archivado, o no se pudo armar el enlace de la clínica */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tope de emails a esta persona o de la clínica */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSignedPdfCopiesController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicSignedPdfCopyDto"];
+                };
+            };
+            /** @description Token desconocido, mal formado, caducado, invalidado al reenviar o de otra clínica (el mismo 404 genérico). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiadas peticiones
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicSignedPdfCopiesController_download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignedPdfCopyDownloadDto"];
+                };
+            };
+            /** @description Token desconocido, mal formado, caducado, invalidado al reenviar o de otra clínica (el mismo 404 genérico). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace ya se usó. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiadas peticiones
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     CashSessionsController_settings: {
         parameters: {
             query?: never;
@@ -48202,513 +49551,6 @@ export interface operations {
             };
         };
     };
-    ConsentTemplatesController_list: {
-        parameters: {
-            query?: {
-                /** @description true = solo activas; false = solo inactivas; sin él, todas */
-                active?: boolean;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConsentTemplateDto"][];
-                };
-            };
-        };
-    };
-    ConsentTemplatesController_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateConsentTemplateDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConsentTemplateDto"];
-                };
-            };
-            /** @description Texto vacío o variables desconocidas */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Solo ADMIN */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Ya existe una plantilla con ese título */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ConsentTemplatesController_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateConsentTemplateDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConsentTemplateDto"];
-                };
-            };
-            /** @description Solo ADMIN */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Plantilla no encontrada en esta clínica */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PatientConsentsController_list: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                patientId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PatientConsentSummaryDto"][];
-                };
-            };
-            /** @description Rol sin acceso clínico (recepción) */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Paciente no encontrado en esta clínica */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PatientConsentsController_sign: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                patientId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SignPatientConsentDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PatientConsentDto"];
-                };
-            };
-            /** @description Falta una firma, no es PNG, supera 200 KB, o falta el tutor; plantilla desactivada */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Rol sin acceso clínico (recepción) */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Paciente, plantilla o plan no encontrados en esta clínica */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description La plantilla cambió desde la vista previa (templateVersion) */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PatientConsentsController_preview: {
-        parameters: {
-            query: {
-                templateId: string;
-                /** @description Plan del paciente que resuelve {{tratamiento}} */
-                treatmentPlanId?: string;
-            };
-            header?: never;
-            path: {
-                patientId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConsentPreviewDto"];
-                };
-            };
-            /** @description Plantilla desactivada */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Rol sin acceso clínico (recepción) */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Paciente, plantilla o plan no encontrados en esta clínica */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PatientConsentsController_countersign: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                patientId: string;
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CountersignPatientConsentDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PatientConsentSummaryDto"];
-                };
-            };
-            /** @description Falta la firma, no es PNG o supera 200 KB */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Solo el profesional que se eligió al enviarlo a firmar (y que nombra el texto) */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Consentimiento no encontrado */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Se firmó en la clínica (ya lleva la firma del profesional) o el profesional ya firmó */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PatientConsentsController_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                patientId: string;
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PatientConsentDocumentDto"];
-                };
-            };
-            /** @description Rol sin acceso clínico (recepción) */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Consentimiento no encontrado */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PatientConsentsController_retrySignedPdfGeneration: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                patientId: string;
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SignedConsentPdfRetryDto"];
-                };
-            };
-            /** @description Sin un rol de esta clínica (los cuatro roles pueden reintentar) */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Consentimiento no encontrado */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description El PDF firmado ya está archivado o se está generando */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PatientConsentsController_resendSignedPdfCopy: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                patientId: string;
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SignedPdfCopyResentDto"];
-                };
-            };
-            /** @description Sin un rol de esta clínica (los cuatro roles pueden reenviar) */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Consentimiento no encontrado */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description El PDF firmado todavía no está archivado, o no se pudo armar el enlace de la clínica */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Tope de emails a esta persona o de la clínica */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PublicSignedPdfCopiesController_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PublicSignedPdfCopyDto"];
-                };
-            };
-            /** @description Token desconocido, mal formado, caducado, invalidado al reenviar o de otra clínica (el mismo 404 genérico). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /**
-             * @description Demasiadas peticiones
-             *
-             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
-             */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PublicSignedPdfCopiesController_download: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SignedPdfCopyDownloadDto"];
-                };
-            };
-            /** @description Token desconocido, mal formado, caducado, invalidado al reenviar o de otra clínica (el mismo 404 genérico). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description El enlace ya se usó. */
-            410: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /**
-             * @description Demasiadas peticiones
-             *
-             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
-             */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     PostOpTemplatesController_list: {
         parameters: {
             query?: {
@@ -49064,389 +49906,6 @@ export interface operations {
             };
             /** @description El enlace caducó (30 días desde la entrega). */
             410: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PatientSignatureRequestsController_options: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                patientId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SignatureRequestOptionsDto"];
-                };
-            };
-            /** @description Paciente no encontrado en esta clínica */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PatientSignatureRequestsController_list: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                patientId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SignatureRequestDto"][];
-                };
-            };
-            /** @description Paciente no encontrado en esta clínica */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PatientSignatureRequestsController_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                patientId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateSignatureRequestDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SignatureRequestCreatedDto"];
-                };
-            };
-            /** @description BUDGET sin plan o sin ítems, sin plantilla, plantilla desactivada, profesional no válido o host no válido */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description BUDGET enviado por un rol que no decide el plan (asistente o recepción), o desde una sede no permitida */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Paciente no encontrado en esta clínica */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description La sede no tiene formato regional, o BUDGET de un plan que no está «Presentado» (o ya aceptado). DX-379 (C): BUDGET de un presupuesto vencido: code QUOTE_EXPIRED («El presupuesto venció el {fecha}: actualiza sus precios antes de enviarlo a firmar a distancia.», con quoteValidUntil) */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Sin email, menor sin responsable o paciente dado de baja de los envíos */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PatientSignatureRequestsController_revoke: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                patientId: string;
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SignatureRequestDto"];
-                };
-            };
-            /** @description Enviada desde una sede no permitida */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Paciente no encontrado en esta clínica */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Ya está firmada o anulada */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PublicSignatureController_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PublicSignatureDto"];
-                };
-            };
-            /** @description «Enlace no válido»: token malformado, desconocido, de otra clínica, caducado, usado, anulado o bloqueado (la misma respuesta para todos). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PublicSignatureController_code: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PublicSignatureDto"];
-                };
-            };
-            /** @description «Enlace no válido»: token malformado, desconocido, de otra clínica, caducado, usado, anulado o bloqueado (la misma respuesta para todos). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description No se pudo encolar el email */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PublicSignatureController_verify: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["VerifySignatureCodeDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SignatureSessionDto"];
-                };
-            };
-            /** @description SIGNATURE_CODE_INVALID (con attemptsLeft), SIGNATURE_CODE_EXPIRED o SIGNATURE_LINK_LOCKED (el quinto fallo) */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description «Enlace no válido»: token malformado, desconocido, de otra clínica, caducado, usado, anulado o bloqueado (la misma respuesta para todos). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PublicSignatureController_document: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description La sesión que devolvió POST …/verify */
-                "X-Signature-Session": string;
-            };
-            path: {
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PublicSignatureDocumentDto"];
-                };
-            };
-            /** @description SIGNATURE_SESSION_REQUIRED: falta la sesión o caducó */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description «Enlace no válido»: token malformado, desconocido, de otra clínica, caducado, usado, anulado o bloqueado (la misma respuesta para todos). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PublicSignatureController_sign: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description La sesión que devolvió POST …/verify */
-                "X-Signature-Session": string;
-            };
-            path: {
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SignPublicSignatureDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PublicSignedCopyDto"];
-                };
-            };
-            /** @description Firma en blanco, no PNG o de más de 200 KB; sin confirmar la lectura; falta el documento del responsable */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description SIGNATURE_SESSION_REQUIRED: falta la sesión o caducó */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description «Enlace no válido»: token malformado, desconocido, de otra clínica, caducado, usado, anulado o bloqueado (la misma respuesta para todos). */
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };

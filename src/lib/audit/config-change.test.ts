@@ -11,6 +11,19 @@ const configChangeItems = (metadata: Parameters<typeof items_>[0]) =>
   items_(metadata, fmt);
 
 describe("configChangeItems (DX-360)", () => {
+  it("DX-561: el seguimiento automático de presupuestos, con los días y la franja con el reloj de la sede", () => {
+    const items = configChangeItems({
+      reason: "QUOTE_FOLLOW_UP_SETTINGS_UPDATED",
+      configChange: {
+        before: { enabled: false, offsetsDays: [3, 10, 21], sendFromHour: 9, sendUntilHour: 19 },
+        after: { enabled: true, offsetsDays: [2, 7], sendFromHour: 8, sendUntilHour: 24 },
+      },
+    });
+    expect(configChangeText(items!)).toBe(
+      "Seguimiento automático activado: No → Sí · Días de los avisos: 3, 10, 21 días → 2, 7 días · Desde: 09:00 → 08:00 · Hasta: 19:00 → medianoche",
+    );
+  });
+
   it("DX-568: el resumen semanal, con día, hora y cuántos destinatarios (no sus ids)", () => {
     const items = configChangeItems({
       reason: "WEEKLY_DIGEST_SETTINGS",

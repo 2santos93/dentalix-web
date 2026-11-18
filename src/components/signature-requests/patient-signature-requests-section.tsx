@@ -43,6 +43,8 @@ const copy = {
   listLabel: 'Consentimientos enviados a firmar',
   sent: (when: string, to: string, by: string | null) =>
     by ? `Enviado el ${when} a ${to} por ${by}` : `Enviado el ${when} a ${to}`,
+  // DX-561: lo mandó el seguimiento automático de presupuestos (sin usuario).
+  followUpSender: 'Seguimiento automático',
   signer: (name: string, guardian: boolean) =>
     guardian ? `Firma ${name}, responsable del paciente` : `Firma ${name}`,
   professional: (name: string) => `Profesional: ${name}`,
@@ -94,7 +96,7 @@ function at(iso: string | null | undefined, clock: SedeClock | null): string {
 /** Las líneas de evidencia de una solicitud, en orden de lo que pasó. */
 function evidence(r: SignatureRequest, clock: SedeClock | null, userId: string | null): string[] {
   const lines = [
-    copy.sent(at(r.sentAt, clock), r.destinationMasked, r.sentByName),
+    copy.sent(at(r.sentAt, clock), r.destinationMasked, r.origin === 'FOLLOW_UP' ? copy.followUpSender : r.sentByName),
     copy.signer(r.signerName, r.signerType === 'GUARDIAN'),
     copy.professional(r.professionalName),
   ];

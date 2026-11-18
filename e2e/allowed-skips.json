@@ -86,6 +86,20 @@
       "reason": "Sin E2E_DATABASE_URL no se puede fijar el logo de la clínica."
     },
     {
+      "file": "e2e/quote-follow-up.spec.ts",
+      "title": "recepción ve «Sin avisos» en Presupuestos por seguir y pausa y reanuda el seguimiento (1440)",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede fechar la presentación en el pasado",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede fechar la presentación en el pasado (la lista empieza a los 7 días)."
+    },
+    {
+      "file": "e2e/quote-follow-up.spec.ts",
+      "title": "recepción ve «Sin avisos» en Presupuestos por seguir y pausa y reanuda el seguimiento (390)",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede fechar la presentación en el pasado",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede fechar la presentación en el pasado (la lista empieza a los 7 días)."
+    },
+    {
       "file": "e2e/treatment-plan-alternatives.spec.ts",
       "title": "recepción sigue los presupuestos presentados y marca uno como rechazado (escritorio)",
       "annotation": "E2E_DATABASE_URL no definido: no se puede fechar la presentación en el pasado",

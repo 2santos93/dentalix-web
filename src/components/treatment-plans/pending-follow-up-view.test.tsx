@@ -13,7 +13,15 @@ import { fetchClinicName } from '@/lib/clinic-branding';
 import { ApiError } from '@/lib/api/client';
 import { clinicLocation } from '@/lib/test/locations';
 import { dateIn, STAMP_FORMATS, STAMP_SEDES } from '@/lib/test/stamp';
+import { pauseQuoteFollowUp, resumeQuoteFollowUp } from '@/lib/treatment-plans/quote-follow-up-api';
+import { notifyError } from '@/components/errors/notify';
 
+jest.mock('../../lib/treatment-plans/quote-follow-up-api', () => ({
+  ...jest.requireActual('../../lib/treatment-plans/quote-follow-up-api'),
+  pauseQuoteFollowUp: jest.fn(),
+  resumeQuoteFollowUp: jest.fn(),
+}));
+jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 jest.mock('../../lib/treatment-plans/plan-options-api', () => ({
   listPendingFollowUp: jest.fn(),
   rejectPlan: jest.fn(),
@@ -48,6 +56,7 @@ function item(overrides: Partial<PendingFollowUpItem> = {}): PendingFollowUpItem
     currency: 'USD',
     total: 5300000,
     itemCount: 2,
+    followUp: { lastStep: null, lastSentAt: null, lastStatus: null, lastReason: null, paused: false },
     ...overrides,
   };
 }
@@ -414,5 +423,136 @@ describe('PendingFollowUpView: cada fila con la sede donde se presentó (DX-354b
     const row = await screen.findByRole('row', { name: /Carolina Ruiz/ });
     expect(row).not.toHaveTextContent('2026');
     expect(screen.queryByText(/No se pudo saber el formato regional/)).not.toBeInTheDocument();
+  });
+  describe('DX-561: seguimiento automático', () => {
+    const sentAt = '2026-11-12T15:00:00.000Z';
+    const followUp = (over: Partial<PendingFollowUpItem['followUp']> = {}) => ({
+      lastStep: null,
+      lastSentAt: null,
+      lastStatus: null,
+      lastReason: null,
+      paused: false,
+      ...over,
+    });
+    const at = (over: Partial<PendingFollowUpItem> = {}) => item({ presentedLocationId: STAMP_SEDES.caracas.id, ...over });
+
+    beforeEach(() => {
+      mockedLocations.mockResolvedValue([STAMP_SEDES.caracas]);
+      jest.mocked(pauseQuoteFollowUp).mockReset();
+      jest.mocked(resumeQuoteFollowUp).mockReset();
+      jest.mocked(notifyError).mockReset();
+    });
+
+    it('columna «Último aviso»: sin avisos, aviso con su fecha de la sede, en pausa y por qué no salió', async () => {
+      mockedList.mockResolvedValue(
+        page([
+          at({ planId: 'a', optionGroupId: 'a', patientName: 'Ana Pérez' }),
+          at({
+            planId: 'b',
+            optionGroupId: 'b',
+            patientName: 'Luis Rojas',
+            followUp: followUp({ lastStep: 2, lastStatus: 'SENT', lastSentAt: sentAt }),
+          }),
+          at({
+            planId: 'c',
+            optionGroupId: 'c',
+            patientName: 'Marta Gil',
+            followUp: followUp({ lastStep: 1, lastStatus: 'SENT', lastSentAt: sentAt, paused: true }),
+          }),
+          at({
+            planId: 'd',
+            optionGroupId: 'd',
+            patientName: 'Pedro Sosa',
+            followUp: followUp({ lastStep: 2, lastStatus: 'SKIPPED', lastReason: 'CHANNEL_WHATSAPP', lastSentAt: sentAt }),
+          }),
+        ]),
+      );
+      render(<PendingFollowUpView token="tok" />);
+      expect(await screen.findByRole('columnheader', { name: 'Último aviso' })).toBeInTheDocument();
+      const status = (name: string) => within(screen.getByRole('row', { name: new RegExp(name) })).getByTestId('follow-up-status');
+      await screen.findByRole('row', { name: /Ana Pérez/ });
+      expect(status('Ana Pérez')).toHaveTextContent('Sin avisos');
+      await waitFor(() => expect(status('Luis Rojas')).toHaveTextContent(`Aviso 2 · ${dateIn('caracas', sentAt)}`));
+      expect(status('Marta Gil')).toHaveTextContent('En pausa');
+      expect(status('Pedro Sosa')).toHaveTextContent('Aviso 2 no salió: su canal es WhatsApp');
+      const pedro = screen.getByRole('row', { name: /Pedro Sosa/ });
+      // La explicación se lee también sin ratón y debajo, el último que sí salió.
+      expect(pedro).toHaveTextContent(/escríbele con «WhatsApp»/);
+      expect(pedro).toHaveTextContent(`Último enviado: ${dateIn('caracas', sentAt)}`);
+    });
+
+    it('«Pausar seguimiento» en el «⋯» pausa la presentación entera y la fila dice «En pausa»', async () => {
+      const user = userEvent.setup();
+      const optionB = at({ planId: 'plan-b', optionLabel: 'Opción B: puente' });
+      mockedList.mockResolvedValue(page([at(), optionB], 1));
+      jest.mocked(pauseQuoteFollowUp).mockResolvedValue({
+        planId: 'plan-a',
+        groupId: 'plan-a',
+        paused: true,
+        pausedAt: '2026-11-18T12:00:00.000Z',
+        pausedById: 'u-1',
+      });
+      render(<PendingFollowUpView token="tok" />);
+      const row = await screen.findByRole('row', { name: /Carolina Ruiz/ });
+      await user.click(within(row).getByRole('button', { name: 'Acciones de Carolina Ruiz' }));
+      await user.click(await screen.findByRole('menuitem', { name: 'Pausar seguimiento' }));
+      await waitFor(() => expect(pauseQuoteFollowUp).toHaveBeenCalledWith('tok', 'plan-a'));
+      await waitFor(() => expect(within(row).getByTestId('follow-up-status')).toHaveTextContent('En pausa'));
+      expect(screen.getByText(/Seguimiento automático en pausa para Carolina Ruiz/)).toBeInTheDocument();
+      await user.click(within(row).getByRole('button', { name: 'Acciones de Carolina Ruiz' }));
+      expect(await screen.findByRole('menuitem', { name: 'Reanudar seguimiento' })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: 'Pausar seguimiento' })).not.toBeInTheDocument();
+    });
+
+    it('«Reanudar seguimiento»; un 409 dice el porqué de la API y relee la lista', async () => {
+      const user = userEvent.setup();
+      mockedList.mockResolvedValue(page([at({ followUp: followUp({ paused: true }) })]));
+      const message = 'El seguimiento automático de este presupuesto no está en pausa.';
+      jest.mocked(resumeQuoteFollowUp).mockRejectedValue(new ApiError(409, message, { messages: [message] }));
+      render(<PendingFollowUpView token="tok" />);
+      const row = await screen.findByRole('row', { name: /Carolina Ruiz/ });
+      await user.click(within(row).getByRole('button', { name: 'Acciones de Carolina Ruiz' }));
+      await user.click(await screen.findByRole('menuitem', { name: 'Reanudar seguimiento' }));
+      await waitFor(() => expect(notifyError).toHaveBeenCalledWith(message));
+      await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
+    });
+
+    it('un 403 de sede ajena al pausar muestra el mensaje de la API, sin cambiar la fila', async () => {
+      const user = userEvent.setup();
+      mockedList.mockResolvedValue(page([at()]));
+      const message = 'No tienes acceso a esta sede.';
+      jest.mocked(pauseQuoteFollowUp).mockRejectedValue(new ApiError(403, message, { messages: [message] }));
+      render(<PendingFollowUpView token="tok" />);
+      const row = await screen.findByRole('row', { name: /Carolina Ruiz/ });
+      await user.click(within(row).getByRole('button', { name: 'Acciones de Carolina Ruiz' }));
+      await user.click(await screen.findByRole('menuitem', { name: 'Pausar seguimiento' }));
+      await waitFor(() => expect(notifyError).toHaveBeenCalledWith(message));
+      expect(within(row).getByTestId('follow-up-status')).toHaveTextContent('Sin avisos');
+      expect(screen.queryByText('Tu rol no tiene acceso a esta lista.')).not.toBeInTheDocument();
+    });
+
+    it('en el teléfono, el estado va en la tarjeta', async () => {
+      const original = window.matchMedia;
+      window.matchMedia = ((query: string) => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      })) as unknown as typeof window.matchMedia;
+      try {
+        mockedList.mockResolvedValue(page([at({ followUp: followUp({ lastStep: 1, lastStatus: 'SENT', lastSentAt: sentAt }) })]));
+        render(<PendingFollowUpView token="tok" />);
+        const list = await screen.findByRole('list', { name: 'Presupuestos presentados sin aceptar' });
+        await waitFor(() =>
+          expect(within(list).getByTestId('follow-up-status')).toHaveTextContent(`Aviso 1 · ${dateIn('caracas', sentAt)}`),
+        );
+      } finally {
+        window.matchMedia = original;
+      }
+    });
   });
 });
