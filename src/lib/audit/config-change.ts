@@ -173,6 +173,33 @@ function weeklyDigestValue(
   return null;
 }
 
+/**
+ * DX-561: el seguimiento automático de presupuestos (`enabled`, los días y la
+ * franja). También comparte `enabled` con otros ajustes: va por su `reason`.
+ */
+const QUOTE_FOLLOW_UP_REASON = "QUOTE_FOLLOW_UP_SETTINGS_UPDATED";
+const QUOTE_FOLLOW_UP_LABELS: Record<string, string> = {
+  enabled: "Seguimiento automático activado",
+  offsetsDays: "Días de los avisos",
+  sendFromHour: "Desde",
+  sendUntilHour: "Hasta",
+};
+const QUOTE_FOLLOW_UP_ORDER = Object.keys(QUOTE_FOLLOW_UP_LABELS);
+
+function quoteFollowUpValue(
+  field: string,
+  value: ConfigValue | undefined,
+  fmt: RegionalFormat | null,
+): string | null {
+  if (field === "offsetsDays" && Array.isArray(value))
+    return value.length === 0 ? null : `${value.join(", ")} días`;
+  if ((field === "sendFromHour" || field === "sendUntilHour") && typeof value === "number" && Number.isInteger(value)) {
+    if (value === 24) return "medianoche";
+    if (value >= 0 && value <= 23) return fmt ? fmt.clock(value, 0) : `${value} h`;
+  }
+  return null;
+}
+
 /** Eventos de configuración de DX-360 (también los que solo traen `changedFields`). */
 const CONFIG_REASON =
   /^(LOCATION_CREATED|DOMAIN_REGISTERED|PRIVACY_POLICY_PUBLISHED|REMINDER_SETTINGS_UPDATED|INVENTORY_MOVEMENT_RECORDED|RECALL_TYPE_TRIGGERS_UPDATED|(APPOINTMENT_TYPE|RECALL_TYPE|PAYER|CONSENT_TEMPLATE|PRESCRIPTION_TEMPLATE|INVENTORY_ITEM)_(CREATED|UPDATED|DELETED))$/;
@@ -239,13 +266,17 @@ function withUnit(field: string, text: string | null): string {
   return unit ? `${text} ${unit}` : text;
 }
 
-function byDigestOrder(a: string, b: string): number {
-  const rank = (f: string) => {
-    const i = WEEKLY_DIGEST_ORDER.indexOf(f);
-    return i === -1 ? WEEKLY_DIGEST_ORDER.length : i;
+function byOrder(order: readonly string[]) {
+  return (a: string, b: string): number => {
+    const rank = (f: string) => {
+      const i = order.indexOf(f);
+      return i === -1 ? order.length : i;
+    };
+    return rank(a) - rank(b);
   };
-  return rank(a) - rank(b);
 }
+const byDigestOrder = byOrder(WEEKLY_DIGEST_ORDER);
+const byQuoteFollowUpOrder = byOrder(QUOTE_FOLLOW_UP_ORDER);
 
 function byScreenOrder(a: string, b: string): number {
   const rank = (f: string) => {
@@ -272,12 +303,18 @@ export function configChangeItems(
   const before = change?.before;
   const after = change?.after;
   const digest = metadata.reason === WEEKLY_DIGEST_REASON;
+  const followUp = metadata.reason === QUOTE_FOLLOW_UP_REASON;
+  const order = digest ? byDigestOrder : followUp ? byQuoteFollowUpOrder : byScreenOrder;
   const fields = [
     ...new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})]),
-  ].sort(digest ? byDigestOrder : byScreenOrder);
+  ].sort(order);
   const valueOf = (field: string, value: ConfigValue | undefined) =>
-    (digest ? weeklyDigestValue(field, value, fmt) : null) ?? bare(field, value, fmt);
-  const labelOf = (field: string) => (digest ? WEEKLY_DIGEST_LABELS[field] : undefined) ?? fieldLabel(field);
+    (digest ? weeklyDigestValue(field, value, fmt) : null) ??
+    (followUp ? quoteFollowUpValue(field, value, fmt) : null) ??
+    bare(field, value, fmt);
+  const labelOf = (field: string) =>
+    (digest ? WEEKLY_DIGEST_LABELS[field] : followUp ? QUOTE_FOLLOW_UP_LABELS[field] : undefined) ??
+    fieldLabel(field);
 
   const items: ConfigChangeItem[] = fields.map((field) => {
     const label = labelOf(field);
@@ -305,7 +342,7 @@ export function configChangeItems(
   // Lo que la API no guarda (texto libre o largo) figura solo en changedFields.
   const hidden = (metadata.changedFields ?? [])
     .filter((f) => !fields.includes(f))
-    .sort(digest ? byDigestOrder : byScreenOrder);
+    .sort(order);
   for (const field of hidden)
     items.push({ field, label: labelOf(field), kind: "hidden" });
 
