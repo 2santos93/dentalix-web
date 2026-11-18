@@ -37,6 +37,7 @@ import {
   ScanBarcode,
   ShieldCheck,
   UserCheck,
+  UserPlus,
   Languages,
   MailCheck,
   UserRound,
@@ -59,6 +60,7 @@ import { canManageRecallTypes } from '@/lib/recall/recall-api';
 import { canManageSlotOfferSettings } from '@/lib/appointments/slot-offer-settings-api';
 import { canManageOnlineBooking } from '@/lib/online-booking/online-booking-api';
 import { canManageChairs } from '@/lib/chairs/chairs-api';
+import { canManageLeadSettings } from '@/lib/leads/leads-api';
 import { canManageEquipment } from '@/lib/equipment/equipment-api';
 import { canManagePayers } from '@/lib/payers/payers-api';
 import { canManagePriceLists } from '@/lib/price-lists/price-lists-api';
@@ -245,6 +247,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'La página donde los pacientes piden o reservan cita por internet y qué tratamientos ofrece.',
         icon: CalendarCheck2,
         visible: canManageOnlineBooking,
+      },
+      // DX-556: motivos de los prospectos y conservación de los perdidos.
+      {
+        href: '/settings/prospectos',
+        label: 'Prospectos',
+        description: 'Motivos de interés y de pérdida de los prospectos, y cuánto se conservan los perdidos.',
+        icon: UserPlus,
+        visible: canManageLeadSettings,
       },
       // DX-026.
       {

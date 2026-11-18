@@ -105,6 +105,7 @@ const QUEUE_ITEMS: Record<WorkQueueKey, WorkQueueItem> = {
   CLOSING_QUEUE: { key: 'CLOSING_QUEUE', status: 'OK', count: 3 },
   ANAMNESIS_REVIEW: { key: 'ANAMNESIS_REVIEW', status: 'OK', count: 5 },
   POST_OP_CHECKS: { key: 'POST_OP_CHECKS', status: 'OK', count: 1 },
+  LEADS_UNCONTACTED: { key: 'LEADS_UNCONTACTED', status: 'OK', count: 2 },
   QUOTE_FOLLOW_UP: { key: 'QUOTE_FOLLOW_UP', status: 'OK', count: 2 },
   ACCEPTED_UNSCHEDULED: { key: 'ACCEPTED_UNSCHEDULED', status: 'OK', count: 0 },
   WAITLIST: { key: 'WAITLIST', status: 'OK', count: 1 },

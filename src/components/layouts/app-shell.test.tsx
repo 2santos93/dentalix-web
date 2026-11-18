@@ -352,8 +352,9 @@ describe('AppShell', () => {
       await nav.findByRole('link', { name: 'Inicio' });
       expect(groupsOf(nav)).toEqual([
         [null, ['/dashboard', '/agenda', '/patients']],
-        ['Atención', ['/agenda/pendiente-de-cerrar', '/presupuestos', '/anamnesis-por-revisar']],
-        ['Finanzas', ['/caja', '/caja/cartera', '/caja/gastos', '/caja/descuentos', '/reportes']],
+        // DX-556: «Prospectos» entra en Atención y «Descuentos» deja la barra (900 px).
+        ['Atención', ['/agenda/pendiente-de-cerrar', '/presupuestos', '/prospectos', '/anamnesis-por-revisar']],
+        ['Finanzas', ['/caja', '/caja/cartera', '/caja/gastos', '/reportes']],
         ['Clínica', ['/catalog', '/inventory']],
         ['Administración', ['/staff', '/settings']],
       ]);
@@ -366,7 +367,7 @@ describe('AppShell', () => {
       await nav.findByRole('link', { name: 'Caja' });
       expect(groupsOf(nav)).toEqual([
         [null, ['/dashboard', '/agenda', '/patients']],
-        ['Atención', ['/agenda/pendiente-de-cerrar', '/presupuestos']],
+        ['Atención', ['/agenda/pendiente-de-cerrar', '/presupuestos', '/prospectos']],
         ['Finanzas', ['/caja', '/caja/cartera', '/reportes']],
         ['Administración', ['/settings']],
       ]);

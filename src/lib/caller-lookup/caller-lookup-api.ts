@@ -10,6 +10,8 @@ import type { components } from '@/lib/api/schema';
  */
 export type CallerMatch = components['schemas']['CallerMatchDto'];
 export type CallerLookupResponse = components['schemas']['CallerLookupResponseDto'];
+/** DX-556: un prospecto con ese número (solo llega a ADMIN y RECEPTION). */
+export type CallerLeadMatch = components['schemas']['CallerLeadMatchDto'];
 
 /** Con menos dígitos no se identifica a nadie (la API responde 400 igual). */
 export const MIN_CALLER_DIGITS = 7;
@@ -27,6 +29,8 @@ export interface CallerLookupResult {
   matches: CallerMatch[];
   /** Hay más pacientes con ese número que los mostrados. */
   truncated: boolean;
+  /** DX-556: prospectos con ese número en las sedes del usuario (vacío para los roles clínicos). */
+  leads?: CallerLeadMatch[];
 }
 
 export async function lookupCaller(token: string, phone: string): Promise<CallerLookupResult> {
@@ -35,5 +39,5 @@ export async function lookupCaller(token: string, phone: string): Promise<Caller
     body: { phone: phone.trim() },
     token,
   });
-  return { matches: res.matches, truncated: res.truncated === true };
+  return { matches: res.matches, truncated: res.truncated === true, leads: res.leads ?? [] };
 }

@@ -3,7 +3,12 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Phone, UserPlus } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { hasEnoughCallerDigits, lookupCaller, type CallerMatch } from '@/lib/caller-lookup/caller-lookup-api';
+import {
+  hasEnoughCallerDigits,
+  lookupCaller,
+  type CallerLeadMatch,
+  type CallerMatch,
+} from '@/lib/caller-lookup/caller-lookup-api';
 import { clearPrefillPhone, setPrefillPhone } from '@/lib/patients/prefill-phone';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import type { ClinicRole } from '@/lib/me/me-api';
@@ -16,6 +21,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { CallerCard } from './caller-card';
+import { CallerLeads } from './caller-leads';
 import { CallerScheduleDialog } from './caller-schedule-dialog';
 
 export const callerLookupCopy = {
@@ -41,7 +47,7 @@ type State =
   | { kind: 'idle' }
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
-  | { kind: 'done'; matches: CallerMatch[]; truncated: boolean };
+  | { kind: 'done'; matches: CallerMatch[]; truncated: boolean; leads: CallerLeadMatch[] };
 
 /**
  * «¿Quién llama?» (DX-224): diálogo para pegar o escribir un número, abierto
@@ -98,8 +104,8 @@ export function CallerLookupDialog({
     async function run() {
       setState({ kind: 'loading' });
       try {
-        const { matches, truncated } = await lookupCaller(token!, search!.phone);
-        if (!cancelled) setState({ kind: 'done', matches, truncated });
+        const { matches, truncated, leads } = await lookupCaller(token!, search!.phone);
+        if (!cancelled) setState({ kind: 'done', matches, truncated, leads: leads ?? [] });
       } catch (err: unknown) {
         if (!cancelled) {
           setState({
@@ -119,6 +125,7 @@ export function CallerLookupDialog({
 
   const matches = state.kind === 'done' ? state.matches : [];
   const truncated = state.kind === 'done' && state.truncated;
+  const leads = state.kind === 'done' ? state.leads : [];
   const stamp = useSedeStamp(
     token ?? '',
     matches.flatMap((m) => [m.nextAppointment?.location.id, m.lastVisit?.location.id]),
@@ -273,6 +280,9 @@ export function CallerLookupDialog({
                 ) : null}
                 <SedeStampNote stamp={stamp} />
               </>
+            ) : null}
+            {state.kind === 'done' && leads.length > 0 ? (
+              <CallerLeads leads={leads} onOpen={() => onOpenChange(false)} />
             ) : null}
           </div>
         </DialogContent>

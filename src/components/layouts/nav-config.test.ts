@@ -35,3 +35,17 @@ describe('menú con permisos extra (DX-090)', () => {
     expect(canSee(item('/reportes'), 'DENTIST')).toBe(true);
   });
 });
+
+describe('DX-556: Prospectos en Atención', () => {
+  it('lo ven ADMIN y recepción (LEAD_ROLES); los clínicos, no', () => {
+    expect(hrefs('ADMIN')).toContain('/prospectos');
+    expect(hrefs('RECEPTION')).toContain('/prospectos');
+    expect(hrefs('DENTIST')).not.toContain('/prospectos');
+    expect(hrefs('ASSISTANT')).not.toContain('/prospectos');
+  });
+
+  it('ADMIN sigue con 15 entradas: «Descuentos» deja la barra (presupuesto de 900 px)', () => {
+    expect(hrefs('ADMIN')).toHaveLength(15);
+    expect(hrefs('ADMIN')).not.toContain('/caja/descuentos');
+  });
+});
