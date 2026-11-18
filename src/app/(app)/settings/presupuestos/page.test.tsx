@@ -24,6 +24,11 @@ describe('/settings/presupuestos (DX-379)', () => {
     render(<QuoteSettingsPage />);
     expect(screen.getByRole('heading', { level: 1, name: 'Presupuestos' })).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: 'Cambiar la validez del presupuesto' })).toBeInTheDocument();
+    // DX-561: la entrada al seguimiento automático por sede.
+    expect(screen.getByRole('link', { name: 'Configurar el seguimiento automático' })).toHaveAttribute(
+      'href',
+      '/settings/presupuestos/seguimiento',
+    );
   });
 
   it.each(['DENTIST', 'ASSISTANT', 'RECEPTION'])('%s la ve en solo lectura', async (role) => {
@@ -32,5 +37,6 @@ describe('/settings/presupuestos (DX-379)', () => {
     expect(await screen.findByTestId('quote-validity-days')).toHaveTextContent('30 días');
     expect(screen.getByText('Lo cambia administración.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Cambiar/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /seguimiento automático/ })).not.toBeInTheDocument();
   });
 });

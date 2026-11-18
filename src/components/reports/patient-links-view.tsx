@@ -68,6 +68,8 @@ export const patientLinksCopy = {
   howMeta: '% sobre enviados',
   howItems: [
     'Cuentan los enlaces ENVIADOS en las fechas elegidas (el día de la sede del enlace). Abiertos, completados y caducados son de esos mismos enlaces, tal como están hoy.',
+    // DX-561: los enlaces del seguimiento automático se miden en su bloque de Reportes › Presupuestos.
+    'Firma de consentimiento y aceptación de presupuesto: solo los enviados por la clínica. Los del seguimiento automático de presupuestos se miden en Reportes › Presupuestos.',
     'Abierto: el paciente abrió la página del enlace. Completar cuenta como abrir. En la anamnesis, la apertura se registra al ver el cuestionario; en la firma, al pedir el código.',
     'Completado: anamnesis enviada, consentimiento firmado, presupuesto aceptado, o cita respondida (confirmar, cancelar o «llámenme»).',
     'Caducado sin abrir: pasó su fecha de caducidad sin que el paciente lo abriera. Un enlace anulado o reemplazado por otro no cuenta: no caducó.',
