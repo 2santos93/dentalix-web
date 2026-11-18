@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   Calculator,
   Copy,
@@ -132,6 +132,8 @@ interface PlanFinancingProps {
   stamp: SedePainters;
   /** Tras firmar con una opción: el padre recarga el plan (y su plan de cuotas). */
   onAccepted: (quote: PlanQuote) => void;
+  /** DX-560: el `?cuotas=` de lo simulado (o `null` sin simulación vigente), para «Presentar». */
+  onFinancingChange?: (financing: string | null) => void;
 }
 
 /**
@@ -148,6 +150,7 @@ export function PlanFinancing({
   role,
   stamp,
   onAccepted,
+  onFinancingChange,
 }: PlanFinancingProps) {
   const baseId = useId();
   const [open, setOpen] = useState(false);
@@ -275,6 +278,16 @@ export function PlanFinancing({
         )}`
       : null;
   const mayAccept = canAcceptPlan(role);
+  // DX-560: «Presentar» lleva las mismas cuotas que se imprimirían.
+  const financingQuery = ready && simulation ? encodeFinancing(simulation.scenarios.map(termsOf)) : null;
+  // Solo cuando cambia lo simulado (el padre pasa una función nueva en cada render).
+  const onFinancingChangeRef = useRef(onFinancingChange);
+  useEffect(() => {
+    onFinancingChangeRef.current = onFinancingChange;
+  });
+  useEffect(() => {
+    onFinancingChangeRef.current?.(financingQuery);
+  }, [financingQuery]);
 
   async function handleCopy() {
     if (!message) return;

@@ -61,6 +61,9 @@ const HEX_ALLOWED: Record<string, string> = {
   'components/shared/signature-pad/signature-pad.tsx': 'tinta y guía de la firma sobre el lienzo blanco',
   'components/signature-requests/public-budget.tsx': 'presupuesto público con aspecto de documento impreso',
   'components/signature-requests/public-signature-view.tsx': 'documento público para firmar, como impreso',
+  // DX-560: el tono `paper` de la presentación del plan es el del presupuesto público.
+  'components/odontogram/compact-odontogram.tsx': 'odontograma compacto del presupuesto público, como impreso',
+  'components/treatment-plans/plan-presentation-visits.tsx': 'visitas del presupuesto público, como impreso',
 };
 
 // Un hex de color en código (no en un comentario: `#101` de «paciente #101»).

@@ -623,6 +623,58 @@
 }
 
 /*
+ * Print CSS de «Presentar» el plan (DX-560, /presentar/patients/[id]/
+ * treatment-plans/[planId]): UNA hoja A4 por vista, con nombre en `html` como
+ * el presupuesto. Ninguna visita ni el total se parten entre hojas; en papel,
+ * más apretado que en pantalla, y con la paleta clara también en modo oscuro.
+ */
+@page presentation {
+  size: A4;
+  margin: 10mm 12mm;
+}
+@media print {
+  html:has(.presentation-print-page) {
+    page: presentation;
+  }
+  .presentation-print-root {
+    color-scheme: light;
+    --color-canvas: #F7F9FC;
+    --color-surface: #FFFFFF;
+    --color-surface-sunken: #F1F5F8;
+    --color-border-subtle: #E5E9EE;
+    --color-border: #D8DFE6;
+    --color-border-input: #838D98;
+    --color-ink: #151C26;
+    --color-muted: #5B6472;
+    --color-faint: #6D7582;
+    font-size: 9pt;
+    gap: 8pt;
+  }
+  .presentation-print-root,
+  .presentation-print-root * {
+    visibility: visible !important;
+  }
+  .presentation-print-root .presentation-visits {
+    gap: 6pt;
+  }
+  .presentation-print-root .presentation-visit {
+    padding: 6pt 8pt;
+    gap: 4pt;
+    break-inside: avoid;
+  }
+  .presentation-print-root .presentation-visit li {
+    padding-block: 2pt;
+  }
+  .presentation-print-root [data-testid='compact-odontogram'] {
+    max-width: 48mm;
+  }
+  .presentation-print-root .presentation-totals,
+  .presentation-print-root [data-testid='presentation-financing'] {
+    break-inside: avoid;
+  }
+}
+
+/*
  * Print CSS del informe de cierre de caja (DX-027, /print/cash-sessions/[id]).
  * Mismo criterio que el presupuesto: página A4 con nombre en `html` (ninguna
  * caja posterior abre una hoja en blanco), documento en flujo y la visibilidad

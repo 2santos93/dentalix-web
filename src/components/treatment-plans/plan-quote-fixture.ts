@@ -51,9 +51,14 @@ export function planQuoteFixture(overrides: Partial<PlanQuote> = {}): PlanQuote 
     totals: [{ currency: 'VES', gross: 3650000, discount: 350000, net: 3300000, agreementSaving: 0 }],
     contentHash: 'c'.repeat(64),
     acceptance: null,
-    // DX-560 (API): la presentación al paciente; aquí vacía (ajuste mínimo de
-    // DX-016 para compilar con el esquema de main hasta que entre la web de DX-560).
-    presentation: { language: 'es', items: [] },
+    // DX-560: el texto para el paciente de cada línea, fuera de lo sellado.
+    presentation: {
+      language: 'es',
+      items: [
+        { itemId: 'i1', visit: 1, label: 'Implante', language: 'es' },
+        { itemId: 'i2', visit: 1, label: 'Resina', language: 'es' },
+      ],
+    },
     ...overrides,
   };
 }

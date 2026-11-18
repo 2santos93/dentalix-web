@@ -519,7 +519,10 @@ export function PlanQuoteDocument({
                   <span className="block font-medium">
                     {copy.acceptedBy(acceptance.signerName, doc.dateTime(acceptance.acceptedAt))}
                   </span>
-                  <span className="text-[#4b5563]">{copy.recordedBy(acceptance.acceptedByName)}</span>
+                  {/* DX-101: la copia del portal del paciente no trae quién la registró. */}
+                  {acceptance.acceptedByName ? (
+                    <span className="text-[#4b5563]">{copy.recordedBy(acceptance.acceptedByName)}</span>
+                  ) : null}
                 </>
               )}
               {/* DX-379 (C): cómo se aceptó un presupuesto vencido, con las fechas de la sede. */}
@@ -562,7 +565,7 @@ export function PlanQuoteDocument({
           {copy.footerHash}:{' '}
           <span className="break-all font-mono text-[#111827]">{quote.contentHash}</span>
         </p>
-        {acceptance ? (
+        {acceptance && acceptance.acceptanceHash ? (
           <p>
             {copy.footerAcceptanceHash}:{' '}
             <span className="break-all font-mono text-[#111827]">{acceptance.acceptanceHash}</span>

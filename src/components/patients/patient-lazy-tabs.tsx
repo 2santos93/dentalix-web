@@ -146,3 +146,9 @@ export const PatientRetentionDialogs = dynamic(
   () => import('@/components/patients/patient-retention-dialogs').then((m) => m.PatientRetentionDialogs),
   { ssr: false },
 );
+// DX-101: «Compartir con el paciente» (ADMIN y recepción, desde el menú «⋯»).
+// Se monta solo al abrirlo: su trozo no entra en la primera carga de la ficha.
+export const PatientAccessDialog = dynamic(
+  () => import('@/components/patient-access/patient-access-dialog').then((m) => m.PatientAccessDialog),
+  { ssr: false },
+);

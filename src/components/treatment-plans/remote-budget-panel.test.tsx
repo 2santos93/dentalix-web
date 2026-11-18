@@ -21,6 +21,14 @@ jest.mock('../../lib/signature-requests/signature-requests-api', () => ({
   createSignatureRequest: jest.fn(),
 }));
 
+// DX-560: la segunda moneda del enlace se elige del catálogo de monedas.
+jest.mock('../../lib/reference/currencies-api', () => ({
+  listCurrencies: jest.fn().mockResolvedValue([
+    { code: 'USD', name: 'Dólar', symbol: 'US$' },
+    { code: 'VES', name: 'Bolívar', symbol: 'Bs.' },
+  ]),
+}));
+
 // Las horas, en el reloj de la sede (Caracas, 12 h), no del navegador.
 jest.mock('../../lib/locations/locations-api', () => ({
   listLocations: jest
@@ -309,5 +317,52 @@ describe('Enviar a aceptar el presupuesto (DX-415)', () => {
     // 14:06 UTC = 10:06 a. m. en Caracas.
     return waitFor(() => expect(evidence).toHaveTextContent(/10:06.*a\. m\./));
     expect(screen.queryByRole('button', { name: /enviar a aceptar/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('DX-560: segunda moneda en el enlace', () => {
+  beforeEach(() => {
+    [mockedList, mockedOptions, mockedCreate].forEach((m) => m.mockReset());
+  });
+
+  it('por defecto no la manda (la API usa la de la sede); elegida, va en `secondCurrency` y la del plan no se ofrece', async () => {
+    const user = setupUser();
+    mockedList.mockResolvedValue([]);
+    mockedOptions.mockResolvedValue(OPTIONS);
+    mockedCreate.mockResolvedValue({ ...budgetRequest({ status: 'SENT', openedAt: null }), emailQueued: true });
+    renderActions(plan());
+    await user.click(await screen.findByRole('button', { name: 'Enviar a aceptar' }));
+    const dialog = await screen.findByRole('dialog');
+    const select = await within(dialog).findByLabelText('Segunda moneda en el enlace (opcional)');
+    await within(dialog).findByRole('option', { name: /Bolívar/ });
+    expect(within(select).queryByRole('option', { name: /Dólar/ })).not.toBeInTheDocument();
+    expect(within(select).getByRole('option', { name: 'La de la sede, si es otra' })).toBeInTheDocument();
+    await user.selectOptions(select, 'VES');
+    await user.click(within(dialog).getByRole('button', { name: 'Enviar a aceptar' }));
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith('tok', 'p1', {
+        type: 'BUDGET',
+        channel: 'EMAIL',
+        treatmentPlanId: 'plan-1',
+        secondCurrency: 'VES',
+      }),
+    );
+  });
+
+  it('el 400 de la segunda moneda va junto a su campo', async () => {
+    const user = setupUser();
+    mockedList.mockResolvedValue([]);
+    mockedOptions.mockResolvedValue(OPTIONS);
+    mockedCreate.mockRejectedValue(new ApiError(400, 'La segunda moneda no está en el catálogo de monedas.'));
+    renderActions(plan());
+    await user.click(await screen.findByRole('button', { name: 'Enviar a aceptar' }));
+    const dialog = await screen.findByRole('dialog');
+    const select = await within(dialog).findByLabelText('Segunda moneda en el enlace (opcional)');
+    await within(dialog).findByRole('option', { name: /Bolívar/ });
+    await user.selectOptions(select, 'VES');
+    await user.click(within(dialog).getByRole('button', { name: 'Enviar a aceptar' }));
+    expect(await within(dialog).findByText('La segunda moneda no está en el catálogo de monedas.')).toBeInTheDocument();
+    expect(select).toHaveAttribute('aria-invalid', 'true');
+    expect(within(dialog).queryByRole('alert', { name: /segunda/ })).not.toBeInTheDocument();
   });
 });

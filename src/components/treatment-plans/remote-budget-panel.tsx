@@ -213,6 +213,7 @@ export function RemoteBudgetPanel({ token, patientId, plan, role }: RemoteBudget
           token={token}
           patientId={patientId}
           planId={plan.id}
+          planCurrency={plan.currency}
           replacesPending={pending}
           // DX-149-quater: un 201 siempre lleva el email en cola (la API guarda
           // la solicitud y su email en la misma transacción; si no se puede

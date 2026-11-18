@@ -2,6 +2,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
+import { ACCEPT_PARAM } from '@/lib/treatment-plans/plan-presentation-href';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getPatient, replacePatientKeepingDerived, type Patient } from '@/lib/patients/patients-api';
 import { mergedPatientCopy, mergedPatientHref } from '@/lib/patients/merged-patient';
@@ -18,6 +19,7 @@ import { PatientDataPanel } from '@/components/patients/patient-data-panel';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 import { PatientRecordHeader } from '@/components/patients/patient-record-header';
 import { imagingExportMenuAction } from '@/components/patients/imaging-export-action';
+import { patientAccessMenuAction } from '@/components/patient-access/patient-access-action';
 import {
   PatientRetentionSection,
   retentionActionLabels,
@@ -70,6 +72,7 @@ import {
   PatientPostOpDeliveries,
   PatientPrescriptionsTab,
   PatientRetentionDialogs,
+  PatientAccessDialog,
   PatientCertificatesTab,
   OrthoTab,
   PerioTab,
@@ -142,6 +145,7 @@ function PatientDetailView() {
   const [mergedFrom, setMergedFrom] = useState<string | null>(null);
   const redirecting = mergedFrom === patientId;
   const [editing, setEditing] = useState(false);
+  const [sharingAccess, setSharingAccess] = useState(false);
   // Menú «⋯» de la cabecera: modales de retención (ADMIN) y «Enviar anamnesis».
   const [retentionDialog, setRetentionDialog] = useState<RetentionDialog | null>(null);
   const [sendingAnamnesis, setSendingAnamnesis] = useState(false);
@@ -242,6 +246,8 @@ function PatientDetailView() {
     },
     [pathname, router, searchParams],
   );
+
+  const clearAcceptParam = useCallback(() => setParams({ [ACCEPT_PARAM]: null }), [setParams]);
 
   /**
    * La sección «Anamnesis» de «Historia clínica»: destino de «Registrar en
@@ -357,6 +363,9 @@ function PatientDetailView() {
   // DX-484: DENTIST, ASSISTANT y ADMIN (la API lo vuelve a exigir).
   const imagingAction = imagingExportMenuAction(role, () => setImagingExportOpen(true));
   if (imagingAction && patient) menuActions.push(imagingAction);
+  // DX-101: ADMIN y recepción (enseña el saldo; la API lo vuelve a exigir).
+  const accessAction = patientAccessMenuAction(role, () => setSharingAccess(true));
+  if (accessAction && patient) menuActions.push(accessAction);
   if (isAdmin && patient) {
     menuActions.push({
       label: retentionActionLabels.retention,
@@ -503,6 +512,15 @@ function PatientDetailView() {
               token={accessToken}
               patientId={patientId}
               patientCode={patient.patientCode}
+            />
+          ) : null}
+          {patient && accessAction && sharingAccess ? (
+            <PatientAccessDialog
+              open={sharingAccess}
+              onOpenChange={setSharingAccess}
+              token={accessToken}
+              patientId={patientId}
+              onEditPatient={() => setEditing(true)}
             />
           ) : null}
           {isAdmin ? (
@@ -688,6 +706,9 @@ function PatientDetailView() {
                 patientId={patientId}
                 focusedTooth={focusedTooth}
                 initialPlanId={searchParams.get('planId')}
+                // DX-560: «Elegir esta opción» en «Presentar» vuelve con la aceptación abierta.
+                initialAccept={searchParams.get(ACCEPT_PARAM) === '1'}
+                onInitialAcceptHandled={clearAcceptParam}
                 odontogramHref={(tooth) => `${pathname}?tab=odontogram&tooth=${tooth}`}
                 // DX-191: desde el ítem que se ejecuta, «Registrar implante»
                 // con el diente y el ítem del plan puestos.

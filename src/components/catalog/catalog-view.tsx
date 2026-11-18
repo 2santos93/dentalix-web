@@ -28,6 +28,18 @@ import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
 import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
 import { FormModal } from '@/components/shared/form-modal';
+import {
+  PatientDescriptionField,
+  patientDescriptionFieldId,
+  usePatientDescriptionEditor,
+} from './patient-description-field';
+import {
+  isPatientDescriptionMessage,
+  languageForApiError,
+  PATIENT_DESCRIPTION_MESSAGES,
+  patientDescriptionError,
+  patientDescriptionTooLarge,
+} from '@/lib/odontogram/patient-description';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { Pagination } from '@/components/shared/pagination';
 import { PageHeader } from '@/components/shared/page-header';
@@ -309,6 +321,8 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
   const [noteTemplatesKey, setNoteTemplatesKey] = useState(0);
   const [priceError, setPriceError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // DX-560: «Descripción para el paciente», un texto por idioma (solo procedimientos).
+  const description = usePatientDescriptionEditor(showForm ? token : null);
   const [formError, setFormError] = useState<string | null>(null);
 
   // Per-row activate/deactivate: the id being toggled, to disable its button.
@@ -474,6 +488,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
     setPostOpDays('1');
     setPostOpCheckError(null);
     setPostOpDaysError(null);
+    description.reset([]);
   }
 
   function openCreate() {
@@ -497,6 +512,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
     setPostOpDaysError(null);
     setTemplateLink(item.clinicalNoteTemplateId ?? '');
     setTemplateError(null);
+    description.reset(item.patientDescription);
     setEditingItem(item);
     setFormError(null);
     setShowForm(true);
@@ -521,6 +537,8 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
     return () => {
       cancelled = true;
     };
+    // `openEdit` solo usa setters estables (`description.reset` es un useCallback sin dependencias).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canWrite, initialItemId, openedInitial, token]);
 
   // Builds the shared payload from the current form fields. Empty optional
@@ -543,6 +561,8 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
       ...(defaultPrice !== undefined ? { defaultPrice } : {}),
       ...(trimmedCategory ? { category: trimmedCategory } : {}),
       ...templateLinkPatch(),
+      // DX-560: la lista ENTERA (los retirados sin tocar), solo si cambió; un diagnóstico no la manda.
+      ...(kind === 'PROCEDURE' && description.changed() ? { patientDescription: description.payload() } : {}),
     };
   }
 
@@ -569,6 +589,24 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
       setPostOpDaysError(copy.postOpDaysInvalid);
       postOpDaysRef.current?.focus();
       return;
+    }
+    // DX-560: la misma validación que la API, junto al campo de su idioma.
+    if (kind === 'PROCEDURE') {
+      const localErrors: Record<string, string> = {};
+      for (const language of description.offered) {
+        const problem = patientDescriptionError(description.texts[language] ?? '');
+        if (problem) localErrors[language] = problem;
+      }
+      description.setErrors(localErrors);
+      const firstInvalid = description.offered.find((language) => localErrors[language]);
+      if (firstInvalid) {
+        document.getElementById(patientDescriptionFieldId(firstInvalid))?.focus();
+        return;
+      }
+      if (patientDescriptionTooLarge(description.payload())) {
+        setFormError(PATIENT_DESCRIPTION_MESSAGES.tooLarge);
+        return;
+      }
     }
     // DX-241: la lectura común de los campos de dinero, en la moneda de la
     // clínica (la de los precios del catálogo).
@@ -607,6 +645,21 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
           postOpDaysRef.current?.focus();
         } else {
           setPostOpCheckError(message);
+        }
+      } else if (kind === 'PROCEDURE' && isPatientDescriptionMessage(apiErrorMessage(err, fallback))) {
+        // DX-560: el 400 de la descripción, junto al campo de su idioma si se sabe cuál.
+        const message = apiErrorMessage(err, fallback);
+        const language = languageForApiError(
+          message,
+          description.payload(),
+          description.offered,
+          description.clinicLanguages,
+        );
+        if (language) {
+          description.setErrors({ [language]: message });
+          document.getElementById(patientDescriptionFieldId(language))?.focus();
+        } else {
+          setFormError(message);
         }
       } else {
         setFormError(apiErrorMessage(err, fallback));
@@ -960,6 +1013,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
               selectRef={templateSelectRef}
             />
           ) : null}
+          {kind === 'PROCEDURE' ? <PatientDescriptionField editor={description} /> : null}
         </FormModal>
 
         {canWrite ? (

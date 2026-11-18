@@ -115,6 +115,13 @@ describe('proxy (DX-062: CSP con nonce por petición)', () => {
     expect(other.headers.get('x-robots-tag')).toBeNull();
   });
 
+  it('DX-101: el portal del paciente sale sin Referer, sin caché y sin indexar', () => {
+    const res = run('http://demo.localhost:3001/mi-clinica/abc', { host: 'demo.localhost:3001' });
+    expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(res.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+  });
+
   it('DX-568: la baja del resumen semanal sale sin Referer, sin caché y sin indexar (no Ajustes › Resumen semanal)', () => {
     const res = run('http://demo.localhost:3001/resumen/baja/abc', { host: 'demo.localhost:3001' });
     expect(res.headers.get('referrer-policy')).toBe('no-referrer');
