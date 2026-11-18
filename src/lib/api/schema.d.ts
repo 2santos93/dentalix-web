@@ -1716,7 +1716,7 @@ export interface paths {
         put?: never;
         /**
          * «¿Quién llama?»: pacientes que tienen ese teléfono (DX-224)
-         * @description Lee el número en cualquier formato (sin «+», con el prefijo de la sede activa) y lo compara por E.164 completo con el teléfono del paciente y el de sus responsables (contacto o paciente). Varios pacientes con el mismo número (grupo familiar) salen todos, hasta 20 (`truncated` avisa si hay más). Cada uno trae su próxima cita, su última visita (solo de las sedes del miembro) y su saldo. `hasCriticalAlert` solo para los roles clínicos. Un evento de lectura por paciente; el número no se registra. DX-556: ADMIN y RECEPTION reciben además `leads`, los prospectos con ese número en sus sedes.
+         * @description Lee el número en cualquier formato (sin «+», con el prefijo de la sede activa) y lo compara por E.164 completo con el teléfono del paciente y el de sus responsables (contacto o paciente). Varios pacientes con el mismo número (grupo familiar) salen todos, hasta 20 (`truncated` avisa si hay más). Cada uno trae su próxima cita, su última visita (solo de las sedes del miembro) y su saldo. `hasCriticalAlert` solo para los roles clínicos. Un evento de lectura por paciente; el número no se registra. DX-556: ADMIN y RECEPTION reciben además `leads`, los prospectos con ese número en sus sedes, con un evento de lectura por prospecto (VIEW LEAD, LEAD_CALLER_LOOKUP).
          */
         post: operations["CallerLookupController_find"];
         delete?: never;
