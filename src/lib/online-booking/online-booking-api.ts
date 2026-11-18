@@ -7,25 +7,17 @@ type Schemas = components['schemas'];
 // ── Página pública /reservar (DX-016) ─────────────────────────────────────────
 
 /**
- * La sede tal como la ve el paciente. `locale` y `hourCycle` son opcionales
- * hasta que la API los mande (como las demás páginas públicas): sin ellos la
- * hora se pinta con la lengua del producto, nunca con la del navegador.
+ * La sede tal como la ve el paciente, con su zona y su formato (`locale` y
+ * `hourCycle`): la hora se pinta siempre con ellos, nunca con los del
+ * navegador; si la sede no los tiene, la página lo dice en vez de inventarlos.
  */
-export type PublicBookingLocation = Schemas['PublicBookingConfigDto']['locations'][number] & {
-  locale?: string | null;
-  hourCycle?: Schemas['HourCycle'] | null;
-};
-export type PublicBookingConfig = Omit<Schemas['PublicBookingConfigDto'], 'locations'> & {
-  locations: PublicBookingLocation[];
-};
+export type PublicBookingLocation = Schemas['PublicBookingConfigDto']['locations'][number];
+export type PublicBookingConfig = Schemas['PublicBookingConfigDto'];
 export type PublicBookingType = Schemas['PublicBookingConfigDto']['types'][number];
 export type PublicBookingProvider = Schemas['PublicBookingConfigDto']['providers'][number];
 export type PublicSlots = Schemas['PublicSlotsDto'];
 export type PublicSlot = PublicSlots['slots'][number];
-export type PublicBookingResult = Schemas['PublicBookingResultDto'] & {
-  locale?: string | null;
-  hourCycle?: Schemas['HourCycle'] | null;
-};
+export type PublicBookingResult = Schemas['PublicBookingResultDto'];
 export type BookingCodeSent = Schemas['BookingCodeSentDto'];
 export type BookingSession = Schemas['BookingSessionDto'];
 export type OnlinePatientKind = Schemas['OnlineBookingPatientKind'];

@@ -17569,6 +17569,16 @@ export interface components {
             address: string | null;
             /** @example America/Caracas */
             timeZone: string;
+            /**
+             * @description Idioma y región del formato de la sede (BCP 47).
+             * @example es-VE
+             */
+            locale: string | null;
+            /**
+             * @description Reloj de la sede.
+             * @enum {string|null}
+             */
+            hourCycle: "h12" | "h23" | null;
         };
         PublicTypeDto: {
             /** Format: uuid */
@@ -17631,7 +17641,7 @@ export interface components {
         };
         RequestBookingCodeDto: {
             /** @description Campo trampa: SIEMPRE vacío (oculto para las personas). */
-            website?: Record<string, never>;
+            website?: string;
             /** @description El `formToken` de GET /public/booking (mide el tiempo de rellenado). */
             formToken: string;
             /** @description Reservado para el desafío anti-bots de un proveedor (pendiente; hoy no se exige). */
@@ -17686,7 +17696,7 @@ export interface components {
         };
         CreatePublicBookingDto: {
             /** @description Campo trampa: SIEMPRE vacío (oculto para las personas). */
-            website?: Record<string, never>;
+            website?: string;
             /** @description El `formToken` de GET /public/booking (mide el tiempo de rellenado). */
             formToken: string;
             /** @description Reservado para el desafío anti-bots de un proveedor (pendiente; hoy no se exige). */
@@ -17723,6 +17733,10 @@ export interface components {
             locationName: string;
             providerName: string;
             appointmentTypeName: string;
+            /** @example es-VE */
+            locale: string | null;
+            /** @enum {string|null} */
+            hourCycle: "h12" | "h23" | null;
             /** @description Enlace para confirmar o cancelar la cita (DX-005). */
             manageUrl: string | null;
         };

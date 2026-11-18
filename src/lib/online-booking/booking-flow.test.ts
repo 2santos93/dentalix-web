@@ -23,8 +23,8 @@ const CONFIG: PublicBookingConfig = {
   minLeadMinutesExisting: 60,
   maxAdvanceDays: 30,
   locations: [
-    { id: 'loc-chacao', name: 'Sede Chacao', address: 'Av. Francisco de Miranda', timeZone: 'America/Caracas' },
-    { id: 'loc-valencia', name: 'Sede Valencia', address: null, timeZone: 'America/Caracas' },
+    { id: 'loc-chacao', name: 'Sede Chacao', address: 'Av. Francisco de Miranda', timeZone: 'America/Caracas', locale: 'es-VE', hourCycle: 'h12' },
+    { id: 'loc-valencia', name: 'Sede Valencia', address: null, timeZone: 'America/Caracas', locale: 'es-VE', hourCycle: 'h12' },
   ],
   types: [
     { id: 't-limpieza', name: 'Limpieza', durationNewMinutes: 45, durationExistingMinutes: 30, locationIds: ['loc-chacao', 'loc-valencia'], providerIds: ['p-1', 'p-2'] },
