@@ -113,7 +113,8 @@ async function expectEveryItemReachable(page: Page, menu: Locator, moment: strin
 
   const items = menu.locator('[role="menuitem"], [role="menuitemcheckbox"]');
   const count = await items.count();
-  expect(count, `${moment}: ítems del menú`).toBe(4);
+  // Mi perfil, Ajustes, Tema oscuro, Este equipo es compartido (DX-574) y Cerrar sesión.
+  expect(count, `${moment}: ítems del menú`).toBe(5);
   for (let i = 0; i < count; i++) {
     const rect = await items.nth(i).evaluate((el) => {
       el.scrollIntoView({ block: 'nearest' });
