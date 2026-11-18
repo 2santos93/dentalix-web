@@ -507,6 +507,8 @@ function TypesSection({ token, allowed }: { token: string; allowed: boolean }) {
 
   async function toggleVisible(type: OnlineType, visible: boolean) {
     setPendingId(type.appointmentTypeId);
+    // El Switch cambia al momento; si la API lo rechaza, vuelve a como estaba.
+    replace({ ...type, visibleOnline: visible });
     try {
       const res = await saveOnlineType(token, type.appointmentTypeId, {
         visibleOnline: visible,
@@ -518,6 +520,7 @@ function TypesSection({ token, allowed }: { token: string; allowed: boolean }) {
       replace(res);
       toast.success(copy.typeSaved(res.name));
     } catch (err) {
+      replace(type);
       notifyError(apiErrorMessage(err, copy.typeSaveError), { onRetry: () => void toggleVisible(type, visible) });
     } finally {
       setPendingId(null);
