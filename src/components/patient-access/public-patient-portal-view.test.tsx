@@ -1,3 +1,4 @@
+import type { AccountStatement } from '@/lib/account-statement/account-statement-api';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PublicPatientPortalView, publicPortalCopy as copy, visibleScopes } from './public-patient-portal-view';
@@ -27,6 +28,69 @@ const mockedVerify = verifyPatientAccess as jest.MockedFunction<typeof verifyPat
 const mockedMe = getPatientPortal as jest.MockedFunction<typeof getPatientPortal>;
 const mockedConfirm = confirmPortalAppointment as jest.MockedFunction<typeof confirmPortalAppointment>;
 const mockedLogout = logoutPatientPortal as jest.MockedFunction<typeof logoutPatientPortal>;
+
+/** El estado de cuenta del personal tal como lo proyecta la API del portal (lista blanca). */
+function asPortal(statement: AccountStatement): NonNullable<PatientPortal['account']> {
+  return {
+    issuedAt: statement.issuedAt,
+    clinic: statement.clinic,
+    regional: statement.regional,
+    patient: {
+      firstName: statement.patient.firstName,
+      lastName: statement.patient.lastName,
+      docType: statement.patient.docType,
+      docTypeLabel: statement.patient.docTypeLabel,
+      docTypeName: statement.patient.docTypeName,
+      docNumber: statement.patient.docNumber,
+    },
+    addressee: { kind: statement.addressee.kind, name: statement.addressee.name },
+    range: statement.range,
+    summary: statement.summary,
+    plans: statement.plans.map((p) => ({
+      id: p.id,
+      status: p.status,
+      currency: p.currency,
+      createdAt: p.createdAt,
+      budgeted: p.budgeted,
+      billable: p.billable,
+      countsTowardsBalance: p.countsTowardsBalance,
+      paid: p.paid,
+      paidOtherCurrencies: p.paidOtherCurrencies,
+      creditMovements: p.creditMovements,
+      balance: p.balance,
+      rateProviderTimedOut: p.rateProviderTimedOut,
+    })),
+    movements: statement.movements.map((m) => ({
+      paidAt: m.paidAt,
+      paidOn: m.paidOn,
+      amount: m.amount,
+      currency: m.currency,
+      method: m.method,
+      paymentMethodName: m.paymentMethod?.name ?? null,
+      reference: m.reference,
+      externalInvoiceNumber: m.externalInvoiceNumber,
+      splitLines: m.splitLines,
+      receiptNumber: m.receiptNumber,
+      locationName: m.location.name,
+      treatmentPlanId: m.treatmentPlanId,
+      openingBalanceId: m.openingBalanceId,
+      voided: m.voided,
+      voidedAt: m.voidedAt,
+    })),
+    installments: statement.installments,
+    openingBalances: statement.openingBalances.map((o) => ({
+      id: o.id,
+      currency: o.currency,
+      amount: o.amount,
+      asOfDate: o.asOfDate,
+      asOfDateApproximate: o.asOfDateApproximate,
+      concept: o.concept,
+      paid: o.paid,
+      pending: o.pending,
+    })),
+    rateProviderTimedOut: statement.rateProviderTimedOut,
+  };
+}
 
 const norm = (t: string | null | undefined) => (t ?? '').replace(/\s/g, ' ');
 
@@ -61,7 +125,7 @@ function portal(over: Partial<PatientPortal> = {}): PatientPortal {
       },
     ],
     plans: [plan()],
-    account: accountStatementFixture(),
+    account: asPortal(accountStatementFixture()),
     ...over,
   };
 }
@@ -226,7 +290,7 @@ test('«Confirmar» confirma la cita y vuelve a leer los datos', async () => {
 test('vacíos: sin citas, sin presupuestos y «Está al día»', async () => {
   const user = userEvent.setup();
   mockedVerify.mockResolvedValue({ sessionExpiresAt: 'x', scopes: [] });
-  mockedMe.mockResolvedValue(portal({ appointments: [], plans: [], account: emptyAccountStatementFixture() }));
+  mockedMe.mockResolvedValue(portal({ appointments: [], plans: [], account: asPortal(emptyAccountStatementFixture()) }));
   await enter(user);
   expect(await screen.findByText(portalSectionsCopy.appointmentsEmpty)).toBeInTheDocument();
   await user.click(screen.getByRole('tab', { name: 'Presupuestos' }));

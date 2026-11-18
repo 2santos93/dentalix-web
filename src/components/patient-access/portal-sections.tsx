@@ -243,8 +243,8 @@ function PlanCard({
         <StatusBadge kind="treatmentPlan" status={plan.status} className="shrink-0" />
       </div>
       <ul aria-label={copy.itemsLabel} className="flex flex-col divide-y divide-border-subtle border-y border-border-subtle">
-        {quote.items.map((item) => (
-          <li key={item.id} className="flex items-start justify-between gap-3 py-2 text-sm">
+        {quote.items.map((item, index) => (
+          <li key={`${item.toothNumber}-${index}`} className="flex items-start justify-between gap-3 py-2 text-sm">
             <span className="min-w-0 break-words">
               <span className="block font-medium text-ink">{item.procedure}</span>
               <span className="block tabular-nums text-muted">

@@ -32,7 +32,11 @@ function created(over: Partial<CreatedAccessLink> = {}): CreatedAccessLink {
     url: 'https://demo.dentalix.app/mi-clinica/tok123',
     expiresAt: '2026-12-02T15:00:00.000Z',
     scopes: ['APPOINTMENTS', 'PLANS', 'ACCOUNT'],
-    whatsapp: { phone: '584145550101', text: 'Hola, María. Clínica Ávila te comparte tus datos: https://demo.dentalix.app/mi-clinica/tok123' },
+    whatsapp: {
+      phone: '584145550101',
+      text: 'Hola, María. Clínica Ávila te comparte tus datos: https://demo.dentalix.app/mi-clinica/tok123',
+      recipient: { kind: 'PATIENT', name: null },
+    },
     minor: false,
     ...over,
   };
@@ -140,6 +144,26 @@ test('sin teléfono válido: solo copiar, con el aviso; menor: aviso del respons
   expect(within(panel).queryByRole('link', { name: /WhatsApp/ })).not.toBeInTheDocument();
   expect(screen.getByTestId('patient-access-no-phone')).toHaveTextContent(copy.noPhone);
   expect(screen.getByTestId('patient-access-minor')).toHaveTextContent(copy.minor);
+});
+
+test('menor con responsable con teléfono: el WhatsApp va al responsable y el diálogo lo dice', async () => {
+  const user = userEvent.setup();
+  mockedCreate.mockResolvedValue(
+    created({
+      minor: true,
+      whatsapp: {
+        phone: '584145550202',
+        text: 'Hola Ana, te saludamos de Clínica Ávila.',
+        recipient: { kind: 'RESPONSIBLE', name: 'Ana Rondón' },
+      },
+    }),
+  );
+  renderDialog();
+  await user.click(screen.getByRole('button', { name: copy.submit }));
+  const panel = await screen.findByTestId('patient-access-created');
+  const wa = within(panel).getByRole('link', { name: /Abrir WhatsApp de Ana Rondón \(responsable\)/ });
+  expect(wa.getAttribute('href')).toContain('https://wa.me/584145550202?text=');
+  expect(screen.getByTestId('patient-access-minor')).toHaveTextContent(copy.sentToResponsible('Ana Rondón'));
 });
 
 test('409 sin fecha de nacimiento: el mensaje de la API y «Editar la ficha»', async () => {

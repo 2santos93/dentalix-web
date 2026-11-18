@@ -58,6 +58,8 @@ export const patientAccessCopy = {
   copied: 'Enlace copiado',
   copyFailed: 'No pudimos copiar automáticamente: cópialo a mano desde el campo.',
   whatsapp: 'Abrir WhatsApp',
+  whatsappToResponsible: (name: string) => `Abrir WhatsApp de ${name} (responsable)`,
+  sentToResponsible: (name: string) => `Paciente menor de edad: el WhatsApp va a su responsable, ${name}.`,
   noPhone: 'El paciente no tiene un teléfono válido para WhatsApp: copia el enlace y envíalo por otro medio.',
   minor:
     'Paciente menor de edad: envía el enlace a su responsable. Los datos del responsable en el portal llegarán más adelante.',
@@ -262,7 +264,10 @@ function CreatedLinkPanel({ token, link }: { token: string; link: CreatedAccessL
         {link.whatsapp ? (
           <Button asChild className="w-full sm:w-auto">
             <ExternalLink href={whatsAppUrl(link.whatsapp.phone, link.whatsapp.text)}>
-              <MessageCircle aria-hidden /> {copy.whatsapp}
+              <MessageCircle aria-hidden />{' '}
+              {link.whatsapp.recipient.kind === 'RESPONSIBLE' && link.whatsapp.recipient.name
+                ? copy.whatsappToResponsible(link.whatsapp.recipient.name)
+                : copy.whatsapp}
             </ExternalLink>
           </Button>
         ) : null}
@@ -277,7 +282,9 @@ function CreatedLinkPanel({ token, link }: { token: string; link: CreatedAccessL
       )}
       {link.minor ? (
         <Callout tone="info" role="note" data-testid="patient-access-minor">
-          {copy.minor}
+          {link.whatsapp?.recipient.kind === 'RESPONSIBLE' && link.whatsapp.recipient.name
+            ? copy.sentToResponsible(link.whatsapp.recipient.name)
+            : copy.minor}
         </Callout>
       ) : null}
     </div>

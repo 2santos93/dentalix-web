@@ -20,6 +20,7 @@ import { useClinicBranding } from '@/components/brand/branding-context';
 import { ClinicBrand } from '@/components/brand/clinic-brand';
 import { AccountStatementDocument } from '@/components/account-statement/account-statement-document';
 import { PlanQuoteDocument } from '@/components/treatment-plans/plan-quote-document';
+import { printableQuote, printableStatement } from '@/lib/patient-access/portal-documents';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { PublicNotice, publicBrandStyle } from '@/components/shared/public-page';
@@ -405,7 +406,7 @@ export function PublicPatientPortalView({ linkToken }: { linkToken: string }) {
                   ) : null}
                   {data.account ? (
                     <TabsContent value={SCOPE_TAB.ACCOUNT}>
-                      <PortalAccount account={data.account} onPrint={() => setPrinting({ kind: 'account' })} />
+                      <PortalAccount account={printableStatement(data.account)} onPrint={() => setPrinting({ kind: 'account' })} />
                     </TabsContent>
                   ) : null}
                 </Tabs>
@@ -419,12 +420,12 @@ export function PublicPatientPortalView({ linkToken }: { linkToken: string }) {
       {/* La vista de impresión: fuera de pantalla, sola en el papel (print CSS de cada documento). */}
       {printPlan ? (
         <div className="quote-print-page hidden print:block" data-testid="portal-print-plan">
-          <PlanQuoteDocument quote={printPlan.quote} format={documentFormat(printPlan.quote.regional)} />
+          <PlanQuoteDocument quote={printableQuote(printPlan)} format={documentFormat(printPlan.quote.regional)} />
         </div>
       ) : null}
       {printAccount ? (
         <div className="statement-print-page hidden print:block" data-testid="portal-print-account">
-          <AccountStatementDocument statement={printAccount} format={documentFormat(printAccount.regional)} />
+          <AccountStatementDocument statement={printableStatement(printAccount)} format={documentFormat(printAccount.regional)} />
         </div>
       ) : null}
     </>
