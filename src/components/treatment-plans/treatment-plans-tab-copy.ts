@@ -315,8 +315,11 @@ export function feeReferences(items: TreatmentPlanItem[]): ReadonlyMap<string, F
   return new Map(fees.map((item, index) => [item.id, { n: index + 1, total: fees.length }]));
 }
 
+/** Texto de un ítem sin su entrada en el catálogo (el mismo que la API): nunca el id. */
+export const PROCEDURE_FALLBACK = 'Procedimiento';
+
 export function procedureName(item: TreatmentPlanItem, catalogById: Map<string, DentalCatalogItem>): string {
-  return catalogById.get(item.catalogItemId)?.labelEs ?? item.catalogItemId;
+  return catalogById.get(item.catalogItemId)?.labelEs ?? PROCEDURE_FALLBACK;
 }
 
 /**

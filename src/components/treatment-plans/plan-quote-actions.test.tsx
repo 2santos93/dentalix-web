@@ -281,3 +281,73 @@ describe('PlanQuoteActions · «Aceptar en parte» (DX-417)', () => {
     expect(await screen.findByRole('dialog', { name: 'Aceptar en parte' })).toBeInTheDocument();
   });
 });
+
+describe('PlanQuoteActions · DX-560 «Presentar»', () => {
+  const stamp = () => testStamp([STAMP_SEDES.caracas]);
+
+  it('«Presentar» abre la ruta sin el shell en la misma pestaña, con las cuotas simuladas si las hay', () => {
+    const { rerender } = render(
+      <PlanQuoteActions token="tok" patientId="p1" plan={plan()} role="DENTIST" onAccepted={jest.fn()} stamp={stamp()} />,
+    );
+    const link = screen.getByRole('link', { name: /Presentar/ });
+    expect(link).toHaveAttribute('href', '/presentar/patients/p1/treatment-plans/plan-1');
+    expect(link).not.toHaveAttribute('target');
+    rerender(
+      <PlanQuoteActions
+        token="tok"
+        patientId="p1"
+        plan={plan()}
+        role="DENTIST"
+        onAccepted={jest.fn()}
+        stamp={stamp()}
+        presentFinancing="M.6.2026-12-01.0"
+      />,
+    );
+    expect(screen.getByRole('link', { name: /Presentar/ })).toHaveAttribute(
+      'href',
+      '/presentar/patients/p1/treatment-plans/plan-1?cuotas=M.6.2026-12-01.0',
+    );
+  });
+
+  it('un plan sin ítems no se presenta', () => {
+    renderActions(plan({ items: [], total: 0 }));
+    expect(screen.queryByRole('link', { name: /Presentar/ })).not.toBeInTheDocument();
+  });
+
+  it('`autoAccept` (desde «Elegir esta opción») abre la aceptación una vez y avisa al padre', async () => {
+    mockedGet.mockResolvedValue(planQuoteFixture());
+    const handled = jest.fn();
+    render(
+      <PlanQuoteActions
+        token="tok"
+        patientId="p1"
+        plan={plan()}
+        role="DENTIST"
+        onAccepted={jest.fn()}
+        stamp={stamp()}
+        autoAccept
+        onAutoAcceptHandled={handled}
+      />,
+    );
+    expect(await screen.findByRole('dialog', { name: 'Aceptar presupuesto con firma' })).toBeInTheDocument();
+    expect(handled).toHaveBeenCalled();
+  });
+
+  it('`autoAccept` con un rol que no acepta no abre nada (y también avisa)', () => {
+    const handled = jest.fn();
+    render(
+      <PlanQuoteActions
+        token="tok"
+        patientId="p1"
+        plan={plan()}
+        role="RECEPTION"
+        onAccepted={jest.fn()}
+        stamp={stamp()}
+        autoAccept
+        onAutoAcceptHandled={handled}
+      />,
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(handled).toHaveBeenCalled();
+  });
+});

@@ -48,6 +48,12 @@ jest.mock('../../lib/catalog/price-changes-api', () => ({
 }));
 const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 
+// DX-560: los idiomas de los pacientes de la clínica (la descripción para el paciente).
+jest.mock('../../lib/patients/patient-languages', () => ({
+  ...jest.requireActual('../../lib/patients/patient-languages'),
+  getPatientLanguages: jest.fn(() => Promise.resolve({ languages: ['es', 'en'] })),
+}));
+
 function clinicIn(country: ClinicLocation['country']): ClinicLocation[] {
   return [
     clinicLocation({
@@ -1077,5 +1083,135 @@ describe('CatalogView · plantilla de evolución del procedimiento (DX-455)', ()
     await screen.findByRole('combobox', { name: 'Plantilla de evolución' });
     await user.selectOptions(screen.getByLabelText('Tipo'), 'DIAGNOSIS');
     expect(screen.queryByRole('combobox', { name: 'Plantilla de evolución' })).not.toBeInTheDocument();
+  });
+});
+
+describe('CatalogView · descripción para el paciente (DX-560)', () => {
+  const admin = tokenFor('ADMIN', 'u-admin');
+
+  beforeEach(() => {
+    mockedList.mockReset().mockResolvedValue(page([item1]));
+    mockedUpdate.mockReset().mockResolvedValue(item1);
+    mockedCreate.mockReset().mockResolvedValue(item1);
+    mockedLocations.mockReset().mockResolvedValue(clinicIn('VE'));
+    (listCatalogItems as jest.Mock).mockReset().mockResolvedValue([item1]);
+    window.localStorage.clear();
+  });
+
+  it('un campo por idioma de la clínica con su contador y su ayuda; manda la lista entera', async () => {
+    const user = setupUser();
+    render(<CatalogView token={admin} />);
+    await screen.findByRole('table', { name: /catálogo/i });
+    await user.click(screen.getByRole('button', { name: /agregar ítem/i }));
+    const es = await screen.findByLabelText('Español (es)');
+    const en = await screen.findByLabelText('English (en)');
+    expect(es).toHaveAttribute('lang', 'es');
+    expect(en).toHaveAttribute('lang', 'en');
+    expect(screen.getByText(/Texto claro para el paciente, sin datos de nadie, sin enlaces ni HTML/)).toBeInTheDocument();
+    expect(screen.getAllByText('0/300')).toHaveLength(2);
+    await user.type(es, 'Limpieza profunda de las encías.');
+    expect(screen.getByText('32/300')).toBeInTheDocument();
+    await user.type(en, 'Deep cleaning of the gums.');
+    await user.type(screen.getByLabelText('Nombre'), 'Raspado');
+    await user.type(screen.getByLabelText('Código'), 'RAS');
+    await user.click(screen.getByRole('button', { name: 'Crear' }));
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith(
+        admin,
+        expect.objectContaining({
+          patientDescription: [
+            { language: 'es', text: 'Limpieza profunda de las encías.' },
+            { language: 'en', text: 'Deep cleaning of the gums.' },
+          ],
+        }),
+      ),
+    );
+  });
+
+  it('un enlace no se guarda: el aviso de la API, junto al campo', async () => {
+    const user = setupUser();
+    render(<CatalogView token={admin} />);
+    await screen.findByRole('table', { name: /catálogo/i });
+    await user.click(screen.getByRole('button', { name: /agregar ítem/i }));
+    const es = await screen.findByLabelText('Español (es)');
+    await user.type(es, 'Más en ejemplo.com');
+    await user.type(screen.getByLabelText('Nombre'), 'Raspado');
+    await user.type(screen.getByLabelText('Código'), 'RAS');
+    await user.click(screen.getByRole('button', { name: 'Crear' }));
+    expect(
+      await screen.findByText('La descripción para el paciente no admite enlaces ni HTML: escríbela como texto.'),
+    ).toBeInTheDocument();
+    expect(es).toHaveAttribute('aria-invalid', 'true');
+    expect(es).toHaveFocus();
+    expect(mockedCreate).not.toHaveBeenCalled();
+  });
+
+  it('el 400 de la API va junto al campo de su idioma', async () => {
+    const user = setupUser();
+    mockedCreate.mockRejectedValue(
+      new ApiError(400, 'La descripción para el paciente no puede tener más de 300 caracteres.'),
+    );
+    render(<CatalogView token={admin} />);
+    await screen.findByRole('table', { name: /catálogo/i });
+    await user.click(screen.getByRole('button', { name: /agregar ítem/i }));
+    const en = await screen.findByLabelText('English (en)');
+    await user.type(en, 'Gum cleaning');
+    await user.type(screen.getByLabelText('Nombre'), 'Raspado');
+    await user.type(screen.getByLabelText('Código'), 'RAS');
+    await user.click(screen.getByRole('button', { name: 'Crear' }));
+    expect(
+      await screen.findByText('La descripción para el paciente no puede tener más de 300 caracteres.'),
+    ).toBeInTheDocument();
+    expect(en).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('un idioma que la clínica retiró se conserva tal cual (o se quita) y sin cambios no se manda', async () => {
+    const user = setupUser();
+    const withRetired = {
+      ...item1,
+      patientDescription: [
+        { language: 'es', text: 'Limpieza de las encías.' },
+        { language: 'ca', text: 'Neteja de les genives.' },
+      ],
+    };
+    (listCatalogItems as jest.Mock).mockResolvedValue([withRetired]);
+    render(<CatalogView token={admin} initialItemId="c1" />);
+    expect(await screen.findByLabelText('Español (es)')).toHaveValue('Limpieza de las encías.');
+    const retired = await screen.findByTestId('patient-description-retired');
+    expect(retired).toHaveTextContent('Neteja de les genives.');
+    expect(within(retired).getByText('Neteja de les genives.')).toHaveAttribute('lang', 'ca');
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalled());
+    expect(mockedUpdate.mock.calls[0][2]).not.toHaveProperty('patientDescription');
+  });
+
+  it('quitar el idioma retirado manda la lista sin él', async () => {
+    const user = setupUser();
+    (listCatalogItems as jest.Mock).mockResolvedValue([
+      {
+        ...item1,
+        patientDescription: [
+          { language: 'es', text: 'Limpieza de las encías.' },
+          { language: 'ca', text: 'Neteja de les genives.' },
+        ],
+      },
+    ]);
+    render(<CatalogView token={admin} initialItemId="c1" />);
+    await user.click(await screen.findByRole('button', { name: /Quitar la descripción en/ }));
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith(
+        admin,
+        'c1',
+        expect.objectContaining({ patientDescription: [{ language: 'es', text: 'Limpieza de las encías.' }] }),
+      ),
+    );
+  });
+
+  it('un diagnóstico no tiene descripción para el paciente', async () => {
+    (listCatalogItems as jest.Mock).mockResolvedValue([{ ...item1, kind: 'DIAGNOSIS', defaultPrice: null }]);
+    render(<CatalogView token={admin} initialItemId="c1" />);
+    await screen.findByLabelText('Nombre');
+    expect(screen.queryByText('Descripción para el paciente')).not.toBeInTheDocument();
   });
 });

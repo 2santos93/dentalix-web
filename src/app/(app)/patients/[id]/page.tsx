@@ -2,6 +2,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
+import { ACCEPT_PARAM } from '@/lib/treatment-plans/plan-presentation-href';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getPatient, replacePatientKeepingDerived, type Patient } from '@/lib/patients/patients-api';
 import { mergedPatientCopy, mergedPatientHref } from '@/lib/patients/merged-patient';
@@ -245,6 +246,8 @@ function PatientDetailView() {
     },
     [pathname, router, searchParams],
   );
+
+  const clearAcceptParam = useCallback(() => setParams({ [ACCEPT_PARAM]: null }), [setParams]);
 
   /**
    * La sección «Anamnesis» de «Historia clínica»: destino de «Registrar en
@@ -703,6 +706,9 @@ function PatientDetailView() {
                 patientId={patientId}
                 focusedTooth={focusedTooth}
                 initialPlanId={searchParams.get('planId')}
+                // DX-560: «Elegir esta opción» en «Presentar» vuelve con la aceptación abierta.
+                initialAccept={searchParams.get(ACCEPT_PARAM) === '1'}
+                onInitialAcceptHandled={clearAcceptParam}
                 odontogramHref={(tooth) => `${pathname}?tab=odontogram&tooth=${tooth}`}
                 // DX-191: desde el ítem que se ejecuta, «Registrar implante»
                 // con el diente y el ítem del plan puestos.
