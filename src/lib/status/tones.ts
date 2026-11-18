@@ -219,6 +219,16 @@ const installment = {
   OVERDUE: s('danger', 'Vencida'),
 } satisfies Presentations<Schemas['DerivedInstallmentDto']['status']>;
 
+/**
+ * DX-123: el plan de cuotas. Cancelado es un cierre sin juicio (como un plan
+ * de tratamiento cancelado), completado está hecho.
+ */
+const paymentPlan = {
+  ACTIVE: s('info', 'Activo'),
+  COMPLETED: s('success', 'Completado'),
+  CANCELLED: s('neutral', 'Cancelado'),
+} satisfies Presentations<Schemas['PaymentPlanDto']['status']>;
+
 const expense = {
   PENDING: s('warning', 'Pendiente'),
   PARTIAL: s('warning', 'Parcial'),
@@ -452,6 +462,7 @@ export const STATUS_PRESENTATION = {
   anamnesisSubmission,
   dataConsent,
   installment,
+  paymentPlan,
   expense,
   paymentPromise,
   recall,
