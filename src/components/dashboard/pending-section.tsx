@@ -32,6 +32,11 @@ export const pendingCopy = {
   anamnesis: { label: 'Anamnesis por revisar', hint: 'Enviadas por los pacientes desde su enlace' },
   // DX-566: llamadas de control a los pacientes operados.
   postOpChecks: { label: 'Controles postoperatorios', hint: 'Llamadas de control de hoy y las vencidas' },
+  // DX-556: prospectos abiertos a los que nadie ha escrito en un día.
+  leadsUncontacted: {
+    label: 'Prospectos sin contactar',
+    hint: 'Hace más de 24 h y sin próxima acción pendiente',
+  },
   followUp: { label: 'Presupuestos por seguir', hint: 'Presentados hace más de 7 días, sin respuesta ni cita' },
   unscheduled: { label: 'Aceptados sin agendar', hint: 'Planes aceptados con visitas por agendar' },
   waitlist: { label: 'Pendientes por agendar', hint: 'Lista de espera: cancelaron o no vinieron' },
@@ -85,6 +90,9 @@ function queueRow(key: WorkQueueKey, role: ClinicRole): QueueRow {
       return { id: 'anamnesis', ...copy.anamnesis, href: ANAMNESIS_HREF };
     case 'POST_OP_CHECKS':
       return { id: 'post-op-checks', ...copy.postOpChecks, href: POST_OP_CHECKS_HREF };
+    case 'LEADS_UNCONTACTED':
+      // DX-556 (#238) trae LEADS_STALE_HREF desde leads-api; puente mientras entra.
+      return { id: 'leads-uncontacted', ...copy.leadsUncontacted, href: '/prospectos?stale=true' };
     case 'QUOTE_FOLLOW_UP':
       return { id: 'follow-up', ...copy.followUp, href: '/presupuestos' };
     case 'ACCEPTED_UNSCHEDULED':

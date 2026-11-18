@@ -1716,7 +1716,7 @@ export interface paths {
         put?: never;
         /**
          * «¿Quién llama?»: pacientes que tienen ese teléfono (DX-224)
-         * @description Lee el número en cualquier formato (sin «+», con el prefijo de la sede activa) y lo compara por E.164 completo con el teléfono del paciente y el de sus responsables (contacto o paciente). Varios pacientes con el mismo número (grupo familiar) salen todos, hasta 20 (`truncated` avisa si hay más). Cada uno trae su próxima cita, su última visita (solo de las sedes del miembro) y su saldo. `hasCriticalAlert` solo para los roles clínicos. Un evento de lectura por paciente; el número no se registra.
+         * @description Lee el número en cualquier formato (sin «+», con el prefijo de la sede activa) y lo compara por E.164 completo con el teléfono del paciente y el de sus responsables (contacto o paciente). Varios pacientes con el mismo número (grupo familiar) salen todos, hasta 20 (`truncated` avisa si hay más). Cada uno trae su próxima cita, su última visita (solo de las sedes del miembro) y su saldo. `hasCriticalAlert` solo para los roles clínicos. Un evento de lectura por paciente; el número no se registra. DX-556: ADMIN y RECEPTION reciben además `leads`, los prospectos con ese número en sus sedes, con un evento de lectura por prospecto (VIEW LEAD, LEAD_CALLER_LOOKUP).
          */
         post: operations["CallerLookupController_find"];
         delete?: never;
@@ -1787,6 +1787,250 @@ export interface paths {
         put: operations["AnamnesisSettingsController_update"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lista de prospectos (paginada, con filtros)
+         * @description Solo las sedes permitidas al usuario (DX-089): la pedida, la activa (X-Location-Id) o todas las que ve. Más recientes primero. `reached` filtra a quien llegó a tener cita o asistió (las cifras del informe). Deja un `audit_event` VIEW LEAD (LEAD_LIST).
+         */
+        get: operations["LeadsController_list"];
+        put?: never;
+        /**
+         * Dar de alta un prospecto
+         * @description Nace en «Nuevo». El teléfono se guarda en E.164 (con el prefijo de la sede). Si ya es de un paciente o de otro prospecto: 409 `LEAD_PHONE_TAKEN` con `existing { kind, id, name }` para abrir el existente (sin id ni nombre si es de una sede no permitida). Solo datos comerciales: nunca datos de salud. Deja un `audit_event` CREATE LEAD (LEAD_CREATED).
+         */
+        post: operations["LeadsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leads/board": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tablero por etapas
+         * @description Solo las sedes permitidas al usuario (DX-089): la pedida, la activa (X-Location-Id) o todas las que ve. Las cinco etapas con su total y los primeros de cada una (próxima acción más urgente arriba). Deja un `audit_event` VIEW LEAD (LEAD_BOARD).
+         */
+        get: operations["LeadsController_board"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leads/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Contador de prospectos (Mi día)
+         * @description Abiertos y «sin contactar hace más de 24 h» (abiertos, sin contacto en 24 h y sin próxima acción pendiente). Solo números, sin auditoría. Solo las sedes permitidas al usuario (DX-089): la pedida, la activa (X-Location-Id) o todas las que ve.
+         */
+        get: operations["LeadsController_count"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leads/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Informe de conversión por canal y por responsable
+         * @description Solo las sedes permitidas al usuario (DX-089): la pedida, la activa (X-Location-Id) o todas las que ve. Prospectos dados de alta en [from, to): cuántos, cuántos llegaron a tener cita, cuántos asistieron y la tasa de cada paso. Cuadra con `GET /leads` con los mismos filtros (y `reached`). Sin datos de los prospectos.
+         */
+        get: operations["LeadsController_report"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leads/owners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Posibles responsables (ADMIN y recepción de la clínica) */
+        get: operations["LeadsController_owners"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leads/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ajustes de prospectos (retención) */
+        get: operations["LeadsController_settings"];
+        /**
+         * Cambiar la retención de los prospectos perdidos (solo ADMIN)
+         * @description Meses tras los que un prospecto PERDIDO se anonimiza (nombre, teléfono y notas). Lo aplica el barrido diario.
+         */
+        put: operations["LeadsController_updateSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leads/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ficha del prospecto con sus notas
+         * @description Deja un `audit_event` VIEW LEAD (LEAD_VIEWED).
+         */
+        get: operations["LeadsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Editar el prospecto
+         * @description Nombre, teléfono (con el aviso de repetido), canal, motivo, sede, responsable y próxima acción. Deja un `audit_event` UPDATE LEAD (LEAD_UPDATED, con los nombres de los campos).
+         */
+        patch: operations["LeadsController_update"];
+        trace?: never;
+    };
+    "/api/v1/leads/{id}/stage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cambiar la etapa
+         * @description «Perdido» exige un motivo del catálogo de pérdida. «Cita agendada» y «Asistió» los pone la cita (409). Deja un `audit_event` UPDATE LEAD (LEAD_STAGE_CHANGED, con la etapa antes y después).
+         */
+        post: operations["LeadsController_changeStage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leads/{id}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Añadir una nota comercial (solo de añadir)
+         * @description Cuenta como contacto (sale de «sin contactar»). Nunca datos de salud. Deja un `audit_event` UPDATE LEAD (LEAD_NOTE_ADDED, sin el texto).
+         */
+        post: operations["LeadsController_addNote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leads/{id}/convert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Convertir en paciente (idempotente)
+         * @description Si ya está convertido, devuelve el mismo paciente (`created: false`). Si un paciente vivo tiene su teléfono, lo enlaza (varios: 409 `LEAD_AMBIGUOUS_PATIENTS` con `candidates`, y se repite con `patientId`). Si no, crea la ficha sin datos clínicos con el nombre y el teléfono. Deja `audit_event` CREATE PATIENT (LEAD_CONVERTED) y UPDATE LEAD (LEAD_CONVERTED o LEAD_LINKED).
+         */
+        post: operations["LeadsController_convert"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lead-reasons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Motivos de prospectos: predefinidos y propios vivos */
+        get: operations["LeadReasonsController_list"];
+        put?: never;
+        /** Crear un motivo propio (solo ADMIN) */
+        post: operations["LeadReasonsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lead-reasons/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Retirar un motivo propio (borrado lógico, solo ADMIN)
+         * @description Los prospectos que lo usan conservan el texto.
+         */
+        delete: operations["LeadReasonsController_remove"];
         options?: never;
         head?: never;
         patch?: never;
@@ -10402,7 +10646,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE" | "ORTHO_CASE" | "ORTHO_VISIT" | "DENTAL_LAB" | "DENTAL_LAB_ORDER" | "COMMISSION_SETTLEMENT" | "POST_OP_CHECK" | "PATIENT_ACCESS_LINK" | "ONLINE_BOOKING";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE" | "ORTHO_CASE" | "ORTHO_VISIT" | "DENTAL_LAB" | "DENTAL_LAB_ORDER" | "COMMISSION_SETTLEMENT" | "POST_OP_CHECK" | "PATIENT_ACCESS_LINK" | "ONLINE_BOOKING" | "LEAD";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -13404,10 +13648,24 @@ export interface components {
             /** @description Solo para los roles clínicos (DENTIST, ASSISTANT, ADMIN); RECEPTION no recibe la clave. */
             hasCriticalAlert?: boolean;
         };
+        /** @enum {string} */
+        LeadStage: "NEW" | "CONTACTED" | "SCHEDULED" | "ATTENDED" | "LOST";
+        CallerLeadMatchDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+            stage: components["schemas"]["LeadStage"];
+            /** Format: uuid */
+            locationId: string;
+            /** Format: uuid */
+            convertedPatientId: string | null;
+        };
         CallerLookupResponseDto: {
             matches: components["schemas"]["CallerMatchDto"][];
             /** @description Hay más pacientes con ese número que los 20 devueltos: afinar la búsqueda. */
             truncated: boolean;
+            /** @description DX-556: prospectos con ese número en las sedes del usuario (hasta 5). Solo ADMIN y RECEPTION; los demás roles no reciben la clave. */
+            leads?: components["schemas"]["CallerLeadMatchDto"][];
         };
         SafetyFlagsDto: {
             /** @description DERIVADA: true solo con un «Sí» explícito al embarazo (`pregnancy`). No dice si se contestó «No». */
@@ -13539,6 +13797,245 @@ export interface components {
              * @example 12
              */
             anamnesisValidityMonths: number;
+        };
+        /** @enum {string} */
+        LeadChannel: "WHATSAPP" | "INSTAGRAM" | "FACEBOOK" | "PHONE" | "WALK_IN" | "REFERRAL" | "WEBSITE" | "OTHER";
+        LeadDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            fullName: string;
+            phone: string | null;
+            /** @description Dígitos para wa.me (el E.164 sin «+»). */
+            whatsAppDigits: string | null;
+            channel: components["schemas"]["LeadChannel"];
+            interestReason: string | null;
+            stage: components["schemas"]["LeadStage"];
+            lostReason: string | null;
+            /** Format: uuid */
+            ownerId: string | null;
+            ownerName: string | null;
+            /** Format: date-time */
+            nextActionAt: string | null;
+            nextActionNote: string | null;
+            /** Format: date-time */
+            lastContactAt: string | null;
+            /** Format: date-time */
+            scheduledAt: string | null;
+            /** Format: date-time */
+            attendedAt: string | null;
+            /** Format: date-time */
+            lostAt: string | null;
+            /** Format: uuid */
+            convertedPatientId: string | null;
+            /** Format: date-time */
+            convertedAt: string | null;
+            /** Format: uuid */
+            firstAppointmentId: string | null;
+            anonymized: boolean;
+            /** @description «Sin contactar hace más de 24 h». */
+            stale: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        LeadListDto: {
+            items: components["schemas"]["LeadDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        LeadBoardColumnDto: {
+            stage: components["schemas"]["LeadStage"];
+            total: number;
+            items: components["schemas"]["LeadDto"][];
+        };
+        LeadBoardDto: {
+            columns: components["schemas"]["LeadBoardColumnDto"][];
+        };
+        LeadCountDto: {
+            /** @description Abiertos (NEW y CONTACTED). */
+            open: number;
+            /** @description «Sin contactar hace más de 24 h». */
+            stale: number;
+        };
+        LeadReportLineDto: {
+            /** @description Canal o id del responsable (null = sin responsable / total). */
+            key: string | null;
+            /** @description Nombre del responsable. */
+            label: string | null;
+            leads: number;
+            /** @description Llegaron a tener cita. */
+            scheduled: number;
+            /** @description Asistieron. */
+            attended: number;
+            /** @description Con cita / prospectos (0..1). */
+            scheduledRate: number;
+            /** @description Asistieron / con cita (0..1). */
+            attendedRate: number;
+            /** @description Asistieron / prospectos (0..1). */
+            conversionRate: number;
+        };
+        LeadReportDto: {
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            to: string;
+            totals: components["schemas"]["LeadReportLineDto"];
+            byChannel: components["schemas"]["LeadReportLineDto"][];
+            byOwner: components["schemas"]["LeadReportLineDto"][];
+        };
+        LeadOwnerDto: {
+            /** Format: uuid */
+            userId: string;
+            fullName: string;
+            /** @enum {string} */
+            role: "ADMIN" | "RECEPTION";
+        };
+        LeadSettingsDto: {
+            lostRetentionMonths: number;
+        };
+        UpdateLeadSettingsDto: {
+            /** @description Meses tras los que un prospecto PERDIDO se anonimiza. */
+            lostRetentionMonths: number;
+        };
+        CreateLeadDto: {
+            fullName: string;
+            /** @description En cualquier formato; sin «+», con el prefijo de la sede. Se guarda en E.164. Si ya es de un paciente o de otro prospecto: 409 `LEAD_PHONE_TAKEN` con `existing`. */
+            phone: string;
+            channel: components["schemas"]["LeadChannel"];
+            /** @description Motivo de interés del catálogo (predefinido o propio). */
+            interestReason?: string | null;
+            /**
+             * Format: uuid
+             * @description Sede del prospecto (403 si no es de las del usuario). Sin ella, la sede activa o la primera permitida.
+             */
+            locationId?: string;
+            /**
+             * Format: uuid
+             * @description Responsable (ADMIN o RECEPTION de la clínica). Sin él, quien lo da de alta; `null`, sin responsable.
+             */
+            ownerId?: string | null;
+            /** Format: date-time */
+            nextActionAt?: string | null;
+            /** @description Qué hacer en la próxima acción. Solo datos comerciales: nunca datos de salud (síntomas, diagnósticos, medicación). */
+            nextActionNote?: string | null;
+        };
+        LeadNoteDto: {
+            /** Format: uuid */
+            id: string;
+            body: string;
+            /** Format: uuid */
+            authorId: string;
+            authorName: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        LeadDetailDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            fullName: string;
+            phone: string | null;
+            /** @description Dígitos para wa.me (el E.164 sin «+»). */
+            whatsAppDigits: string | null;
+            channel: components["schemas"]["LeadChannel"];
+            interestReason: string | null;
+            stage: components["schemas"]["LeadStage"];
+            lostReason: string | null;
+            /** Format: uuid */
+            ownerId: string | null;
+            ownerName: string | null;
+            /** Format: date-time */
+            nextActionAt: string | null;
+            nextActionNote: string | null;
+            /** Format: date-time */
+            lastContactAt: string | null;
+            /** Format: date-time */
+            scheduledAt: string | null;
+            /** Format: date-time */
+            attendedAt: string | null;
+            /** Format: date-time */
+            lostAt: string | null;
+            /** Format: uuid */
+            convertedPatientId: string | null;
+            /** Format: date-time */
+            convertedAt: string | null;
+            /** Format: uuid */
+            firstAppointmentId: string | null;
+            anonymized: boolean;
+            /** @description «Sin contactar hace más de 24 h». */
+            stale: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description Más recientes primero. */
+            notes: components["schemas"]["LeadNoteDto"][];
+        };
+        UpdateLeadDto: {
+            fullName?: string;
+            phone?: string;
+            channel?: components["schemas"]["LeadChannel"];
+            interestReason?: string | null;
+            /** Format: uuid */
+            locationId?: string;
+            /** Format: uuid */
+            ownerId?: string | null;
+            /** Format: date-time */
+            nextActionAt?: string | null;
+            nextActionNote?: string | null;
+        };
+        ChangeLeadStageDto: {
+            /** @description NEW ↔ CONTACTED; NEW/CONTACTED/SCHEDULED → LOST (con motivo); LOST → NEW/CONTACTED (reabrir); SCHEDULED → CONTACTED. SCHEDULED y ATTENDED solo por la cita (409). */
+            stage: components["schemas"]["LeadStage"];
+            /** @description Motivo de pérdida del catálogo: obligatorio con LOST. */
+            lostReason?: string | null;
+        };
+        AddLeadNoteDto: {
+            /** @description Solo datos comerciales: nunca datos de salud (síntomas, diagnósticos, medicación). */
+            body: string;
+        };
+        ConvertLeadDto: {
+            /** @description Nombre de la ficha. Sin él, la primera palabra del prospecto. */
+            firstName?: string;
+            /** @description Apellido de la ficha. Sin él, el resto del nombre del prospecto. */
+            lastName?: string;
+            /**
+             * Format: uuid
+             * @description Con varios pacientes con ese teléfono (409 `LEAD_AMBIGUOUS_PATIENTS`), el elegido de entre ellos.
+             */
+            patientId?: string;
+        };
+        ConvertLeadResultDto: {
+            /** Format: uuid */
+            patientId: string;
+            /** @description Se creó la ficha ahora. */
+            created: boolean;
+            /** @description Se enlazó a un paciente con ese teléfono. */
+            linked: boolean;
+            lead: components["schemas"]["LeadDto"];
+        };
+        /** @enum {string} */
+        LeadReasonKind: "INTEREST" | "LOSS";
+        LeadReasonDto: {
+            /**
+             * Format: uuid
+             * @description null en los predefinidos.
+             */
+            id: string | null;
+            kind: components["schemas"]["LeadReasonKind"];
+            name: string;
+            predefined: boolean;
+        };
+        CreateLeadReasonDto: {
+            kind: components["schemas"]["LeadReasonKind"];
+            name: string;
         };
         ClinicalEntryAnswerDto: {
             /**
@@ -30418,7 +30915,7 @@ export interface components {
             catalogItemIds: string[];
         };
         /** @enum {string} */
-        WorkQueueKey: "CLOSING_QUEUE" | "PAYMENT_REPORTS" | "ANAMNESIS_REVIEW" | "POST_OP_CHECKS" | "QUOTE_FOLLOW_UP" | "ACCEPTED_UNSCHEDULED" | "WAITLIST" | "RECALL" | "RECEIVABLES" | "LOW_STOCK";
+        WorkQueueKey: "CLOSING_QUEUE" | "PAYMENT_REPORTS" | "ANAMNESIS_REVIEW" | "POST_OP_CHECKS" | "LEADS_UNCONTACTED" | "QUOTE_FOLLOW_UP" | "ACCEPTED_UNSCHEDULED" | "WAITLIST" | "RECALL" | "RECEIVABLES" | "LOW_STOCK";
         WorkQueueOverdueDto: {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
@@ -35719,6 +36216,647 @@ export interface operations {
             };
             /** @description Solo un administrador puede cambiar la vigencia de la anamnesis. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LeadsController_list: {
+        parameters: {
+            query?: {
+                /** @description Solo esta sede (403 si no es de las del usuario). Sin ella, la sede activa (X-Location-Id) o todas las que ve el usuario. */
+                locationId?: string;
+                channel?: components["schemas"]["LeadChannel"];
+                ownerId?: string;
+                /** @description Solo los que no tienen responsable (la fila «Sin responsable» del informe). Se ignora con `ownerId`. */
+                unowned?: boolean;
+                /** @description Nombre (sin tildes ni mayúsculas) o 3+ dígitos del teléfono. */
+                q?: string;
+                /** @description Alta desde este instante (incluido). */
+                createdFrom?: string;
+                /** @description Alta hasta este instante (excluido). */
+                createdTo?: string;
+                stage?: components["schemas"]["LeadStage"];
+                /** @description Los que llegaron a tener cita (`SCHEDULED`) o asistieron (`ATTENDED`), aunque luego cambiaran de etapa: las cifras del informe. */
+                reached?: "SCHEDULED" | "ATTENDED";
+                /** @description Solo los «sin contactar hace más de 24 h» (Mi día). */
+                stale?: boolean;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadListDto"];
+                };
+            };
+            /** @description Filtros o paginación inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede fuera de las del usuario (o prospecto de una de ellas) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LeadsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLeadDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadDto"];
+                };
+            };
+            /** @description Teléfono no válido, motivo fuera del catálogo o responsable no válido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede fuera de las del usuario (o prospecto de una de ellas) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ese teléfono ya es de un paciente o de otro prospecto. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LeadsController_board: {
+        parameters: {
+            query?: {
+                /** @description Solo esta sede (403 si no es de las del usuario). Sin ella, la sede activa (X-Location-Id) o todas las que ve el usuario. */
+                locationId?: string;
+                channel?: components["schemas"]["LeadChannel"];
+                ownerId?: string;
+                /** @description Solo los que no tienen responsable (la fila «Sin responsable» del informe). Se ignora con `ownerId`. */
+                unowned?: boolean;
+                /** @description Nombre (sin tildes ni mayúsculas) o 3+ dígitos del teléfono. */
+                q?: string;
+                /** @description Alta desde este instante (incluido). */
+                createdFrom?: string;
+                /** @description Alta hasta este instante (excluido). */
+                createdTo?: string;
+                perStage?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadBoardDto"];
+                };
+            };
+            /** @description Filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede fuera de las del usuario (o prospecto de una de ellas) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LeadsController_count: {
+        parameters: {
+            query?: {
+                /** @description Solo esta sede (403 si no es de las del usuario). Sin ella, la sede activa (X-Location-Id) o todas las que ve el usuario. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadCountDto"];
+                };
+            };
+            /** @description Sede fuera de las del usuario (o prospecto de una de ellas) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LeadsController_report: {
+        parameters: {
+            query: {
+                /** @description Solo esta sede (403 si no es de las del usuario). Sin ella, la sede activa (X-Location-Id) o todas las que ve el usuario. */
+                locationId?: string;
+                /** @description Alta desde (incluido). */
+                from: string;
+                /** @description Alta hasta (excluido). */
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadReportDto"];
+                };
+            };
+            /** @description Período inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede fuera de las del usuario (o prospecto de una de ellas) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LeadsController_owners: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadOwnerDto"][];
+                };
+            };
+        };
+    };
+    LeadsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadSettingsDto"];
+                };
+            };
+        };
+    };
+    LeadsController_updateSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLeadSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadSettingsDto"];
+                };
+            };
+            /** @description Meses fuera de 1–120 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LeadsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadDetailDto"];
+                };
+            };
+            /** @description Sede fuera de las del usuario (o prospecto de una de ellas) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Prospecto no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LeadsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLeadDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadDto"];
+                };
+            };
+            /** @description Datos inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede fuera de las del usuario (o prospecto de una de ellas) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Prospecto no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ese teléfono ya es de un paciente o de otro prospecto. / El prospecto está anonimizado: ya no se puede modificar. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LeadsController_changeStage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeLeadStageDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadDto"];
+                };
+            };
+            /** @description Para marcarlo como perdido elige un motivo del catálogo. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede fuera de las del usuario (o prospecto de una de ellas) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Prospecto no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description «Cita agendada» y «Asistió» los pone la cita: agenda la primera cita desde el prospecto. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LeadsController_addNote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddLeadNoteDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadNoteDto"];
+                };
+            };
+            /** @description Nota vacía o de más de 1000 caracteres */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede fuera de las del usuario (o prospecto de una de ellas) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Prospecto no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El prospecto está anonimizado: ya no se puede modificar. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LeadsController_convert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConvertLeadDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConvertLeadResultDto"];
+                };
+            };
+            /** @description Escribe el apellido para crear la ficha del paciente. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede fuera de las del usuario (o prospecto de una de ellas) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Prospecto no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hay varios pacientes con ese teléfono: elige con cuál enlazar el prospecto. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LeadReasonsController_list: {
+        parameters: {
+            query?: {
+                kind?: components["schemas"]["LeadReasonKind"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadReasonDto"][];
+                };
+            };
+            /** @description Solo ADMIN y recepción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LeadReasonsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLeadReasonDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadReasonDto"];
+                };
+            };
+            /** @description Nombre fuera de 2–60 caracteres */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe un motivo con ese nombre. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LeadReasonsController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retirado. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Motivo no encontrado */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -58532,7 +59670,7 @@ export interface operations {
                     "application/json": components["schemas"]["PortalPlanDto"];
                 };
             };
-            /** @description Nombre vacío o largo, firma no válida, hash mal formado o sin `consent: true`. */
+            /** @description Nombre vacío, largo o con caracteres de control o de dirección («Escribe tu nombre sin caracteres especiales.»), firma no válida, hash mal formado o sin `consent: true`. */
             400: {
                 headers: {
                     [name: string]: unknown;
