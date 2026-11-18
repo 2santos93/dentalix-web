@@ -178,7 +178,7 @@ test.describe('Presentar el plan al paciente (DX-560)', () => {
     // Segunda moneda orientativa con la tasa de hoy.
     await page.getByLabel('Segunda moneda').selectOption('VES');
     await expect(article.getByTestId('presentation-second-total')).toContainText('Total orientativo (VES)');
-    await expect(article.getByTestId('presentation-plan-total')).toContainText(/Tasa de hoy: 1 USD = VES 40,00 \(manual/);
+    await expect(article.getByTestId('presentation-plan-total')).toContainText(/Tasa de hoy:\s1\sUSD\s=\sVES\s40,00\s\(manual/);
 
     await page.getByRole('radio', { name: 'Clínica' }).click();
     await expect(page).toHaveURL(/vista=clinica/);
@@ -275,7 +275,7 @@ test.describe('Presentar el plan al paciente (DX-560)', () => {
       await expect(budget.getByRole('img', { name: 'Dientes de esta visita: 26' })).toBeVisible();
       await expect(budget).toContainText('Total (USD)');
       await expect(budget.getByTestId('public-budget-second-total')).toContainText('Total orientativo (VES)');
-      await expect(budget.getByTestId('public-budget-second-note')).toContainText('1 USD = VES 40,00');
+      await expect(budget.getByTestId('public-budget-second-note')).toContainText(/1\sUSD\s=\sVES\s40,00/);
       await expectNoHorizontalScroll(publicPage);
       await shot(publicPage, 'dx560-firmar-presentacion', 390);
       const violations = await axeInBothThemes(publicPage, budget);
