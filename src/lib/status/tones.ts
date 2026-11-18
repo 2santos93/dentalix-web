@@ -403,6 +403,29 @@ const majorityReview = {
   REVIEWED: s('success', 'Revisado'),
 } satisfies Presentations<'PENDING' | 'OVERDUE' | 'REVIEWED'>;
 
+/**
+ * DX-464: estado de pago de una liquidación de honorarios. Pendiente y parcial
+ * piden pagar; pagada está hecha; sin importe es un cierre sin juicio.
+ */
+const commissionPayment = {
+  UNPAID: s('warning', 'Pendiente de pago'),
+  PARTIALLY_PAID: s('warning', 'Pagada parcialmente'),
+  PAID: s('success', 'Pagada'),
+  NOTHING_TO_PAY: s('neutral', 'Sin importe a pagar'),
+} satisfies Presentations<Schemas['CommissionSettlementPaymentStatus']>;
+
+/**
+ * DX-464: la conformidad del profesional con un pago. Sin pedir es nada aún;
+ * pedida espera su firma; caducado es un enlace que ya no sirve (como la firma
+ * a distancia); firmada, hecha.
+ */
+const commissionReceipt = {
+  NONE: s('neutral', 'Sin conformidad'),
+  PENDING: s('warning', 'Por firmar'),
+  EXPIRED: s('neutral', 'Caducado'),
+  SIGNED: s('success', 'Firmada conforme'),
+} satisfies Presentations<Schemas['CommissionReceiptStatus']>;
+
 export const STATUS_PRESENTATION = {
   majorityReview,
   equipmentMaintenance,
@@ -445,6 +468,8 @@ export const STATUS_PRESENTATION = {
   tenantDomain,
   signatureRequest,
   sedationSheet,
+  commissionPayment,
+  commissionReceipt,
 } as const;
 
 export type StatusKind = keyof typeof STATUS_PRESENTATION;

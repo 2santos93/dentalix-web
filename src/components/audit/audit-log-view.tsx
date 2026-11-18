@@ -52,6 +52,7 @@ import {
   signatureRequestDetail,
   treatmentPlanAcceptanceDetail,
   externalOrderDetail,
+  commissionPaymentDetail,
   dentalLabDetail,
   postOpCheckDetail,
 } from '@/lib/audit/audit-labels';
@@ -115,6 +116,8 @@ const copy = {
   unknownActor: 'Usuario no identificado',
   // DX-128: la baja de recordatorios por enlace o mensaje la hace el paciente.
   patientActor: 'El propio paciente',
+  // DX-464: la conformidad del pago la firma el profesional con su enlace, sin sesión.
+  professionalLinkActor: 'El profesional, con su enlace',
   formerMember: 'Usuario retirado',
   // Sin "Intenta de nuevo.": alimenta AsyncSection -> SectionError, que trae su botón.
   loadError: 'No pudimos cargar la auditoría.',
@@ -592,6 +595,7 @@ function eventDetail(
     signatureRequestDetail(event.metadata) ??
     treatmentPlanAcceptanceDetail(event.metadata) ??
     externalOrderDetail(event.metadata) ??
+    commissionPaymentDetail(event.metadata) ??
     dentalLabDetail(event.metadata) ??
     postOpCheckDetail(event.metadata)
   );
@@ -599,6 +603,7 @@ function eventDetail(
 
 function actorName(event: AuditEvent): string {
   if (event.actor) return event.actor.fullName ?? copy.formerMember;
+  if (event.metadata.reason === 'COMMISSION_RECEIPT_SIGNED') return copy.professionalLinkActor;
   return isPatientOptOut(event.metadata) ? copy.patientActor : copy.unknownActor;
 }
 
