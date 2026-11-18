@@ -149,3 +149,24 @@ describe('CommandPalette: «Laboratorio dental» (DX-017)', () => {
     expect(push).toHaveBeenCalledWith('/laboratorio');
   });
 });
+
+describe('CommandPalette: «Solicitudes online» (DX-016)', () => {
+  beforeEach(() => {
+    jest.mocked(listPatients).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 5 } as never);
+  });
+
+  it.each(['ADMIN', 'RECEPTION'] as const)('%s la encuentra al escribir y lleva a la bandeja', async (role) => {
+    const user = userEvent.setup();
+    render(<CommandPalette open onOpenChange={() => {}} token="t" role={role} />);
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'solicitudes' } });
+    await user.click(await screen.findByRole('option', { name: /Solicitudes online/ }));
+    expect(push).toHaveBeenCalledWith('/solicitudes-online');
+  });
+
+  it('el odontólogo no la ve (la atiende el mostrador)', async () => {
+    render(<CommandPalette open onOpenChange={() => {}} token="t" role="DENTIST" />);
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'solicitudes' } });
+    await screen.findByRole('listbox');
+    expect(screen.queryByRole('option', { name: /Solicitudes online/ })).not.toBeInTheDocument();
+  });
+});

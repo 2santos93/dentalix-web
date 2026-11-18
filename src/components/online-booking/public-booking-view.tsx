@@ -204,7 +204,9 @@ export function PublicBookingView() {
   const types = useMemo(() => (config ? typesAt(config, locationId) : []), [config, locationId]);
   const type = types.find((t) => t.id === typeId) ?? null;
   const providers = useMemo(() => (config ? providersFor(config, locationId, typeId) : []), [config, locationId, typeId]);
-  const skipProvider = providers.length <= 1;
+  // Con un solo profesional no se pregunta. Antes de elegir el tratamiento se
+  // cuenta con el total, para que «Paso 1 de N» no cambie al elegirlo.
+  const skipProvider = type ? providers.length <= 1 : (config?.providers.length ?? 0) <= 1;
   const providerId = skipProvider ? (providers[0]?.id ?? null) : providerChoice || null;
   const clock = location ? bookingClock(location) : null;
   const today = location ? sedeToday(location.timeZone) : null;
