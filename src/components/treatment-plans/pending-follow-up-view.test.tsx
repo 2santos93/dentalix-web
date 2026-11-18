@@ -517,6 +517,20 @@ describe('PendingFollowUpView: cada fila con la sede donde se presentó (DX-354b
       await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
     });
 
+    it('un 403 de sede ajena al pausar muestra el mensaje de la API, sin cambiar la fila', async () => {
+      const user = userEvent.setup();
+      mockedList.mockResolvedValue(page([at()]));
+      const message = 'No tienes acceso a esta sede.';
+      jest.mocked(pauseQuoteFollowUp).mockRejectedValue(new ApiError(403, message, { messages: [message] }));
+      render(<PendingFollowUpView token="tok" />);
+      const row = await screen.findByRole('row', { name: /Carolina Ruiz/ });
+      await user.click(within(row).getByRole('button', { name: 'Acciones de Carolina Ruiz' }));
+      await user.click(await screen.findByRole('menuitem', { name: 'Pausar seguimiento' }));
+      await waitFor(() => expect(notifyError).toHaveBeenCalledWith(message));
+      expect(within(row).getByTestId('follow-up-status')).toHaveTextContent('Sin avisos');
+      expect(screen.queryByText('Tu rol no tiene acceso a esta lista.')).not.toBeInTheDocument();
+    });
+
     it('en el teléfono, el estado va en la tarjeta', async () => {
       const original = window.matchMedia;
       window.matchMedia = ((query: string) => ({
