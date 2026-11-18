@@ -298,5 +298,7 @@ test('390 px: «Necesita cita» cierra el control y abre la cita con el paciente
   await expect(form.getByLabel('Profesional', { exact: true })).toHaveValue(dentistId);
   await expectNoHorizontalScroll(page);
   await page.keyboard.press('Escape');
-  await expect(list).not.toContainText(s.name, { timeout: 15_000 });
+  // Era el último control: la lista puede desaparecer (estado vacío), así que se
+  // comprueba que ya no hay ninguna tarjeta suya, no el texto de la lista.
+  await expect(page.getByRole('listitem').filter({ hasText: s.name })).toHaveCount(0, { timeout: 15_000 });
 });
