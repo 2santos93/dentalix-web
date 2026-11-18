@@ -542,7 +542,7 @@ function DocumentStep({
         {doc.budget ? (
           <>
             <div className="mt-3">
-              <PublicBudgetSummary budget={doc.budget} clock={clock} />
+              <PublicBudgetSummary budget={doc.budget} clock={clock} presentation={doc.presentation ?? null} />
             </div>
             <h2 className="mt-4 text-sm font-semibold">{copy.budgetConditions}</h2>
             <p className="mt-1 whitespace-pre-line text-sm leading-relaxed">{doc.body}</p>
