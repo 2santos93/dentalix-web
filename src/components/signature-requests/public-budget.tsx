@@ -135,7 +135,8 @@ export function PublicBudgetSummary({
           mode="completa"
           money={money}
           tone="paper"
-          headingLevel={3}
+          // Va justo bajo el título del documento (h1), antes de «Condiciones» (h2): h2 sin saltos (axe heading-order).
+          headingLevel={2}
           showPlanTotal={false}
           listLabel={copy.itemsLabel}
           // La clave de cada línea es su posición en `budget.items`.
