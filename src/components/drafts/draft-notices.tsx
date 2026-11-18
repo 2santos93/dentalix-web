@@ -2,6 +2,7 @@
 import { CloudOff, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
+import { deviceTime } from '@/lib/format/device-time';
 import type { FormDraft } from '@/lib/drafts/use-form-draft';
 import type { ResilientSubmit } from '@/lib/drafts/use-resilient-submit';
 
@@ -21,8 +22,7 @@ export const draftCopy = {
 
 /** «14:05»: la hora del equipo (el borrador es de este equipo), en 24 h. */
 export function draftTime(savedAt: number): string {
-  const d = new Date(savedAt);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return deviceTime(savedAt);
 }
 
 /**

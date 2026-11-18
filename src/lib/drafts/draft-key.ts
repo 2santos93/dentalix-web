@@ -1,4 +1,5 @@
 import { apiFetch } from '@/lib/api/client';
+import type { components } from '@/lib/api/schema';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { readJwtClaims } from '@/lib/auth/jwt-claims';
 
@@ -9,14 +10,8 @@ import { readJwtClaims } from '@/lib/auth/jwt-claims';
  * AES-GCM NO extraíble y vive solo en memoria, por dueño; nunca se persiste.
  * Se pide la primera vez que un formulario la necesita y se olvida al cerrar
  * sesión (`forgetDraftKeys`).
- *
- * Tipado a mano mientras `schema.d.ts` no lo trae (se regenera con la API).
  */
-export interface DraftKeyResponse {
-  /** base64 de 32 bytes. */
-  key: string;
-  version: 1;
-}
+export type DraftKeyResponse = components['schemas']['DraftKeyDto'];
 
 /** `sub|tenantId` del token: el mismo dueño que la copia sin conexión de la agenda (DX-405). */
 export function draftOwnerOf(token: string | null | undefined): string | null {

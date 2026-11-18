@@ -32,7 +32,7 @@ const admin = { fullName: 'Ana Titular', email: `ana.borradores.${suffix}@exampl
 const dentist = { fullName: 'Luis Borrador', email: `luis.borradores.${suffix}@example.com` };
 const procedureLabel = `Resina DX574 ${suffix}`.slice(0, 40);
 const OFFLINE_SAVED = 'Sin conexión; se guardó en este dispositivo.';
-const RECOVER = /Recuperar borrador de las \d{2}:\d{2}/;
+const RECOVER = /Recuperar borrador de las \d{2}:\d{2}/; // hora del equipo, 24 h (deviceTime)
 /** `aria-label` del formulario «Agregar ítem» (`copy.addItemHeading`). */
 const ADD_ITEM_HEADING = 'Agregar ítem';
 /** Debounce del borrador (800 ms) con margen. */
