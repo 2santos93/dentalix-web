@@ -14,6 +14,7 @@ import { saveCsv } from '@/lib/files/save-csv';
 import { regionalFormat } from '@/lib/format/regional-format';
 import { moneyWithCode } from '@/lib/format/sede-number';
 import { useSedeFormat } from '@/lib/locations/use-sede-format';
+import { getQuoteFollowUpReport, type QuoteFollowUpReport } from '@/lib/treatment-plans/quote-follow-up-api';
 
 let search = new URLSearchParams('tab=presupuestos');
 const replace = jest.fn();
@@ -36,6 +37,10 @@ jest.mock('../../lib/reports/quote-funnel-api', () => ({
   getQuoteFunnelPresentations: jest.fn(),
   downloadQuoteFunnelCsv: jest.fn(),
 }));
+jest.mock('../../lib/treatment-plans/quote-follow-up-api', () => ({
+  ...jest.requireActual('../../lib/treatment-plans/quote-follow-up-api'),
+  getQuoteFollowUpReport: jest.fn(),
+}));
 jest.mock('../../lib/files/save-csv', () => ({ saveCsv: jest.fn() }));
 jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 jest.mock('../../lib/locations/use-sede-time-zone', () => ({
@@ -49,6 +54,7 @@ jest.mock('../../lib/locations/use-sede-format', () => ({
 }));
 
 const mockedGet = getQuoteFunnel as jest.MockedFunction<typeof getQuoteFunnel>;
+const mockedFollowUp = jest.mocked(getQuoteFollowUpReport);
 const mockedDetail = getQuoteFunnelPresentations as jest.MockedFunction<typeof getQuoteFunnelPresentations>;
 const mockedCsv = downloadQuoteFunnelCsv as jest.MockedFunction<typeof downloadQuoteFunnelCsv>;
 const mockedSave = saveCsv as jest.MockedFunction<typeof saveCsv>;
@@ -164,12 +170,43 @@ function mockPhone(matches: boolean) {
   };
 }
 
+const stepStats = (step: number | null, sent: number, opened: number, accepted: number) => ({
+  step,
+  sent,
+  opened,
+  acceptedWithin14Days: accepted,
+  openRate: sent ? Math.round((opened / sent) * 1000) / 10 : null,
+  acceptanceRate: sent ? Math.round((accepted / sent) * 1000) / 10 : null,
+});
+
+function followUpReport(overrides: Partial<QuoteFollowUpReport> = {}): QuoteFollowUpReport {
+  return {
+    period: NOV,
+    scope: 'CLINIC',
+    restrictedToLocations: false,
+    filters: { locationId: null },
+    steps: [stepStats(1, 3, 1, 1), stepStats(2, 2, 1, 0), stepStats(3, 0, 0, 0)],
+    total: stepStats(null, 5, 2, 1),
+    skipped: [
+      { reason: 'OPTED_OUT', count: 2 },
+      { reason: 'NO_EMAIL', count: 1 },
+    ],
+    definitions: [
+      { key: 'sent', label: 'Enviados', howItIsCalculated: ['Avisos que salieron por email en el período.'] },
+      { key: 'acceptanceRate', label: 'Tasa de aceptación', howItIsCalculated: ['Aceptados en 14 días ÷ enviados.'] },
+    ],
+    options: { locations: [] },
+    ...overrides,
+  };
+}
+
 describe('QuoteFunnelView (DX-558)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     search = new URLSearchParams('tab=presupuestos');
     jest.mocked(useSedeFormat).mockReturnValue({ status: 'ready', fmt } as ReturnType<typeof useSedeFormat>);
     mockedGet.mockResolvedValue(report());
+    mockedFollowUp.mockResolvedValue(followUpReport());
     mockedDetail.mockResolvedValue({ currency: 'USD', items: [presentation()], total: 1, page: 1, pageSize: 25 });
   });
 
@@ -394,5 +431,61 @@ describe('QuoteFunnelView (DX-558)', () => {
     expect(screen.queryByTestId('quote-funnel-step-PRESENTED')).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
     await screen.findByTestId('quote-funnel-step-PRESENTED');
+  });
+  describe('DX-561: bloque «Seguimiento automático»', () => {
+    it('pide el informe con el mismo período y sede (sin profesional) y pinta por aviso y en total', async () => {
+      search = new URLSearchParams(
+        'tab=presupuestos&periodo=custom&desde=2026-10-01&hasta=2026-10-31&sede=loc-1&profesional=u-1',
+      );
+      render(<QuoteFunnelView token="t" isAdmin />);
+      const block = await screen.findByTestId('quote-follow-up-report');
+      await within(block).findByTestId('follow-up-sent-total');
+      expect(mockedFollowUp).toHaveBeenCalledWith('t', { from: '2026-10-01', to: '2026-10-31', locationId: 'loc-1' });
+      expect(within(block).getByRole('heading', { name: 'Seguimiento automático' })).toBeInTheDocument();
+      expect(block).toHaveTextContent('no se filtra por profesional');
+      const table = within(block).getByRole('table', { name: 'Seguimiento automático por aviso' });
+      const rows = within(table).getAllByRole('row').slice(1).map((r) => r.firstElementChild?.textContent);
+      expect(rows).toEqual(['Aviso 1', 'Aviso 2', 'Aviso 3', 'Total']);
+      expect(within(block).getByTestId('follow-up-sent-total')).toHaveTextContent('5');
+      expect(flat(within(block).getByTestId('follow-up-rate-total').textContent)).toMatch(/20\s?%/);
+      expect(within(block).getByTestId('follow-up-rate-step-3')).toHaveTextContent('—');
+      expect(within(table).getByRole('columnheader', { name: /Aceptados en 14 días/ })).toBeInTheDocument();
+      const skipped = within(block).getByRole('list', { name: 'Avisos que no salieron, por motivo' });
+      expect(within(skipped).getAllByRole('listitem').map((li) => flat(li.textContent))).toEqual([
+        'se dio de baja2',
+        'sin email1',
+      ]);
+      await userEvent.click(within(block).getByText('Cómo se calcula el seguimiento'));
+      expect(within(block).getAllByText('Aceptados en 14 días ÷ enviados.').some((el) => el.tagName === 'LI')).toBe(true);
+    });
+
+    it('sin avisos en el período: su vacío, que dice dónde se activa', async () => {
+      mockedFollowUp.mockResolvedValue(
+        followUpReport({
+          steps: [stepStats(1, 0, 0, 0), stepStats(2, 0, 0, 0), stepStats(3, 0, 0, 0)],
+          total: stepStats(null, 0, 0, 0),
+          skipped: [],
+        }),
+      );
+      render(<QuoteFunnelView token="t" isAdmin />);
+      const block = await screen.findByTestId('quote-follow-up-report');
+      expect(await within(block).findByText('Ningún aviso automático en el período')).toBeInTheDocument();
+      expect(block).toHaveTextContent('Ajustes › Presupuestos › Seguimiento automático');
+    });
+
+    it('un 403 sin sede no pinta el bloque; otro error, su escalón con reintento', async () => {
+      mockedFollowUp.mockRejectedValueOnce(new ApiError(403, 'Prohibido'));
+      const { unmount } = render(<QuoteFunnelView token="t" isAdmin />);
+      await screen.findByTestId('quote-funnel-step-PRESENTED');
+      await waitFor(() => expect(screen.queryByTestId('quote-follow-up-report')).not.toBeInTheDocument());
+      unmount();
+
+      mockedFollowUp.mockRejectedValueOnce(new Error('boom'));
+      render(<QuoteFunnelView token="t" isAdmin />);
+      const block = await screen.findByTestId('quote-follow-up-report');
+      expect(await within(block).findByText('No pudimos cargar el seguimiento automático.')).toBeInTheDocument();
+      await userEvent.click(within(block).getByRole('button', { name: 'Reintentar' }));
+      await within(block).findByTestId('follow-up-sent-total');
+    });
   });
 });

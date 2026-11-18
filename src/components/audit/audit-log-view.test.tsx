@@ -181,6 +181,31 @@ describe('AuditLogView', () => {
     ).toBeInTheDocument();
   });
 
+  // DX-561: el aviso del seguimiento automático no tiene usuario: lo manda el sistema.
+  it('el aviso del seguimiento automático sale como «Seguimiento automático», no como usuario no identificado', async () => {
+    mockedList.mockResolvedValue(
+      page({
+        items: [
+          {
+            ...view,
+            id: 'ev-fu',
+            action: 'SEND',
+            resourceType: 'SIGNATURE_REQUEST',
+            actor: null,
+            ip: null,
+            metadata: { reason: 'QUOTE_FOLLOW_UP_SENT', origin: 'JOB' },
+          },
+        ],
+      }),
+    );
+    render(<AuditLogView token="tok" />);
+    const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
+    const [, row] = within(table).getAllByRole('row');
+    expect(within(row).getByText('Seguimiento automático')).toBeInTheDocument();
+    expect(within(row).queryByText('Usuario no identificado')).not.toBeInTheDocument();
+    expect(row).toHaveTextContent('Aviso de seguimiento del presupuesto enviado con un enlace para aceptarlo');
+  });
+
   // DX-213: un desbloqueo rechazado no se confunde con uno hecho.
   it('distingue el desbloqueo del login de su rechazo', async () => {
     const admin = { id: 'u-admin', fullName: 'Ana Admin', role: 'ADMIN' as const };

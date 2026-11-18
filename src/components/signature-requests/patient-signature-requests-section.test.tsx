@@ -49,6 +49,7 @@ function request(overrides: Partial<SignatureRequest> = {}): SignatureRequest {
     locationId: caracasSede({ id: 'loc-1' }).id,
     type: 'CONSENT',
     channel: 'EMAIL',
+    origin: 'STAFF',
     templateId: 'tpl-1',
     templateVersion: 2,
     treatmentPlanId: null,
@@ -125,6 +126,13 @@ describe('PatientSignatureRequestsSection (DX-243)', () => {
     expect(empty).toHaveTextContent(/Usa «Enviar a firmar»/);
     expect(empty.querySelector('svg')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Enviar a firmar' })).toBeInTheDocument();
+  });
+
+  it('DX-561: lo enviado por el seguimiento automático no lleva nombre de persona', async () => {
+    mockedList.mockResolvedValue([request({ id: 'f', status: 'SENT', origin: 'FOLLOW_UP', sentByName: null })]);
+    render(<PatientSignatureRequestsSection token="tok" patientId="p1" userId="u-reception" />);
+    const list = await screen.findByRole('list', { name: 'Consentimientos enviados a firmar' });
+    await waitFor(() => expect(list).toHaveTextContent(/a la\*\*\*@example\.com por Seguimiento automático/));
   });
 
   it('estados y evidencias con el reloj de la sede: Enviado, Bloqueado, Firmado por paciente, Completo', async () => {

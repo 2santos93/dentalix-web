@@ -287,6 +287,8 @@ const SIGNATURE_REASONS: Record<string, string> = {
   SIGNATURE_LINK_LOCKED: 'Enlace bloqueado tras 5 códigos incorrectos',
   SIGNATURE_PATIENT_SIGNED: 'Firmado por el paciente a distancia',
   CONSENT_COUNTERSIGNED: 'Firma del profesional (consentimiento completo)',
+  // DX-561: el seguimiento automático (sin usuario) manda un enlace nuevo por opción.
+  QUOTE_FOLLOW_UP_SENT: 'Aviso de seguimiento del presupuesto enviado con un enlace para aceptarlo',
 };
 
 /** DX-243: qué pasó con la firma a distancia, o null si no es de ella. */
@@ -304,6 +306,9 @@ const TREATMENT_PLAN_ACCEPTANCE_REASONS: Record<string, string> = {
   PLAN_SPLIT_PENDING: 'Presupuesto pendiente creado por una aceptación parcial',
   // DX-559: ítems añadidos al plan desde una plantilla.
   PLAN_TEMPLATE_APPLIED: 'Procedimientos añadidos desde una plantilla',
+  // DX-561: la pausa vale para todas las opciones de la presentación.
+  QUOTE_FOLLOW_UP_PAUSED: 'Seguimiento automático del presupuesto pausado',
+  QUOTE_FOLLOW_UP_RESUMED: 'Seguimiento automático del presupuesto reanudado',
 };
 
 /**
@@ -1010,6 +1015,8 @@ export function clinicSettingsDetail(metadata: AuditMetadata): string | null {
   if (metadata.reason === 'EXTERNAL_ORDER_SETTINGS') return 'Plazo de las órdenes externas sin resultado';
   // DX-568: el antes y el después del resumen semanal los pinta `configChangeItems`.
   if (metadata.reason === 'WEEKLY_DIGEST_SETTINGS') return 'Resumen semanal por email';
+  // DX-561: el antes y el después (días, franja, activo) los pinta `configChangeItems`.
+  if (metadata.reason === 'QUOTE_FOLLOW_UP_SETTINGS_UPDATED') return 'Seguimiento automático de presupuestos';
   if (metadata.reason === 'WEEKLY_DIGEST_TEST_SENT') return 'Prueba del resumen semanal enviada a su correo';
   if (metadata.reason === 'WEEKLY_DIGEST_UNSUBSCRIBED') {
     return 'Dejó de recibir el resumen semanal desde el enlace del email';

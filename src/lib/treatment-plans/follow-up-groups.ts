@@ -20,6 +20,8 @@ export interface FollowUpGroup {
   daysSincePresented: number;
   /** Las opciones por seguir, en el orden de la API (de la más antigua a la más nueva). */
   options: PendingFollowUpItem[];
+  /** DX-561: el seguimiento automático de la presentación (la API manda el mismo en todas sus opciones). */
+  followUp: PendingFollowUpItem['followUp'];
 }
 
 export function followUpGroupKey(item: PendingFollowUpItem): string {
@@ -47,6 +49,7 @@ export function groupFollowUp(items: readonly PendingFollowUpItem[]): FollowUpGr
         presentedLocationId: item.presentedLocationId,
         daysSincePresented: item.daysSincePresented,
         options: [item],
+        followUp: item.followUp,
       });
       continue;
     }
