@@ -23,8 +23,12 @@ export const IDLE_CHECK_INTERVAL_MS = 15_000;
 /** Como mucho una escritura de actividad cada esto: el ratón no escribe en cada píxel. */
 export const ACTIVITY_WRITE_THROTTLE_MS = 5_000;
 
-/** Lo que cuenta como actividad: tocar, teclear, desplazar. Mover el ratón no. */
-export const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart', 'scroll'] as const;
+/**
+ * Lo que cuenta como actividad: tocar, teclear, la rueda. Mover el ratón no, y
+ * `scroll` tampoco: lo disparan también los desplazamientos que hace la propia
+ * app (y el teclado, la rueda y el dedo ya cuentan por su cuenta).
+ */
+export const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
 
 let memoryLastActivity = 0;
 

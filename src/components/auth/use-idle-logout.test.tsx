@@ -41,6 +41,20 @@ describe('useIdleLogout (DX-137)', () => {
     expect(takeIdleLogout()).toBe(true);
   });
 
+  it('si `/me` llega tarde, no cuenta como actividad', async () => {
+    let resolveMe: (me: { sessionIdleMinutes: number }) => void = () => undefined;
+    const { loadMe } = jest.requireMock('../../lib/session/session-store') as { loadMe: jest.Mock };
+    loadMe.mockReturnValueOnce(new Promise((resolve) => (resolveMe = resolve)));
+    renderHook(() => useIdleLogout('tok'));
+    act(() => jest.advanceTimersByTime(14 * MINUTE));
+    await act(async () => {
+      resolveMe({ sessionIdleMinutes: 15 });
+      await Promise.resolve();
+    });
+    act(() => jest.advanceTimersByTime(MINUTE + 15_000));
+    expect(clear).toHaveBeenCalled();
+  });
+
   it('tocar la pantalla en cualquier momento reinicia la cuenta', async () => {
     renderHook(() => useIdleLogout('tok'));
     await act(async () => {

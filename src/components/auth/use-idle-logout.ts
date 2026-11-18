@@ -30,6 +30,12 @@ import {
 export function useIdleLogout(token: string | null): void {
   const [minutes, setMinutes] = useState(DEFAULT_IDLE_MINUTES);
   const closing = useRef(false);
+  // Los minutos llegan con `/me` (a veces tarde): el temporizador los lee de
+  // aquí, sin volver a montarse ni apuntar actividad cuando cambian.
+  const minutesRef = useRef(minutes);
+  useEffect(() => {
+    minutesRef.current = minutes;
+  }, [minutes]);
 
   useEffect(() => {
     if (!token) return;
@@ -45,8 +51,9 @@ export function useIdleLogout(token: string | null): void {
   }, [token]);
 
   // El token se renueva cada pocos minutos (también por los sondeos en segundo
-  // plano): el temporizador depende de HABER sesión, no del token, o cada
-  // renovación contaría como actividad y la sesión no caducaría nunca.
+  // plano): el temporizador depende de HABER sesión, no del token ni de los
+  // minutos, o cada renovación (o la llegada tardía de `/me`) contaría como
+  // actividad y la sesión no caducaría a su hora.
   const signedIn = token !== null;
 
   useEffect(() => {
@@ -65,7 +72,7 @@ export function useIdleLogout(token: string | null): void {
 
     function check() {
       if (closing.current) return;
-      if (!isIdle(readLastActivity(), Date.now(), minutes)) return;
+      if (!isIdle(readLastActivity(), Date.now(), minutesRef.current)) return;
       closing.current = true;
       rememberIdleLogout();
       useAuthStore.getState().clear();
@@ -95,5 +102,5 @@ export function useIdleLogout(token: string | null): void {
       document.removeEventListener('visibilitychange', onVisibility);
       window.clearInterval(timer);
     };
-  }, [signedIn, minutes]);
+  }, [signedIn]);
 }
