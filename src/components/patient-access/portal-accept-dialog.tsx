@@ -12,6 +12,7 @@ import { InlineError } from '@/components/errors/inline-error';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { cn } from '@/lib/utils';
 
 // Copy como constantes (i18n-ready). Español neutro y de «tú», sin nada de un país.
 export const portalAcceptCopy = {
@@ -215,12 +216,16 @@ export function PortalAcceptDialog({
             <span id={previewId} className="text-sm font-medium text-ink">
               {copy.previewLabel}
             </span>
-            {/* Fondo blanco fijo: la firma es un documento que se imprime (igual que el lienzo de «Dibujar»). */}
+            {/* Con firma, fondo blanco fijo: es un documento que se imprime (igual que el lienzo de
+                «Dibujar»). Sin firma, el aviso va sobre la superficie del tema, con su contraste. */}
             <div
               aria-labelledby={previewId}
               role="group"
               data-testid="portal-typed-signature"
-              className="flex min-h-28 min-w-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-white px-3"
+              className={cn(
+                'flex min-h-28 min-w-0 items-center justify-center overflow-hidden rounded-lg border px-3',
+                typed ? 'border-border bg-white' : 'border-dashed border-border bg-surface-sunken',
+              )}
             >
               {typed ? (
                 // eslint-disable-next-line @next/next/no-img-element -- data URL generada en el navegador; next/image no la optimiza
@@ -231,7 +236,7 @@ export function PortalAcceptDialog({
                   className="h-24 w-full max-w-full object-contain"
                 />
               ) : (
-                <p className="px-2 py-4 text-center text-sm text-[#4b5563]">
+                <p className="px-2 py-4 text-center text-sm text-muted">
                   {typedUnsupported ? copy.previewUnsupported : copy.previewEmpty}
                 </p>
               )}
