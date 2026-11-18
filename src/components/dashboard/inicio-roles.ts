@@ -34,6 +34,8 @@ const ACCESS = {
   receivables: ['ADMIN', 'RECEPTION'],
   /** `GET /payment-reports/count` (PAYMENT_ROLES, DX-569): los pagos que reportan los pacientes. */
   paymentReports: ['ADMIN', 'RECEPTION'],
+  /** `GET /online-booking/requests/pending-count` (APPOINTMENT_ROLES, DX-016; la bandeja la atiende el mostrador). */
+  onlineRequests: ['ADMIN', 'RECEPTION'],
   /** `GET /inventory/items?lowStockOnly` (INVENTORY_ROLES). */
   lowStock: ['ADMIN', 'ASSISTANT'],
   /** Lista «Por reponer»: la asistente prepara el material; ADMIN ve el conteo. */

@@ -260,3 +260,12 @@ function periodLockedMessage(err: ApiError, options: ApiErrorMessageOptions): st
   if (!err.lockedThrough || !options.civilDate) return base;
   return `${withPeriod(base)} ${errorMessageCopy.periodLockedThrough(options.civilDate(err.lockedThrough))}`;
 }
+
+/**
+ * DX-016: ¿dijo el servidor alguno de estos textos? Para decidir el PASO
+ * siguiente ante un 4xx sin `code` (p. ej. «El formulario caducó» → recargar),
+ * nunca para pintarlo: lo que se enseña sigue saliendo de `apiErrorMessage`.
+ */
+export function apiErrorSaid(err: unknown, test: (serverText: string) => boolean): boolean {
+  return err instanceof ApiError && err.messages.some(test);
+}

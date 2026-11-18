@@ -89,6 +89,12 @@ export class ApiError extends Error {
    * la BD no lo sabe).
    */
   public readonly lockedThrough: string | null;
+  /**
+   * DX-016: en el 409 `ONLINE_SLOT_TAKEN` / `ONLINE_PATIENT_BUSY` de la reserva
+   * online, la sesión para reintentar con otro hueco sin volver a mandar los
+   * datos del paciente nuevo (su ficha ya se creó). Solo vive en memoria.
+   */
+  public readonly sessionToken: string | null;
 
   constructor(
     public readonly status: number,
@@ -109,6 +115,7 @@ export class ApiError extends Error {
       position?: number | null;
       lineId?: string | null;
       lockedThrough?: string | null;
+      sessionToken?: string | null;
     } = {},
   ) {
     super(message);
@@ -128,6 +135,7 @@ export class ApiError extends Error {
     this.position = details.position ?? null;
     this.lineId = details.lineId ?? null;
     this.lockedThrough = details.lockedThrough ?? null;
+    this.sessionToken = details.sessionToken ?? null;
   }
 }
 

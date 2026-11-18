@@ -130,6 +130,10 @@ load_env() {
   # DX-435: la oferta de hueco pública (por IP y por token).
   export RATE_LIMIT_SLOT_OFFER_LIMIT=100000
   export RATE_LIMIT_SLOT_TOKEN_LIMIT=100000
+  # DX-016: la reserva online pública (lecturas y escrituras por IP); el spec
+  # carga la página, pide huecos y reserva varias veces desde la misma IP.
+  export RATE_LIMIT_ONLINE_BOOKING_LIMIT=100000
+  export RATE_LIMIT_ONLINE_BOOKING_WRITE_LIMIT=100000
   # DX-443: la copia pública del PDF firmado (por IP: 20/min; por token:
   # 10/min). Una pasada de remote-signature abre /copia/ media docena de
   # veces; repetida (--repeat-each) o junto a otra suite, la siguiente daba 429
