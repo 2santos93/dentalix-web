@@ -62,6 +62,29 @@ interface PlanPresentationVisitsProps {
   headingLevel?: 2 | 3;
   /** `false`: el total del plan lo pinta quien lo usa (la página pública, con su desglose). */
   showPlanTotal?: boolean;
+  /**
+   * Nombre de la lista de visitas. Con él, las visitas van en una `<ul>`
+   * (la página pública: «Procedimientos del presupuesto», el mismo nombre que
+   * su lista de siempre).
+   */
+  listLabel?: string;
+  /** Lo que va bajo cada línea (la página pública: precio, descuento y precio de lista). */
+  lineDetail?: (line: PresentationLine) => React.ReactNode;
+}
+
+/** Con nombre, las visitas son una lista (cada una, un elemento); sin él, solo se apilan. */
+function VisitsList({ label, children }: { label?: string; children: React.ReactNode }) {
+  return label ? (
+    <ul aria-label={label} className="flex min-w-0 flex-col gap-4">
+      {children}
+    </ul>
+  ) : (
+    <>{children}</>
+  );
+}
+
+function VisitItem({ listed, children }: { listed: boolean; children: React.ReactNode }) {
+  return listed ? <li className="min-w-0">{children}</li> : <>{children}</>;
 }
 
 function toothLine(line: PresentationLine): string | null {
@@ -92,6 +115,8 @@ export function PlanPresentationVisits({
   secondTotal = null,
   headingLevel = 2,
   showPlanTotal = true,
+  listLabel,
+  lineDetail,
 }: PlanPresentationVisitsProps) {
   const t = TONES[tone];
   const showMoney = modeShowsMoney(mode);
@@ -105,69 +130,75 @@ export function PlanPresentationVisits({
 
   return (
     <div className="presentation-visits flex min-w-0 flex-col gap-4" data-mode={mode}>
-      {model.visits.map((visit) => {
-        const headingId = `${baseId}-visit-${visit.visit}`;
-        const drawTeeth = showTeeth && visit.teeth.length > 0;
-        return (
-          <section
-            key={visit.visit}
-            aria-labelledby={headingId}
-            data-testid={`presentation-visit-${visit.visit}`}
-            className={cn(
-              'presentation-visit flex min-w-0 flex-col gap-3 rounded-lg border p-4 break-inside-avoid sm:p-5',
-              t.card,
-            )}
-          >
-            <header className="flex min-w-0 flex-col gap-0.5">
-              <Heading id={headingId} className={cn('text-base font-semibold break-words', t.ink)}>
-                {visitTitle(visit)}
-              </Heading>
-              {visit.minDaysAfterPrevious > 0 ? (
-                <p className={cn('text-xs tabular-nums', t.muted)}>{copy.interval(visit.minDaysAfterPrevious)}</p>
-              ) : null}
-            </header>
-            <div className={cn('flex min-w-0 flex-col gap-4', drawTeeth && 'md:flex-row md:items-start')}>
-              {drawTeeth ? (
-                <CompactOdontogram teeth={visit.teeth} tone={tone} className="shrink-0 md:w-64" />
-              ) : null}
-              <ul
-                aria-label={copy.proceduresOf(visit.visit)}
-                className={cn('flex min-w-0 flex-1 flex-col divide-y border-y', t.rule)}
+      <VisitsList label={listLabel}>
+        {model.visits.map((visit) => {
+          const headingId = `${baseId}-visit-${visit.visit}`;
+          const drawTeeth = showTeeth && visit.teeth.length > 0;
+          return (
+            <VisitItem key={visit.visit} listed={Boolean(listLabel)}>
+              <section
+                aria-labelledby={headingId}
+                data-testid={`presentation-visit-${visit.visit}`}
+                className={cn(
+                  'presentation-visit flex min-w-0 flex-col gap-3 rounded-lg border p-4 break-inside-avoid sm:p-5',
+                  t.card,
+                )}
               >
-                {visit.lines.map((line) => {
-                  const tooth = showTeeth ? toothLine(line) : null;
-                  return (
-                    <li
-                      key={line.key}
-                      data-testid="presentation-line"
-                      className={cn('flex min-w-0 items-start justify-between gap-3 py-2 text-sm', t.rule)}
-                    >
-                      <div className="min-w-0">
-                        <p lang={line.language} className={cn('whitespace-pre-line break-words font-medium', t.ink)}>
-                          {line.label}
-                        </p>
-                        {tooth ? <p className={cn('text-xs tabular-nums', t.muted)}>{tooth}</p> : null}
-                      </div>
-                      {showMoney ? (
-                        <p className={cn('shrink-0 text-right font-medium tabular-nums', t.ink)}>{money(line.subtotal)}</p>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-            {showMoney ? (
-              <p
-                data-testid={`presentation-visit-total-${visit.visit}`}
-                className={cn('flex justify-between gap-3 text-sm font-semibold tabular-nums', t.ink)}
-              >
-                <span>{copy.visitTotal}</span>
-                <span>{money(visit.total)}</span>
-              </p>
-            ) : null}
-          </section>
-        );
-      })}
+                <header className="flex min-w-0 flex-col gap-0.5">
+                  <Heading id={headingId} className={cn('text-base font-semibold break-words', t.ink)}>
+                    {visitTitle(visit)}
+                  </Heading>
+                  {visit.minDaysAfterPrevious > 0 ? (
+                    <p className={cn('text-xs tabular-nums', t.muted)}>{copy.interval(visit.minDaysAfterPrevious)}</p>
+                  ) : null}
+                </header>
+                <div className={cn('flex min-w-0 flex-col gap-4', drawTeeth && 'md:flex-row md:items-start')}>
+                  {drawTeeth ? (
+                    <CompactOdontogram teeth={visit.teeth} tone={tone} className="shrink-0 md:w-64" />
+                  ) : null}
+                  <ul
+                    aria-label={copy.proceduresOf(visit.visit)}
+                    className={cn('flex min-w-0 flex-1 flex-col divide-y border-y', t.rule)}
+                  >
+                    {visit.lines.map((line) => {
+                      const tooth = showTeeth ? toothLine(line) : null;
+                      return (
+                        <li
+                          key={line.key}
+                          data-testid="presentation-line"
+                          className={cn('flex min-w-0 flex-col gap-1 py-2 text-sm', t.rule)}
+                        >
+                          <div className="flex min-w-0 items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p lang={line.language} className={cn('whitespace-pre-line break-words font-medium', t.ink)}>
+                                {line.label}
+                              </p>
+                              {tooth ? <p className={cn('text-xs tabular-nums', t.muted)}>{tooth}</p> : null}
+                            </div>
+                            {showMoney ? (
+                              <p className={cn('shrink-0 text-right font-medium tabular-nums', t.ink)}>{money(line.subtotal)}</p>
+                            ) : null}
+                          </div>
+                          {showMoney && lineDetail ? lineDetail(line) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+                {showMoney ? (
+                  <p
+                    data-testid={`presentation-visit-total-${visit.visit}`}
+                    className={cn('flex justify-between gap-3 text-sm font-semibold tabular-nums', t.ink)}
+                  >
+                    <span>{copy.visitTotal}</span>
+                    <span>{money(visit.total)}</span>
+                  </p>
+                ) : null}
+              </section>
+            </VisitItem>
+          );
+        })}
+      </VisitsList>
 
       {showMoney && showPlanTotal ? (
         <dl

@@ -94,6 +94,29 @@ export function PublicBudgetSummary({
   const hiddenListPrice = listCurrencies.includes(null);
   const second: SecondCurrency | null = presentation?.secondCurrency ?? null;
   const anyMoney = (value: number, currency: string) => sedeMoney(value, currency, fmt);
+  // Lo que el paciente acepta y firma, por línea: precio, descuento y precio de lista en su moneda.
+  const priceDetail = (item: PublicBudgetItem) => {
+    const listText = listPriceText(item);
+    return (
+      <dl className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-[#4b5563] tabular-nums">
+        <div className="flex gap-1">
+          <dt>{copy.unitPrice}</dt>
+          <dd>{money(item.unitPrice)}</dd>
+        </div>
+        {item.discount > 0 ? (
+          <div className="flex gap-1">
+            <dt>{copy.discount}</dt>
+            <dd>−{money(item.discount)}</dd>
+          </div>
+        ) : null}
+        {listText ? (
+          <div>
+            <dd>{copy.listPrice(listText)}</dd>
+          </div>
+        ) : null}
+      </dl>
+    );
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -114,11 +137,16 @@ export function PublicBudgetSummary({
           tone="paper"
           headingLevel={3}
           showPlanTotal={false}
+          listLabel={copy.itemsLabel}
+          // La clave de cada línea es su posición en `budget.items`.
+          lineDetail={(line) => {
+            const item = budget.items[Number(line.key)];
+            return item ? priceDetail(item) : null;
+          }}
         />
       ) : (
         <ul aria-label={copy.itemsLabel} className="flex flex-col divide-y divide-[#e5e7eb] border-y border-[#e5e7eb]">
           {budget.items.map((item, index) => {
-            const listText = listPriceText(item);
             return (
               <li key={`${item.toothNumber}-${index}`} className="flex flex-col gap-1 py-3 text-sm">
                 <div className="flex items-start justify-between gap-3">
@@ -131,23 +159,7 @@ export function PublicBudgetSummary({
                   </p>
                   <p className="shrink-0 text-right font-medium tabular-nums text-[#111827]">{money(item.subtotal)}</p>
                 </div>
-                <dl className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-[#4b5563] tabular-nums">
-                  <div className="flex gap-1">
-                    <dt>{copy.unitPrice}</dt>
-                    <dd>{money(item.unitPrice)}</dd>
-                  </div>
-                  {item.discount > 0 ? (
-                    <div className="flex gap-1">
-                      <dt>{copy.discount}</dt>
-                      <dd>−{money(item.discount)}</dd>
-                    </div>
-                  ) : null}
-                  {listText ? (
-                    <div>
-                      <dd>{copy.listPrice(listText)}</dd>
-                    </div>
-                  ) : null}
-                </dl>
+                {priceDetail(item)}
               </li>
             );
           })}

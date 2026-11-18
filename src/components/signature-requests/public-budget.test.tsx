@@ -142,7 +142,33 @@ describe('PublicBudgetSummary · DX-560 presentación', () => {
     expect(text(screen.getByTestId('public-budget-second-note'))).toBe(
       'Tasa del 18/11/2026: 1 USD = VES 4.000,00 (manual). El importe en USD es orientativo y se calcula con la tasa del día del pago.',
     );
-    expect(screen.queryByRole('list', { name: 'Procedimientos del presupuesto' })).not.toBeInTheDocument();
+    // Lo que firma sigue por línea: precio (y descuento o precio de lista si los hay).
+    const items = screen.getByRole('list', { name: 'Procedimientos del presupuesto' });
+    expect(text(items)).toContain('PrecioVES 150.000,00');
+    expect(text(items)).toContain('PrecioVES 3.150.000,00');
+  });
+
+  it('con presentación sigue el descuento y el precio de lista en la moneda del catálogo, con su nota', () => {
+    const eur = eurBudget();
+    render(
+      <PublicBudgetSummary
+        budget={{ ...eur, items: [{ ...eur.items[0], discount: 10, subtotal: 90.55 }] }}
+        clock={CLOCK}
+        presentation={{
+          language: 'es',
+          items: [{ index: 0, visit: 1, label: 'Funda para el incisivo', language: 'es' }],
+          visitOrganization: [{ visit: 1, label: null, minDaysAfterPrevious: 0 }],
+        }}
+      />,
+    );
+    const items = screen.getByRole('list', { name: 'Procedimientos del presupuesto' });
+    expect(within(items).getByRole('heading', { name: 'Visita 1' })).toBeInTheDocument();
+    expect(text(items)).toContain('Funda para el incisivo');
+    expect(text(items)).toContain('PrecioEUR 100,55');
+    expect(text(items)).toContain('Descuento−EUR 10,00');
+    expect(text(items)).toContain('Precio de lista VES 80.000,00');
+    expect(text(items)).not.toContain('EUR 80.000,00');
+    expect(screen.getByTestId('public-budget-list-price-note')).toBeInTheDocument();
   });
 
   it('sin presentación (enlaces anteriores): la lista de siempre, sin segunda moneda', () => {
