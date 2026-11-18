@@ -118,6 +118,8 @@ const copy = {
   patientActor: 'El propio paciente',
   // DX-464: la conformidad del pago la firma el profesional con su enlace, sin sesión.
   professionalLinkActor: 'El profesional, con su enlace',
+  // DX-561: el aviso del seguimiento automático lo manda el sistema, sin usuario.
+  followUpActor: 'Seguimiento automático',
   formerMember: 'Usuario retirado',
   // Sin "Intenta de nuevo.": alimenta AsyncSection -> SectionError, que trae su botón.
   loadError: 'No pudimos cargar la auditoría.',
@@ -604,6 +606,7 @@ function eventDetail(
 function actorName(event: AuditEvent): string {
   if (event.actor) return event.actor.fullName ?? copy.formerMember;
   if (event.metadata.reason === 'COMMISSION_RECEIPT_SIGNED') return copy.professionalLinkActor;
+  if (event.metadata.reason === 'QUOTE_FOLLOW_UP_SENT') return copy.followUpActor;
   return isPatientOptOut(event.metadata) ? copy.patientActor : copy.unknownActor;
 }
 

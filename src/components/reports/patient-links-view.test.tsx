@@ -183,6 +183,8 @@ describe('PatientLinksView (DX-424)', () => {
     expect(how).toHaveTextContent('Cada porcentaje es sobre los enlaces enviados en el período.');
     expect(how).toHaveTextContent('Un enlace anulado o reemplazado por otro no cuenta');
     expect(how).toHaveTextContent('Sin nombres, teléfonos ni emails de pacientes.');
+    // DX-561: las firmas, solo las enviadas por la clínica.
+    expect(how).toHaveTextContent('aceptación de presupuesto: solo los enviados por la clínica');
   });
 
   it('a 390 px cada tipo es una tarjeta (sin tabla) y los «—» no se pintan', async () => {

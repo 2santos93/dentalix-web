@@ -18,6 +18,7 @@ function item(over: Partial<PendingFollowUpItem> = {}): PendingFollowUpItem {
     currency: 'VES',
     total: 100,
     itemCount: 1,
+    followUp: { lastStep: null, lastSentAt: null, lastStatus: null, lastReason: null, paused: false },
     ...over,
   };
 }
