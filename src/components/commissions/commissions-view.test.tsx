@@ -10,7 +10,7 @@ import { setActiveLocationId } from '@/lib/locations/location-store';
 import { clearSessionStore } from '@/lib/session/session-store';
 import { setupUser } from '@/lib/test/user';
 import { CommissionsView, commissionsViewCopy as copy } from './commissions-view';
-import { DRA_X, makePreview, makeRuleRow, makeSettlement } from './commissions-fixtures';
+import { DRA_X, makePreview, makeRuleRow, makeSettlement, makeSettlementSummary } from './commissions-fixtures';
 
 const push = jest.fn();
 jest.mock('next/navigation', () => ({
@@ -42,7 +42,7 @@ describe('CommissionsView (DX-018)', () => {
       categories: ['Endodoncia', 'Higiene'],
       deductionsAvailable: { labCost: false, cardFee: false },
     });
-    jest.mocked(listCommissionSettlements).mockResolvedValue([makeSettlement()]);
+    jest.mocked(listCommissionSettlements).mockResolvedValue([makeSettlementSummary()]);
   });
 
   it('ADMIN: vista previa con el detalle por abono, los ajustes aparte y los totales por moneda', async () => {
@@ -103,6 +103,19 @@ describe('CommissionsView (DX-018)', () => {
     expect(screen.queryByRole('combobox', { name: copy.professional })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: copy.close })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /2026/ })).toHaveAttribute('href', '/honorarios/s1');
+  });
+
+  it('DX-464: cada liquidación cerrada lleva su estado de pago', async () => {
+    jest.mocked(getTokenRole).mockReturnValue('ADMIN');
+    jest.mocked(getCommissionPreview).mockResolvedValue(makePreview());
+    jest.mocked(listCommissionSettlements).mockResolvedValue([
+      makeSettlementSummary(),
+      makeSettlementSummary({ id: 's2', payment: { status: 'PAID', currencies: [] } }),
+    ]);
+    render(<CommissionsView token="tok" />);
+    const list = await screen.findByRole('table', { name: copy.settlementsLabel });
+    expect(within(list).getByText('Pendiente de pago')).toBeInTheDocument();
+    expect(within(list).getByText('Pagada')).toBeInTheDocument();
   });
 
   it('error al calcular: sección con reintento', async () => {

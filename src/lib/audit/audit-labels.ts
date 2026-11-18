@@ -327,6 +327,24 @@ const EXTERNAL_ORDER_REASONS: Record<string, string> = {
   EXTERNAL_ORDER_TEMPLATE_UPDATED: 'Plantilla de orden cambiada',
 };
 
+/**
+ * DX-464: el pago de una liquidación de honorarios (y su gasto en la sede),
+ * sus PDF y la conformidad del profesional. Sin importes en la metadata.
+ */
+const COMMISSION_PAYMENT_REASONS: Record<string, string> = {
+  COMMISSION_PAYMENT_CREATED: 'Pago de la liquidación registrado',
+  COMMISSION_PAYMENT_VOIDED: 'Pago de la liquidación anulado',
+  COMMISSION_SETTLEMENT_PDF: 'PDF de la liquidación descargado',
+  COMMISSION_RECEIPT_PDF: 'Recibo del pago descargado',
+  COMMISSION_RECEIPT_REQUESTED: 'Conformidad pedida al profesional',
+  COMMISSION_RECEIPT_SIGNED: 'Conformidad firmada por el profesional',
+  COMMISSION_PAYMENT: 'Gasto del pago de honorarios',
+};
+
+export function commissionPaymentDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && COMMISSION_PAYMENT_REASONS[metadata.reason]) ?? null;
+}
+
 /** DX-572: el paso de la orden externa, o null si el evento no es de ella. */
 export function externalOrderDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && EXTERNAL_ORDER_REASONS[metadata.reason]) ?? null;
