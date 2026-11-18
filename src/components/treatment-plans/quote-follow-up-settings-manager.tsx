@@ -42,6 +42,7 @@ export const quoteFollowUpManagerCopy = {
     'El enlace caduca a las 72 horas; cada aviso trae uno nuevo y anula el anterior.',
     'Se detiene al aceptar, rechazar, agendar una cita, vencer el presupuesto o darse de baja el paciente. Recepción puede pausarlo en «Presupuestos por seguir».',
     'Solo sale por email, a pacientes con email y sin baja de los avisos (en un menor, a su responsable).',
+    'Los avisos usan como mucho la mitad de los emails diarios de la clínica; el resto se envía en los días siguientes.',
   ],
 };
 

@@ -84,6 +84,9 @@ describe('QuoteFollowUpSettingsManager (DX-561)', () => {
     expect(about).toHaveTextContent('Sin importes ni tratamientos.');
     expect(about).toHaveTextContent('caduca a las 72 horas');
     expect(about).toHaveTextContent(/aceptar, rechazar, agendar una cita, vencer el presupuesto o darse de baja/);
+    expect(about).toHaveTextContent(
+      'Los avisos usan como mucho la mitad de los emails diarios de la clínica; el resto se envía en los días siguientes.',
+    );
   });
 
   it('activa una sede con 3/10/21 de 9 a 19 y lo anuncia', async () => {
@@ -168,5 +171,22 @@ describe('QuoteFollowUpSettingsManager (DX-561)', () => {
     mockedUpdate.mockRejectedValueOnce(new ApiError(404, 'Sede no encontrada', { messages: ['Sede no encontrada'] }));
     await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
     expect(await within(dialog).findByText('Sede no encontrada')).toBeInTheDocument();
+  });
+  it('409 LOCATION_TIMEZONE_REQUIRED: el aviso de la sede sin zona dentro del modal, con reintento', async () => {
+    const user = setupUser();
+    const message = 'La sede no tiene zona horaria: configúrala en Ajustes › Sedes para activar el seguimiento.';
+    mockedUpdate
+      .mockRejectedValueOnce(
+        new ApiError(409, message, { messages: [message], code: 'LOCATION_TIMEZONE_REQUIRED', locationId: 'loc-2' }),
+      )
+      .mockResolvedValueOnce({ ...norte, enabled: true });
+    render(<QuoteFollowUpSettingsManager token="tok" allowed />);
+    const dialog = await openNorte(user);
+    await user.click(within(dialog).getByRole('checkbox', { name: /Enviar avisos de seguimiento por email/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
+    expect(await within(dialog).findByText(message)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Reintentar' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 });

@@ -19,6 +19,7 @@ import {
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -29,6 +30,9 @@ export function followUpHourLabel(hour: number, fmt: RegionalFormat | null): str
   if (hour === 24) return 'medianoche';
   return fmt ? fmt.clock(hour, 0) : `${hour} h`;
 }
+
+/** 409 de la API al activar el seguimiento en una sede sin zona horaria. */
+const LOCATION_TIMEZONE_REQUIRED = 'LOCATION_TIMEZONE_REQUIRED';
 
 const FROM_HOURS = Array.from({ length: 24 }, (_, h) => h);
 const UNTIL_HOURS = Array.from({ length: 24 }, (_, h) => h + 1);
@@ -90,6 +94,8 @@ export function QuoteFollowUpSettingsModal({
   const [fieldErrors, setFieldErrors] = useState<FollowUpFieldErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // La sede no tiene zona horaria: sin ella no se sabe la franja (el arreglo está en Ajustes › Sedes).
+  const [zoneError, setZoneError] = useState<{ message: string; locationId: string | null } | null>(null);
 
   const offsetsHintId = `${ids}-offsets-hint`;
   const offsetsErrorId = `${ids}-offsets-error`;
@@ -103,7 +109,12 @@ export function QuoteFollowUpSettingsModal({
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    await save();
+  }
+
+  async function save() {
     setError(null);
+    setZoneError(null);
     setFieldErrors({});
     const parsed = parseFollowUpDraft(offsets, fromHour, untilHour);
     if ('errors' in parsed) {
@@ -123,6 +134,10 @@ export function QuoteFollowUpSettingsModal({
       onOpenChange(false);
     } catch (err) {
       const message = apiErrorMessage(err, copy.genericError);
+      if (err instanceof ApiError && err.code === LOCATION_TIMEZONE_REQUIRED) {
+        setZoneError({ message, locationId: err.locationId ?? settings.locationId });
+        return;
+      }
       const field = err instanceof ApiError && err.status === 400 ? followUpErrorField(message) : null;
       if (field) {
         const errors = { [field]: message };
@@ -145,6 +160,16 @@ export function QuoteFollowUpSettingsModal({
       submitting={submitting}
       error={error}
     >
+      {zoneError ? (
+        <SedeConfigError
+          kind="timeZone"
+          variant="note"
+          description={zoneError.message}
+          locationId={zoneError.locationId}
+          onRetry={() => void save()}
+        />
+      ) : null}
+
       <Checkbox
         id={`${ids}-enabled`}
         checked={enabled}
