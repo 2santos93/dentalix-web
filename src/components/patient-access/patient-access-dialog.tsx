@@ -139,7 +139,7 @@ export function PatientAccessDialog({ open, onOpenChange, token, patientId, onEd
     } catch (err) {
       const message = apiErrorMessage(err, copy.genericError);
       // 409 sin fecha de nacimiento (el segundo factor): se ofrece editar la ficha.
-      setNeedsBirthDate(err instanceof ApiError && err.status === 409 && /nacimiento/i.test(message));
+      setNeedsBirthDate(err instanceof ApiError && err.code === 'PATIENT_ACCESS_NO_BIRTH_DATE');
       setError(message);
     } finally {
       setSubmitting(false);

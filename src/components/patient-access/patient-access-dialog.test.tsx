@@ -146,7 +146,9 @@ test('409 sin fecha de nacimiento: el mensaje de la API y «Editar la ficha»', 
   const user = userEvent.setup();
   const message =
     'El paciente no tiene fecha de nacimiento registrada: añádela en su ficha antes de compartir el enlace (es lo que se le pedirá para abrirlo).';
-  mockedCreate.mockRejectedValue(new ApiError(409, message, { messages: [message] }));
+  mockedCreate.mockRejectedValue(
+    new ApiError(409, message, { messages: [message], code: 'PATIENT_ACCESS_NO_BIRTH_DATE' }),
+  );
   const { onOpenChange, onEditPatient } = renderDialog();
   await user.click(screen.getByRole('button', { name: copy.submit }));
   expect(await screen.findByText(message)).toBeInTheDocument();
