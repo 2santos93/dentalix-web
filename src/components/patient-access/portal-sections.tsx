@@ -49,7 +49,9 @@ export const portalSectionsCopy = {
   plansEmptyHint: 'Cuando la clínica te presente un presupuesto, aparecerá aquí.',
   alternatives: 'Alternativas para elegir',
   alternativesHint: 'La clínica te propone estas opciones: eliges una de ellas.',
-  option: (label: string | null, index: number) => `Opción ${label ?? String.fromCharCode(65 + index)}`,
+  // La API ya manda «Opción A» (DX-040; o un texto libre como «Opción B: puente»): no se repite «Opción».
+  option: (label: string | null, index: number) =>
+    label && /^opci[oó]n\b/i.test(label) ? label : `Opción ${label ?? String.fromCharCode(65 + index)}`,
   quoteTitle: (location: string) => `Presupuesto · ${location}`,
   issuedValid: (issued: string, until: string) => `Emitido el ${issued} · válido hasta el ${until}`,
   itemsLabel: 'Procedimientos',

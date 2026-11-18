@@ -365,6 +365,13 @@ test('presupuestos: las alternativas A/B juntas y el PDF de cada una', async () 
   await waitFor(() => expect(window.print).toHaveBeenCalled());
 });
 
+test('la etiqueta A/B de la API («Opción B») no se repite: «Opción B», no «Opción Opción B»', () => {
+  expect(portalSectionsCopy.option('Opción B', 1)).toBe('Opción B');
+  expect(portalSectionsCopy.option('Opción B: puente', 1)).toBe('Opción B: puente');
+  expect(portalSectionsCopy.option('B', 1)).toBe('Opción B');
+  expect(portalSectionsCopy.option(null, 2)).toBe('Opción C');
+});
+
 test('groupPlans: agrupa por optionGroupId en el orden de llegada', () => {
   const groups = groupPlans([
     plan({ id: 'a', optionGroupId: 'g' }),
