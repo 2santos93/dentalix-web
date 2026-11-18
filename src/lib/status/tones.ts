@@ -259,6 +259,17 @@ const paymentReport = {
 } satisfies Presentations<Schemas['PaymentReportStatus']>;
 
 /**
+ * DX-016: la solicitud de la reserva online. Pendiente espera a recepción;
+ * reservada (directa) y aceptada acaban en cita; rechazada es un «no» de la clínica.
+ */
+const onlineRequest = {
+  PENDING: s('warning', 'Por revisar'),
+  BOOKED: s('success', 'Reservada'),
+  ACCEPTED: s('success', 'Aceptada'),
+  DECLINED: s('danger', 'Rechazada'),
+} satisfies Presentations<Schemas['OnlineBookingStatus']>;
+
+/**
  * Los métodos de pago NO son estados: son categorías. Todos neutros (sin
  * punto); el icono, si hace falta, distingue. Efectivo en verde y tarjeta en el
  * acento hacían que dos valores categóricos se leyeran como «bien» y «elegido».
@@ -447,6 +458,7 @@ export const STATUS_PRESENTATION = {
   cashSession,
   paymentLink,
   paymentReport,
+  onlineRequest,
   paymentMethod,
   coverage,
   agreement,

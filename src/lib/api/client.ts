@@ -339,6 +339,8 @@ export function apiErrorFromBody(
       typeof data.lockedThrough === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.lockedThrough)
         ? data.lockedThrough
         : null,
+    // DX-016: la sesión de reintento del 409 de la reserva online.
+    sessionToken: text(data.sessionToken),
   });
 }
 
