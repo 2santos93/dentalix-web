@@ -150,6 +150,8 @@ jest.mock('../../lib/odontogram/catalog-api', () => ({
 // "no active plan" (`null`) response so it renders its empty state instead.
 jest.mock('../../lib/payment-plans/payment-plan-api', () => ({
   getPaymentPlan: jest.fn(),
+  // DX-123: sin planes de cuotas cancelados.
+  listCancelledPaymentPlans: jest.fn(() => Promise.resolve([])),
   createPaymentPlan: jest.fn(),
   deletePaymentPlan: jest.fn(),
 }));
