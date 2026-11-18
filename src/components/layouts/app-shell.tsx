@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Ellipsis, PanelLeftClose, PanelLeftOpen, Phone, Search } from 'lucide-react';
 import { UserMenu, useLogout } from '@/components/profile/user-menu';
+import { useIdleLogout } from '@/components/auth/use-idle-logout';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { useSessionBootstrap } from '@/lib/auth/use-session-bootstrap';
 import { getTokenRole } from '@/lib/auth/token-role';
@@ -82,6 +83,8 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
   // recupera de la cookie HttpOnly (DX-062). `RequireSession` (en el layout de
   // `(app)`) espera a que esté resuelta (`_hasHydrated`) antes de mandar a /login.
   useSessionBootstrap();
+  // DX-137: cierre de sesión por inactividad (minutos de la clínica).
+  useIdleLogout(accessToken);
   // El rol se resuelve en un efecto y no en el render: el token sale del store
   // en memoria, que en SSR está vacío, y leerlo durante el render haría que el
   // menú del servidor y el del primer render del cliente no coincidieran. Hasta

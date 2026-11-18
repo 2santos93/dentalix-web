@@ -3,6 +3,7 @@ import { LoginForm } from '@/components/auth/login-form';
 import { AuthLayout } from '@/components/auth/auth-layout';
 import { randomHeroImage } from '@/lib/auth/hero-images';
 import { authContext } from '@/components/auth/auth-clinic';
+import { IDLE_LOGOUT_REASON, LOGOUT_REASON_PARAM } from '@/lib/auth/idle-logout';
 import { INVITATION_ACCEPTED_PARAM, PASSWORD_RESET_DONE_PARAM } from '@/lib/auth/password-reset-api';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
@@ -25,6 +26,8 @@ export default async function LoginPage({
   const params = await searchParams;
   const passwordReset = params[PASSWORD_RESET_DONE_PARAM] === '1';
   const invitationAccepted = params[INVITATION_ACCEPTED_PARAM] === '1';
+  // DX-137: «Sesión cerrada por inactividad».
+  const idleLogout = params[LOGOUT_REASON_PARAM] === IDLE_LOGOUT_REASON;
   const { clinic } = await authContext();
 
   return (
@@ -43,7 +46,11 @@ export default async function LoginPage({
         </>
       }
     >
-      <LoginForm passwordReset={passwordReset} invitationAccepted={invitationAccepted} />
+      <LoginForm
+        passwordReset={passwordReset}
+        invitationAccepted={invitationAccepted}
+        idleLogout={idleLogout}
+      />
     </AuthLayout>
   );
 }

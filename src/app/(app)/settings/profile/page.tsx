@@ -4,11 +4,16 @@ import { SettingsPage, SettingsSection } from '@/components/settings/settings-pa
 import { ProfileView } from '@/components/profile/profile-view';
 import { ChangePasswordForm } from '@/components/profile/change-password-form';
 import { MfaSettings } from '@/components/profile/mfa-settings';
+import { SessionList } from '@/components/sessions/session-list';
+import { useLogout } from '@/components/profile/user-menu';
 
 const copy = {
   title: 'Mi perfil',
-  description: 'Tu nombre, tu foto, tu contraseña y la verificación en dos pasos.',
+  description: 'Tu nombre, tu foto, tu contraseña, la verificación en dos pasos y tus sesiones.',
   securityTitle: 'Seguridad',
+  sessionsTitle: 'Sesiones',
+  sessionsHelp:
+    'Dónde tienes la sesión abierta en esta clínica. Si no reconoces un dispositivo, ciérralo y cambia tu contraseña.',
 };
 
 /**
@@ -18,6 +23,7 @@ const copy = {
  */
 export default function ProfilePage() {
   const accessToken = useAuthStore((s) => s.accessToken);
+  const { logout } = useLogout();
 
   if (!accessToken) return null;
 
@@ -27,6 +33,10 @@ export default function ProfilePage() {
       <SettingsSection title={copy.securityTitle}>
         <ChangePasswordForm token={accessToken} />
         <MfaSettings token={accessToken} />
+      </SettingsSection>
+      {/* DX-137: dónde está abierta la sesión, con «Este dispositivo» marcado. */}
+      <SettingsSection title={copy.sessionsTitle} description={copy.sessionsHelp}>
+        <SessionList mode="self" token={accessToken} onCloseCurrent={() => void logout()} />
       </SettingsSection>
     </SettingsPage>
   );
