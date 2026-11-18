@@ -412,7 +412,7 @@ export interface paths {
         put?: never;
         /**
          * «No fui yo»: cierra todas las sesiones de la cuenta del aviso
-         * @description Queda auditado (SESSION, DELETE, `SESSION_NOT_ME`) con cuántas sesiones se cerraron. La respuesta no lleva el email ni el nombre de la cuenta.
+         * @description Cierra todas las sesiones de la cuenta, deja sin valor los enlaces de restablecimiento vivos y envía uno nuevo al email de la cuenta (como «¿Olvidaste tu contraseña?»). Queda auditado (SESSION, DELETE, `SESSION_NOT_ME`) con cuántas sesiones se cerraron. La respuesta no lleva tokens, email ni nombre.
          */
         post: operations["SessionAlertsController_notMe"];
         delete?: never;
@@ -10603,8 +10603,8 @@ export interface components {
             token: string;
         };
         NotMeResultDto: {
-            /** @description Token del enlace de restablecimiento (`/restablecer/<token>`) para cambiar la contraseña ya. `null` si la cuenta ya no es miembro activo de esta clínica (las sesiones se cerraron igual). */
-            passwordResetToken: string | null;
+            /** @description Mensaje fijo: las sesiones se cerraron y, si la cuenta sigue activa en la clínica, se envió al EMAIL de la cuenta un enlace para elegir contraseña. La respuesta nunca lleva tokens ni datos de la cuenta. */
+            message: string;
         };
         CreateInvitationDto: {
             fullName: string;

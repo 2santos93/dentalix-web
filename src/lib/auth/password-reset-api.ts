@@ -9,8 +9,6 @@ export const FORGOT_PASSWORD_PATH = '/olvide-contrasena';
 /** Aviso del login tras restablecer (`/login?restablecida=1`). */
 export const PASSWORD_RESET_DONE_PARAM = 'restablecida';
 /** DX-021: invitación aceptada con una cuenta que necesita segundo factor. */
-/** DX-137: `/restablecer/<token>?sesiones-cerradas=1` (viene de «No fui yo»). */
-export const SESSIONS_CLOSED_PARAM = 'sesiones-cerradas';
 export const INVITATION_ACCEPTED_PARAM = 'invitacion-aceptada';
 
 /**
