@@ -46,6 +46,7 @@ import { HowCalculated } from './how-calculated';
 import { RankedBars } from './ranked-bars';
 import { Stat, StatGroup } from './stat-group';
 import { QuoteFunnelPresentationsDialog, type OpenQuoteFunnelFigure } from './quote-funnel-presentations-dialog';
+import { QuoteFollowUpReportSection } from './quote-follow-up-report';
 
 export const quoteFunnelCopy = {
   scopeClinic: 'Presupuestos de la clínica',
@@ -773,6 +774,18 @@ export function QuoteFunnelView({
           ) : null}
         </AsyncSection>
       )}
+
+      {/* DX-561: el seguimiento automático, con el mismo período y sede (no admite
+          profesional). Fuera del vacío del embudo: los avisos se cuentan por la
+          fecha en que salieron, no por la de la presentación. */}
+      {filters && fmt && !zoneError && sedeFormat.status === 'ready' ? (
+        <QuoteFollowUpReportSection
+          token={token}
+          filters={{ from: filters.from, to: filters.to, ...(filters.locationId ? { locationId: filters.locationId } : {}) }}
+          fmt={fmt}
+          providerFiltered={Boolean(filters.providerId)}
+        />
+      ) : null}
 
       {filters && fmt ? (
         <QuoteFunnelPresentationsDialog
