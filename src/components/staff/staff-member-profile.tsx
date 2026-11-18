@@ -31,6 +31,7 @@ import { notifyError } from '@/components/errors/notify';
 import { ScheduleBlockDialog } from '@/components/appointments/schedule-block-dialog';
 import { StaffLocationsCard } from '@/components/staff/staff-locations-card';
 import { StaffMfaReset } from '@/components/staff/staff-mfa-reset';
+import { SessionList } from '@/components/sessions/session-list';
 import { StaffPermissionsSection } from '@/components/staff/staff-permissions-section';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import {
@@ -65,6 +66,9 @@ const copy = {
   statusActive: 'Activo',
   statusInactive: 'Inactivo',
   accessTitle: 'Acceso',
+  sessionsTitle: 'Sesiones',
+  sessionsHint:
+    'Navegadores donde tiene la sesión abierta en esta clínica. Ciérralas si usó un equipo compartido o perdió el móvil.',
   accessActiveHint: 'Puede entrar a la clínica con su cuenta.',
   accessInactiveHint: 'No puede entrar. Reactívalo/a para devolverle el acceso.',
   deactivate: 'Desactivar acceso',
@@ -540,6 +544,18 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
                 )}
               </div>
             </section>
+
+            {/* DX-137: dónde tiene abierta la sesión en ESTA clínica (solo ADMIN). */}
+            {viewerRole === 'ADMIN' && member.status === 'ACTIVE' && viewerId !== userId ? (
+              <section aria-labelledby="profile-sessions-title" className={DATA_SECTION_CLASS}>
+                <SectionHeader
+                  titleId="profile-sessions-title"
+                  title={copy.sessionsTitle}
+                  description={copy.sessionsHint}
+                />
+                <SessionList mode="member" token={token} userId={userId} memberName={member.fullName} />
+              </section>
+            ) : null}
           </div>
         )}
       </AsyncSection>

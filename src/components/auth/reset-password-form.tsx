@@ -14,6 +14,7 @@ import {
   type PasswordResetTokenStatus,
 } from '@/lib/auth/password-reset-api';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/shared/form-field';
 import { SectionError } from '@/components/errors/section-error';
@@ -106,7 +107,19 @@ function statusFromError(err: unknown): InvalidStatus | null {
  * montar; si no sirve (caducado, usado, inexistente o reemplazado) explica por
  * qué y ofrece pedir otro. Al guardar lleva al login con el aviso de éxito.
  */
-export function ResetPasswordForm({ resetToken }: { resetToken: string }) {
+const notMeCopy = {
+  closedTitle: 'Cerramos todas tus sesiones.',
+  closedBody: 'Nadie puede seguir dentro de tu cuenta. Elige una contraseña nueva para terminar.',
+};
+
+export function ResetPasswordForm({
+  resetToken,
+  sessionsClosed = false,
+}: {
+  resetToken: string;
+  /** DX-137: se llega desde «No fui yo»: ya cerramos todas las sesiones. */
+  sessionsClosed?: boolean;
+}) {
   const router = useRouter();
   const [status, setStatus] = useState<PasswordResetTokenStatus | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -223,6 +236,11 @@ export function ResetPasswordForm({ resetToken }: { resetToken: string }) {
 
     return (
       <form onSubmit={handleSubmit} noValidate className={AUTH_FORM_CLASS}>
+        {sessionsClosed ? (
+          <Callout tone="success" role="status" title={notMeCopy.closedTitle}>
+            {notMeCopy.closedBody}
+          </Callout>
+        ) : null}
         <p className="text-sm text-muted">{copy.intro}</p>
         <FormField
           htmlFor="reset-password-new"

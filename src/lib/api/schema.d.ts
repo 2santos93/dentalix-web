@@ -297,7 +297,7 @@ export interface paths {
         get: operations["SecurityPolicyController_get"];
         /**
          * Cambia la política de seguridad de la clínica (solo ADMIN)
-         * @description Para endurecerla, quien la cambia debe tener ya su MFA activo (409 si no). Cierra las sesiones de quienes quedan obligados sin tenerlo. Queda en la auditoría con el antes, el después y cuántas sesiones se cerraron.
+         * @description Para endurecerla, quien la cambia debe tener ya su MFA activo (409 si no). Cierra las sesiones de quienes quedan obligados sin tenerlo. Queda en la auditoría con el antes, el después y cuántas sesiones se cerraron. DX-137: `sessionIdleMinutes` (15–240) cambia el cierre por inactividad, con su propio evento.
          */
         put: operations["SecurityPolicyController_update"];
         post?: never;
@@ -338,6 +338,83 @@ export interface paths {
          * @description Borra su secreto y sus códigos, cierra sus sesiones, deja sin valor sus dispositivos de confianza y le avisa por correo. Queda en la auditoría (`MFA_RESET_<motivo>`). Nunca la propia, la de un superadmin ni la de una cuenta con acceso a otra clínica (`MFA_RESET_REFUSED`).
          */
         post: operations["StaffMfaController_reset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/{userId}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sesiones abiertas de un miembro en esta clínica */
+        get: operations["StaffSessionsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/{userId}/sessions/{sessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Cierra una sesión de un miembro
+         * @description El dispositivo pierde la sesión en su próxima renovación (como mucho, lo que dura un access token). Queda auditado (`SESSION_REVOKED_BY_ADMIN`).
+         */
+        delete: operations["StaffSessionsController_revoke"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/{userId}/sessions/revoke-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cierra todas las sesiones de un miembro en esta clínica
+         * @description Nunca la sesión con la que se pide. Queda auditado (`MEMBER_SESSIONS_REVOKED_BY_ADMIN`) con cuántas se cerraron.
+         */
+        post: operations["StaffSessionsController_revokeAll"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/session-alerts/not-me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * «No fui yo»: cierra todas las sesiones de la cuenta del aviso
+         * @description Queda auditado (SESSION, DELETE, `SESSION_NOT_ME`) con cuántas sesiones se cerraron. La respuesta no lleva el email ni el nombre de la cuenta.
+         */
+        post: operations["SessionAlertsController_notMe"];
         delete?: never;
         options?: never;
         head?: never;
@@ -623,6 +700,63 @@ export interface paths {
          * @description Queda en la auditoría (`MFA_RECOVERY_CODES_REGENERATED`).
          */
         post: operations["MyMfaController_regenerate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tus sesiones abiertas en esta clínica */
+        get: operations["MySessionsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/sessions/{sessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Cierra una de tus sesiones
+         * @description El dispositivo pierde la sesión en su próxima renovación (como mucho, lo que dura un access token). Cerrar la actual equivale a salir. Queda auditado (`SESSION_REVOKED_BY_SELF`).
+         */
+        delete: operations["MySessionsController_revoke"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/sessions/revoke-others": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cierra todas tus demás sesiones en esta clínica
+         * @description Todas salvo la de esta petición. Queda auditado (`OTHER_SESSIONS_REVOKED`) con cuántas se cerraron.
+         */
+        post: operations["MySessionsController_revokeOthers"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4950,10 +5084,35 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** El plan de cuotas activo del plan de tratamiento, o null */
         get: operations["PaymentPlansController_get"];
         put?: never;
         post: operations["PaymentPlansController_create"];
+        /**
+         * Cancelar el plan de cuotas activo (con motivo; queda quién y cuándo)
+         * @description DX-092 (SEC-029): el plan de cuotas pasa a CANCELLED con `cancelledById` (del token), `cancelledAt` (hora del servidor) y `cancelReason`. Los abonos y el saldo del plan de tratamiento no cambian. Sale en `GET /treatment-plans/:id/payment-plan/history`.
+         */
         delete: operations["PaymentPlansController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/treatment-plans/{id}/payment-plan/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Planes de cuotas cancelados del plan de tratamiento
+         * @description DX-123: del más reciente al más antiguo, con cuándo, quién y por qué se cancelaron. Lista vacía si nunca se canceló ninguno.
+         */
+        get: operations["PaymentPlansController_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -10389,6 +10548,8 @@ export interface components {
             requireAdminMfa: boolean;
             /** @description DX-021-bis: la exige a todos los miembros (implica `requireAdminMfa`). Sin indicarlo, se conserva. */
             requireAllMfa?: boolean;
+            /** @description DX-137: minutos sin actividad (por defecto 60) tras los que la web cierra la sesión («Sesión cerrada por inactividad») y /auth/refresh deja de renovarla. Sin indicarlo, se conserva. Auditado (`SESSION_IDLE_POLICY`). */
+            sessionIdleMinutes?: number;
         };
         StaffMfaStatusDto: {
             enabled: boolean;
@@ -10410,6 +10571,40 @@ export interface components {
             currentPassword: string;
             /** @enum {string} */
             reason: "LOST_DEVICE" | "DEVICE_REPLACED" | "SECURITY_INCIDENT";
+        };
+        UserSessionDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Chrome en Windows */
+            deviceLabel: string;
+            /**
+             * @description IP truncada (/24 en IPv4, /48 en IPv6). Nunca la IP completa.
+             * @example 190.202.15.0/24
+             */
+            ipPrefix: string | null;
+            /**
+             * Format: date-time
+             * @description Inicio de sesión
+             */
+            firstSeenAt: string;
+            /**
+             * Format: date-time
+             * @description Última renovación de la sesión (actividad)
+             */
+            lastSeenAt: string;
+            /** @description Es la sesión de esta petición («este dispositivo») */
+            current: boolean;
+        };
+        SessionsClosedDto: {
+            sessionsClosed: number;
+        };
+        NotMeDto: {
+            /** @description Token del enlace «No fui yo» del email */
+            token: string;
+        };
+        NotMeResultDto: {
+            /** @description Token del enlace de restablecimiento (`/restablecer/<token>`) para cambiar la contraseña ya. `null` si la cuenta ya no es miembro activo de esta clínica (las sesiones se cerraron igual). */
+            passwordResetToken: string | null;
         };
         CreateInvitationDto: {
             fullName: string;
@@ -10475,6 +10670,8 @@ export interface components {
             memberships: components["schemas"]["MyProfileMembershipDto"][];
             /** @description DX-090: lo que puede hacer en la clínica de la sesión: los permisos de serie de su rol más los extra concedidos. Solo decide qué pinta la web; la frontera es cada ruta. */
             effectivePermissions: components["schemas"]["ExtraPermission"][];
+            /** @description DX-137: minutos sin actividad tras los que la web cierra la sesión de esta clínica («Sesión cerrada por inactividad»). */
+            sessionIdleMinutes: number;
         };
         UpdateNameDto: {
             /** @example Ana Gómez */
@@ -20793,7 +20990,48 @@ export interface components {
              */
             isFullyPaid: boolean;
         };
+        PaymentPlanActorDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Ana Rodríguez */
+            fullName: string | null;
+        };
+        CancelledPaymentPlanDto: {
+            /** Format: uuid */
+            id: string;
+            /** @description Código ISO 4217 de la moneda del plan */
+            currency: string;
+            /** @example 1200 */
+            totalToFinance: number;
+            /** @example 200 */
+            downPayment: number;
+            /** @example 6 */
+            installmentsCount: number;
+            /** @enum {string} */
+            periodicity: "WEEKLY" | "BIWEEKLY" | "MONTHLY";
+            /** Format: date-time */
+            startDate: string;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description Cuándo se canceló (hora del servidor). En los cancelados antes de DX-109, la del borrado lógico.
+             */
+            cancelledAt: string;
+            /** @description Quién lo canceló; `null` en los cancelados antes de DX-109, que no lo guardaban. */
+            cancelledBy: components["schemas"]["PaymentPlanActorDto"] | null;
+            /**
+             * @description Motivo. Al cancelar o rechazar el plan de tratamiento, el que pone el sistema. `null` antes de DX-109.
+             * @example El paciente pagará el saldo de contado
+             */
+            cancelReason: string | null;
+        };
         CancelPaymentPlanDto: {
+            /**
+             * @description Motivo de la cancelación (3–300 caracteres tras quitar espacios). Queda guardado junto a quién y cuándo canceló.
+             * @example El paciente pagará el saldo de contado
+             */
+            reason: string;
             /**
              * @description DX-091: motivo para hacerlo en un período contable cerrado. Solo vale para ADMIN y si la clínica admite la exención (`financialLockAdminExempt`); entonces es obligatorio (3–300 caracteres, 400 sin él) y queda registrado con quién y cuándo. Para cualquier otro rol se ignora y el período cerrado da 409 `PERIOD_LOCKED`.
              * @example Abono del 15/09 que recepción olvidó registrar; cuadrado con el extracto del banco
@@ -24250,7 +24488,9 @@ export interface components {
             recordedAt: string;
             /** @description `null` solo en filas LEGACY migradas. */
             recordedBy: components["schemas"]["UserRefDto"] | null;
+            /** @description IP de la petición que la registró. Solo para ADMIN (DX-092): para el resto de roles, siempre `null`. */
             ipAddress: string | null;
+            /** @description User-agent de la petición que la registró. Solo para ADMIN (DX-092): para el resto de roles, siempre `null`. */
             userAgent: string | null;
         };
         ScopeConsentStatusDto: {
@@ -30239,6 +30479,148 @@ export interface operations {
             };
         };
     };
+    StaffSessionsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserSessionDto"][];
+                };
+            };
+            /** @description La sesión es un acceso de soporte */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es miembro activo de esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    StaffSessionsController_revoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cerrada */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sesión es un acceso de soporte */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es miembro activo de esta clínica, o la sesión no es suya aquí */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    StaffSessionsController_revokeAll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionsClosedDto"];
+                };
+            };
+            /** @description La sesión es un acceso de soporte */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es miembro activo de esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SessionAlertsController_notMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotMeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotMeResultDto"];
+                };
+            };
+            /** @description Este enlace ya no es válido: caducó o ya se usó. Si no reconoces la actividad de tu cuenta, cambia tu contraseña. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     StaffInvitationsController_list: {
         parameters: {
             query?: never;
@@ -30823,6 +31205,92 @@ export interface operations {
              *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
              */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MySessionsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserSessionDto"][];
+                };
+            };
+            /** @description La sesión es un acceso de soporte */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MySessionsController_revoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cerrada */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La sesión es un acceso de soporte */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es una sesión tuya abierta aquí */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MySessionsController_revokeOthers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionsClosedDto"];
+                };
+            };
+            /** @description La sesión es un acceso de soporte */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -42975,16 +43443,24 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description El plan de cuotas activo con sus cuotas y estados. Cuerpo vacío (null) si el plan de tratamiento no tiene plan de cuotas activo: es un estado normal, nunca un 404 (DX-123). */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaymentPlanDto"];
+                    "application/json": components["schemas"]["PaymentPlanDto"] | null;
                 };
             };
             /** @description Id que no es UUID */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El plan de tratamiento no existe o es de otra clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -43053,8 +43529,15 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Id que no es UUID */
+            /** @description Id que no es UUID, o falta `reason` o no tiene 3–300 caracteres tras quitar espacios. */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El plan de tratamiento no tiene plan de cuotas activo, no existe o es de otra clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -43062,6 +43545,41 @@ export interface operations {
             };
             /** @description DX-091: `code: PERIOD_LOCKED` si el plan tiene cuotas vencidas en un período contable cerrado. El ADMIN lo salta con `lockOverrideReason` si la clínica admite la exención. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentPlansController_history: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancelledPaymentPlanDto"][];
+                };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El plan de tratamiento no existe o es de otra clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
