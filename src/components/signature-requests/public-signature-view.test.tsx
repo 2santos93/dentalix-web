@@ -330,6 +330,63 @@ describe('PublicSignatureView (DX-243)', () => {
     expect(screen.getByRole('button', { name: /imprimir o guardar en pdf/i })).toBeInTheDocument();
   });
 
+  it('DX-560: con la presentación congelada, el presupuesto sale por visitas con los textos para el paciente', async () => {
+    const user = setupUser();
+    const budget = {
+      currency: 'USD',
+      clinicName: 'Clínica Sonrisas',
+      location: { name: 'Sede Centro', address: null },
+      patient: { name: 'Laura Castro', document: null },
+      professionalName: null,
+      agreement: null,
+      issuedOn: '2026-10-30',
+      validUntil: '2026-11-29',
+      validityDays: 30,
+      items: [
+        {
+          toothNumber: '36',
+          surfaces: [],
+          procedure: 'Corona en zirconio',
+          quantity: 1,
+          unitPrice: 300,
+          discount: 0,
+          subtotal: 300,
+          listPrice: null,
+          agreementName: null,
+          listPriceCurrency: null,
+        },
+      ],
+      totals: [{ currency: 'USD', gross: 300, discount: 0, net: 300, agreementSaving: 0 }],
+    };
+    mockedGet.mockResolvedValue(view({ type: 'BUDGET' }));
+    mockedCode.mockResolvedValue(view({ type: 'BUDGET', codeSent: true, codeSendsLeft: 4 }));
+    mockedVerify.mockResolvedValue({ sessionToken: 'S'.repeat(43), sessionExpiresAt: '2026-10-30T15:00:00.000Z' });
+    mockedDocument.mockResolvedValue(
+      documentFixture({
+        type: 'BUDGET',
+        title: 'Presupuesto de tratamiento',
+        body: 'Al firmar aceptas este presupuesto.',
+        templateVersion: null,
+        budget,
+        presentation: {
+          language: 'es',
+          items: [{ index: 0, visit: 1, label: 'Funda de zirconio para la muela', language: 'es' }],
+          visitOrganization: [{ visit: 1, label: null, minDaysAfterPrevious: 0 }],
+        },
+      }),
+    );
+    render(<PublicSignatureView linkToken="tok" />);
+    await user.click(await screen.findByRole('button', { name: 'Enviarme el código' }));
+    await user.type(await screen.findByLabelText('Código de 6 dígitos'), '012345');
+    await user.click(screen.getByRole('button', { name: 'Ver el presupuesto' }));
+    const article = await screen.findByRole('article', { name: 'Presupuesto y condiciones' });
+    expect(within(article).getByRole('heading', { name: 'Visita 1' })).toBeInTheDocument();
+    expect(within(article).getByRole('img', { name: 'Dientes de esta visita: 36' })).toBeInTheDocument();
+    expect(article).toHaveTextContent('Funda de zirconio para la muela');
+    expect(article).not.toHaveTextContent('Corona en zirconio');
+    expect(article).toHaveTextContent(/Total \(USD\)\s*USD\s300,00/);
+  });
+
   it('presupuesto que cambió tras el envío: «Enlace no válido»', async () => {
     mockedGet.mockRejectedValue(new ApiError(404, 'Enlace no válido'));
     render(<PublicSignatureView linkToken="tok" />);
