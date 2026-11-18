@@ -26,6 +26,12 @@ export interface MyProfile {
    * antiguo no lo traen; ausente cuenta como ninguno.
    */
   effectivePermissions?: components['schemas']['ExtraPermission'][];
+  /**
+   * DX-137: minutos sin uso tras los que la web cierra la sesión de esta
+   * clínica. Opcional por el mismo motivo (un `PATCH /me` no lo trae): sin él,
+   * 60.
+   */
+  sessionIdleMinutes?: number;
 }
 
 export function getMe(token: string): Promise<MyProfile> {

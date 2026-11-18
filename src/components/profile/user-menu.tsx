@@ -34,7 +34,7 @@ const LOGOUT_TIMEOUT_MS = 3000;
  * falla o al vencer el timeout — nunca lanza. El cierre local tiene que ocurrir
  * igual en todos los casos.
  */
-async function revokeSession(): Promise<void> {
+export async function revokeSession(): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<void>((resolve) => {
     timer = setTimeout(resolve, LOGOUT_TIMEOUT_MS);

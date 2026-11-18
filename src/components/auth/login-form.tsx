@@ -43,6 +43,9 @@ const copy = {
   forgotPassword: '¿Olvidaste tu contraseña?',
   passwordResetDone:
     'Listo: tu contraseña se cambió y cerramos la sesión en todos los dispositivos. Inicia sesión con la nueva.',
+  // DX-137: la app cerró la sesión tras los minutos sin uso de la clínica.
+  idleLogout: 'Sesión cerrada por inactividad.',
+  idleLogoutHint: 'Por seguridad, cerramos tu sesión al no usarla un rato. Vuelve a entrar para seguir.',
   // DX-048: fin de la espera tras demasiados intentos.
   lockEnded: 'Ya puedes volver a intentarlo.',
   lockClockLabel: 'Tiempo restante',
@@ -82,7 +85,8 @@ interface BreakGlassInput {
 export function LoginForm({
   passwordReset = false,
   invitationAccepted = false,
-}: { passwordReset?: boolean; invitationAccepted?: boolean } = {}) {
+  idleLogout = false,
+}: { passwordReset?: boolean; invitationAccepted?: boolean; idleLogout?: boolean } = {}) {
   const router = useRouter();
   const setAccessToken = useAuthStore((s) => s.setAccessToken);
   const [email, setEmail] = useState('');
@@ -286,6 +290,11 @@ export function LoginForm({
 
   return (
     <form onSubmit={handleSubmit} className={AUTH_FORM_CLASS}>
+      {idleLogout ? (
+        <Callout tone="info" role="status" title={copy.idleLogout}>
+          {copy.idleLogoutHint}
+        </Callout>
+      ) : null}
       {passwordReset ? (
         <Callout tone="success" role="status">
           {copy.passwordResetDone}
