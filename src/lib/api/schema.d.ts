@@ -4950,10 +4950,35 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** El plan de cuotas activo del plan de tratamiento, o null */
         get: operations["PaymentPlansController_get"];
         put?: never;
         post: operations["PaymentPlansController_create"];
+        /**
+         * Cancelar el plan de cuotas activo (con motivo; queda quién y cuándo)
+         * @description DX-092 (SEC-029): el plan de cuotas pasa a CANCELLED con `cancelledById` (del token), `cancelledAt` (hora del servidor) y `cancelReason`. Los abonos y el saldo del plan de tratamiento no cambian. Sale en `GET /treatment-plans/:id/payment-plan/history`.
+         */
         delete: operations["PaymentPlansController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/treatment-plans/{id}/payment-plan/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Planes de cuotas cancelados del plan de tratamiento
+         * @description DX-123: del más reciente al más antiguo, con cuándo, quién y por qué se cancelaron. Lista vacía si nunca se canceló ninguno.
+         */
+        get: operations["PaymentPlansController_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -20793,7 +20818,48 @@ export interface components {
              */
             isFullyPaid: boolean;
         };
+        PaymentPlanActorDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Ana Rodríguez */
+            fullName: string | null;
+        };
+        CancelledPaymentPlanDto: {
+            /** Format: uuid */
+            id: string;
+            /** @description Código ISO 4217 de la moneda del plan */
+            currency: string;
+            /** @example 1200 */
+            totalToFinance: number;
+            /** @example 200 */
+            downPayment: number;
+            /** @example 6 */
+            installmentsCount: number;
+            /** @enum {string} */
+            periodicity: "WEEKLY" | "BIWEEKLY" | "MONTHLY";
+            /** Format: date-time */
+            startDate: string;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description Cuándo se canceló (hora del servidor). En los cancelados antes de DX-109, la del borrado lógico.
+             */
+            cancelledAt: string;
+            /** @description Quién lo canceló; `null` en los cancelados antes de DX-109, que no lo guardaban. */
+            cancelledBy: components["schemas"]["PaymentPlanActorDto"] | null;
+            /**
+             * @description Motivo. Al cancelar o rechazar el plan de tratamiento, el que pone el sistema. `null` antes de DX-109.
+             * @example El paciente pagará el saldo de contado
+             */
+            cancelReason: string | null;
+        };
         CancelPaymentPlanDto: {
+            /**
+             * @description Motivo de la cancelación (3–300 caracteres tras quitar espacios). Queda guardado junto a quién y cuándo canceló.
+             * @example El paciente pagará el saldo de contado
+             */
+            reason: string;
             /**
              * @description DX-091: motivo para hacerlo en un período contable cerrado. Solo vale para ADMIN y si la clínica admite la exención (`financialLockAdminExempt`); entonces es obligatorio (3–300 caracteres, 400 sin él) y queda registrado con quién y cuándo. Para cualquier otro rol se ignora y el período cerrado da 409 `PERIOD_LOCKED`.
              * @example Abono del 15/09 que recepción olvidó registrar; cuadrado con el extracto del banco
@@ -24250,7 +24316,9 @@ export interface components {
             recordedAt: string;
             /** @description `null` solo en filas LEGACY migradas. */
             recordedBy: components["schemas"]["UserRefDto"] | null;
+            /** @description IP de la petición que la registró. Solo para ADMIN (DX-092): para el resto de roles, siempre `null`. */
             ipAddress: string | null;
+            /** @description User-agent de la petición que la registró. Solo para ADMIN (DX-092): para el resto de roles, siempre `null`. */
             userAgent: string | null;
         };
         ScopeConsentStatusDto: {
@@ -42975,16 +43043,24 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description El plan de cuotas activo con sus cuotas y estados. Cuerpo vacío (null) si el plan de tratamiento no tiene plan de cuotas activo: es un estado normal, nunca un 404 (DX-123). */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaymentPlanDto"];
+                    "application/json": components["schemas"]["PaymentPlanDto"] | null;
                 };
             };
             /** @description Id que no es UUID */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El plan de tratamiento no existe o es de otra clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -43053,8 +43129,15 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Id que no es UUID */
+            /** @description Id que no es UUID, o falta `reason` o no tiene 3–300 caracteres tras quitar espacios. */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El plan de tratamiento no tiene plan de cuotas activo, no existe o es de otra clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -43062,6 +43145,41 @@ export interface operations {
             };
             /** @description DX-091: `code: PERIOD_LOCKED` si el plan tiene cuotas vencidas en un período contable cerrado. El ADMIN lo salta con `lockOverrideReason` si la clínica admite la exención. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentPlansController_history: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancelledPaymentPlanDto"][];
+                };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El plan de tratamiento no existe o es de otra clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

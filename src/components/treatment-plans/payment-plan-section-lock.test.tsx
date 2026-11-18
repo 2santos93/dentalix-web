@@ -6,11 +6,17 @@ import { getPeriodLock } from '@/lib/financial-lock/financial-lock-api';
 import { ApiError } from '@/lib/api/client';
 import { regionalFormat } from '@/lib/format/regional-format';
 import { periodLockCopy } from '@/components/payments/period-lock-field';
+import { cancelPaymentPlanCopy } from '@/components/payment-plans/cancel-payment-plan-modal';
 
 jest.mock('../../lib/payment-plans/payment-plan-api', () => ({
   ...jest.requireActual('../../lib/payment-plans/payment-plan-api'),
   getPaymentPlan: jest.fn(),
+  listCancelledPaymentPlans: jest.fn(() => Promise.resolve([])),
   deletePaymentPlan: jest.fn(),
+}));
+jest.mock('../../lib/locations/locations-api', () => ({
+  ...jest.requireActual('../../lib/locations/locations-api'),
+  listLocations: jest.fn(() => Promise.resolve([])),
 }));
 jest.mock('../../lib/financial-lock/financial-lock-api', () => ({
   ...jest.requireActual('../../lib/financial-lock/financial-lock-api'),
@@ -89,22 +95,26 @@ describe('DX-091 · cancelar un plan de cuotas con cuotas en un período cerrado
     const dialog = await openCancel(user);
     await waitFor(() => expect(dialog).toHaveTextContent(/período contable cerrado: ya no se puede cancelar/));
     expect(screen.queryByLabelText(periodLockCopy.planCancelReasonLabel)).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Sí, cancelar' }));
+    await user.type(screen.getByLabelText(cancelPaymentPlanCopy.reasonLabel), 'El paciente pagará de contado');
+    await user.click(screen.getByRole('button', { name: cancelPaymentPlanCopy.submit }));
     expect(await screen.findByText(`${message} Cerrado hasta el ${fmt.civilDate('2026-09-30')}, inclusive.`)).toBeInTheDocument();
   });
 
-  it('el ADMIN con la exención indica el motivo, que viaja a la API', async () => {
+  it('el ADMIN con la exención indica los dos motivos, que viajan a la API', async () => {
     mockedLock.mockResolvedValue({ lockedThrough: '2026-09-30', canOverride: true });
     mockedDelete.mockResolvedValue(undefined);
     const user = userEvent.setup();
     renderSection();
     await openCancel(user);
-    const reason = await screen.findByLabelText(periodLockCopy.planCancelReasonLabel);
-    await user.click(screen.getByRole('button', { name: 'Sí, cancelar' }));
+    const lockReason = await screen.findByLabelText(periodLockCopy.planCancelReasonLabel);
+    await user.type(screen.getByLabelText(cancelPaymentPlanCopy.reasonLabel), 'Pasa a pagar de contado');
+    await user.click(screen.getByRole('button', { name: cancelPaymentPlanCopy.submit }));
     expect(await screen.findByText(periodLockCopy.reasonMissing)).toBeInTheDocument();
     expect(mockedDelete).not.toHaveBeenCalled();
-    await user.type(reason, 'El paciente pagó todo de contado');
-    await user.click(screen.getByRole('button', { name: 'Sí, cancelar' }));
-    await waitFor(() => expect(mockedDelete).toHaveBeenCalledWith('tok', 'plan-1', 'El paciente pagó todo de contado'));
+    await user.type(lockReason, 'El paciente pagó todo de contado');
+    await user.click(screen.getByRole('button', { name: cancelPaymentPlanCopy.submit }));
+    await waitFor(() =>
+      expect(mockedDelete).toHaveBeenCalledWith('tok', 'plan-1', 'Pasa a pagar de contado', 'El paciente pagó todo de contado'),
+    );
   });
 });

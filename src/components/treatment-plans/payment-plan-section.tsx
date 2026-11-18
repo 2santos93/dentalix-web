@@ -4,6 +4,8 @@ import { apiErrorMessage, sedeCivilDateOption } from '@/lib/api/error-message';
 import {
   deletePaymentPlan,
   getPaymentPlan,
+  listCancelledPaymentPlans,
+  type CancelledPaymentPlan,
   type Installment,
   type InstallmentStatus,
   type PaymentPlan,
@@ -14,10 +16,9 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CreatePaymentPlanModal } from '@/components/payment-plans/create-payment-plan-modal';
-import { ConfirmDialog } from '@/components/shared/confirm-dialog';
-import { Callout } from '@/components/ui/callout';
+import { CancelPaymentPlanModal } from '@/components/payment-plans/cancel-payment-plan-modal';
+import { CancelledPaymentPlans } from '@/components/payment-plans/cancelled-payment-plans';
 import { readyPeriodLock, usePeriodLock } from '@/components/payments/use-period-lock';
-import { LockOverrideReasonField, periodLockCopy, validLockReason } from '@/components/payments/period-lock-field';
 import { isDayLocked } from '@/lib/financial-lock/financial-lock-api';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
@@ -36,12 +37,7 @@ const copy = {
   // No «Intenta de nuevo.» — `SectionError` has its own retry button.
   loadError: 'No pudimos cargar el plan de pagos.',
   cancelPlan: 'Cancelar plan',
-  cancelConfirmTitle: '¿Cancelar el plan de pagos?',
-  cancelConfirmDescription: 'Se cancelará el calendario de cuotas. Los abonos registrados no se ven afectados. Podrás crear uno nuevo.',
-  // DX-091: cuotas vencidas en un período contable cerrado.
-  cancelLocked:
-    'Este plan tiene cuotas vencidas en un período contable cerrado: ya no se puede cancelar. Pide a administración que lo revise.',
-  cancelConfirm: 'Sí, cancelar',
+  cancelError: 'No pudimos cancelar el plan de pagos.',
   totalToFinance: 'Total a financiar',
   paid: 'Pagado',
   remaining: 'Saldo',
@@ -86,6 +82,8 @@ export function PaymentPlanSection({
   canCreate = true,
 }: PaymentPlanSectionProps) {
   const [plan, setPlan] = useState<PaymentPlan | null>(null);
+  // DX-123 (O-2): los cancelados, con quién, cuándo y por qué.
+  const [cancelledPlans, setCancelledPlans] = useState<CancelledPaymentPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryTick, setRetryTick] = useState(0);
@@ -93,6 +91,8 @@ export function PaymentPlanSection({
   const [showCreate, setShowCreate] = useState(false);
 
   const [showCancel, setShowCancel] = useState(false);
+  // Una `key` por apertura: cada cancelación empieza con el motivo en blanco.
+  const [cancelKey, setCancelKey] = useState(0);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   // DX-091: con cuotas vencidas en un período contable cerrado, solo el ADMIN
@@ -100,8 +100,7 @@ export function PaymentPlanSection({
   const periodLock = readyPeriodLock(usePeriodLock(token, showCancel));
   const lockedInstallments =
     plan !== null && plan.installments.some((i) => isDayLocked(i.dueDate.slice(0, 10), periodLock?.lockedThrough));
-  const [lockReason, setLockReason] = useState('');
-  const [lockReasonError, setLockReasonError] = useState<string | null>(null);
+  const cancelLock = !lockedInstallments || !periodLock ? 'none' : periodLock.canOverride ? 'override' : 'blocked';
 
   // Fetch on plan change AND whenever the parent bumps refreshSignal (after an
   // abono is recorded/voided) so installment coverage stays in sync.
@@ -110,9 +109,13 @@ export function PaymentPlanSection({
     async function load() {
       setLoading(true);
       try {
-        const data = await getPaymentPlan(token, planId);
+        const [data, history] = await Promise.all([
+          getPaymentPlan(token, planId),
+          listCancelledPaymentPlans(token, planId),
+        ]);
         if (!cancelled) {
           setPlan(data);
+          setCancelledPlans(history);
           setLoadError(null);
         }
       } catch (err) {
@@ -128,32 +131,23 @@ export function PaymentPlanSection({
   }, [token, planId, refreshSignal, retryTick]);
 
   async function refetch() {
-    const data = await getPaymentPlan(token, planId);
+    const [data, history] = await Promise.all([
+      getPaymentPlan(token, planId),
+      listCancelledPaymentPlans(token, planId),
+    ]);
     setPlan(data);
+    setCancelledPlans(history);
   }
 
-  async function handleCancel() {
+  async function handleCancel(reason: string, lockOverrideReason?: string) {
     setCancelError(null);
-    let lockOverrideReason: string | undefined;
-    if (lockedInstallments && periodLock?.canOverride) {
-      const valid = validLockReason(lockReason);
-      if (!valid) {
-        setLockReasonError(periodLockCopy.reasonMissing);
-        document.getElementById('pp-cancel-lock-reason')?.focus();
-        return;
-      }
-      lockOverrideReason = valid;
-    }
-    setLockReasonError(null);
     setCancelling(true);
     try {
-      await deletePaymentPlan(token, planId, lockOverrideReason);
+      await deletePaymentPlan(token, planId, reason, lockOverrideReason);
       setShowCancel(false);
       await refetch();
     } catch (err) {
-      setCancelError(
-        apiErrorMessage(err, { fallback: 'No pudimos cancelar el plan de pagos.', ...sedeCivilDateOption(fmt) }),
-      );
+      setCancelError(apiErrorMessage(err, { fallback: copy.cancelError, ...sedeCivilDateOption(fmt) }));
     } finally {
       setCancelling(false);
     }
@@ -168,9 +162,8 @@ export function PaymentPlanSection({
         {plan ? (
           // Abre su confirmación: destructiva en forma «ghost» (DESIGN.md).
           <Button type="button" variant="destructive-ghost" size="sm" onClick={() => {
-              setLockReason('');
-              setLockReasonError(null);
               setCancelError(null);
+              setCancelKey((k) => k + 1);
               setShowCancel(true);
             }}>
             {copy.cancelPlan}
@@ -215,6 +208,8 @@ export function PaymentPlanSection({
         </>
       )}
 
+      {!loading && !loadError ? <CancelledPaymentPlans token={token} plans={cancelledPlans} /> : null}
+
       <CreatePaymentPlanModal
         open={showCreate}
         onOpenChange={setShowCreate}
@@ -227,36 +222,15 @@ export function PaymentPlanSection({
         }}
       />
 
-      <ConfirmDialog
+      <CancelPaymentPlanModal
+        key={cancelKey}
         open={showCancel}
         onOpenChange={setShowCancel}
-        title={copy.cancelConfirmTitle}
-        description={copy.cancelConfirmDescription}
-        confirmLabel={copy.cancelConfirm}
-        onConfirm={handleCancel}
-        confirming={cancelling}
+        onConfirm={(reason, lockOverrideReason) => void handleCancel(reason, lockOverrideReason)}
+        submitting={cancelling}
         error={cancelError}
-      >
-        {lockedInstallments && periodLock ? (
-          periodLock.canOverride ? (
-            <LockOverrideReasonField
-              id="pp-cancel-lock-reason"
-              label={periodLockCopy.planCancelReasonLabel}
-              value={lockReason}
-              error={lockReasonError}
-              disabled={cancelling}
-              onChange={(next) => {
-                setLockReason(next);
-                if (lockReasonError) setLockReasonError(null);
-              }}
-            />
-          ) : (
-            <Callout tone="warning" role="note">
-              {copy.cancelLocked}
-            </Callout>
-          )
-        ) : null}
-      </ConfirmDialog>
+        periodLock={cancelLock}
+      />
     </section>
   );
 }

@@ -1,4 +1,4 @@
-import { apiFetch, apiFetchOrNull, ApiError } from '@/lib/api/client';
+import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 
 // Response DTOs are fully @ApiProperty-decorated on the backend
@@ -18,23 +18,30 @@ export type Periodicity = 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY';
 
 /**
  * `GET /treatment-plans/:id/payment-plan` — the active payment plan with its
- * installments and derived statuses, or `null` when there is no active plan
- * (the backend 404s for that, a NORMAL state, not an error). Uses `apiFetch`
- * in a try/catch rather than `apiFetchOrNull` (which only tolerates an empty
- * 200 body, not a 404).
+ * installments and derived statuses, or `null` when there is no active plan.
+ * DX-123 (B-4): the API answers that normal state with 200 and an empty body
+ * (never a 404, so the browser console stays clean); a plan that does not
+ * exist is still a 404 and throws.
  */
 export async function getPaymentPlan(
   token: string,
   planId: string,
 ): Promise<PaymentPlan | null> {
-  try {
-    return await apiFetch<PaymentPlan>(`/treatment-plans/${planId}/payment-plan`, {
-      token,
-    });
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 404) return null;
-    throw err;
-  }
+  return apiFetchOrNull<PaymentPlan>(`/treatment-plans/${planId}/payment-plan`, { token });
+}
+
+/** DX-123 (O-2): un plan de cuotas cancelado, con quién, cuándo y por qué. */
+export type CancelledPaymentPlan = components['schemas']['CancelledPaymentPlanDto'];
+
+/**
+ * `GET /treatment-plans/:id/payment-plan/history` — los planes de cuotas
+ * cancelados, del más reciente al más antiguo (lista vacía si ninguno).
+ */
+export async function listCancelledPaymentPlans(
+  token: string,
+  planId: string,
+): Promise<CancelledPaymentPlan[]> {
+  return apiFetch<CancelledPaymentPlan[]>(`/treatment-plans/${planId}/payment-plan/history`, { token });
 }
 
 /** `POST /treatment-plans/:id/payment-plan` — creates the schedule; returns the derived view. 409 if one is already active. */
@@ -50,16 +57,23 @@ export async function createPaymentPlan(
   });
 }
 
-/** `DELETE /treatment-plans/:id/payment-plan` — cancels the active plan (204, empty body → apiFetchOrNull). */
+/**
+ * `DELETE /treatment-plans/:id/payment-plan` — cancels the active plan (204,
+ * empty body → apiFetchOrNull). DX-092 (SEC-029): el motivo es obligatorio
+ * (3–300 caracteres) y queda junto a quién y cuándo lo canceló.
+ */
 export async function deletePaymentPlan(
   token: string,
   planId: string,
+  reason: string,
   /** DX-091: motivo del ADMIN para cancelarlo con cuotas vencidas en un período cerrado. */
   lockOverrideReason?: string,
 ): Promise<void> {
   await apiFetchOrNull<null>(`/treatment-plans/${planId}/payment-plan`, {
     method: 'DELETE',
-    ...(lockOverrideReason ? { body: { lockOverrideReason } } : {}),
+    body: { reason, ...(lockOverrideReason ? { lockOverrideReason } : {}) } satisfies CancelPaymentPlanInput,
     token,
   });
 }
+
+type CancelPaymentPlanInput = components['schemas']['CancelPaymentPlanDto'];
