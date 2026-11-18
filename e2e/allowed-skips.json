@@ -350,6 +350,13 @@
       "annotation": "E2E_DATABASE_URL no definido: no se puede poner hoy la cita ni el día del control",
       "requiresUnset": "E2E_DATABASE_URL",
       "reason": "Sin E2E_DATABASE_URL no se puede mover a hoy la cita atendida ni poner para hoy el día de la llamada del control (la API no agenda en el pasado y el control nace para el siguiente día hábil)."
+    },
+    {
+      "file": "e2e/patient-access.spec.ts",
+      "title": "Enlace de acceso del paciente (DX-101) › el personal comparte; el paciente verifica a 390 px; al revocar, «ya no está disponible»",
+      "annotation": "E2E_MAIL_DIR no definido: no se puede registrar la clínica (usa scripts/e2e-ci.sh)",
+      "requiresUnset": "E2E_MAIL_DIR",
+      "reason": "DX-101: la prueba registra su propia clínica, que se confirma con el enlace del email."
     }
   ]
 }
