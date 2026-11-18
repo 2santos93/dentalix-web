@@ -95,6 +95,13 @@ const copy = {
   allowDiscountLabel: 'Admite descuentos',
   allowDiscountHint:
     'Si lo desmarcas, este procedimiento no recibe descuentos de convenio ni descuentos en el plan: se cobra al precio que corresponda.',
+  // DX-566: el control postoperatorio (una llamada al paciente N días hábiles después).
+  postOpCheckLabel: 'Pide control postoperatorio',
+  postOpCheckHint:
+    'Al marcarlo hecho, aparece en «Controles postoperatorios» para llamar al paciente y preguntarle cómo sigue.',
+  postOpDaysLabel: 'Días después',
+  postOpDaysHint: 'Días hábiles de la sede entre el procedimiento y la llamada (de 1 a 30).',
+  postOpDaysInvalid: 'Escribe un número de días entre 1 y 30.',
   submit: 'Crear',
   editSubmit: 'Guardar',
   retry: 'Reintentar',
@@ -154,6 +161,19 @@ const copy = {
  * no manda código para estos: se reconoce su texto en español (el que ya
  * filtra `apiErrorMessage`), que siempre nombra la plantilla.
  */
+/** DX-566: el 400 de la API sobre el control postoperatorio (los días o el tipo). */
+function isPostOpCheckError(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 400 && /control postoperatorio/i.test(apiErrorMessage(err, ''));
+}
+
+/** DX-566: los días del control, entero de 1 a 30; null si no lo es. */
+function parsePostOpDays(text: string): number | null {
+  const trimmed = text.trim();
+  if (!/^\d{1,2}$/.test(trimmed)) return null;
+  const n = Number(trimmed);
+  return n >= 1 && n <= 30 ? n : null;
+}
+
 function isTemplateLinkError(err: unknown): boolean {
   return (
     err instanceof ApiError &&
@@ -273,6 +293,12 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [category, setCategory] = useState('');
   const [allowDiscount, setAllowDiscount] = useState(true);
+  // DX-566: control postoperatorio; los días se escriben como texto (1–30).
+  const [requiresPostOpCheck, setRequiresPostOpCheck] = useState(false);
+  const [postOpDays, setPostOpDays] = useState('1');
+  const [postOpCheckError, setPostOpCheckError] = useState<string | null>(null);
+  const [postOpDaysError, setPostOpDaysError] = useState<string | null>(null);
+  const postOpDaysRef = React.useRef<HTMLInputElement>(null);
   // DX-455: '' = sin plantilla.
   const [templateLink, setTemplateLink] = useState('');
   const [templateError, setTemplateError] = useState<string | null>(null);
@@ -444,6 +470,10 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
     setCategory('');
     setPriceError(null);
     setAllowDiscount(true);
+    setRequiresPostOpCheck(false);
+    setPostOpDays('1');
+    setPostOpCheckError(null);
+    setPostOpDaysError(null);
   }
 
   function openCreate() {
@@ -461,6 +491,10 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
     setColor(item.color);
     setCategory(item.category ?? '');
     setAllowDiscount(item.allowDiscount ?? true);
+    setRequiresPostOpCheck(item.requiresPostOpCheck ?? false);
+    setPostOpDays(String(item.postOpCheckAfterDays ?? 1));
+    setPostOpCheckError(null);
+    setPostOpDaysError(null);
     setTemplateLink(item.clinicalNoteTemplateId ?? '');
     setTemplateError(null);
     setEditingItem(item);
@@ -493,7 +527,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
   // fields are omitted (so a blank price/category doesn't send anything) — a
   // known v1 limitation for edit: you can't clear an existing price/category
   // from the UI (the backend partial DTO rejects null for those).
-  function buildPayload(defaultPrice: number | undefined): CreateCatalogItemInput {
+  function buildPayload(defaultPrice: number | undefined, afterDays: number | null): CreateCatalogItemInput {
     const trimmedCategory = category.trim();
     return {
       code: code.trim(),
@@ -502,6 +536,10 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
       color,
       // DX-105-bis: la casilla solo existe en los procedimientos; un diagnóstico no la manda.
       ...(kind === 'PROCEDURE' ? { allowDiscount } : {}),
+      // DX-566: solo procedimientos; los días, solo con la casilla marcada. Un
+      // ítem que pasa a diagnóstico pierde el control en la API.
+      ...(kind === 'PROCEDURE' ? { requiresPostOpCheck } : {}),
+      ...(kind === 'PROCEDURE' && requiresPostOpCheck && afterDays !== null ? { postOpCheckAfterDays: afterDays } : {}),
       ...(defaultPrice !== undefined ? { defaultPrice } : {}),
       ...(trimmedCategory ? { category: trimmedCategory } : {}),
       ...templateLinkPatch(),
@@ -524,6 +562,14 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
     setFormError(null);
     setPriceError(null);
     setTemplateError(null);
+    setPostOpCheckError(null);
+    setPostOpDaysError(null);
+    const afterDays = kind === 'PROCEDURE' && requiresPostOpCheck ? parsePostOpDays(postOpDays) : null;
+    if (kind === 'PROCEDURE' && requiresPostOpCheck && afterDays === null) {
+      setPostOpDaysError(copy.postOpDaysInvalid);
+      postOpDaysRef.current?.focus();
+      return;
+    }
     // DX-241: la lectura común de los campos de dinero, en la moneda de la
     // clínica (la de los precios del catálogo).
     const parsedPrice = price.trim() === '' ? null : parseMoneyInput(price, currency ?? '');
@@ -533,7 +579,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
     }
     setSaving(true);
     try {
-      const payload = buildPayload(parsedPrice?.ok ? parsedPrice.value : undefined);
+      const payload = buildPayload(parsedPrice?.ok ? parsedPrice.value : undefined, afterDays);
       if (editingItem) {
         await updateCatalogItem(token, editingItem.id, payload);
       } else {
@@ -553,6 +599,15 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
         // DX-455: el error de la plantilla va junto a su campo, con el foco.
         setTemplateError(apiErrorMessage(err, fallback));
         templateSelectRef.current?.focus();
+      } else if (isPostOpCheckError(err)) {
+        // DX-566: el 400 del control va junto a su campo (los días o la casilla).
+        const message = apiErrorMessage(err, fallback);
+        if (/días/i.test(message) && requiresPostOpCheck) {
+          setPostOpDaysError(message);
+          postOpDaysRef.current?.focus();
+        } else {
+          setPostOpCheckError(message);
+        }
       } else {
         setFormError(apiErrorMessage(err, fallback));
       }
@@ -846,6 +901,46 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
               label={copy.allowDiscountLabel}
               description={copy.allowDiscountHint}
             />
+          ) : null}
+          {kind === 'PROCEDURE' ? (
+            <div className="flex flex-col gap-3">
+              <Checkbox
+                id="catalog-post-op-check"
+                checked={requiresPostOpCheck}
+                onChange={(e) => {
+                  setRequiresPostOpCheck(e.target.checked);
+                  setPostOpCheckError(null);
+                  setPostOpDaysError(null);
+                }}
+                label={copy.postOpCheckLabel}
+                description={copy.postOpCheckHint}
+                error={postOpCheckError}
+              />
+              {requiresPostOpCheck ? (
+                <FormField
+                  htmlFor="catalog-post-op-days"
+                  label={copy.postOpDaysLabel}
+                  hint={copy.postOpDaysHint}
+                  error={postOpDaysError}
+                  className="sm:max-w-56 sm:pl-7"
+                >
+                  <Input
+                    ref={postOpDaysRef}
+                    id="catalog-post-op-days"
+                    // Sin min/max nativos: el aviso fuera de rango es el nuestro, en español y junto al campo.
+                    type="number"
+                    inputMode="numeric"
+                    value={postOpDays}
+                    onChange={(e) => {
+                      setPostOpDays(e.target.value);
+                      setPostOpDaysError(null);
+                    }}
+                    aria-invalid={postOpDaysError ? true : undefined}
+                    className="tabular-nums"
+                  />
+                </FormField>
+              ) : null}
+            </div>
           ) : null}
           {kind === 'PROCEDURE' ? (
             <TemplateLinkField

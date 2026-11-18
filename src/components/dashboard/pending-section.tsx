@@ -9,6 +9,7 @@ import { ANAMNESIS_HREF, PAYMENT_REPORTS_HREF } from '@/components/layouts/nav-c
 import { getCurrentCashSession, type CurrentCashSession } from '@/lib/cash-sessions/cash-sessions-api';
 import type { WorkQueueItem, WorkQueueKey } from '@/lib/work-queues/work-queues-api';
 import { useWorkQueuesView } from '@/components/work-queues/work-queues-context';
+import { POST_OP_CHECKS_HREF } from '@/lib/post-op-checks/post-op-checks-api';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
 import { SectionHeader } from '@/components/ui/section-header';
@@ -28,6 +29,8 @@ export const pendingCopy = {
   closing: { label: 'Pendiente de cerrar', hint: 'Citas pasadas sin desenlace, evoluciones o tratamientos sin marcar' },
   closingMine: { label: 'Pendiente de cerrar', hint: 'Tus evoluciones y tratamientos sin marcar' },
   anamnesis: { label: 'Anamnesis por revisar', hint: 'Enviadas por los pacientes desde su enlace' },
+  // DX-566: llamadas de control a los pacientes operados.
+  postOpChecks: { label: 'Controles postoperatorios', hint: 'Llamadas de control de hoy y las vencidas' },
   followUp: { label: 'Presupuestos por seguir', hint: 'Presentados hace más de 7 días, sin respuesta ni cita' },
   unscheduled: { label: 'Aceptados sin agendar', hint: 'Planes aceptados con visitas por agendar' },
   waitlist: { label: 'Pendientes por agendar', hint: 'Lista de espera: cancelaron o no vinieron' },
@@ -77,6 +80,8 @@ function queueRow(key: WorkQueueKey, role: ClinicRole): QueueRow {
       return { id: 'closing', ...(role === 'DENTIST' ? copy.closingMine : copy.closing), href: '/agenda/pendiente-de-cerrar' };
     case 'ANAMNESIS_REVIEW':
       return { id: 'anamnesis', ...copy.anamnesis, href: ANAMNESIS_HREF };
+    case 'POST_OP_CHECKS':
+      return { id: 'post-op-checks', ...copy.postOpChecks, href: POST_OP_CHECKS_HREF };
     case 'QUOTE_FOLLOW_UP':
       return { id: 'follow-up', ...copy.followUp, href: '/presupuestos' };
     case 'ACCEPTED_UNSCHEDULED':

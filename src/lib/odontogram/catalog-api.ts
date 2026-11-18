@@ -34,6 +34,10 @@ export interface DentalCatalogItem {
   defaultPrice: number | null;
   /** DX-105: false = la prestación no admite descuentos (ni de convenio ni discrecionales). */
   allowDiscount?: boolean;
+  /** DX-566: al marcarlo hecho se crea un control postoperatorio (solo procedimientos). */
+  requiresPostOpCheck?: boolean;
+  /** DX-566: días hábiles de la sede entre el procedimiento y la llamada (1–30). */
+  postOpCheckAfterDays?: number;
   /**
    * DX-502-ter: moneda de `defaultPrice` (la del catálogo de la clínica), `null` si no se
    * sabe. La traen las lecturas de `GET /catalog/items`; no las altas ni las ediciones.
@@ -138,6 +142,10 @@ export interface CreateCatalogItemInput {
   defaultPrice?: number;
   /** DX-105: por defecto true. */
   allowDiscount?: boolean;
+  /** DX-566: solo procedimientos (400 en un diagnóstico). */
+  requiresPostOpCheck?: boolean;
+  /** DX-566: 1–30 días hábiles; por defecto 1. */
+  postOpCheckAfterDays?: number;
   active?: boolean;
   /** DX-455: `null` la desliga; ausente, no cambia. Solo procedimientos. */
   clinicalNoteTemplateId?: string | null;
@@ -172,6 +180,8 @@ export interface UpdateCatalogItemInput {
   labelPt?: string;
   defaultPrice?: number;
   allowDiscount?: boolean;
+  requiresPostOpCheck?: boolean;
+  postOpCheckAfterDays?: number;
   active?: boolean;
   clinicalNoteTemplateId?: string | null;
 }

@@ -605,13 +605,18 @@ describe('AppShell', () => {
     const aside = within(document.querySelector('aside') as HTMLElement);
     expect(await aside.findByRole('link', { name: 'Pendiente de cerrar 2' })).toBeInTheDocument();
     expect(aside.getByRole('link', { name: 'Anamnesis 7 · por revisar' })).toBeInTheDocument();
-    expect(getWorkQueuesSummary).toHaveBeenCalledWith(expect.any(String), ['CLOSING_QUEUE', 'ANAMNESIS_REVIEW']);
+    expect(getWorkQueuesSummary).toHaveBeenCalledWith(expect.any(String), [
+      'CLOSING_QUEUE',
+      'ANAMNESIS_REVIEW',
+      // DX-566: el contador de la cabecera de la Agenda.
+      'POST_OP_CHECKS',
+    ]);
   });
 
   it('DX-503: la asistente no sondea «Pendiente de cerrar»; recepción no sondea anamnesis', async () => {
     for (const [role, keys] of [
-      ['ASSISTANT', ['ANAMNESIS_REVIEW']],
-      ['RECEPTION', ['CLOSING_QUEUE']],
+      ['ASSISTANT', ['ANAMNESIS_REVIEW', 'POST_OP_CHECKS']],
+      ['RECEPTION', ['CLOSING_QUEUE', 'POST_OP_CHECKS']],
     ] as const) {
       mockAccessToken = tokenForRole(role);
       (getWorkQueuesSummary as jest.Mock).mockClear();

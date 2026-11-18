@@ -281,6 +281,7 @@ describe('CatalogView', () => {
         labelEs: 'Profilaxis',
         color: '#0E7490',
         allowDiscount: true,
+        requiresPostOpCheck: false,
         defaultPrice: 80000,
       }),
     );
@@ -367,6 +368,7 @@ describe('CatalogView', () => {
         labelEs: 'Profilaxis dental',
         color: '#0E7490',
         allowDiscount: true,
+        requiresPostOpCheck: false,
         defaultPrice: 80000,
         category: 'Preventiva',
       }),
@@ -901,6 +903,82 @@ describe('CatalogView · admite descuentos (DX-105)', () => {
   it('un ítem sin el campo (respuesta antigua) se trata como que admite descuentos', async () => {
     render(<CatalogView token={admin} initialItemId="c1" />);
     expect(await screen.findByRole('checkbox', { name: 'Admite descuentos' })).toBeChecked();
+  });
+});
+
+describe('CatalogView · control postoperatorio (DX-566)', () => {
+  const admin = tokenFor('ADMIN', 'u-admin');
+
+  beforeEach(() => {
+    mockedList.mockReset().mockResolvedValue(page([item1]));
+    mockedUpdate.mockReset().mockResolvedValue(item1);
+    mockedCreate.mockReset().mockResolvedValue(item1);
+    mockedLocations.mockReset().mockResolvedValue(clinicIn('VE'));
+    (listCatalogItems as jest.Mock).mockReset().mockResolvedValue([item1]);
+    window.localStorage.clear();
+  });
+
+  it('marcada, pide los días (1 por defecto) y los manda; sin marcar no hay campo de días', async () => {
+    const user = setupUser();
+    render(<CatalogView token={admin} />);
+    await screen.findByRole('table', { name: /catálogo/i });
+    await user.click(screen.getByRole('button', { name: /agregar ítem/i }));
+    const box = await screen.findByRole('checkbox', { name: 'Pide control postoperatorio' });
+    expect(box).not.toBeChecked();
+    expect(screen.queryByLabelText('Días después')).not.toBeInTheDocument();
+    await user.click(box);
+    const days = screen.getByLabelText('Días después');
+    expect(days).toHaveValue(1);
+    await user.clear(days);
+    await user.type(days, '3');
+    await user.type(screen.getByLabelText('Nombre'), 'Extracción simple');
+    await user.type(screen.getByLabelText('Código'), 'EXO');
+    await user.click(screen.getByRole('button', { name: 'Crear' }));
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith(
+        admin,
+        expect.objectContaining({ requiresPostOpCheck: true, postOpCheckAfterDays: 3 }),
+      ),
+    );
+  });
+
+  it('fuera de 1–30 no guarda y avisa junto al campo', async () => {
+    const user = setupUser();
+    (listCatalogItems as jest.Mock).mockResolvedValue([{ ...item1, requiresPostOpCheck: true, postOpCheckAfterDays: 2 }]);
+    render(<CatalogView token={admin} initialItemId="c1" />);
+    const days = await screen.findByLabelText('Días después');
+    expect(days).toHaveValue(2);
+    await user.clear(days);
+    await user.type(days, '31');
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    expect(await screen.findByText('Escribe un número de días entre 1 y 30.')).toBeInTheDocument();
+    expect(days).toHaveAttribute('aria-invalid', 'true');
+    expect(mockedUpdate).not.toHaveBeenCalled();
+  });
+
+  it('el 400 de la API sobre los días va junto al campo de días', async () => {
+    const user = setupUser();
+    (listCatalogItems as jest.Mock).mockResolvedValue([{ ...item1, requiresPostOpCheck: true, postOpCheckAfterDays: 2 }]);
+    mockedUpdate.mockRejectedValue(new ApiError(400, 'Los días del control postoperatorio van de 1 a 30.'));
+    render(<CatalogView token={admin} initialItemId="c1" />);
+    await screen.findByLabelText('Días después');
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    const error = await screen.findByText('Los días del control postoperatorio van de 1 a 30.');
+    expect(screen.getByLabelText('Días después')).toHaveAttribute('aria-describedby', expect.stringContaining(error.id));
+  });
+
+  it('desmarcada no manda los días; un diagnóstico no ofrece la casilla ni la manda', async () => {
+    const user = setupUser();
+    (listCatalogItems as jest.Mock).mockResolvedValue([{ ...item1, requiresPostOpCheck: true, postOpCheckAfterDays: 2 }]);
+    render(<CatalogView token={admin} initialItemId="c1" />);
+    const box = await screen.findByRole('checkbox', { name: 'Pide control postoperatorio' });
+    expect(box).toBeChecked();
+    await user.click(box);
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalled());
+    const patch = mockedUpdate.mock.calls[0][2];
+    expect(patch).toEqual(expect.objectContaining({ requiresPostOpCheck: false }));
+    expect(patch).not.toHaveProperty('postOpCheckAfterDays');
   });
 });
 
