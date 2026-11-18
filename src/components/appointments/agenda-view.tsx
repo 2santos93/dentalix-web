@@ -129,6 +129,7 @@ import { WalkInDialog, walkInCopy } from '@/components/appointments/walk-in-dial
 import { OVERBOOK_SLOT_TAKEN, canWalkIn, type WalkInResult } from '@/lib/appointments/walk-in';
 import { KeepOverbookedDialog, type KeepOverbookedPrompt } from '@/components/appointments/keep-overbooked-dialog';
 import { OverbookedChip } from '@/components/appointments/overbooked-chip';
+import { OnlineChip } from '@/components/appointments/online-chip';
 import { canDownloadContingencyAgenda } from '@/lib/appointments/contingency-agenda-api';
 import { InClinicPanel, inClinicCopy } from '@/components/appointments/in-clinic-panel';
 import { focusLocationSwitcher } from '@/components/locations/location-switcher';
@@ -2103,6 +2104,8 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                   status={liveDetailAppointment.status}
                   className="self-start"
                 />
+                {/* DX-016: la reservó el paciente desde la reserva online. */}
+                <OnlineChip origin={liveDetailAppointment.origin} className="self-start" />
                 {liveDetailAppointment.status === 'CANCELLED' &&
                 cancellationSummary(liveDetailAppointment) ? (
                   <p className="text-sm text-muted" data-testid="cancellation-summary">

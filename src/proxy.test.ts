@@ -88,6 +88,15 @@ describe('proxy (DX-062: CSP con nonce por petición)', () => {
     expect(res.headers.get('x-robots-tag')).toBe('noindex, nofollow');
   });
 
+  it('DX-016: la reserva online sale sin Referer, sin caché y sin indexar (no la bandeja del personal)', () => {
+    const res = run('http://demo.localhost:3001/reservar', { host: 'demo.localhost:3001' });
+    expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(res.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+    const staff = run('http://demo.localhost:3001/solicitudes-online', { host: 'demo.localhost:3001' });
+    expect(staff.headers.get('x-robots-tag')).toBeNull();
+  });
+
   it('DX-572: la copia de una orden sale sin Referer, sin caché y sin indexar (no las órdenes del personal)', () => {
     const res = run('http://demo.localhost:3001/orden/copia/abc', { host: 'demo.localhost:3001' });
     expect(res.headers.get('referrer-policy')).toBe('no-referrer');

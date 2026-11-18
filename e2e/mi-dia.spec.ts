@@ -83,8 +83,9 @@ test('ADMIN: los números son los de la API, lo que está a 0 se pliega y cada f
   const zero = body.items.filter((i) => i.count === 0).length;
   expect(zero).toBe(8);
 
-  // Las listas a 0, plegadas; se despliegan con el teclado.
-  const toggle = pending.getByRole('button', { name: /Al día: 8 listas/ });
+  // Las listas a 0, plegadas; se despliegan con el teclado. DX-016: más la
+  // de «Solicitudes online» (su contador no es de /work-queues), también a 0.
+  const toggle = pending.getByRole('button', { name: /Al día: 9 listas/ });
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(pending.getByTestId('pending-follow-up')).toBeHidden();
   await toggle.focus();

@@ -175,7 +175,7 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   POST_OP_CHECK: 'Control postoperatorio',
   // DX-101: el enlace de acceso del paciente (crear, revocar, verificar, bloqueo).
   PATIENT_ACCESS_LINK: 'Enlace de acceso del paciente',
-  // DX-016: la reserva online (mismas etiquetas que su PR web).
+  // DX-016: reserva online (código, solicitud, reserva, aceptar y rechazar).
   ONLINE_BOOKING: 'Reserva online',
 };
 
@@ -210,7 +210,7 @@ const ORIGIN_LABELS: Record<AuditOrigin, string> = {
   JOB: 'proceso automático',
   // DX-435: el paciente desde el enlace público de la oferta de hueco.
   PUBLIC_LINK: 'desde el enlace de la oferta',
-  // DX-016: la página pública de reserva online.
+  // DX-016: el paciente desde la página pública de reserva online.
   ONLINE_BOOKING: 'desde la reserva online',
 };
 

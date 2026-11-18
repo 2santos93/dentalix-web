@@ -10,6 +10,7 @@ import {
   Store,
   CalendarClock,
   CalendarDays,
+  CalendarCheck2,
   ClipboardClock,
   ClipboardList,
   ClipboardPlus,
@@ -56,6 +57,7 @@ import { canManageAnestheticCatalog } from '@/lib/anesthesia/anesthesia-api';
 import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
 import { canManageRecallTypes } from '@/lib/recall/recall-api';
 import { canManageSlotOfferSettings } from '@/lib/appointments/slot-offer-settings-api';
+import { canManageOnlineBooking } from '@/lib/online-booking/online-booking-api';
 import { canManageChairs } from '@/lib/chairs/chairs-api';
 import { canManageEquipment } from '@/lib/equipment/equipment-api';
 import { canManagePayers } from '@/lib/payers/payers-api';
@@ -235,6 +237,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Cuánto antes del hueco caduca el enlace de la oferta y con cuánta antelación se puede enviar.',
         icon: Hourglass,
         visible: canManageSlotOfferSettings,
+      },
+      // DX-016: la página pública /reservar.
+      {
+        href: '/settings/reserva-online',
+        label: 'Reserva online',
+        description: 'La página donde los pacientes piden o reservan cita por internet y qué tratamientos ofrece.',
+        icon: CalendarCheck2,
+        visible: canManageOnlineBooking,
       },
       // DX-026.
       {
