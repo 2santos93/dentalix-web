@@ -317,10 +317,12 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         visible: canManagePriceLists,
       },
       // DX-379: la leen todos; solo ADMIN la cambia (la pantalla y la API).
+      // DX-561: el seguimiento automático es una subpantalla
+      // (/settings/presupuestos/seguimiento, solo ADMIN): no cuenta como entrada.
       {
         href: '/settings/presupuestos',
         label: 'Presupuestos',
-        description: 'Cuántos días valen los precios de un presupuesto.',
+        description: 'Cuántos días valen los precios de un presupuesto y su seguimiento automático.',
         icon: FileClock,
       },
     ],
