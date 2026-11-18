@@ -83,6 +83,7 @@ function documentFixture(overrides: Partial<PublicSignatureDocument> = {}): Publ
     clinic: CLINIC,
     location: LOCATION,
     budget: null,
+    presentation: null,
     ...overrides,
   };
 }
