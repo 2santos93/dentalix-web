@@ -2,6 +2,7 @@ import { webcrypto } from 'node:crypto';
 import { TextDecoder, TextEncoder } from 'node:util';
 import { createOfflineVault } from './offline-vault';
 import { memoryKv } from './offline-kv';
+import { installMemoryDraftStore, uninstallDraftStore } from '../test/draft-store';
 import {
   enableOfflineCopy,
   forgetOfflineSession,
@@ -107,3 +108,33 @@ describe('copia sin conexión: sesión, PIN y época (DX-405)', () => {
     expect(kv.tables.agenda.size).toBe(0);
   });
 });
+
+describe('cerrar sesión borra los borradores del usuario (DX-574)', () => {
+  beforeEach(() => {
+    resetOfflineAgendaForTests();
+    window.sessionStorage.clear();
+  });
+  afterEach(() => uninstallDraftStore());
+
+  const mine = { owner: 'user-1|tenant-1', patientId: 'pac-1', form: 'evolution' as const };
+  const other = { owner: 'user-2|tenant-1', patientId: 'pac-1', form: 'evolution' as const };
+
+  it('con la marca de la pestaña borra solo los de ese usuario', async () => {
+    const drafts = await installMemoryDraftStore();
+    await drafts.seed(mine, { notes: 'mía' }, 'k1');
+    await drafts.seed(other, { notes: 'de otro' }, 'k2');
+    markOfflineSession(TOKEN);
+    await forgetOfflineSession();
+    expect(await drafts.store.has(mine)).toBe(false);
+    expect(await drafts.store.has(other)).toBe(true);
+  });
+
+  it('sin saber quién era (sin marca) borra todos los del equipo', async () => {
+    const drafts = await installMemoryDraftStore();
+    await drafts.seed(mine, { notes: 'mía' }, 'k1');
+    await drafts.seed(other, { notes: 'de otro' }, 'k2');
+    await forgetOfflineSession();
+    expect(drafts.kv.tables.drafts.size).toBe(0);
+  });
+});
+

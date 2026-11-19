@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { ApiError } from '@/lib/api/client';
+import { IDEMPOTENCY_KEY_REUSED, newIdempotencyKey } from '@/lib/api/idempotency-key';
 import { apiErrorMessage, sedeCivilDateOption } from '@/lib/api/error-message';
 import { QUOTE_EXPIRED, canPrintPlanQuote, isPlanAcceptable, type PlanQuote } from '@/lib/treatment-plans/plan-quote-api';
 import {
@@ -198,6 +199,9 @@ export function TreatmentPlansTab({
   const [reloadKey, setReloadKey] = useState(0);
 
   const [creatingPlan, setCreatingPlan] = useState(false);
+  // DX-574: la clave del alta del plan se conserva entre reintentos (un fallo
+  // de red no crea dos planes) y se renueva tras crearlo.
+  const createPlanKeyRef = useRef<string | null>(null);
   const [createPlanError, setCreatePlanError] = useState<string | null>(null);
   // Transient "Plan creado" confirmation — the POST always succeeded, but with
   // same-day identical labels the create looked like a no-op; this makes the
@@ -548,11 +552,14 @@ export function TreatmentPlansTab({
         document.getElementById('tp-new-plan-currency')?.focus();
         return;
       }
-      const created = await createPlan(token, patientId, { currency: newPlanCurrency });
+      createPlanKeyRef.current ??= newIdempotencyKey();
+      const created = await createPlan(token, patientId, { currency: newPlanCurrency }, createPlanKeyRef.current);
+      createPlanKeyRef.current = null;
       await refreshPlansInPlace();
       setSelectedPlanId(created.id);
       setPlanCreated(true);
     } catch (err) {
+      if (err instanceof ApiError && err.code === IDEMPOTENCY_KEY_REUSED) createPlanKeyRef.current = null;
       setCreatePlanError(apiErrorMessage(err, copy.genericCreatePlanError));
     } finally {
       setCreatingPlan(false);

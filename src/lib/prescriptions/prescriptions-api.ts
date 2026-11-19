@@ -1,3 +1,4 @@
+import { idempotencyHeaders } from '@/lib/api/idempotency-key';
 import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
@@ -91,8 +92,15 @@ export async function issuePrescription(
   token: string,
   patientId: string,
   input: IssuePrescriptionInput,
+  /** DX-574: un reintento con la misma clave no emite otra receta. */
+  idempotencyKey?: string,
 ): Promise<Prescription> {
-  return apiFetch<Prescription>(patientPath(patientId), { method: 'POST', body: input, token });
+  return apiFetch<Prescription>(patientPath(patientId), {
+    method: 'POST',
+    body: input,
+    token,
+    ...idempotencyHeaders(idempotencyKey),
+  });
 }
 
 /**

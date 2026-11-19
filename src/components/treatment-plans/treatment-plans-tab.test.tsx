@@ -52,6 +52,13 @@ import { dateIn, dateTimeIn, STAMP_SEDES } from '@/lib/test/stamp';
 import { getPlanVisits } from '@/lib/treatment-plans/plan-visits-api';
 import { listNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
 import { createClinicalEntry } from '@/lib/patients/clinical-api';
+import { NetworkError } from '@/lib/api/api-error';
+import {
+  dropAndRestoreNetwork,
+  installMemoryDraftStore,
+  resetConnectivityForTests,
+  uninstallDraftStore,
+} from '@/lib/test/draft-store';
 import { prophylaxisTemplate, resinTemplate } from '@/components/clinical-notes/fixtures';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
@@ -514,7 +521,7 @@ describe('TreatmentPlansTab', () => {
     // GLOBAL-G1 (R14): sin sede activa, la moneda común de la clínica (la del
     // fixture de sede, VES), nunca USD por defecto.
     await waitFor(() =>
-      expect(mockedCreatePlan).toHaveBeenCalledWith(tok, 'pat-1', { currency: 'VES' }),
+      expect(mockedCreatePlan).toHaveBeenCalledWith(tok, 'pat-1', { currency: 'VES' }, expect.any(String)),
     );
     await waitFor(() => expect(mockedListPlans).toHaveBeenCalledTimes(2));
     // The new plan is auto-selected -> its (empty) detail is fetched.
@@ -725,7 +732,7 @@ describe('TreatmentPlansTab', () => {
         toothNumber: '16',
         catalogItemId: 'cat-1',
         price: 45000,
-      }),
+      }, expect.any(String)),
     );
   });
 
@@ -2649,7 +2656,7 @@ describe('TreatmentPlansTab', () => {
           toothNumber: '16',
           catalogItemId: 'cat-1',
           discount: 2500,
-        }),
+        }, expect.any(String)),
       );
     });
 
@@ -2794,7 +2801,7 @@ describe('TreatmentPlansTab', () => {
           discount: 10000,
           discountReason: 'LOYALTY',
           discountReasonNote: 'Viene hace 10 años',
-        }),
+        }, expect.any(String)),
       );
     });
 
@@ -2943,7 +2950,7 @@ describe('TreatmentPlansTab', () => {
             catalogItemId: 'cat-1',
             price: 40000,
             discountReason: 'PROMOTION',
-          }),
+          }, expect.any(String)),
         );
       });
 
@@ -2977,7 +2984,7 @@ describe('TreatmentPlansTab', () => {
             toothNumber: '16',
             catalogItemId: 'cat-1',
             price: 47500,
-          }),
+          }, expect.any(String)),
         );
       });
 
@@ -3043,7 +3050,7 @@ describe('TreatmentPlansTab', () => {
             expect(mockedAddItem).toHaveBeenCalledWith(assistantToken, 'plan-1', {
               toothNumber: '16',
               catalogItemId: 'cat-1',
-            }),
+            }, expect.any(String)),
           );
         });
 
@@ -3258,6 +3265,73 @@ describe('TreatmentPlansTab', () => {
 
     const submit = () => screen.getByRole('button', { name: /^agregar ítem$/i });
 
+    describe('borradores sin conexión (DX-574)', () => {
+      const SCOPE = { owner: 'u-recep|t1', patientId: 'pat-1', form: 'plan-item' as const, variant: 'plan-1' };
+      let drafts: Awaited<ReturnType<typeof installMemoryDraftStore>>;
+      beforeEach(async () => {
+        resetConnectivityForTests();
+        drafts = await installMemoryDraftStore();
+      });
+      afterEach(() => uninstallDraftStore());
+
+      it('sin red: el ítem no se pierde, avisa y al volver la red se agrega UNA vez con la misma clave', async () => {
+        mockedGetPriceQuote.mockResolvedValue(agreementQuote());
+        mockedAddItem
+          .mockRejectedValueOnce(new NetworkError(new TypeError('Failed to fetch')))
+          .mockResolvedValueOnce({ ...item1, id: 'item-3' });
+        const user = await openForm();
+        await user.click(screen.getByRole('radio', { name: /resina/i }));
+        const price = screen.getByLabelText<HTMLInputElement>(/^precio$/i);
+        await waitFor(() => expect(price.value).toBe('40000'));
+        await user.clear(price);
+        await user.type(price, '45000');
+        await user.click(submit());
+
+        expect(await screen.findByText('Sin conexión; se guardó en este dispositivo.')).toBeInTheDocument();
+        expect(screen.getByLabelText<HTMLInputElement>(/^precio$/i).value).toBe('45000');
+        expect((await drafts.read(SCOPE))?.payload.value).toMatchObject({ toothNumber: '16', price: '45000' });
+
+        dropAndRestoreNetwork();
+        await waitFor(() => expect(mockedAddItem).toHaveBeenCalledTimes(2));
+        expect(mockedAddItem.mock.calls[1][3]).toBe(mockedAddItem.mock.calls[0][3]);
+        await waitFor(() => expect(screen.getByLabelText<HTMLInputElement>(/^precio$/i).value).toBe(''));
+        await waitFor(async () => expect(await drafts.store.has(SCOPE)).toBe(false));
+      });
+
+      it('Recuperar rellena el ítem (el precio escrito a mano no lo pisa el resuelto) y no lo agrega solo', async () => {
+        mockedGetPriceQuote.mockResolvedValue(agreementQuote());
+        await drafts.seed(
+          SCOPE,
+          {
+            toothNumber: '16',
+            catalogItemId: 'cat-1',
+            price: '45000',
+            priceEdited: true,
+            discount: '',
+            surfaces: { VESTIBULAR: false, LINGUAL: false, MESIAL: false, DISTAL: false, OCCLUSAL: true },
+            notes: 'Paciente prefiere cita en la mañana',
+            addReason: { reason: '', note: '' },
+          },
+          'clave-item',
+        );
+        mockedListPlans.mockResolvedValue([plan1]);
+        mockedGetPlan.mockResolvedValue(plan1Detail);
+        const user = userEvent.setup();
+        render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
+        await user.click(await screen.findByRole('button', { name: 'Recuperar' }));
+        await waitFor(() => expect(mockedGetPriceQuote).toHaveBeenCalled());
+        await waitFor(() => expect(screen.getByLabelText<HTMLInputElement>(/^precio$/i)).toBeEnabled());
+        expect(screen.getByLabelText<HTMLInputElement>(/^precio$/i).value).toBe('45000');
+        expect(screen.getByLabelText(/código fdi/i)).toHaveValue('16');
+        expect(mockedAddItem).not.toHaveBeenCalled();
+        mockedAddItem.mockResolvedValueOnce({ ...item1, id: 'item-3' });
+        await user.click(submit());
+        await waitFor(() => expect(mockedAddItem).toHaveBeenCalledTimes(1));
+        expect(mockedAddItem.mock.calls[0][2]).toMatchObject({ price: 45000, surfaces: ['OCCLUSAL'] });
+        expect(mockedAddItem.mock.calls[0][3]).toBe('clave-item');
+      });
+    });
+
     it('pide el precio del paciente para la prestación, lo precarga y dice de dónde sale', async () => {
       mockedGetPriceQuote.mockResolvedValue(agreementQuote());
       const user = await openForm();
@@ -3308,7 +3382,7 @@ describe('TreatmentPlansTab', () => {
       await user.click(submit());
 
       await waitFor(() =>
-        expect(mockedAddItem).toHaveBeenCalledWith(tok, 'plan-1', { toothNumber: '16', catalogItemId: 'cat-1' }),
+        expect(mockedAddItem).toHaveBeenCalledWith(tok, 'plan-1', { toothNumber: '16', catalogItemId: 'cat-1' }, expect.any(String)),
       );
     });
 
@@ -3328,7 +3402,7 @@ describe('TreatmentPlansTab', () => {
           toothNumber: '16',
           catalogItemId: 'cat-1',
           price: 45000,
-        }),
+        }, expect.any(String)),
       );
     });
 
@@ -3348,7 +3422,7 @@ describe('TreatmentPlansTab', () => {
           toothNumber: '16',
           catalogItemId: 'cat-1',
           price: 30000,
-        }),
+        }, expect.any(String)),
       );
     });
 
@@ -3370,7 +3444,7 @@ describe('TreatmentPlansTab', () => {
         expect(mockedAddItem).toHaveBeenCalledWith(tok, 'plan-1', {
           toothNumber: '16',
           catalogItemId: 'cat-1',
-        }),
+        }, expect.any(String)),
       );
     });
 
@@ -3966,7 +4040,7 @@ describe('TreatmentPlansTab', () => {
       const select = await screen.findByLabelText<HTMLSelectElement>('Moneda del nuevo plan');
       await waitFor(() => expect(select.value).toBe('JPY'));
       await user.click(screen.getByRole('button', { name: /^nuevo plan$/i }));
-      await waitFor(() => expect(mockedCreatePlan).toHaveBeenCalledWith(tok, 'pat-1', { currency: 'JPY' }));
+      await waitFor(() => expect(mockedCreatePlan).toHaveBeenCalledWith(tok, 'pat-1', { currency: 'JPY' }, expect.any(String)));
     });
 
     it('mixed currencies and no location leaves the plan currency empty and required', async () => {
@@ -3986,7 +4060,7 @@ describe('TreatmentPlansTab', () => {
       await waitFor(() => expect(select.querySelector('option[value="EUR"]')).not.toBeNull());
       await user.selectOptions(select, 'EUR');
       await user.click(screen.getByRole('button', { name: /^nuevo plan$/i }));
-      await waitFor(() => expect(mockedCreatePlan).toHaveBeenCalledWith(tok, 'pat-1', { currency: 'EUR' }));
+      await waitFor(() => expect(mockedCreatePlan).toHaveBeenCalledWith(tok, 'pat-1', { currency: 'EUR' }, expect.any(String)));
     });
 
     it('location without currency leaves the plan currency empty, never VES or USD', async () => {
@@ -4288,7 +4362,7 @@ describe('TreatmentPlansTab · evolución sugerida al marcar hecho (DX-455)', ()
       expect(createClinicalEntry).toHaveBeenCalledWith(dentistToken, 'pat-1', {
         notes: 'Resina en superficie O con Resina A2. Observaciones: [sin respuesta].',
         templateId: 'tpl-resina',
-      }),
+      }, expect.any(String)),
     );
     expect(await screen.findByText('Evolución guardada en la historia clínica.')).toBeInTheDocument();
   });

@@ -1,6 +1,6 @@
 'use client';
 import type * as React from 'react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeMoney } from '@/lib/format/sede-number';
@@ -46,8 +46,23 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { SectionHeader } from '@/components/ui/section-header';
 import { Textarea } from '@/components/ui/textarea';
+import { useFormDraft } from '@/lib/drafts/use-form-draft';
+import { useResilientSubmit } from '@/lib/drafts/use-resilient-submit';
+import { DraftRecoveryCallout, OfflineSaveNotice } from '@/components/drafts/draft-notices';
 import { PriceQuoteLine } from './price-quote-line';
 import { copy, emptySurfacesState, optionalAmount, unreadableReason } from './treatment-plans-tab-copy';
+
+/** DX-574: lo que guarda el borrador local del tratamiento que se está añadiendo. */
+interface PlanItemDraftValue {
+  toothNumber: string;
+  catalogItemId: string;
+  price: string;
+  priceEdited: boolean;
+  discount: string;
+  surfaces: Record<ToothSurface, boolean>;
+  notes: string;
+  addReason: DiscountReasonValue;
+}
 
 interface PlanItemFormProps {
   token: string;
@@ -108,6 +123,45 @@ export function PlanItemForm({
   // DX-241: precio y descuento que no valen, junto a su campo (escalón 4).
   const [itemAmountErrors, setItemAmountErrors] = useState<{ price?: string; discount?: string }>({});
   const [addItemError, setAddItemError] = useState<string | null>(null);
+  // DX-574: precio escrito a mano en un borrador recuperado: el precio
+  // resuelto que llega al elegir la prestación no lo pisa.
+  const restoredPriceRef = useRef<string | null>(null);
+
+  // DX-574: borrador cifrado en el equipo (por plan) y envío que no se pierde sin red.
+  const draft = useFormDraft<PlanItemDraftValue>({
+    token,
+    patientId,
+    form: 'plan-item',
+    variant: plan.id,
+    value: { toothNumber, catalogItemId, price, priceEdited, discount, surfaces, notes, addReason },
+    // El precio precargado por la prestación no es algo escrito.
+    isEmpty: (v) =>
+      !v.toothNumber.trim() &&
+      !v.catalogItemId &&
+      !v.priceEdited &&
+      !v.discount.trim() &&
+      !Object.values(v.surfaces).some(Boolean) &&
+      !v.notes.trim() &&
+      !v.addReason.reason &&
+      !v.addReason.note.trim(),
+  });
+  const resilient = useResilientSubmit(draft, {
+    onRetryError: (err) => setAddItemError(apiErrorMessage(err, copy.genericAddItemError)),
+  });
+
+  function restoreDraft(saved: PlanItemDraftValue) {
+    restoredPriceRef.current = saved.priceEdited ? saved.price : null;
+    setToothNumber(saved.toothNumber ?? '');
+    setCatalogItemId(saved.catalogItemId ?? '');
+    setPrice(saved.price ?? '');
+    setPriceEdited(Boolean(saved.priceEdited));
+    setDiscount(saved.discount ?? '');
+    setSurfaces({ ...emptySurfacesState(), ...saved.surfaces });
+    setNotes(saved.notes ?? '');
+    setAddReason(saved.addReason ?? EMPTY_REASON);
+    setAddItemError(null);
+    setAddItemValidationError(null);
+  }
 
   // DX-513-bis (L5): el precio de catálogo crudo solo sirve de respaldo si está
   // en la moneda del plan (o en una que no se sabe, como DX-513). En otra
@@ -129,6 +183,14 @@ export function PlanItemForm({
     catalogItemId,
     currency: plan.currency,
     onSettled: (q) => {
+      const restoredPrice = restoredPriceRef.current;
+      if (restoredPrice !== null) {
+        // DX-574: el precio del borrador recuperado lo había escrito el usuario.
+        restoredPriceRef.current = null;
+        setPrice(restoredPrice);
+        setPriceEdited(true);
+        return;
+      }
       if (q) {
         // DX-513-bis: se propone la referencia en la moneda del plan (la del
         // catálogo convertida con la tasa de hoy), nunca la cifra cruda de
@@ -175,6 +237,7 @@ export function PlanItemForm({
       : null;
 
   function handleProcedureChange(nextCatalogItemId: string) {
+    restoredPriceRef.current = null;
     setCatalogItemId(nextCatalogItemId);
     // Prefill (not lock) the price with the chosen procedure's default —
     // the field stays editable afterwards.
@@ -272,17 +335,23 @@ export function PlanItemForm({
         ...(discounted ? reasonPayload(addReason) : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
       };
-      await addItem(token, plan.id, input);
-      setToothNumber('');
-      setCatalogItemId('');
-      setPrice('');
-      setPriceEdited(false);
-      setDiscount('');
-      setAddReason(EMPTY_REASON);
-      setSurfaces(emptySurfacesState());
-      setNotes('');
-      // DX-051: un ítem aceptado nuevo recibe los sobrantes del reparto.
-      await onAdded();
+      // DX-574: sin red no se pierde ni se duplica: se reenvía al volver la
+      // conexión con la misma Idempotency-Key.
+      await resilient.run(
+        (key) => addItem(token, plan.id, input, key),
+        async () => {
+          setToothNumber('');
+          setCatalogItemId('');
+          setPrice('');
+          setPriceEdited(false);
+          setDiscount('');
+          setAddReason(EMPTY_REASON);
+          setSurfaces(emptySurfacesState());
+          setNotes('');
+          // DX-051: un ítem aceptado nuevo recibe los sobrantes del reparto.
+          await onAdded();
+        },
+      );
     } catch (err) {
       // Un 400 (FDI inválido / precio obligatorio si el ítem del catálogo no
       // tiene defaultPrice) llega en inglés: apiErrorMessage lo dice en español.
@@ -314,6 +383,7 @@ export function PlanItemForm({
   return (
     <form onSubmit={handleAddItem} aria-label={copy.addItemHeading} className="flex flex-col gap-4">
       <SectionHeader as="h3" title={copy.addItemHeading} actions={headerActions} />
+      <DraftRecoveryCallout draft={draft} onRestore={restoreDraft} />
 
       {/* El diente se TOCA en el mapa, no se transcribe de
           memoria: es el mismo `OdontogramChart` del tab de al
@@ -487,14 +557,15 @@ export function PlanItemForm({
       {rateMissingNotice && <InlineError>{rateMissingNotice}</InlineError>}
       {addItemValidationError && <InlineError>{addItemValidationError}</InlineError>}
       {addItemError && <InlineError>{addItemError}</InlineError>}
+      <OfflineSaveNotice submit={resilient} />
 
       <Button
         type="submit"
         variant={submitPrimary ? 'default' : 'secondary'}
-        disabled={addItemSubmitting || addPriceLoading || rateMissing}
+        disabled={addItemSubmitting || resilient.retrying || addPriceLoading || rateMissing}
         className="self-start"
       >
-        {addItemSubmitting ? copy.addItemSubmitting : copy.addItemSubmit}
+        {addItemSubmitting || resilient.retrying ? copy.addItemSubmitting : copy.addItemSubmit}
       </Button>
     </form>
   );

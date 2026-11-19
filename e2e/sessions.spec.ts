@@ -105,7 +105,14 @@ for (const width of [1440, 390] as const) {
 
       await page.clock.install();
       await loginAs(page, session.origin, clinic.email, PASSWORD);
+      // Los 15 min de la clínica llegan con `/me`: se espera su respuesta
+      // (registrada ANTES de navegar) antes de mover el reloj; si no, el
+      // umbral podía seguir en los 60 por defecto al avanzar (DX-574).
+      const me = page.waitForResponse(
+        (res) => new URL(res.url()).pathname.endsWith('/api/v1/me') && res.request().method() === 'GET' && res.ok(),
+      );
       await page.goto(`${session.origin}/patients`);
+      await me;
       const heading = page.getByRole('heading', { name: 'Pacientes', level: 1 });
       await expect(heading).toBeVisible({ timeout: 15_000 });
 

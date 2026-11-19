@@ -33,8 +33,14 @@ export function useIdleLogout(token: string | null): void {
   // Los minutos llegan con `/me` (a veces tarde): el temporizador los lee de
   // aquí, sin volver a montarse ni apuntar actividad cuando cambian.
   const minutesRef = useRef(minutes);
+  // La comprobación del temporizador montado (no-op sin sesión).
+  const checkRef = useRef<() => void>(() => undefined);
   useEffect(() => {
     minutesRef.current = minutes;
+    // Llegan los minutos de la clínica (p. ej. 15 en vez de los 60 por
+    // defecto): se reevalúa en el acto, sin esperar al siguiente tick. Si ya
+    // pasaron, la sesión se cierra ahora.
+    checkRef.current();
   }, [minutes]);
 
   useEffect(() => {
@@ -95,7 +101,9 @@ export function useIdleLogout(token: string | null): void {
     }
     document.addEventListener('visibilitychange', onVisibility);
     const timer = window.setInterval(check, IDLE_CHECK_INTERVAL_MS);
+    checkRef.current = check;
     return () => {
+      checkRef.current = () => undefined;
       for (const event of ACTIVITY_EVENTS) {
         window.removeEventListener(event, onActivity, { capture: true });
       }

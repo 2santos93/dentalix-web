@@ -6,6 +6,14 @@ import { MedicalHistoryPanel } from './medical-history-panel';
 import { getMedicalHistory, saveMedicalHistory } from '@/lib/patients/clinical-api';
 import { listStaff } from '@/lib/staff/staff-api';
 import type { MedicalHistory } from '@/lib/clinical/clinical-types';
+import { NetworkError } from '@/lib/api/api-error';
+import {
+  draftTestToken,
+  dropAndRestoreNetwork,
+  installMemoryDraftStore,
+  resetConnectivityForTests,
+  uninstallDraftStore,
+} from '@/lib/test/draft-store';
 
 jest.mock('../../lib/locations/locations-api', () => ({
   listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/sede-clock').utcSede()]),
@@ -385,5 +393,66 @@ describe('MedicalHistoryPanel con cada sede (DX-354b)', () => {
     render(<MedicalHistoryPanel token="tok" patientId="p1" />);
     expect(await screen.findByText(/^Registrada el —/)).toBeInTheDocument();
     await waitFor(() => expect(screen.getAllByText(/No se pudo saber el formato regional/)).toHaveLength(1));
+  });
+});
+
+describe('MedicalHistoryPanel · borradores sin conexión (DX-574)', () => {
+  const DENTIST = draftTestToken('u-me', 't1', 'DENTIST');
+  const SCOPE = { owner: 'u-me|t1', patientId: 'p1', form: 'anamnesis' as const };
+  let drafts: Awaited<ReturnType<typeof installMemoryDraftStore>>;
+
+  beforeEach(async () => {
+    resetConnectivityForTests();
+    mockedGet.mockReset();
+    mockedSave.mockReset();
+    mockedListStaff.mockReset();
+    mockedListStaff.mockResolvedValue(staff);
+    mockedGet.mockResolvedValue(latest);
+    drafts = await installMemoryDraftStore();
+  });
+  afterEach(() => uninstallDraftStore());
+
+  it('al abrir la edición ofrece recuperar; Recuperar rellena sin guardar una versión', async () => {
+    await drafts.seed(SCOPE, { notes: 'Toma losartán 50 mg desde octubre' }, 'clave-anamnesis');
+    const user = userEvent.setup();
+    render(<MedicalHistoryPanel token={DENTIST} patientId="p1" />);
+    await openForm(user);
+    await user.click(await screen.findByRole('button', { name: 'Recuperar' }));
+    expect(screen.getByLabelText(/notas/i)).toHaveValue('Toma losartán 50 mg desde octubre');
+    expect(mockedSave).not.toHaveBeenCalled();
+    mockedSave.mockResolvedValue({ ...latest, version: 3, notes: 'Toma losartán 50 mg desde octubre' });
+    await user.click(screen.getByRole('button', { name: 'Guardar nueva versión' }));
+    await waitFor(() => expect(mockedSave).toHaveBeenCalledTimes(1));
+    expect(mockedSave.mock.calls[0][3]).toBe('clave-anamnesis');
+  });
+
+  it('sin red: el formulario sigue abierto, avisa y al volver la red guarda una sola versión con la misma clave', async () => {
+    mockedSave.mockRejectedValueOnce(new NetworkError(new TypeError('Failed to fetch')));
+    const user = userEvent.setup();
+    render(<MedicalHistoryPanel token={DENTIST} patientId="p1" />);
+    await openForm(user);
+    await user.type(screen.getByLabelText(/notas/i), ' (actualizado)');
+    await user.click(screen.getByRole('button', { name: 'Guardar nueva versión' }));
+    expect(await screen.findByText('Sin conexión; se guardó en este dispositivo.')).toBeInTheDocument();
+    expect(screen.getByLabelText(/notas/i)).toHaveValue('Paciente colaborador (actualizado)');
+    expect((await drafts.read(SCOPE))?.payload.value).toMatchObject({ notes: 'Paciente colaborador (actualizado)' });
+
+    mockedSave.mockResolvedValueOnce({ ...latest, version: 3, notes: 'Paciente colaborador (actualizado)' });
+    dropAndRestoreNetwork();
+    await waitFor(() => expect(mockedSave).toHaveBeenCalledTimes(2));
+    expect(mockedSave.mock.calls[1][3]).toBe(mockedSave.mock.calls[0][3]);
+    expect(await screen.findByText(/versión 3/i)).toBeInTheDocument();
+    await waitFor(async () => expect(await drafts.store.has(SCOPE)).toBe(false));
+  });
+
+  it('descartar los cambios (confirmado) borra el borrador', async () => {
+    const user = userEvent.setup();
+    render(<MedicalHistoryPanel token={DENTIST} patientId="p1" />);
+    await openForm(user);
+    await user.type(screen.getByLabelText(/notas/i), ' (actualizado)');
+    await waitFor(async () => expect(await drafts.store.has(SCOPE)).toBe(true), { timeout: 3000 });
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Descartar' }));
+    await waitFor(async () => expect(await drafts.store.has(SCOPE)).toBe(false));
   });
 });

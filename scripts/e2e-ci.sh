@@ -73,6 +73,8 @@ load_env() {
       umask 077
       echo "JWT_ACCESS_SECRET=$(openssl rand -hex 32)"
       echo "JWT_REFRESH_SECRET=$(openssl rand -hex 32)"
+      # DX-574: clave de los borradores cifrados en el dispositivo (GET /me/draft-key).
+      echo "DEVICE_DRAFT_KEY_SECRET=$(openssl rand -hex 32)"
     ) > "$file"
   fi
   set -a

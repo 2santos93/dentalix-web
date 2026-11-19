@@ -515,6 +515,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/draft-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Clave de los borradores cifrados en el dispositivo (DX-574) */
+        get: operations["MeController_draftKey"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -11339,6 +11356,18 @@ export interface components {
         };
         AcceptInvitationDto: {
             password: string;
+        };
+        DraftKeyDto: {
+            /**
+             * @description Clave AES-256-GCM en base64 (32 bytes) para cifrar en este dispositivo los borradores de evolución, anamnesis, plan y receta. Una por usuario y clínica, la misma tras volver a entrar. Se guarda solo en memoria, nunca en el dispositivo.
+             * @example q3Jx0m3sZ1y6r2t9u8v7w6x5y4z3a2b1c0d9e8f7g6h=
+             */
+            key: string;
+            /**
+             * @description Versión de la derivación (para rotarla sin ambigüedad).
+             * @example 1
+             */
+            version: number;
         };
         MyProfileMembershipDto: {
             tenantId: string;
@@ -32759,6 +32788,46 @@ export interface operations {
             };
         };
     };
+    MeController_draftKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftKeyDto"];
+                };
+            };
+            /** @description Sin sesión de clínica, o la sesión ya no está viva: revocada o caducada, `tokenVersion` cambiada (contraseña o MFA), membresía retirada o clínica dada de baja */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Acceso de soporte (break-glass): sin borradores locales */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El servidor no tiene DEVICE_DRAFT_KEY_SECRET (fuera de producción) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     MeController_me: {
         parameters: {
             query?: never;
@@ -36067,7 +36136,10 @@ export interface operations {
     MedicalHistoryController_save: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description DX-574: UUID estable por intento de guardado (reintento tras un corte de red, doble clic). Repetir la MISMA petición con la misma clave devuelve el registro original sin crear otro ni volver a auditarlo; la misma clave con otros datos es 422 `IDEMPOTENCY_KEY_REUSED`. Por clínica; vive con el registro. */
+                "Idempotency-Key"?: string;
+            };
             path: {
                 patientId: string;
             };
@@ -36089,6 +36161,13 @@ export interface operations {
             };
             /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `IDEMPOTENCY_KEY_REUSED`: la Idempotency-Key ya guardó otro registro con otros datos. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -36891,7 +36970,10 @@ export interface operations {
     ClinicalEntriesController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description DX-574: UUID estable por intento de guardado (reintento tras un corte de red, doble clic). Repetir la MISMA petición con la misma clave devuelve el registro original sin crear otro ni volver a auditarlo; la misma clave con otros datos es 422 `IDEMPOTENCY_KEY_REUSED`. Por clínica; vive con el registro. */
+                "Idempotency-Key"?: string;
+            };
             path: {
                 patientId: string;
             };
@@ -36925,7 +37007,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description DX-015-bis (D18): el tipo de `recall` no existe en esta clínica o se retiró; no se guarda la evolución. */
+            /** @description DX-015-bis (D18): el tipo de `recall` no existe en esta clínica o se retiró; no se guarda la evolución. `IDEMPOTENCY_KEY_REUSED`: la Idempotency-Key ya guardó otro registro con otros datos. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -43784,7 +43866,10 @@ export interface operations {
     TreatmentPlansController_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description DX-574: UUID estable por intento de guardado (reintento tras un corte de red, doble clic). Repetir la MISMA petición con la misma clave devuelve el registro original sin crear otro ni volver a auditarlo; la misma clave con otros datos es 422 `IDEMPOTENCY_KEY_REUSED`. Por clínica; vive con el registro. */
+                "Idempotency-Key"?: string;
+            };
             path: {
                 patientId: string;
             };
@@ -43806,6 +43891,13 @@ export interface operations {
             };
             /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `IDEMPOTENCY_KEY_REUSED`: la Idempotency-Key ya guardó otro registro con otros datos. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -44037,7 +44129,10 @@ export interface operations {
     TreatmentPlansController_addItem: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description DX-574: UUID estable por intento de guardado (reintento tras un corte de red, doble clic). Repetir la MISMA petición con la misma clave devuelve el registro original sin crear otro ni volver a auditarlo; la misma clave con otros datos es 422 `IDEMPOTENCY_KEY_REUSED`. Por clínica; vive con el registro. */
+                "Idempotency-Key"?: string;
+            };
             path: {
                 id: string;
             };
@@ -44071,7 +44166,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo. DX-513-bis: `code` DISCOUNT_REFERENCE_RATE_MISSING si el precio de catálogo está en otra moneda y la clínica no tiene la tasa de hoy (el mensaje nombra la moneda y el día con el formato de la sede; a quien gestiona las tasas lo remite a Ajustes › Tasa de cambio y al resto le pide que avise a un administrador); no se guarda nada */
+            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo. DX-513-bis: `code` DISCOUNT_REFERENCE_RATE_MISSING si el precio de catálogo está en otra moneda y la clínica no tiene la tasa de hoy (el mensaje nombra la moneda y el día con el formato de la sede; a quien gestiona las tasas lo remite a Ajustes › Tasa de cambio y al resto le pide que avise a un administrador); no se guarda nada `IDEMPOTENCY_KEY_REUSED`: la Idempotency-Key ya guardó otro registro con otros datos. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -53200,6 +53295,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description DX-574: UUID estable por intento de guardado (reintento tras un corte de red, doble clic). Repetir la MISMA petición con la misma clave devuelve el registro original sin crear otro ni volver a auditarlo; la misma clave con otros datos es 422 `IDEMPOTENCY_KEY_REUSED`. Por clínica; vive con el registro. */
+                "Idempotency-Key"?: string;
                 /** @description Sede desde la que se emite (da la dirección y la zona horaria). Sin ella, la sede principal. */
                 "X-Location-Id"?: string;
             };
@@ -53251,6 +53348,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SafetyConflictDto"];
                 };
+            };
+            /** @description `IDEMPOTENCY_KEY_REUSED`: la Idempotency-Key ya guardó otro registro con otros datos. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

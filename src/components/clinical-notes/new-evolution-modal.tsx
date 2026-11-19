@@ -56,6 +56,9 @@ import {
 } from '@/lib/recall/recall-offer';
 import { stampPainters } from '@/lib/locations/sede-stamp';
 import { EvolutionRecallFields } from './evolution-recall-fields';
+import { useFormDraft } from '@/lib/drafts/use-form-draft';
+import { useResilientSubmit } from '@/lib/drafts/use-resilient-submit';
+import { DraftRecoveryCallout, OfflineSaveNotice } from '@/components/drafts/draft-notices';
 
 export const newEvolutionCopy = {
   title: 'Nueva evolución',
@@ -108,6 +111,17 @@ interface NewEvolutionModalProps {
   suggestedTemplateId?: string | null;
   /** DX-455: el procedimiento que la sugiere, para decirlo junto al selector. */
   suggestedBy?: string | null;
+}
+
+/** DX-574: lo que guarda el borrador local de la evolución. */
+interface EvolutionDraftValue {
+  templateId: string | null;
+  answers: Record<string, PromptAnswer>;
+  entryDate: string;
+  reason: string;
+  manualNotes: string | null;
+  diagnoses: DiagnosesDraft;
+  recallDraft: EvolutionRecallDraft;
 }
 
 /** DX-455: un atajo con preguntas a la espera de que se contesten. */
@@ -174,6 +188,61 @@ export function NewEvolutionModal({
   // DX-455: la sugerida se elige una sola vez (al cargar las plantillas).
   const suggestionTried = useRef(false);
   const [suggestionShown, setSuggestionShown] = useState(false);
+
+  // DX-574: borrador cifrado en el equipo (sobrevive a cerrar la pestaña o a un
+  // corte) y envío que no se pierde sin red. Vive en el almacén, no en estado:
+  // el padre monta el modal con una `key` nueva en cada apertura.
+  const draftValue: EvolutionDraftValue = {
+    templateId,
+    answers,
+    entryDate,
+    reason,
+    manualNotes,
+    diagnoses,
+    recallDraft,
+  };
+  const draft = useFormDraft<EvolutionDraftValue>({
+    token,
+    patientId,
+    form: 'evolution',
+    variant: appointment?.id ?? null,
+    value: draftValue,
+    // Solo la plantilla sugerida o elegida, sin contestar ni escribir nada, no es un borrador.
+    isEmpty: (v) =>
+      !v.manualNotes?.trim() &&
+      !v.reason.trim() &&
+      !v.entryDate &&
+      v.diagnoses.principal.code === null &&
+      v.diagnoses.related.length === 0 &&
+      !v.recallDraft.enabled &&
+      answersUntouched(v.templateId, v.answers),
+    enabled: open,
+  });
+  const resilient = useResilientSubmit(draft, {
+    onRetryError: (err) => setError(apiErrorMessage(err, copy.genericError)),
+  });
+
+  function answersUntouched(id: string | null, current: Record<string, PromptAnswer>): boolean {
+    const t = id ? templates?.find((x) => x.id === id) : null;
+    if (!t) return Object.keys(current).length === 0 || id !== null;
+    const initial = Object.fromEntries(t.prompts.map((p) => [p.id, initialAnswer(p)]));
+    return JSON.stringify(current) === JSON.stringify(initial);
+  }
+
+  function restoreDraft(saved: EvolutionDraftValue) {
+    setTemplateId(saved.templateId);
+    setAnswers(saved.answers ?? {});
+    setEntryDate(saved.entryDate ?? '');
+    setReason(saved.reason ?? '');
+    setManualNotes(saved.manualNotes);
+    setDiagnoses(saved.diagnoses ?? emptyDiagnosesDraft());
+    setRecallDraft(saved.recallDraft ?? emptyEvolutionRecallDraft);
+    // La sugerida ya no manda: lo recuperado trae su propia plantilla.
+    suggestionTried.current = true;
+    setSuggestionShown(false);
+    setNotesError(null);
+    setError(null);
+  }
 
   useLayoutEffect(() => {
     const caret = caretRef.current;
@@ -359,19 +428,25 @@ export function NewEvolutionModal({
     };
     setSubmitting(true);
     try {
-      const { warnings, recallUpdates, ...created } = await createClinicalEntry(token, patientId, input);
-      onCreated({ ...created, addenda: created.addenda ?? [] });
-      onOpenChange(false);
-      // DX-540: ya guardada; el aviso del servidor se lee en un toast.
-      announceClinicalEntryWarnings(warnings);
-      if (recall.recall) {
-        // D18: el recall cambió: la ficha lo relee y se dice cuándo vence (y, D9, a cuál sustituyó).
-        // La fecha con el formato de la sede de la pantalla solo sin cita: con cita, el recall es de la sede de la cita.
-        announceRecallChanged(patientId);
-        const painters = !appointment && clock ? stampPainters(clock) : null;
-        const notice = recallUpdatesNotice(recallUpdates, painters ? (day) => painters.civilDate(day) : null);
-        if (notice) toast.success(notice);
-      }
+      // DX-574: sin red no se cierra ni se pierde nada; se reenvía al volver
+      // la conexión con la misma Idempotency-Key (una sola evolución).
+      await resilient.run(
+        (key) => createClinicalEntry(token, patientId, input, key),
+        ({ warnings, recallUpdates, ...created }) => {
+          onCreated({ ...created, addenda: created.addenda ?? [] });
+          onOpenChange(false);
+          // DX-540: ya guardada; el aviso del servidor se lee en un toast.
+          announceClinicalEntryWarnings(warnings);
+          if (recall.recall) {
+            // D18: el recall cambió: la ficha lo relee y se dice cuándo vence (y, D9, a cuál sustituyó).
+            // La fecha con el formato de la sede de la pantalla solo sin cita: con cita, el recall es de la sede de la cita.
+            announceRecallChanged(patientId);
+            const painters = !appointment && clock ? stampPainters(clock) : null;
+            const notice = recallUpdatesNotice(recallUpdates, painters ? (day) => painters.civilDate(day) : null);
+            if (notice) toast.success(notice);
+          }
+        },
+      );
     } catch (err) {
       setError(apiErrorMessage(err, copy.genericError));
     } finally {
@@ -387,12 +462,14 @@ export function NewEvolutionModal({
       description={copy.description}
       onSubmit={handleSubmit}
       submitLabel={copy.submit}
-      submitting={submitting}
+      submitting={submitting || resilient.retrying}
       error={error}
       // Sin el día de la sede no se puede topar la fecha de atención (la API la valida igual).
       submitDisabled={(!appointment && today === null) || missingMessage !== null || pendingShortcut !== null}
       size="lg"
     >
+      <DraftRecoveryCallout draft={draft} onRestore={restoreDraft} />
+      <OfflineSaveNotice submit={resilient} />
       {licenseMissing ? (
         <ProfessionalLicenseNotice
           canEditStaff={getTokenRole(token) === 'ADMIN'}

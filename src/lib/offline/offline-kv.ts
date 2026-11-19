@@ -3,8 +3,13 @@
  * agenda CIFRADA) y `vault` (la clave de datos ENVUELTA con el PIN, su salt,
  * sus iteraciones y el contador de fallos; nunca una clave usable, ver
  * `offline-vault.ts`). En el navegador es IndexedDB; en los tests, memoria.
+ *
+ * DX-574: `drafts` (borradores de formularios clínicos, CIFRADOS con la clave
+ * que da la API y que solo vive en memoria, ver `lib/drafts/draft-store.ts`) y
+ * `device` (preferencias del equipo sin datos de salud: «Este equipo es
+ * compartido»).
  */
-export type OfflineTable = 'agenda' | 'vault';
+export type OfflineTable = 'agenda' | 'vault' | 'drafts' | 'device';
 
 export interface OfflineKv {
   get<T>(table: OfflineTable, key: string): Promise<T | undefined>;
@@ -16,8 +21,9 @@ export interface OfflineKv {
 }
 
 const DB_NAME = 'dentalix-offline';
-const DB_VERSION = 2;
-const TABLES: readonly OfflineTable[] = ['agenda', 'vault'];
+// 3 (DX-574): añade `drafts` y `device`; `onupgradeneeded` crea los que falten.
+const DB_VERSION = 3;
+const TABLES: readonly OfflineTable[] = ['agenda', 'vault', 'drafts', 'device'];
 
 function request<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -67,7 +73,12 @@ export function indexedDbKv(): OfflineKv | null {
 
 /** En memoria (tests). */
 export function memoryKv(): OfflineKv & { tables: Record<OfflineTable, Map<string, unknown>> } {
-  const tables: Record<OfflineTable, Map<string, unknown>> = { agenda: new Map(), vault: new Map() };
+  const tables: Record<OfflineTable, Map<string, unknown>> = {
+    agenda: new Map(),
+    vault: new Map(),
+    drafts: new Map(),
+    device: new Map(),
+  };
   return {
     tables,
     get: async <T>(table: OfflineTable, key: string) => tables[table].get(key) as T | undefined,
