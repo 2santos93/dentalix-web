@@ -16,7 +16,7 @@ import { SectionSkeleton } from '@/components/shared/async-section';
 import { SettingRow, SettingRows } from '@/components/settings/settings-page';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CHANNEL_LABELS, messageStatusCopy } from './message-template-labels';
+import { CHANNEL_LABELS, MESSAGE_STATUS_BADGE, messageStatus } from './message-template-labels';
 
 /*
  * El editor (modal, pestañas, tooltips, vista previa) llega en su propio trozo
@@ -138,6 +138,7 @@ export function MessageTemplatesSettings({ token }: { token: string }) {
         <MessageTemplateEditor
           token={token}
           message={editingMessage}
+          syntaxHelp={catalog.syntaxHelp}
           onOpenChange={(open) => {
             if (!open) setEditing(null);
           }}
@@ -161,8 +162,8 @@ function MessageStatus({ message }: { message: MessageEntry }) {
                 {languageName(entry.language)}
                 {entry.offered ? '' : ` (${copy.retired})`}
               </span>
-              <Badge variant={entry.custom ? 'info' : 'neutral'}>
-                {entry.custom ? messageStatusCopy.custom : messageStatusCopy.isDefault}
+              <Badge variant={MESSAGE_STATUS_BADGE[messageStatus(entry)].variant}>
+                {MESSAGE_STATUS_BADGE[messageStatus(entry)].label}
               </Badge>
             </span>
           ))}

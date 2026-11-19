@@ -33,7 +33,8 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip } from '@/components/ui/tooltip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
-import { CHANNEL_LABELS, GUARDIAN_STANDARD_TEXT, messageStatusCopy } from './message-template-labels';
+import { CHANNEL_LABELS, MESSAGE_STATUS_BADGE, messageStatus, messageStatusCopy } from './message-template-labels';
+import { Callout } from '@/components/ui/callout';
 
 /** Espera tras la última tecla antes de pedir la vista previa. */
 export const PREVIEW_DEBOUNCE_MS = 400;
@@ -50,8 +51,6 @@ export const messageEditorCopy = {
   variablesHint: 'Pulsa una para insertarla donde está el cursor.',
   insert: (name: string) => `Insertar {${name}}`,
   required: 'obligatoria',
-  syntax:
-    'Las variables van entre llaves, como {paciente}. Un tramo entre corchetes sale solo si sus variables tienen valor, como «[ con {profesional}]». Una línea en blanco empieza un párrafo.',
   emailFixed:
     'No se editan: el saludo, el botón con el enlace (el enlace no se escribe aquí), los bloques fijos como la política de cancelación o la lista de fechas, el pie y el enlace para darse de baja.',
   whatsappFixed: (required: boolean) =>
@@ -59,7 +58,7 @@ export const messageEditorCopy = {
       ? 'El texto tiene que llevar {enlace}: es donde va el enlace del paciente. No admite otros enlaces ni HTML.'
       : 'No admite enlaces ni HTML.',
   confirmationExtras: 'Si toca, se añaden detrás el cuestionario de salud y las indicaciones «Antes de tu cita».',
-  guardian: 'A quien responde por un menor le llega siempre el texto estándar.',
+  guardian: 'A quien responde por un menor le llega siempre el texto por defecto.',
   savedBy: (name: string) => `Guardado por ${name}.`,
   saved: 'Texto guardado.',
   noChanges: 'Sin cambios que guardar.',
@@ -114,6 +113,8 @@ function offeredLanguages(channel: MessageChannelEntry): MessageLanguageEntry[] 
 interface MessageTemplateEditorProps {
   token: string;
   message: MessageEntry;
+  /** La ayuda de la sintaxis que da la API (variables, corchetes, párrafos). */
+  syntaxHelp: string;
   onOpenChange: (open: boolean) => void;
   /** Tras guardar o restablecer: el padre actualiza su catálogo. */
   onSaved: (template: MessageTemplate) => void;
@@ -125,7 +126,7 @@ interface MessageTemplateEditorProps {
  * y «Guardar» guarda la que está abierta. Vista previa en vivo renderizada por
  * la API; «Enviarme una prueba» (email) y «Restablecer» (con confirmación).
  */
-export function MessageTemplateEditor({ token, message, onOpenChange, onSaved }: MessageTemplateEditorProps) {
+export function MessageTemplateEditor({ token, message, syntaxHelp, onOpenChange, onSaved }: MessageTemplateEditorProps) {
   const firstChannel = message.channels[0];
   const [channel, setChannel] = useState<MessageChannel>(firstChannel.channel);
   const [languageByChannel, setLanguageByChannel] = useState<Partial<Record<MessageChannel, MessageLanguage>>>({});
@@ -229,6 +230,7 @@ export function MessageTemplateEditor({ token, message, onOpenChange, onSaved }:
       key={comboId(ch.channel, entry.language)}
       token={token}
       message={message}
+      syntaxHelp={syntaxHelp}
       channelEntry={ch}
       languageEntry={entry}
       draft={draftOf(ch, entry)}
@@ -367,6 +369,7 @@ export function MessageTemplateEditor({ token, message, onOpenChange, onSaved }:
 interface MessageTextPanelProps {
   token: string;
   message: MessageEntry;
+  syntaxHelp: string;
   channelEntry: MessageChannelEntry;
   languageEntry: MessageLanguageEntry;
   draft: MessageDraft;
@@ -382,6 +385,7 @@ type Field = 'subject' | 'body';
 function MessageTextPanel({
   token,
   message,
+  syntaxHelp,
   channelEntry,
   languageEntry,
   draft,
@@ -518,18 +522,24 @@ function MessageTextPanel({
   }
 
   const required = new Set<string>(channelEntry.required);
+  const status = messageStatus(languageEntry);
   const describe = (...list: (string | false)[]) => list.filter(Boolean).join(' ') || undefined;
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant={languageEntry.custom ? 'info' : 'neutral'} data-testid="message-template-status">
-          {languageEntry.custom ? messageStatusCopy.custom : messageStatusCopy.isDefault}
+        <Badge variant={MESSAGE_STATUS_BADGE[status].variant} data-testid="message-template-status">
+          {MESSAGE_STATUS_BADGE[status].label}
         </Badge>
         {languageEntry.custom?.updatedByName ? (
           <span className="text-xs text-muted">{copy.savedBy(languageEntry.custom.updatedByName)}</span>
         ) : null}
       </div>
+      {languageEntry.custom?.invalid ? (
+        <Callout tone="warning" data-testid="message-template-invalid">
+          {messageStatusCopy.invalidNotice(languageEntry.custom.invalid)}
+        </Callout>
+      ) : null}
 
       {isEmail && channelEntry.subjectMaxLength !== null ? (
         <FormField htmlFor={subjectId} label={copy.subject} error={errors.subject}>
@@ -617,10 +627,10 @@ function MessageTextPanel({
       </div>
 
       <div className="flex flex-col gap-1 text-xs text-muted">
-        <p id={syntaxId}>{copy.syntax}</p>
+        <p id={syntaxId}>{syntaxHelp}</p>
         <p>{isEmail ? copy.emailFixed : copy.whatsappFixed(required.has('enlace'))}</p>
         {message.key === 'appointment-confirmation' ? <p>{copy.confirmationExtras}</p> : null}
-        {isEmail && GUARDIAN_STANDARD_TEXT.has(message.key) ? <p>{copy.guardian}</p> : null}
+        {message.guardianUsesDefault ? <p>{copy.guardian}</p> : null}
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">

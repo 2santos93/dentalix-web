@@ -36,11 +36,13 @@ const VARIABLES = [
 function catalog(): MessageTemplates {
   return {
     languages: ['es', 'en'],
+    syntaxHelp: SYNTAX_HELP,
     messages: [
       {
         key: 'appointment-reminder',
         title: 'Recordatorio de cita',
         description: 'El email automático antes de la cita.',
+        guardianUsesDefault: true,
         channels: [
           {
             channel: 'EMAIL',
@@ -64,10 +66,11 @@ function catalog(): MessageTemplates {
         key: 'appointment-confirmation',
         title: 'Confirmación de cita por WhatsApp',
         description: 'El mensaje de «Abrir WhatsApp» del detalle de la cita.',
+        guardianUsesDefault: false,
         channels: [
           {
             channel: 'WHATSAPP',
-            variables: [...VARIABLES, { name: 'enlace', description: 'El enlace para confirmar.', sample: 'https://ejemplo.dentalix.app/vista-previa' }],
+            variables: [...VARIABLES, { name: 'enlace', description: 'El enlace para confirmar.', sample: 'https://example.com/dentalix/vista-previa' }],
             required: ['enlace'],
             subjectMaxLength: null,
             bodyMaxLength: 1000,
@@ -85,6 +88,9 @@ function catalog(): MessageTemplates {
     ],
   };
 }
+
+const SYNTAX_HELP =
+  'Las variables van entre llaves, como {paciente}. Un tramo entre corchetes, como «[ con {profesional}]», sale solo si sus variables tienen valor.';
 
 const EMAIL_PREVIEW = {
   channel: 'EMAIL' as const,
@@ -137,7 +143,10 @@ describe('Ajustes › Mensajes (DX-565)', () => {
     expect(within(dialog).getByLabelText(copy.body)).toHaveValue(REMINDER_DEFAULT_ES.body);
     expect(within(dialog).getByText(copy.counter(36, 150))).toBeInTheDocument();
     expect(within(dialog).getByText(copy.emailFixed)).toBeInTheDocument();
+    // DX-565: el aviso del menor sale del dato de la API, y la ayuda de la sintaxis es la suya.
     expect(within(dialog).getByText(copy.guardian)).toBeInTheDocument();
+    expect(within(dialog).getByText(SYNTAX_HELP)).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(copy.body)).toHaveAccessibleDescription(expect.stringContaining(SYNTAX_HELP));
     expect(within(dialog).getByTestId('message-template-status')).toHaveTextContent('Por defecto');
     // Sin cambios, Guardar espera.
     expect(within(dialog).getByRole('button', { name: 'Guardar' })).toBeDisabled();
@@ -175,7 +184,7 @@ describe('Ajustes › Mensajes (DX-565)', () => {
       ...target,
       offered: true,
       default: REMINDER_DEFAULT_ES,
-      custom: { subject: draft.subject, body: draft.body, updatedAt: '2026-11-19T12:00:00.000Z', updatedByName: 'Laura Gómez' },
+      custom: { subject: draft.subject, body: draft.body, updatedAt: '2026-11-19T12:00:00.000Z', updatedByName: 'Laura Gómez', invalid: null },
     }));
     const { user, dialog } = await openReminder();
     await user.clear(within(dialog).getByLabelText(copy.subject));
@@ -250,6 +259,27 @@ describe('Ajustes › Mensajes (DX-565)', () => {
     expect(await within(dialog).findByText(/Confirma tu correo antes de pedir una prueba/)).toBeInTheDocument();
   });
 
+  it('un texto guardado que ya no es válido: «No válido» en la lista y en el editor, con el motivo', async () => {
+    const stale = catalog();
+    stale.messages[0].channels[0].languages[0].custom = {
+      subject: 'Tu cita',
+      body: 'Hola {nombre}',
+      updatedAt: '2026-11-19T12:00:00.000Z',
+      updatedByName: 'Laura Gómez',
+      invalid: 'La variable {nombre} no existe.',
+    };
+    jest.mocked(listMessageTemplates).mockResolvedValue(stale);
+    const { dialog } = await openReminder();
+    expect(within(screen.getByTestId('message-status-appointment-reminder')).getByText('No válido')).toBeInTheDocument();
+    expect(within(screen.getByTestId('message-status-appointment-reminder')).queryByText('Personalizado')).not.toBeInTheDocument();
+    expect(within(dialog).getByTestId('message-template-status')).toHaveTextContent('No válido');
+    expect(within(dialog).getByTestId('message-template-invalid')).toHaveTextContent(
+      'Este texto ya no es válido: La variable {nombre} no existe. Se está usando el texto por defecto.',
+    );
+    // Se puede restablecer: el texto guardado sigue ahí.
+    expect(within(dialog).getByRole('button', { name: copy.reset })).toBeEnabled();
+  });
+
   it('«Restablecer» pide confirmación y vuelve a «Por defecto»', async () => {
     const saved = catalog();
     saved.messages[0].channels[0].languages[0].custom = {
@@ -257,6 +287,7 @@ describe('Ajustes › Mensajes (DX-565)', () => {
       body: 'Hola {paciente}',
       updatedAt: '2026-11-19T12:00:00.000Z',
       updatedByName: null,
+      invalid: null,
     };
     jest.mocked(listMessageTemplates).mockResolvedValue(saved);
     jest.mocked(resetMessageTemplate).mockResolvedValue({
@@ -283,7 +314,7 @@ describe('Ajustes › Mensajes (DX-565)', () => {
       channel: 'WHATSAPP',
       subject: null,
       html: null,
-      text: 'Hola Ana, confirma aquí: https://ejemplo.dentalix.app/vista-previa',
+      text: 'Hola Ana, confirma aquí: https://example.com/dentalix/vista-previa',
     });
     render(<MessageTemplatesSettings token="tok" />);
     const user = setupUser();
@@ -293,11 +324,12 @@ describe('Ajustes › Mensajes (DX-565)', () => {
     expect(within(dialog).queryByRole('button', { name: copy.test })).not.toBeInTheDocument();
     expect(within(dialog).getByText(copy.whatsappFixed(true))).toBeInTheDocument();
     expect(within(dialog).getByText(copy.confirmationExtras)).toBeInTheDocument();
+    expect(within(dialog).queryByText(copy.guardian)).not.toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Insertar {enlace}' })).toHaveAccessibleDescription(
       'El enlace para confirmar. (obligatoria)',
     );
     expect(await within(dialog).findByTestId('message-preview-text')).toHaveTextContent(
-      'Hola Ana, confirma aquí: https://ejemplo.dentalix.app/vista-previa',
+      'Hola Ana, confirma aquí: https://example.com/dentalix/vista-previa',
     );
     // Un solo idioma: sin pestañas.
     expect(within(dialog).queryByRole('tab')).not.toBeInTheDocument();
@@ -356,7 +388,7 @@ describe('withTemplate', () => {
     base.messages[0].channels[0].languages[1] = {
       ...base.messages[0].channels[0].languages[1],
       offered: false,
-      custom: { subject: 'x', body: 'y', updatedAt: '2026-11-19T12:00:00.000Z', updatedByName: null },
+      custom: { subject: 'x', body: 'y', updatedAt: '2026-11-19T12:00:00.000Z', updatedByName: null, invalid: null },
     };
     const next = withTemplate(base, {
       key: 'appointment-reminder',
