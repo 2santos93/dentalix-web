@@ -193,7 +193,7 @@ test('390 px ADMIN: las tres pestañas en tarjetas, sin scroll horizontal', asyn
   test.setTimeout(150_000);
   await page.setViewportSize({ width: 390, height: 844 });
   await open(page, 'profesionales', 'Profesionales');
-  await expect(page.getByText(admin.fullName).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('main').getByText(admin.fullName).first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('table', { name: 'Productividad por profesional' })).toHaveCount(0);
   await expectNoHorizontalScroll(page);
   await expectNoHorizontalScrollIn(page);
@@ -230,7 +230,7 @@ test('axe: las tres pestañas a 390 y 1440 px, en claro y oscuro', async ({ page
       .map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.map((n) => n.target) }));
   }
   const ready: Record<string, (p: Page) => Promise<void>> = {
-    profesionales: (p) => expect(p.getByText(admin.fullName).first()).toBeVisible({ timeout: 30_000 }),
+    profesionales: (p) => expect(p.getByRole('main').getByText(admin.fullName).first()).toBeVisible({ timeout: 30_000 }),
     inasistencias: (p) => expect(p.getByTestId('no-shows-list')).toBeVisible({ timeout: 30_000 }),
     cartera: (p) => expect(p.getByTestId('aging-total-USD')).toBeVisible({ timeout: 30_000 }),
   };
