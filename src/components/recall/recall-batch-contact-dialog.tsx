@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { RecallCallbackField } from './recall-callback-field';
 import { contactDialogCopy, safeToday } from './recall-contact-dialog';
+import { announceRecallQueueChanged } from './recall-work-queues';
 
 export const batchContactCopy = {
   title: (n: number) => (n === 1 ? 'Registrar intento de 1 paciente' : `Registrar intento de ${n} pacientes`),
@@ -96,6 +97,7 @@ export function RecallBatchContactDialog({
         ...(note.trim() ? { note: note.trim() } : {}),
         ...(outcome === 'CALL_BACK' && callbackOn ? { callbackOn } : {}),
       });
+      announceRecallQueueChanged();
       onSaved(res.contacts.length);
       onOpenChange(false);
     } catch (err) {

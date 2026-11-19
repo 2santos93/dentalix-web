@@ -15,6 +15,7 @@ import { FormField } from '@/components/shared/form-field';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { announceRecallQueueChanged } from './recall-work-queues';
 
 export const scheduleDialogCopy = {
   title: 'Agendar cita',
@@ -106,6 +107,7 @@ export function RecallScheduleDialog({
   async function handleCreated(appointment: Appointment) {
     setRegistering(true);
     await registerBookedContact(token, item.recallId, bookedContactInput(channel, appointment.id, note));
+    announceRecallQueueChanged();
     onCreated(appointment);
   }
 
