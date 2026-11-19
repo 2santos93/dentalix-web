@@ -5,6 +5,8 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { CashRegisterView } from '@/components/payments/cash-register-view';
 import { CashShiftsView } from '@/components/cash-sessions/cash-shifts-view';
 import { PaymentReportsInboxView } from '@/components/payment-links/payment-reports-inbox-view';
+import { BankReconciliationView } from '@/components/bank-reconciliation/bank-reconciliation-view';
+import { canReconcile } from '@/lib/bank-reconciliation/bank-reconciliation-api';
 import { canHandlePaymentLinks, countPendingPaymentReports } from '@/lib/payment-links/payment-links-api';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { onLocationChange } from '@/lib/locations/location-store';
@@ -36,9 +38,15 @@ function CajaRoute() {
   const searchParams = useSearchParams();
   const accessToken = useAuthStore((s) => s.accessToken);
   // DX-569: «Por confirmar» solo para quien cobra (PAYMENT_ROLES); otro rol cae en «Abonos».
-  const showReports = canHandlePaymentLinks(getTokenRole(accessToken ?? ''));
+  const role = getTokenRole(accessToken ?? '');
+  const showReports = canHandlePaymentLinks(role);
+  // DX-571: «Conciliación» solo para ADMIN; otro rol cae en «Abonos».
+  const showReconciliation = canReconcile(role);
   const requested = resolveCashTab(searchParams.get('tab'));
-  const tab = requested === 'por-confirmar' && !showReports ? 'abonos' : requested;
+  const tab =
+    (requested === 'por-confirmar' && !showReports) || (requested === 'conciliacion' && !showReconciliation)
+      ? 'abonos'
+      : requested;
   const pendingReports = usePendingReportsCount(showReports ? accessToken : null);
 
   if (!accessToken) {
@@ -51,7 +59,13 @@ function CajaRoute() {
   }
   const tabs = {
     nav: (
-      <CashTabs active={tab} onChange={changeTab} showReports={showReports} pendingReports={pendingReports.count} />
+      <CashTabs
+        active={tab}
+        onChange={changeTab}
+        showReports={showReports}
+        pendingReports={pendingReports.count}
+        showReconciliation={showReconciliation}
+      />
     ),
     panelId: cashPanelId(tab),
     tabId: cashTabId(tab),
@@ -59,6 +73,8 @@ function CajaRoute() {
 
   return tab === 'turnos' ? (
     <CashShiftsView token={accessToken} tabs={tabs} />
+  ) : tab === 'conciliacion' ? (
+    <BankReconciliationView token={accessToken} tabs={tabs} />
   ) : tab === 'por-confirmar' ? (
     <PaymentReportsInboxView token={accessToken} tabs={tabs} onChanged={pendingReports.reload} />
   ) : (

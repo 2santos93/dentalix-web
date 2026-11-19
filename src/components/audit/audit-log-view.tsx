@@ -48,6 +48,7 @@ import {
   paymentAllocationDetail,
   locationCalendarDetail,
   patientFlowDetail,
+  bankReconciliationDetail,
   importBatchDetail,
   planItemAttributionDetail,
   anamnesisDetail,
@@ -589,6 +590,8 @@ function eventDetail(
     patientFlowDetail(event.metadata) ??
     recallViaDetail(event.metadata) ??
     planItemAttributionDetail(event.metadata, clock) ??
+    // DX-571: antes que la de pacientes (comparten `IMPORT_CONFIRMED`).
+    bankReconciliationDetail(event.resourceType, event.metadata) ??
     importBatchDetail(event.metadata) ??
     healthRegistrationDetail(event.metadata) ??
     clinicSettingsDetail(event.metadata) ??

@@ -100,6 +100,13 @@ describe('uploadImportFile (DX-107 × DX-259)', () => {
     expect(FakeXhr.instances[0].url).toBe(`/api/import-upload/balances/${id}`);
   });
 
+  it('DX-571: el extracto del banco va a la ruta de subida de su cuenta y paso', async () => {
+    FakeXhr.respond = (xhr) => xhr.reply(200, { fileSha256: 'a' });
+    const id = '0b6f1c1e-2a3b-4c5d-8e9f-001122334455';
+    await uploadImportFile({ bankStatement: { accountId: id, step: 'preview' } }, new FormData(), { token: 'T' });
+    expect(FakeXhr.instances[0].url).toBe(`/api/import-upload/bank-statements/${id}/preview`);
+  });
+
   it('informa el progreso de la subida y termina en 1', async () => {
     const progress: number[] = [];
     FakeXhr.respond = (xhr) => {

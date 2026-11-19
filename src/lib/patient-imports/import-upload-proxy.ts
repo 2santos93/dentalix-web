@@ -64,6 +64,11 @@ const TOO_LARGE_MESSAGE = 'El archivo pesa más de 5 MB. Divídelo en varios arc
 const UNREACHABLE_MESSAGE = 'No pudimos conectar con el servidor. Vuelve a intentarlo en unos minutos.';
 const TIMEOUT_MESSAGE = 'El servidor tardó demasiado en responder. Vuelve a intentarlo.';
 const BAD_BATCH_MESSAGE = 'El lote de importación no es válido. Vuelve a subir el archivo de pacientes.';
+// DX-571: el extracto del banco va a una cuenta de conciliación.
+const BANK_NO_SESSION_MESSAGE = 'Tu sesión terminó. Vuelve a iniciar sesión para subir el extracto.';
+const BAD_BANK_ACCOUNT_MESSAGE = 'La cuenta de conciliación no es válida. Vuelve a elegirla.';
+
+const isBankStatement = (target: ImportUploadTarget) => typeof target !== 'string' && 'bankStatement' in target;
 
 /** Error con el formato de la API (`{ statusCode, error, message }`). */
 function apiError(statusCode: number, error: string, message: string, close = false): Response {
@@ -100,7 +105,8 @@ export async function forwardImportUpload(
   opts: ForwardImportUploadOptions = {},
 ): Promise<Response> {
   const paths = importUploadPaths(target);
-  if (!paths) return apiError(400, 'Bad Request', BAD_BATCH_MESSAGE, true);
+  const bank = isBankStatement(target);
+  if (!paths) return apiError(400, 'Bad Request', bank ? BAD_BANK_ACCOUNT_MESSAGE : BAD_BATCH_MESSAGE, true);
   // Rechazos ANTES de leer el cuerpo. Sin tamaño o con más del tope, además
   // se cierra la conexión (no se lee un cuerpo de tamaño desconocido o
   // grande); sin sesión, el cuerpo ya está acotado y Node lo descarta sin
@@ -114,7 +120,7 @@ export async function forwardImportUpload(
     return apiError(413, 'Payload Too Large', TOO_LARGE_MESSAGE, true);
   }
   if (!/^Bearer \S+$/.test(req.headers.get('authorization') ?? '')) {
-    return apiError(401, 'Unauthorized', NO_SESSION_MESSAGE);
+    return apiError(401, 'Unauthorized', bank ? BANK_NO_SESSION_MESSAGE : NO_SESSION_MESSAGE);
   }
 
   const headers: http.OutgoingHttpHeaders = {};
