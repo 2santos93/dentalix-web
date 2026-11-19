@@ -85,7 +85,7 @@ import {
 } from '@/components/appointments/provider-columns-picker';
 import { WeekTimeGrid } from '@/components/appointments/week-time-grid';
 import { AgendaStatusLegend, MonthAgenda } from '@/components/appointments/month-agenda';
-import { AppointmentForm } from '@/components/appointments/appointment-form';
+import { AgendaNewAppointmentForm } from '@/components/appointments/agenda-new-appointment-form';
 import { AppointmentMedicalAlerts } from '@/components/clinical/appointment-medical-alerts';
 import { ConfirmationLinkPanel } from '@/components/appointments/confirmation-link-panel';
 import { CancellationFeePanel } from '@/components/appointments/cancellation-fee-panel';
@@ -2089,10 +2089,9 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
               <DialogTitle>{copy.newAppointment}</DialogTitle>
               <DialogDescription>{copy.newAppointmentDesc}</DialogDescription>
             </DialogHeader>
-            <AppointmentForm
+            <AgendaNewAppointmentForm
               token={token}
               onCreated={handleAppointmentCreated}
-              allowRepeat
               onSeriesCreated={handleSeriesCreated}
               defaultDate={slotPrefill?.date ?? selectedDate}
               defaultStartTime={slotPrefill?.startTime}

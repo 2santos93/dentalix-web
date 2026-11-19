@@ -1,6 +1,7 @@
 import { configure, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppointmentForm } from './appointment-form';
+import { AgendaNewAppointmentForm } from './agenda-new-appointment-form';
 import { createAppointment } from '@/lib/appointments/appointments-api';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { listPatients } from '@/lib/patients/patients-api';
@@ -12,8 +13,8 @@ import { getHolidayOnDay } from '@/lib/locations/location-calendar-api';
 import { dateGroup, typeDate } from './date-segments-for-tests';
 
 /**
- * DX-562: «Repetir» del formulario de cita. Solo con `allowRepeat` (el diálogo
- * de nueva cita de la agenda); los otros cinco usos no cambian.
+ * DX-562: «Repetir» de la nueva cita de la agenda (`AgendaNewAppointmentForm`,
+ * que envuelve `AppointmentForm`); el formulario solo no la tiene.
  */
 configure({ asyncUtilTimeout: 5_000 });
 
@@ -82,19 +83,18 @@ const patient = {
 /** Mañana (UTC, el reloj de la sede de prueba). */
 const FUTURE_DATE = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-function renderForm(props: Partial<React.ComponentProps<typeof AppointmentForm>> = {}) {
-  render(
-    <AppointmentForm
-      token="tok"
-      onCreated={jest.fn()}
-      defaultPatient={patient}
-      defaultProviderId="staff-1"
-      defaultDate={FUTURE_DATE}
-      defaultStartTime="09:00"
-      defaultEndTime="09:30"
-      {...props}
-    />,
-  );
+const baseProps = {
+  token: 'tok',
+  onCreated: jest.fn(),
+  defaultPatient: patient,
+  defaultProviderId: 'staff-1',
+  defaultDate: FUTURE_DATE,
+  defaultStartTime: '09:00',
+  defaultEndTime: '09:30',
+};
+
+function renderForm() {
+  render(<AgendaNewAppointmentForm {...baseProps} onSeriesCreated={jest.fn()} />);
 }
 
 async function waitForLoad() {
@@ -124,21 +124,15 @@ describe('AppointmentForm · Repetir (DX-562)', () => {
     } as never);
   });
 
-  it('sin allowRepeat no hay «Repetir» (los otros usos del formulario no cambian)', async () => {
-    renderForm({ onSeriesCreated: jest.fn() });
-    await waitForLoad();
-    expect(screen.queryByRole('checkbox', { name: /^repetir/i })).not.toBeInTheDocument();
-  });
-
-  it('con planItemIds tampoco: un tratamiento reserva una sola cita', async () => {
-    renderForm({ allowRepeat: true, onSeriesCreated: jest.fn(), planItemIds: ['pi-1'] });
+  it('el formulario solo (los otros cinco usos) no tiene «Repetir»', async () => {
+    render(<AppointmentForm {...baseProps} />);
     await waitForLoad();
     expect(screen.queryByRole('checkbox', { name: /^repetir/i })).not.toBeInTheDocument();
   });
 
   it('desactivada por defecto; al marcarla, «Ver fechas» abre la vista previa con la recurrencia', async () => {
     const user = userEvent.setup();
-    renderForm({ allowRepeat: true, onSeriesCreated: jest.fn() });
+    renderForm();
     await waitForLoad();
     const repeat = screen.getByRole('checkbox', { name: /^repetir/i });
     expect(repeat).not.toBeChecked();
@@ -178,7 +172,7 @@ describe('AppointmentForm · Repetir (DX-562)', () => {
 
   it('valida los topes (1–12 semanas, 2–26 veces) y «Hasta el» posterior a la primera cita', async () => {
     const user = userEvent.setup();
-    renderForm({ allowRepeat: true, onSeriesCreated: jest.fn() });
+    renderForm();
     await waitForLoad();
     await user.click(screen.getByRole('checkbox', { name: /^repetir/i }));
     const interval = await screen.findByLabelText('Cada (semanas)');
