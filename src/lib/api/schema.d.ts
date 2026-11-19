@@ -6433,6 +6433,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/acquisition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Captación: pacientes nuevos y lo cobrado por fuente
+         * @description Pacientes dados de alta en el período por «¿Cómo nos conoció?» (DX-172) y lo cobrado a esos pacientes en el período: abonos no anulados, por moneda, sin convertir. La sede de captación de un paciente es la de su PRIMERA cita (la ficha es de la clínica); sin citas, no es de ninguna y solo cuenta en «Todas las sedes» para quien las ve todas. Día civil: el de esa sede (sin sede, el de la principal); el de un abono, el de su sede. Filas: las fuentes activas (también con 0), las desactivadas que trajeron pacientes y «Sin dato»; y los 10 pacientes que más pacientes nuevos recomendaron. Solo las sedes que ve quien consulta (DX-089).
+         */
+        get: operations["AcquisitionController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/acquisition.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Captación en CSV (mismos filtros; solo ADMIN)
+         * @description Pacientes dados de alta en el período por «¿Cómo nos conoció?» (DX-172) y lo cobrado a esos pacientes en el período: abonos no anulados, por moneda, sin convertir. La sede de captación de un paciente es la de su PRIMERA cita (la ficha es de la clínica); sin citas, no es de ninguna y solo cuenta en «Todas las sedes» para quien las ve todas. Día civil: el de esa sede (sin sede, el de la principal); el de un abono, el de su sede. Filas: las fuentes activas (también con 0), las desactivadas que trajeron pacientes y «Sin dato»; y los 10 pacientes que más pacientes nuevos recomendaron. Solo las sedes que ve quien consulta (DX-089). Una fila por fuente y el total, con lo cobrado en una columna por moneda; cabecera con período y sede. Sin datos de pacientes. UTF-8 con BOM; celdas protegidas contra fórmulas. Auditado (EXPORT).
+         */
+        get: operations["AcquisitionController_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/closing-queue": {
         parameters: {
             query?: never;
@@ -9393,6 +9433,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patient-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fuentes de captación de la clínica («¿Cómo nos conoció?»)
+         * @description Las activas, o todas con `includeInactive=true`. Una clínica sin ninguna recibe las de por defecto (Recomendación de paciente, Instagram, Facebook, Google, Marketplace de reservas, Convenio/empresa, Profesional externo, Paso por la sede, Otro).
+         */
+        get: operations["PatientSourcesController_list"];
+        put?: never;
+        /** Crear una fuente propia (solo ADMIN) */
+        post: operations["PatientSourcesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patient-sources/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Renombrar o (des)activar una fuente (solo ADMIN)
+         * @description El tipo no cambia. Desactivarla la quita del alta; los pacientes que la tienen y el informe la conservan.
+         */
+        patch: operations["PatientSourcesController_update"];
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/acquisition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * «¿Cómo nos conoció?» del paciente y a quién ha recomendado
+         * @description DX-172. La fuente, el paciente que lo recomendó o el profesional externo que lo derivó, y cuántos pacientes (vivos) ha recomendado él, con los 10 más recientes. 404 como `GET /patients/:id`.
+         */
+        get: operations["PatientAcquisitionController_acquisition"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/commissions/rules": {
         parameters: {
             query?: never;
@@ -11948,6 +12049,18 @@ export interface components {
             emergencyContactPhone?: string;
             /** @description Anamnesis inicial (versión 1). Solo roles clínicos (DENTIST, ASSISTANT, ADMIN); con RECEPTION la petición se rechaza con 403. */
             medicalHistory?: components["schemas"]["SaveMedicalHistoryDto"];
+            /**
+             * Format: uuid
+             * @description DX-172: fuente del catálogo de la clínica (`GET /patient-sources`). Opcional; al asignarla tiene que estar activa. `null` la vacía (y con ella el referente).
+             */
+            sourceId?: string | null;
+            /**
+             * Format: uuid
+             * @description DX-172: el paciente de la clínica que lo recomendó. Solo con una fuente de tipo PATIENT; nunca el propio paciente. De otra clínica: 400.
+             */
+            referredByPatientId?: string | null;
+            /** @description DX-172: nombre del profesional externo que lo derivó (1–120). Solo con una fuente de tipo EXTERNAL_PROFESSIONAL. */
+            referredByName?: string | null;
         };
         /**
          * @description Retención extendida de la HC: NONE = el plazo de la clínica desde la última atención, DOUBLE = el doble de ese plazo, PERMANENT = nunca se libera. Solo ADMIN la cambia.
@@ -12082,6 +12195,18 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /**
+             * Format: uuid
+             * @description DX-172: «¿Cómo nos conoció?» (fuente del catálogo); null = sin dato. El nombre y el referente, en `GET /patients/:id/acquisition`.
+             */
+            sourceId: string | null;
+            /**
+             * Format: uuid
+             * @description DX-172: el paciente que lo recomendó.
+             */
+            referredByPatientId: string | null;
+            /** @description DX-172: el profesional externo que lo derivó. */
+            referredByName: string | null;
         };
         /**
          * @description NONE: sin coberturas vivas. EXPIRED: la vigencia terminó antes de hoy. NOT_STARTED: empieza después de hoy. ACTIVE: el resto.
@@ -12218,6 +12343,18 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /**
+             * Format: uuid
+             * @description DX-172: «¿Cómo nos conoció?» (fuente del catálogo); null = sin dato. El nombre y el referente, en `GET /patients/:id/acquisition`.
+             */
+            sourceId: string | null;
+            /**
+             * Format: uuid
+             * @description DX-172: el paciente que lo recomendó.
+             */
+            referredByPatientId: string | null;
+            /** @description DX-172: el profesional externo que lo derivó. */
+            referredByName: string | null;
             coverage: components["schemas"]["CoverageSummaryDto"];
         };
         ListPatientsResponseDto: {
@@ -12514,6 +12651,18 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /**
+             * Format: uuid
+             * @description DX-172: «¿Cómo nos conoció?» (fuente del catálogo); null = sin dato. El nombre y el referente, en `GET /patients/:id/acquisition`.
+             */
+            sourceId: string | null;
+            /**
+             * Format: uuid
+             * @description DX-172: el paciente que lo recomendó.
+             */
+            referredByPatientId: string | null;
+            /** @description DX-172: el profesional externo que lo derivó. */
+            referredByName: string | null;
             balance: components["schemas"]["OverdueBalanceDto"];
             coverage: components["schemas"]["CoverageSummaryDto"];
             agreement: components["schemas"]["AgreementSummaryDto"];
@@ -12550,6 +12699,18 @@ export interface components {
             emergencyContactName?: string | null;
             emergencyContactRelationship?: string | null;
             emergencyContactPhone?: string | null;
+            /**
+             * Format: uuid
+             * @description DX-172: fuente del catálogo de la clínica (`GET /patient-sources`). Opcional; al asignarla tiene que estar activa. `null` la vacía (y con ella el referente).
+             */
+            sourceId?: string | null;
+            /**
+             * Format: uuid
+             * @description DX-172: el paciente de la clínica que lo recomendó. Solo con una fuente de tipo PATIENT; nunca el propio paciente. De otra clínica: 400.
+             */
+            referredByPatientId?: string | null;
+            /** @description DX-172: nombre del profesional externo que lo derivó (1–120). Solo con una fuente de tipo EXTERNAL_PROFESSIONAL. */
+            referredByName?: string | null;
         };
         ClinicalRecordRetentionErrorDto: {
             /** @example 409 */
@@ -18959,6 +19120,8 @@ export interface components {
              * @example Laura Gómez
              */
             updatedByName: string | null;
+            /** @description Por qué este texto ya no sale y en su lugar sale el de por defecto (p. ej. el catálogo cambió); null si sale. Mismo texto que el 400 al guardar. */
+            invalid: string | null;
         };
         MessageLanguageDto: {
             /**
@@ -18994,11 +19157,15 @@ export interface components {
             /** @example Recordatorio de cita */
             title: string;
             description: string;
+            /** @description Al responsable de un menor le llega siempre el texto por defecto (el editable habla de «tu cita»). */
+            guardianUsesDefault: boolean;
             channels: components["schemas"]["MessageChannelDto"][];
         };
         MessageTemplatesDto: {
             /** @description Idiomas de la clínica con texto en el catálogo (español siempre, primero). */
             languages: ("es" | "en")[];
+            /** @description Ayuda de la sintaxis para el editor: variables, tramos opcionales, párrafos y que las llaves y los corchetes no se pueden escribir como texto. */
+            syntaxHelp: string;
             messages: components["schemas"]["MessageDto"][];
         };
         MessageTemplateTextDto: {
@@ -25170,6 +25337,80 @@ export interface components {
             page: number;
             pageSize: number;
         };
+        AcquisitionPeriodDto: {
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+        };
+        AcquisitionFiltersDto: {
+            /** Format: uuid */
+            locationId: string | null;
+            locationName: string | null;
+        };
+        AcquisitionLocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            isActive: boolean;
+        };
+        AcquisitionOptionsDto: {
+            locations: components["schemas"]["AcquisitionLocationDto"][];
+        };
+        /** @enum {string} */
+        PatientSourceKind: "CHANNEL" | "PATIENT" | "EXTERNAL_PROFESSIONAL";
+        AcquisitionAmountDto: {
+            currency: string;
+            /** @example 100000 */
+            amount: number;
+        };
+        AcquisitionRowDto: {
+            /**
+             * Format: uuid
+             * @description null = «Sin dato» (pacientes sin fuente).
+             */
+            sourceId: string | null;
+            /** @example Instagram */
+            name: string;
+            kind: components["schemas"]["PatientSourceKind"] | null;
+            /** @description Desactivada: sale si trajo pacientes en el período. */
+            isActive: boolean | null;
+            /** @description Pacientes dados de alta en el período. */
+            newPatients: number;
+            /** @description De ellos, con algún abono en el período. */
+            payingPatients: number;
+            /** @description Abonos no anulados del período, por moneda (sin convertir). */
+            collected: components["schemas"]["AcquisitionAmountDto"][];
+        };
+        AcquisitionTotalsDto: {
+            newPatients: number;
+            payingPatients: number;
+            collected: components["schemas"]["AcquisitionAmountDto"][];
+        };
+        AcquisitionReferrerDto: {
+            /** Format: uuid */
+            patientId: string;
+            fullName: string;
+            patientCode: string;
+            /** @description Pacientes nuevos del período que recomendó. */
+            referred: number;
+            /** @description Lo cobrado en el período a esos pacientes, por moneda. */
+            collected: components["schemas"]["AcquisitionAmountDto"][];
+        };
+        AcquisitionReportDto: {
+            period: components["schemas"]["AcquisitionPeriodDto"];
+            filters: components["schemas"]["AcquisitionFiltersDto"];
+            options: components["schemas"]["AcquisitionOptionsDto"];
+            /** @description Las fuentes activas (también con 0), las desactivadas que trajeron a alguien y «Sin dato». */
+            rows: components["schemas"]["AcquisitionRowDto"][];
+            totals: components["schemas"]["AcquisitionTotalsDto"];
+            /** @description Hasta 10 pacientes que más pacientes nuevos recomendaron en el período. */
+            topReferrers: components["schemas"]["AcquisitionReferrerDto"][];
+            /** @description Monedas de lo cobrado. */
+            currencies: string[];
+            /** @description Algún paciente nuevo en el período. */
+            hasActivity: boolean;
+        };
         /**
          * @description Las secciones que ve el rol: ADMIN las tres, DENTIST EVOLUTION y TREATMENT, RECEPTION OUTCOME
          * @enum {string}
@@ -30148,6 +30389,59 @@ export interface components {
              */
             attemptId: string;
             attemptsCount: number;
+        };
+        PatientSourceDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Instagram */
+            name: string;
+            /** @description CHANNEL: un canal. PATIENT: lo recomendó un paciente (el alta pide el referente). EXTERNAL_PROFESSIONAL: lo derivó un profesional externo (el alta pide su nombre). */
+            kind: components["schemas"]["PatientSourceKind"];
+            /** @description Desactivada: no se ofrece en el alta, pero los pacientes que la tienen y el informe la conservan. */
+            isActive: boolean;
+            /** @description Clave de las sembradas (PATIENT_REFERRAL, INSTAGRAM…); null en las propias. */
+            systemKey: string | null;
+            sortOrder: number;
+        };
+        CreatePatientSourceDto: {
+            name: string;
+            kind: components["schemas"]["PatientSourceKind"];
+        };
+        UpdatePatientSourceDto: {
+            name?: string;
+            isActive?: boolean;
+        };
+        PatientAcquisitionSourceDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            kind: components["schemas"]["PatientSourceKind"];
+            isActive: boolean;
+        };
+        PatientAcquisitionReferrerDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+            patientCode: string;
+        };
+        PatientAcquisitionReferralDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        PatientAcquisitionReferralsDto: {
+            /** @description Pacientes vivos que este recomendó. */
+            count: number;
+            /** @description Los más recientes (hasta 10). */
+            recent: components["schemas"]["PatientAcquisitionReferralDto"][];
+        };
+        PatientAcquisitionDto: {
+            source: components["schemas"]["PatientAcquisitionSourceDto"] | null;
+            referredByPatient: components["schemas"]["PatientAcquisitionReferrerDto"] | null;
+            referredByName: string | null;
+            referrals: components["schemas"]["PatientAcquisitionReferralsDto"];
         };
         CommissionProfessionalDto: {
             /** Format: uuid */
@@ -49461,6 +49755,101 @@ export interface operations {
             };
         };
     };
+    AcquisitionController_get: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de la sede de captación del paciente o de la sede del abono). Como mucho 24 meses por calendario; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo los pacientes captados en esta sede (la de su primera cita) y sus abonos en ella (403 si no es de las del usuario o no es de la clínica). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcquisitionReportDto"];
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 24 meses. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y quien tenga acceso a los reportes financieros ven la captación de pacientes. / No tienes acceso a esta sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con abonos no tiene zona horaria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AcquisitionController_csv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de la sede de captación del paciente o de la sede del abono). Como mucho 24 meses por calendario; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo los pacientes captados en esta sede (la de su primera cita) y sus abonos en ella (403 si no es de las del usuario o no es de la clínica). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 24 meses. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración descarga la captación de pacientes. / No tienes acceso a esta sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con abonos no tiene zona horaria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     ClosingQueueController_list: {
         parameters: {
             query?: {
@@ -57361,6 +57750,167 @@ export interface operations {
             };
             /** @description Este control postoperatorio ya está cerrado: no admite más intentos */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientSourcesController_list: {
+        parameters: {
+            query?: {
+                /** @description true: también las desactivadas (Ajustes y la edición de un paciente que tiene una). */
+                includeInactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientSourceDto"][];
+                };
+            };
+            /** @description Rol sin acceso a pacientes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientSourcesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePatientSourceDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientSourceDto"];
+                };
+            };
+            /** @description El nombre debe tener entre 2 y 60 caracteres. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración cambia el origen de pacientes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe una fuente con ese nombre. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientSourcesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePatientSourceDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientSourceDto"];
+                };
+            };
+            /** @description El nombre debe tener entre 2 y 60 caracteres. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración cambia el origen de pacientes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fuente no encontrada. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe una fuente con ese nombre. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientAcquisitionController_acquisition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientAcquisitionDto"];
+                };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente inexistente en la clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
