@@ -96,7 +96,7 @@ describe('RecallScheduleDialog (DX-015-bis-4, D21–D22)', () => {
     expect(mockedNotify).not.toHaveBeenCalled();
   });
 
-  it('desde «Registrar contacto»: el canal y la nota ya puestos, y la nota va en el contacto', async () => {
+  it('desde «Registrar intento»: el canal y la nota ya puestos, y la nota va en el contacto', async () => {
     const user = userEvent.setup();
     mockedContact.mockResolvedValue({} as RecallContact);
     const onCreated = jest.fn();

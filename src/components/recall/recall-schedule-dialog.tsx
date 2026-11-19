@@ -74,7 +74,7 @@ export function RecallScheduleDialog({
   item: RecallDueItem;
   /** D21: el tipo de cita del tipo de recall; el formulario lo ignora si ya no está activo. */
   appointmentTypeId?: string | null;
-  /** D23: el canal y la nota que se eligieron en «Registrar contacto». */
+  /** D23: el canal y la nota que se eligieron en «Registrar intento». */
   defaultChannel?: RecallContactChannel;
   note?: string;
   onClose: () => void;

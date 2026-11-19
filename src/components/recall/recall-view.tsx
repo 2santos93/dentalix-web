@@ -130,7 +130,7 @@ export const recallCopy = {
 const copy = recallCopy;
 
 /**
- * El diálogo abierto. «Agendar» puede venir de «Registrar contacto» con
+ * El diálogo abierto. «Agendar» puede venir de «Registrar intento» con
  * «Agendó» (D23): trae el canal y la nota elegidos allí.
  */
 type Dialog =
@@ -192,7 +192,7 @@ function ContactButtons({
  * Lista de llamada de recall (DX-015), de la sede activa: filtros, `DataList`
  * y páginas, como la cartera. Toda la fila abre la ficha; «Llamar» y
  * «WhatsApp» son iconos en la tabla y van al «⋯» en el teléfono, junto a
- * «Agendar» y «Registrar contacto». Con baja de avisos (DX-128) no se ofrece
+ * «Agendar» y «Registrar intento». Con baja de avisos (DX-128) no se ofrece
  * contacto: el paciente sigue en la lista para agendarle si llama él.
  */
 export function RecallView({ token }: { token: string }) {
