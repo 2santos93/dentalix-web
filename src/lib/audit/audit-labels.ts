@@ -179,6 +179,11 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   ONLINE_BOOKING: 'Reserva online',
   // DX-556: prospectos (alta, edición, etapa, notas, conversión y anonimizado).
   LEAD: 'Prospecto',
+  // DX-571: conciliación con el extracto del banco (cuenta, extracto importado
+  // y emparejado movimiento ↔ abono).
+  BANK_ACCOUNT: 'Cuenta de conciliación',
+  BANK_STATEMENT_IMPORT: 'Extracto del banco',
+  BANK_RECONCILIATION_MATCH: 'Emparejado con el banco',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
@@ -682,6 +687,43 @@ export function importBatchDetail(metadata: AuditMetadata): string | null {
   }
   parts.push(`SHA-256 ${batch.fileSha256.slice(0, 12)}…`);
   return parts.join(' · ');
+}
+
+const BANK_RECONCILIATION_REASONS: Record<string, string> = {
+  MANUAL_MATCH: 'Emparejado a mano',
+  MANUAL_UNMATCH: 'Emparejado deshecho',
+  AUTO_MATCH: 'Volver a emparejar',
+  RECONCILIATION_SUMMARY: 'Resumen de la conciliación',
+  RECONCILIATION_ITEMS: 'Lista de la conciliación',
+  RECONCILIATION_CANDIDATES: 'Abonos candidatos de un movimiento',
+};
+
+/**
+ * DX-571: qué se hizo en la conciliación con el banco. La importación de un
+ * extracto (`IMPORT_CONFIRMED` sobre BANK_STATEMENT_IMPORT) dice sus totales
+ * y el inicio del SHA-256 del archivo (nada del extracto en sí); el resto, la
+ * acción. null si no es de la conciliación.
+ */
+export function bankReconciliationDetail(resourceType: string, metadata: AuditMetadata): string | null {
+  if (resourceType === 'BANK_STATEMENT_IMPORT' && metadata.reason === 'IMPORT_CONFIRMED') {
+    const batch = metadata.importBatch as (AuditMetadata['importBatch'] & { matched?: number }) | undefined;
+    const parts = ['Extracto importado'];
+    if (batch) {
+      if (batch.rows !== undefined) {
+        parts.push(
+          `${batch.rows} filas`,
+          `${batch.created ?? batch.valid ?? 0} nuevos`,
+          `${batch.duplicates ?? 0} ya importados`,
+          `${batch.errors ?? 0} con error`,
+        );
+      }
+      if (batch.matched !== undefined) parts.push(`${batch.matched} conciliados solos`);
+      parts.push(`SHA-256 ${batch.fileSha256.slice(0, 12)}…`);
+    }
+    return parts.join(' · ');
+  }
+  if (!resourceType.startsWith('BANK_')) return null;
+  return (metadata.reason && BANK_RECONCILIATION_REASONS[metadata.reason]) ?? null;
 }
 
 /**

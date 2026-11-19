@@ -23,7 +23,24 @@ export type ImportUploadStep = keyof typeof IMPORT_UPLOAD_ROUTES;
  * `POST /patient-imports/:id/balances`) o su hoja de citas (DX-263,
  * `/api/import-upload/appointments/:id` → `POST /patient-imports/:id/appointments`).
  */
-export type ImportUploadTarget = ImportUploadStep | { balancesOf: string } | { appointmentsOf: string };
+export type ImportUploadTarget =
+  | ImportUploadStep
+  | { balancesOf: string }
+  | { appointmentsOf: string }
+  | { bankStatement: BankStatementUpload };
+
+/**
+ * DX-571: los tres pasos del extracto del banco de una cuenta de conciliación
+ * (`/api/import-upload/bank-statements/:id/<paso>` →
+ * `POST /bank-reconciliation/accounts/:id/statements[/<paso>]`), hasta 5 MB
+ * como la importación de pacientes.
+ */
+export type BankStatementStep = 'inspect' | 'preview' | 'confirm';
+export interface BankStatementUpload {
+  accountId: string;
+  step: BankStatementStep;
+}
+const BANK_STATEMENT_STEPS: readonly BankStatementStep[] = ['inspect', 'preview', 'confirm'];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -39,9 +56,25 @@ export function appointmentsBatchId(target: ImportUploadTarget): string | null {
   return UUID.test(target.appointmentsOf) ? target.appointmentsOf : null;
 }
 
+/** La cuenta del extracto (DX-571), solo si es un UUID y el paso es uno de los tres. */
+export function bankStatementAccountId(target: ImportUploadTarget): string | null {
+  if (typeof target === 'string' || !('bankStatement' in target)) return null;
+  const { accountId, step } = target.bankStatement;
+  return UUID.test(accountId) && BANK_STATEMENT_STEPS.includes(step) ? accountId : null;
+}
+
 /** Ruta de la web (navegador) y de la API para lo que se sube. */
 export function importUploadPaths(target: ImportUploadTarget): { web: string; api: string } | null {
   if (typeof target === 'string') return IMPORT_UPLOAD_ROUTES[target];
+  if ('bankStatement' in target) {
+    const accountId = bankStatementAccountId(target);
+    if (accountId === null) return null;
+    const { step } = target.bankStatement;
+    return {
+      web: `/api/import-upload/bank-statements/${accountId}/${step}`,
+      api: `/bank-reconciliation/accounts/${accountId}/statements${step === 'confirm' ? '' : `/${step}`}`,
+    };
+  }
   const sheet = 'appointmentsOf' in target ? 'appointments' : 'balances';
   const id = sheet === 'appointments' ? appointmentsBatchId(target) : balancesBatchId(target);
   if (id === null) return null;

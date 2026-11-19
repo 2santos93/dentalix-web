@@ -196,7 +196,14 @@ describe('proxy (DX-062: CSP con nonce por petición)', () => {
 
   it('DX-107 × DX-259: la subida de la importación NO pasa por el proxy (Next no copia su cuerpo en memoria); /api/v1 sí', () => {
     const body = { 'content-length': String(4 * 1024 * 1024) };
-    for (const url of ['/api/import-upload/inspect', '/api/import-upload/validate']) {
+    for (const url of [
+      '/api/import-upload/inspect',
+      '/api/import-upload/validate',
+      // DX-571: los tres pasos del extracto del banco.
+      '/api/import-upload/bank-statements/0b6f1c1e-2a3b-4c5d-8e9f-001122334455/inspect',
+      '/api/import-upload/bank-statements/0b6f1c1e-2a3b-4c5d-8e9f-001122334455/preview',
+      '/api/import-upload/bank-statements/0b6f1c1e-2a3b-4c5d-8e9f-001122334455/confirm',
+    ]) {
       expect(unstable_doesMiddlewareMatch({ config, url, headers: body })).toBe(false);
     }
     // La ruta de siempre de la API sigue con el tope de 1 MB…

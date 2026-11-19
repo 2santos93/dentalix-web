@@ -128,6 +128,7 @@ const anaCash: CashPayment = {
   adjustments: [],
   collectedAmount: 150000.5,
   hasProof: false,
+  reconciled: false,
 };
 const betoCard: CashPayment = {
   ...anaCash,
@@ -750,6 +751,24 @@ describe('anular desde la caja (DX-057)', () => {
     const table = await screen.findByRole('table', { name: /abonos/i });
     expect(within(table).getAllByText('Cobro dividido · 3 formas · PRI-000007')).toHaveLength(2);
     expect(within(table).queryByText(/PRI-000008/)).not.toBeInTheDocument();
+  });
+
+  it('DX-571: el abono conciliado con el extracto del banco lleva «Conciliado»; el resto no', async () => {
+    mockedList.mockResolvedValue(
+      response({
+        items: [
+          { ...anaCash, id: 'pay-1', reconciled: true },
+          { ...anaCash, id: 'pay-2', reconciled: false },
+        ],
+        total: 2,
+      }),
+    );
+    render(<CashRegisterView token="tok" />);
+    const table = await screen.findByRole('table', { name: /abonos/i });
+    const badges = within(table).getAllByTestId('reconciled-badge');
+    expect(badges).toHaveLength(1);
+    expect(badges[0]).toHaveTextContent('Conciliado');
+    expect(badges[0]).toHaveAttribute('title', 'Conciliado con el extracto del banco');
   });
 
   it('revisión DX-390: una forma de pago de un cobro dividido avisa que se anula el cobro entero', async () => {

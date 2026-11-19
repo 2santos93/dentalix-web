@@ -450,7 +450,20 @@ const lead = {
   LOST: s('neutral', 'Perdido'),
 } satisfies Presentations<Schemas['LeadStage']>;
 
+/**
+ * DX-571: cada movimiento del extracto y cada abono en la conciliación con el
+ * banco. Conciliado es el cierre bueno; importe distinto, sin abono y sin
+ * movimiento piden que alguien los revise.
+ */
+const bankReconciliation = {
+  CONCILIADO: s('success', 'Conciliado'),
+  IMPORTE_DISTINTO: s('warning', 'Importe distinto'),
+  MOVIMIENTO_SIN_ABONO: s('warning', 'Sin abono'),
+  SIN_MOVIMIENTO: s('warning', 'Sin movimiento'),
+} satisfies Presentations<Schemas['ReconciliationItemDto']['status']>;
+
 export const STATUS_PRESENTATION = {
+  bankReconciliation,
   lead,
   majorityReview,
   equipmentMaintenance,

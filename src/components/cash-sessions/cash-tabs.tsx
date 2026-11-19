@@ -1,13 +1,16 @@
 'use client';
 import { TabBar } from '@/components/ui/tabs';
 
-export type CashTabKey = 'abonos' | 'turnos' | 'por-confirmar';
+export type CashTabKey = 'abonos' | 'turnos' | 'por-confirmar' | 'conciliacion';
 
 const TABS: { key: CashTabKey; label: string }[] = [
   { key: 'abonos', label: 'Abonos' },
   { key: 'turnos', label: 'Turnos' },
   // DX-569: los pagos que reportan los pacientes desde su enlace (PAYMENT_ROLES).
   { key: 'por-confirmar', label: 'Por confirmar' },
+  // DX-571: conciliar con el extracto del banco (solo ADMIN). Vive aquí y no
+  // en el menú: el presupuesto de 15 entradas a 900 px no admite otra.
+  { key: 'conciliacion', label: 'Conciliación' },
 ];
 
 const copy = {
@@ -17,7 +20,7 @@ const copy = {
 
 /** `?tab=` de la URL → pestaña (cualquier otro valor cae en «Abonos»). */
 export function resolveCashTab(value: string | null | undefined): CashTabKey {
-  return value === 'turnos' || value === 'por-confirmar' ? value : 'abonos';
+  return value === 'turnos' || value === 'por-confirmar' || value === 'conciliacion' ? value : 'abonos';
 }
 
 export const cashTabId = (key: CashTabKey) => `cash-tab-${key}`;
@@ -30,24 +33,36 @@ interface CashTabsProps {
   showReports?: boolean;
   /** Pagos reportados pendientes en la sede activa; `null` mientras no se sabe. */
   pendingReports?: number | null;
+  /** DX-571: sin ella (cualquier rol que no sea ADMIN) no hay pestaña «Conciliación». */
+  showReconciliation?: boolean;
 }
 
 /**
  * Pestañas de la Caja (DX-027): «Abonos» (la caja del período, DX-002),
  * «Turnos» (apertura y cierre por usuario y sede) y, DX-569, «Por confirmar»
- * (los pagos que reportan los pacientes, con su contador). Patrón ARIA de
+ * (los pagos que reportan los pacientes, con su contador) y, DX-571,
+ * «Conciliación» (el extracto del banco, solo ADMIN). Patrón ARIA de
  * pestañas con activación manual, como la ficha del paciente: las flechas
  * mueven el foco y Enter/Espacio (o el clic) eligen; cada panel carga datos al
  * montarse.
  */
-export function CashTabs({ active, onChange, showReports = false, pendingReports = null }: CashTabsProps) {
+export function CashTabs({
+  active,
+  onChange,
+  showReports = false,
+  pendingReports = null,
+  showReconciliation = false,
+}: CashTabsProps) {
   return (
     <TabBar
       aria-label={copy.tablist}
       value={active}
       onValueChange={onChange}
       className="mb-6"
-      items={TABS.filter((tab) => tab.key !== 'por-confirmar' || showReports).map((tab) => ({
+      items={TABS.filter(
+        (tab) =>
+          (tab.key !== 'por-confirmar' || showReports) && (tab.key !== 'conciliacion' || showReconciliation),
+      ).map((tab) => ({
         value: tab.key,
         label:
           tab.key === 'por-confirmar' && pendingReports ? (
