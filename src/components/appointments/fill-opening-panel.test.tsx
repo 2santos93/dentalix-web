@@ -375,8 +375,15 @@ describe('«Ocupar este hueco» (DX-210)', () => {
   });
 
   describe('DX-435: oferta con enlace', () => {
+    // DX-565: con enlace y teléfono, la API devuelve el texto de wa.me ya compuesto.
     const offerResult = (patientId: string, url: string | null, whatsappPhone: string | null) =>
-      ({ id: `o-${patientId}`, patientId, url, whatsappPhone }) as Awaited<ReturnType<typeof createLinkOffer>>;
+      ({
+        id: `o-${patientId}`,
+        patientId,
+        url,
+        whatsappPhone,
+        whatsappText: url && whatsappPhone ? `Hola, se liberó un hueco. Acéptalo aquí: ${url}` : null,
+      }) as Awaited<ReturnType<typeof createLinkOffer>>;
 
     it('elige varios, envía por WhatsApp y deja un «Abrir WhatsApp» por paciente con el enlace en el texto', async () => {
       const carla = candidate({ patientId: 'p-carla', patientFirstName: 'Carla', patientLastName: 'Paz' });

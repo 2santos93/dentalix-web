@@ -7,12 +7,10 @@ import { whatsAppUrl } from '@/lib/appointments/confirmation-message';
 import {
   createLinkOffer,
   linkOfferChannels,
-  linkOfferMessage,
   type LinkOfferChannel,
   type OpeningCandidate,
   type OpeningSlot,
 } from '@/lib/appointments/opening-candidates';
-import type { SedeClock } from '@/lib/locations/sede-clock';
 import { FormModal } from '@/components/shared/form-modal';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -71,9 +69,6 @@ interface LinkOfferDialogProps {
   onOpenChange: (open: boolean) => void;
   token: string;
   slot: OpeningSlot;
-  clock: SedeClock;
-  providerName: string;
-  locationName: string;
   candidates: OpeningCandidate[];
   /** Se envió al menos una: el panel recarga y limpia la selección. */
   onSent: () => void;
@@ -91,9 +86,6 @@ export function LinkOfferDialog({
   onOpenChange,
   token,
   slot,
-  clock,
-  providerName,
-  locationName,
   candidates: initialCandidates,
   onSent,
 }: LinkOfferDialogProps) {
@@ -124,19 +116,11 @@ export function LinkOfferDialog({
     for (const c of targets) {
       try {
         const offer = await createLinkOffer(token, slot, c, channel);
+        // DX-565: el texto lo compone la API (la plantilla «Oferta de hueco»
+        // de la clínica o el de siempre); sin él (sede sin reloj), sin botón.
         const waHref =
-          channel === 'LINK_WA_ME' && offer.url && offer.whatsappPhone
-            ? whatsAppUrl(
-                offer.whatsappPhone,
-                linkOfferMessage({
-                  firstName: c.patientFirstName,
-                  start: slot.start,
-                  locationName,
-                  providerName,
-                  clock,
-                  url: offer.url,
-                }),
-              )
+          channel === 'LINK_WA_ME' && offer.url && offer.whatsappPhone && offer.whatsappText
+            ? whatsAppUrl(offer.whatsappPhone, offer.whatsappText)
             : null;
         out.push({ key: keyOf(c), name: fullName(c), ok: true, message: null, waHref });
       } catch (err) {
