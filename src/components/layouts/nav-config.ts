@@ -8,7 +8,7 @@ import {
   Package,
   Wallet,
   HandCoins,
-  BadgePercent,
+  UserPlus,
   ReceiptText,
   ChartColumn,
   FileClock,
@@ -19,6 +19,7 @@ import {
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { ExtraPermission } from '@/lib/auth/permissions';
 import { CLOSING_QUEUE_HREF } from '@/lib/appointments/closing-queue-api';
+import { LEADS_HREF } from '@/lib/leads/leads-api';
 
 export const ANAMNESIS_HREF = '/anamnesis-por-revisar';
 /** DX-569: la bandeja «Pagos por confirmar» es una pestaña de la Caja. */
@@ -115,12 +116,15 @@ const RECEIVABLES: NavItem = {
 };
 // Gastos de la sede (DX-274): EXPENSE_ROLES.
 const EXPENSES: NavItem = { href: '/caja/gastos', label: 'Gastos', icon: ReceiptText, roles: ['ADMIN'] };
-// Informe de descuentos (DX-204): DISCOUNT_REPORT_ROLES.
-const DISCOUNTS: NavItem = {
-  href: '/caja/descuentos',
-  label: 'Descuentos',
-  icon: BadgePercent,
-  roles: ['ADMIN'],
+// DX-556: la bandeja de prospectos (LEAD_ROLES). Trabajo diario del mostrador:
+// entra en «Atención» y, por el presupuesto de 900 px, sustituye a
+// «Descuentos» (informe mensual de ADMIN en /caja/descuentos), que sigue a
+// mano desde la paleta (⌘K), Ajustes › Descuentos y su URL.
+const LEADS: NavItem = {
+  href: LEADS_HREF,
+  label: 'Prospectos',
+  icon: UserPlus,
+  roles: ['ADMIN', 'RECEPTION'],
 };
 // Reportes (DX-014): «Comparar sedes» (REPORT_ROLES), «Producción por
 // procedimiento» (PRODUCTION_REPORT_ROLES, DX-423: el odontólogo ve la suya) y
@@ -155,8 +159,8 @@ const SETTINGS: NavItem = { href: '/settings', label: 'Ajustes', icon: Settings 
  */
 export const NAV_GROUPS: readonly NavGroup[] = [
   { id: 'main', label: null, items: [DASHBOARD, AGENDA, PATIENTS] },
-  { id: 'care', label: 'Atención', items: [CLOSING_QUEUE, QUOTES, ANAMNESIS] },
-  { id: 'finance', label: 'Finanzas', items: [CASH, RECEIVABLES, EXPENSES, DISCOUNTS, REPORTS] },
+  { id: 'care', label: 'Atención', items: [CLOSING_QUEUE, QUOTES, LEADS, ANAMNESIS] },
+  { id: 'finance', label: 'Finanzas', items: [CASH, RECEIVABLES, EXPENSES, REPORTS] },
   { id: 'clinic', label: 'Clínica', items: [CATALOG, INVENTORY] },
   { id: 'admin', label: 'Administración', items: [STAFF, SETTINGS] },
 ];

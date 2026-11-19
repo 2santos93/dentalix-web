@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { hasUnsavedChanges, requestNavigation } from '@/components/settings/unsaved-changes';
-import { Cake, CalendarPlus, CalendarCheck2, ClipboardList, CornerDownLeft, ListTodo, Phone, PhoneCall, Search, UserPlus, UserRound, UsersRound, Factory, Percent } from 'lucide-react';
+import { Cake, CalendarPlus, CalendarCheck2, ClipboardList, CornerDownLeft, ListTodo, Phone, PhoneCall, Search, UserPlus, UserRound, UsersRound, Factory, Percent, BadgePercent } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
@@ -43,6 +43,9 @@ const copy = {
   labOrdersHint: 'Trabajos de laboratorio: coronas y prótesis enviadas, atrasadas y recibidas',
   commissions: 'Honorarios',
   commissionsHint: 'Liquidación de honorarios de los odontólogos: comisiones del período y cierre',
+  // DX-556: el informe de descuentos dejó la barra lateral (900 px) a «Prospectos».
+  discounts: 'Descuentos',
+  discountsHint: 'Informe de los descuentos dados: quién, cuánto y por qué',
   onlineRequests: 'Solicitudes online',
   onlineRequestsHint: 'Citas pedidas por los pacientes desde la reserva online',
   actions: 'Acciones',
@@ -269,6 +272,18 @@ export function CommandPalette({
         hint: copy.commissionsHint,
         icon: Percent,
         run: () => go(COMMISSIONS_HREF),
+      });
+    }
+    // DX-556: el informe de descuentos (DX-204, solo ADMIN) dejó la barra a
+    // «Prospectos»; se llega desde aquí y desde Ajustes › Descuentos.
+    if (q && role === 'ADMIN' && matches(copy.discounts, copy.discountsHint)) {
+      result.push({
+        id: 'nav-discounts',
+        group: 'goto',
+        label: copy.discounts,
+        hint: copy.discountsHint,
+        icon: BadgePercent,
+        run: () => go('/caja/descuentos'),
       });
     }
     // DX-016: la bandeja de la reserva online no gasta entrada en la barra

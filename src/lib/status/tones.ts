@@ -437,7 +437,21 @@ const commissionReceipt = {
   SIGNED: s('success', 'Firmada conforme'),
 } satisfies Presentations<Schemas['CommissionReceiptStatus']>;
 
+/**
+ * DX-556: la etapa de un prospecto. Nuevo pide el primer contacto; contactado
+ * y con cita están en curso; asistió es el éxito (ya es paciente); perdido es
+ * un cierre sin juicio (puede reabrirse).
+ */
+const lead = {
+  NEW: s('warning', 'Nuevo'),
+  CONTACTED: s('info', 'Contactado'),
+  SCHEDULED: s('info', 'Cita agendada'),
+  ATTENDED: s('success', 'Asistió'),
+  LOST: s('neutral', 'Perdido'),
+} satisfies Presentations<Schemas['LeadStage']>;
+
 export const STATUS_PRESENTATION = {
+  lead,
   majorityReview,
   equipmentMaintenance,
   equipmentMaintenanceRecord,

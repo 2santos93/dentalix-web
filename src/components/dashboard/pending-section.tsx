@@ -10,6 +10,7 @@ import { getCurrentCashSession, type CurrentCashSession } from '@/lib/cash-sessi
 import type { WorkQueueItem, WorkQueueKey } from '@/lib/work-queues/work-queues-api';
 import { useWorkQueuesView } from '@/components/work-queues/work-queues-context';
 import { POST_OP_CHECKS_HREF } from '@/lib/post-op-checks/post-op-checks-api';
+import { LEADS_STALE_HREF } from '@/lib/leads/leads-api';
 import { getOnlinePendingCount, ONLINE_REQUESTS_HREF } from '@/lib/online-booking/online-booking-api';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
@@ -91,8 +92,7 @@ function queueRow(key: WorkQueueKey, role: ClinicRole): QueueRow {
     case 'POST_OP_CHECKS':
       return { id: 'post-op-checks', ...copy.postOpChecks, href: POST_OP_CHECKS_HREF };
     case 'LEADS_UNCONTACTED':
-      // DX-556 (#238) trae LEADS_STALE_HREF desde leads-api; puente mientras entra.
-      return { id: 'leads-uncontacted', ...copy.leadsUncontacted, href: '/prospectos?stale=true' };
+      return { id: 'leads-uncontacted', ...copy.leadsUncontacted, href: LEADS_STALE_HREF };
     case 'QUOTE_FOLLOW_UP':
       return { id: 'follow-up', ...copy.followUp, href: '/presupuestos' };
     case 'ACCEPTED_UNSCHEDULED':
