@@ -10,7 +10,8 @@ import { TabBar } from '@/components/ui/tabs';
  * recuperados» (DX-436: ADMIN), «Ocupación por sillón» (DX-481: ADMIN) y
  * «Enlaces del paciente» (DX-424: ADMIN) y «Presupuestos» (DX-558: ADMIN,
  * DENTIST, que ve los que elaboró, y FINANCIAL_REPORTS_VIEW) y «Previsión» (DX-567: los mismos, el
- * DENTIST con lo suyo) y «Captación» (DX-172: ADMIN y FINANCIAL_REPORTS_VIEW). Las siguientes son una línea más en `REPORT_TABS` y su vista en la
+ * DENTIST con lo suyo) y «Captación» (DX-172: ADMIN y FINANCIAL_REPORTS_VIEW) y «Profesionales»,
+ * «Inasistencias» (DX-304: como «Previsión») y «Cartera» (DX-304: ADMIN). Las siguientes son una línea más en `REPORT_TABS` y su vista en la
  * página. Patrón ARIA de pestañas con activación manual, como la Caja: las
  * flechas mueven el foco y Enter/Espacio (o el clic) eligen.
  */
@@ -34,6 +35,22 @@ export const REPORT_TABS = [
     roles: ['ADMIN', 'DENTIST'],
     permissions: ['FINANCIAL_REPORTS_VIEW'],
   },
+  // DX-304: productividad por profesional y no-show con su lista; ADMIN y
+  // FINANCIAL_REPORTS_VIEW, toda la clínica; DENTIST, lo suyo (PROFESSIONAL_REPORT_ROLES).
+  {
+    key: 'profesionales',
+    label: 'Profesionales',
+    roles: ['ADMIN', 'DENTIST'],
+    permissions: ['FINANCIAL_REPORTS_VIEW'],
+  },
+  {
+    key: 'inasistencias',
+    label: 'Inasistencias',
+    roles: ['ADMIN', 'DENTIST'],
+    permissions: ['FINANCIAL_REPORTS_VIEW'],
+  },
+  // DX-304: los totales por tramo de la cartera (DX-145, RECEIVABLES_ROLES); aquí, la mirada del dueño.
+  { key: 'cartera', label: 'Cartera', roles: ['ADMIN'] },
   // DX-172: pacientes nuevos y lo cobrado por «¿Cómo nos conoció?»; ADMIN y FINANCIAL_REPORTS_VIEW (ACQUISITION_REPORT_ROLES).
   { key: 'captacion', label: 'Captación', roles: ['ADMIN'], permissions: ['FINANCIAL_REPORTS_VIEW'] },
   // DX-399: lo cobrado que aún no cubre ningún ítem; los roles de cobro (UNALLOCATED_PAYMENTS_ROLES).
