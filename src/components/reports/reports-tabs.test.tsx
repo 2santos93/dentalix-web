@@ -1,10 +1,10 @@
 import { render, screen } from '@testing-library/react';
 import { REPORT_TABS, ReportsTabs, reportTabsFor, resolveReportTab } from './reports-tabs';
 
-describe('pestañas de Reportes por rol (DX-423, DX-399, DX-558, DX-567)', () => {
-  it('ADMIN ve las diez; DENTIST «Producción por procedimiento», «Presupuestos» y «Previsión»; RECEPTION solo «Cobrado sin imputar»; el resto, la primera (su 403)', () => {
-    expect(reportTabsFor('ADMIN').map((t) => t.key)).toEqual(['comparar-sedes', 'rentabilidad', 'produccion', 'presupuestos', 'prevision', 'captacion', 'sin-imputar', 'huecos-recuperados', 'ocupacion-sillones', 'enlaces-paciente']);
-    expect(reportTabsFor('DENTIST').map((t) => t.key)).toEqual(['produccion', 'presupuestos', 'prevision']);
+describe('pestañas de Reportes por rol (DX-423, DX-399, DX-558, DX-567, DX-304)', () => {
+  it('ADMIN ve las trece; DENTIST «Producción por procedimiento», «Presupuestos», «Previsión», «Profesionales» e «Inasistencias»; RECEPTION solo «Cobrado sin imputar»; el resto, la primera (su 403)', () => {
+    expect(reportTabsFor('ADMIN').map((t) => t.key)).toEqual(['comparar-sedes', 'rentabilidad', 'produccion', 'presupuestos', 'prevision', 'profesionales', 'inasistencias', 'cartera', 'captacion', 'sin-imputar', 'huecos-recuperados', 'ocupacion-sillones', 'enlaces-paciente']);
+    expect(reportTabsFor('DENTIST').map((t) => t.key)).toEqual(['produccion', 'presupuestos', 'prevision', 'profesionales', 'inasistencias']);
     expect(reportTabsFor('RECEPTION').map((t) => t.key)).toEqual(['sin-imputar']);
     expect(reportTabsFor('ASSISTANT').map((t) => t.key)).toEqual(['comparar-sedes']);
     expect(reportTabsFor(null).map((t) => t.key)).toEqual(['comparar-sedes']);
@@ -16,6 +16,8 @@ describe('pestañas de Reportes por rol (DX-423, DX-399, DX-558, DX-567)', () =>
       'rentabilidad',
       'presupuestos',
       'prevision',
+      'profesionales',
+      'inasistencias',
       'captacion',
       'sin-imputar',
     ]);
@@ -25,6 +27,8 @@ describe('pestañas de Reportes por rol (DX-423, DX-399, DX-558, DX-567)', () =>
       'produccion',
       'presupuestos',
       'prevision',
+      'profesionales',
+      'inasistencias',
       'captacion',
       'sin-imputar',
     ]);
@@ -56,12 +60,16 @@ describe('pestañas de Reportes por rol (DX-423, DX-399, DX-558, DX-567)', () =>
     expect(resolveReportTab('captacion', reportTabsFor('ADMIN'))).toBe('captacion');
     expect(resolveReportTab('captacion', reportTabsFor('DENTIST'))).toBe('produccion');
     expect(resolveReportTab('captacion', reportTabsFor('RECEPTION', ['FINANCIAL_REPORTS_VIEW']))).toBe('captacion');
+    expect(resolveReportTab('profesionales', reportTabsFor('DENTIST'))).toBe('profesionales');
+    expect(resolveReportTab('inasistencias', reportTabsFor('RECEPTION'))).toBe('sin-imputar');
+    expect(resolveReportTab('cartera', reportTabsFor('ADMIN'))).toBe('cartera');
+    expect(resolveReportTab('cartera', reportTabsFor('DENTIST'))).toBe('produccion');
     expect(resolveReportTab('otra')).toBe(REPORT_TABS[0].key);
   });
 
   it('pinta solo las pestañas recibidas', () => {
     render(<ReportsTabs active="produccion" onChange={() => undefined} tabs={reportTabsFor('DENTIST')} />);
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Producción por procedimiento', 'Presupuestos', 'Previsión']);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Producción por procedimiento', 'Presupuestos', 'Previsión', 'Profesionales', 'Inasistencias']);
     expect(screen.getByRole('tab', { name: 'Producción por procedimiento' })).toHaveAttribute('aria-selected', 'true');
   });
 });
