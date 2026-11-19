@@ -10323,7 +10323,7 @@ export interface paths {
         };
         /**
          * Lista de llamada: pacientes con el control vencido y sin cita
-         * @description Recalls activos vencidos (o que vencen en ≤ withinDays) cuyo paciente no tiene cita futura agendada o confirmada ni una en curso, en cualquier sede; sin pausa vigente ni paciente archivado. Vencimiento (guardado) = MAX(último control fijado a mano, último procedimiento disparador del tipo realizado) + intervalo; una cita atendida sin ese procedimiento ya no lo mueve (DX-015-bis). Ordenada por días de vencido.
+         * @description Recalls activos vencidos (o que vencen en ≤ withinDays) cuyo paciente no tiene cita futura agendada o confirmada ni una en curso, en cualquier sede; sin pausa vigente ni paciente archivado. Vencimiento (guardado) = MAX(último control fijado a mano, último procedimiento disparador del tipo realizado) + intervalo; una cita atendida sin ese procedimiento ya no lo mueve (DX-015-bis). Ordenada por días de vencido. DX-465: por defecto sin los contactados que siguen ocultos (tras un intento, los días de la sede del paciente desde el día del intento, o hasta «Llamar luego»; tras «Rechaza», hasta el vencimiento siguiente) ni los de intentos agotados (intentos del ciclo ≥ tope de la sede); `includeContacted` y `exhausted` los muestran. Cada fila con sus intentos, el último, hasta cuándo está oculta y si el teléfono está por revisar.
          */
         get: operations["RecallController_list"];
         put?: never;
@@ -10362,9 +10362,29 @@ export interface paths {
         put?: never;
         /**
          * Registrar un contacto de recall (append-only)
-         * @description Canal, desenlace y una nota corta (≤ 280, sin datos clínicos). «Agendó» (BOOKED) exige la cita creada, del mismo paciente. No se edita ni se borra: una corrección es otro contacto.
+         * @description Canal, desenlace y una nota corta (≤ 280, sin datos clínicos). «Agendó» (BOOKED) exige la cita creada, del mismo paciente. No se edita ni se borra: una corrección es otro contacto. DX-465: es el intento y deja el estado del ciclo en la misma transacción: cuenta (salvo «Rechaza» y «Agendó», que lo cierran), oculta al paciente los días de su sede (o hasta `callbackOn` con «Llamar luego»; tras «Rechaza», hasta el vencimiento siguiente) y «Número equivocado» marca su teléfono para revisar. Un «Agendó» de una cita que ya lo tiene en este recall (lo registra el servidor al crear la cita) responde 200 con el existente, sin otra alta ni otro evento.
          */
         post: operations["RecallController_contact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recall/contacts/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Registrar el mismo intento para varios pacientes de la lista
+         * @description DX-465 (D5): de 1 a 50 recalls distintos con el mismo canal, desenlace, nota y (con CALL_BACK, obligatoria) `callbackOn`. Sin BOOKED. Todo o nada en UNA transacción: mismos permisos y sede que el registro suelto, por recall. Cada contacto deja su estado del ciclo como el suelto y su evento de auditoría.
+         */
+        post: operations["RecallController_batch"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10493,6 +10513,66 @@ export interface paths {
          */
         put: operations["RecallTypesController_triggers"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recall-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Intentos de recall de cada sede
+         * @description Una fila por sede viva. Sin configurar: 7 días de ocultación y 3 intentos.
+         */
+        get: operations["RecallSettingsController_findAll"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recall-settings/{locationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Reemplaza los intentos de recall de una sede
+         * @description Días de ocultación (1–90) y tope de intentos (1–10). Se aplican al instante en la lista (se evalúan al leer). Queda en la auditoría (RECALL_SETTINGS_UPDATED) con el antes y el después, en esa sede; guardar lo mismo no deja evento.
+         */
+        put: operations["RecallSettingsController_replace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/phone-review/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Quitar la marca de teléfono por revisar
+         * @description DX-465: sin cambiar el número (p. ej. se confirmó que es correcto). Cambiar el teléfono la quita sola. Idempotente: sin marca, `cleared: false` y sin evento.
+         */
+        post: operations["PatientPhoneReviewController_clearReview"];
         delete?: never;
         options?: never;
         head?: never;
@@ -31671,6 +31751,15 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        RecallLastAttemptDto: {
+            /**
+             * Format: date-time
+             * @description Hora del servidor del intento
+             */
+            at: string;
+            outcome: components["schemas"]["RecallContactOutcome"];
+            channel: components["schemas"]["RecallContactChannel"];
+        };
         RecallDueItemDto: {
             /** Format: uuid */
             recallId: string;
@@ -31705,6 +31794,26 @@ export interface components {
              */
             locationId: string;
             lastContact: components["schemas"]["RecallLastContactDto"] | null;
+            /** @description DX-465: el último intento (el mismo contacto que `lastContact`) */
+            lastAttempt: components["schemas"]["RecallLastAttemptDto"] | null;
+            /** @description DX-465: intentos del ciclo actual (vuelve a 0 con «Agendó», «Rechaza» o un vencimiento nuevo) */
+            attempts: number;
+            /** @description DX-465: tope de intentos de la sede del paciente */
+            maxAttempts: number;
+            /** @description DX-465: attempts ≥ maxAttempts */
+            exhausted: boolean;
+            /**
+             * Format: date
+             * @description DX-465: oculto por defecto hasta ese día de la sede (vuelve ese día); null si ya sale. Solo con `includeContacted` o `exhausted` llega una fila con valor.
+             */
+            hiddenUntil: string | null;
+            /**
+             * Format: date
+             * @description DX-465: «Llamar luego» del ciclo actual
+             */
+            callbackOn: string | null;
+            /** @description DX-465: el teléfono está marcado para revisar («Número equivocado») */
+            phoneReview: boolean;
         };
         RecallDuePageDto: {
             items: components["schemas"]["RecallDueItemDto"][];
@@ -31728,6 +31837,12 @@ export interface components {
              * @description La cita creada (obligatoria con BOOKED); del mismo paciente
              */
             appointmentId?: string | null;
+            /**
+             * Format: date
+             * @description DX-465: solo con CALL_BACK. Día (AAAA-MM-DD, de hoy a 90 días, en la sede del paciente) en que vuelve a la lista. Sin él, «Llamar luego» oculta los días de la sede, como los demás intentos.
+             * @example 2027-02-15
+             */
+            callbackOn?: string | null;
         };
         RecallStaffRefDto: {
             /** Format: uuid */
@@ -31753,9 +31868,38 @@ export interface components {
             note: string | null;
             /** Format: uuid */
             appointmentId: string | null;
+            /**
+             * Format: date
+             * @description DX-465: «Llamar luego» con fecha
+             */
+            callbackOn: string | null;
             author: components["schemas"]["RecallStaffRefDto"];
             /** Format: date-time */
             createdAt: string;
+        };
+        RecallContactBatchItemDto: {
+            /** Format: uuid */
+            recallId: string;
+        };
+        CreateRecallContactsBatchDto: {
+            /** @description De 1 a 50 recalls distintos de la lista de llamada */
+            items: components["schemas"]["RecallContactBatchItemDto"][];
+            /** @description Llamada, enlace de WhatsApp, email o en persona */
+            channel: components["schemas"]["RecallContactChannel"];
+            /** @description El mismo para todos. Sin BOOKED: «Agendó» se registra al crear la cita de cada paciente. */
+            outcome: components["schemas"]["RecallContactOutcome"];
+            /** @description Nota corta (sin datos clínicos), la misma en cada contacto */
+            note?: string | null;
+            /**
+             * Format: date
+             * @description Obligatoria con CALL_BACK y solo con él: de hoy a 90 días en la sede de cada paciente.
+             * @example 2027-02-15
+             */
+            callbackOn?: string | null;
+        };
+        RecallContactsBatchDto: {
+            /** @description Un contacto por recall, en el orden del cuerpo */
+            contacts: components["schemas"]["RecallContactDto"][];
         };
         CreateDefaultRecallDto: {
             /**
@@ -31830,6 +31974,32 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             updatedBy: components["schemas"]["RecallStaffRefDto"];
+            /** @description DX-465: intentos del ciclo actual */
+            attempts: number;
+            /** @description DX-465: tope de intentos de la sede */
+            maxAttempts: number;
+            /** @description DX-465: attempts ≥ maxAttempts */
+            exhausted: boolean;
+            /**
+             * Format: date-time
+             * @description DX-465: hora del servidor del último intento del ciclo
+             */
+            lastAttemptAt: string | null;
+            /**
+             * Format: date
+             * @description DX-465: no sale en la lista por defecto hasta ese día de la sede; null si ya sale
+             */
+            hiddenUntil: string | null;
+            /**
+             * Format: date
+             * @description DX-465: «Llamar luego» del ciclo actual
+             */
+            callbackOn: string | null;
+        };
+        RecallPhoneReviewDto: {
+            /** Format: date-time */
+            flaggedAt: string;
+            flaggedBy: components["schemas"]["RecallStaffRefDto"];
         };
         RecallReplacementTypeDto: {
             /** Format: uuid */
@@ -31857,6 +32027,8 @@ export interface components {
             recalls: components["schemas"]["PatientRecallDto"][];
             /** @description Historial de contactos, más recientes primero (hasta 50) */
             contacts: components["schemas"]["RecallContactDto"][];
+            /** @description DX-465: el teléfono marcado para revisar por un «Número equivocado»; null si no */
+            phoneReview: components["schemas"]["RecallPhoneReviewDto"] | null;
             /** @description D9: recalls de tipos del mismo grupo de exclusión que este alta o reactivación desactivó («Recall de Higiene desactivado: lo sustituye Mantenimiento periodontal»); vacío si ninguno */
             recallUpdates: components["schemas"]["RecallExclusionUpdateDto"][];
         };
@@ -31864,6 +32036,8 @@ export interface components {
             recalls: components["schemas"]["PatientRecallDto"][];
             /** @description Historial de contactos, más recientes primero (hasta 50) */
             contacts: components["schemas"]["RecallContactDto"][];
+            /** @description DX-465: el teléfono marcado para revisar por un «Número equivocado»; null si no */
+            phoneReview: components["schemas"]["RecallPhoneReviewDto"] | null;
         };
         SetPatientRecallDto: {
             /**
@@ -31965,6 +32139,45 @@ export interface components {
         SetRecallTypeTriggersDto: {
             /** @description Reemplaza los disparadores: procedimientos vivos del catálogo de la clínica (o los que el tipo ya tenía). [] los quita todos */
             catalogItemIds: string[];
+        };
+        LocationRecallSettingsDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sede principal */
+            locationName: string;
+            /**
+             * @description Días de ocultación tras un intento. Sin configurar: 7.
+             * @example 7
+             */
+            hideDays: number;
+            /**
+             * @description Tope de intentos del ciclo. Sin configurar: 3.
+             * @example 3
+             */
+            maxAttempts: number;
+            /**
+             * Format: date-time
+             * @description null = sin configurar (valores por defecto)
+             */
+            updatedAt: string | null;
+        };
+        UpdateRecallSettingsDto: {
+            /**
+             * @description Tras un intento, días (de la sede) que el paciente no sale en la lista por defecto
+             * @example 7
+             */
+            hideDays: number;
+            /**
+             * @description Intentos del ciclo con los que el paciente queda en «Intentos agotados»
+             * @example 3
+             */
+            maxAttempts: number;
+        };
+        RecallPhoneReviewClearedDto: {
+            /** Format: uuid */
+            patientId: string;
+            /** @description true si estaba marcado y se quitó; false si no lo estaba (nada que hacer) */
+            cleared: boolean;
         };
         /** @enum {string} */
         WorkQueueKey: "CLOSING_QUEUE" | "PAYMENT_REPORTS" | "ANAMNESIS_REVIEW" | "POST_OP_CHECKS" | "LEADS_UNCONTACTED" | "QUOTE_FOLLOW_UP" | "ACCEPTED_UNSCHEDULED" | "WAITLIST" | "RECALL" | "RECEIVABLES" | "LOW_STOCK";
@@ -60223,6 +60436,10 @@ export interface operations {
                 recallTypeId?: string;
                 /** @description Incluir también los que vencen en los próximos N días (0 = solo los ya vencidos) */
                 withinDays?: number;
+                /** @description DX-465: incluir también a los contactados que siguen ocultos (tras un intento, los días de la sede o hasta «Llamar luego»; tras «Rechaza», hasta el vencimiento siguiente). Por defecto, no. */
+                includeContacted?: boolean;
+                /** @description DX-465: true = SOLO los de intentos agotados (intentos del ciclo ≥ tope de la sede), estén ocultos o no. Por defecto salen sin ellos. */
+                exhausted?: boolean;
                 /** @description Por días de vencido: los más vencidos primero o al revés */
                 sort?: components["schemas"]["RecallDueSort"];
                 page?: number;
@@ -60263,6 +60480,10 @@ export interface operations {
                 recallTypeId?: string;
                 /** @description Incluir también los que vencen en los próximos N días (0 = solo los ya vencidos) */
                 withinDays?: number;
+                /** @description DX-465: incluir también a los contactados que siguen ocultos (tras un intento, los días de la sede o hasta «Llamar luego»; tras «Rechaza», hasta el vencimiento siguiente). Por defecto, no. */
+                includeContacted?: boolean;
+                /** @description DX-465: true = SOLO los de intentos agotados (intentos del ciclo ≥ tope de la sede), estén ocultos o no. Por defecto salen sin ellos. */
+                exhausted?: boolean;
             };
             header?: {
                 /** @description Sede activa: los pacientes cuya sede (la de su última cita atendida o, sin ella, la del recall) es esta; sin ella, las sedes permitidas (vista consolidada) */
@@ -60308,6 +60529,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description DX-465: «Agendó» de una cita que ya lo tenía en este recall: el existente */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallContactDto"];
+                };
+            };
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -60316,7 +60546,7 @@ export interface operations {
                     "application/json": components["schemas"]["RecallContactDto"];
                 };
             };
-            /** @description Canal o desenlace inválidos, nota de más de 280, BOOKED sin cita o cita de otro paciente */
+            /** @description Canal o desenlace inválidos, nota de más de 280, BOOKED sin cita o cita de otro paciente; `callbackOn` con otro desenlace que CALL_BACK, no válida, anterior a hoy o a más de 90 días (en la sede del paciente) */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -60332,6 +60562,71 @@ export interface operations {
             };
             /** @description Recall de otra clínica o inexistente */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: con `callbackOn`, la sede del paciente no tiene zona horaria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecallController_batch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRecallContactsBatchDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallContactsBatchDto"];
+                };
+            };
+            /** @description Lista vacía, de más de 50 o con un recall repetido; BOOKED; CALL_BACK sin `callbackOn` o `callbackOn` con otro desenlace, no válida, anterior a hoy o a más de 90 días en la sede de algún paciente; nota de más de 280 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no gestiona la lista de recall: es para administración y recepción. O 403 LOCATION_NOT_ALLOWED: algún paciente es de una sede no permitida (no se registra ninguno). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Algún recall no existe en esta clínica (`recallIds` con los que faltan); no se registra ninguno */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: con `callbackOn`, la sede de algún paciente no tiene zona horaria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -60698,6 +60993,113 @@ export interface operations {
             };
             /** @description Algún id no es un procedimiento vivo del catálogo de esta clínica */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecallSettingsController_findAll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationRecallSettingsDto"][];
+                };
+            };
+            /** @description Solo un administrador puede ver y cambiar los intentos de recall de las sedes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RecallSettingsController_replace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRecallSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationRecallSettingsDto"];
+                };
+            };
+            /** @description Días de 1 a 90 o tope de 1 a 10 (mensaje en español); identificador de sede no válido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar los intentos de recall de las sedes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientPhoneReviewController_clearReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecallPhoneReviewClearedDto"];
+                };
+            };
+            /** @description Tu rol no corrige los datos de contacto del paciente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente de otra clínica o inexistente */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
