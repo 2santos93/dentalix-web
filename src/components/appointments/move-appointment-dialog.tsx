@@ -30,6 +30,18 @@ import { endSentence } from '@/lib/format/text';
 import { defaultHoursNote } from '@/lib/locations/default-business-hours';
 import { HolidayNotice, holidayClosedMessage, useHolidayOnDay } from './holiday-notice';
 import { isInClinic } from '@/lib/appointments/patient-flow';
+import {
+  isPendingSeriesStatus,
+  isSeriesStale,
+  moveAppointmentSeries,
+  previewMoveAppointmentSeries,
+  seriesConflictsOf,
+  seriesLabel,
+  type AppointmentSeriesChange,
+  type SeriesPreview,
+} from '@/lib/appointments/appointment-series-api';
+import { RadioCard, RadioGroup } from '@/components/ui/radio-group';
+import { Badge } from '@/components/ui/badge';
 
 const copy = {
   title: 'Mover a…',
@@ -69,7 +81,29 @@ const copy = {
       ? `No hay huecos libres de ese profesional con «${chair}» en los próximos ${NEXT_OPENING_DAYS} días. Prueba con otro profesional u otro sillón, o mantenla donde está.`
       : `No hay huecos libres de ese profesional en los próximos ${NEXT_OPENING_DAYS} días. Prueba con otro profesional o mantenla donde está.`,
   nextOpeningError: 'No pudimos buscar el siguiente hueco libre. Elige otra hora a mano.',
+  // DX-562: cita de una serie.
+  scope: 'Qué citas mover',
+  scopeHint: (label: string) => `Esta cita es de una serie (${label}).`,
+  scopeOne: 'Solo esta cita',
+  scopeOneHint: 'Las demás citas de la serie no cambian.',
+  scopeFollowing: 'Esta y las siguientes',
+  scopeFollowingHint:
+    'Las siguientes pendientes se desplazan los mismos días y toman la nueva hora. Mismo profesional y sillón.',
+  seriesCheck: 'Ver fechas',
+  seriesChecking: 'Revisando las fechas…',
+  seriesTitle: 'Así quedarían las citas',
+  seriesFree: 'Libre',
+  seriesConflict: 'Choca',
+  seriesBlocked: (n: number) =>
+    n === 1
+      ? '1 fecha choca. Las citas de una serie no se ajustan aquí: muévela primero por separado («Solo esta cita») y luego vuelve a mover las siguientes, o elige otra hora para todas.'
+      : `${n} fechas chocan. Las citas de una serie no se ajustan aquí: muévelas primero por separado («Solo esta cita») y luego vuelve a mover las siguientes, o elige otra hora para todas.`,
+  seriesSubmit: (n: number) => (n === 1 ? 'Mover 1 cita' : `Mover ${n} citas`),
+  seriesChange: 'Cambiar la hora',
+  seriesError: 'No pudimos mover las citas de la serie. Intenta de nuevo.',
 };
+
+type MoveScope = 'one' | 'following';
 
 /** El reloj se lee al enviar (en el manejador), nunca al pintar. */
 function isPast(iso: string): boolean {
@@ -105,6 +139,15 @@ interface MoveAppointmentDialogProps {
    * abre con ese destino, el mensaje del servidor y el siguiente hueco libre.
    */
   collision?: { target: MoveTarget; error: unknown; message: string } | null;
+  /**
+   * DX-562: con una cita pendiente de una serie se elige «Solo esta cita» o
+   * «Esta y las siguientes» (vista previa y `POST /appointments/series/:id/move`).
+   */
+  onSeriesMoved?: (result: AppointmentSeriesChange) => void;
+  /** DX-562: otra persona cambió alguna cita de la serie a la vez: recargar la agenda. */
+  onSeriesStale?: () => void;
+  /** DX-562: destino propuesto (p. ej. el arrastre de una cita de serie), sin error. */
+  initialTarget?: MoveTarget | null;
 }
 
 /**
@@ -124,9 +167,18 @@ export function MoveAppointmentDialog({
   onMoved,
   chairs = [],
   collision = null,
+  onSeriesMoved,
+  onSeriesStale,
+  initialTarget = null,
 }: MoveAppointmentDialogProps) {
   const { timeZone, fmt } = clock;
-  const initial = collision?.target ?? appointment;
+  const initial = collision?.target ?? initialTarget ?? appointment;
+  const series = appointment.series;
+  const offersSeries = !!series && isPendingSeriesStatus(appointment.status) && onSeriesMoved !== undefined;
+  const [scope, setScope] = useState<MoveScope>('one');
+  const following = offersSeries && scope === 'following';
+  // La vista previa de «esta y las siguientes» para un inicio concreto.
+  const [seriesPlan, setSeriesPlan] = useState<{ start: string; preview: SeriesPreview } | null>(null);
   const [date, setDate] = useState(() => wallDay(initial.start, timeZone));
   const [time, setTime] = useState(() => formatMinute(minuteOfDay(initial.start, timeZone)));
   const [providerId, setProviderId] = useState(initial.providerId);
@@ -235,6 +287,37 @@ export function MoveAppointmentDialog({
   const holiday = useHolidayOnDay(token, appointment.locationId, date);
   const inClinic = isInClinic(appointment.status);
 
+  /** DX-562: «Esta y las siguientes»: primero la vista previa, luego confirmar. */
+  async function submitSeries() {
+    if (!series || !onSeriesMoved || startMinute === null) return;
+    const start = moveTarget(appointment, date, startMinute, appointment.providerId, timeZone).start;
+    setSubmitting(true);
+    try {
+      if (seriesPlan && seriesPlan.start === start) {
+        onSeriesMoved(await moveAppointmentSeries(token, series.id, { fromAppointmentId: appointment.id, start }));
+        return;
+      }
+      const preview = await previewMoveAppointmentSeries(token, series.id, { fromAppointmentId: appointment.id, start });
+      setSeriesPlan({ start, preview });
+    } catch (err) {
+      setError(apiErrorMessage(err, copy.seriesError));
+      if (isSeriesStale(err)) onSeriesStale?.();
+      // Ya no estaban libres al confirmar: se vuelve a revisar la lista.
+      if (seriesConflictsOf(err) !== null) {
+        try {
+          setSeriesPlan({
+            start,
+            preview: await previewMoveAppointmentSeries(token, series.id, { fromAppointmentId: appointment.id, start }),
+          });
+        } catch {
+          setSeriesPlan(null);
+        }
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
@@ -242,6 +325,25 @@ export function MoveAppointmentDialog({
     search.current++;
     if (!isCivilDay(date) || startMinute === null || !providerId) {
       setError(copy.missing);
+      return;
+    }
+    if (following) {
+      const pivot = moveTarget(appointment, date, startMinute, appointment.providerId, timeZone);
+      if (seriesPlan === null || seriesPlan.start !== pivot.start) {
+        if (isPast(pivot.start)) {
+          setError(copy.past);
+          return;
+        }
+        if (!fitsBusinessHoursLocal(date, time, formatMinute(startMinute + duration), hours)) {
+          setError(copy.outsideHours(describeDay(civilWeekday(date), hours, fmt)));
+          return;
+        }
+        if (holiday.status === 'holiday') {
+          setError(holidayClosedMessage(holiday.name));
+          return;
+        }
+      }
+      await submitSeries();
       return;
     }
     const slot = moveTarget(appointment, date, startMinute, providerId, timeZone);
@@ -275,6 +377,13 @@ export function MoveAppointmentDialog({
     await submit(target);
   }
 
+  const seriesConflicts = seriesPlan?.preview.occurrences.filter((o) => o.status === 'CONFLICT').length ?? 0;
+  const submitLabel = following
+    ? seriesPlan
+      ? copy.seriesSubmit(seriesPlan.preview.occurrences.length)
+      : copy.seriesCheck
+    : copy.submit;
+
   return (
     <FormModal
       open={open}
@@ -282,11 +391,47 @@ export function MoveAppointmentDialog({
       title={copy.title}
       description={(showChair ? copy.descriptionWithChair : copy.description)(patientLabel(appointment))}
       onSubmit={handleSubmit}
-      submitLabel={copy.submit}
+      submitLabel={submitLabel}
       submitting={submitting}
+      submitDisabled={following && seriesPlan !== null && seriesConflicts > 0}
       error={error}
     >
-      {nextOpening ? (
+      {offersSeries && series && !seriesPlan ? (
+        <RadioGroup
+          id="move-scope"
+          legend={copy.scope}
+          hint={copy.scopeHint(seriesLabel(series))}
+          value={scope}
+          onValueChange={(v) => {
+            setScope(v === 'following' ? 'following' : 'one');
+            setError(null);
+          }}
+          disabled={submitting}
+          optionsClassName="gap-2"
+        >
+          <RadioCard id="move-scope-one" value="one" title={copy.scopeOne} description={copy.scopeOneHint} />
+          <RadioCard
+            id="move-scope-following"
+            value="following"
+            title={copy.scopeFollowing}
+            description={copy.scopeFollowingHint}
+          />
+        </RadioGroup>
+      ) : null}
+      {following && seriesPlan ? (
+        <SeriesMovePlan
+          preview={seriesPlan.preview}
+          conflicts={seriesConflicts}
+          fmt={fmt}
+          disabled={submitting}
+          onChange={() => {
+            setSeriesPlan(null);
+            setError(null);
+          }}
+        />
+      ) : (
+        <>
+      {following ? null : nextOpening ? (
         <Callout
           tone={nextOpening.status === 'found' ? 'info' : 'neutral'}
           title={nextOpening.status === 'found' ? copy.nextOpeningTitle : undefined}
@@ -342,6 +487,7 @@ export function MoveAppointmentDialog({
           />
         </FormField>
       </div>
+      {following ? null : (<>
       <FormField htmlFor="move-provider" label={copy.provider}>
         <NativeSelect
           id="move-provider"
@@ -389,6 +535,66 @@ export function MoveAppointmentDialog({
           )}
         </Callout>
       ) : null}
+      </>)}
+        </>
+      )}
     </FormModal>
+  );
+}
+
+/** DX-562: la lista de «esta y las siguientes» antes de confirmar (sin edición por fecha). */
+function SeriesMovePlan({
+  preview,
+  conflicts,
+  fmt,
+  disabled,
+  onChange,
+}: {
+  preview: SeriesPreview;
+  conflicts: number;
+  fmt: SedeClock['fmt'];
+  disabled: boolean;
+  onChange: () => void;
+}) {
+  const tz = preview.timeZone;
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => headingRef.current?.focus(), []);
+  return (
+    <div className="flex flex-col gap-3" data-testid="series-move-preview">
+      <h3 ref={headingRef} tabIndex={-1} className="text-sm font-semibold text-ink focus:outline-none">
+        {copy.seriesTitle}
+      </h3>
+      <ol className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border">
+        {preview.occurrences.map((o) => (
+          <li key={o.index} className="flex flex-col gap-1 px-3 py-2" data-testid={`series-move-${o.index}`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-ink">
+                <span className="tabular-nums text-muted">{o.index}.</span>{' '}
+                <span className="font-medium">{fmt.longDate(new Date(o.start), tz, { weekday: true })}</span>,{' '}
+                <time dateTime={o.start} className="tabular-nums">{fmt.time(new Date(o.start), tz)}</time>
+              </p>
+              <Badge variant={o.status === 'CONFLICT' ? 'danger' : 'success'} dot>
+                {o.status === 'CONFLICT' ? copy.seriesConflict : copy.seriesFree}
+              </Badge>
+            </div>
+            {o.reasons.length > 0 ? (
+              <ul className="flex list-disc flex-col gap-0.5 pl-5 text-sm text-danger-text">
+                {o.reasons.map((r) => (
+                  <li key={`${r.code}-${r.message}`}>{r.message}</li>
+                ))}
+              </ul>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+      {conflicts > 0 ? (
+        <Callout tone="warning" role="status" data-testid="series-move-blocked">
+          {copy.seriesBlocked(conflicts)}
+        </Callout>
+      ) : null}
+      <Button type="button" variant="secondary" size="sm" className="self-start" disabled={disabled} onClick={onChange}>
+        {copy.seriesChange}
+      </Button>
+    </div>
   );
 }

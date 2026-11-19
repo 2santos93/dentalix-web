@@ -27,7 +27,7 @@ import {
   timeToMinutes,
   type BusinessHours,
 } from '@/lib/locations/schedule-api';
-import { screenLocation, sedeMinuteRanges, useSedeClock } from '@/lib/locations/sede-clock';
+import { screenLocation, sedeMinuteRanges, useSedeClock, type SedeClock } from '@/lib/locations/sede-clock';
 import { useLocationsState } from '@/lib/locations/use-locations-state';
 import { HolidayNotice, holidayClosedMessage, useHolidayOnDay } from './holiday-notice';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
@@ -155,6 +155,31 @@ const PATIENT_SEARCH_PAGE_SIZE = 20;
  * DX-378: the ISO instant of a `YYYY-MM-DD` date + `HH:mm` time on the sede
  * clock (`timeZone`), never the browser's; `null` for a malformed time.
  */
+/**
+ * DX-562: la cita base que el formulario ya validó (paciente, profesional,
+ * horas en el reloj de la sede, no en el pasado, horario y festivo), para quien
+ * la convierta en otra cosa (la serie de la agenda).
+ */
+export type AppointmentFormBase = Pick<
+  CreateAppointmentInput,
+  'patientId' | 'providerId' | 'start' | 'end' | 'appointmentTypeId' | 'chairId' | 'reason'
+>;
+
+/**
+ * DX-562: un añadido del formulario que pone quien lo usa (la agenda: «Repetir»).
+ * El formulario no sabe nada de series: pinta `fields`, y con `active` el envío
+ * entrega la cita base validada a `onSubmitBase` en vez de crearla; `step`, si
+ * no es null, se pinta EN LUGAR del formulario (sin desmontarlo: lo escrito se
+ * conserva al volver).
+ */
+export interface AppointmentFormExtension {
+  fields: React.ReactNode;
+  active: boolean;
+  submitLabel: string;
+  onSubmitBase: (base: AppointmentFormBase, context: { date: string; clock: SedeClock }) => void;
+  step: React.ReactNode | null;
+}
+
 function toIsoInstant(date: string, time: string, timeZone: string): string | null {
   const minute = timeToMinutes(time);
   return minute === null ? null : wallInstant(date, minute, timeZone).toISOString();
@@ -190,6 +215,8 @@ interface AppointmentFormProps {
    * mismo efecto que elegirlo a mano (duración y hora de fin).
    */
   defaultAppointmentTypeId?: string | null;
+  /** DX-562: añadido de quien usa el formulario (la agenda: «Repetir»). */
+  extension?: AppointmentFormExtension;
 }
 
 /**
@@ -226,7 +253,9 @@ export function AppointmentForm({
   planItemIds,
   minimumDate,
   locationId,
+  extension,
 }: AppointmentFormProps) {
+  const extending = extension?.active === true;
   const [patients, setPatients] = useState<Patient[]>([]);
   const [patientsLoading, setPatientsLoading] = useState(true);
   // Truthy is all that's needed — the rendered `FieldError` shows a fixed
@@ -573,6 +602,22 @@ export function AppointmentForm({
       return;
     }
 
+    if (extension?.active) {
+      extension.onSubmitBase(
+        {
+          patientId,
+          providerId,
+          start,
+          end,
+          ...(appointmentTypeId ? { appointmentTypeId } : {}),
+          ...(chairId ? { chairId } : {}),
+          ...(reason.trim() ? { reason: reason.trim() } : {}),
+        },
+        { date, clock },
+      );
+      return;
+    }
+
     setSubmitting(true);
     try {
       const input: CreateAppointmentInput = {
@@ -638,6 +683,8 @@ export function AppointmentForm({
     trimmedPatientQuery !== '' &&
     !patientsLoading &&
     patients.length === 0;
+
+  if (extension?.step) return <>{extension.step}</>;
 
   return (
     <form onSubmit={handleSubmit} aria-label={copy.submit} className="flex flex-col gap-4">
@@ -993,7 +1040,9 @@ export function AppointmentForm({
         />
       </div>
 
-      {canMarkWantsEarlier ? (
+      {extension?.fields}
+
+      {canMarkWantsEarlier && !extending ? (
         <Checkbox
           id="appointment-wants-earlier"
           checked={wantsEarlier}
@@ -1045,7 +1094,7 @@ export function AppointmentForm({
 
       <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
         <Button type="submit" loading={submitting}>
-          {submitting ? copy.submitting : copy.submit}
+          {submitting ? copy.submitting : extending ? extension.submitLabel : copy.submit}
         </Button>
       </div>
     </form>

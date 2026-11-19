@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CancelAppointmentDialog } from './cancel-appointment-dialog';
 import { updateAppointment } from '@/lib/appointments/appointments-api';
+import { cancelAppointmentSeries } from '@/lib/appointments/appointment-series-api';
 import { getCancellationPreview } from '@/lib/cancellations/cancellation';
 import { ApiError } from '@/lib/api/client';
 import type { AppointmentStatus } from '@/lib/appointments/appointments-api';
@@ -174,5 +175,102 @@ describe('CancelAppointmentDialog (DX-279)', () => {
     await user.selectOptions(screen.getByLabelText('Motivo'), 'OTHER');
     await user.click(submit());
     expect(await screen.findByText('Indica el motivo de la cancelación.')).toBeInTheDocument();
+  });
+});
+
+// DX-562: una cita de una serie elige «Solo esta cita» o «Esta y las siguientes».
+jest.mock('../../lib/appointments/appointment-series-api', () => ({
+  ...jest.requireActual('../../lib/appointments/appointment-series-api'),
+  cancelAppointmentSeries: jest.fn(),
+}));
+
+describe('CancelAppointmentDialog · cita de una serie (DX-562)', () => {
+  const mockedCancelSeries = jest.mocked(cancelAppointmentSeries);
+  const series = { id: 's-1', index: 4, total: 6 };
+
+  function renderSeries() {
+    const onDone = jest.fn();
+    const onSeriesDone = jest.fn();
+    const onSeriesStale = jest.fn();
+    render(
+      <CancelAppointmentDialog
+        open
+        onOpenChange={() => {}}
+        token="tok"
+        appointmentId="a-4"
+        patientName="Ana Pérez"
+        fromStatus="SCHEDULED"
+        onDone={onDone}
+        series={series}
+        onSeriesDone={onSeriesDone}
+        onSeriesStale={onSeriesStale}
+      />,
+    );
+    return { onDone, onSeriesDone, onSeriesStale };
+  }
+
+  beforeEach(() => {
+    mockedUpdate.mockReset();
+    mockedCancelSeries.mockReset();
+    mockedPreview.mockReset();
+    mockedPreview.mockResolvedValue(LATE);
+  });
+
+  it('por defecto «Solo esta cita»: el PATCH de siempre', async () => {
+    const user = userEvent.setup();
+    mockedUpdate.mockResolvedValue({ id: 'a-4' } as never);
+    const { onDone } = renderSeries();
+    expect(screen.getByRole('radiogroup', { name: 'Qué citas cancelar' })).toHaveAccessibleDescription(
+      /Serie · 4 de 6/,
+    );
+    expect(screen.getByLabelText(/Solo esta cita/)).toBeChecked();
+    await user.click(screen.getByLabelText(/La clínica/));
+    await user.click(submit());
+    expect(mockedUpdate).toHaveBeenCalledWith('tok', 'a-4', expect.objectContaining({ status: 'CANCELLED' }));
+    expect(mockedCancelSeries).not.toHaveBeenCalled();
+    expect(onDone).toHaveBeenCalled();
+  });
+
+  it('«Esta y las siguientes» cancela la serie desde esta cita, con el mismo origen y motivo', async () => {
+    const user = userEvent.setup();
+    const change = { seriesId: 's-1', appointments: [] };
+    mockedCancelSeries.mockResolvedValue(change);
+    const { onSeriesDone } = renderSeries();
+    await user.click(screen.getByLabelText(/Esta y las siguientes/));
+    await user.click(screen.getByLabelText(/El paciente avisa/));
+    await user.selectOptions(screen.getByLabelText('Motivo'), 'WORK');
+    await user.type(screen.getByLabelText('Detalle (opcional)'), ' Cambió de turno ');
+    await user.click(screen.getByRole('button', { name: 'Cancelar esta y las siguientes' }));
+    expect(mockedCancelSeries).toHaveBeenCalledWith('tok', 's-1', {
+      fromAppointmentId: 'a-4',
+      cancelledByKind: 'STAFF_FOR_PATIENT',
+      cancelReasonCode: 'WORK',
+      cancelReasonText: 'Cambió de turno',
+    });
+    expect(mockedUpdate).not.toHaveBeenCalled();
+    expect(onSeriesDone).toHaveBeenCalledWith(change);
+  });
+
+  it('409 STALE: lo dice y pide recargar la agenda', async () => {
+    const user = userEvent.setup();
+    mockedCancelSeries.mockRejectedValue(
+      new ApiError(
+        409,
+        'Alguna cita de la serie cambió mientras tanto (otra persona la movió, la canceló o la atendió). Vuelve a abrir la serie y repite el cambio.',
+        { code: 'APPOINTMENT_SERIES_STALE' },
+      ),
+    );
+    const { onSeriesDone, onSeriesStale } = renderSeries();
+    await user.click(screen.getByLabelText(/Esta y las siguientes/));
+    await user.click(screen.getByLabelText(/La clínica/));
+    await user.click(screen.getByRole('button', { name: 'Cancelar esta y las siguientes' }));
+    expect(await screen.findByText(/cambió mientras tanto/)).toBeInTheDocument();
+    expect(onSeriesStale).toHaveBeenCalled();
+    expect(onSeriesDone).not.toHaveBeenCalled();
+  });
+
+  it('sin serie no hay elección', () => {
+    renderDialog();
+    expect(screen.queryByRole('radiogroup', { name: 'Qué citas cancelar' })).not.toBeInTheDocument();
   });
 });
