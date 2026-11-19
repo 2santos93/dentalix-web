@@ -37,17 +37,43 @@ function first(table: readonly [RegExp, string][], ua: string): string | null {
   return table.find(([pattern]) => pattern.test(ua))?.[1] ?? null;
 }
 
+// DX-582: desde entonces la API guarda en la auditoría el navegador ya
+// resumido («Chrome en macOS», «Chrome», «macOS» o «Dispositivo desconocido»),
+// nunca el User-Agent en bruto. Las filas anteriores y los accesos de soporte
+// siguen trayendo el User-Agent completo.
+const SERVER_BROWSERS = ['Edge', 'Firefox', 'Chrome', 'Safari'];
+const SERVER_SYSTEMS = ['iOS', 'Android', 'macOS', 'Windows', 'Linux'];
+const SERVER_UNKNOWN = 'Dispositivo desconocido';
+
+function serverLabel(value: string): string | null | undefined {
+  if (value === SERVER_UNKNOWN) return null;
+  if (SERVER_BROWSERS.includes(value) || SERVER_SYSTEMS.includes(value)) return value;
+  const [browser, system, ...rest] = value.split(' en ');
+  if (rest.length === 0 && SERVER_BROWSERS.includes(browser) && SERVER_SYSTEMS.includes(system ?? '')) {
+    return `${browser} · ${system}`;
+  }
+  return undefined;
+}
+
 /** «Chrome · macOS», «Safari · iPhone», solo una de las dos, o `null` si no se reconoce nada. */
 export function deviceLabel(userAgent: string | null | undefined): string | null {
   if (!userAgent) return null;
+  const summarized = serverLabel(userAgent);
+  if (summarized !== undefined) return summarized;
   const parts = [first(BROWSERS, userAgent), first(SYSTEMS, userAgent)].filter(Boolean);
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
-/** La IP de la propia máquina (loopback, también en su forma IPv6 mapeada). */
+/** La IP de la propia máquina (loopback, también en su forma IPv6 mapeada o ya truncada). */
 export function isLoopback(ip: string): boolean {
   const value = ip.trim().toLowerCase();
-  return value === '::1' || value === 'localhost' || /^(?:::ffff:)?127\.\d+\.\d+\.\d+$/.test(value);
+  return (
+    value === '::1' ||
+    value === 'localhost' ||
+    /^(?:::ffff:)?127\.\d+\.\d+\.\d+$/.test(value) ||
+    // DX-582: la IP ya truncada que guarda la auditoría.
+    /^127\.\d+\.\d+\.0\/24$/.test(value)
+  );
 }
 
 /** La IP para leer: «Este equipo (local)» para el loopback, «Sin IP» si no hay. */
