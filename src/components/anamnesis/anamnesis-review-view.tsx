@@ -1,8 +1,9 @@
 'use client';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { ApiError } from '@/lib/api/api-error';
+import { WORK_QUEUES_CHANGED_EVENT } from '@/components/work-queues/work-queues-context';
 import {
   SUBMISSION_STATUS_LABELS,
   acceptAnamnesis,
@@ -77,11 +78,42 @@ const copy = {
   acceptedText: 'La versión nueva ya está en la historia clínica y las alertas en la agenda.',
   rejectedTitle: 'Anamnesis rechazada',
   goToPatient: 'Ir a la ficha',
+  // DX-298 (FE-072): otra persona la revisó antes (409).
+  conflictTitle: 'Esta anamnesis ya no está por revisar',
+  conflictFallback: 'Otra persona la revisó mientras la tenías abierta. Esto es lo que quedó.',
+  refreshing: 'Cargando el estado actual…',
   reviewed: (status: string, who: string | null, when: string | null) =>
     [status, who ? `por ${who}` : null, when ? `el ${when}` : null].filter(Boolean).join(' '),
 };
 
 type FlagKey = keyof typeof SAFETY_FLAG_LABELS;
+
+/** Anillo de foco del bloque de resultado (recibe el foco por programa). */
+const OUTCOME_FOCUS =
+  'rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text';
+
+/** Ya revisada: estado, quién y cuándo (y el motivo, si se rechazó). */
+function ReviewedSummary({
+  submission,
+  stamp,
+}: {
+  submission: AnamnesisSubmission;
+  stamp: ReturnType<typeof useSedeStamp>;
+}) {
+  return (
+    <div className="flex flex-col items-start gap-2 rounded-lg border border-border bg-surface p-4 sm:p-6">
+      <StatusBadge kind="anamnesisSubmission" status={submission.status} />
+      <p className="text-sm text-muted">
+        {copy.reviewed(
+          SUBMISSION_STATUS_LABELS[submission.status],
+          submission.reviewedByName,
+          submission.reviewedAt ? stamp.dateTime(submission.reviewedAt, submission.location.id) : null,
+        )}
+      </p>
+      {submission.rejectReason && <p className="text-sm text-ink">{submission.rejectReason}</p>}
+    </div>
+  );
+}
 
 function alertLines(flags: SafetyFlags): string[] {
   return (Object.keys(SAFETY_FLAG_LABELS) as FlagKey[])
@@ -161,6 +193,16 @@ export function AnamnesisReviewView({
   const [reasonError, setReasonError] = useState<string | null>(null);
   const [rejectError, setRejectError] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState(false);
+  // DX-298: un 409 (ya revisada) relee la revisión; mientras, sin acciones.
+  const [conflict, setConflict] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const conflictRef = useRef<string | null>(null);
+  const showConflict = (message: string | null) => {
+    conflictRef.current = message;
+    setConflict(message);
+  };
+  // El bloque de resultado (o el aviso del 409) recibe el foco: el botón pulsado ya no existe.
+  const outcomeRef = useRef<HTMLDivElement>(null);
   // La solicitud y su cita se pintan con el reloj de SU sede; la versión de la historia no trae sede (la de la pantalla).
   const stamp = useSedeStamp(token, [data?.submission.location.id]);
 
@@ -171,6 +213,13 @@ export function AnamnesisReviewView({
         if (cancelled) return;
         setData(review);
         setError(null);
+        // Tras un 409, si la API dice que sigue por revisar, no era «ya revisada»:
+        // el aviso pasa a error de la acción y vuelven los botones.
+        const pendingConflict = conflictRef.current;
+        if (pendingConflict !== null && review.submission.status === 'SUBMITTED') {
+          setActionError(pendingConflict);
+          showConflict(null);
+        }
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -178,20 +227,49 @@ export function AnamnesisReviewView({
         setError(apiErrorMessage(err, { fallback: copy.loadError, byStatus: { 404: copy.notFound } }));
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (cancelled) return;
+        setLoading(false);
+        setRefreshing(false);
       });
     return () => {
       cancelled = true;
     };
   }, [token, submissionId, reloadKey]);
 
+  useEffect(() => {
+    if (result || conflict) outcomeRef.current?.focus();
+  }, [result, conflict]);
+
+  /** La bandeja y su contador del menú releen (DX-298, FE-073). */
+  function announceReviewed() {
+    window.dispatchEvent(new Event(WORK_QUEUES_CHANGED_EVENT));
+  }
+
+  function done(submission: AnamnesisSubmission) {
+    setResult(submission);
+    announceReviewed();
+  }
+
+  /** `true` si era un 409: se cierran los diálogos y se relee la revisión. */
+  function handleConflict(err: unknown): boolean {
+    if (!(err instanceof ApiError) || err.status !== 409) return false;
+    setAdjustOpen(false);
+    setRejectOpen(false);
+    setActionError(null);
+    showConflict(apiErrorMessage(err, copy.conflictFallback));
+    setRefreshing(true);
+    setReloadKey((k) => k + 1);
+    announceReviewed();
+    return true;
+  }
+
   async function handleAccept() {
     setAccepting(true);
     setActionError(null);
     try {
-      setResult(await acceptAnamnesis(token, submissionId));
+      done(await acceptAnamnesis(token, submissionId));
     } catch (err) {
-      setActionError(apiErrorMessage(err, copy.acceptError));
+      if (!handleConflict(err)) setActionError(apiErrorMessage(err, copy.acceptError));
     } finally {
       setAccepting(false);
     }
@@ -202,10 +280,10 @@ export function AnamnesisReviewView({
     setAdjusting(true);
     setAdjustError(null);
     try {
-      setResult(await acceptAnamnesis(token, submissionId, adjusted));
+      done(await acceptAnamnesis(token, submissionId, adjusted));
       setAdjustOpen(false);
     } catch (err) {
-      setAdjustError(apiErrorMessage(err, copy.acceptError));
+      if (!handleConflict(err)) setAdjustError(apiErrorMessage(err, copy.acceptError));
     } finally {
       setAdjusting(false);
     }
@@ -220,28 +298,29 @@ export function AnamnesisReviewView({
     setRejecting(true);
     setRejectError(null);
     try {
-      setResult(await rejectAnamnesis(token, submissionId, reason.trim()));
+      done(await rejectAnamnesis(token, submissionId, reason.trim()));
       setRejectOpen(false);
     } catch (err) {
-      setRejectError(apiErrorMessage(err, copy.rejectError));
+      if (!handleConflict(err)) setRejectError(apiErrorMessage(err, copy.rejectError));
     } finally {
       setRejecting(false);
     }
   }
 
-  const backLink = (
-    <Link
-      href="/anamnesis-por-revisar"
-      className="mb-4 inline-flex min-h-11 items-center gap-1.5 self-start text-sm font-medium text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
-    >
-      <ArrowLeft aria-hidden className="size-4" /> {copy.back}
-    </Link>
-  );
+  // FE-075 (3): el «volver» común de la app (`PageHeader back`), no un enlace propio.
+  const back = { href: '/anamnesis-por-revisar', label: copy.back };
+
+  /** Al cerrar un diálogo tras revisar, el foco va al resultado y no a `<body>`. */
+  const focusOutcome = (event: Event) => {
+    if (!outcomeRef.current) return;
+    event.preventDefault();
+    outcomeRef.current.focus();
+  };
 
   if (loading) {
     return (
       <div className="flex flex-col">
-        {backLink}
+        <PageHeader title={copy.loadingTitle} back={back} />
         <div role="status" aria-label="Cargando" className="flex flex-col gap-4">
           <Skeleton className="h-8 w-72" />
           <Skeleton className="h-4 w-96 max-w-full" />
@@ -254,7 +333,7 @@ export function AnamnesisReviewView({
   if (error || !data) {
     return (
       <div className="flex flex-col">
-        {backLink}
+        <PageHeader title={copy.loadingTitle} back={back} />
         <SectionError
           description={error ?? copy.loadError}
           onRetry={() => {
@@ -268,13 +347,13 @@ export function AnamnesisReviewView({
 
   const { submission } = data;
   const name = submission.patient.fullName;
-  const pending = submission.status === 'SUBMITTED' && !result;
+  const pending = submission.status === 'SUBMITTED' && !result && !conflict;
   const alerts = data.proposedFlags ? alertLines(data.proposedFlags.safetyFlags as SafetyFlags) : [];
 
   return (
     <div className="flex flex-col">
-      {backLink}
       <PageHeader
+        back={back}
         title={copy.title(name)}
         meta={
           <div className="mt-1.5 flex flex-col gap-0.5 text-sm text-muted tabular-nums">
@@ -288,30 +367,40 @@ export function AnamnesisReviewView({
       <SedeStampNote stamp={stamp} className="mb-4" />
 
       {result ? (
-        <Callout
-          tone="success"
-          role="status"
-          title={result.status === 'ACCEPTED' ? copy.acceptedTitle : copy.rejectedTitle}
-          action={
-            <Button asChild variant="secondary" className="min-h-11 sm:min-h-10">
-              <Link href={`/patients/${submission.patient.id}?tab=clinical-history`}>{copy.goToPatient}</Link>
-            </Button>
-          }
-        >
-          {result.status === 'ACCEPTED' ? copy.acceptedText : null}
-        </Callout>
-      ) : !pending ? (
-        <div className="flex flex-col items-start gap-2 rounded-lg border border-border bg-surface p-4 sm:p-6">
-          <StatusBadge kind="anamnesisSubmission" status={submission.status} />
-          <p className="text-sm text-muted">
-            {copy.reviewed(
-              SUBMISSION_STATUS_LABELS[submission.status],
-              submission.reviewedByName,
-              submission.reviewedAt ? stamp.dateTime(submission.reviewedAt, submission.location.id) : null,
-            )}
-          </p>
-          {submission.rejectReason && <p className="text-sm text-ink">{submission.rejectReason}</p>}
+        <div ref={outcomeRef} tabIndex={-1} data-testid="anamnesis-review-outcome" className={OUTCOME_FOCUS}>
+          <Callout
+            tone="success"
+            role="status"
+            title={result.status === 'ACCEPTED' ? copy.acceptedTitle : copy.rejectedTitle}
+            action={
+              <Button asChild variant="secondary" className="min-h-11 sm:min-h-10">
+                <Link href={`/patients/${submission.patient.id}?tab=clinical-history`}>{copy.goToPatient}</Link>
+              </Button>
+            }
+          >
+            {result.status === 'ACCEPTED' ? copy.acceptedText : null}
+          </Callout>
         </div>
+      ) : conflict ? (
+        <div
+          ref={outcomeRef}
+          tabIndex={-1}
+          data-testid="anamnesis-review-outcome"
+          className={cn(OUTCOME_FOCUS, 'flex flex-col gap-4')}
+        >
+          <Callout tone="warning" role="status" title={copy.conflictTitle}>
+            {conflict}
+          </Callout>
+          {refreshing ? (
+            <p role="status" className="text-sm text-muted">
+              {copy.refreshing}
+            </p>
+          ) : (
+            <ReviewedSummary submission={submission} stamp={stamp} />
+          )}
+        </div>
+      ) : !pending ? (
+        <ReviewedSummary submission={submission} stamp={stamp} />
       ) : (
         <div className="flex flex-col gap-6">
           {/* Lo que la ficha va a avisar si se acepta: el aviso de la pantalla. */}
@@ -419,6 +508,7 @@ export function AnamnesisReviewView({
         submitting={adjusting}
         error={adjustError}
         size="lg"
+        onCloseAutoFocus={focusOutcome}
       >
         <ClinicalHistoryFields value={adjusted} onChange={setAdjusted} />
       </FormModal>
@@ -433,6 +523,7 @@ export function AnamnesisReviewView({
         submitting={rejecting}
         error={rejectError}
         destructive
+        onCloseAutoFocus={focusOutcome}
       >
         <FormField htmlFor={`${ids}-reason`} label={copy.rejectReason} error={reasonError}>
           <Textarea

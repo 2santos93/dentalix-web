@@ -3,13 +3,16 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { setActiveLocationId } from '@/lib/locations/location-store';
 import { listLocations } from '@/lib/locations/locations-api';
 import { getMe, type MyProfile } from '@/lib/me/me-api';
+import { listStaff } from '@/lib/appointments/staff-api';
 import { clinicLocation } from '@/lib/test/locations';
 import {
   clearSessionStore,
   invalidateLocations,
   loadLocations,
   loadMe,
+  loadStaff,
   putMe,
+  STAFF_MAX_AGE_MS,
   sessionKeyOf,
   useLocations,
   useMe,
@@ -18,6 +21,7 @@ import {
 
 jest.mock('../locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../me/me-api', () => ({ getMe: jest.fn() }));
+jest.mock('../appointments/staff-api', () => ({ listStaff: jest.fn() }));
 const listLocationsMock = jest.mocked(listLocations);
 const getMeMock = jest.mocked(getMe);
 
@@ -172,5 +176,38 @@ describe('session-store (FE-031)', () => {
     act(() => putMe(useAuthStore.getState().accessToken!, { ...profile, fullName: 'Ana G.' }));
     expect(result.current.data?.fullName).toBe('Ana G.');
     expect(getMeMock).toHaveBeenCalledTimes(1);
+  });
+
+  describe('equipo (`GET /staff`, DX-298)', () => {
+    const listStaffMock = jest.mocked(listStaff);
+    const staff = [{ userId: 'u1', fullName: 'Ana Gómez', role: 'DENTIST' as const, locationIds: null }];
+    beforeEach(() => listStaffMock.mockReset().mockResolvedValue(staff));
+    afterEach(() => jest.useRealTimers());
+
+    it('se comparte, caduca a los cinco minutos y «fresh» vuelve a la API', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
+      const token = useAuthStore.getState().accessToken!;
+      await Promise.all([loadStaff(token), loadStaff(token)]);
+      await loadStaff(token);
+      expect(listStaffMock).toHaveBeenCalledTimes(1);
+      jest.advanceTimersByTime(STAFF_MAX_AGE_MS - 1);
+      await loadStaff(token);
+      expect(listStaffMock).toHaveBeenCalledTimes(1);
+      jest.advanceTimersByTime(1);
+      await expect(loadStaff(token)).resolves.toEqual(staff);
+      expect(listStaffMock).toHaveBeenCalledTimes(2);
+      await loadStaff(token, { fresh: true });
+      expect(listStaffMock).toHaveBeenCalledTimes(3);
+    });
+
+    it('otra sesión o cerrar sesión no reutiliza el equipo', async () => {
+      await loadStaff(useAuthStore.getState().accessToken!);
+      act(() => useAuthStore.getState().setAccessToken(jwt({ ...ANA, tenantId: 't2' })));
+      await loadStaff(useAuthStore.getState().accessToken!);
+      expect(listStaffMock).toHaveBeenCalledTimes(2);
+      clearSessionStore();
+      await loadStaff(useAuthStore.getState().accessToken!);
+      expect(listStaffMock).toHaveBeenCalledTimes(3);
+    });
   });
 });

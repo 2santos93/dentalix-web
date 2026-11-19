@@ -1,9 +1,10 @@
 'use client';
 import * as React from 'react';
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
+import type { StaffMember } from '@/lib/appointments/staff-api';
+import { loadStaff } from '@/lib/session/session-store';
 import { getTokenUserId } from '@/lib/auth/token-role';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
@@ -14,6 +15,8 @@ import { updateItem, type TreatmentPlanItem } from '@/lib/treatment-plans/treatm
 import { attendsAt, attributionInstant, isAttendingRole } from '@/lib/treatment-plans/item-attribution';
 import { FormModal } from '@/components/shared/form-modal';
 import { FieldError } from '@/components/errors/field-error';
+import { InlineError } from '@/components/errors/inline-error';
+import { fieldErrorId } from '@/components/shared/form-field';
 import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -126,13 +129,24 @@ export function MarkDoneModal({
   const [loadFailed, setLoadFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [performerId, setPerformerId] = useState('');
+  // Fallo del envío (resumen arriba del formulario).
   const [error, setError] = useState<string | null>(null);
+  // DX-298 (FE-032): la validación va junto a su campo, con `aria-describedby`.
+  const [fieldError, setFieldError] = useState<{ field: 'location' | 'date' | 'performer'; message: string } | null>(
+    null,
+  );
   const [submitting, setSubmitting] = useState(false);
+  // Reintentar vuelve a la API; abrir el modal otra vez usa la lista de la sesión.
+  const freshRef = useRef(false);
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    listStaff(token)
+    // DX-298 (FE-073): la lista sale de la caché de la sesión: marcar varios
+    // ítems seguidos no repite `GET /staff`.
+    const fresh = freshRef.current;
+    freshRef.current = false;
+    loadStaff(token, { fresh })
       .then((list) => {
         if (cancelled) return;
         const attending = list
@@ -163,29 +177,40 @@ export function MarkDoneModal({
     };
   }, [open, token, mode, item.performedById, activeLocationId, preferredPerformerId, reloadKey]);
 
+  // El foco va al campo que falta (su error, por `aria-describedby`, se lee con él).
+  useEffect(() => {
+    if (!fieldError) return;
+    const id = fieldError.field === 'location' ? locationSelectId : fieldError.field === 'date' ? dateId : selectId;
+    const el = document.getElementById(id);
+    const target = el?.matches('input, select, button, [tabindex]') ? el : el?.querySelector<HTMLElement>('[tabindex], input, button');
+    target?.focus();
+  }, [fieldError, locationSelectId, dateId, selectId]);
+
   // La sede elegida al atribuir filtra la lista ya cargada, sin volver a pedirla.
   const staff = members === null ? null : members.filter((m) => attendsAt(m.locationIds, scopeLocationId));
 
   const retry = useCallback(() => {
     setLoadFailed(false);
     setMembers(null);
+    freshRef.current = true;
     setReloadKey((k) => k + 1);
   }, []);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (attribute && !chosenLocation) {
-      setError(copy.locationRequired);
+      setFieldError({ field: 'location', message: copy.locationRequired });
       return;
     }
     if (attribute && (!day || zoneMissing || (today !== null && day > today))) {
-      setError(copy.dateRequired);
+      setFieldError({ field: 'date', message: copy.dateRequired });
       return;
     }
     if (!performerId) {
-      setError(copy.performerRequired);
+      setFieldError({ field: 'performer', message: copy.performerRequired });
       return;
     }
+    setFieldError(null);
     setError(null);
     setSubmitting(true);
     try {
@@ -241,10 +266,12 @@ export function MarkDoneModal({
               value={locationId}
               disabled={submitting}
               aria-required
-              aria-invalid={error === copy.locationRequired || undefined}
+              aria-invalid={fieldError?.field === 'location' || undefined}
+              aria-describedby={fieldError?.field === 'location' ? fieldErrorId(locationSelectId) : undefined}
               onChange={(e) => {
                 const next = e.target.value;
                 setLocationId(next);
+                setFieldError(null);
                 setError(null);
                 // Quien no atiende en la nueva sede deja de estar elegido.
                 const stillThere = members?.some(
@@ -262,6 +289,9 @@ export function MarkDoneModal({
                 </option>
               ))}
             </NativeSelect>
+            {fieldError?.field === 'location' ? (
+              <InlineError id={fieldErrorId(locationSelectId)}>{fieldError.message}</InlineError>
+            ) : null}
           </div>
           <div className="flex min-w-0 flex-col gap-1.5">
             <Label id={`${dateId}-label`} htmlFor={dateId}>
@@ -284,13 +314,18 @@ export function MarkDoneModal({
                 disabled={submitting}
                 required
                 aria-labelledby={`${dateId}-label`}
-                isInvalid={error === copy.dateRequired}
+                aria-describedby={fieldError?.field === 'date' ? fieldErrorId(dateId) : undefined}
+                isInvalid={fieldError?.field === 'date'}
                 onChange={(next) => {
                   setDay(next ?? '');
+                  setFieldError(null);
                   setError(null);
                 }}
               />
             )}
+            {fieldError?.field === 'date' ? (
+              <InlineError id={fieldErrorId(dateId)}>{fieldError.message}</InlineError>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -313,9 +348,11 @@ export function MarkDoneModal({
             value={performerId}
             disabled={submitting}
             aria-required
-            aria-invalid={error === copy.performerRequired || undefined}
+            aria-invalid={fieldError?.field === 'performer' || undefined}
+            aria-describedby={fieldError?.field === 'performer' ? fieldErrorId(selectId) : undefined}
             onChange={(e) => {
               setPerformerId(e.target.value);
+              setFieldError(null);
               setError(null);
             }}
           >
@@ -329,6 +366,9 @@ export function MarkDoneModal({
             ))}
           </NativeSelect>
         )}
+        {fieldError?.field === 'performer' ? (
+          <InlineError id={fieldErrorId(selectId)}>{fieldError.message}</InlineError>
+        ) : null}
       </div>
       {mode === 'done' && (locationName || activeLocationId === null) ? (
         <p className="text-sm text-muted">{locationName ? copy.inLocation(locationName) : copy.defaultLocation}</p>

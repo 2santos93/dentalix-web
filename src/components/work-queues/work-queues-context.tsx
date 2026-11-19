@@ -1,5 +1,5 @@
 'use client';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { getActiveLocationId, onLocationChange } from '@/lib/locations/location-store';
 import {
@@ -50,9 +50,15 @@ interface Snapshot {
  * (contadores de «Pendiente de cerrar» y «Anamnesis») y «Mi día» en Inicio
  * leen la MISMA respuesta, así que sus números nunca difieren. Fuera de
  * Inicio se piden solo las listas del menú; en Inicio (o con «Mi día»
- * montado), todas, desde la primera lectura. Se
- * relee al cambiar de pantalla o de sede, cada minuto con la pestaña visible,
- * al volver a ella y al recibir `WORK_QUEUES_CHANGED_EVENT`.
+ * montado), todas, desde la primera lectura. Se relee al cambiar de sede, cada
+ * minuto con la pestaña visible, al volver a ella si la última lectura tiene un
+ * minuto o más, y al recibir `WORK_QUEUES_CHANGED_EVENT` (quien cierra un
+ * pendiente o revisa una anamnesis lo emite).
+ *
+ * DX-298 (FE-073): cambiar de pantalla NO relee. Solo se vuelve a pedir si la
+ * última lectura buena no cubre lo que hace falta ahora (otro rol, otra sede,
+ * o hacen falta todas las listas y se leyeron solo las del menú) o ya tiene un
+ * minuto: ir de Inicio a la Agenda y volver no repite la petición.
  *
  * Contadores del menú: un fallo deja el último valor (es un contador; cada
  * lista tiene su propio estado de error en su pantalla). «Mi día»: un fallo
@@ -96,14 +102,21 @@ export function WorkQueuesProvider({
   }, []);
 
   const requestKey = `${role ?? ''}|${scope}|${wantFull ? 'full' : menuKeys.join(',')}|${reloadKey}`;
+  // La última lectura buena: qué cubrió y cuándo (DX-298).
+  const lastRead = useRef<{ at: number; base: string; full: boolean; reloadKey: number } | null>(null);
 
   useEffect(() => {
     if (!token || !role || (!wantFull && menuKeys.length === 0)) return;
     let cancelled = false;
-    const load = () =>
-      getWorkQueuesSummary(token, wantFull ? undefined : menuKeys)
+    const base = `${role}|${scope}|${menuKeys.join(',')}`;
+    const age = () => (lastRead.current ? Date.now() - lastRead.current.at : Infinity);
+    let inFlight = false;
+    const load = () => {
+      inFlight = true;
+      return getWorkQueuesSummary(token, wantFull ? undefined : menuKeys)
         .then((summary) => {
           if (cancelled) return;
+          lastRead.current = { at: Date.now(), base, full: wantFull, reloadKey };
           setFailedKey(null);
           setSnapshot({ scope, full: wantFull, items: summary.items });
           setCounts((prev) => {
@@ -116,27 +129,47 @@ export function WorkQueuesProvider({
         })
         .catch(() => {
           if (!cancelled) setFailedKey(requestKey);
+        })
+        .finally(() => {
+          inFlight = false;
         });
-    void load();
-    // DX-487: con la pestaña oculta no se sondea; al volver se relee al momento.
-    const timer = setInterval(() => {
+    };
+    // DX-298: la lectura vigente sirve si es del mismo rol, sede y listas
+    // (todas cubren las del menú), del mismo Reintentar y de hace menos de un minuto.
+    const last = lastRead.current;
+    const covered =
+      last !== null && last.base === base && last.reloadKey === reloadKey && (last.full || !wantFull) && age() < POLL_MS;
+    // DX-487: con la pestaña oculta no se sondea.
+    const tick = () => {
       if (document.visibilityState === 'visible') void load();
-    }, POLL_MS);
+    };
+    let timer: ReturnType<typeof setInterval> | undefined;
+    // Sin lectura nueva, el sondeo sigue el compás de la anterior.
+    const first = setTimeout(
+      () => {
+        tick();
+        timer = setInterval(tick, POLL_MS);
+      },
+      covered ? POLL_MS - age() : POLL_MS,
+    );
+    if (!covered) void load();
     const onChanged = () => void load();
+    // Al volver a la pestaña, solo si lo que se ve tiene un minuto o más.
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void load();
+      if (document.visibilityState === 'visible' && !inFlight && age() >= POLL_MS) void load();
     };
     window.addEventListener(WORK_QUEUES_CHANGED_EVENT, onChanged);
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      clearTimeout(first);
+      if (timer !== undefined) clearInterval(timer);
       window.removeEventListener(WORK_QUEUES_CHANGED_EVENT, onChanged);
       document.removeEventListener('visibilitychange', onVisible);
     };
-    // `requestKey` resume rol, sede, listas y reintento; `pathname` relee al navegar.
+    // `requestKey` resume rol, sede, listas y reintento. Sin `pathname`: navegar no relee (DX-298).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, requestKey, pathname]);
+  }, [token, requestKey]);
 
   const value = useMemo<Ctx>(() => {
     const current = snapshot && snapshot.full && snapshot.scope === scope ? snapshot : null;
