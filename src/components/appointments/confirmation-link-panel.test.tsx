@@ -3,10 +3,6 @@ import { ConfirmationLinkPanel } from './confirmation-link-panel';
 import { createConfirmationLink } from '../../lib/appointments/confirmations-api';
 import { ApiError } from '../../lib/api/client';
 import type { Appointment } from '../../lib/appointments/appointments-api';
-import { testAgendaClock } from '@/lib/test/sede-clock';
-
-/** Reloj de la sede de pruebas (UTC, 24 h): estas pruebas no tratan del reloj. */
-const CLOCK = testAgendaClock();
 
 jest.mock('../../lib/appointments/confirmations-api', () => ({
   createConfirmationLink: jest.fn(),
@@ -45,11 +41,17 @@ function appointment(overrides: Partial<Appointment> = {}): Appointment {
   };
 }
 
-function link(whatsappPhone: string | null = '584145550101') {
+/** DX-565: el texto de wa.me lo compone la API (plantilla de la clínica o el de siempre). */
+const WA_TEXT =
+  'Hola Ana, te recordamos tu cita del martes, 20 de octubre a las 14:00 con Dra. Pérez en Sede Norte. ' +
+  'Confírmala, cancélala o pide que te llamemos aquí: http://demo.localhost:3001/confirmar/tok_123';
+
+function link(whatsappPhone: string | null = '584145550101', whatsappText: string | null = WA_TEXT) {
   return {
     url: 'http://demo.localhost:3001/confirmar/tok_123',
     expiresAt: FUTURE.toISOString(),
     whatsappPhone,
+    whatsappText,
     appointment: {
       patientFirstName: 'Ana',
       start: '2026-10-20T14:00:00.000Z',
@@ -74,7 +76,7 @@ describe('ConfirmationLinkPanel', () => {
     create.mockResolvedValueOnce(link());
     const onLinkCreated = jest.fn();
 
-    render(<ConfirmationLinkPanel clock={CLOCK} token="jwt" appointment={appointment()} onLinkCreated={onLinkCreated} />);
+    render(<ConfirmationLinkPanel token="jwt" appointment={appointment()} onLinkCreated={onLinkCreated} />);
     fireEvent.click(screen.getByRole('button', { name: 'Enviar confirmación' }));
 
     await waitFor(() => expect(create).toHaveBeenCalledWith('jwt', 'appt-1'));
@@ -86,12 +88,8 @@ describe('ConfirmationLinkPanel', () => {
     const wa = screen.getByRole('link', { name: /abrir whatsapp/i });
     const href = wa.getAttribute('href') ?? '';
     expect(href.startsWith('https://wa.me/584145550101?text=')).toBe(true);
-    const text = decodeURIComponent(href.split('?text=')[1]);
-    expect(text).toContain('Hola Ana');
-    expect(text).toContain('martes, 20 de octubre a las 14:00');
-    expect(text).toContain('Dra. Pérez');
-    expect(text).toContain('Sede Norte');
-    expect(text).toContain('http://demo.localhost:3001/confirmar/tok_123');
+    // El texto de la API, tal cual: la web ya no lo compone.
+    expect(href).toBe(`https://wa.me/584145550101?text=${encodeURIComponent(WA_TEXT)}`);
     expect(wa).toHaveAttribute('target', '_blank');
     expect(wa).toHaveAttribute('rel', expect.stringContaining('noopener'));
 
@@ -103,42 +101,39 @@ describe('ConfirmationLinkPanel', () => {
   });
 
   it('DX-290: con el enlace de anamnesis, el mensaje lo lleva y el panel lo avisa', async () => {
+    const withAnamnesis = `${WA_TEXT} Antes de la cita, responde el cuestionario de salud: http://demo.localhost:3001/anamnesis/anam_tok`;
     create.mockResolvedValueOnce({
-      ...link(),
+      ...link('584145550101', withAnamnesis),
       anamnesisUrl: 'http://demo.localhost:3001/anamnesis/anam_tok',
       anamnesisPending: false,
     });
-    render(<ConfirmationLinkPanel clock={CLOCK} token="jwt" appointment={appointment()} />);
+    render(<ConfirmationLinkPanel token="jwt" appointment={appointment()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Enviar confirmación' }));
     const wa = await screen.findByRole('link', { name: /Abrir WhatsApp/ });
     const text = decodeURIComponent((wa.getAttribute('href') ?? '').split('?text=')[1]);
-    expect(text).toContain('Antes de la cita, responde el cuestionario de salud: http://demo.localhost:3001/anamnesis/anam_tok');
+    expect(text).toBe(withAnamnesis);
     expect(screen.getByTestId('confirmation-anamnesis-note')).toHaveTextContent('cuestionario de salud');
   });
 
-  it('DX-290: con un enlace vivo de antes, el mensaje lo recuerda sin otro enlace', async () => {
+  it('DX-290: con un enlace vivo de antes, el panel avisa de que no se envía otro', async () => {
     create.mockResolvedValueOnce({ ...link(), anamnesisUrl: null, anamnesisPending: true });
-    render(<ConfirmationLinkPanel clock={CLOCK} token="jwt" appointment={appointment()} />);
+    render(<ConfirmationLinkPanel token="jwt" appointment={appointment()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Enviar confirmación' }));
-    const wa = await screen.findByRole('link', { name: /Abrir WhatsApp/ });
-    const text = decodeURIComponent((wa.getAttribute('href') ?? '').split('?text=')[1]);
-    expect(text).toContain('usa el enlace que te enviamos');
-    expect(text).not.toContain('/anamnesis/');
+    expect(await screen.findByRole('link', { name: /Abrir WhatsApp/ })).toBeInTheDocument();
     expect(screen.getByTestId('confirmation-anamnesis-note')).toHaveTextContent('no se envía otro');
   });
 
-  it('DX-290: sin enlace de anamnesis, ni aviso ni texto en el mensaje', async () => {
+  it('DX-290: sin enlace de anamnesis, sin aviso', async () => {
     create.mockResolvedValueOnce({ ...link(), anamnesisUrl: null, anamnesisPending: false });
-    render(<ConfirmationLinkPanel clock={CLOCK} token="jwt" appointment={appointment()} />);
+    render(<ConfirmationLinkPanel token="jwt" appointment={appointment()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Enviar confirmación' }));
-    const wa = await screen.findByRole('link', { name: /Abrir WhatsApp/ });
-    expect(decodeURIComponent(wa.getAttribute('href') ?? '')).not.toContain('cuestionario');
+    expect(await screen.findByRole('link', { name: /Abrir WhatsApp/ })).toBeInTheDocument();
     expect(screen.queryByTestId('confirmation-anamnesis-note')).not.toBeInTheDocument();
   });
 
   it('sin teléfono utilizable: "Abrir WhatsApp" deshabilitado con la explicación', async () => {
     create.mockResolvedValueOnce(link(null));
-    render(<ConfirmationLinkPanel clock={CLOCK} token="jwt" appointment={appointment()} />);
+    render(<ConfirmationLinkPanel token="jwt" appointment={appointment()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Enviar confirmación' }));
 
     const wa = await screen.findByRole('button', { name: /abrir whatsapp/i });
@@ -152,10 +147,22 @@ describe('ConfirmationLinkPanel', () => {
     expect(screen.getByRole('button', { name: 'Copiar enlace' })).toBeEnabled();
   });
 
+  it('DX-565: sin texto de la API (sede sin reloj): "Abrir WhatsApp" deshabilitado y copiar el enlace', async () => {
+    create.mockResolvedValueOnce(link('584145550101', null));
+    render(<ConfirmationLinkPanel token="jwt" appointment={appointment()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar confirmación' }));
+
+    const wa = await screen.findByRole('button', { name: /abrir whatsapp/i });
+    expect(wa).toBeDisabled();
+    expect(screen.getByText(/el mensaje no puede decir la hora de la cita/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /abrir whatsapp/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copiar enlace' })).toBeEnabled();
+  });
+
   it('si el portapapeles no está disponible, lo dice y deja el enlace seleccionado', async () => {
     create.mockResolvedValueOnce(link());
     writeText.mockRejectedValueOnce(new Error('denied'));
-    render(<ConfirmationLinkPanel clock={CLOCK} token="jwt" appointment={appointment()} />);
+    render(<ConfirmationLinkPanel token="jwt" appointment={appointment()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Enviar confirmación' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Copiar enlace' }));
     expect(await screen.findByText(/cópialo a mano/i)).toBeInTheDocument();
@@ -163,7 +170,7 @@ describe('ConfirmationLinkPanel', () => {
 
   it('error al generar: mensaje junto al botón, que sigue disponible', async () => {
     create.mockRejectedValueOnce(new ApiError(409, 'Solo se puede pedir confirmación de una cita agendada o confirmada'));
-    render(<ConfirmationLinkPanel clock={CLOCK} token="jwt" appointment={appointment()} />);
+    render(<ConfirmationLinkPanel token="jwt" appointment={appointment()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Enviar confirmación' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/solo se puede pedir confirmación/i);
     expect(screen.getByRole('button', { name: 'Enviar confirmación' })).toBeEnabled();
@@ -173,14 +180,14 @@ describe('ConfirmationLinkPanel', () => {
     ['CANCELLED', /cancelada/i],
     ['COMPLETED', /completada/i],
   ] as const)('cita %s: botón deshabilitado con la razón', (status, reason) => {
-    render(<ConfirmationLinkPanel clock={CLOCK} token="jwt" appointment={appointment({ status })} />);
+    render(<ConfirmationLinkPanel token="jwt" appointment={appointment({ status })} />);
     expect(screen.getByRole('button', { name: 'Enviar confirmación' })).toBeDisabled();
     expect(screen.getByText(reason)).toBeInTheDocument();
   });
 
   it('cita que ya empezó: deshabilitado', () => {
     render(
-      <ConfirmationLinkPanel clock={CLOCK}
+      <ConfirmationLinkPanel
         token="jwt"
         appointment={appointment({ start: new Date(Date.now() - 60_000).toISOString() })}
       />,
@@ -191,7 +198,7 @@ describe('ConfirmationLinkPanel', () => {
 
   it('muestra el estado actual: confirmación pendiente / pide llamada', () => {
     const { rerender } = render(
-      <ConfirmationLinkPanel clock={CLOCK}
+      <ConfirmationLinkPanel
         token="jwt"
         appointment={appointment({ confirmationSentAt: '2026-10-10T00:00:00.000Z' })}
       />,
@@ -200,7 +207,7 @@ describe('ConfirmationLinkPanel', () => {
     expect(screen.getByRole('button', { name: 'Reenviar confirmación' })).toBeEnabled();
 
     rerender(
-      <ConfirmationLinkPanel clock={CLOCK}
+      <ConfirmationLinkPanel
         token="jwt"
         appointment={appointment({ callbackRequestedAt: '2026-10-10T00:00:00.000Z' })}
       />,

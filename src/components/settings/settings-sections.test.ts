@@ -30,10 +30,10 @@ describe('Índice de Ajustes (DX-282)', () => {
     ]);
   });
 
-  it('ADMIN ve las 44 pantallas de ajustes (Mi perfil incluido), cada una una sola vez', () => {
+  it('ADMIN ve las 46 pantallas de ajustes (Mi perfil incluido), cada una una sola vez', () => {
     const hrefs = hrefsFor('ADMIN');
-    expect(hrefs).toHaveLength(44);
-    expect(new Set(hrefs).size).toBe(44);
+    expect(hrefs).toHaveLength(46);
+    expect(new Set(hrefs).size).toBe(46);
   });
 
   it('la entrada de Historia clínica dice también el plazo de conservación (DX-330)', () => {
@@ -151,6 +151,17 @@ describe('Resumen semanal (DX-568)', () => {
     expect(clinic?.entries.at(-1)).toMatchObject({ href: '/settings/resumen-semanal', label: 'Resumen semanal' });
     for (const role of ['RECEPTION', 'DENTIST', 'ASSISTANT', null] as const) {
       expect(hrefsFor(role)).not.toContain('/settings/resumen-semanal');
+    }
+  });
+});
+
+describe('Mensajes (DX-565)', () => {
+  it('solo ADMIN la ve, en «Clínica y sedes», justo tras «Idiomas de los pacientes»', () => {
+    const clinic = visibleSettingsSections('ADMIN').find((section) => section.id === 'clinica');
+    const labels = clinic?.entries.map((entry) => entry.label) ?? [];
+    expect(labels.indexOf('Mensajes')).toBe(labels.indexOf('Idiomas de los pacientes') + 1);
+    for (const role of ['RECEPTION', 'DENTIST', 'ASSISTANT', null] as const) {
+      expect(hrefsFor(role)).not.toContain('/settings/mensajes');
     }
   });
 });

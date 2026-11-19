@@ -505,3 +505,39 @@ describe("DX-448: ajustes de la oferta de hueco", () => {
     );
   });
 });
+
+describe("DX-172: «¿Cómo nos conoció?» en la auditoría", () => {
+  it("la captación de un paciente: la fuente por su nombre, sin ids; el referente y el profesional, solo que cambiaron", () => {
+    const items = configChangeItems({
+      reason: "PATIENT_ACQUISITION_CHANGED",
+      changedFields: ["referredByName", "referredByPatientId", "source", "sourceId"],
+      configChange: {
+        before: { source: "Recomendación de paciente", sourceId: "s-1", referredByPatientId: "p-9" },
+        after: { source: "Profesional externo", sourceId: "s-2", referredByPatientId: null },
+      },
+    });
+    expect(configChangeText(items!)).toBe(
+      "Cómo nos conoció: Recomendación de paciente → Profesional externo · Paciente que lo recomendó: cambió · Profesional que lo derivó: cambió",
+    );
+  });
+
+  it("el catálogo: alta con su tipo y desactivación", () => {
+    expect(
+      configChangeText(
+        configChangeItems({
+          reason: "PATIENT_SOURCE_CREATED",
+          configChange: { after: { name: "Valla en la avenida", kind: "CHANNEL", isActive: true } },
+        })!,
+      ),
+    ).toBe("Nombre: Valla en la avenida · Tipo: Canal · Activa: Sí");
+    expect(
+      configChangeText(
+        configChangeItems({
+          reason: "PATIENT_SOURCE_UPDATED",
+          changedFields: ["isActive"],
+          configChange: { before: { isActive: true }, after: { isActive: false } },
+        })!,
+      ),
+    ).toBe("Activa: Sí → No");
+  });
+});

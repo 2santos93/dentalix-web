@@ -1124,6 +1124,7 @@ describe('AgendaView', () => {
       anamnesisPending: false,
       expiresAt: start,
       whatsappPhone: '584145550101',
+      whatsappText: 'Hola María, te recordamos tu cita. Confírmala aquí: http://demo.localhost:3001/confirmar/tok',
       patientLanguage: null,
       preVisitInstructions: [],
       appointment: {

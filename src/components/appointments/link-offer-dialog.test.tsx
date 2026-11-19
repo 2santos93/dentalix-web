@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event';
 import { LinkOfferDialog, linkOfferCopy as copy } from './link-offer-dialog';
 import { ApiError, NetworkError } from '@/lib/api/api-error';
 import { createLinkOffer, type OpeningCandidate, type OpeningSlot } from '@/lib/appointments/opening-candidates';
-import { testAgendaClock } from '@/lib/test/sede-clock';
 
 jest.mock('../../lib/appointments/opening-candidates', () => ({
   ...jest.requireActual('../../lib/appointments/opening-candidates'),
@@ -51,8 +50,15 @@ const ana = candidate({ patientId: 'p-ana' });
 const carla = candidate({ patientId: 'p-carla', patientFirstName: 'Carla', patientLastName: 'Paz' });
 const dario = candidate({ patientId: 'p-dario', patientFirstName: 'Darío', patientLastName: 'Sol' });
 
-const offer = (patientId: string, url: string | null = null, whatsappPhone: string | null = null) =>
-  ({ id: `o-${patientId}`, patientId, url, whatsappPhone }) as Awaited<ReturnType<typeof createLinkOffer>>;
+const offer = (
+  patientId: string,
+  url: string | null = null,
+  whatsappPhone: string | null = null,
+  whatsappText: string | null = null,
+) => ({ id: `o-${patientId}`, patientId, url, whatsappPhone, whatsappText }) as Awaited<ReturnType<typeof createLinkOffer>>;
+
+/** DX-565: el texto de wa.me de la oferta lo compone la API. */
+const WA_TEXT = 'Hola Ana, te escribimos de Sede Centro. Acéptalo aquí: https://demo.dentalix.app/hueco/aaa';
 
 function renderDialog(candidates: OpeningCandidate[]) {
   const onSent = jest.fn();
@@ -62,9 +68,6 @@ function renderDialog(candidates: OpeningCandidate[]) {
       onOpenChange={jest.fn()}
       token="tok"
       slot={SLOT}
-      clock={testAgendaClock()}
-      providerName="Dr. X"
-      locationName="Sede Centro"
       candidates={candidates}
       onSent={onSent}
     />,
@@ -143,11 +146,29 @@ describe('LinkOfferDialog: resultados anunciados y reintento (DX-486, FE-102)', 
   });
 
   it('«Abrir WhatsApp» mide al menos 44 px (min-h-11), no solo en los botones del modal', async () => {
-    mockedLinkOffer.mockResolvedValueOnce(offer('p-ana', 'https://demo.dentalix.app/hueco/aaa', '584141234567'));
+    mockedLinkOffer.mockResolvedValueOnce(offer('p-ana', 'https://demo.dentalix.app/hueco/aaa', '584141234567', WA_TEXT));
     const { dialog } = renderDialog([ana]);
     await userEvent.click(within(dialog).getByRole('radio', { name: /WhatsApp/ }));
     await userEvent.click(within(dialog).getByRole('button', { name: copy.submit }));
     const link = await within(dialog).findByRole('link', { name: new RegExp(`^${copy.openWhatsAppFor('Ana Ríos')}`) });
     expect(link).toHaveClass('min-h-11');
+  });
+
+  it('DX-565: el enlace de WhatsApp lleva el texto de la API tal cual', async () => {
+    mockedLinkOffer.mockResolvedValueOnce(offer('p-ana', 'https://demo.dentalix.app/hueco/aaa', '584141234567', WA_TEXT));
+    const { dialog } = renderDialog([ana]);
+    await userEvent.click(within(dialog).getByRole('radio', { name: /WhatsApp/ }));
+    await userEvent.click(within(dialog).getByRole('button', { name: copy.submit }));
+    const link = await within(dialog).findByRole('link', { name: new RegExp(`^${copy.openWhatsAppFor('Ana Ríos')}`) });
+    expect(link).toHaveAttribute('href', `https://wa.me/584141234567?text=${encodeURIComponent(WA_TEXT)}`);
+  });
+
+  it('DX-565: sin texto de la API (sede sin reloj), sin enlace de WhatsApp', async () => {
+    mockedLinkOffer.mockResolvedValueOnce(offer('p-ana', 'https://demo.dentalix.app/hueco/aaa', '584141234567', null));
+    const { dialog } = renderDialog([ana]);
+    await userEvent.click(within(dialog).getByRole('radio', { name: /WhatsApp/ }));
+    await userEvent.click(within(dialog).getByRole('button', { name: copy.submit }));
+    await waitFor(() => expect(within(dialog).getByRole('status')).toHaveTextContent(copy.summary(1, 1)));
+    expect(within(dialog).queryByRole('link', { name: new RegExp(copy.openWhatsAppFor('Ana Ríos')) })).not.toBeInTheDocument();
   });
 });

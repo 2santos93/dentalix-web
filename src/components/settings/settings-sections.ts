@@ -40,11 +40,13 @@ import {
   UserPlus,
   Languages,
   MailCheck,
+  MessageSquareText,
   UserRound,
   Wallet,
   Smile,
   Factory,
   Percent,
+  Megaphone,
 } from 'lucide-react';
 import { canManageOrthoSettings } from '@/lib/ortho/ortho-roles';
 import { canManageDentalLabs } from '@/lib/lab-orders/lab-orders-roles';
@@ -61,6 +63,7 @@ import { canManageSlotOfferSettings } from '@/lib/appointments/slot-offer-settin
 import { canManageOnlineBooking } from '@/lib/online-booking/online-booking-api';
 import { canManageChairs } from '@/lib/chairs/chairs-api';
 import { canManageLeadSettings } from '@/lib/leads/leads-api';
+import { canManagePatientSources } from '@/lib/patients/patient-sources-api';
 import { canManageEquipment } from '@/lib/equipment/equipment-api';
 import { canManagePayers } from '@/lib/payers/payers-api';
 import { canManagePriceLists } from '@/lib/price-lists/price-lists-api';
@@ -84,6 +87,7 @@ import { canReadSupportAccesses } from '@/lib/support-accesses/support-accesses-
 import { canReadAuditLog } from '@/lib/audit/audit-api';
 import { canManageClinicSettings } from '@/lib/clinic/clinic-settings-api';
 import { canManageWeeklyDigest } from '@/lib/clinic/weekly-digest-api';
+import { canManageMessageTemplates } from '@/lib/message-templates/message-templates-api';
 import { canManageSecurityPolicy } from '@/lib/auth/mfa-api';
 
 export interface SettingsEntry {
@@ -187,6 +191,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         icon: Languages,
         visible: canManagePatientLanguages,
       },
+      // DX-565: los textos de los mensajes al paciente (email y WhatsApp).
+      {
+        href: '/settings/mensajes',
+        label: 'Mensajes',
+        description: 'Los textos de los emails y WhatsApp que reciben los pacientes, en cada idioma.',
+        icon: MessageSquareText,
+        visible: canManageMessageTemplates,
+      },
       // DX-568: el email semanal con las cifras de cada sede.
       {
         href: '/settings/resumen-semanal',
@@ -255,6 +267,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Motivos de interés y de pérdida de los prospectos, y cuánto se conservan los perdidos.',
         icon: UserPlus,
         visible: canManageLeadSettings,
+      },
+      // DX-172: las opciones de «¿Cómo nos conoció?».
+      {
+        href: '/settings/origen-de-pacientes',
+        label: 'Origen de pacientes',
+        description: 'Las opciones de «¿Cómo nos conoció?» al dar de alta un paciente: canales, recomendaciones y profesionales externos.',
+        icon: Megaphone,
+        visible: canManagePatientSources,
       },
       // DX-026.
       {

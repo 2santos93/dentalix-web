@@ -40,6 +40,12 @@ const ScheduledProductionView = dynamic(
   { ssr: false, loading: () => <SectionSkeleton /> },
 );
 
+// DX-172: «Captación», igual.
+const AcquisitionView = dynamic(
+  () => import('@/components/reports/acquisition-view').then((m) => m.AcquisitionView),
+  { ssr: false, loading: () => <SectionSkeleton /> },
+);
+
 // «Reportes» (DX-014). Mismo guard de sesión que la Caja; la pestaña va en
 // `?tab=` (la primera del rol, sin parámetro). Cada rol ve las pestañas que
 // su API le deja abrir (DX-423 y DX-558: el odontólogo, «Producción por
@@ -110,6 +116,8 @@ function ReportesRoute() {
         token={accessToken}
         ownByRole={role === 'DENTIST' && !canViewFinancialReports(role, permissions)}
       />
+    ) : tab === 'captacion' ? (
+      <AcquisitionView token={accessToken} isAdmin={role === 'ADMIN'} />
     ) : tab === 'sin-imputar' ? (
       <UnallocatedPaymentsView token={accessToken} />
     ) : (

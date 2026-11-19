@@ -2332,7 +2332,6 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                   key={liveDetailAppointment.id}
                   token={token}
                   appointment={liveDetailAppointment}
-                  clock={clock.of(liveDetailAppointment.locationId)}
                   onLinkCreated={() => void refreshAppointmentsInPlace()}
                 />
                 {/* DX-099: «Enviar anamnesis» antes de la cita (caduca a su

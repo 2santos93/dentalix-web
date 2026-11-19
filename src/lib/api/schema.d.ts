@@ -4020,6 +4020,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/message-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Mensajes al paciente editables: canales, variables, textos por defecto y los de la clínica (DX-565) */
+        get: operations["MessageTemplatesController_index"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-templates/{key}/{channel}/{language}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Guarda el texto de un mensaje en un idioma (DX-565)
+         * @description Crea o cambia la fila y lo audita en la misma transacción (CLINIC_SETTINGS, MESSAGE_TEMPLATE_UPDATED: CREATE o UPDATE con el asunto antes/después y del cuerpo su longitud y huella; el cuerpo, oculto). Sin cambios, no hay evento. Afecta a los envíos siguientes, nunca a los ya encolados.
+         */
+        put: operations["MessageTemplatesController_update"];
+        post?: never;
+        /**
+         * Restablece el texto por defecto de un mensaje en un idioma (DX-565)
+         * @description Borra el texto guardado y lo audita (CLINIC_SETTINGS, MESSAGE_TEMPLATE_RESET, DELETE con el antes). Sin texto guardado no hace nada. Vale también para un idioma que la clínica ya retiró.
+         */
+        delete: operations["MessageTemplatesController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-templates/{key}/{channel}/{language}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vista previa de un borrador con datos de ejemplo (DX-565)
+         * @description No guarda ni envía nada. Email: asunto, HTML y texto con la marca de la clínica. WhatsApp: el texto prellenado.
+         */
+        post: operations["MessageTemplatesController_render"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-templates/{key}/{channel}/{language}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Envía a tu correo una prueba del email con datos de ejemplo (DX-565)
+         * @description El borrador (o, sin `body`, lo guardado o el texto por defecto), con «[Prueba]» en el asunto y sin enlace de baja, solo a tu correo confirmado. Una cada 5 minutos por persona; gasta del tope diario de la clínica. Queda en la auditoría (VIEW de CLINIC_SETTINGS, MESSAGE_TEMPLATE_TEST_SENT).
+         */
+        post: operations["MessageTemplatesController_test"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/booking": {
         parameters: {
             query?: never;
@@ -6344,6 +6425,46 @@ export interface paths {
          * @description Mismos filtros y alcance que la producción agendada: las citas que cuentan (ni canceladas ni inasistencias) sin ningún procedimiento de un presupuesto ligado, con paciente (`patientArchived`: archivado, sin enlace a su ficha), tipo, profesional y sede, por inicio (asc; `page`/`pageSize`, 25 por defecto, máx. 100). Lleva el nombre del paciente: auditado (VIEW).
          */
         get: operations["ScheduledProductionController_unlinked"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/acquisition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Captación: pacientes nuevos y lo cobrado por fuente
+         * @description Pacientes dados de alta en el período por «¿Cómo nos conoció?» (DX-172) y lo cobrado a esos pacientes en el período: abonos no anulados, por moneda, sin convertir. La sede de captación de un paciente es la de su PRIMERA cita (la ficha es de la clínica); sin citas, no es de ninguna y solo cuenta en «Todas las sedes» para quien las ve todas. Día civil: el de esa sede (sin sede, el de la principal); el de un abono, el de su sede. Filas: las fuentes activas (también con 0), las desactivadas que trajeron pacientes y «Sin dato»; y los 10 pacientes que más pacientes nuevos recomendaron. Solo las sedes que ve quien consulta (DX-089).
+         */
+        get: operations["AcquisitionController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/acquisition.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Captación en CSV (mismos filtros; solo ADMIN)
+         * @description Pacientes dados de alta en el período por «¿Cómo nos conoció?» (DX-172) y lo cobrado a esos pacientes en el período: abonos no anulados, por moneda, sin convertir. La sede de captación de un paciente es la de su PRIMERA cita (la ficha es de la clínica); sin citas, no es de ninguna y solo cuenta en «Todas las sedes» para quien las ve todas. Día civil: el de esa sede (sin sede, el de la principal); el de un abono, el de su sede. Filas: las fuentes activas (también con 0), las desactivadas que trajeron pacientes y «Sin dato»; y los 10 pacientes que más pacientes nuevos recomendaron. Solo las sedes que ve quien consulta (DX-089). Una fila por fuente y el total, con lo cobrado en una columna por moneda; cabecera con período y sede. Sin datos de pacientes. UTF-8 con BOM; celdas protegidas contra fórmulas. Auditado (EXPORT).
+         */
+        get: operations["AcquisitionController_csv"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9312,6 +9433,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patient-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fuentes de captación de la clínica («¿Cómo nos conoció?»)
+         * @description Las activas, o todas con `includeInactive=true`. Una clínica sin ninguna recibe las de por defecto (Recomendación de paciente, Instagram, Facebook, Google, Marketplace de reservas, Convenio/empresa, Profesional externo, Paso por la sede, Otro).
+         */
+        get: operations["PatientSourcesController_list"];
+        put?: never;
+        /** Crear una fuente propia (solo ADMIN) */
+        post: operations["PatientSourcesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patient-sources/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Renombrar o (des)activar una fuente (solo ADMIN)
+         * @description El tipo no cambia. Desactivarla la quita del alta; los pacientes que la tienen y el informe la conservan.
+         */
+        patch: operations["PatientSourcesController_update"];
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/acquisition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * «¿Cómo nos conoció?» del paciente y a quién ha recomendado
+         * @description DX-172. La fuente, el paciente que lo recomendó o el profesional externo que lo derivó, y cuántos pacientes (vivos) ha recomendado él, con los 10 más recientes. 404 como `GET /patients/:id`.
+         */
+        get: operations["PatientAcquisitionController_acquisition"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/commissions/rules": {
         parameters: {
             query?: never;
@@ -11867,6 +12049,18 @@ export interface components {
             emergencyContactPhone?: string;
             /** @description Anamnesis inicial (versión 1). Solo roles clínicos (DENTIST, ASSISTANT, ADMIN); con RECEPTION la petición se rechaza con 403. */
             medicalHistory?: components["schemas"]["SaveMedicalHistoryDto"];
+            /**
+             * Format: uuid
+             * @description DX-172: fuente del catálogo de la clínica (`GET /patient-sources`). Opcional; al asignarla tiene que estar activa. `null` la vacía (y con ella el referente).
+             */
+            sourceId?: string | null;
+            /**
+             * Format: uuid
+             * @description DX-172: el paciente de la clínica que lo recomendó. Solo con una fuente de tipo PATIENT; nunca el propio paciente. De otra clínica: 400.
+             */
+            referredByPatientId?: string | null;
+            /** @description DX-172: nombre del profesional externo que lo derivó (1–120). Solo con una fuente de tipo EXTERNAL_PROFESSIONAL. */
+            referredByName?: string | null;
         };
         /**
          * @description Retención extendida de la HC: NONE = el plazo de la clínica desde la última atención, DOUBLE = el doble de ese plazo, PERMANENT = nunca se libera. Solo ADMIN la cambia.
@@ -12001,6 +12195,18 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /**
+             * Format: uuid
+             * @description DX-172: «¿Cómo nos conoció?» (fuente del catálogo); null = sin dato. El nombre y el referente, en `GET /patients/:id/acquisition`.
+             */
+            sourceId: string | null;
+            /**
+             * Format: uuid
+             * @description DX-172: el paciente que lo recomendó.
+             */
+            referredByPatientId: string | null;
+            /** @description DX-172: el profesional externo que lo derivó. */
+            referredByName: string | null;
         };
         /**
          * @description NONE: sin coberturas vivas. EXPIRED: la vigencia terminó antes de hoy. NOT_STARTED: empieza después de hoy. ACTIVE: el resto.
@@ -12137,6 +12343,18 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /**
+             * Format: uuid
+             * @description DX-172: «¿Cómo nos conoció?» (fuente del catálogo); null = sin dato. El nombre y el referente, en `GET /patients/:id/acquisition`.
+             */
+            sourceId: string | null;
+            /**
+             * Format: uuid
+             * @description DX-172: el paciente que lo recomendó.
+             */
+            referredByPatientId: string | null;
+            /** @description DX-172: el profesional externo que lo derivó. */
+            referredByName: string | null;
             coverage: components["schemas"]["CoverageSummaryDto"];
         };
         ListPatientsResponseDto: {
@@ -12433,6 +12651,18 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /**
+             * Format: uuid
+             * @description DX-172: «¿Cómo nos conoció?» (fuente del catálogo); null = sin dato. El nombre y el referente, en `GET /patients/:id/acquisition`.
+             */
+            sourceId: string | null;
+            /**
+             * Format: uuid
+             * @description DX-172: el paciente que lo recomendó.
+             */
+            referredByPatientId: string | null;
+            /** @description DX-172: el profesional externo que lo derivó. */
+            referredByName: string | null;
             balance: components["schemas"]["OverdueBalanceDto"];
             coverage: components["schemas"]["CoverageSummaryDto"];
             agreement: components["schemas"]["AgreementSummaryDto"];
@@ -12469,6 +12699,18 @@ export interface components {
             emergencyContactName?: string | null;
             emergencyContactRelationship?: string | null;
             emergencyContactPhone?: string | null;
+            /**
+             * Format: uuid
+             * @description DX-172: fuente del catálogo de la clínica (`GET /patient-sources`). Opcional; al asignarla tiene que estar activa. `null` la vacía (y con ella el referente).
+             */
+            sourceId?: string | null;
+            /**
+             * Format: uuid
+             * @description DX-172: el paciente de la clínica que lo recomendó. Solo con una fuente de tipo PATIENT; nunca el propio paciente. De otra clínica: 400.
+             */
+            referredByPatientId?: string | null;
+            /** @description DX-172: nombre del profesional externo que lo derivó (1–120). Solo con una fuente de tipo EXTERNAL_PROFESSIONAL. */
+            referredByName?: string | null;
         };
         ClinicalRecordRetentionErrorDto: {
             /** @example 409 */
@@ -18724,6 +18966,8 @@ export interface components {
             url: string | null;
             /** @description DX-435, solo `LINK_WA_ME`: E.164 sin `+` para wa.me. */
             whatsappPhone: string | null;
+            /** @description DX-565, solo `LINK_WA_ME`: el texto prellenado de wa.me ya compuesto (la plantilla «Oferta de hueco» de la clínica por WhatsApp o el de siempre). La web lo usa tal cual: `https://wa.me/<whatsappPhone>?text=<encodeURIComponent(whatsappText)>`. null en los demás canales o si la sede no tiene zona, formato y reloj. */
+            whatsappText: string | null;
         };
         RecordWaitlistOfferOutcomeDto: {
             /** @enum {string} */
@@ -18846,6 +19090,136 @@ export interface components {
              * @example 20
              */
             minLeadMinutes: number;
+        };
+        MessageVariableDto: {
+            /**
+             * @example paciente
+             * @enum {string}
+             */
+            name: "paciente" | "clinica" | "sede" | "direccion" | "fecha" | "hora" | "profesional" | "enlace" | "caduca" | "cantidad";
+            description: string;
+            /**
+             * @description Valor de la vista previa.
+             * @example Ana
+             */
+            sample: string;
+        };
+        MessageTextDto: {
+            /** @description Asunto; null en WhatsApp. */
+            subject: string | null;
+            body: string;
+        };
+        MessageCustomDto: {
+            /** @description Asunto; null en WhatsApp. */
+            subject: string | null;
+            body: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /**
+             * @description Quién lo guardó por última vez.
+             * @example Laura Gómez
+             */
+            updatedByName: string | null;
+            /** @description Por qué este texto ya no sale y en su lugar sale el de por defecto (p. ej. el catálogo cambió); null si sale. Mismo texto que el 400 al guardar. */
+            invalid: string | null;
+        };
+        MessageLanguageDto: {
+            /**
+             * @example es
+             * @enum {string}
+             */
+            language: "es" | "en";
+            /** @description En la lista de idiomas de la clínica. false: la clínica lo retiró y solo queda restablecer su texto guardado. */
+            offered: boolean;
+            /** @description El texto por defecto (el que sale sin texto guardado). */
+            default: components["schemas"]["MessageTextDto"];
+            /** @description El texto guardado; null = «Por defecto». */
+            custom: components["schemas"]["MessageCustomDto"] | null;
+        };
+        MessageChannelDto: {
+            /** @enum {string} */
+            channel: "EMAIL" | "WHATSAPP";
+            variables: components["schemas"]["MessageVariableDto"][];
+            /** @description Variables que el texto tiene que llevar (fuera de corchetes). */
+            required: ("paciente" | "clinica" | "sede" | "direccion" | "fecha" | "hora" | "profesional" | "enlace" | "caduca" | "cantidad")[];
+            /**
+             * @description null en WhatsApp.
+             * @example 150
+             */
+            subjectMaxLength: number | null;
+            /** @example 2000 */
+            bodyMaxLength: number;
+            languages: components["schemas"]["MessageLanguageDto"][];
+        };
+        MessageDto: {
+            /** @enum {string} */
+            key: "appointment-reminder" | "appointment-confirmation" | "slot-offer" | "quote-follow-up" | "appointment-series" | "signature-request";
+            /** @example Recordatorio de cita */
+            title: string;
+            description: string;
+            /** @description Al responsable de un menor le llega siempre el texto por defecto (el editable habla de «tu cita»). */
+            guardianUsesDefault: boolean;
+            channels: components["schemas"]["MessageChannelDto"][];
+        };
+        MessageTemplatesDto: {
+            /** @description Idiomas de la clínica con texto en el catálogo (español siempre, primero). */
+            languages: ("es" | "en")[];
+            /** @description Ayuda de la sintaxis para el editor: variables, tramos opcionales, párrafos y que las llaves y los corchetes no se pueden escribir como texto. */
+            syntaxHelp: string;
+            messages: components["schemas"]["MessageDto"][];
+        };
+        MessageTemplateTextDto: {
+            /**
+             * @description Asunto (solo email, obligatorio en él; hasta 150 caracteres, una línea). En WhatsApp, ausente, null o vacío.
+             * @example Recordatorio de tu cita en {clinica}
+             */
+            subject?: string | null;
+            /**
+             * @description Texto plano con `{variable}` y tramos opcionales «[ con {profesional}]» (salen solo si sus variables tienen valor). Una línea en blanco separa párrafos. Sin HTML ni enlaces: el enlace va con `{enlace}` (WhatsApp) o en el botón (email). Hasta 2000 caracteres en email y 1000 en WhatsApp.
+             * @example Te recordamos tu cita en {clinica}.
+             *
+             *     Fecha y hora: {fecha} a las {hora} (hora de la sede)
+             */
+            body: string;
+        };
+        MessageTemplateDto: {
+            /**
+             * @example es
+             * @enum {string}
+             */
+            language: "es" | "en";
+            /** @description En la lista de idiomas de la clínica. false: la clínica lo retiró y solo queda restablecer su texto guardado. */
+            offered: boolean;
+            /** @description El texto por defecto (el que sale sin texto guardado). */
+            default: components["schemas"]["MessageTextDto"];
+            /** @description El texto guardado; null = «Por defecto». */
+            custom: components["schemas"]["MessageCustomDto"] | null;
+            /** @enum {string} */
+            key: "appointment-reminder" | "appointment-confirmation" | "slot-offer" | "quote-follow-up" | "appointment-series" | "signature-request";
+            /** @enum {string} */
+            channel: "EMAIL" | "WHATSAPP";
+        };
+        MessagePreviewDto: {
+            /** @enum {string} */
+            channel: "EMAIL" | "WHATSAPP";
+            /** @description null en WhatsApp. */
+            subject: string | null;
+            /** @description El email entero en HTML (para un iframe aislado); null en WhatsApp. */
+            html: string | null;
+            /** @description Email: la versión de texto plano. WhatsApp: el mensaje tal como se prellena. */
+            text: string;
+        };
+        MessageTemplateTestDto: {
+            subject?: string | null;
+            /** @description El borrador a probar. Sin él, se prueba el texto guardado (o el de por defecto si no hay). */
+            body?: string | null;
+        };
+        MessageTestResultDto: {
+            /**
+             * @description Enmascarado.
+             * @example ma***@clinica.com
+             */
+            sentTo: string;
         };
         /** @enum {string} */
         OnlineBookingMode: "REQUEST" | "DIRECT";
@@ -19233,6 +19607,8 @@ export interface components {
             expiresAt: string;
             /** @description Teléfono del paciente en E.164 sin "+", listo para https://wa.me/<número>. null si no hay uno utilizable. */
             whatsappPhone: string | null;
+            /** @description DX-565: el mensaje prellenado de WhatsApp ya compuesto, en el idioma del paciente (la plantilla «Confirmación de cita por WhatsApp» de la clínica o el de siempre) con el cuestionario de salud y «Antes de tu cita» detrás; hasta 1500 caracteres. La web lo usa tal cual: `https://wa.me/<whatsappPhone>?text=<encodeURIComponent(whatsappText)>`. null si la sede de la cita no tiene zona, formato y reloj. */
+            whatsappText: string | null;
             appointment: components["schemas"]["PublicConfirmationAppointmentDto"];
             /** @description DX-290: enlace de un solo uso al cuestionario de salud, para el mismo mensaje, si la sede envía la anamnesis con el recordatorio y el paciente es nuevo o su anamnesis caduca el día de la cita. Contiene el token en claro: se entrega solo aquí. null si no toca. */
             anamnesisUrl: string | null;
@@ -25127,6 +25503,80 @@ export interface components {
             page: number;
             pageSize: number;
         };
+        AcquisitionPeriodDto: {
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+        };
+        AcquisitionFiltersDto: {
+            /** Format: uuid */
+            locationId: string | null;
+            locationName: string | null;
+        };
+        AcquisitionLocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            isActive: boolean;
+        };
+        AcquisitionOptionsDto: {
+            locations: components["schemas"]["AcquisitionLocationDto"][];
+        };
+        /** @enum {string} */
+        PatientSourceKind: "CHANNEL" | "PATIENT" | "EXTERNAL_PROFESSIONAL";
+        AcquisitionAmountDto: {
+            currency: string;
+            /** @example 100000 */
+            amount: number;
+        };
+        AcquisitionRowDto: {
+            /**
+             * Format: uuid
+             * @description null = «Sin dato» (pacientes sin fuente).
+             */
+            sourceId: string | null;
+            /** @example Instagram */
+            name: string;
+            kind: components["schemas"]["PatientSourceKind"] | null;
+            /** @description Desactivada: sale si trajo pacientes en el período. */
+            isActive: boolean | null;
+            /** @description Pacientes dados de alta en el período. */
+            newPatients: number;
+            /** @description De ellos, con algún abono en el período. */
+            payingPatients: number;
+            /** @description Abonos no anulados del período, por moneda (sin convertir). */
+            collected: components["schemas"]["AcquisitionAmountDto"][];
+        };
+        AcquisitionTotalsDto: {
+            newPatients: number;
+            payingPatients: number;
+            collected: components["schemas"]["AcquisitionAmountDto"][];
+        };
+        AcquisitionReferrerDto: {
+            /** Format: uuid */
+            patientId: string;
+            fullName: string;
+            patientCode: string;
+            /** @description Pacientes nuevos del período que recomendó. */
+            referred: number;
+            /** @description Lo cobrado en el período a esos pacientes, por moneda. */
+            collected: components["schemas"]["AcquisitionAmountDto"][];
+        };
+        AcquisitionReportDto: {
+            period: components["schemas"]["AcquisitionPeriodDto"];
+            filters: components["schemas"]["AcquisitionFiltersDto"];
+            options: components["schemas"]["AcquisitionOptionsDto"];
+            /** @description Las fuentes activas (también con 0), las desactivadas que trajeron a alguien y «Sin dato». */
+            rows: components["schemas"]["AcquisitionRowDto"][];
+            totals: components["schemas"]["AcquisitionTotalsDto"];
+            /** @description Hasta 10 pacientes que más pacientes nuevos recomendaron en el período. */
+            topReferrers: components["schemas"]["AcquisitionReferrerDto"][];
+            /** @description Monedas de lo cobrado. */
+            currencies: string[];
+            /** @description Algún paciente nuevo en el período. */
+            hasActivity: boolean;
+        };
         /**
          * @description Las secciones que ve el rol: ADMIN las tres, DENTIST EVOLUTION y TREATMENT, RECEPTION OUTCOME
          * @enum {string}
@@ -30131,6 +30581,59 @@ export interface components {
              */
             attemptId: string;
             attemptsCount: number;
+        };
+        PatientSourceDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Instagram */
+            name: string;
+            /** @description CHANNEL: un canal. PATIENT: lo recomendó un paciente (el alta pide el referente). EXTERNAL_PROFESSIONAL: lo derivó un profesional externo (el alta pide su nombre). */
+            kind: components["schemas"]["PatientSourceKind"];
+            /** @description Desactivada: no se ofrece en el alta, pero los pacientes que la tienen y el informe la conservan. */
+            isActive: boolean;
+            /** @description Clave de las sembradas (PATIENT_REFERRAL, INSTAGRAM…); null en las propias. */
+            systemKey: string | null;
+            sortOrder: number;
+        };
+        CreatePatientSourceDto: {
+            name: string;
+            kind: components["schemas"]["PatientSourceKind"];
+        };
+        UpdatePatientSourceDto: {
+            name?: string;
+            isActive?: boolean;
+        };
+        PatientAcquisitionSourceDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            kind: components["schemas"]["PatientSourceKind"];
+            isActive: boolean;
+        };
+        PatientAcquisitionReferrerDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+            patientCode: string;
+        };
+        PatientAcquisitionReferralDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        PatientAcquisitionReferralsDto: {
+            /** @description Pacientes vivos que este recomendó. */
+            count: number;
+            /** @description Los más recientes (hasta 10). */
+            recent: components["schemas"]["PatientAcquisitionReferralDto"][];
+        };
+        PatientAcquisitionDto: {
+            source: components["schemas"]["PatientAcquisitionSourceDto"] | null;
+            referredByPatient: components["schemas"]["PatientAcquisitionReferrerDto"] | null;
+            referredByName: string | null;
+            referrals: components["schemas"]["PatientAcquisitionReferralsDto"];
         };
         CommissionProfessionalDto: {
             /** Format: uuid */
@@ -43382,6 +43885,234 @@ export interface operations {
             };
         };
     };
+    MessageTemplatesController_index: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageTemplatesDto"];
+                };
+            };
+            /** @description Solo un administrador puede ver y cambiar los textos de los mensajes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MessageTemplatesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: "appointment-reminder" | "appointment-confirmation" | "slot-offer" | "quote-follow-up" | "appointment-series" | "signature-request";
+                channel: "EMAIL" | "WHATSAPP";
+                language: "es" | "en";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageTemplateTextDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageTemplateDto"];
+                };
+            };
+            /** @description MESSAGE_TEMPLATE_INVALID con `field` (`subject` | `body`) y el motivo: «La variable {x} no existe.», «{x} no se puede usar en el recordatorio.», «{importe} no se puede usar en …: los mensajes al paciente no llevan importes ni datos clínicos.», «La confirmación por WhatsApp tiene que llevar {enlace}.», topes, llaves o corchetes mal cerrados, enlaces o HTML. Sin `code`: «Ese mensaje no se puede escribir en ese idioma: elige uno de la lista de idiomas de los pacientes de la clínica (Ajustes › Idiomas de los pacientes).». */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar los textos de los mensajes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ese mensaje no existe o no se envía por ese canal. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MessageTemplatesController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: "appointment-reminder" | "appointment-confirmation" | "slot-offer" | "quote-follow-up" | "appointment-series" | "signature-request";
+                channel: "EMAIL" | "WHATSAPP";
+                language: "es" | "en";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageTemplateDto"];
+                };
+            };
+            /** @description Ese mensaje no se puede escribir en ese idioma: elige uno de la lista de idiomas de los pacientes de la clínica (Ajustes › Idiomas de los pacientes). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar los textos de los mensajes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ese mensaje no existe o no se envía por ese canal. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MessageTemplatesController_render: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: "appointment-reminder" | "appointment-confirmation" | "slot-offer" | "quote-follow-up" | "appointment-series" | "signature-request";
+                channel: "EMAIL" | "WHATSAPP";
+                language: "es" | "en";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageTemplateTextDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessagePreviewDto"];
+                };
+            };
+            /** @description MESSAGE_TEMPLATE_INVALID con `field` (`subject` | `body`) y el motivo: «La variable {x} no existe.», «{x} no se puede usar en el recordatorio.», «{importe} no se puede usar en …: los mensajes al paciente no llevan importes ni datos clínicos.», «La confirmación por WhatsApp tiene que llevar {enlace}.», topes, llaves o corchetes mal cerrados, enlaces o HTML. Sin `code`: «Ese mensaje no se puede escribir en ese idioma: elige uno de la lista de idiomas de los pacientes de la clínica (Ajustes › Idiomas de los pacientes).». */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar los textos de los mensajes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ese mensaje no existe o no se envía por ese canal. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MessageTemplatesController_test: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: "appointment-reminder" | "appointment-confirmation" | "slot-offer" | "quote-follow-up" | "appointment-series" | "signature-request";
+                channel: "EMAIL" | "WHATSAPP";
+                language: "es" | "en";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageTemplateTestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageTestResultDto"];
+                };
+            };
+            /** @description MESSAGE_TEMPLATE_INVALID con `field` (`subject` | `body`) y el motivo: «La variable {x} no existe.», «{x} no se puede usar en el recordatorio.», «{importe} no se puede usar en …: los mensajes al paciente no llevan importes ni datos clínicos.», «La confirmación por WhatsApp tiene que llevar {enlace}.», topes, llaves o corchetes mal cerrados, enlaces o HTML. Sin `code`: «Ese mensaje no se puede escribir en ese idioma: elige uno de la lista de idiomas de los pacientes de la clínica (Ajustes › Idiomas de los pacientes).». WhatsApp: «La prueba solo se envía por email. Para WhatsApp, copia el texto de la vista previa.» */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar los textos de los mensajes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ese mensaje no existe o no se envía por ese canal. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description EMAIL_NOT_VERIFIED: «Confirma tu correo antes de pedir una prueba: solo se envía a correos confirmados.» */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya pediste una prueba hace menos de 5 minutos (o se alcanzó el tope de correos); `retryAfterSeconds` dice cuánto esperar. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PublicBookingController_config: {
         parameters: {
             query?: never;
@@ -49208,6 +49939,101 @@ export interface operations {
                 content?: never;
             };
             /** @description LOCATION_TIMEZONE_REQUIRED: una sede con citas o realizados no tiene zona horaria / LOCATION_REQUIRED: la clínica no tiene ninguna sede activa */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AcquisitionController_get: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de la sede de captación del paciente o de la sede del abono). Como mucho 24 meses por calendario; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo los pacientes captados en esta sede (la de su primera cita) y sus abonos en ella (403 si no es de las del usuario o no es de la clínica). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcquisitionReportDto"];
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 24 meses. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y quien tenga acceso a los reportes financieros ven la captación de pacientes. / No tienes acceso a esta sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con abonos no tiene zona horaria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AcquisitionController_csv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de la sede de captación del paciente o de la sede del abono). Como mucho 24 meses por calendario; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo los pacientes captados en esta sede (la de su primera cita) y sus abonos en ella (403 si no es de las del usuario o no es de la clínica). Sin él, todas las sedes que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 24 meses. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración descarga la captación de pacientes. / No tienes acceso a esta sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con abonos no tiene zona horaria */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -57116,6 +57942,167 @@ export interface operations {
             };
             /** @description Este control postoperatorio ya está cerrado: no admite más intentos */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientSourcesController_list: {
+        parameters: {
+            query?: {
+                /** @description true: también las desactivadas (Ajustes y la edición de un paciente que tiene una). */
+                includeInactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientSourceDto"][];
+                };
+            };
+            /** @description Rol sin acceso a pacientes */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientSourcesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePatientSourceDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientSourceDto"];
+                };
+            };
+            /** @description El nombre debe tener entre 2 y 60 caracteres. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración cambia el origen de pacientes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe una fuente con ese nombre. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientSourcesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePatientSourceDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientSourceDto"];
+                };
+            };
+            /** @description El nombre debe tener entre 2 y 60 caracteres. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración cambia el origen de pacientes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fuente no encontrada. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe una fuente con ese nombre. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientAcquisitionController_acquisition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientAcquisitionDto"];
+                };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente inexistente en la clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
