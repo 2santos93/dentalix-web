@@ -21868,7 +21868,7 @@ export interface components {
             /** @description Un abono por línea, en orden (`splitLine`). */
             payments: components["schemas"]["PaymentDto"][];
         };
-        RecordPaymentDto: {
+        RecordOpeningBalancePaymentDto: {
             /**
              * @description Número finito mayor que 0, con como mucho 2 decimales.
              * @example 100
@@ -46731,7 +46731,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RecordPaymentDto"];
+                "application/json": components["schemas"]["RecordOpeningBalancePaymentDto"];
             };
         };
         responses: {

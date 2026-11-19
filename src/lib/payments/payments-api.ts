@@ -1,7 +1,9 @@
 import { apiFetch, apiFetchOrNull, apiFetchText } from '@/lib/api/client';
 import type { components, paths } from '@/lib/api/schema';
 
-export type RecordPaymentInput = components['schemas']['RecordPaymentDto'];
+// El cuerpo común del abono (DX-570: la API lo publica con el nombre del abono al saldo migrado,
+// que es el mismo sin vuelto; el del plan añade «Recibido» y el vuelto).
+export type RecordPaymentInput = components['schemas']['RecordOpeningBalancePaymentDto'];
 /** DX-570: el abono a un plan, con «Recibido» y el vuelto de un cobro en efectivo. */
 export type RecordPlanPaymentInput = components['schemas']['RecordPlanPaymentDto'];
 export type VoidPaymentInput = components['schemas']['VoidPaymentDto'];
