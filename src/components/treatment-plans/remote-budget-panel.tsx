@@ -35,6 +35,10 @@ export const remoteBudgetCopy = {
   evidenceOpened: 'Abierto',
   evidenceVerified: 'Código verificado',
   evidenceIp: 'IP de quien firmó',
+  // DX-101-bis: aceptado por el paciente desde su portal (sin email ni código).
+  portalEvidenceHeading: 'Evidencias de la aceptación desde el portal',
+  portalChannel: 'Canal',
+  portalChannelValue: 'Portal del paciente',
   // DX-379 (C): vencido, no se envía (la API: 409 QUOTE_EXPIRED); un enlace ya enviado deja de valer.
   expiredSend: (date: string) => `El presupuesto venció el ${date}: actualiza sus precios antes de enviarlo.`,
   expiredPending: 'El presupuesto venció: el enlace enviado ya no vale para el paciente.',
@@ -82,6 +86,34 @@ export function RemoteAcceptanceEvidence({
   return (
     <dl
       aria-label={copy.evidenceHeading}
+      className="grid grid-cols-1 gap-x-4 gap-y-1 t-caption text-muted sm:grid-cols-2"
+    >
+      {rows.map(([label, value]) => (
+        <div key={label} className="flex min-w-0 gap-1">
+          <dt>{label}:</dt>
+          <dd className="min-w-0 break-words tabular-nums text-ink">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/**
+ * DX-101-bis: evidencias de un plan aceptado por el paciente desde el portal
+ * (`acceptance.portal`): el canal y, si la API la guardó, la IP de quien firmó.
+ */
+export function PortalAcceptanceEvidence({
+  portal,
+}: {
+  portal: NonNullable<NonNullable<TreatmentPlan['acceptance']>['portal']>;
+}) {
+  const rows: [string, string][] = [
+    [copy.portalChannel, copy.portalChannelValue],
+    ...(portal.ipAddress ? ([[copy.evidenceIp, portal.ipAddress]] as [string, string][]) : []),
+  ];
+  return (
+    <dl
+      aria-label={copy.portalEvidenceHeading}
       className="grid grid-cols-1 gap-x-4 gap-y-1 t-caption text-muted sm:grid-cols-2"
     >
       {rows.map(([label, value]) => (

@@ -10562,6 +10562,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/patient-access/me/plans/{planId}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Aceptar con firma un presupuesto compartido (DX-101-bis)
+         * @description La misma aceptación que la del enlace de firma (DX-415): foto del presupuesto con su hash, firma, hora del servidor y evidencias (enlace de acceso, IP y navegador); el plan pasa a aceptado y las demás opciones abiertas del grupo, a rechazadas. Auditado (SIGN de TREATMENT_PLAN, PORTAL_QUOTE_ACCEPTED). Email de confirmación si el paciente tiene email. Devuelve el plan como en `GET me`, ya aceptado. 10/min por sesión.
+         */
+        post: operations["PublicPatientAccessController_acceptPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/patient-access/me/logout": {
         parameters: {
             query?: never;
@@ -19573,12 +19593,18 @@ export interface components {
             /** @description IP desde la que firmó */
             ipAddress: string | null;
         };
+        TreatmentPlanPortalAcceptanceDto: {
+            /** @description IP desde la que firmó */
+            ipAddress: string | null;
+        };
         TreatmentPlanAcceptanceSummaryDto: {
             signerName: string;
             /** Format: date-time */
             acceptedAt: string;
             /** @description «Aceptado a distancia» (DX-415): el paciente firmó por el enlace con código; null si se firmó en la clínica. */
             remote: components["schemas"]["TreatmentPlanRemoteAcceptanceDto"] | null;
+            /** @description «Aceptado desde el portal del paciente» (DX-101-bis); null si se firmó en la clínica o por el enlace con código. */
+            portal: components["schemas"]["TreatmentPlanPortalAcceptanceDto"] | null;
         };
         TreatmentPlanDto: {
             visitIntervals?: {
@@ -19985,6 +20011,13 @@ export interface components {
             verifiedAt: string;
             signerType?: components["schemas"]["ConsentSignerType"];
         };
+        PlanQuotePortalAcceptanceDto: {
+            /**
+             * Format: uuid
+             * @description El enlace de acceso al portal con el que entró el paciente.
+             */
+            patientAccessLinkId: string;
+        };
         /**
          * @description DX-379 (C): null si el presupuesto no estaba vencido. ORIGINAL_PRICES: «Aceptado con los precios del presupuesto vencido el {quoteValidUntil}. Motivo: {expiredReason}[: {expiredNote}]». REPRICE: «Precios actualizados el {acceptedAt} antes de aceptar».
          * @enum {string}
@@ -20015,6 +20048,8 @@ export interface components {
             userAgent: string | null;
             /** @description DX-415: «Aceptado a distancia» por el paciente con enlace y código; null si se firmó en la clínica. */
             remote: components["schemas"]["PlanQuoteRemoteAcceptanceDto"] | null;
+            /** @description DX-101-bis: «Aceptado desde el portal del paciente» (con su firma, en su sesión del portal); null si se firmó en la clínica o por el enlace con código. */
+            portal: components["schemas"]["PlanQuotePortalAcceptanceDto"] | null;
             /**
              * Format: date
              * @description DX-379 (C): último día válido del presupuesto al firmar (antes de actualizar precios). Null en aceptaciones anteriores o sin validez guardada. Fuera del contenido firmado.
@@ -31410,6 +31445,20 @@ export interface components {
             optionGroupId: string | null;
             /** @example A */
             optionLabel: string | null;
+            /** @description DX-101-bis: se puede aceptar desde el portal («Aceptar presupuesto»; con opciones A/B, «Elegir esta opción»): presentado, sin firmar, con ítems, no vencido y sin otra opción del grupo elegida. */
+            acceptable: boolean;
+            /**
+             * @description Último día válido del presupuesto (AAAA-MM-DD), el de `quote.validUntil`.
+             * @example 2026-12-18
+             */
+            validUntil: string;
+            /** @description El hash del presupuesto mostrado (el de `quote.contentHash`): se manda tal cual al aceptar. */
+            contentHash: string;
+            /**
+             * Format: date-time
+             * @description Aceptado: la hora del servidor de la firma; si no, null.
+             */
+            acceptedAt: string | null;
             /** @description El presupuesto de DX-012 (ítems y totales) tal como se imprime para el paciente; de la aceptación, solo quién firmó, la firma y cuándo. */
             quote: components["schemas"]["PortalQuoteDto"];
         };
@@ -31602,6 +31651,19 @@ export interface components {
         PortalAppointmentConfirmedDto: {
             /** @enum {string} */
             status: "CONFIRMED";
+        };
+        AcceptPortalQuoteDto: {
+            /**
+             * @description Nombre de quien firma (el paciente o el responsable de un menor), 1–120 caracteres tras recortar.
+             * @example María José Pérez
+             */
+            signerName: string;
+            /** @description Firma en PNG (data:image/png;base64,… o base64), máx. 200 KB: la misma validación que la firma a distancia. */
+            signature: string;
+            /** @description El `contentHash` del presupuesto que mostró el portal. Si cambió desde entonces: 409 PORTAL_QUOTE_CHANGED. */
+            contentHash: string;
+            /** @description Confirma que leyó el presupuesto y lo acepta (debe ser true). */
+            consent: boolean;
         };
         /**
          * @description BUSINESS_HOURS: horario de alguna sede guardado por la clínica (el sembrado no cuenta). APPOINTMENT_TYPES: algún tipo de cita activo. CATALOG_PRICES: algún precio en el catálogo o en una lista de precios. STAFF: alguna invitación no revocada o algún miembro además del que creó la clínica. FIRST_APPOINTMENT: alguna cita. PATIENT_IMPORT (opcional): alguna importación de pacientes terminada.
@@ -59577,6 +59639,84 @@ export interface operations {
                 content?: never;
             };
             /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicPatientAccessController_acceptPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptPortalQuoteDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalPlanDto"];
+                };
+            };
+            /** @description Nombre vacío, largo o con caracteres de control o de dirección («Escribe tu nombre sin caracteres especiales.»), firma no válida, hash mal formado o sin `consent: true`. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description PATIENT_ACCESS_SESSION_REQUIRED: sin la cookie `dentalix_pa`, con una de otra clínica o caducada. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description PATIENT_ACCESS_SCOPE_REQUIRED: el enlace no comparte los presupuestos. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description «No encontramos ese presupuesto.»: no existe o es de otro paciente. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description PORTAL_QUOTE_NOT_ACCEPTABLE («Este presupuesto ya no se puede aceptar desde aquí. Contacta con la clínica.»): aceptado, rechazado, vencido, otra opción elegida u otra aceptación a la vez, sin decir cuál. PORTAL_QUOTE_CHANGED («El presupuesto ha cambiado. Recarga la página para ver la versión actual.»): el presupuesto no es el mostrado. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description PATIENT_ACCESS_GONE: la clínica revocó el enlace, caducó o el paciente se archivó (se borra la cookie). Sin ningún dato. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Más de 10 por minuto en la sesión.
+             *
+             *     Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             */
             429: {
                 headers: {
                     [name: string]: unknown;

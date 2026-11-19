@@ -51,7 +51,7 @@ describe('plan-quote-api (DX-012)', () => {
     expect(
       isPlanAcceptable({
         status: 'ACCEPTED',
-        acceptance: { signerName: 'Ana', acceptedAt: '2026-10-16T15:00:00Z', remote: null },
+        acceptance: { signerName: 'Ana', acceptedAt: '2026-10-16T15:00:00Z', remote: null, portal: null },
         items: [{}],
       }),
     ).toBe(false);
@@ -112,7 +112,7 @@ describe('plan-quote-api (DX-012)', () => {
     expect(
       isPlanPartiallyAcceptable({
         status: 'PRESENTED',
-        acceptance: { signerName: 'Ana', acceptedAt: '2026-10-16T15:00:00Z', remote: null },
+        acceptance: { signerName: 'Ana', acceptedAt: '2026-10-16T15:00:00Z', remote: null, portal: null },
         items: [proposed, proposed],
       }),
     ).toBe(false);
@@ -141,7 +141,7 @@ describe('plan-quote-api (DX-012)', () => {
       isPendingRest({
         splitFromPlanId: 'o',
         status: 'PRESENTED',
-        acceptance: { signerName: 'Ana', acceptedAt: '2026-10-16T15:00:00Z', remote: null },
+        acceptance: { signerName: 'Ana', acceptedAt: '2026-10-16T15:00:00Z', remote: null, portal: null },
       }),
     ).toBe(false);
   });

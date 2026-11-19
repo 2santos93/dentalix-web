@@ -73,6 +73,7 @@ export const SIGNED_ACCEPTANCE: NonNullable<PlanQuote['acceptance']> = {
   ipAddress: null,
   userAgent: null,
   remote: null,
+  portal: null,
   // DX-379 (C): la aceptación de ejemplo no es de un presupuesto vencido.
   quoteValidUntil: null,
   expiredMode: null,

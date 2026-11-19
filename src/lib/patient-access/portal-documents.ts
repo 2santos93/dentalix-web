@@ -37,6 +37,7 @@ export function printableQuote(plan: PortalPlan): PlanQuote {
           acceptanceHash: '',
           integrityOk: true,
           remote: null,
+          portal: null,
           ipAddress: null,
           userAgent: null,
           quoteValidUntil: null,

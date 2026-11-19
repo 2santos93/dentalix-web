@@ -73,6 +73,8 @@ test('ADMIN: los números son los de la API, lo que está a 0 se pliega y cada f
     'ANAMNESIS_REVIEW',
     // DX-566: las llamadas de control postoperatorio.
     'POST_OP_CHECKS',
+    // DX-556: prospectos sin contactar (a 0 en una clínica nueva).
+    'LEADS_UNCONTACTED',
     'QUOTE_FOLLOW_UP',
     'ACCEPTED_UNSCHEDULED',
     'WAITLIST',
@@ -81,11 +83,11 @@ test('ADMIN: los números son los de la API, lo que está a 0 se pliega y cada f
     'LOW_STOCK',
   ]);
   const zero = body.items.filter((i) => i.count === 0).length;
-  expect(zero).toBe(8);
+  expect(zero).toBe(9);
 
   // Las listas a 0, plegadas; se despliegan con el teclado. DX-016: más la
   // de «Solicitudes online» (su contador no es de /work-queues), también a 0.
-  const toggle = pending.getByRole('button', { name: /Al día: 9 listas/ });
+  const toggle = pending.getByRole('button', { name: /Al día: 10 listas/ });
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(pending.getByTestId('pending-follow-up')).toBeHidden();
   await toggle.focus();

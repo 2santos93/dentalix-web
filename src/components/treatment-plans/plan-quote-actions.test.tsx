@@ -103,7 +103,7 @@ describe('PlanQuoteActions (DX-012)', () => {
     renderActions(
       plan({
         status: 'ACCEPTED',
-        acceptance: { signerName: 'Ana Pérez', acceptedAt: '2026-10-16T15:30:00.000Z', remote: null },
+        acceptance: { signerName: 'Ana Pérez', acceptedAt: '2026-10-16T15:30:00.000Z', remote: null, portal: null },
       }),
     );
     expect(screen.getByRole('status')).toHaveTextContent(
@@ -120,7 +120,7 @@ describe('PlanQuoteActions (DX-012)', () => {
       plan({
         status: 'ACCEPTED',
         acceptedLocationId: STAMP_SEDES.berlin.id,
-        acceptance: { signerName: 'Ana Pérez', acceptedAt, remote: null },
+        acceptance: { signerName: 'Ana Pérez', acceptedAt, remote: null, portal: null },
       }),
     );
     expect(screen.getByRole('status')).toHaveTextContent(`el ${dateTimeIn('berlin', acceptedAt)}`);
@@ -141,7 +141,7 @@ describe('PlanQuoteActions (DX-012)', () => {
       plan({
         status: 'ACCEPTED',
         acceptedLocationId: STAMP_SEDES.caracas.id,
-        acceptance: { signerName: 'Marta Ríos', acceptedAt, remote },
+        acceptance: { signerName: 'Marta Ríos', acceptedAt, remote, portal: null },
       }),
       'DENTIST',
       testStamp([STAMP_SEDES.miami, STAMP_SEDES.caracas]),
@@ -159,11 +159,43 @@ describe('PlanQuoteActions (DX-012)', () => {
     expect(evidence).not.toHaveTextContent(dateTimeIn('miami', remote.sentAt));
   });
 
+  it('DX-101-bis: aceptado desde el portal, «Aceptado por el paciente desde el portal» con la IP y sin evidencias de email', () => {
+    const acceptedAt = '2026-10-31T04:46:00.000Z';
+    renderActions(
+      plan({
+        status: 'ACCEPTED',
+        acceptedLocationId: STAMP_SEDES.caracas.id,
+        acceptance: { signerName: 'María José Pérez', acceptedAt, remote: null, portal: { ipAddress: '203.0.113.7' } },
+      }),
+      'DENTIST',
+      testStamp([STAMP_SEDES.miami, STAMP_SEDES.caracas]),
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(
+      `Aceptado por el paciente desde el portal el ${dateTimeIn('caracas', acceptedAt)} · firmó María José Pérez`,
+    );
+    const evidence = screen.getByLabelText('Evidencias de la aceptación desde el portal');
+    expect(evidence).toHaveTextContent('Canal:Portal del paciente');
+    expect(evidence).toHaveTextContent('IP de quien firmó:203.0.113.7');
+    expect(screen.queryByLabelText('Evidencias de la aceptación a distancia')).not.toBeInTheDocument();
+  });
+
+  it('DX-101-bis: desde el portal sin IP guardada, solo el canal', () => {
+    renderActions(
+      plan({
+        status: 'ACCEPTED',
+        acceptance: { signerName: 'Ana', acceptedAt: '2026-10-31T04:46:00.000Z', remote: null, portal: { ipAddress: null } },
+      }),
+    );
+    const evidence = screen.getByLabelText('Evidencias de la aceptación desde el portal');
+    expect(evidence).toHaveTextContent('Canal:Portal del paciente');
+    expect(evidence).not.toHaveTextContent('IP');
+  });
+
   it('sin formato de la sede, «—» en lugar de la fecha (el aviso lo pinta la pantalla)', () => {
     renderActions(
       plan({
         status: 'ACCEPTED',
-        acceptance: { signerName: 'Ana Pérez', acceptedAt: '2026-10-16T15:30:00.000Z', remote: null },
+        acceptance: { signerName: 'Ana Pérez', acceptedAt: '2026-10-16T15:30:00.000Z', remote: null, portal: null },
       }),
       'DENTIST',
       stampPainters(null),
@@ -202,7 +234,7 @@ describe('PlanQuoteActions · «Actualizar precios» (DX-379 B)', () => {
   });
 
   it('un plan aceptado (con o sin firma), rechazado o sin propuestos no la ofrece', () => {
-    const signed = { signerName: 'Ana', acceptedAt: '2026-10-16T15:00:00Z', remote: null };
+    const signed = { signerName: 'Ana', acceptedAt: '2026-10-16T15:00:00Z', remote: null, portal: null };
     for (const p of [
       plan({ status: 'ACCEPTED' }),
       plan({ status: 'PRESENTED', acceptance: signed }),
@@ -261,7 +293,7 @@ describe('PlanQuoteActions · «Aceptar en parte» (DX-417)', () => {
   });
 
   it('un borrador, un aceptado, uno firmado o uno con un solo propuesto no la ofrecen', () => {
-    const signed = { signerName: 'Ana', acceptedAt: '2026-10-16T15:00:00Z', remote: null };
+    const signed = { signerName: 'Ana', acceptedAt: '2026-10-16T15:00:00Z', remote: null, portal: null };
     for (const p of [
       plan({ status: 'DRAFT', items: two }),
       plan({ status: 'ACCEPTED', items: two }),
