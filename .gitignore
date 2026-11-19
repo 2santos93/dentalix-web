@@ -59,3 +59,6 @@ next-env.d.ts
 
 # DX-252: informe JSON de la E2E (lo lee scripts/check-e2e-skips.mjs)
 /playwright-results.json
+
+# DX-034: configuración local de MCP (copia .mcp.example.json a .mcp.json)
+.mcp.json
