@@ -420,6 +420,30 @@ it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', asy
   );
 });
 
+it('DX-571: llega precargado (importe, moneda, medio y día del movimiento del banco) y devuelve el abono creado', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue([eurPlan]);
+  mockedRecord.mockResolvedValue(savedPayment());
+  const onRecorded = jest.fn();
+  const prefill = { amount: 150000, currency: 'EUR', paymentMethodId: 'pm-transfer', reference: null, date: '2026-10-01' };
+  const props = { onOpenChange: jest.fn(), token: 'tok', patientId: 'pat-1', onRecorded, prefill };
+  const { rerender } = render(<RecordPaymentModal open={false} {...props} />);
+  rerender(<RecordPaymentModal open {...props} />);
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+  expect(within(dialog).getByLabelText('Importe')).toHaveValue('150000');
+  await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+  await waitFor(() =>
+    expect(mockedRecord).toHaveBeenCalledWith(
+      'tok',
+      'plan-eur',
+      expect.objectContaining({ amount: 150000, currency: 'EUR', paidAt: '2026-10-01', paymentMethodId: 'pm-transfer' }),
+      expect.any(String),
+    ),
+  );
+  expect(onRecorded).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ paymentIds: [savedPayment().id] }));
+});
+
 it('DX-075: un día posterior a hoy en la sede se rechaza junto al campo, con el foco y sin llamar a la API', async () => {
   const user = userEvent.setup();
   mockedList.mockResolvedValue([eurPlan]);

@@ -14,6 +14,7 @@ import {
   patientAccessDetail,
   acquisitionDetail,
   importBatchDetail,
+  bankReconciliationDetail,
   AUDIT_ACTION_LABELS,
   AUDIT_ACTION_OPTIONS,
   AUDIT_ACTION_VARIANT,
@@ -276,6 +277,42 @@ describe('scheduleChangeDetail (DX-233)', () => {
   });
   it('sin cambio de horario, null', () => {
     expect(scheduleChangeDetail({}, H23)).toBeNull();
+  });
+});
+
+describe('bankReconciliationDetail (DX-571)', () => {
+  const sha = 'abcdef0123456789'.repeat(4);
+
+  it('nombra los tres recursos', () => {
+    expect(AUDIT_RESOURCE_LABELS.BANK_ACCOUNT).toBe('Cuenta de conciliación');
+    expect(AUDIT_RESOURCE_LABELS.BANK_STATEMENT_IMPORT).toBe('Extracto del banco');
+    expect(AUDIT_RESOURCE_LABELS.BANK_RECONCILIATION_MATCH).toBe('Emparejado con el banco');
+  });
+
+  it('el extracto importado dice sus totales, los conciliados solos y el inicio del hash', () => {
+    expect(
+      bankReconciliationDetail('BANK_STATEMENT_IMPORT', {
+        reason: 'IMPORT_CONFIRMED',
+        importBatch: { fileSha256: sha, rows: 12, valid: 9, duplicates: 2, errors: 1, created: 7, matched: 5 } as never,
+      }),
+    ).toBe(
+      'Extracto importado · 12 filas · 7 nuevos · 2 ya importados · 1 con error · 5 conciliados solos · SHA-256 abcdef012345…',
+    );
+  });
+
+  it('cada acción de la conciliación con su texto; lo ajeno no es suyo', () => {
+    expect(bankReconciliationDetail('BANK_RECONCILIATION_MATCH', { reason: 'MANUAL_MATCH' })).toBe('Emparejado a mano');
+    expect(bankReconciliationDetail('BANK_RECONCILIATION_MATCH', { reason: 'MANUAL_UNMATCH' })).toBe('Emparejado deshecho');
+    expect(bankReconciliationDetail('BANK_ACCOUNT', { reason: 'AUTO_MATCH' })).toBe('Volver a emparejar');
+    expect(bankReconciliationDetail('BANK_ACCOUNT', { reason: 'RECONCILIATION_SUMMARY' })).toBe('Resumen de la conciliación');
+    expect(bankReconciliationDetail('BANK_ACCOUNT', { reason: 'RECONCILIATION_ITEMS' })).toBe('Lista de la conciliación');
+    expect(bankReconciliationDetail('BANK_ACCOUNT', { reason: 'RECONCILIATION_CANDIDATES' })).toBe(
+      'Abonos candidatos de un movimiento',
+    );
+    // La importación de pacientes sigue con su propio texto.
+    expect(
+      bankReconciliationDetail('PATIENT_IMPORT_BATCH', { reason: 'IMPORT_CONFIRMED', importBatch: { fileSha256: sha } }),
+    ).toBeNull();
   });
 });
 
