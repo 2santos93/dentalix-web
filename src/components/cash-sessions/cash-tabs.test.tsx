@@ -6,6 +6,7 @@ describe('CashTabs (DX-027)', () => {
   it('cualquier ?tab= desconocido cae en «Abonos»', () => {
     expect(resolveCashTab('turnos')).toBe('turnos');
     expect(resolveCashTab('por-confirmar')).toBe('por-confirmar');
+    expect(resolveCashTab('conciliacion')).toBe('conciliacion');
     expect(resolveCashTab('otra')).toBe('abonos');
     expect(resolveCashTab(null)).toBe('abonos');
   });
@@ -34,5 +35,17 @@ describe('CashTabs (DX-027)', () => {
     expect(within(tab).getByLabelText('3 pagos por confirmar')).toBeInTheDocument();
     rerender(<CashTabs active="abonos" onChange={jest.fn()} showReports pendingReports={0} />);
     expect(screen.getByRole('tab', { name: 'Por confirmar' })).toBeInTheDocument();
+  });
+
+  it('DX-571: «Conciliación» solo para ADMIN, la última', () => {
+    const { rerender } = render(<CashTabs active="abonos" onChange={jest.fn()} showReports />);
+    expect(screen.queryByRole('tab', { name: 'Conciliación' })).not.toBeInTheDocument();
+    rerender(<CashTabs active="abonos" onChange={jest.fn()} showReports showReconciliation />);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
+      'Abonos',
+      'Turnos',
+      'Por confirmar',
+      'Conciliación',
+    ]);
   });
 });

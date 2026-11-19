@@ -385,7 +385,7 @@ it('un abono guardado sin tasa lo dice en el aviso', async () => {
   expect(onRecorded.mock.calls[0][0]).toMatch(/^Abono registrado: USD\s50,00 · .+\. /);
   expect(onRecorded.mock.calls[0][0]).toContain(recordPaymentCopy.recordedWithoutRate);
   // DX-075: la advertencia de «sin tasa» no puede caducar sola.
-  expect(onRecorded.mock.calls[0][1]).toEqual({ persistent: true });
+  expect(onRecorded.mock.calls[0][1]).toEqual(expect.objectContaining({ persistent: true }));
 });
 
 it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', async () => {
@@ -416,8 +416,32 @@ it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', asy
   );
   expect(onRecorded).toHaveBeenCalledWith(
     expect.stringMatching(/^Abono registrado: EUR\s150\.000,00 · 01\/10\/2026 · Plan del 01\/08\/2026\.$/),
-    { persistent: false },
+    expect.objectContaining({ persistent: false }),
   );
+});
+
+it('DX-571: llega precargado (importe, moneda, medio y día del movimiento del banco) y devuelve el abono creado', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue([eurPlan]);
+  mockedRecord.mockResolvedValue(savedPayment());
+  const onRecorded = jest.fn();
+  const prefill = { amount: 150000, currency: 'EUR', paymentMethodId: 'pm-transfer', reference: null, date: '2026-10-01' };
+  const props = { onOpenChange: jest.fn(), token: 'tok', patientId: 'pat-1', onRecorded, prefill };
+  const { rerender } = render(<RecordPaymentModal open={false} {...props} />);
+  rerender(<RecordPaymentModal open {...props} />);
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+  expect(within(dialog).getByLabelText('Importe')).toHaveValue('150000');
+  await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+  await waitFor(() =>
+    expect(mockedRecord).toHaveBeenCalledWith(
+      'tok',
+      'plan-eur',
+      expect.objectContaining({ amount: 150000, currency: 'EUR', paidAt: '2026-10-01', paymentMethodId: 'pm-transfer' }),
+      expect.any(String),
+    ),
+  );
+  expect(onRecorded).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ paymentIds: [savedPayment().id] }));
 });
 
 it('DX-075: un día posterior a hoy en la sede se rechaza junto al campo, con el foco y sin llamar a la API', async () => {
@@ -739,7 +763,7 @@ it('el aviso dice lo que la API registró, no lo que quedó en el formulario (re
   await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
   expect(onRecorded).toHaveBeenCalledWith(
     expect.stringMatching(/^Abono registrado: EUR\s1\.?000,00 · 01\/10\/2026 · Plan del 01\/08\/2026\.$/),
-    { persistent: false },
+    expect.objectContaining({ persistent: false }),
   );
 });
 
