@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { Repeat } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { listRecallSettings, type LocationRecallSettings } from '@/lib/recall/recall-api';
+import { listRecallSettings, type LocationRecallSettings } from '@/lib/recall/recall-attempts-api';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { SettingsSection } from '@/components/settings/settings-page';
 import { Badge } from '@/components/ui/badge';

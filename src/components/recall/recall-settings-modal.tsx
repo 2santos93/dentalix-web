@@ -10,7 +10,7 @@ import {
   RECALL_MAX_ATTEMPTS_MIN,
   updateRecallSettings,
   type LocationRecallSettings,
-} from '@/lib/recall/recall-api';
+} from '@/lib/recall/recall-attempts-api';
 import { FormField } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
 import { Input } from '@/components/ui/input';

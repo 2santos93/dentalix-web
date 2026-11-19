@@ -1,4 +1,4 @@
-import { BATCH_OUTCOME_ORDER, attemptsLabel, callbackCopy, callbackError, callbackRange } from './presentation';
+import { BATCH_OUTCOME_ORDER, attemptsLabel, callbackCopy, callbackError, callbackRange } from './attempts-presentation';
 
 describe('presentación de los intentos (DX-465)', () => {
   it('«2 de 3»', () => {

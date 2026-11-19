@@ -4,13 +4,10 @@ import { useState } from 'react';
 import { PhoneOff } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { SedePainters } from '@/lib/locations/sede-stamp';
-import { CHANNEL_LABELS, OUTCOME_LABELS, attemptsLabel } from '@/lib/recall/presentation';
-import {
-  clearPhoneReview,
-  type PatientRecall,
-  type RecallContact,
-  type RecallPhoneReview,
-} from '@/lib/recall/recall-api';
+import { CHANNEL_LABELS, OUTCOME_LABELS } from '@/lib/recall/presentation';
+import { attemptsLabel } from '@/lib/recall/attempts-presentation';
+import type { PatientRecall, RecallContact } from '@/lib/recall/recall-api';
+import { clearPhoneReview, type RecallPhoneReview } from '@/lib/recall/recall-attempts-api';
 import { recallTypeLabel } from '@/lib/recall/recall-types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

@@ -1,13 +1,6 @@
 import { ApiError } from '@/lib/api/api-error';
-import {
-  clearPhoneReview,
-  createDefaultPatientRecall,
-  createRecallContactsBatch,
-  isRecallAlreadySet,
-  listRecallDue,
-  listRecallSettings,
-  updateRecallSettings,
-} from './recall-api';
+import { createDefaultPatientRecall, isRecallAlreadySet, listRecallDue } from './recall-api';
+import { clearPhoneReview, createRecallContactsBatch, listRecallSettings, updateRecallSettings } from './recall-attempts-api';
 import { apiFetch } from '../api/client';
 
 jest.mock('../api/client', () => ({ apiFetch: jest.fn(), apiFetchOrNull: jest.fn() }));

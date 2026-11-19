@@ -4,7 +4,6 @@ import { ApiError } from '@/lib/api/client';
 import {
   createDefaultPatientRecall,
   createRecallContact,
-  createRecallContactsBatch,
   listRecallDue,
   listRecallTypes,
   listRecallUnconfigured,
@@ -13,12 +12,14 @@ import {
   type RecallDuePage,
   type RecallType,
 } from '@/lib/recall/recall-api';
-import { callbackCopy, overdueLabel, recallMessage } from '@/lib/recall/presentation';
+import { overdueLabel, recallMessage } from '@/lib/recall/presentation';
+import { callbackCopy } from '@/lib/recall/attempts-presentation';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { addCivilDays } from '@/lib/time/wall-clock';
 import { typeDate } from '@/components/patients/date-test-utils';
 import { selectionBarCopy } from './recall-selection-bar';
 import { batchContactCopy } from './recall-batch-contact-dialog';
+import { createRecallContactsBatch } from '@/lib/recall/recall-attempts-api';
 import { RecallView, recallCopy } from './recall-view';
 import { recallUnconfiguredCopy } from './recall-unconfigured-list';
 import { recallDefaultCopy } from './recall-default-dialog';
@@ -50,11 +51,11 @@ jest.mock('./recall-schedule-dialog', () => ({
     </div>
   ),
 }));
+jest.mock('../../lib/recall/recall-attempts-api', () => ({ createRecallContactsBatch: jest.fn() }));
 jest.mock('../../lib/recall/recall-api', () => ({
   listRecallDue: jest.fn(),
   listRecallTypes: jest.fn(),
   createRecallContact: jest.fn(),
-  createRecallContactsBatch: jest.fn(),
   listRecallUnconfigured: jest.fn(),
   createDefaultPatientRecall: jest.fn(),
   announceRecallChanged: jest.fn(),

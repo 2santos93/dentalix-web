@@ -4,21 +4,10 @@ import { useState } from 'react';
 import { ShieldAlert } from 'lucide-react';
 import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import {
-  createRecallContactsBatch,
-  type RecallContactChannel,
-  type RecallContactOutcome,
-  type RecallDueItem,
-} from '@/lib/recall/recall-api';
-import {
-  BATCH_OUTCOME_ORDER,
-  CHANNEL_LABELS,
-  CHANNEL_ORDER,
-  OUTCOME_LABELS,
-  RECALL_NOTE_MAX,
-  callbackError,
-  callbackRange,
-} from '@/lib/recall/presentation';
+import type { RecallContactChannel, RecallContactOutcome, RecallDueItem } from '@/lib/recall/recall-api';
+import { createRecallContactsBatch } from '@/lib/recall/recall-attempts-api';
+import { CHANNEL_LABELS, CHANNEL_ORDER, OUTCOME_LABELS, RECALL_NOTE_MAX } from '@/lib/recall/presentation';
+import { BATCH_OUTCOME_ORDER, callbackError, callbackRange } from '@/lib/recall/attempts-presentation';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
 import { Callout } from '@/components/ui/callout';

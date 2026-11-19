@@ -2,7 +2,6 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '@/lib/api/client';
 import {
-  clearPhoneReview,
   createRecallContact,
   getPatientRecalls,
   listRecallTypes,
@@ -11,6 +10,7 @@ import {
   type PatientRecalls,
   type RecallType,
 } from '@/lib/recall/recall-api';
+import { clearPhoneReview } from '@/lib/recall/recall-attempts-api';
 import { PatientRecallSection } from './patient-recall-section';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
@@ -22,8 +22,8 @@ jest.mock('../../lib/recall/recall-api', () => ({
   listRecallTypes: jest.fn(),
   setPatientRecall: jest.fn(),
   createRecallContact: jest.fn(),
-  clearPhoneReview: jest.fn(),
 }));
+jest.mock('../../lib/recall/recall-attempts-api', () => ({ clearPhoneReview: jest.fn() }));
 const mockedGet = getPatientRecalls as jest.MockedFunction<typeof getPatientRecalls>;
 const mockedSet = setPatientRecall as jest.MockedFunction<typeof setPatientRecall>;
 const mockedContact = createRecallContact as jest.MockedFunction<typeof createRecallContact>;

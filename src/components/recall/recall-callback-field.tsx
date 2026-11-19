@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { callbackCopy } from '@/lib/recall/presentation';
+import { callbackCopy } from '@/lib/recall/attempts-presentation';
 import { FormField } from '@/components/shared/form-field';
 import { DatePicker } from '@/components/ui/date-picker';
 

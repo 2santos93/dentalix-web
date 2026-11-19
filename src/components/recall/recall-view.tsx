@@ -10,15 +10,8 @@ import { fetchClinicName } from '@/lib/clinic-branding';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { useMediaQuery } from '@/lib/hooks/use-media-query';
-import {
-  CHANNEL_LABELS,
-  OUTCOME_LABELS,
-  RECALL_SOON_DAYS,
-  attemptsLabel,
-  intervalLabel,
-  overdueLabel,
-  recallWhatsAppHref,
-} from '@/lib/recall/presentation';
+import { CHANNEL_LABELS, OUTCOME_LABELS, RECALL_SOON_DAYS, intervalLabel, overdueLabel, recallWhatsAppHref } from '@/lib/recall/presentation';
+import { attemptsLabel } from '@/lib/recall/attempts-presentation';
 import {
   attemptsQuery,
   parseRecallFilters,

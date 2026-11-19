@@ -9,15 +9,8 @@ import {
   type RecallContactChannel,
   type RecallContactOutcome,
 } from '@/lib/recall/recall-api';
-import {
-  CHANNEL_LABELS,
-  CHANNEL_ORDER,
-  OUTCOME_LABELS,
-  OUTCOME_ORDER,
-  RECALL_NOTE_MAX,
-  callbackError,
-  callbackRange,
-} from '@/lib/recall/presentation';
+import { CHANNEL_LABELS, CHANNEL_ORDER, OUTCOME_LABELS, OUTCOME_ORDER, RECALL_NOTE_MAX } from '@/lib/recall/presentation';
+import { callbackError, callbackRange } from '@/lib/recall/attempts-presentation';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';

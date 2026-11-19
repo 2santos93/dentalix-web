@@ -1,12 +1,12 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '@/lib/api/client';
-import { listRecallSettings, updateRecallSettings, type LocationRecallSettings } from '@/lib/recall/recall-api';
+import { listRecallSettings, updateRecallSettings, type LocationRecallSettings } from '@/lib/recall/recall-attempts-api';
 import { RecallSettingsManager, recallSettingsManagerCopy as copy } from './recall-settings-manager';
 import { recallSettingsModalCopy as modalCopy } from './recall-settings-modal';
 
-jest.mock('../../lib/recall/recall-api', () => ({
-  ...jest.requireActual('../../lib/recall/recall-api'),
+jest.mock('../../lib/recall/recall-attempts-api', () => ({
+  ...jest.requireActual('../../lib/recall/recall-attempts-api'),
   listRecallSettings: jest.fn(),
   updateRecallSettings: jest.fn(),
 }));
