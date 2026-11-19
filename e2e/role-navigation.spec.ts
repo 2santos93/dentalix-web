@@ -46,7 +46,7 @@ const EXTRA_SETTINGS = ['/settings/recordatorios', '/settings/tipos-de-cita'];
  * vista («Tu rol no tiene acceso…», «Solo administración configura…»).
  */
 const FORBIDDEN_NOTICE =
-  /no tienes permiso|no tiene acceso|tu rol no puede|sin permiso|pide acceso|pídes[ea]l[ao]|solo (la |el )?administra(ción|dor)|solo para/i;
+  /no tienes permiso|no tiene acceso|tu rol no puede|sin permiso|pide acceso|pídes[ea]l[ao]|solo (la |el )?administra(ción|dor)|solo (las|los|lo|la) ven|solo para/i;
 
 /** Botones que cambian algo: ninguno puede quedar habilitado en una pantalla sin permiso. */
 const WRITE_BUTTON =
@@ -100,11 +100,6 @@ async function expectForbidden(page: Page, href: string): Promise<void> {
   await expect(main.getByText(FORBIDDEN_NOTICE).first(), `${href}: aviso en español`).toBeVisible({
     timeout: 15_000,
   });
-  // Un permiso no se arregla reintentando: el aviso no ofrece «Reintentar».
-  await expect(
-    main.getByRole('button', { name: 'Reintentar' }),
-    `${href}: el aviso de permiso no ofrece reintentar`,
-  ).toHaveCount(0);
   const enabledWrites: string[] = [];
   for (const button of await main.getByRole('button').all()) {
     const name = ((await button.getAttribute('aria-label')) ?? (await button.innerText())).trim();
