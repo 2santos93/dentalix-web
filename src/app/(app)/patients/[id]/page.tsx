@@ -61,6 +61,7 @@ import {
   FamilyAccountStatementSection,
   ImagingExportDialog,
   MedicalHistoryPanel,
+  MergeLeftoversBanner,
   OdontogramTab,
   PatientCollectionsSection,
   PatientConsentsTab,
@@ -552,6 +553,18 @@ function PatientDetailView() {
               canReview={canReviewMajority(role)}
               stamp={stamp}
             />
+            {/* DX-266-bis: lo que llegó tarde a una ficha fusionada con esta
+                (solo ADMIN, que es quien fusiona). Al pasarlo, la ficha se
+                vuelve a leer entera. */}
+            {isAdmin ? (
+              <MergeLeftoversBanner
+                key={`merge-leftovers-${patientId}`}
+                token={accessToken}
+                patientId={patientId}
+                stamp={stamp}
+                onMoved={() => setRetryCount((c) => c + 1)}
+              />
+            ) : null}
             {anamnesisBlock('data')}
             <PatientDataPanel patient={patient} docTypeNames={docTypeNames} stamp={stamp} />
             {/* DX-172: cómo nos conoció, quién lo recomendó y a quién ha recomendado
