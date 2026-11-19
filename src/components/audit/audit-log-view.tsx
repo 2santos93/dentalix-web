@@ -29,6 +29,7 @@ import {
   locationNameMap,
   type LocationNames,
   appointmentMoveDetail,
+  appointmentSeriesDetail,
   staffNameMap,
   type StaffNames,
   cashSessionDetail,
@@ -572,6 +573,8 @@ function eventDetail(
 ): string | null {
   return (
     appointmentMoveDetail(event.metadata, moveClock(event, clock), staffNames) ??
+    // DX-562: crear, cancelar o mover «esta y las siguientes» de una serie.
+    appointmentSeriesDetail(event.metadata, moveClock(event, clock)) ??
     communicationDetail(event.metadata) ??
     confirmationLinkDetail(event.metadata) ??
     implantSearchDetail(event.metadata) ??
