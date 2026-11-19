@@ -168,7 +168,7 @@ function Summary({ report, fmt }: { report: AcquisitionReport; fmt: RegionalForm
   const { totals } = report;
   const pct = totals.newPatients > 0 ? fmt.percent((totals.payingPatients / totals.newPatients) * 100, 0) : null;
   return (
-    <StatGroup title={c.summaryTitle} className="grid-cols-2 sm:grid-cols-3">
+    <StatGroup as="h2" title={c.summaryTitle} className="grid-cols-2 sm:grid-cols-3">
       <Stat
         testId="acquisition-new"
         label={c.newPatients}
@@ -261,7 +261,7 @@ function SourceTable({ report, fmt }: { report: AcquisitionReport; fmt: Regional
   ];
   return (
     <section className="flex min-w-0 flex-col gap-2" aria-label={c.tableTitle}>
-      <h3 className="t-label text-ink">{c.tableTitle}</h3>
+      <h2 className="t-label text-ink">{c.tableTitle}</h2>
       <DataList label={c.tableLabel} rows={report.rows} columns={columns} getRowKey={(r) => r.sourceId ?? 'none'} />
     </section>
   );
@@ -291,7 +291,7 @@ function TopReferrers({ report, fmt }: { report: AcquisitionReport; fmt: Regiona
   return (
     <section className="flex min-w-0 flex-col gap-2" aria-label={c.referrersTitle}>
       <div className="flex flex-col gap-0.5">
-        <h3 className="t-label text-ink">{c.referrersTitle}</h3>
+        <h2 className="t-label text-ink">{c.referrersTitle}</h2>
         <p className="t-caption">{c.referrersCaption}</p>
       </div>
       <DataList

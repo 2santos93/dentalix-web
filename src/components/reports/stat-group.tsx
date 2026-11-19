@@ -34,10 +34,21 @@ export function Stat({
  * columnas las pone quien lo usa (`className`, p. ej. `grid-cols-2 sm:grid-cols-3`).
  * Lo comparten «Huecos recuperados» (DX-436) y «Presupuestos» (DX-558).
  */
-export function StatGroup({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
+export function StatGroup({
+  title,
+  children,
+  className,
+  as: Heading = 'h3',
+}: {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+  /** Nivel del título: `h2` cuando el bloque cuelga directamente del `h1` de la página (DX-172). */
+  as?: 'h2' | 'h3';
+}) {
   return (
     <section className="flex min-w-0 flex-col gap-2" aria-label={title}>
-      <h3 className="t-label text-ink">{title}</h3>
+      <Heading className="t-label text-ink">{title}</Heading>
       <dl
         className={cn(
           'grid min-w-0 gap-px overflow-hidden rounded-xl border border-border bg-border-subtle',
