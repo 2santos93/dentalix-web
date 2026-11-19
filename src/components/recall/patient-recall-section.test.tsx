@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '@/lib/api/client';
 import {
+  clearPhoneReview,
   createRecallContact,
   getPatientRecalls,
   listRecallTypes,
@@ -21,6 +22,7 @@ jest.mock('../../lib/recall/recall-api', () => ({
   listRecallTypes: jest.fn(),
   setPatientRecall: jest.fn(),
   createRecallContact: jest.fn(),
+  clearPhoneReview: jest.fn(),
 }));
 const mockedGet = getPatientRecalls as jest.MockedFunction<typeof getPatientRecalls>;
 const mockedSet = setPatientRecall as jest.MockedFunction<typeof setPatientRecall>;
@@ -186,19 +188,19 @@ describe('PatientRecallSection (DX-015)', () => {
     ).toBeInTheDocument();
   });
 
-  it('el mostrador registra un contacto y exige canal y resultado', async () => {
+  it('el mostrador registra un intento y exige canal y resultado', async () => {
     mockedGet.mockResolvedValue(data);
     mockedContact.mockResolvedValue(data.contacts[0]);
     render(<PatientRecallSection token="tok" patient={patient} canSet={false} canContact />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Registrar contacto de control' }));
-    await userEvent.click(await screen.findByRole('button', { name: 'Guardar contacto' }));
-    expect(await screen.findByText('Elige el canal del contacto.')).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Registrar intento de control' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Guardar intento' }));
+    expect(await screen.findByText('Elige el canal del intento.')).toBeInTheDocument();
     expect(mockedContact).not.toHaveBeenCalled();
     await userEvent.selectOptions(screen.getByLabelText('Canal'), 'CALL');
     // D23: en la ficha no hay desde dónde agendar: sin «Agendó».
     expect(within(screen.getByLabelText('Resultado')).queryByRole('option', { name: 'Agendó' })).not.toBeInTheDocument();
     await userEvent.selectOptions(screen.getByLabelText('Resultado'), 'NO_ANSWER');
-    await userEvent.click(screen.getByRole('button', { name: 'Guardar contacto' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar intento' }));
     await waitFor(() => expect(mockedContact).toHaveBeenCalledWith('tok', 'r1', { channel: 'CALL', outcome: 'NO_ANSWER' }));
   });
 
@@ -357,6 +359,63 @@ describe('PatientRecallSection (DX-015)', () => {
       expect(within(row).getByTestId('recall-basis')).toHaveTextContent(day);
       const manual = over === undefined || Object.keys(over).length === 0;
       expect(within(row).getByTestId('recall-basis').textContent?.includes('fijado a mano')).toBe(manual);
+    });
+  });
+
+  describe('DX-465: intentos y teléfono por revisar', () => {
+    it('el ciclo del recall: intentos y tope, «Llamar el» y agotados; el historial con su fecha de volver a llamar', async () => {
+      mockedGet.mockResolvedValue({
+        ...data,
+        recalls: [{ ...recall, attempts: 3, maxAttempts: 3, exhausted: true, callbackOn: '2026-12-12', hiddenUntil: '2026-12-12' }],
+        contacts: [{ ...data.contacts[0], outcome: 'CALL_BACK', callbackOn: '2026-12-12', locationId: 'l1' }],
+      });
+      render(<PatientRecallSection token="tok" patient={patient} canSet={false} canContact={false} />);
+      const cycle = await screen.findByTestId('recall-cycle');
+      const day = STAMP_FORMATS.caracas.civilDate('2026-12-12');
+      await waitFor(() => expect(cycle).toHaveTextContent(`Intentos: 3 de 3 · Llamar el ${day}`));
+      expect(within(cycle).getByText('Intentos agotados')).toBeInTheDocument();
+      const contact = screen.getByTestId('recall-contact-row');
+      expect(contact).toHaveTextContent('Control · Llamada · Llamar luego');
+      expect(contact).toHaveTextContent(`Volver a llamar el ${day}`);
+    });
+
+    it('sin intentos no pinta la línea del ciclo', async () => {
+      mockedGet.mockResolvedValue(data);
+      render(<PatientRecallSection token="tok" patient={patient} canSet={false} canContact={false} />);
+      await screen.findByTestId('recall-row-CHECKUP');
+      expect(screen.queryByTestId('recall-cycle')).toBeNull();
+      expect(screen.queryByTestId('phone-review')).toBeNull();
+    });
+
+    it('«Teléfono por revisar» con quién y cuándo; «Ya está corregido» lo quita y relee', async () => {
+      const mockedClear = jest.mocked(clearPhoneReview);
+      mockedClear.mockReset().mockResolvedValue({ patientId: 'pat-1', cleared: true });
+      mockedGet
+        .mockResolvedValueOnce({
+          ...data,
+          phoneReview: { flaggedAt: '2026-11-10T15:00:00.000Z', flaggedBy: { id: 'u2', fullName: 'Rita' } },
+        })
+        .mockResolvedValue(data);
+      render(<PatientRecallSection token="tok" patient={patient} canSet={false} canContact={false} />);
+      const notice = await screen.findByTestId('phone-review');
+      await waitFor(() => expect(notice).toHaveTextContent(/número erróneo el .+, Rita/));
+      await userEvent.click(within(notice).getByRole('button', { name: 'Ya está corregido' }));
+      expect(mockedClear).toHaveBeenCalledWith('tok', 'pat-1');
+      expect(await screen.findByText('Teléfono marcado como corregido.')).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByTestId('phone-review')).toBeNull());
+    });
+
+    it('si quitar la marca falla, el motivo junto al botón y la marca sigue', async () => {
+      const mockedClear = jest.mocked(clearPhoneReview);
+      mockedClear.mockReset().mockRejectedValue(new ApiError(500, 'boom'));
+      mockedGet.mockResolvedValue({
+        ...data,
+        phoneReview: { flaggedAt: '2026-11-10T15:00:00.000Z', flaggedBy: { id: 'u2', fullName: null } },
+      });
+      render(<PatientRecallSection token="tok" patient={patient} canSet={false} canContact={false} />);
+      const notice = await screen.findByTestId('phone-review');
+      await userEvent.click(within(notice).getByRole('button', { name: 'Ya está corregido' }));
+      expect(await within(notice).findByRole('alert')).toHaveTextContent('No pudimos quitar la marca del teléfono.');
     });
   });
 });
