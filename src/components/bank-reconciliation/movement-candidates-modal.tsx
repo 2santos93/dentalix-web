@@ -135,8 +135,14 @@ export function MovementCandidatesModal({
       p.reference ?? copy.noReference,
       p.receiptNumber ? copy.receipt(p.receiptNumber) : null,
     ]
-      .filter(Boolean)
-      .join(' · ');
+      .filter((part): part is string => Boolean(part))
+      // Cada dato entero en su línea: «Recibo PRI-000002» no se parte por el guion.
+      .map((part, i) => (
+        <React.Fragment key={i}>
+          {i > 0 ? ' · ' : null}
+          <span className="whitespace-nowrap">{part}</span>
+        </React.Fragment>
+      ));
 
   const empty = !loading && !result?.error && payments.length === 0 && reports.length === 0;
 
