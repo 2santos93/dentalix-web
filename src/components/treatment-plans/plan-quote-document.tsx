@@ -84,6 +84,9 @@ const copy = {
   remotePatient: 'paciente',
   remoteGuardian: (patient: string) => `representante de ${patient}`,
   sentBy: (name: string, when: string) => `Enviado por ${name} el ${when}`,
+  // DX-101-bis: aceptado con su firma desde el portal del paciente.
+  portalAccepted: 'Aceptado por el paciente desde el portal',
+  portalSignedBy: (name: string, when: string) => `Firmado por ${name} el ${when}`,
   blankSignature: 'Firma de aceptación del paciente',
   blankName: 'Nombre y documento',
   blankDate: 'Fecha',
@@ -512,6 +515,13 @@ export function PlanQuoteDocument({
                   </span>
                   <span className="text-[#4b5563]">
                     {copy.sentBy(acceptance.acceptedByName, doc.dateTime(acceptance.remote.sentAt))}
+                  </span>
+                </>
+              ) : acceptance.portal ? (
+                <>
+                  <span className="block font-medium">{copy.portalAccepted}</span>
+                  <span className="block text-[#4b5563]">
+                    {copy.portalSignedBy(acceptance.signerName, doc.dateTime(acceptance.acceptedAt))}
                   </span>
                 </>
               ) : (

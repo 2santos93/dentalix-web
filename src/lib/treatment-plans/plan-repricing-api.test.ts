@@ -66,7 +66,7 @@ describe('plan-repricing-api (DX-379 B)', () => {
     expect(
       isPlanRepriceable({
         status: 'PRESENTED',
-        acceptance: { signerName: 'Ana', acceptedAt: '2026-10-16T15:00:00Z', remote: null },
+        acceptance: { signerName: 'Ana', acceptedAt: '2026-10-16T15:00:00Z', remote: null, portal: null },
         items: proposed,
       }),
     ).toBe(false);

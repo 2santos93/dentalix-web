@@ -357,6 +357,20 @@
       "annotation": "E2E_MAIL_DIR no definido: no se puede registrar la clínica (usa scripts/e2e-ci.sh)",
       "requiresUnset": "E2E_MAIL_DIR",
       "reason": "DX-101: la prueba registra su propia clínica, que se confirma con el enlace del email."
+    },
+    {
+      "file": "e2e/patient-portal-accept.spec.ts",
+      "title": "Aceptar el presupuesto desde el portal (DX-101-bis) › el paciente elige la opción B con su nombre escrito, solo con el teclado (1440 y 390)",
+      "annotation": "E2E_MAIL_DIR no definido: no se puede registrar la clínica (usa scripts/e2e-ci.sh)",
+      "requiresUnset": "E2E_MAIL_DIR",
+      "reason": "DX-101-bis: la prueba registra su propia clínica, que se confirma con el enlace del email."
+    },
+    {
+      "file": "e2e/patient-portal-accept.spec.ts",
+      "title": "Aceptar el presupuesto desde el portal (DX-101-bis) › el personal ve la opción B aceptada desde el portal, con sus evidencias (1440 y 390)",
+      "annotation": "E2E_MAIL_DIR no definido: no se puede registrar la clínica (usa scripts/e2e-ci.sh)",
+      "requiresUnset": "E2E_MAIL_DIR",
+      "reason": "DX-101-bis: la prueba registra su propia clínica, que se confirma con el enlace del email."
     }
   ]
 }
