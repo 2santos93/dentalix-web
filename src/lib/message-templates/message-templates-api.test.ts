@@ -87,7 +87,7 @@ describe('message-templates-api (DX-565)', () => {
       });
       expect(messageTemplateFailure(err, messageTemplateErrorCopy.save)).toEqual({
         field: 'body',
-        message: '{importe} no se puede usar en el recordatorio: los mensajes al paciente no llevan importes ni datos clínicos.',
+        text: '{importe} no se puede usar en el recordatorio: los mensajes al paciente no llevan importes ni datos clínicos.',
         retryAfterSeconds: null,
       });
       const subject = new ApiError(400, 'El asunto no puede pasar de 150 caracteres.', {
@@ -106,7 +106,7 @@ describe('message-templates-api (DX-565)', () => {
       const err = new ApiError(409, 'Confirma tu correo…', { code: 'EMAIL_NOT_VERIFIED' });
       expect(messageTemplateFailure(err, messageTemplateErrorCopy.test)).toEqual({
         field: null,
-        message: messageTemplateErrorCopy.notVerified,
+        text: messageTemplateErrorCopy.notVerified,
         retryAfterSeconds: null,
       });
     });
@@ -117,7 +117,7 @@ describe('message-templates-api (DX-565)', () => {
       });
       expect(messageTemplateFailure(err, messageTemplateErrorCopy.test)).toEqual({
         field: null,
-        message: 'Ya te enviamos una prueba hace un momento. Espera 4 minutos para pedir otra.',
+        text: 'Ya te enviamos una prueba hace un momento. Espera 4 minutos para pedir otra.',
         retryAfterSeconds: 240,
       });
     });
@@ -125,7 +125,7 @@ describe('message-templates-api (DX-565)', () => {
     it('sin red: el texto de siempre, sin campo', () => {
       const failure = messageTemplateFailure(new NetworkError(new TypeError('Failed to fetch')), messageTemplateErrorCopy.save);
       expect(failure.field).toBeNull();
-      expect(failure.message).toMatch(/conexión/i);
+      expect(failure.text).toMatch(/conexión/i);
     });
   });
 

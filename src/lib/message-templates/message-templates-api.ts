@@ -100,7 +100,7 @@ export function sendMessageTemplateTest(
 export interface MessageTemplateFailure {
   /** `subject`/`body`: junto al campo; `null`: arriba del editor. */
   field: 'subject' | 'body' | null;
-  message: string;
+  text: string;
   /** 429: cuántos segundos esperar antes de volver a pedir la prueba. */
   retryAfterSeconds: number | null;
 }
@@ -121,17 +121,17 @@ export const messageTemplateErrorCopy = {
 export function messageTemplateFailure(err: unknown, fallback: string): MessageTemplateFailure {
   if (err instanceof ApiError) {
     if (err.status === 409 && err.code === MESSAGE_TEMPLATE_EMAIL_NOT_VERIFIED) {
-      return { field: null, message: messageTemplateErrorCopy.notVerified, retryAfterSeconds: null };
+      return { field: null, text: messageTemplateErrorCopy.notVerified, retryAfterSeconds: null };
     }
     if (err.status === 400 && err.code === MESSAGE_TEMPLATE_INVALID) {
       const field = err.field === 'subject' || err.field === 'body' ? err.field : null;
-      return { field, message: apiErrorMessage(err, fallback), retryAfterSeconds: null };
+      return { field, text: apiErrorMessage(err, fallback), retryAfterSeconds: null };
     }
     if (err.status === 429) {
-      return { field: null, message: apiErrorMessage(err, fallback), retryAfterSeconds: err.retryAfterSeconds ?? null };
+      return { field: null, text: apiErrorMessage(err, fallback), retryAfterSeconds: err.retryAfterSeconds ?? null };
     }
   }
-  return { field: null, message: apiErrorMessage(err, fallback), retryAfterSeconds: null };
+  return { field: null, text: apiErrorMessage(err, fallback), retryAfterSeconds: null };
 }
 
 /** Caracteres como los cuenta la API: puntos de código (un emoji cuenta uno). */
