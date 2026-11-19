@@ -1,0 +1,1121 @@
+{
+  "format": 1,
+  "source": "test/support/route-access-matrix.ts",
+  "roles": [
+    "ADMIN",
+    "DENTIST",
+    "ASSISTANT",
+    "RECEPTION"
+  ],
+  "extraPermissions": [
+    "PAYMENT_REGISTER",
+    "FINANCIAL_REPORTS_VIEW"
+  ],
+  "roleBasePermissions": {
+    "ADMIN": [
+      "PAYMENT_REGISTER",
+      "FINANCIAL_REPORTS_VIEW"
+    ],
+    "DENTIST": [],
+    "ASSISTANT": [],
+    "RECEPTION": [
+      "PAYMENT_REGISTER"
+    ]
+  },
+  "routes": {
+    "GET /agreements": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /anesthetics": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT"
+      ],
+      "permissions": []
+    },
+    "GET /appointment-types": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /appointments": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /audit-events": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /bank-reconciliation/accounts": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /cash-sessions": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "RECEPTION"
+      ],
+      "permissions": [
+        "PAYMENT_REGISTER",
+        "FINANCIAL_REPORTS_VIEW"
+      ]
+    },
+    "GET /cash-sessions/current": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "RECEPTION"
+      ],
+      "permissions": [
+        "PAYMENT_REGISTER",
+        "FINANCIAL_REPORTS_VIEW"
+      ]
+    },
+    "GET /cash-sessions/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "RECEPTION"
+      ],
+      "permissions": [
+        "PAYMENT_REGISTER",
+        "FINANCIAL_REPORTS_VIEW"
+      ]
+    },
+    "GET /catalog/items": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT"
+      ],
+      "permissions": []
+    },
+    "GET /certificates/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /chairs": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /clinic/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /clinic/weekly-digest-settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /clinical-note-templates": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT"
+      ],
+      "permissions": []
+    },
+    "GET /closing-queue": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /closing-queue/count": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /commissions/rules": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /commissions/settlements": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST"
+      ],
+      "permissions": []
+    },
+    "GET /consent-templates": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT"
+      ],
+      "permissions": []
+    },
+    "GET /dashboard": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /dental-labs": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /discount-policy": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT"
+      ],
+      "permissions": []
+    },
+    "GET /domains": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /equipment": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /equipment/maintenance-due": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /exchange/currency-texts": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /exchange/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /expenses": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /external-orders/pending": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /external-orders/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT"
+      ],
+      "permissions": []
+    },
+    "GET /implants/search": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /inventory/items": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "ASSISTANT"
+      ],
+      "permissions": []
+    },
+    "GET /lab-orders": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /leads": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /leads/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /locations": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /locations/:id/calendar": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /locations/schedule": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /me": {
+      "kind": "authenticated"
+    },
+    "GET /medical-history/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /medical-history/submissions": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT"
+      ],
+      "permissions": []
+    },
+    "GET /medical-history/submissions/summary": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT"
+      ],
+      "permissions": []
+    },
+    "GET /message-templates": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /online-booking/requests": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /online-booking/requests/pending-count": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /online-booking/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /ortho/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /patient-duplicates": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /patient-imports": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /patient-sources": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /patients": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /patients/coming-of-age": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /patients/document-type-names": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /patients/languages": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /patients/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /payers": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /payment-reports": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /payment-reports/count": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /payments": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "RECEPTION"
+      ],
+      "permissions": [
+        "PAYMENT_REGISTER",
+        "FINANCIAL_REPORTS_VIEW"
+      ]
+    },
+    "GET /post-op-checks/count": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /post-op-templates": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /prescriptions/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT"
+      ],
+      "permissions": []
+    },
+    "GET /price-lists": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT"
+      ],
+      "permissions": []
+    },
+    "GET /privacy-policies": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /recall-types": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /recall/due": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /recall/due/count": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /receivables/aging": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /receivables/aging/summary": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /reminder-settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /reports/acquisition": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": [
+        "FINANCIAL_REPORTS_VIEW"
+      ]
+    },
+    "GET /reports/chair-occupancy": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /reports/discounts": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /reports/locations-comparison": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": [
+        "FINANCIAL_REPORTS_VIEW"
+      ]
+    },
+    "GET /reports/no-shows": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST"
+      ],
+      "permissions": [
+        "FINANCIAL_REPORTS_VIEW"
+      ]
+    },
+    "GET /reports/patient-links": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /reports/production-by-procedure": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST"
+      ],
+      "permissions": []
+    },
+    "GET /reports/professional-productivity": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST"
+      ],
+      "permissions": [
+        "FINANCIAL_REPORTS_VIEW"
+      ]
+    },
+    "GET /reports/profitability": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": [
+        "FINANCIAL_REPORTS_VIEW"
+      ]
+    },
+    "GET /reports/quote-funnel": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST"
+      ],
+      "permissions": [
+        "FINANCIAL_REPORTS_VIEW"
+      ]
+    },
+    "GET /reports/recovered-slots": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /reports/scheduled-production": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST"
+      ],
+      "permissions": [
+        "FINANCIAL_REPORTS_VIEW"
+      ]
+    },
+    "GET /reports/unallocated-payments": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "RECEPTION"
+      ],
+      "permissions": [
+        "FINANCIAL_REPORTS_VIEW"
+      ]
+    },
+    "GET /security-policy": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /slot-offer-settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /staff/directory": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /support-accesses": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "GET /treatment-plan-settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /treatment-plan-templates": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT"
+      ],
+      "permissions": []
+    },
+    "GET /treatment-plans/pending-follow-up": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /treatment-plans/pending-follow-up/count": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /treatment-plans/unscheduled/count": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /waitlist": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "GET /work-queues/summary": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST",
+        "ASSISTANT",
+        "RECEPTION"
+      ],
+      "permissions": []
+    },
+    "PATCH /clinic/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "PATCH /payers/:id": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "POST /agreements": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "POST /anesthetics": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "POST /appointment-types": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "POST /chairs": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "POST /clinical-note-templates": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "POST /consent-templates": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "POST /dental-labs": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "POST /domains": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "POST /equipment": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "POST /message-templates/:key/:channel/:language/preview": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "POST /patient-imports/inspect": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "POST /patient-sources": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "POST /post-op-templates": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "POST /price-lists": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "POST /recall-types": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "POST /treatment-plan-templates": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "PUT /cash-sessions/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "PUT /certificates/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "PUT /clinic/weekly-digest-settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "PUT /commissions/rules/:userId": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "PUT /discount-policy": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "PUT /exchange/currency-texts": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "PUT /exchange/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "PUT /external-orders/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "PUT /leads/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "PUT /locations/:id/calendar/working-weekdays": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "PUT /medical-history/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "PUT /online-booking/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "PUT /ortho/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "PUT /patients/document-type-names": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "PUT /patients/languages": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "PUT /patients/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "PUT /prescriptions/settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "PUT /reminder-settings/:locationId": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "PUT /security-policy": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "PUT /slot-offer-settings": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    }
+  }
+}
