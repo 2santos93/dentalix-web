@@ -20,6 +20,7 @@ import { typeDate } from '@/components/patients/date-test-utils';
 import { selectionBarCopy } from './recall-selection-bar';
 import { batchContactCopy } from './recall-batch-contact-dialog';
 import { createRecallContactsBatch } from '@/lib/recall/recall-attempts-api';
+import { WORK_QUEUES_CHANGED_EVENT } from '@/components/work-queues/work-queues-context';
 import { RecallView, recallCopy } from './recall-view';
 import { recallUnconfiguredCopy } from './recall-unconfigured-list';
 import { recallDefaultCopy } from './recall-default-dialog';
@@ -107,6 +108,12 @@ const item = (over: Partial<RecallDueItem> = {}): RecallDueItem => ({
   ...over,
 });
 const page = (items: RecallDueItem[]): RecallDuePage => ({ items, total: items.length, page: 1, pageSize: 20 });
+
+
+const afterTestCleanups: Array<() => void> = [];
+afterEach(() => {
+  while (afterTestCleanups.length) afterTestCleanups.pop()!();
+});
 
 describe('RecallView (DX-015)', () => {
   beforeEach(() => {
@@ -520,6 +527,28 @@ describe('RecallView · intentos (DX-465)', () => {
     expect(await screen.findByText(recallCopy.contactSavedHidden('Ana Pérez'))).toBeInTheDocument();
   });
 
+  it('DX-298: guardar un intento avisa a las listas del menú (WORK_QUEUES_CHANGED_EVENT)', async () => {
+    const user = userEvent.setup();
+    const changed = jest.fn();
+    window.addEventListener(WORK_QUEUES_CHANGED_EVENT, changed);
+    try {
+      mockedList.mockResolvedValue(page([item()]));
+      mockedContact.mockResolvedValue({ outcome: 'NO_ANSWER' } as never);
+      render(<RecallView token="tok" />);
+      const row = (await screen.findByText('Ana Pérez')).closest('tr')!;
+      await user.click(within(row).getByRole('button', { name: 'Acciones de Ana Pérez' }));
+      await user.click(await screen.findByRole('menuitem', { name: recallCopy.register }));
+      const dialog = await screen.findByRole('dialog', { name: 'Registrar intento' });
+      await user.selectOptions(within(dialog).getByLabelText('Canal'), 'CALL');
+      await user.selectOptions(within(dialog).getByLabelText('Resultado'), 'NO_ANSWER');
+      expect(changed).not.toHaveBeenCalled();
+      await user.click(within(dialog).getByRole('button', { name: 'Guardar intento' }));
+      await waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
+    } finally {
+      window.removeEventListener(WORK_QUEUES_CHANGED_EVENT, changed);
+    }
+  });
+
   it('«Llamar luego» más allá de 90 días: el error junto al campo', async () => {
     const user = userEvent.setup();
     mockedList.mockResolvedValue(page([item()]));
@@ -557,8 +586,11 @@ describe('RecallView · intentos (DX-465)', () => {
       expect(screen.queryByRole('region', { name: selectionBarCopy.region })).toBeNull();
     });
 
-    it('registra el mismo intento para los marcados, recarga y limpia la selección', async () => {
+    it('registra el mismo intento para los marcados, recarga, limpia la selección y avisa a las listas del menú', async () => {
       const user = userEvent.setup();
+      const changed = jest.fn();
+      window.addEventListener(WORK_QUEUES_CHANGED_EVENT, changed);
+      afterTestCleanups.push(() => window.removeEventListener(WORK_QUEUES_CHANGED_EVENT, changed));
       mockedList.mockResolvedValue(two());
       mockedBatch.mockResolvedValue({ contacts: [{}, {}] } as never);
       render(<RecallView token="tok" />);
@@ -581,6 +613,7 @@ describe('RecallView · intentos (DX-465)', () => {
         note: 'Mensaje de control',
       });
       expect(await screen.findByText(recallCopy.batchSaved(2))).toBeInTheDocument();
+      expect(changed).toHaveBeenCalledTimes(1);
       await waitFor(() => expect(mockedList.mock.calls.length).toBeGreaterThan(calls));
       expect(screen.queryByRole('region', { name: selectionBarCopy.region })).toBeNull();
     });
