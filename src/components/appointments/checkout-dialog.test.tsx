@@ -337,6 +337,7 @@ describe('DX-015-bis (D16): «Programar recall de <tipo>» en la salida', () => 
       } as unknown as PatientRecall,
     ],
     contacts: [],
+    phoneReview: null,
     recallUpdates: [],
   });
 

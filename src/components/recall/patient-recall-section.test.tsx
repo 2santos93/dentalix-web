@@ -67,6 +67,12 @@ const recall: PatientRecall = {
   status: 'DUE',
   updatedAt: '2026-04-10T12:00:00.000Z',
   updatedBy: { id: 'u1', fullName: 'Dra. Ruiz' },
+  attempts: 0,
+  maxAttempts: 3,
+  exhausted: false,
+  lastAttemptAt: null,
+  hiddenUntil: null,
+  callbackOn: null,
 };
 const data: PatientRecalls = {
   recalls: [recall],
@@ -83,10 +89,12 @@ const data: PatientRecalls = {
       outcome: 'NO_ANSWER',
       note: 'Volver a llamar',
       appointmentId: null,
+      callbackOn: null,
       author: { id: 'u2', fullName: 'Rita' },
       createdAt: '2026-10-20T15:00:00.000Z',
     },
   ],
+  phoneReview: null,
 };
 
 describe('PatientRecallSection (DX-015)', () => {
@@ -233,7 +241,7 @@ describe('PatientRecallSection (DX-015)', () => {
     it('cambiar solo el intervalo no manda fecha: ni el día del procedimiento ni lo fijado (revisión 1, MAJOR-1)', async () => {
       // Fijado en enero; una profilaxis de junio da la base.
       const both = { ...recall, manualDoneAt: '2026-01-10', lastDoneAt: '2026-06-10', lastDoneItemId: 'item-1' };
-      mockedGet.mockResolvedValue({ recalls: [both], contacts: [] });
+      mockedGet.mockResolvedValue({ recalls: [both], contacts: [], phoneReview: null });
       mockedSet.mockResolvedValue({ ...data, recallUpdates: [] });
       render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
       await userEvent.click(await screen.findByRole('button', { name: 'Cambiar recall de control' }));
@@ -251,7 +259,7 @@ describe('PatientRecallSection (DX-015)', () => {
 
     it('un recall nacido de un procedimiento abre con la fecha vacía y, sin tocarla, no la manda', async () => {
       const born = { ...recall, manualDoneAt: null, lastDoneAt: '2026-06-10', lastDoneItemId: 'item-1', source: 'PROCEDURE' as const };
-      mockedGet.mockResolvedValue({ recalls: [born], contacts: [] });
+      mockedGet.mockResolvedValue({ recalls: [born], contacts: [], phoneReview: null });
       mockedSet.mockResolvedValue({ ...data, recallUpdates: [] });
       render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
       await userEvent.click(await screen.findByRole('button', { name: 'Cambiar recall de control' }));
@@ -265,7 +273,7 @@ describe('PatientRecallSection (DX-015)', () => {
 
     it('si el clínico cambia la fecha, se manda', async () => {
       const born = { ...recall, manualDoneAt: null, lastDoneAt: '2026-06-10', lastDoneItemId: 'item-1', source: 'PROCEDURE' as const };
-      mockedGet.mockResolvedValue({ recalls: [born], contacts: [] });
+      mockedGet.mockResolvedValue({ recalls: [born], contacts: [], phoneReview: null });
       mockedSet.mockResolvedValue({ ...data, recallUpdates: [] });
       const user = userEvent.setup();
       render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
@@ -280,8 +288,8 @@ describe('PatientRecallSection (DX-015)', () => {
     });
 
     it('un recall nuevo sin fecha no la manda (la API pone hoy); con fecha, sí', async () => {
-      mockedGet.mockResolvedValue({ recalls: [], contacts: [] });
-      mockedSet.mockResolvedValue({ recalls: [], contacts: [], recallUpdates: [] });
+      mockedGet.mockResolvedValue({ recalls: [], contacts: [], phoneReview: null });
+      mockedSet.mockResolvedValue({ recalls: [], contacts: [], phoneReview: null, recallUpdates: [] });
       const user = userEvent.setup();
       render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
       await user.click(await screen.findByRole('button', { name: 'Fijar recall de higiene' }));
@@ -303,6 +311,7 @@ describe('PatientRecallSection (DX-015)', () => {
       mockedGet.mockResolvedValue({
         recalls: [{ ...recall, id: 'r9', kind: null, recallTypeId: 't-gone', recallTypeName: 'Ortodoncia' }],
         contacts: [],
+        phoneReview: null,
       });
       render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
       const row = await screen.findByTestId('recall-row-t-gone');
@@ -318,6 +327,7 @@ describe('PatientRecallSection (DX-015)', () => {
       mockedGet.mockResolvedValue({
         recalls: [{ ...recall, id: 'r9', kind: null, recallTypeId: 't-perio', recallTypeName: 'Mantenimiento periodontal' }],
         contacts: [],
+        phoneReview: null,
       });
       render(<PatientRecallSection token="tok" patient={patient} canSet={false} canContact={false} />);
       const row = await screen.findByTestId('recall-row-t-perio');
@@ -339,7 +349,7 @@ describe('PatientRecallSection (DX-015)', () => {
       ['lo fijado a mano', {}, 'Cuenta desde el'],
     ])('dice de dónde cuenta el plazo: %s', async (_name, over, text) => {
       (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([{ ...STAMP_SEDES.caracas, id: 'l1' }]);
-      mockedGet.mockResolvedValue({ recalls: [{ ...recall, ...over }], contacts: [] });
+      mockedGet.mockResolvedValue({ recalls: [{ ...recall, ...over }], contacts: [], phoneReview: null });
       render(<PatientRecallSection token="tok" patient={patient} canSet={false} canContact={false} />);
       const row = await screen.findByTestId('recall-row-CHECKUP');
       const day = STAMP_FORMATS.caracas.civilDate('2026-04-10');

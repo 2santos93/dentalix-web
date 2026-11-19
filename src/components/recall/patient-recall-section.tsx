@@ -251,7 +251,7 @@ export function PatientRecallSection({
           defaultIntervalMonths={dialog.recallType.defaultIntervalMonths}
           recall={dialog.recall}
           onSaved={(saved) => {
-            setData({ recalls: saved.recalls, contacts: saved.contacts });
+            setData({ recalls: saved.recalls, contacts: saved.contacts, phoneReview: saved.phoneReview });
             // D9: «Recall de Higiene desactivado: lo sustituye Mantenimiento periodontal».
             const excluded = recallUpdatesNotice(saved.recallUpdates, null);
             setNotice(excluded ? `${copy.saved} ${excluded}.` : copy.saved);

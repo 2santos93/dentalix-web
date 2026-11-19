@@ -45,6 +45,13 @@ const item: RecallDueItem = {
   daysOverdue: 22,
   locationId: 'l1',
   lastContact: null,
+  lastAttempt: null,
+  attempts: 0,
+  maxAttempts: 3,
+  exhausted: false,
+  hiddenUntil: null,
+  callbackOn: null,
+  phoneReview: false,
 };
 
 describe('RecallScheduleDialog (DX-015-bis-4, D21–D22)', () => {

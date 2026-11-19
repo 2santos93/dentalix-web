@@ -89,6 +89,13 @@ const item = (over: Partial<RecallDueItem> = {}): RecallDueItem => ({
   daysOverdue: 22,
   locationId: 'l1',
   lastContact: null,
+  lastAttempt: null,
+  attempts: 0,
+  maxAttempts: 3,
+  exhausted: false,
+  hiddenUntil: null,
+  callbackOn: null,
+  phoneReview: false,
   ...over,
 });
 const page = (items: RecallDueItem[]): RecallDuePage => ({ items, total: items.length, page: 1, pageSize: 20 });
@@ -369,7 +376,7 @@ describe('RecallView · «Sin recall configurado» (DX-015-bis D17)', () => {
     mockedUnconfigured
       .mockResolvedValueOnce({ items: [row()], total: 1, page: 1, pageSize: 20 })
       .mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 });
-    mockedCreate.mockResolvedValue({ recalls: [], contacts: [], recallUpdates: [] });
+    mockedCreate.mockResolvedValue({ recalls: [], contacts: [], phoneReview: null, recallUpdates: [] });
     await openUnconfigured();
     const tr = (await screen.findByText('María Rondón')).closest('tr')!;
     await userEvent.click(within(tr).getByRole('button', { name: 'Acciones de María Rondón' }));
