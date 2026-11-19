@@ -126,6 +126,8 @@ export class ApiError extends Error {
   public readonly seriesConflicts: readonly SeriesConflictRef[] | null;
   /** DX-562: las citas que cambiaron a la vez en el 409 `APPOINTMENT_SERIES_STALE`. */
   public readonly appointmentIds: readonly string[] | null;
+  /** DX-465: los recalls que no existen en el 404 del registro de intentos en lote. */
+  public readonly recallIds: readonly string[] | null;
 
   constructor(
     public readonly status: number,
@@ -151,6 +153,7 @@ export class ApiError extends Error {
       candidates?: readonly CandidateRef[] | null;
       seriesConflicts?: readonly SeriesConflictRef[] | null;
       appointmentIds?: readonly string[] | null;
+      recallIds?: readonly string[] | null;
     } = {},
   ) {
     super(message);
@@ -175,6 +178,7 @@ export class ApiError extends Error {
     this.candidates = details.candidates ?? null;
     this.seriesConflicts = details.seriesConflicts ?? null;
     this.appointmentIds = details.appointmentIds ?? null;
+    this.recallIds = details.recallIds ?? null;
   }
 }
 

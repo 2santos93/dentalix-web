@@ -30,6 +30,27 @@ export type RecallTypeTrigger = Schemas['RecallTypeTriggerDto'];
 /** DX-015-bis (D17): un paciente atendido sin recall ni cita («Sin recall configurado»). */
 export type RecallUnconfiguredItem = Schemas['RecallUnconfiguredItemDto'];
 export type RecallUnconfiguredPage = Schemas['RecallUnconfiguredPageDto'];
+/** DX-465: el último intento de una fila de la lista. */
+export type RecallLastAttempt = Schemas['RecallLastAttemptDto'];
+/** DX-465: el teléfono marcado para revisar por un «Número erróneo» (ficha). */
+export type RecallPhoneReview = Schemas['RecallPhoneReviewDto'];
+export type CreateRecallContactsBatchInput = Schemas['CreateRecallContactsBatchDto'];
+export type RecallContactsBatch = Schemas['RecallContactsBatchDto'];
+/** DX-465: días de ocultación y tope de intentos de una sede. */
+export type LocationRecallSettings = Schemas['LocationRecallSettingsDto'];
+export type UpdateRecallSettingsInput = Schemas['UpdateRecallSettingsDto'];
+export type PhoneReviewCleared = Schemas['RecallPhoneReviewClearedDto'];
+
+/** DX-465: límites de la API (DTO y CHECK de `location_recall_settings`). */
+export const RECALL_HIDE_DAYS_MIN = 1;
+export const RECALL_HIDE_DAYS_MAX = 90;
+export const RECALL_MAX_ATTEMPTS_MIN = 1;
+export const RECALL_MAX_ATTEMPTS_MAX = 10;
+/** Lo que trae una sede sin configurar. */
+export const RECALL_DEFAULT_HIDE_DAYS = 7;
+export const RECALL_DEFAULT_MAX_ATTEMPTS = 3;
+/** Recalls por petición del lote. */
+export const RECALL_BATCH_MAX = 50;
 
 /** Crear, editar, retirar y fijar disparadores de los tipos: solo ADMIN (`RECALL_TYPE_WRITE_ROLES`). */
 export function canManageRecallTypes(role: ClinicRole | null): boolean {
@@ -42,6 +63,10 @@ export interface RecallDueFilters {
   /** DX-015-bis: un tipo de la clínica (`GET /recall-types`). */
   recallTypeId?: string;
   withinDays?: number;
+  /** DX-465: también los ocultos tras un intento y los que rechazaron (no los agotados). */
+  includeContacted?: boolean;
+  /** DX-465: SOLO los que llegaron al tope de intentos de su sede. */
+  exhausted?: boolean;
   sort?: RecallDueSort;
   page?: number;
   pageSize?: number;
@@ -51,7 +76,8 @@ export interface RecallDueFilters {
 export function listRecallDue(token: string, filters: RecallDueFilters = {}): Promise<RecallDuePage> {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {
-    if (value !== undefined) search.set(key, String(value));
+    // Un filtro booleano apagado no viaja: es el valor por defecto de la API.
+    if (value !== undefined && value !== false) search.set(key, String(value));
   }
   const query = search.toString();
   return apiFetch<RecallDuePage>(`/recall/due${query ? `?${query}` : ''}`, { token });
@@ -83,6 +109,53 @@ export function createRecallContact(
     token,
     method: 'POST',
     body: input,
+  });
+}
+
+/**
+ * `POST /recall/contacts/batch` (DX-465): el mismo intento para 1–50 recalls,
+ * todo o nada. Sin «Agendó». Con «Llamar luego», `callbackOn` es obligatoria.
+ * 404 con `recallIds` si alguno ya no existe; 403 si alguno es de otra sede.
+ */
+export function createRecallContactsBatch(
+  token: string,
+  input: CreateRecallContactsBatchInput,
+): Promise<RecallContactsBatch> {
+  return apiFetch<RecallContactsBatch>('/recall/contacts/batch', { token, method: 'POST', body: input });
+}
+
+/** Ajustes de intentos por sede: solo ADMIN (la API responde 403 a los demás, también al leer). */
+export function canManageRecallSettings(role: ClinicRole | null): boolean {
+  return role === 'ADMIN';
+}
+
+/** `GET /recall-settings` (DX-465): una fila por sede viva; sin configurar, 7 días y 3 intentos. */
+export function listRecallSettings(token: string): Promise<LocationRecallSettings[]> {
+  return apiFetch<LocationRecallSettings[]>('/recall-settings', { token });
+}
+
+/** `PUT /recall-settings/:locationId` (DX-465): reemplaza los dos valores de la sede. */
+export function updateRecallSettings(
+  token: string,
+  locationId: string,
+  input: UpdateRecallSettingsInput,
+): Promise<LocationRecallSettings> {
+  return apiFetch<LocationRecallSettings>(`/recall-settings/${encodeURIComponent(locationId)}`, {
+    token,
+    method: 'PUT',
+    body: input,
+  });
+}
+
+/**
+ * `POST /patients/:id/phone-review/clear` (DX-465): «Ya está corregido».
+ * Idempotente: `cleared` es false si no estaba marcado. Cambiar el teléfono
+ * del paciente también quita la marca (en el servidor).
+ */
+export function clearPhoneReview(token: string, patientId: string): Promise<PhoneReviewCleared> {
+  return apiFetch<PhoneReviewCleared>(`/patients/${encodeURIComponent(patientId)}/phone-review/clear`, {
+    token,
+    method: 'POST',
   });
 }
 
