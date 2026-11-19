@@ -21,6 +21,8 @@ export const POLICY_TEMPLATE: PublishPrivacyPolicyInput = {
     'Responsable del tratamiento: [Nombre de la clínica], con domicilio en [Dirección], recoge y trata los datos personales de sus pacientes.',
     'Finalidades: prestar la atención odontológica, llevar la historia clínica, agendar y recordar citas, cobrar y facturar los servicios, y cumplir las obligaciones legales de la clínica.',
     'Derechos del paciente: conocer, actualizar, rectificar y suprimir sus datos, y revocar esta autorización en cualquier momento, salvo lo que la clínica deba conservar por obligación legal.',
+    // DX-574: borradores locales de los formularios clínicos.
+    'Borradores en los equipos de la clínica: para no perder lo que se escribe en la historia clínica si se corta la luz o internet, el sistema guarda un borrador cifrado en el equipo, solo para el profesional que lo escribe. Se borra al guardarlo, al cerrar la sesión o a las 72 horas, y nunca se guarda en equipos marcados como compartidos.',
     'Contacto: para ejercer sus derechos o hacer consultas, escriba a [Correo o teléfono de contacto].',
     'Marco legal: [Normativa de protección de datos aplicable y autoridad ante la que reclamar, o borre este párrafo].',
   ].join('\n\n'),

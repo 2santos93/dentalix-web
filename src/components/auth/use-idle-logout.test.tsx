@@ -55,6 +55,23 @@ describe('useIdleLogout (DX-137)', () => {
     expect(clear).toHaveBeenCalled();
   });
 
+  it('si `/me` llega después de los minutos de la clínica, cierra en el acto, sin esperar al siguiente tick', async () => {
+    let resolveMe: (me: { sessionIdleMinutes: number }) => void = () => undefined;
+    const { loadMe } = jest.requireMock('../../lib/session/session-store') as { loadMe: jest.Mock };
+    loadMe.mockReturnValueOnce(new Promise((resolve) => (resolveMe = resolve)));
+    renderHook(() => useIdleLogout('tok'));
+    // 16 min sin uso con los 60 por defecto: aún dentro.
+    act(() => jest.advanceTimersByTime(16 * MINUTE));
+    expect(clear).not.toHaveBeenCalled();
+    // Llegan los 15 de la clínica: se reevalúa ya, sin avanzar el reloj.
+    await act(async () => {
+      resolveMe({ sessionIdleMinutes: 15 });
+      await Promise.resolve();
+    });
+    expect(clear).toHaveBeenCalled();
+    expect(takeIdleLogout()).toBe(true);
+  });
+
   it.each([
     ['la rueda o el trackpad', () => new WheelEvent('wheel', { deltaY: 120 })],
     ['tocar con el dedo', () => new Event('touchstart')],

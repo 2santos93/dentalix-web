@@ -1,3 +1,4 @@
+import { idempotencyHeaders } from '@/lib/api/idempotency-key';
 import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 
@@ -56,11 +57,14 @@ export async function createPlan(
   token: string,
   patientId: string,
   input: CreateTreatmentPlanInput = {},
+  /** DX-574: un reintento con la misma clave no crea otro plan. */
+  idempotencyKey?: string,
 ): Promise<TreatmentPlan> {
   return apiFetch<TreatmentPlan>(`/patients/${patientId}/treatment-plans`, {
     method: 'POST',
     body: input,
     token,
+    ...idempotencyHeaders(idempotencyKey),
   });
 }
 
@@ -100,11 +104,14 @@ export async function addItem(
   token: string,
   planId: string,
   input: AddTreatmentPlanItemInput,
+  /** DX-574: un reintento con la misma clave no duplica el ítem. */
+  idempotencyKey?: string,
 ): Promise<TreatmentPlanItem> {
   return apiFetch<TreatmentPlanItem>(`/treatment-plans/${planId}/items`, {
     method: 'POST',
     body: input,
     token,
+    ...idempotencyHeaders(idempotencyKey),
   });
 }
 

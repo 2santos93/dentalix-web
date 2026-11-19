@@ -1,6 +1,14 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { NewEvolutionModal } from './new-evolution-modal';
+import { NewEvolutionModal, newEvolutionCopy } from './new-evolution-modal';
+import { ApiError, NetworkError } from '@/lib/api/api-error';
+import {
+  draftTestToken,
+  dropAndRestoreNetwork,
+  installMemoryDraftStore,
+  resetConnectivityForTests,
+  uninstallDraftStore,
+} from '@/lib/test/draft-store';
 import { listNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
 import { createClinicalEntry, getClinicalEntrySigning } from '@/lib/patients/clinical-api';
 import { toast } from 'sonner';
@@ -137,7 +145,7 @@ describe('NewEvolutionModal (DX-170)', () => {
       notes:
         'Resina en superficie O con Resina A2 y Adhesivo universal. Observaciones: Sin sensibilidad.',
       templateId: 'tpl-resina',
-    });
+    }, expect.any(String));
     expect(onCreated).toHaveBeenCalled();
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
@@ -271,7 +279,7 @@ describe('NewEvolutionModal (DX-170)', () => {
       expect(mockedCreate).toHaveBeenCalledWith('tok', 'p1', {
         notes: 'Control sin novedad',
         appointmentId: 'apt-1',
-      }),
+      }, expect.any(String)),
     );
   });
 
@@ -530,7 +538,7 @@ describe('NewEvolutionModal · atajos de plantilla (DX-455)', () => {
     expect(screen.getByText('Plantilla «Resina» insertada.')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /guardar evolución/i }));
-    await waitFor(() => expect(mockedCreate).toHaveBeenCalledWith('tok', 'p1', { notes: text }));
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalledWith('tok', 'p1', { notes: text }, expect.any(String)));
   });
 
   it('«Cancelar» en las preguntas deja el atajo como texto', async () => {
@@ -592,7 +600,7 @@ describe('NewEvolutionModal · atajos de plantilla (DX-455)', () => {
         expect(mockedCreate).toHaveBeenCalledWith('tok', 'p1', {
           notes: 'Profilaxis con Ultrasonido.',
           templateId: 'tpl-profilaxis',
-        }),
+        }, expect.any(String)),
       );
     });
 
@@ -606,7 +614,7 @@ describe('NewEvolutionModal · atajos de plantilla (DX-455)', () => {
       await user.type(screen.getByLabelText(/texto de la evolución/i), 'Hecho sin incidencias.');
       await user.click(screen.getByRole('button', { name: /guardar evolución/i }));
       await waitFor(() =>
-        expect(mockedCreate).toHaveBeenCalledWith('tok', 'p1', { notes: 'Hecho sin incidencias.' }),
+        expect(mockedCreate).toHaveBeenCalledWith('tok', 'p1', { notes: 'Hecho sin incidencias.' }, expect.any(String)),
       );
     });
 
@@ -708,5 +716,172 @@ describe('NewEvolutionModal · recall (DX-015-bis D18)', () => {
     const notice = (toast.success as jest.Mock).mock.calls[0][0] as string;
     expect(notice).toMatch(/^Recall de Higiene: vence el 17\/01\/2027 · /);
     expect(notice).toContain('Recall de Control desactivado: lo sustituye Higiene');
+  });
+});
+
+describe('NewEvolutionModal · borradores sin conexión (DX-574)', () => {
+  const DENTIST = draftTestToken('u-me', 't1', 'DENTIST');
+  const SCOPE = { owner: 'u-me|t1', patientId: 'p1', form: 'evolution' as const };
+  const DRAFT_VALUE = {
+    templateId: null,
+    answers: {},
+    entryDate: '',
+    reason: 'Control',
+    manualNotes: 'Profilaxis completa; se cobra en USD.',
+    diagnoses: { principal: { code: null, tooth: '' }, related: [] },
+    recallDraft: { enabled: false, recallTypeId: null, intervalMonths: null },
+  };
+  let drafts: Awaited<ReturnType<typeof installMemoryDraftStore>>;
+
+  beforeEach(async () => {
+    resetConnectivityForTests();
+    mockedList.mockReset();
+    mockedCreate.mockReset();
+    mockedList.mockResolvedValue([resinTemplate, prophylaxisTemplate]);
+    mockedCreate.mockResolvedValue(created);
+    mockedSigning.mockReset();
+    mockedSigning.mockResolvedValue(SIGNED_OK);
+    drafts = await installMemoryDraftStore();
+  });
+  afterEach(() => uninstallDraftStore());
+
+  it('al abrir ofrece «Recuperar borrador de las HH:MM»; Recuperar rellena y NO guarda hasta pulsar Guardar', async () => {
+    await drafts.seed(SCOPE, DRAFT_VALUE, 'clave-original');
+    const user = userEvent.setup();
+    const { onCreated } = renderModal({ token: DENTIST });
+    expect(await screen.findByText('Recuperar borrador de las 14:05')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Recuperar' }));
+    expect(screen.getByLabelText(/texto de la evolución/i)).toHaveValue('Profilaxis completa; se cobra en USD.');
+    expect(screen.getByLabelText('Motivo')).toHaveValue('Control');
+    expect(screen.queryByText(/recuperar borrador/i)).not.toBeInTheDocument();
+    expect(mockedCreate).not.toHaveBeenCalled();
+    expect(onCreated).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: /guardar evolución/i }));
+    // El envío original pudo llegar: se reintenta con SU clave.
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith(
+        DENTIST,
+        'p1',
+        { notes: 'Profilaxis completa; se cobra en USD.', reason: 'Control' },
+        'clave-original',
+      ),
+    );
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    // Guardado en la historia: el borrador ya no está.
+    await waitFor(async () => expect(await drafts.store.has(SCOPE)).toBe(false));
+  });
+
+  it('la API ya no da la clave a esta sesión (401: tokenVersion vieja o sesión revocada): sin borrador, sin error, y se borra', async () => {
+    await drafts.seed(SCOPE, DRAFT_VALUE, 'clave-original');
+    drafts.failKey(() => new ApiError(401, 'La sesión ya no es válida para guardar borradores.'));
+    renderModal({ token: DENTIST });
+    await waitFor(async () => expect(await drafts.store.has(SCOPE)).toBe(false));
+    expect(screen.queryByText(/recuperar borrador/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/se podrá recuperar cuando vuelva la conexión/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    drafts.failKey(null);
+  });
+
+  it('sin red al abrir: avisa de que hay un borrador y lo conserva', async () => {
+    await drafts.seed(SCOPE, DRAFT_VALUE, 'clave-original');
+    drafts.failKey(() => new NetworkError(new TypeError('Failed to fetch')));
+    renderModal({ token: DENTIST });
+    expect(await screen.findByText(/se podrá recuperar cuando vuelva la conexión/i)).toBeInTheDocument();
+    expect(await drafts.store.has(SCOPE)).toBe(true);
+    drafts.failKey(null);
+  });
+
+  it('Descartar borra el borrador y deja el formulario vacío', async () => {
+    await drafts.seed(SCOPE, DRAFT_VALUE, 'clave-original');
+    const user = userEvent.setup();
+    renderModal({ token: DENTIST });
+    await user.click(await screen.findByRole('button', { name: 'Descartar' }));
+    expect(screen.getByLabelText(/texto de la evolución/i)).toHaveValue('');
+    await waitFor(async () => expect(await drafts.store.has(SCOPE)).toBe(false));
+  });
+
+  it('lo escrito se guarda cifrado en el equipo (no en localStorage ni sessionStorage)', async () => {
+    const user = userEvent.setup();
+    renderModal({ token: DENTIST });
+    await user.type(await screen.findByLabelText(/texto de la evolución/i), 'Exodoncia del 48');
+    await waitFor(async () => expect((await drafts.read(SCOPE))?.payload.value).toMatchObject({ manualNotes: 'Exodoncia del 48' }), {
+      timeout: 3000,
+    });
+    const storages = JSON.stringify({ ...window.localStorage }) + JSON.stringify({ ...window.sessionStorage });
+    expect(storages).not.toContain('Exodoncia');
+  });
+
+  it('sin red: no cierra, avisa «Sin conexión; se guardó en este dispositivo» y al volver la red guarda UNA vez con la misma clave', async () => {
+    mockedCreate.mockRejectedValueOnce(new NetworkError(new TypeError('Failed to fetch')));
+    const user = userEvent.setup();
+    const { onCreated, onOpenChange } = renderModal({ token: DENTIST });
+    await user.type(await screen.findByLabelText(/texto de la evolución/i), 'Control postoperatorio');
+    await user.click(screen.getByRole('button', { name: /guardar evolución/i }));
+
+    expect(await screen.findByText('Sin conexión; se guardó en este dispositivo.')).toBeInTheDocument();
+    expect(screen.getByText('Se enviará al volver la conexión.')).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    expect(screen.queryByText(newEvolutionCopy.genericError)).not.toBeInTheDocument();
+    expect((await drafts.read(SCOPE))?.payload.value).toMatchObject({ manualNotes: 'Control postoperatorio' });
+    const firstKey = mockedCreate.mock.calls[0][3];
+
+    dropAndRestoreNetwork();
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(2));
+    expect(mockedCreate.mock.calls[1][3]).toBe(firstKey);
+    await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    await waitFor(async () => expect(await drafts.store.has(SCOPE)).toBe(false));
+
+    // Otra reconexión no vuelve a enviar.
+    dropAndRestoreNetwork();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mockedCreate).toHaveBeenCalledTimes(2);
+  });
+
+  it('si el reintento lo rechaza la API, muestra su error y no reintenta en bucle', async () => {
+    mockedCreate
+      .mockRejectedValueOnce(new NetworkError(new TypeError('Failed to fetch')))
+      .mockRejectedValueOnce(new ApiError(422, 'Idempotency key reused', { code: 'IDEMPOTENCY_KEY_REUSED', messages: ['La clave de envío ya se usó con otros datos.'] }));
+    const user = userEvent.setup();
+    const { onOpenChange } = renderModal({ token: DENTIST });
+    await user.type(await screen.findByLabelText(/texto de la evolución/i), 'Control');
+    await user.click(screen.getByRole('button', { name: /guardar evolución/i }));
+    await screen.findByText('Sin conexión; se guardó en este dispositivo.');
+    const firstKey = mockedCreate.mock.calls[0][3];
+
+    dropAndRestoreNetwork();
+    expect(await screen.findByText(/la clave de envío ya se usó/i)).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    dropAndRestoreNetwork();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mockedCreate).toHaveBeenCalledTimes(2);
+
+    // El siguiente «Guardar» lleva una clave nueva.
+    mockedCreate.mockResolvedValueOnce(created);
+    await user.click(screen.getByRole('button', { name: /guardar evolución/i }));
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(3));
+    expect(mockedCreate.mock.calls[2][3]).not.toBe(firstKey);
+  });
+
+  it('cerrar el modal antes del debounce no pierde lo último escrito', async () => {
+    const user = userEvent.setup();
+    const view = render(
+      <NewEvolutionModal open onOpenChange={jest.fn()} token={DENTIST} patientId="p1" onCreated={jest.fn()} />,
+    );
+    await user.type(await screen.findByLabelText(/texto de la evolución/i), 'Sutura retirada');
+    view.unmount();
+    await waitFor(async () =>
+      expect((await drafts.read(SCOPE))?.payload.value).toMatchObject({ manualNotes: 'Sutura retirada' }),
+    );
+  });
+
+  it('el borrador de otro usuario del mismo navegador no se ofrece', async () => {
+    await drafts.seed({ ...SCOPE, owner: 'u-otro|t1' }, DRAFT_VALUE, 'k');
+    renderModal({ token: DENTIST });
+    await screen.findByLabelText(/texto de la evolución/i);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText(/recuperar borrador/i)).not.toBeInTheDocument();
   });
 });

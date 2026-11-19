@@ -10,6 +10,7 @@ import {
   type VaultStatus,
 } from './offline-vault';
 import { forgetOfflinePages } from './service-worker';
+import { forgetDrafts } from '@/lib/drafts/drafts-runtime';
 
 /** La agenda de hoy y mañana de una sede, tal cual la da la API (DX-405). */
 export type OfflineAgenda = components['schemas']['OfflineAgendaDto'];
@@ -207,11 +208,15 @@ export async function forgetOfflineAgendaData(): Promise<void> {
 
 /**
  * Cierre de sesión (aquí, en otra pestaña, o 401 de la API) y «Quitar copia
- * sin conexión»: la marca, la clave envuelta, la de la pestaña, la agenda y la
+ * sin conexión»: los borradores del usuario (DX-574), la marca, la clave envuelta, la de la pestaña, la agenda y la
  * página guardada por el service worker. Sube la época ANTES de borrar.
  */
 export async function forgetOfflineSession(): Promise<void> {
   epoch += 1;
+  // DX-574: los borradores del usuario que se va (y la clave en memoria). La
+  // marca de la pestaña dice quién era; sin ella, todos los del equipo.
+  const owner = offlineSessionOwner();
+  await forgetDrafts(owner);
   try {
     tabStorage()?.removeItem(SESSION_MARK);
   } catch {

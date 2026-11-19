@@ -2,6 +2,9 @@ import { auditRenderedControls } from '@/lib/test/rendered-a11y';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { clearSessionStore } from '@/lib/session/session-store';
 import { setupUser } from '@/lib/test/user';
+import { memoryKv } from '@/lib/offline/offline-kv';
+import { setDraftRuntimeForTests } from '@/lib/drafts/drafts-runtime';
+import type { DraftStore } from '@/lib/drafts/draft-store';
 import { UserMenu } from './user-menu';
 
 const push = jest.fn();
@@ -156,9 +159,12 @@ describe('UserMenu', () => {
       await user.keyboard('{ArrowDown}');
       expect(screen.getByRole('menuitemcheckbox', { name: 'Tema oscuro' })).toHaveFocus();
       await user.keyboard('{ArrowDown}');
+      // DX-574
+      expect(screen.getByRole('menuitemcheckbox', { name: 'Este equipo es compartido' })).toHaveFocus();
+      await user.keyboard('{ArrowDown}');
       expect(screen.getByRole('menuitem', { name: /cerrar sesión/i })).toHaveFocus();
       await user.keyboard('{ArrowUp}');
-      expect(screen.getByRole('menuitemcheckbox', { name: 'Tema oscuro' })).toHaveFocus();
+      expect(screen.getByRole('menuitemcheckbox', { name: 'Este equipo es compartido' })).toHaveFocus();
 
       await user.keyboard('{Escape}');
       await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
@@ -230,4 +236,27 @@ describe('UserMenu', () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith('/login'), { timeout: 4000 });
     expect(clear).toHaveBeenCalled();
   }, 10_000);
+  it('DX-574: «Este equipo es compartido» se guarda en el equipo, explica qué hace y al marcarlo borra los borradores', async () => {
+    const kv = memoryKv();
+    const wipeAll = jest.fn().mockResolvedValue(undefined);
+    setDraftRuntimeForTests({ kv, store: { wipeAll } as unknown as DraftStore });
+    try {
+      const user = setupUser();
+      render(<UserMenu />);
+      await user.click(await screen.findByRole('button', { name: /ana gómez/i }));
+      const item = await screen.findByRole('menuitemcheckbox', { name: 'Este equipo es compartido' });
+      expect(item).toHaveAccessibleDescription(/no se guardan borradores en este equipo/i);
+      await waitFor(() => expect(item).toHaveAttribute('aria-checked', 'false'));
+      await user.click(item);
+      await waitFor(() => expect(item).toHaveAttribute('aria-checked', 'true'));
+      await waitFor(() => expect(wipeAll).toHaveBeenCalledTimes(1));
+      expect(kv.tables.device.get('shared')).toBe(true);
+      await user.click(item);
+      await waitFor(() => expect(item).toHaveAttribute('aria-checked', 'false'));
+      await waitFor(() => expect(kv.tables.device.get('shared')).toBe(false));
+      expect(wipeAll).toHaveBeenCalledTimes(1);
+    } finally {
+      setDraftRuntimeForTests();
+    }
+  });
 });

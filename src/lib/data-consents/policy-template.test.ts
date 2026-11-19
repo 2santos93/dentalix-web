@@ -35,6 +35,9 @@ describe('POLICY_TEMPLATE', () => {
     expect(policyText).toContain('\n\nFinalidades:');
     expect(policyText).toContain('\n\nDerechos del paciente:');
     expect(policyText).toContain('\n\nContacto:');
+    // DX-574: los borradores cifrados del equipo.
+    expect(policyText).toContain('\n\nBorradores en los equipos de la clínica:');
+    expect(policyText).toMatch(/cifrado.*72 horas.*compartidos/);
     // El marco legal es de la clínica: un marcador que escribe o borra, nunca una ley dada.
     expect(policyText.endsWith(`\n\nMarco legal: ${LEGAL}.`)).toBe(true);
   });

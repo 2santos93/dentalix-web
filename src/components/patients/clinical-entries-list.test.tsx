@@ -256,7 +256,7 @@ describe('ClinicalEntriesList', () => {
     expect(mockedCreate).toHaveBeenCalledWith(
       'tok',
       'p1',
-      expect.objectContaining({ notes: 'Nueva evolución registrada' }),
+      expect.objectContaining({ notes: 'Nueva evolución registrada' }), expect.any(String),
     );
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     // Rendered twice — desktop table + mobile cards.
