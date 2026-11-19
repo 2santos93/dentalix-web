@@ -39,6 +39,7 @@ import {
   signatureRequestDetail,
   confirmationLinkDetail,
   appointmentMoveDetail,
+  appointmentSeriesDetail,
   staffNameMap,
   treatmentPlanAcceptanceDetail,
 } from './audit-labels';
@@ -1171,5 +1172,58 @@ describe('acquisitionDetail (DX-172)', () => {
     expect(acquisitionDetail({ reason: 'PATIENT_SOURCE_UPDATED' })).toBe('Origen de pacientes: fuente cambiada');
     expect(acquisitionDetail({ reason: 'OTRA' })).toBeNull();
     expect(acquisitionDetail({})).toBeNull();
+  });
+});
+
+describe('appointmentSeriesDetail (DX-562)', () => {
+  const VE = { timeZone: 'America/Caracas', fmt: regionalFormat({ locale: 'es-VE', hourCycle: 'h23' }) };
+  const ids = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
+  const series = {
+    seriesId: '33333333-3333-4333-8333-333333333333',
+    appointmentIds: ids,
+    // 9:00 en Caracas (UTC−4).
+    dates: ['2027-01-11T13:00:00.000Z', '2027-02-08T13:00:00.000Z'],
+    intervalWeeks: 4,
+  };
+  const at = (iso: string) => VE.fmt.dateTime(new Date(iso), VE.timeZone);
+
+  it('crear: cuántas, cada cuántas semanas y la primera y la última, en el reloj de la sede', () => {
+    const detail = appointmentSeriesDetail({ reason: 'APPOINTMENT_SERIES_CREATED', appointmentSeries: series }, VE);
+    expect(detail).toBe(`Serie de citas creada · 2 citas · cada 4 semanas · ${at(series.dates[0])} → ${at(series.dates[1])}`);
+    expect(detail).toMatch(/09:00/);
+    // Sin el reloj de la sede, «—»; nunca otro formato.
+    expect(appointmentSeriesDetail({ reason: 'APPOINTMENT_SERIES_CREATED', appointmentSeries: series }, null)).toBe(
+      'Serie de citas creada · 2 citas · cada 4 semanas · — → —',
+    );
+  });
+
+  it('cancelar: cuántas y la cancelación de la primera (quién, motivo, aviso, tardía)', () => {
+    expect(
+      appointmentSeriesDetail(
+        {
+          reason: 'APPOINTMENT_SERIES_CANCELLED',
+          appointmentSeries: { seriesId: series.seriesId, appointmentIds: ids },
+          cancellation: { byKind: 'CLINIC', reasonCode: 'CLINIC_RESCHEDULE', noticeMinutes: 4320, lateCancellation: false },
+        },
+        VE,
+      ),
+    ).toMatch(/^Citas de la serie canceladas · 2 citas · .+ · aviso de 4320 min$/);
+  });
+
+  it('mover: cuántas y la hora de la cita pivote antes y después', () => {
+    const move = {
+      from: { start: '2027-02-08T13:00:00.000Z', end: '2027-02-08T13:30:00.000Z', providerId: ids[0] },
+      to: { start: '2027-02-09T14:00:00.000Z', end: '2027-02-09T14:30:00.000Z', providerId: ids[0] },
+    };
+    expect(
+      appointmentSeriesDetail(
+        { reason: 'APPOINTMENT_SERIES_MOVED', appointmentSeries: { ...series, appointmentIds: [ids[1]] }, move },
+        VE,
+      ),
+    ).toBe(`Citas de la serie movidas · 1 cita · Antes: ${at(move.from.start)} · Después: ${at(move.to.start)}`);
+  });
+
+  it('otro motivo: null', () => {
+    expect(appointmentSeriesDetail({ reason: 'APPOINTMENT_MOVED' }, VE)).toBeNull();
   });
 });

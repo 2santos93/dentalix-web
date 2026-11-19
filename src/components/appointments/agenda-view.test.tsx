@@ -9,6 +9,7 @@ import { getAppointmentType } from '@/lib/appointments/appointment-types-api';
 import { currentlyOffline } from '@/lib/offline/connectivity';
 import { Toaster } from '@/components/errors/toaster';
 import { toast } from 'sonner';
+import { cancelAppointmentSeries } from '@/lib/appointments/appointment-series-api';
 import { ApiError } from '@/lib/api/client';
 import { wallDayRange, wallWeekRange } from '@/lib/time/wall-clock';
 import { caracasSede, utcSede } from '@/lib/test/sede-clock';
@@ -77,6 +78,12 @@ jest.mock('../../lib/appointments/appointments-api', () => ({
 }));
 // DX-567: la tira «Agendado» pide su propio endpoint (solo ADMIN, DENTIST y
 // FINANCIAL_REPORTS_VIEW): no entra en los conteos de `listAppointments`.
+// DX-562: cancelar o mover «esta y las siguientes».
+jest.mock('../../lib/appointments/appointment-series-api', () => ({
+  ...jest.requireActual('../../lib/appointments/appointment-series-api'),
+  cancelAppointmentSeries: jest.fn(),
+}));
+const mockedCancelSeries = jest.mocked(cancelAppointmentSeries);
 jest.mock('../../lib/reports/scheduled-production-api', () => ({
   ...jest.requireActual('../../lib/reports/scheduled-production-api'),
   getScheduledProduction: jest.fn(() => new Promise(() => {})),
@@ -1648,6 +1655,43 @@ describe('AgendaView', () => {
         cancelReasonCode: 'ILLNESS',
       });
       await waitFor(() => expect(mockedListWaitlist.mock.calls.length).toBeGreaterThan(before));
+    });
+
+    it('DX-562: una cita de serie lleva «Serie · 4 de 6» y cancela «Esta y las siguientes» sin ofrecer ocupar el hueco', async () => {
+      const apt = appointment({
+        id: 'apt-s4',
+        start: new Date(`${today}T09:00:00`).toISOString(),
+        end: new Date(`${today}T09:30:00`).toISOString(),
+        series: { id: 's-1', index: 4, total: 6 },
+      });
+      mockedListAppointments.mockResolvedValue([apt]);
+      mockedCancelSeries.mockResolvedValue({ seriesId: 's-1', appointments: [apt, apt, apt] } as unknown as Awaited<ReturnType<typeof cancelAppointmentSeries>>);
+      const user = userEvent.setup();
+      await renderAgenda(
+        <>
+          <AgendaView token={tokenFor('RECEPTION')} />
+          <Toaster />
+        </>,
+      );
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await user.click(screen.getByRole('button', { name: 'Lista' }));
+      expect((await screen.findAllByTestId('series-chip'))[0]).toHaveTextContent('Serie · 4 de 6');
+
+      const [select] = await screen.findAllByTestId('appointment-status-select');
+      await pickStatus(user, select, 'Cancelada');
+      const dialog = await screen.findByRole('dialog', { name: /Cancelar la cita de/ });
+      await user.click(within(dialog).getByLabelText(/Esta y las siguientes/));
+      await user.click(within(dialog).getByLabelText(/La clínica/));
+      await user.click(within(dialog).getByRole('button', { name: 'Cancelar esta y las siguientes' }));
+      await waitFor(() =>
+        expect(mockedCancelSeries).toHaveBeenCalledWith(expect.any(String), 's-1', {
+          fromAppointmentId: 'apt-s4',
+          cancelledByKind: 'CLINIC',
+          cancelReasonCode: 'CLINIC_RESCHEDULE',
+        }),
+      );
+      expect(mockedUpdateAppointment).not.toHaveBeenCalled();
+      expect(await screen.findByText('Se cancelaron 3 citas de la serie.')).toBeInTheDocument();
     });
 
     it('con el teclado, Enter sobre «Cancelada» abre el diálogo y Esc lo cierra sin cambiar nada, con el foco en el selector (QA 14)', async () => {

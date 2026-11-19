@@ -9,6 +9,13 @@ import {
 } from '@/lib/appointments/appointments-api';
 import { isInClinic } from '@/lib/appointments/patient-flow';
 import {
+  cancelAppointmentSeries,
+  isSeriesStale,
+  seriesLabel,
+  type AppointmentSeriesChange,
+  type AppointmentSeriesRef,
+} from '@/lib/appointments/appointment-series-api';
+import {
   CANCEL_REASON_TEXT_MAX,
   CANCELLATION_KIND_HINTS,
   CANCELLATION_KIND_LABELS,
@@ -58,7 +65,18 @@ export const cancelAppointmentCopy = {
   submit: 'Cancelar la cita',
   back: 'Volver',
   genericError: 'No pudimos cancelar la cita. Intenta de nuevo.',
+  // DX-562: cita de una serie.
+  scope: 'Qué citas cancelar',
+  scopeHint: (label: string) => `Esta cita es de una serie (${label}).`,
+  scopeOne: 'Solo esta cita',
+  scopeOneHint: 'Las demás citas de la serie siguen agendadas.',
+  scopeFollowing: 'Esta y las siguientes',
+  scopeFollowingHint: 'Se cancelan esta y las siguientes que siguen pendientes. Las anteriores y las ya atendidas no cambian.',
+  submitFollowing: 'Cancelar esta y las siguientes',
+  seriesError: 'No pudimos cancelar las citas de la serie. Intenta de nuevo.',
 };
+
+type CancelScope = 'one' | 'following';
 
 const copy = cancelAppointmentCopy;
 
@@ -77,6 +95,14 @@ interface CancelAppointmentDialogProps {
   /** Dónde queda el foco al cerrar (por defecto, donde estaba al abrir). */
   onCloseAutoFocus?: (event: Event) => void;
   onDone: (result: AppointmentWriteDetail) => void;
+  /**
+   * DX-562: la serie de la cita. Con ella se elige «Solo esta cita» o «Esta y
+   * las siguientes» (`POST /appointments/series/:id/cancel`, `onSeriesDone`).
+   */
+  series?: AppointmentSeriesRef;
+  onSeriesDone?: (result: AppointmentSeriesChange) => void;
+  /** DX-562: otra persona cambió alguna cita de la serie a la vez: recargar la agenda. */
+  onSeriesStale?: () => void;
 }
 
 /**
@@ -95,8 +121,14 @@ export function CancelAppointmentDialog({
   fromStatus,
   onCloseAutoFocus,
   onDone,
+  series,
+  onSeriesDone,
+  onSeriesStale,
 }: CancelAppointmentDialogProps) {
   const fromCompleted = fromStatus === 'COMPLETED';
+  const offersSeries = !!series && !fromCompleted && onSeriesDone !== undefined;
+  const [scope, setScope] = useState<CancelScope>('one');
+  const following = offersSeries && scope === 'following';
   const attended = fromCompleted || isInClinic(fromStatus);
   const id = useId();
   const originName = `${id}-origin`;
@@ -158,6 +190,24 @@ export function CancelAppointmentDialog({
     }
     setSubmitting(true);
     setError(null);
+    if (following && series && onSeriesDone) {
+      try {
+        onSeriesDone(
+          await cancelAppointmentSeries(token, series.id, {
+            fromAppointmentId: appointmentId,
+            cancelledByKind: byKind,
+            cancelReasonCode: reasonCode,
+            ...(detail.trim() ? { cancelReasonText: detail.trim() } : {}),
+          }),
+        );
+      } catch (err) {
+        setError(apiErrorMessage(err, copy.seriesError));
+        if (isSeriesStale(err)) onSeriesStale?.();
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
     try {
       const result = await updateAppointment(token, appointmentId, {
         status: 'CANCELLED',
@@ -183,12 +233,32 @@ export function CancelAppointmentDialog({
       title={copy.title(patientName)}
       description={copy.description}
       onSubmit={handleSubmit}
-      submitLabel={copy.submit}
+      submitLabel={following ? copy.submitFollowing : copy.submit}
       cancelLabel={copy.back}
       submitting={submitting}
       error={error}
       onCloseAutoFocus={onCloseAutoFocus}
     >
+      {offersSeries && series ? (
+        <RadioGroup
+          id={`${id}-scope`}
+          legend={copy.scope}
+          hint={copy.scopeHint(seriesLabel(series))}
+          value={scope}
+          onValueChange={(v) => setScope(v === 'following' ? 'following' : 'one')}
+          disabled={submitting}
+          optionsClassName="gap-2"
+        >
+          <RadioCard id={`${id}-scope-one`} value="one" title={copy.scopeOne} description={copy.scopeOneHint} />
+          <RadioCard
+            id={`${id}-scope-following`}
+            value="following"
+            title={copy.scopeFollowing}
+            description={copy.scopeFollowingHint}
+          />
+        </RadioGroup>
+      ) : null}
+
       <RadioGroup
         id={originName}
         legend={copy.origin}
