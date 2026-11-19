@@ -1004,6 +1004,22 @@ describe('AppointmentForm', () => {
     });
   });
 
+  // DX-465: agendar desde recall.
+  it('`recallContact` viaja en el alta de la cita', async () => {
+    const user = userEvent.setup();
+    mockedCreateAppointment.mockResolvedValue(createdAppointment);
+    const recallContact = { recallId: 'r1', channel: 'WHATSAPP_LINK' as const, note: 'Prefiere la tarde' };
+    render(<AppointmentForm token="tok" onCreated={jest.fn()} recallContact={recallContact} />);
+    await screen.findByRole('option', { name: /dra\. ana ríos/i });
+    await waitFor(() => expect(mockedListPatients).toHaveBeenCalled());
+    await fillValidForm(user);
+    await user.click(screen.getByRole('button', { name: /agendar|guardar/i }));
+    await waitFor(() => expect(mockedCreateAppointment).toHaveBeenCalled());
+    expect(mockedCreateAppointment.mock.calls.at(-1)![1]).toMatchObject({ recallContact });
+    // Los tests de abajo leen la primera llamada.
+    mockedCreateAppointment.mockClear();
+  });
+
 });
 
 describe('«Adelantar si hay hueco» (DX-210)', () => {

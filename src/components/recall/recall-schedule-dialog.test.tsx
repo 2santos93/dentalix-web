@@ -15,9 +15,15 @@ jest.mock('../appointments/appointment-form', () => ({
   AppointmentForm: (props: {
     defaultAppointmentTypeId?: string | null;
     defaultReason?: string;
+    recallContact?: unknown;
     onCreated: (a: { id: string }) => void;
   }) => (
-    <div data-testid="appointment-form" data-type={props.defaultAppointmentTypeId ?? ''} data-reason={props.defaultReason}>
+    <div
+      data-testid="appointment-form"
+      data-type={props.defaultAppointmentTypeId ?? ''}
+      data-reason={props.defaultReason}
+      data-recall-contact={JSON.stringify(props.recallContact ?? null)}
+    >
       <button type="button" onClick={() => props.onCreated({ id: 'ap-1' })}>
         Crear cita
       </button>
@@ -79,6 +85,11 @@ describe('RecallScheduleDialog (DX-015-bis-4, D21–D22)', () => {
       'En persona',
     ]);
     await user.selectOptions(channel, 'WHATSAPP_LINK');
+    // DX-465: el alta de la cita lleva el «Agendó» con el canal elegido (sin nota).
+    expect(JSON.parse(screen.getByTestId('appointment-form').getAttribute('data-recall-contact')!)).toEqual({
+      recallId: 'r1',
+      channel: 'WHATSAPP_LINK',
+    });
     await user.click(screen.getByRole('button', { name: 'Crear cita' }));
 
     expect(mockedContact).toHaveBeenCalledWith('tok', 'r1', {
@@ -113,6 +124,11 @@ describe('RecallScheduleDialog (DX-015-bis-4, D21–D22)', () => {
     await screen.findByTestId('appointment-form');
     expect(screen.getByLabelText(scheduleDialogCopy.channel)).toHaveValue('IN_PERSON');
     expect(screen.getByText(scheduleDialogCopy.note('Prefiere la tarde'))).toBeInTheDocument();
+    expect(JSON.parse(screen.getByTestId('appointment-form').getAttribute('data-recall-contact')!)).toEqual({
+      recallId: 'r1',
+      channel: 'IN_PERSON',
+      note: 'Prefiere la tarde',
+    });
     await user.click(screen.getByRole('button', { name: 'Crear cita' }));
     await waitFor(() => expect(onCreated).toHaveBeenCalled());
     expect(mockedContact).toHaveBeenCalledWith('tok', 'r1', {
