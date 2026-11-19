@@ -84,6 +84,7 @@ function clinicMethod(overrides: Partial<ClinicPaymentMethod>): ClinicPaymentMet
     requiresReference: false,
     proofPolicy: 'NONE' as const,
     allowInPaymentLink: false,
+    gatewayFeePercent: null,
     legacyMethod: null,
     adjustments: [],
     createdAt: '2026-01-01T00:00:00.000Z',

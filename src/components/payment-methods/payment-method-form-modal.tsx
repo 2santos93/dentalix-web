@@ -2,12 +2,15 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { parseDecimalInput } from '@/lib/format/money';
 import {
   PAYMENT_METHOD_KIND_LABELS,
   PAYMENT_METHOD_KIND_OPTIONS,
   PAYMENT_PROOF_POLICY_LABELS,
   PAYMENT_PROOF_POLICY_OPTIONS,
+  GATEWAY_FEE_MAX,
   createPaymentMethod,
+  setPaymentMethodGatewayFee,
   updatePaymentMethod,
   type ClinicPaymentMethod,
   type PaymentMethodKind,
@@ -40,6 +43,12 @@ export const paymentMethodFormCopy = {
   allowInPaymentLink: 'Permitir en el enlace de pago',
   allowInPaymentLinkHint:
     'El paciente podrá reportar su pago con este medio desde el enlace que le envíes. Solo se muestra si tiene datos para pagar.',
+  // DX-018-bis: lo que la pasarela cobra a la CLÍNICA (no es un ajuste al paciente).
+  gatewayFee: 'Comisión de la pasarela (%)',
+  gatewayFeeHint:
+    'Lo que el banco o la pasarela cobra a la clínica por cada cobro con este medio. No cambia lo que paga el paciente; sirve para descontarlo de los honorarios si la regla lo indica. Vacío si no cobra.',
+  gatewayFeeError: 'Escribe un porcentaje mayor que 0 y como mucho 100, con hasta 2 decimales, o déjalo vacío.',
+  gatewayFeeSaveError: 'Guardamos el medio de pago, pero no la comisión de la pasarela. Intenta de nuevo.',
   create: 'Crear medio',
   save: 'Guardar cambios',
   invalidName: 'Escribe un nombre (hasta 60 caracteres).',
@@ -73,6 +82,13 @@ export function PaymentMethodFormModal({
   const [requiresReference, setRequiresReference] = useState(method?.requiresReference ?? true);
   const [proofPolicy, setProofPolicy] = useState<PaymentProofPolicy>(method?.proofPolicy ?? 'NONE');
   const [allowInPaymentLink, setAllowInPaymentLink] = useState(method?.allowInPaymentLink ?? false);
+  const [gatewayFee, setGatewayFee] = useState(
+    method?.gatewayFeePercent == null ? '' : String(method.gatewayFeePercent).replace('.', ','),
+  );
+  const [gatewayFeeError, setGatewayFeeError] = useState<string | null>(null);
+  // Si el medio se guardó y falló la comisión, el reintento edita ese medio (no crea otro).
+  const [saved, setSaved] = useState<ClinicPaymentMethod | null>(null);
+  const gatewayFeeRef = React.useRef<HTMLInputElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -91,16 +107,40 @@ export function PaymentMethodFormModal({
       nameRef.current?.focus();
       return;
     }
+    let fee: number | null = null;
+    if (gatewayFee.trim() !== '') {
+      const parsed = parseDecimalInput(gatewayFee, 2);
+      if (!parsed.ok || parsed.value <= 0 || parsed.value > GATEWAY_FEE_MAX) {
+        setGatewayFeeError(copy.gatewayFeeError);
+        gatewayFeeRef.current?.focus();
+        return;
+      }
+      fee = parsed.value;
+    }
+    setGatewayFeeError(null);
     setSubmitting(true);
+    const target = saved ?? method ?? null;
+    let current: ClinicPaymentMethod | null = saved;
     try {
-      const input = { name: trimmed, kind, requiresReference, proofPolicy, allowInPaymentLink };
-      const saved = editing
-        ? await updatePaymentMethod(token, method.id, input)
-        : await createPaymentMethod(token, input);
-      onSaved(saved);
-      onOpenChange(false);
+      if (!saved) {
+        const input = { name: trimmed, kind, requiresReference, proofPolicy, allowInPaymentLink };
+        current = target ? await updatePaymentMethod(token, target.id, input) : await createPaymentMethod(token, input);
+      }
     } catch (err) {
       setError(apiErrorMessage(err, copy.genericError));
+      setSubmitting(false);
+      return;
+    }
+    try {
+      if (current && (current.gatewayFeePercent ?? null) !== fee) {
+        current = await setPaymentMethodGatewayFee(token, current.id, fee);
+      }
+      onSaved(current!);
+      onOpenChange(false);
+    } catch (err) {
+      setSaved(current);
+      onSaved(current!);
+      setError(apiErrorMessage(err, copy.gatewayFeeSaveError));
     } finally {
       setSubmitting(false);
     }
@@ -184,6 +224,27 @@ export function PaymentMethodFormModal({
         label={copy.allowInPaymentLink}
         description={copy.allowInPaymentLinkHint}
       />
+      <FormField
+        htmlFor="pm-gateway-fee"
+        label={copy.gatewayFee}
+        hint={copy.gatewayFeeHint}
+        hintId="pm-gateway-fee-hint"
+        error={gatewayFeeError}
+        className="sm:w-72"
+      >
+        <Input
+          id="pm-gateway-fee"
+          ref={gatewayFeeRef}
+          inputMode="decimal"
+          value={gatewayFee}
+          aria-invalid={gatewayFeeError ? true : undefined}
+          aria-describedby={gatewayFeeError ? fieldErrorId('pm-gateway-fee') : 'pm-gateway-fee-hint'}
+          onChange={(e) => {
+            setGatewayFee(e.target.value);
+            if (gatewayFeeError) setGatewayFeeError(null);
+          }}
+        />
+      </FormField>
     </FormModal>
   );
 }

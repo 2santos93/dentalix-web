@@ -3719,6 +3719,26 @@ export interface paths {
         patch: operations["PaymentMethodsController_changeAdjustment"];
         trace?: never;
     };
+    "/api/v1/payment-methods/{id}/gateway-fee": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Pone o quita la comisión de la pasarela del medio
+         * @description DX-018-bis. Lo que la pasarela cobra a la CLÍNICA por cada cobro con este medio (no es un ajuste al paciente de DX-516). Con «descontar pasarela» en la regla de honorarios, la base cobrada de cada abono se reduce en este %; al cerrar la liquidación queda congelado.
+         */
+        put: operations["PaymentMethodsController_gatewayFee"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payment-methods/{id}/instructions": {
         parameters: {
             query?: never;
@@ -9904,6 +9924,26 @@ export interface paths {
          * @description En borrador, todo. Tras «Enviada» solo dueOn y appointmentId (409 para el resto: se corrige con una orden nueva que la sustituya). Recepción solo dueOn y appointmentId.
          */
         patch: operations["LabOrdersController_update"];
+        trace?: never;
+    };
+    "/api/v1/lab-orders/{id}/cost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Pone o quita el costo del laboratorio de la orden (solo ADMIN)
+         * @description En cualquier estado salvo anulada (también tras «Enviada»: el laboratorio factura al entregar). Con «descontar laboratorio» en la regla de honorarios, el costo en la moneda del plan del ítem se descuenta de la base; en otra moneda no se convierte: se avisa y no se descuenta.
+         */
+        put: operations["LabOrdersController_setCost"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/lab-orders/{id}/send": {
@@ -18782,6 +18822,11 @@ export interface components {
             proofPolicy: components["schemas"]["PaymentProofPolicy"];
             /** @description DX-569 «Permitir en el enlace de pago»: el paciente lo ve en su enlace si además está activo y tiene datos para pagar en la sede del enlace (o de toda la clínica). */
             allowInPaymentLink: boolean;
+            /**
+             * @description DX-018-bis: % que la pasarela cobra a la clínica por cada cobro con este medio (null = ninguno). Los honorarios pueden descontarlo.
+             * @example 3.5
+             */
+            gatewayFeePercent: number | null;
             /** @description Medio inicial equivalente a este método antiguo; null si lo creó la clínica. */
             legacyMethod: components["schemas"]["PaymentMethod"] | null;
             /** @description DX-516: sus ajustes (activos o no; hasta 5 activos). Vacío por defecto. */
@@ -18844,6 +18889,13 @@ export interface components {
             fixedCurrency?: string | null;
             /** @description Sin indicarlo, activo. */
             active?: boolean;
+        };
+        SetPaymentMethodGatewayFeeDto: {
+            /**
+             * @description Mayor que 0 y como mucho 100, con hasta 2 decimales; null la quita.
+             * @example 3.5
+             */
+            percent: number | null;
         };
         PaymentMethodInstructionDto: {
             /** Format: uuid */
@@ -31411,6 +31463,17 @@ export interface components {
             toothNumber: string;
             /** @example Corona de zirconio */
             procedureName: string;
+            /** @description DX-018-bis: moneda del plan. Un costo en otra moneda no se descuenta de los honorarios. */
+            planCurrency: string;
+        };
+        LabOrderCostDto: {
+            /**
+             * @description Decimal en texto.
+             * @example 180.00
+             */
+            amount: string;
+            /** @description Código ISO 4217. */
+            currency: string;
         };
         LabOrderAppointmentRefDto: {
             /** Format: uuid */
@@ -31488,6 +31551,8 @@ export interface components {
             cancelledBy: components["schemas"]["LabOrderPersonDto"] | null;
             cancelReason: string | null;
             treatmentPlanItem: components["schemas"]["LabOrderPlanItemRefDto"] | null;
+            /** @description DX-018-bis: costo del trabajo. Solo ADMIN lo ve (null para el resto y en la impresión). */
+            cost: components["schemas"]["LabOrderCostDto"] | null;
             appointment: components["schemas"]["LabOrderAppointmentRefDto"] | null;
             /** @description La orden anterior que esta corrige */
             replacesOrder: components["schemas"]["LabOrderNumberRefDto"] | null;
@@ -31578,6 +31643,15 @@ export interface components {
             appointmentId?: string | null;
             /** Format: uuid */
             replacesOrderId?: string | null;
+        };
+        SetLabOrderCostDto: {
+            /**
+             * @description Lo que cobra el laboratorio: decimal ≥ 0 con hasta 2 decimales, en texto. null lo quita (con la moneda en null).
+             * @example 180.00
+             */
+            cost: string | null;
+            /** @description Moneda del costo (ISO 4217). Si no es la del plan del ítem, no se descuenta de los honorarios. */
+            currency: string | null;
         };
         SendLabOrderDto: {
             /**
@@ -31838,9 +31912,9 @@ export interface components {
             rule: components["schemas"]["CommissionRuleDto"] | null;
         };
         CommissionDeductionsDto: {
-            /** @description Se puede descontar el costo de laboratorio (hoy no: sin datos). */
+            /** @description Se puede descontar el costo de laboratorio (DX-018-bis: sí). */
             labCost: boolean;
-            /** @description Se puede descontar la comisión de la pasarela (hoy no: sin datos). */
+            /** @description Se puede descontar la comisión de la pasarela (DX-018-bis: sí). */
             cardFee: boolean;
         };
         CommissionRulesDto: {
@@ -31873,12 +31947,12 @@ export interface components {
              */
             active: boolean;
             /**
-             * @description Descontar el costo de laboratorio. Aún no disponible (las órdenes de laboratorio no guardan su costo): true → 400.
+             * @description DX-018-bis: descontar antes del % el costo de laboratorio del ítem (sus órdenes vivas con costo en la moneda del plan; en otra moneda no se convierte: se avisa y no se descuenta).
              * @default false
              */
             deductLabCost: boolean;
             /**
-             * @description Descontar la comisión de la pasarela del medio de pago. Aún no disponible (los medios de pago no guardan ese %): true → 400.
+             * @description DX-018-bis: descontar antes del % la comisión de la pasarela (el % del medio de pago del abono; solo base «cobrado»).
              * @default false
              */
             deductCardFee: boolean;
@@ -31905,6 +31979,18 @@ export interface components {
             amount: number;
             /** @description Moneda del abono. */
             currency: string;
+        };
+        CommissionLineDeductionsDto: {
+            /** @description Base antes de descuentos (sin descuentos, = base). */
+            grossBase: number;
+            /** @description Costo de laboratorio descontado. */
+            labCost: number;
+            /** @description % de la pasarela aplicado; null si no se descontó. */
+            cardFeePercent: number | null;
+            /** @description Comisión de la pasarela descontada. */
+            cardFee: number;
+            /** @description Monedas de costos de laboratorio distintas a la del plan: no se convierten ni se descuentan (aviso). */
+            labCostSkippedCurrencies: string[];
         };
         CommissionLineDto: {
             /**
@@ -31947,6 +32033,7 @@ export interface components {
             percent: number;
             /** @description Honorario en la moneda de la línea (un ajuste, con signo). */
             amount: number;
+            deductions: components["schemas"]["CommissionLineDeductionsDto"];
             /**
              * Format: uuid
              * @description DX-464: el pago vivo de la liquidación que cubre la línea; null en la vista previa o si está pendiente.
@@ -32071,6 +32158,10 @@ export interface components {
             basis: components["schemas"]["CommissionBasis"];
             releaseMode: components["schemas"]["CommissionReleaseMode"];
             percent: number;
+            /** @description DX-018-bis: la regla descontaba el laboratorio al cerrar. */
+            deductLabCost: boolean;
+            /** @description DX-018-bis: la regla descontaba la pasarela al cerrar. */
+            deductCardFee: boolean;
             /** Format: date-time */
             closedAt: string;
             closedBy: components["schemas"]["CommissionClosedByDto"];
@@ -32101,6 +32192,10 @@ export interface components {
             basis: components["schemas"]["CommissionBasis"];
             releaseMode: components["schemas"]["CommissionReleaseMode"];
             percent: number;
+            /** @description DX-018-bis: la regla descontaba el laboratorio al cerrar. */
+            deductLabCost: boolean;
+            /** @description DX-018-bis: la regla descontaba la pasarela al cerrar. */
+            deductCardFee: boolean;
             /** Format: date-time */
             closedAt: string;
             closedBy: components["schemas"]["CommissionClosedByDto"];
@@ -44076,6 +44171,52 @@ export interface operations {
             };
             /** @description Etiqueta repetida en el medio o tope de ajustes activos */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentMethodsController_gatewayFee: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPaymentMethodGatewayFeeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodDto"];
+                };
+            };
+            /** @description Porcentaje fuera de (0, 100] o con más de 2 decimales */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Medio no encontrado en esta clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -60260,6 +60401,66 @@ export interface operations {
                 content?: never;
             };
             /** @description Ítem, cita u orden corregida de otro paciente; laboratorio o servicio inactivo */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LabOrdersController_setCost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetLabOrderCostDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabOrderDto"];
+                };
+            };
+            /** @description Costo o moneda inválidos, uno sin el otro, o sin cambios */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración pone el costo del laboratorio. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Orden de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Orden anulada o cambiada a la vez */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La moneda no existe */
             422: {
                 headers: {
                     [name: string]: unknown;

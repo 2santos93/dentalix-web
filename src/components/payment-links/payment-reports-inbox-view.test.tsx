@@ -66,6 +66,7 @@ function method(over: Partial<ClinicPaymentMethod>): ClinicPaymentMethod {
     requiresReference: true,
     proofPolicy: 'OPTIONAL',
     allowInPaymentLink: true,
+    gatewayFeePercent: null,
     legacyMethod: null,
     adjustments: [],
     createdAt: '2026-01-01T00:00:00.000Z',
