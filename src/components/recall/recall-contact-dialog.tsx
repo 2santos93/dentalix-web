@@ -18,6 +18,7 @@ import { NativeSelect } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { RecallCallbackField } from './recall-callback-field';
+import { announceRecallQueueChanged } from './recall-work-queues';
 
 export const contactDialogCopy = {
   title: 'Registrar intento',
@@ -116,6 +117,7 @@ export function RecallContactDialog({
         ...(note.trim() ? { note: note.trim() } : {}),
         ...(outcome === 'CALL_BACK' && callbackOn ? { callbackOn } : {}),
       });
+      announceRecallQueueChanged();
       onSaved(contact);
       onOpenChange(false);
     } catch (err) {
