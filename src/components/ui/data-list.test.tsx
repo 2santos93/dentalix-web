@@ -2,6 +2,7 @@ import * as React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import { setupUser } from '@/lib/test/user';
 import { DataList, type DataListColumn } from './data-list';
+import { SelectableDataList } from './selectable-data-list';
 
 /**
  * El contrato de `DataList`: una declaración de columnas, tabla de verdad en
@@ -255,7 +256,7 @@ describe('DataList', () => {
     function Selectable({ initial = [] as string[], onChange = jest.fn() }) {
       const [keys, setKeys] = React.useState<ReadonlySet<string>>(new Set(initial));
       return (
-        <DataList
+        <SelectableDataList
           label="Pacientes"
           rows={rows}
           columns={columns}

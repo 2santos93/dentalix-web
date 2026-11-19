@@ -48,7 +48,8 @@ import { Pagination } from '@/components/shared/pagination';
 import type { RowAction } from '@/components/shared/row-actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { DataList, DATA_LIST_PHONE_QUERY, type DataListColumn } from '@/components/ui/data-list';
+import { DATA_LIST_PHONE_QUERY, type DataListColumn } from '@/components/ui/data-list';
+import { SelectableDataList } from '@/components/ui/selectable-data-list';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Tooltip } from '@/components/ui/tooltip';
 import { RecallContactDialog } from './recall-contact-dialog';
@@ -549,7 +550,7 @@ export function RecallView({ token }: { token: string }) {
               skeleton={<TableSkeleton rows={5} />}
             >
               <ResultCount total={data?.total ?? 0} noun={copy.countNoun} nounPlural={copy.countNounPlural} />
-              <DataList
+              <SelectableDataList
                 label={copy.listLabel}
                 rows={items}
                 columns={columns}

@@ -5,7 +5,6 @@ import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useMediaQuery } from '@/lib/hooks/use-media-query';
 import { Card } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { MissingValue } from '@/components/ui/missing-value';
 import { Skeleton } from '@/components/ui/skeleton';
 import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
@@ -49,18 +48,20 @@ export interface DataListColumn<T> {
 }
 
 /**
- * Selección múltiple (DX-465): una casilla por fila y «Seleccionar todo» de las
- * filas que se ven (la página). La lista no guarda nada: quien la usa tiene el
- * conjunto y pinta la barra de acciones. Casillas nativas: Espacio las marca.
+ * Huecos de la selección múltiple (DX-465). `DataList` solo reserva el sitio:
+ * las casillas y su lógica las pone `SelectableDataList`
+ * (`selectable-data-list.tsx`), para que el shell, que carga `DataList` en
+ * todas las rutas, no pague `Checkbox` ni la selección.
  */
-export interface DataListSelection<T> {
-  /** Las claves (`getRowKey`) marcadas; puede tener claves de filas que ya no se ven. */
-  selectedKeys: ReadonlySet<string>;
-  onChange: (next: ReadonlySet<string>) => void;
-  /** Nombre accesible de la casilla de la fila: «Seleccionar a Ana Pérez». */
-  getRowLabel: (row: T) => string;
-  /** Nombre de la casilla de cabecera: «Seleccionar todos los de esta página». */
-  allLabel: string;
+export interface DataListCheckboxes<T> {
+  /** La casilla «Seleccionar todo» de la cabecera de la tabla. */
+  header: React.ReactNode;
+  /** La fila «Seleccionar todo» sobre las tarjetas del teléfono. */
+  phoneHeader: React.ReactNode;
+  /** La casilla de la fila. */
+  cell: (row: T) => React.ReactNode;
+  /** Marca la fila como seleccionada (`data-selected`). */
+  isSelected: (row: T) => boolean;
 }
 
 export interface DataListProps<T> {
@@ -90,8 +91,8 @@ export interface DataListProps<T> {
   loadingLabel?: string;
   /** Qué pintar sin filas (normalmente un `EmptyState`). */
   empty?: React.ReactNode;
-  /** Selección múltiple: casilla por fila y en la cabecera (ver `DataListSelection`). */
-  selection?: DataListSelection<T>;
+  /** Huecos de la selección múltiple; se usa a través de `SelectableDataList`. */
+  checkboxes?: DataListCheckboxes<T>;
   className?: string;
 }
 
@@ -147,7 +148,7 @@ export function DataList<T>({
   loading = false,
   loadingLabel = copy.loading,
   empty,
-  selection,
+  checkboxes,
   className,
 }: DataListProps<T>) {
   const isPhone = useMediaQuery(DATA_LIST_PHONE_QUERY);
@@ -169,7 +170,7 @@ export function DataList<T>({
 
   if (rows.length === 0 && empty !== undefined) return <>{empty}</>;
 
-  const props = { label, rows, columns, getRowKey, getRowHref, onRowClick, leading, rowActions, getRowLabel, selection };
+  const props = { label, rows, columns, getRowKey, getRowHref, onRowClick, leading, rowActions, getRowLabel, checkboxes };
 
   return (
     <Card className={cn('overflow-hidden p-0', className)}>
@@ -189,57 +190,8 @@ type InnerProps<T> = Pick<
   | 'leading'
   | 'rowActions'
   | 'getRowLabel'
-  | 'selection'
+  | 'checkboxes'
 >;
-
-/** Cuántas de las filas que se ven están marcadas: para la casilla de cabecera. */
-function pageSelection<T>(rows: readonly T[], getRowKey: (row: T) => string, selection: DataListSelection<T>) {
-  const keys = rows.map(getRowKey);
-  const marked = keys.filter((k) => selection.selectedKeys.has(k)).length;
-  return { keys, all: keys.length > 0 && marked === keys.length, some: marked > 0 && marked < keys.length };
-}
-
-/** Marcar o desmarcar todas las filas que se ven, sin tocar las demás claves. */
-function toggleAll<T>(keys: readonly string[], checked: boolean, selection: DataListSelection<T>) {
-  const next = new Set(selection.selectedKeys);
-  for (const k of keys) {
-    if (checked) next.add(k);
-    else next.delete(k);
-  }
-  selection.onChange(next);
-}
-
-function toggleOne<T>(key: string, checked: boolean, selection: DataListSelection<T>) {
-  const next = new Set(selection.selectedKeys);
-  if (checked) next.add(key);
-  else next.delete(key);
-  selection.onChange(next);
-}
-
-/** La casilla de cabecera: marcada si están todas, guion si solo algunas. */
-function SelectAllBox<T>({
-  rows,
-  getRowKey,
-  selection,
-  label,
-}: {
-  rows: readonly T[];
-  getRowKey: (row: T) => string;
-  selection: DataListSelection<T>;
-  label?: React.ReactNode;
-}) {
-  const state = pageSelection(rows, getRowKey, selection);
-  return (
-    <Checkbox
-      aria-label={label ? undefined : selection.allLabel}
-      label={label}
-      checked={state.all}
-      indeterminate={state.some}
-      disabled={rows.length === 0}
-      onChange={(e) => toggleAll(state.keys, e.target.checked, selection)}
-    />
-  );
-}
 
 function primaryIndex<T>(columns: readonly DataListColumn<T>[]): number {
   const i = columns.findIndex((c) => c.mobile === 'primary');
@@ -262,7 +214,7 @@ function DataTable<T>({
   leading,
   rowActions,
   getRowLabel,
-  selection,
+  checkboxes,
   sticky,
 }: InnerProps<T> & { sticky: boolean }) {
   const primary = primaryIndex(columns);
@@ -277,11 +229,7 @@ function DataTable<T>({
     <Table aria-label={label} stack={false}>
       <TableHeader>
         <TableRow className="hover:bg-transparent">
-          {selection ? (
-            <TableHead className="w-10 pr-0">
-              <SelectAllBox rows={rows} getRowKey={getRowKey} selection={selection} />
-            </TableHead>
-          ) : null}
+          {checkboxes ? <TableHead className="w-10 pr-0">{checkboxes.header}</TableHead> : null}
           {columns.map((col, i) => (
             <TableHead
               key={col.id}
@@ -312,18 +260,12 @@ function DataTable<T>({
               // `relative` ancla el enlace estirado de la celda principal: toda
               // la fila abre, pero el lector de pantalla oye UN enlace por fila.
               className={cn('group', opens && 'relative cursor-pointer')}
-              data-selected={selection?.selectedKeys.has(key) ? 'true' : undefined}
+              data-selected={checkboxes?.isSelected(row) ? 'true' : undefined}
             >
-              {selection ? (
+              {checkboxes ? (
                 <TableCell className="w-10 pr-0">
                   {/* Por encima del enlace estirado de la fila (`after:inset-0`). */}
-                  <span className="relative z-10 inline-flex">
-                    <Checkbox
-                      aria-label={selection.getRowLabel(row)}
-                      checked={selection.selectedKeys.has(key)}
-                      onChange={(e) => toggleOne(key, e.target.checked, selection)}
-                    />
-                  </span>
+                  <span className="relative z-10 inline-flex">{checkboxes.cell(row)}</span>
                 </TableCell>
               ) : null}
               {columns.map((col, i) => {
@@ -424,7 +366,7 @@ function PhoneList<T>({
   leading,
   rowActions,
   getRowLabel,
-  selection,
+  checkboxes,
 }: InnerProps<T>) {
   const primary = primaryIndex(columns);
   const trailing = columns.find((c) => c.mobile === 'trailing');
@@ -480,7 +422,7 @@ function PhoneList<T>({
         const key = getRowKey(row);
         const targetClass = cn(
           'flex min-h-14 min-w-0 flex-1 items-center gap-3 py-3 text-left',
-          selection ? 'pl-1' : 'pl-4',
+          checkboxes ? 'pl-1' : 'pl-4',
           actions.length > 0 ? 'pr-1' : 'pr-4',
           opens &&
             'transition-colors hover:bg-surface-sunken active:bg-surface-sunken focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary-text',
@@ -488,16 +430,10 @@ function PhoneList<T>({
 
         return (
           <li key={key} className="flex items-center">
-            {selection ? (
+            {checkboxes ? (
               // La casilla va FUERA del enlace, como el «⋯»; la etiqueta hace de
               // objetivo táctil de 44px alrededor de la caja.
-              <label className="flex size-11 shrink-0 items-center justify-center pl-2">
-                <Checkbox
-                  aria-label={selection.getRowLabel(row)}
-                  checked={selection.selectedKeys.has(key)}
-                  onChange={(e) => toggleOne(key, e.target.checked, selection)}
-                />
-              </label>
+              <label className="flex size-11 shrink-0 items-center justify-center pl-2">{checkboxes.cell(row)}</label>
             ) : null}
             {href ? (
               <Link href={href} className={targetClass}>
@@ -521,12 +457,10 @@ function PhoneList<T>({
     </ul>
   );
 
-  if (!selection) return list;
+  if (!checkboxes) return list;
   return (
     <>
-      <div className="border-b border-border px-4 py-1">
-        <SelectAllBox rows={rows} getRowKey={getRowKey} selection={selection} label={selection.allLabel} />
-      </div>
+      <div className="border-b border-border px-4 py-1">{checkboxes.phoneHeader}</div>
       {list}
     </>
   );
