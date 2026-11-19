@@ -1,6 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import {
   listMessageTemplates,
   type MessageEntry,
@@ -16,7 +17,17 @@ import { SettingRow, SettingRows } from '@/components/settings/settings-page';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CHANNEL_LABELS, messageStatusCopy } from './message-template-labels';
-import { MessageTemplateEditor } from './message-template-editor';
+
+/*
+ * El editor (modal, pestañas, tooltips, vista previa) llega en su propio trozo
+ * al pulsar «Editar»: la lista se pinta sin él. Sin `loading`: el modal
+ * aparece cuando llega (el botón ya tiene el foco). `ssr: false` como el resto
+ * de diálogos bajo demanda (`patient-lazy-tabs`).
+ */
+const MessageTemplateEditor = dynamic(
+  () => import('./message-template-editor').then((m) => m.MessageTemplateEditor),
+  { ssr: false },
+);
 
 export const messageTemplatesCopy = {
   edit: 'Editar',
