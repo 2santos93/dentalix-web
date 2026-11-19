@@ -11226,6 +11226,8 @@ export interface components {
             errors?: number;
             created?: number;
             updated?: number;
+            /** @description DX-571: emparejados solos al importar un extracto del banco. */
+            matched?: number;
             undoneCreated?: number;
             undoneFilled?: number;
             /** @description DX-262: SHA-256 (hex) de la hoja de saldos */
@@ -26149,8 +26151,10 @@ export interface components {
             name: string;
             /** @enum {string} */
             kind: "CASH" | "CARD" | "TRANSFER" | "DIGITAL" | "OTHER";
+            /** @description El medio pide referencia (DX-377). */
+            requiresReference: boolean;
         };
-        UserRefDto: {
+        BankUserRefDto: {
             /** Format: uuid */
             id: string;
             name: string;
@@ -26177,7 +26181,7 @@ export interface components {
             periodTo: string | null;
             /** Format: date-time */
             createdAt: string;
-            createdBy: components["schemas"]["UserRefDto"];
+            createdBy: components["schemas"]["BankUserRefDto"];
         };
         BankAccountDto: {
             /** Format: uuid */
@@ -26294,12 +26298,12 @@ export interface components {
             currency: string;
             description: string | null;
         };
-        RefNameDto: {
+        BankRefNameDto: {
             /** Format: uuid */
             id: string;
             name: string;
         };
-        PatientRefDto: {
+        BankPatientRefDto: {
             /** Format: uuid */
             id: string;
             fullName: string;
@@ -26314,16 +26318,16 @@ export interface components {
             collectedAmount: number;
             currency: string;
             reference: string | null;
-            paymentMethod: components["schemas"]["RefNameDto"] | null;
+            paymentMethod: components["schemas"]["BankRefNameDto"] | null;
             receiptNumber: string | null;
             /** @description Tiene comprobante (GET /payments/:id/proof/url). */
             hasProof: boolean;
-            patient: components["schemas"]["PatientRefDto"];
-            location: components["schemas"]["RefNameDto"];
+            patient: components["schemas"]["BankPatientRefDto"];
+            location: components["schemas"]["BankRefNameDto"];
             /** Format: uuid */
             treatmentPlanId: string | null;
         };
-        MatchRefDto: {
+        BankMatchRefDto: {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
@@ -26336,7 +26340,7 @@ export interface components {
             status: "CONCILIADO" | "IMPORTE_DISTINTO" | "MOVIMIENTO_SIN_ABONO" | "SIN_MOVIMIENTO";
             movement: components["schemas"]["BankMovementDto"] | null;
             payment: components["schemas"]["ReconciliationPaymentDto"] | null;
-            match: components["schemas"]["MatchRefDto"] | null;
+            match: components["schemas"]["BankMatchRefDto"] | null;
         };
         ReconciliationItemsDto: {
             from: string;
@@ -26376,12 +26380,12 @@ export interface components {
             collectedAmount: number;
             currency: string;
             reference: string | null;
-            paymentMethod: components["schemas"]["RefNameDto"] | null;
+            paymentMethod: components["schemas"]["BankRefNameDto"] | null;
             receiptNumber: string | null;
             /** @description Tiene comprobante (GET /payments/:id/proof/url). */
             hasProof: boolean;
-            patient: components["schemas"]["PatientRefDto"];
-            location: components["schemas"]["RefNameDto"];
+            patient: components["schemas"]["BankPatientRefDto"];
+            location: components["schemas"]["BankRefNameDto"];
             /** Format: uuid */
             treatmentPlanId: string | null;
             referenceMatches: boolean;
@@ -26393,8 +26397,8 @@ export interface components {
             currency: string;
             reference: string | null;
             paidOn: string;
-            paymentMethod: components["schemas"]["RefNameDto"];
-            patient: components["schemas"]["PatientRefDto"];
+            paymentMethod: components["schemas"]["BankRefNameDto"];
+            patient: components["schemas"]["BankPatientRefDto"];
             referenceMatches: boolean;
         };
         MovementCandidatesDto: {
@@ -26422,7 +26426,7 @@ export interface components {
             /** @enum {string} */
             kind: "AUTO" | "MANUAL";
         };
-        IdDto: {
+        BankMatchIdDto: {
             /** Format: uuid */
             id: string;
         };
@@ -28453,6 +28457,12 @@ export interface components {
              * @description El `uploadId` de `POST /expenses/attachments/upload-url`, ya subido al almacén.
              */
             attachmentUploadId?: string;
+        };
+        UserRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Dra. Laura Gómez */
+            fullName: string;
         };
         PrivacyPolicyVersionDto: {
             /** Format: uuid */
@@ -51587,7 +51597,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdDto"];
+                    "application/json": components["schemas"]["BankMatchIdDto"];
                 };
             };
             /** @description Solo un administrador de la clínica puede conciliar con el extracto del banco. */

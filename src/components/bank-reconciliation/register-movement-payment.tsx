@@ -59,8 +59,9 @@ export function RegisterMovementPayment({
     onClose();
   }
 
-  // El medio: el primero de la cuenta (todos liquidan en ella); se puede cambiar en el abono.
-  const method = account.paymentMethods[0] ?? null;
+  // El medio: el primero de la cuenta que pide referencia (transferencia o pago móvil), o el
+  // primero de la cuenta; se puede cambiar en el abono.
+  const method = account.paymentMethods.find((m) => m.requiresReference) ?? account.paymentMethods[0] ?? null;
 
   return (
     <>

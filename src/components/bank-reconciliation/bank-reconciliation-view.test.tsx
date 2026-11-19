@@ -83,7 +83,7 @@ function account(over: Partial<BankAccount> = {}): BankAccount {
     amountTolerance: 0,
     active: true,
     columnMapping: null,
-    paymentMethods: [{ id: 'pm-mobile', name: 'Pago móvil', kind: 'DIGITAL' }],
+    paymentMethods: [{ id: 'pm-mobile', name: 'Pago móvil', kind: 'DIGITAL', requiresReference: true }],
     lastImport: {
       id: 'imp-1',
       fileSha256: 'a'.repeat(64),
