@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   updatePatient,
@@ -21,6 +21,13 @@ import {
 import { DocTypeLabelField, docTypeLabelFieldError } from './doc-type-label-field';
 import { isEmailAddress } from '@/lib/format/email';
 import { isWhatsappMobileError } from '@/lib/patients/communication-api';
+import {
+  acquisitionPayload,
+  getPatientAcquisition,
+  referredByNameTooLong,
+  type AcquisitionDraft,
+} from '@/lib/patients/patient-sources-api';
+import { AcquisitionFields, acquisitionFieldsCopy, sourceKindOf, usePatientSources } from './acquisition-fields';
 
 // Copy as constants (i18n-ready) — es first.
 const copy = {
@@ -33,6 +40,10 @@ const copy = {
   contact: 'Contacto',
   emergency: 'Emergencia',
   administrative: 'Administrativo',
+  // DX-172.
+  acquisition: 'Origen',
+  referrerLoading: 'Cargando…',
+  referrerUnknown: 'Paciente de la clínica',
   docType: 'Tipo de documento',
   sex: 'Sexo',
   firstNameMissing: 'Escribe el nombre del paciente.',
@@ -147,6 +158,15 @@ interface PatientEditModalProps {
   docTypeNames?: ClinicDocumentTypeNames;
 }
 
+/** DX-172: la captación guardada (el nombre del referente llega aparte). */
+function acquisitionFrom(patient: Patient): AcquisitionDraft {
+  return {
+    sourceId: patient.sourceId ?? null,
+    referredBy: patient.referredByPatientId ? { id: patient.referredByPatientId, fullName: '' } : null,
+    referredByName: patient.referredByName ?? '',
+  };
+}
+
 /** Tipo con el que se siembra el select: el de la ficha. */
 function seededDocType(patient: Patient): Patient['docType'] {
   return patient.docType;
@@ -178,6 +198,29 @@ export function PatientEditModal({
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const phoneRef = React.useRef<HTMLInputElement>(null);
   const [sex, setSex] = useState<Patient['sex']>(patient.sex);
+  // DX-172: «¿Cómo nos conoció?». El catálogo y el nombre del referente se
+  // piden al abrir (el modal está siempre montado en la ficha).
+  const patientSources = usePatientSources(token, open);
+  const [acquisition, setAcquisition] = useState<AcquisitionDraft>(() => acquisitionFrom(patient));
+  const [referrerName, setReferrerName] = useState<{ id: string; fullName: string | null } | null>(null);
+  const [referredByNameError, setReferredByNameError] = useState<string | null>(null);
+  const referredByNameRef = React.useRef<HTMLInputElement>(null);
+  const storedReferrerId = patient.referredByPatientId ?? null;
+  useEffect(() => {
+    if (!open || !storedReferrerId) return;
+    let alive = true;
+    getPatientAcquisition(token, patient.id).then(
+      (a) => {
+        if (alive) setReferrerName({ id: storedReferrerId, fullName: a.referredByPatient?.fullName ?? null });
+      },
+      () => {
+        if (alive) setReferrerName({ id: storedReferrerId, fullName: null });
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, [open, token, patient.id, storedReferrerId]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [seededPatient, setSeededPatient] = useState(patient);
@@ -201,6 +244,8 @@ export function PatientEditModal({
     setEmailError(null);
     setPhoneError(null);
     setSex(patient.sex);
+    setAcquisition(acquisitionFrom(patient));
+    setReferredByNameError(null);
     setError(null);
   }
   if (open !== wasOpen) {
@@ -234,6 +279,21 @@ export function PatientEditModal({
     const label = normalizeDocTypeLabel(docTypeLabel);
     if (label !== (seededPatient.docTypeLabel ?? null)) patch.docTypeLabel = label;
     if (sex !== seededPatient.sex) patch.sex = sex;
+    // DX-172: si cambió algo de la captación, viajan los tres campos (lo que
+    // no encaja con el tipo de la fuente, a null).
+    const acquired = acquisitionPayload(acquisition, sourceKindOf(patientSources, acquisition.sourceId));
+    const stored = {
+      sourceId: seededPatient.sourceId ?? null,
+      referredByPatientId: seededPatient.referredByPatientId ?? null,
+      referredByName: seededPatient.referredByName ?? null,
+    };
+    if (
+      acquired.sourceId !== stored.sourceId ||
+      acquired.referredByPatientId !== stored.referredByPatientId ||
+      acquired.referredByName !== stored.referredByName
+    ) {
+      Object.assign(patch, acquired);
+    }
     for (const group of GROUPS) {
       for (const f of group.fields) {
         const value = text[f.key].trim();
@@ -270,6 +330,14 @@ export function PatientEditModal({
       emailRef.current?.focus();
       return;
     }
+    if (
+      sourceKindOf(patientSources, acquisition.sourceId) === 'EXTERNAL_PROFESSIONAL' &&
+      referredByNameTooLong(acquisition.referredByName)
+    ) {
+      setReferredByNameError(acquisitionFieldsCopy.nameTooLong);
+      referredByNameRef.current?.focus();
+      return;
+    }
     const labelError = docTypeLabelFieldError(docTypeLabel);
     if (labelError) {
       setDocTypeLabelError(labelError);
@@ -294,6 +362,13 @@ export function PatientEditModal({
     } finally {
       setSaving(false);
     }
+  }
+
+  /** El referente guardado se siembra sin nombre: se completa al llegar `GET …/acquisition`. */
+  function referrerShown(referredBy: AcquisitionDraft['referredBy']): AcquisitionDraft['referredBy'] {
+    if (!referredBy || referredBy.fullName) return referredBy;
+    if (referrerName?.id !== referredBy.id) return { ...referredBy, fullName: copy.referrerLoading };
+    return { ...referredBy, fullName: referrerName.fullName ?? copy.referrerUnknown };
   }
 
   function textField(f: TextFieldSpec) {
@@ -416,6 +491,25 @@ export function PatientEditModal({
             </div>
           </section>
         ))}
+        <section className="flex flex-col gap-3">
+          <h3 className="t-label text-muted">{copy.acquisition}</h3>
+          <AcquisitionFields
+            idPrefix="pe"
+            token={token}
+            sources={patientSources}
+            value={{ ...acquisition, referredBy: referrerShown(acquisition.referredBy) }}
+            onChange={(next) => {
+              // El mismo referente sigue sin nombre propio (lo pone `referrerShown`).
+              const same = next.referredBy && next.referredBy.id === acquisition.referredBy?.id;
+              setAcquisition(same ? { ...next, referredBy: acquisition.referredBy } : next);
+              setReferredByNameError(null);
+            }}
+            storedSourceId={seededPatient.sourceId ?? null}
+            patientId={patient.id}
+            nameError={referredByNameError}
+            nameRef={referredByNameRef}
+          />
+        </section>
       </div>
     </FormModal>
   );

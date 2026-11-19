@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PatientCreateWizard } from './patient-create-wizard';
-import { createPatient, type Patient } from '@/lib/patients/patients-api';
+import { createPatient, listPatients, type Patient } from '@/lib/patients/patients-api';
+import { listPatientSources, type PatientSource } from '@/lib/patients/patient-sources-api';
 import { getPrivacyPolicies } from '@/lib/data-consents/data-consents-api';
 import { getDocumentTypeNames } from '@/lib/patients/document-type-names-api';
 import { policiesFixture, policyFixture } from '@/lib/test/data-consents';
@@ -14,6 +15,11 @@ jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }))
 // path here, matching @/lib/patients/patients-api's actual location.
 jest.mock('../../lib/patients/patients-api', () => ({
   createPatient: jest.fn(),
+  listPatients: jest.fn(),
+}));
+jest.mock('../../lib/patients/patient-sources-api', () => ({
+  ...jest.requireActual('../../lib/patients/patient-sources-api'),
+  listPatientSources: jest.fn(),
 }));
 
 jest.mock('../../lib/patients/patient-languages', () => ({
@@ -34,6 +40,24 @@ const mockedCreatePatient = createPatient as jest.MockedFunction<typeof createPa
 const mockedGetNames = getDocumentTypeNames as jest.MockedFunction<typeof getDocumentTypeNames>;
 const mockedGetLanguages = getPatientLanguages as jest.MockedFunction<typeof getPatientLanguages>;
 const mockedGetPolicies = getPrivacyPolicies as jest.MockedFunction<typeof getPrivacyPolicies>;
+const mockedListSources = jest.mocked(listPatientSources);
+const mockedListPatients = jest.mocked(listPatients);
+
+const source = (overrides: Partial<PatientSource>): PatientSource => ({
+  id: 's-ig',
+  name: 'Instagram',
+  kind: 'CHANNEL',
+  isActive: true,
+  systemKey: 'INSTAGRAM',
+  sortOrder: 20,
+  ...overrides,
+});
+const SOURCES: PatientSource[] = [
+  source({ id: 's-ref', name: 'Recomendación de paciente', kind: 'PATIENT', systemKey: 'PATIENT_REFERRAL', sortOrder: 10 }),
+  source({}),
+  source({ id: 's-ext', name: 'Profesional externo', kind: 'EXTERNAL_PROFESSIONAL', systemKey: 'EXTERNAL_PROFESSIONAL' }),
+  source({ id: 's-old', name: 'Radio', isActive: false, systemKey: null }),
+];
 
 const CREATED: Patient = {
   id: 'p1',
@@ -74,6 +98,9 @@ describe('PatientCreateWizard', () => {
     mockedGetPolicies.mockResolvedValue(policiesFixture());
     mockedGetLanguages.mockReset();
     mockedGetLanguages.mockResolvedValue({ languages: ['es'], clinicLanguage: 'es' });
+    mockedListSources.mockReset();
+    mockedListSources.mockResolvedValue(SOURCES);
+    mockedListPatients.mockReset();
     mockedGetNames.mockReset();
     mockedGetNames.mockResolvedValue({
       NATIONAL_ID: null,
@@ -553,6 +580,83 @@ describe('PatientCreateWizard', () => {
         dataConsents: { decisions: [{ scope: 'GENERAL', granted: true }] },
       });
       expect(input).not.toHaveProperty('medicalHistory');
+    });
+  });
+  describe('DX-172: «¿Cómo nos conoció?»', () => {
+    async function fillBasics(user: ReturnType<typeof userEvent.setup>) {
+      await user.type(screen.getByLabelText(/^nombre$/i), 'Ana');
+      await user.type(screen.getByLabelText(/apellido/i), 'García');
+      await user.selectOptions(screen.getByLabelText(/tipo de documento/i), 'NATIONAL_ID');
+    }
+
+    it('ofrece las fuentes activas y «Sin indicar»; sin elegir, no envía nada de captación', async () => {
+      const user = userEvent.setup();
+      mockedCreatePatient.mockResolvedValue(CREATED);
+      render(<PatientCreateWizard token="tok" canWriteClinicalHistory={false} />);
+      const select = await screen.findByLabelText(/cómo nos conoció/i);
+      await screen.findByRole('option', { name: 'Instagram' });
+      expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual([
+        'Sin indicar',
+        'Recomendación de paciente',
+        'Instagram',
+        'Profesional externo',
+      ]);
+      await fillBasics(user);
+      await user.click(screen.getByRole('button', { name: /crear paciente/i }));
+      const input = mockedCreatePatient.mock.calls[0][1];
+      expect(input).not.toHaveProperty('sourceId');
+      expect(input).not.toHaveProperty('referredByPatientId');
+    });
+
+    it('recepción elige «Recomendación de paciente» y busca al paciente que lo recomendó', async () => {
+      const user = userEvent.setup();
+      mockedCreatePatient.mockResolvedValue(CREATED);
+      mockedListPatients.mockResolvedValue({
+        items: [{ ...CREATED, id: 'p-ref', firstName: 'Luisa', lastName: 'Márquez', docNumber: 'V-12345678' }],
+        total: 1,
+        page: 1,
+        pageSize: 8,
+      });
+      render(<PatientCreateWizard token="tok" canWriteClinicalHistory={false} />);
+      await screen.findByRole('option', { name: 'Instagram' });
+      await fillBasics(user);
+      await user.selectOptions(screen.getByLabelText(/cómo nos conoció/i), 's-ref');
+      await user.type(screen.getByLabelText(/^paciente que lo recomendó/i), 'Luisa');
+      await user.click(await screen.findByRole('button', { name: /Luisa Márquez/ }));
+      expect(screen.getByTestId('picked-patient')).toHaveTextContent('Luisa Márquez');
+      await user.click(screen.getByRole('button', { name: /crear paciente/i }));
+      expect(mockedCreatePatient.mock.calls[0][1]).toMatchObject({ sourceId: 's-ref', referredByPatientId: 'p-ref' });
+      expect(mockedCreatePatient.mock.calls[0][1]).not.toHaveProperty('referredByName');
+    });
+
+    it('«Profesional externo» pide el nombre (≤120) y no envía referente', async () => {
+      const user = userEvent.setup();
+      mockedCreatePatient.mockResolvedValue(CREATED);
+      render(<PatientCreateWizard token="tok" canWriteClinicalHistory={false} />);
+      await screen.findByRole('option', { name: 'Instagram' });
+      await fillBasics(user);
+      await user.selectOptions(screen.getByLabelText(/cómo nos conoció/i), 's-ext');
+      const name = screen.getByLabelText(/nombre del profesional/i);
+      fireEvent.change(name, { target: { value: 'x'.repeat(121) } });
+      await user.click(screen.getByRole('button', { name: /crear paciente/i }));
+      expect(mockedCreatePatient).not.toHaveBeenCalled();
+      expect(screen.getByText('Escribe como mucho 120 caracteres.')).toBeInTheDocument();
+      expect(name).toHaveFocus();
+      fireEvent.change(name, { target: { value: '  Dra.   Carmen Rodríguez ' } });
+      await user.click(screen.getByRole('button', { name: /crear paciente/i }));
+      const input = mockedCreatePatient.mock.calls[0][1];
+      expect(input).toMatchObject({ sourceId: 's-ext', referredByName: 'Dra. Carmen Rodríguez' });
+      expect(input).not.toHaveProperty('referredByPatientId');
+    });
+
+    it('si el catálogo no carga, el selector se sustituye por el aviso con reintento y el alta sigue', async () => {
+      const user = userEvent.setup();
+      mockedListSources.mockRejectedValueOnce(new Error('caída')).mockResolvedValueOnce(SOURCES);
+      mockedCreatePatient.mockResolvedValue(CREATED);
+      render(<PatientCreateWizard token="tok" canWriteClinicalHistory={false} />);
+      expect(await screen.findByText('Opciones no disponibles')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /reintentar/i }));
+      expect(await screen.findByRole('option', { name: 'Instagram' })).toBeInTheDocument();
     });
   });
 });
