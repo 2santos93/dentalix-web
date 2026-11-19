@@ -11882,14 +11882,14 @@ export interface components {
              * Format: uuid
              * @description DX-172: fuente del catálogo de la clínica (`GET /patient-sources`). Opcional; al asignarla tiene que estar activa. `null` la vacía (y con ella el referente).
              */
-            sourceId?: Record<string, never> | null;
+            sourceId?: string | null;
             /**
              * Format: uuid
              * @description DX-172: el paciente de la clínica que lo recomendó. Solo con una fuente de tipo PATIENT; nunca el propio paciente. De otra clínica: 400.
              */
-            referredByPatientId?: Record<string, never> | null;
+            referredByPatientId?: string | null;
             /** @description DX-172: nombre del profesional externo que lo derivó (1–120). Solo con una fuente de tipo EXTERNAL_PROFESSIONAL. */
-            referredByName?: Record<string, never> | null;
+            referredByName?: string | null;
         };
         /**
          * @description Retención extendida de la HC: NONE = el plazo de la clínica desde la última atención, DOUBLE = el doble de ese plazo, PERMANENT = nunca se libera. Solo ADMIN la cambia.
@@ -12532,14 +12532,14 @@ export interface components {
              * Format: uuid
              * @description DX-172: fuente del catálogo de la clínica (`GET /patient-sources`). Opcional; al asignarla tiene que estar activa. `null` la vacía (y con ella el referente).
              */
-            sourceId?: Record<string, never> | null;
+            sourceId?: string | null;
             /**
              * Format: uuid
              * @description DX-172: el paciente de la clínica que lo recomendó. Solo con una fuente de tipo PATIENT; nunca el propio paciente. De otra clínica: 400.
              */
-            referredByPatientId?: Record<string, never> | null;
+            referredByPatientId?: string | null;
             /** @description DX-172: nombre del profesional externo que lo derivó (1–120). Solo con una fuente de tipo EXTERNAL_PROFESSIONAL. */
-            referredByName?: Record<string, never> | null;
+            referredByName?: string | null;
         };
         ClinicalRecordRetentionErrorDto: {
             /** @example 409 */
@@ -29869,31 +29869,37 @@ export interface components {
             name?: string;
             isActive?: boolean;
         };
-        AcquisitionSourceDto: {
+        PatientAcquisitionSourceDto: {
             /** Format: uuid */
             id: string;
             name: string;
             kind: components["schemas"]["PatientSourceKind"];
             isActive: boolean;
         };
-        AcquisitionReferralDto: {
+        PatientAcquisitionReferrerDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+            patientCode: string;
+        };
+        PatientAcquisitionReferralDto: {
             /** Format: uuid */
             id: string;
             fullName: string;
             /** Format: date-time */
             createdAt: string;
         };
-        AcquisitionReferralsDto: {
+        PatientAcquisitionReferralsDto: {
             /** @description Pacientes vivos que este recomendó. */
             count: number;
             /** @description Los más recientes (hasta 10). */
-            recent: components["schemas"]["AcquisitionReferralDto"][];
+            recent: components["schemas"]["PatientAcquisitionReferralDto"][];
         };
         PatientAcquisitionDto: {
-            source: components["schemas"]["AcquisitionSourceDto"] | null;
-            referredByPatient: components["schemas"]["AcquisitionReferrerDto"] | null;
+            source: components["schemas"]["PatientAcquisitionSourceDto"] | null;
+            referredByPatient: components["schemas"]["PatientAcquisitionReferrerDto"] | null;
             referredByName: string | null;
-            referrals: components["schemas"]["AcquisitionReferralsDto"];
+            referrals: components["schemas"]["PatientAcquisitionReferralsDto"];
         };
         CommissionProfessionalDto: {
             /** Format: uuid */

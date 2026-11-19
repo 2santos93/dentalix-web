@@ -9,20 +9,10 @@ export type PatientSource = Schemas['PatientSourceDto'];
 export type PatientSourceKind = Schemas['PatientSourceKind'];
 
 /** Quién recomendó al paciente (`GET /patients/:id/acquisition`). */
-export interface AcquisitionReferredBy {
-  id: string;
-  fullName: string;
-  patientCode: string;
-}
+export type AcquisitionReferredBy = Schemas['PatientAcquisitionReferrerDto'];
 
-/**
- * `GET /patients/:id/acquisition`. `referredByPatient` va tipado a mano: en el
- * OpenAPI dos DTO de la API se llaman igual (`AcquisitionReferrerDto`) y el
- * generado lleva la forma del informe, no la de este endpoint.
- */
-export type PatientAcquisition = Omit<Schemas['PatientAcquisitionDto'], 'referredByPatient'> & {
-  referredByPatient: AcquisitionReferredBy | null;
-};
+/** `GET /patients/:id/acquisition`: fuente, referente y a quién ha recomendado. */
+export type PatientAcquisition = Schemas['PatientAcquisitionDto'];
 
 /** Los topes de la API (patient-source.dto.ts y patient-acquisition.ts). */
 export const PATIENT_SOURCE_NAME_MIN = 2;

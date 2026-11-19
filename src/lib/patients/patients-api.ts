@@ -16,22 +16,10 @@ import type { ClinicRole } from '@/lib/me/me-api';
  */
 export type CreatePatientInput = Omit<
   components['schemas']['CreatePatientDto'],
-  'medicalHistory' | AcquisitionKey
+  'medicalHistory'
 > & {
   medicalHistory?: ClinicalHistoryValue;
-} & AcquisitionInput;
-
-/**
- * DX-172: la captación del alta y la edición. El OpenAPI de la API la
- * declara sin tipo (`Record<string, never> | null`): se tipa aquí a mano
- * hasta que la API la anote. Ausente = no tocar; `null` = vaciar.
- */
-type AcquisitionKey = 'sourceId' | 'referredByPatientId' | 'referredByName';
-interface AcquisitionInput {
-  sourceId?: string | null;
-  referredByPatientId?: string | null;
-  referredByName?: string | null;
-}
+};
 
 // The `docType`/`sex` unions are re-used from the generated OpenAPI schema
 // (backend DTOs carry `@ApiProperty({ enum: ... })`) so they stay in sync
@@ -40,7 +28,7 @@ interface AcquisitionInput {
 export type DocType = components['schemas']['DocType'];
 export type Sex = components['schemas']['CreatePatientDto']['sex'];
 
-export type UpdatePatientInput = Omit<components['schemas']['UpdatePatientDto'], AcquisitionKey> & AcquisitionInput;
+export type UpdatePatientInput = components['schemas']['UpdatePatientDto'];
 
 /**
  * DX-153: resumen de la cobertura vigente del paciente (`GET /patients`,
