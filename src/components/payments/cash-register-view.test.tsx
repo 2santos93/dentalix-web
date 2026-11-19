@@ -128,6 +128,7 @@ const anaCash: CashPayment = {
   adjustments: [],
   collectedAmount: 150000.5,
   hasProof: false,
+  reconciled: false,
 };
 const betoCard: CashPayment = {
   ...anaCash,

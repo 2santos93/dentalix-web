@@ -44,6 +44,7 @@ import { PageHeader } from '@/components/shared/page-header';
 import { ResultCount } from '@/components/shared/list-toolbar';
 import { InlineError } from '@/components/errors/inline-error';
 import { SplitPaymentBadge, splitPaymentLabel } from './split-payment-badge';
+import { ReconciledBadge, reconciledLabel } from './reconciled-badge';
 import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
@@ -419,6 +420,8 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
           ) : null}
           {/* DX-414: las líneas de un cobro dividido, juntas por su recibo único. */}
           <SplitPaymentBadge splitLines={payment.splitLines} receiptNumber={payment.receiptNumber} />
+          {/* DX-571: casa con un movimiento del extracto del banco. */}
+          <ReconciledBadge reconciled={payment.reconciled} />
           {payment.externalInvoiceNumber ? (
             <span className="t-caption mt-1 block break-all font-mono text-muted">
               {externalInvoiceCopy.inline(payment.externalInvoiceNumber)}
@@ -433,6 +436,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
           payment.reference ? copy.referenceLabel(payment.reference) : null,
           payment.externalInvoiceNumber ? externalInvoiceCopy.inline(payment.externalInvoiceNumber) : null,
           splitPaymentLabel(payment),
+          reconciledLabel(payment.reconciled),
         ]
           .filter(Boolean)
           .join(' · ') || null,

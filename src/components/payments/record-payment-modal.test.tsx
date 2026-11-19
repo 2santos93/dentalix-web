@@ -385,7 +385,7 @@ it('un abono guardado sin tasa lo dice en el aviso', async () => {
   expect(onRecorded.mock.calls[0][0]).toMatch(/^Abono registrado: USD\s50,00 · .+\. /);
   expect(onRecorded.mock.calls[0][0]).toContain(recordPaymentCopy.recordedWithoutRate);
   // DX-075: la advertencia de «sin tasa» no puede caducar sola.
-  expect(onRecorded.mock.calls[0][1]).toEqual({ persistent: true });
+  expect(onRecorded.mock.calls[0][1]).toEqual(expect.objectContaining({ persistent: true }));
 });
 
 it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', async () => {
@@ -416,7 +416,7 @@ it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', asy
   );
   expect(onRecorded).toHaveBeenCalledWith(
     expect.stringMatching(/^Abono registrado: EUR\s150\.000,00 · 01\/10\/2026 · Plan del 01\/08\/2026\.$/),
-    { persistent: false },
+    expect.objectContaining({ persistent: false }),
   );
 });
 
@@ -739,7 +739,7 @@ it('el aviso dice lo que la API registró, no lo que quedó en el formulario (re
   await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
   expect(onRecorded).toHaveBeenCalledWith(
     expect.stringMatching(/^Abono registrado: EUR\s1\.?000,00 · 01\/10\/2026 · Plan del 01\/08\/2026\.$/),
-    { persistent: false },
+    expect.objectContaining({ persistent: false }),
   );
 });
 

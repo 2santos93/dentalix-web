@@ -30,7 +30,7 @@ import { cn } from '@/lib/utils';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
 import { PaymentAdjustmentsPreview } from './payment-adjustments-preview';
-import { parseMoneyInput } from '@/lib/format/money';
+import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
 import { FormModal } from '@/components/shared/form-modal';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { BillablePlanField, BillablePlansEmpty } from './billable-plan-field';
@@ -141,14 +141,28 @@ interface FormState {
   date: string;
 }
 
+/**
+ * DX-571: lo que llega ya escrito al registrar el abono de un movimiento del
+ * extracto del banco (Caja › Conciliación): su importe, moneda, medio,
+ * referencia y día. Todo sigue editable.
+ */
+export interface RecordPaymentPrefill {
+  amount: number;
+  currency: string;
+  paymentMethodId: string | null;
+  reference: string | null;
+  /** Día civil `YYYY-MM-DD`. */
+  date: string;
+}
+
 /** `today`: hoy en la zona de la sede (DX-097), no en la del navegador. */
-function initialForm(today: string): FormState {
+function initialForm(today: string, prefill?: RecordPaymentPrefill): FormState {
   return {
     target: '',
     planId: '',
-    amount: '',
-    currency: '',
-    date: today,
+    amount: prefill ? moneyInputText(prefill.amount) : '',
+    currency: prefill?.currency ?? '',
+    date: prefill?.date ?? today,
   };
 }
 
@@ -164,7 +178,10 @@ interface RecordPaymentModalProps {
   openingBalances?: AccountStatementOpeningBalance[];
   /** Tras registrar, con el aviso a enseñar: quien abre cierra y recarga. */
   /** `persistent`: el aviso lleva una advertencia o un recibo que no debe perderse. */
-  onRecorded: (notice: string, opts?: { persistent?: boolean }) => void;
+  /** `paymentIds`: los abonos que guardó la API (uno, o las líneas de un cobro dividido). */
+  onRecorded: (notice: string, opts?: { persistent?: boolean; paymentIds?: string[] }) => void;
+  /** DX-571: el abono llega precargado (el movimiento del extracto del banco). */
+  prefill?: RecordPaymentPrefill;
 }
 
 /**
@@ -187,6 +204,7 @@ export function RecordPaymentModal({
   patientId,
   openingBalances = [],
   onRecorded,
+  prefill,
 }: RecordPaymentModalProps) {
   const billable = useBillablePlans(token, patientId, open);
   const locationHint = usePaymentLocationHint(token, open);
@@ -206,7 +224,7 @@ export function RecordPaymentModal({
   const periodLock = readyPeriodLock(usePeriodLock(token, open));
   const [lockReason, setLockReason] = useState('');
   const [lockReasonError, setLockReasonError] = useState<string | null>(null);
-  const [form, setForm] = useState<FormState>(() => initialForm(today));
+  const [form, setForm] = useState<FormState>(() => initialForm(today, prefill));
   // La clave y lo que identifica la petición que ya viajó con ella (como la
   // huella de la API: ni el motivo de una repetida ni la confirmación del
   // saldo a favor cuentan, así el reintento tras esos 409 es la misma).
@@ -276,14 +294,17 @@ export function RecordPaymentModal({
   if (open !== prevOpen) {
     setPrevOpen(open);
     if (open) {
-      setForm(initialForm(today));
-      setDateTouched(false);
+      setForm(initialForm(today, prefill));
+      // Un día precargado (DX-571) no se cambia por «hoy» cuando llega la zona.
+      setDateTouched(Boolean(prefill));
       setError(null);
       setAmountError(null);
       setDateError(null);
       setLockReason('');
       setLockReasonError(null);
       methodFields.reset();
+      if (prefill?.paymentMethodId) methodFields.selectMethod(prefill.paymentMethodId);
+      if (prefill?.reference) methodFields.setReference(prefill.reference);
       split.reset();
       proofUpload.clear();
       setProofError(null);
@@ -483,6 +504,7 @@ export function RecordPaymentModal({
       const withoutRate = saved.payments.some((p) => p.exchangeRateStatus === 'MISSING');
       onRecorded(withoutRate ? `${recorded} ${copy.recordedWithoutRate}` : recorded, {
         persistent: withoutRate || Boolean(saved.receiptNumber),
+        paymentIds: saved.payments.map((p) => p.id),
       });
     } catch (err) {
       // La clave NO cambia: el reintento de este cobro la reusa.
@@ -658,6 +680,7 @@ export function RecordPaymentModal({
         : recorded;
       onRecorded(withoutRate ? `${withChange} ${copy.recordedWithoutRate}` : withChange, {
         persistent: withoutRate || savedChange != null,
+        paymentIds: [saved.id],
       });
     } catch (err) {
       // La clave NO cambia: el reintento de este mismo abono la reusa y el
