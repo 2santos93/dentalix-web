@@ -43,10 +43,10 @@ const EXTRA_SETTINGS = ['/settings/recordatorios', '/settings/tipos-de-cita'];
 /**
  * El aviso de «sin permiso» de las pantallas: el de `RouteRoleGate`, el de la
  * escalera de errores para un 403 (`apiErrorMessage`) y los propios de cada
- * vista («Tu rol no tiene acceso…», «Solo la administración…»).
+ * vista («Tu rol no tiene acceso…», «Solo administración configura…»).
  */
 const FORBIDDEN_NOTICE =
-  /no tienes permiso|no tiene acceso|sin permiso|pídeselo|pídesela|pide acceso|solo (el|la|los|las) (administrador|administración|odontólog|asistente|recepci|personal)|solo para/i;
+  /no tienes permiso|no tiene acceso|tu rol no puede|sin permiso|pide acceso|pídes[ea]l[ao]|solo (la |el )?administra(ción|dor)|solo para/i;
 
 /** Botones que cambian algo: ninguno puede quedar habilitado en una pantalla sin permiso. */
 const WRITE_BUTTON =
