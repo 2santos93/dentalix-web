@@ -47,6 +47,23 @@ export interface DataListColumn<T> {
   cellClassName?: string;
 }
 
+/**
+ * Huecos de la selección múltiple (DX-465). `DataList` solo reserva el sitio:
+ * las casillas y su lógica las pone `SelectableDataList`
+ * (`selectable-data-list.tsx`), para que el shell, que carga `DataList` en
+ * todas las rutas, no pague `Checkbox` ni la selección.
+ */
+export interface DataListCheckboxes<T> {
+  /** La casilla «Seleccionar todo» de la cabecera de la tabla. */
+  header: React.ReactNode;
+  /** La fila «Seleccionar todo» sobre las tarjetas del teléfono. */
+  phoneHeader: React.ReactNode;
+  /** La casilla de la fila. */
+  cell: (row: T) => React.ReactNode;
+  /** Marca la fila como seleccionada (`data-selected`). */
+  isSelected: (row: T) => boolean;
+}
+
 export interface DataListProps<T> {
   /** Nombre accesible de la tabla y de la lista («Pacientes»). */
   label: string;
@@ -74,6 +91,8 @@ export interface DataListProps<T> {
   loadingLabel?: string;
   /** Qué pintar sin filas (normalmente un `EmptyState`). */
   empty?: React.ReactNode;
+  /** Huecos de la selección múltiple; se usa a través de `SelectableDataList`. */
+  checkboxes?: DataListCheckboxes<T>;
   className?: string;
 }
 
@@ -129,6 +148,7 @@ export function DataList<T>({
   loading = false,
   loadingLabel = copy.loading,
   empty,
+  checkboxes,
   className,
 }: DataListProps<T>) {
   const isPhone = useMediaQuery(DATA_LIST_PHONE_QUERY);
@@ -150,7 +170,7 @@ export function DataList<T>({
 
   if (rows.length === 0 && empty !== undefined) return <>{empty}</>;
 
-  const props = { label, rows, columns, getRowKey, getRowHref, onRowClick, leading, rowActions, getRowLabel };
+  const props = { label, rows, columns, getRowKey, getRowHref, onRowClick, leading, rowActions, getRowLabel, checkboxes };
 
   return (
     <Card className={cn('overflow-hidden p-0', className)}>
@@ -161,7 +181,16 @@ export function DataList<T>({
 
 type InnerProps<T> = Pick<
   DataListProps<T>,
-  'label' | 'rows' | 'columns' | 'getRowKey' | 'getRowHref' | 'onRowClick' | 'leading' | 'rowActions' | 'getRowLabel'
+  | 'label'
+  | 'rows'
+  | 'columns'
+  | 'getRowKey'
+  | 'getRowHref'
+  | 'onRowClick'
+  | 'leading'
+  | 'rowActions'
+  | 'getRowLabel'
+  | 'checkboxes'
 >;
 
 function primaryIndex<T>(columns: readonly DataListColumn<T>[]): number {
@@ -185,6 +214,7 @@ function DataTable<T>({
   leading,
   rowActions,
   getRowLabel,
+  checkboxes,
   sticky,
 }: InnerProps<T> & { sticky: boolean }) {
   const primary = primaryIndex(columns);
@@ -199,6 +229,7 @@ function DataTable<T>({
     <Table aria-label={label} stack={false}>
       <TableHeader>
         <TableRow className="hover:bg-transparent">
+          {checkboxes ? <TableHead className="w-10 pr-0">{checkboxes.header}</TableHead> : null}
           {columns.map((col, i) => (
             <TableHead
               key={col.id}
@@ -222,13 +253,21 @@ function DataTable<T>({
       <TableBody>
         {rows.map((row) => {
           const href = getRowHref?.(row);
+          const key = getRowKey(row);
           return (
             <TableRow
-              key={getRowKey(row)}
+              key={key}
               // `relative` ancla el enlace estirado de la celda principal: toda
               // la fila abre, pero el lector de pantalla oye UN enlace por fila.
               className={cn('group', opens && 'relative cursor-pointer')}
+              data-selected={checkboxes?.isSelected(row) ? 'true' : undefined}
             >
+              {checkboxes ? (
+                <TableCell className="w-10 pr-0">
+                  {/* Por encima del enlace estirado de la fila (`after:inset-0`). */}
+                  <span className="relative z-10 inline-flex">{checkboxes.cell(row)}</span>
+                </TableCell>
+              ) : null}
               {columns.map((col, i) => {
                 const content = withMissing(col.cell(row));
                 const isPrimary = i === primary;
@@ -327,13 +366,14 @@ function PhoneList<T>({
   leading,
   rowActions,
   getRowLabel,
+  checkboxes,
 }: InnerProps<T>) {
   const primary = primaryIndex(columns);
   const trailing = columns.find((c) => c.mobile === 'trailing');
   const meta = columns.filter((c, i) => i !== primary && c !== trailing && (c.mobile ?? 'meta') === 'meta');
   const primaryCol = columns[primary];
 
-  return (
+  const list = (
     <ul aria-label={label} className="divide-y divide-border">
       {rows.map((row) => {
         const href = getRowHref?.(row);
@@ -379,15 +419,22 @@ function PhoneList<T>({
         // Toda la tarjeta es el objetivo (≥56px), salvo el «⋯», que va FUERA
         // del enlace: un botón dentro de un enlace no es HTML válido y el
         // toque abriría la ficha en vez del menú.
+        const key = getRowKey(row);
         const targetClass = cn(
-          'flex min-h-14 min-w-0 flex-1 items-center gap-3 py-3 pl-4 text-left',
+          'flex min-h-14 min-w-0 flex-1 items-center gap-3 py-3 text-left',
+          checkboxes ? 'pl-1' : 'pl-4',
           actions.length > 0 ? 'pr-1' : 'pr-4',
           opens &&
             'transition-colors hover:bg-surface-sunken active:bg-surface-sunken focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary-text',
         );
 
         return (
-          <li key={getRowKey(row)} className="flex items-center">
+          <li key={key} className="flex items-center">
+            {checkboxes ? (
+              // La casilla va FUERA del enlace, como el «⋯»; la etiqueta hace de
+              // objetivo táctil de 44px alrededor de la caja.
+              <label className="flex size-11 shrink-0 items-center justify-center pl-2">{checkboxes.cell(row)}</label>
+            ) : null}
             {href ? (
               <Link href={href} className={targetClass}>
                 {body}
@@ -408,5 +455,13 @@ function PhoneList<T>({
         );
       })}
     </ul>
+  );
+
+  if (!checkboxes) return list;
+  return (
+    <>
+      <div className="border-b border-border px-4 py-1">{checkboxes.phoneHeader}</div>
+      {list}
+    </>
   );
 }

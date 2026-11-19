@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
-import { CHANNEL_LABELS, OUTCOME_LABELS, intervalLabel } from '@/lib/recall/presentation';
+import { intervalLabel } from '@/lib/recall/presentation';
 import { recallUpdatesNotice } from '@/lib/recall/recall-notice';
 import {
   RECALL_CHANGED_EVENT,
@@ -19,7 +19,6 @@ import {
   recallBasis,
   recallRows,
   recallTypeKey,
-  recallTypeLabel,
   recallTypeOptions,
   type RecallBasis,
   type RecallTypeOption,
@@ -40,6 +39,18 @@ const RecallContactDialog = dynamic(
   () => import('./recall-contact-dialog').then((m) => m.RecallContactDialog),
   { ssr: false },
 );
+// DX-465: el ciclo de intentos, el historial y el teléfono por revisar, en su
+// propio trozo (presupuesto de la ficha): llegan con los datos del recall.
+const RecallCycleLine = dynamic(() => import('./patient-recall-attempts').then((m) => m.RecallCycleLine), {
+  ssr: false,
+});
+const RecallContactHistory = dynamic(
+  () => import('./patient-recall-attempts').then((m) => m.RecallContactHistory),
+  { ssr: false },
+);
+const PhoneReviewNotice = dynamic(() => import('./patient-recall-attempts').then((m) => m.PhoneReviewNotice), {
+  ssr: false,
+});
 
 export const patientRecallCopy = {
   heading: 'Recall',
@@ -48,10 +59,10 @@ export const patientRecallCopy = {
   notSet: 'Sin recall',
   set: 'Fijar',
   change: 'Cambiar',
-  register: 'Registrar contacto',
+  register: 'Registrar intento',
   setLabel: (kind: string) => `Fijar recall de ${kind.toLowerCase()}`,
   changeLabel: (kind: string) => `Cambiar recall de ${kind.toLowerCase()}`,
-  registerLabel: (kind: string) => `Registrar contacto de ${kind.toLowerCase()}`,
+  registerLabel: (kind: string) => `Registrar intento de ${kind.toLowerCase()}`,
   due: (day: string) => `Vence el ${day}`,
   // DX-015-bis: de dónde cuenta el plazo. Lo congelado en el despliegue no lo fijó nadie a mano.
   basis: {
@@ -61,12 +72,10 @@ export const patientRecallCopy = {
   } satisfies Record<RecallBasis['kind'], (day: string) => string>,
   pausedUntil: (day: string, reason: string | null) => `En pausa hasta el ${day}${reason ? ` · ${reason}` : ''}`,
   typeGone: 'Este tipo ya no existe en la clínica: el recall se conserva, pero no se puede cambiar.',
-  contactsHeading: 'Historial de contactos',
-  noContacts: 'Sin contactos.',
-  by: (name: string | null) => (name ? `por ${name}` : 'por un miembro que ya no está en la clínica'),
   loadError: 'No pudimos cargar el recall.',
   saved: 'Recall guardado.',
-  contactSaved: 'Contacto registrado.',
+  contactSaved: 'Intento registrado.',
+  phoneCleared: 'Teléfono marcado como corregido.',
 };
 const copy = patientRecallCopy;
 
@@ -149,6 +158,18 @@ export function PatientRecallSection({
         {notice}
       </p>
       <SedeStampNote stamp={stamp} />
+      {data?.phoneReview ? (
+        <PhoneReviewNotice
+          token={token}
+          patientId={patient.id}
+          phoneReview={data.phoneReview}
+          stamp={stamp}
+          onCleared={() => {
+            setNotice(copy.phoneCleared);
+            setReloadKey((k) => k + 1);
+          }}
+        />
+      ) : null}
       <AsyncSection
         loading={loading}
         error={error}
@@ -181,6 +202,7 @@ export function PatientRecallSection({
                       {copy.basis[basis.kind](stamp.civilDate(basis.day, recall.locationId))}
                     </span>
                   ) : null}
+                  {recall ? <RecallCycleLine recall={recall} stamp={stamp} /> : null}
                   {!editable ? <span className="text-xs text-muted">{copy.typeGone}</span> : null}
                   {recall?.status === 'PAUSED' && recall.disabledUntil ? (
                     <span className="text-xs text-muted tabular-nums">
@@ -216,26 +238,7 @@ export function PatientRecallSection({
             );
           })}
         </ul>
-        <div className="min-w-0">
-          <h3 className="t-label mb-2 mt-3 text-muted">{copy.contactsHeading}</h3>
-          {contacts.length === 0 ? (
-            <p className="text-sm text-muted">{copy.noContacts}</p>
-          ) : (
-            <ul className="flex flex-col divide-y divide-border-subtle rounded-xl border border-border bg-surface">
-              {contacts.map((c) => (
-                <li key={c.id} className="flex min-w-0 flex-col gap-1 px-4 py-3 text-sm" data-testid="recall-contact-row">
-                  <span className="font-medium text-ink">
-                    {recallTypeLabel(c)} · {CHANNEL_LABELS[c.channel]} · {OUTCOME_LABELS[c.outcome]}
-                  </span>
-                  {c.note ? <p className="whitespace-pre-line break-words text-ink">{c.note}</p> : null}
-                  <span className="text-xs text-muted tabular-nums">
-                    {stamp.dateTime(c.createdAt, c.locationId)} {copy.by(c.author.fullName)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        {data ? <RecallContactHistory contacts={contacts} stamp={stamp} /> : null}
       </AsyncSection>
 
       {dialog?.type === 'interval' ? (
@@ -251,7 +254,7 @@ export function PatientRecallSection({
           defaultIntervalMonths={dialog.recallType.defaultIntervalMonths}
           recall={dialog.recall}
           onSaved={(saved) => {
-            setData({ recalls: saved.recalls, contacts: saved.contacts });
+            setData({ recalls: saved.recalls, contacts: saved.contacts, phoneReview: saved.phoneReview });
             // D9: «Recall de Higiene desactivado: lo sustituye Mantenimiento periodontal».
             const excluded = recallUpdatesNotice(saved.recallUpdates, null);
             setNotice(excluded ? `${copy.saved} ${excluded}.` : copy.saved);
@@ -267,6 +270,7 @@ export function PatientRecallSection({
           token={token}
           recallId={dialog.recall.id}
           patientName={patient.fullName}
+          timeZone={stamp.clock?.of(dialog.recall.locationId)?.timeZone ?? null}
           onSaved={() => {
             setNotice(copy.contactSaved);
             setReloadKey((k) => k + 1);

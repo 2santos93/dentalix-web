@@ -2,51 +2,49 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { ShieldAlert } from 'lucide-react';
-import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   createRecallContact,
   type RecallContact,
   type RecallContactChannel,
   type RecallContactOutcome,
 } from '@/lib/recall/recall-api';
-import {
-  CHANNEL_LABELS,
-  CHANNEL_ORDER,
-  OUTCOME_LABELS,
-  OUTCOME_ORDER,
-  RECALL_NOTE_MAX,
-} from '@/lib/recall/presentation';
+import { CHANNEL_LABELS, CHANNEL_ORDER, OUTCOME_LABELS, OUTCOME_ORDER, RECALL_NOTE_MAX } from '@/lib/recall/presentation';
+import { callbackError, callbackRange, recallWriteError } from '@/lib/recall/attempts-presentation';
+import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
 import { Callout } from '@/components/ui/callout';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { RecallCallbackField } from './recall-callback-field';
 
 export const contactDialogCopy = {
-  title: 'Registrar contacto',
-  description: (name: string) => `Contacto con ${name}. No se edita ni se borra: si te equivocas, registra otro.`,
+  title: 'Registrar intento',
+  description: (name: string) => `Intento con ${name}. No se edita ni se borra: si te equivocas, registra otro.`,
   channel: 'Canal',
   outcome: 'Resultado',
   choose: 'Elige una opción',
   note: 'Nota (opcional)',
   counter: (n: number) => `${n}/${RECALL_NOTE_MAX}`,
   clinicalWarning: 'No escribas datos clínicos (diagnósticos, tratamientos, medicación): solo lo hablado sobre la cita.',
-  submit: 'Guardar contacto',
+  submit: 'Guardar intento',
   // D23: «Agendó» no se guarda sin cita: sigue en «Agendar».
   submitBooked: 'Agendar cita…',
   bookedHint: 'El contacto se guarda al agendar la cita, con este canal y esta nota.',
-  channelRequired: 'Elige el canal del contacto.',
-  outcomeRequired: 'Elige el resultado del contacto.',
+  channelRequired: 'Elige el canal del intento.',
+  outcomeRequired: 'Elige el resultado del intento.',
   noteTooLong: `La nota admite hasta ${RECALL_NOTE_MAX} caracteres.`,
-  saveError: 'No pudimos guardar el contacto. Intenta de nuevo.',
+  saveError: 'No pudimos guardar el intento. Intenta de nuevo.',
 };
 const copy = contactDialogCopy;
 
 /**
- * «Registrar contacto» (DX-015): canal, resultado y nota corta. Append-only.
- * Con «Agendó» (D23) no guarda nada: pasa el canal y la nota a `onBook`, que
- * abre «Agendar»; el contacto se registra con la cita creada.
+ * «Registrar intento» (DX-015, DX-465): canal, resultado y nota corta.
+ * Append-only. Con «Agendó» (D23) no guarda nada: pasa el canal y la nota a
+ * `onBook`, que abre «Agendar»; el contacto se registra con la cita creada.
+ * Con «Llamar luego» pide el día de volver a llamar (de hoy a 90 días en la
+ * sede del paciente, `timeZone`).
  */
 export function RecallContactDialog({
   open,
@@ -56,6 +54,7 @@ export function RecallContactDialog({
   patientName,
   onSaved,
   onBook,
+  timeZone = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -65,11 +64,16 @@ export function RecallContactDialog({
   onSaved: (contact: RecallContact) => void;
   /** Sin él (la ficha) no se ofrece «Agendó»: no hay desde dónde agendar. */
   onBook?: (draft: { channel: RecallContactChannel; note: string }) => void;
+  /** Zona de la sede del paciente: el «hoy» de «Llamar luego». */
+  timeZone?: string | null;
 }) {
   const [channel, setChannel] = useState<RecallContactChannel | ''>('');
   const [outcome, setOutcome] = useState<RecallContactOutcome | ''>('');
   const [note, setNote] = useState('');
-  const [errors, setErrors] = useState<{ channel?: string; outcome?: string; note?: string }>({});
+  const [callbackOn, setCallbackOn] = useState<string | null>(null);
+  const [errors, setErrors] = useState<{ channel?: string; outcome?: string; note?: string; callbackOn?: string }>(
+    {},
+  );
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -81,10 +85,13 @@ export function RecallContactDialog({
       setChannel('');
       setOutcome('');
       setNote('');
+      setCallbackOn(null);
       setErrors({});
       setSubmitError(null);
     }
   }
+
+  const range = callbackRange([timeZone ? safeToday(timeZone) : null]);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -92,6 +99,8 @@ export function RecallContactDialog({
     if (!channel) next.channel = copy.channelRequired;
     if (!outcome) next.outcome = copy.outcomeRequired;
     if (note.trim().length > RECALL_NOTE_MAX) next.note = copy.noteTooLong;
+    const callback = outcome === 'CALL_BACK' ? callbackError(callbackOn, range) : null;
+    if (callback) next.callbackOn = callback;
     setErrors(next);
     if (Object.keys(next).length > 0 || !channel || !outcome) return;
     if (outcome === 'BOOKED' && onBook) {
@@ -105,11 +114,12 @@ export function RecallContactDialog({
         channel,
         outcome,
         ...(note.trim() ? { note: note.trim() } : {}),
+        ...(outcome === 'CALL_BACK' && callbackOn ? { callbackOn } : {}),
       });
       onSaved(contact);
       onOpenChange(false);
     } catch (err) {
-      setSubmitError(apiErrorMessage(err, { fallback: copy.saveError }));
+      setSubmitError(recallWriteError(err, copy.saveError));
     } finally {
       setSubmitting(false);
     }
@@ -168,6 +178,18 @@ export function RecallContactDialog({
           {copy.bookedHint}
         </p>
       ) : null}
+      {outcome === 'CALL_BACK' ? (
+        <RecallCallbackField
+          id="rc-callback"
+          value={callbackOn}
+          onChange={(value) => {
+            setCallbackOn(value);
+            setErrors((prev) => ({ ...prev, callbackOn: undefined }));
+          }}
+          range={range}
+          error={errors.callbackOn}
+        />
+      ) : null}
       <FormField htmlFor="rc-note" label={copy.note} error={errors.note}>
         <Callout id="rc-note-warning" tone="warning" role="note" icon={ShieldAlert}>
           {copy.clinicalWarning}
@@ -190,4 +212,13 @@ export function RecallContactDialog({
       </FormField>
     </FormModal>
   );
+}
+
+/** «Hoy» en la zona de la sede; `null` con una zona que no existe (la API lo dirá). */
+export function safeToday(timeZone: string): string | null {
+  try {
+    return sedeToday(timeZone);
+  } catch {
+    return null;
+  }
 }

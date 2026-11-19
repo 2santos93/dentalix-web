@@ -288,7 +288,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       {
         href: '/settings/recall',
         label: 'Recall',
-        description: 'Cada cuánto vuelve el paciente, qué procedimientos reinician el plazo y qué controles se excluyen.',
+        description: 'Cada cuánto vuelve el paciente, qué reinicia el plazo, qué se excluye y cuántas veces se le llama.',
         icon: Repeat,
         visible: canManageRecallTypes,
       },

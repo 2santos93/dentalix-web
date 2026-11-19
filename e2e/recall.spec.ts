@@ -18,8 +18,12 @@ import { API_URL, tenantOrigin } from './support/urls';
  *
  * DX-015-bis-4: Control está enlazado al tipo de cita «Control periódico»
  * (45 min), que «Agendar» prellena. A 1440 se agenda desde «Agendar»; a 390,
- * desde «Registrar contacto» › «Agendó», con el canal y la nota, y el contacto
+ * desde «Registrar intento» › «Agendó», con el canal y la nota, y el contacto
  * «Agendó» queda en el historial de la ficha.
+ *
+ * DX-465: tras «No contesta» el paciente sale de la lista por defecto (los días
+ * de la sede); se le sigue la pista en «Incluir contactados», desde donde se
+ * le agenda.
  */
 const suffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase();
 const subdomain = `recall-${suffix}`.slice(0, 40);
@@ -78,22 +82,25 @@ async function receptionFlow(
   await expectNoHorizontalScroll(page);
   await shot(page, 'list', width);
 
-  // «Llamado, no contesta»: sigue en la lista, con su último contacto.
-  await rowAction(page, row, 'Registrar contacto');
+  // «Llamado, no contesta»: sale de la lista por defecto (DX-465) y sigue en «Incluir contactados».
+  await rowAction(page, row, 'Registrar intento');
   const contact = page.getByRole('dialog');
   await contact.getByLabel('Canal').selectOption('CALL');
   await contact.getByLabel('Resultado').selectOption('NO_ANSWER');
   await contact.getByLabel('Nota (opcional)').fill('Volver a llamar por la tarde');
   await expectDialogInsideViewport(page, contact);
   await shot(page, 'contact', width);
-  await contact.getByRole('button', { name: 'Guardar contacto' }).click();
-  await expect(page.getByText(`Contacto registrado para ${fullName}.`)).toBeVisible();
+  await contact.getByRole('button', { name: 'Guardar intento' }).click();
+  await expect(page.getByText(`Intento registrado para ${fullName}`)).toBeVisible();
+  await expect(row).toHaveCount(0);
+  await page.getByLabel('Intentos', { exact: true }).selectOption('contacted');
   await expect(row).toContainText('No contesta');
+  await expect(row).toContainText('1 de 3');
 
   if (via === 'booked') {
     // D23: «Agendó» no se guarda sin cita: abre «Agendar» con el canal y la nota.
-    await rowAction(page, row, 'Registrar contacto');
-    const booked = page.getByRole('dialog', { name: 'Registrar contacto' });
+    await rowAction(page, row, 'Registrar intento');
+    const booked = page.getByRole('dialog', { name: 'Registrar intento' });
     await booked.getByLabel('Canal').selectOption('WHATSAPP_LINK');
     await booked.getByLabel('Resultado').selectOption('BOOKED');
     await booked.getByLabel('Nota (opcional)').fill('Prefiere la mañana');

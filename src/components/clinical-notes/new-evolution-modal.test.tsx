@@ -645,6 +645,7 @@ describe('NewEvolutionModal · recall (DX-015-bis D18)', () => {
       .mockResolvedValue({
         recalls: [{ recallTypeId: 't-ctl', intervalMonths: 4, active: true } as never],
         contacts: [],
+        phoneReview: null,
       });
     jest.mocked(announceRecallChanged).mockReset();
     (toast.success as jest.Mock).mockReset();

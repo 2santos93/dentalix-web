@@ -358,10 +358,14 @@ export function apiErrorFromBody(
     candidates: parseCandidates(data.candidates),
     // DX-562: el 409 de una serie (fechas que chocan) y el de citas que cambiaron a la vez.
     seriesConflicts: parseSeriesConflicts(data.conflicts),
-    appointmentIds: Array.isArray(data.appointmentIds)
-      ? data.appointmentIds.filter((id): id is string => typeof id === 'string' && id !== '')
-      : null,
+    appointmentIds: idList(data.appointmentIds),
+    // DX-465: el 404 del lote de intentos nombra los recalls que no existen.
+    recallIds: idList(data.recallIds),
   });
+}
+
+function idList(value: unknown): string[] | null {
+  return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string' && id !== '') : null;
 }
 
 function parseSeriesConflicts(value: unknown): SeriesConflictRef[] | null {

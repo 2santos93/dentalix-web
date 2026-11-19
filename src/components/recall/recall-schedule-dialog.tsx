@@ -32,6 +32,11 @@ export const scheduleDialogCopy = {
 /**
  * D22: registra el contacto «Agendó» de una cita ya creada. Si falla, la cita
  * se queda y un aviso reintenta solo el contacto (nunca otra cita).
+ *
+ * DX-465: el alta de la cita ya lleva `recallContact` (canal y nota de
+ * recepción) y la API escribe el «Agendó» en la misma transacción. Este POST
+ * queda de respaldo: es idempotente para el mismo recall y la misma cita (200
+ * con el existente), así que no hay doble «Agendó».
  */
 export async function registerBookedContact(
   token: string,
@@ -68,7 +73,7 @@ export function RecallScheduleDialog({
   item: RecallDueItem;
   /** D21: el tipo de cita del tipo de recall; el formulario lo ignora si ya no está activo. */
   appointmentTypeId?: string | null;
-  /** D23: el canal y la nota que se eligieron en «Registrar contacto». */
+  /** D23: el canal y la nota que se eligieron en «Registrar intento». */
   defaultChannel?: RecallContactChannel;
   note?: string;
   onClose: () => void;
@@ -155,6 +160,8 @@ export function RecallScheduleDialog({
                   defaultReason={scheduleDialogCopy.reason(recallTypeLabel(item))}
                   locationId={item.locationId}
                   defaultAppointmentTypeId={appointmentTypeId}
+                  // DX-465: el «Agendó» con el canal y la nota de recepción, en la misma transacción que la cita.
+                  recallContact={{ recallId: item.recallId, channel, ...(trimmedNote ? { note: trimmedNote } : {}) }}
                   onCreated={(appointment) => void handleCreated(appointment)}
                 />
               ) : null}
