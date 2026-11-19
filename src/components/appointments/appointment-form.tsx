@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { PatientMedicalAlertsNotice } from '@/components/clinical/appointment-medical-alerts';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -8,6 +8,8 @@ import {
   type Appointment,
   type CreateAppointmentInput,
 } from '@/lib/appointments/appointments-api';
+import type { CreatedAppointmentSeries, SeriesPreviewInput } from '@/lib/appointments/appointment-series-api';
+import { parseRecurrence, type RecurrenceDraft, type RecurrenceErrors } from '@/lib/appointments/series-limits';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canChangeWantsEarlier } from '@/lib/appointments/wants-earlier';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
@@ -62,6 +64,17 @@ import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { endSentence } from '@/lib/format/text';
 import { controlHeight, fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
+
+// DX-562: «Repetir» va en trozos aparte (el formulario está en el shell, en la
+// búsqueda por llamada): sus campos al marcarlo y la vista previa al pedir «Ver
+// fechas». `React.lazy` y no `next/dynamic`, para no sumar su cargador al shell;
+// solo se pintan tras un clic, así que no hay SSR que perder.
+const AppointmentRepeatFields = lazy(() =>
+  import('./appointment-repeat-fields').then((m) => ({ default: m.AppointmentRepeatFields })),
+);
+const SeriesPreviewStep = lazy(() =>
+  import('./series-preview-step').then((m) => ({ default: m.SeriesPreviewStep })),
+);
 
 // Copy as constants (i18n-ready, es-first) — matches patient-form.tsx /
 // tooth-record-panel.tsx convention until next-intl wiring lands.
@@ -130,6 +143,11 @@ const copy = {
       : `Fuera del horario de ${name} en esta sede (ese día: ${ranges}).`,
   providerOffScheduleAllowed: 'Se puede agendar igual; quedará el aviso.',
   providerOffScheduleStrict: 'La clínica no permite citar fuera del horario del profesional.',
+  // DX-562: «Repetir» (citas en serie), solo en la agenda.
+  repeatLabel: 'Repetir',
+  repeatHint: 'Agenda la misma cita cada pocas semanas (p. ej. controles de ortodoncia).',
+  repeatSubmit: 'Ver fechas',
+  repeatLoading: 'Cargando…',
 };
 
 function fullPatientName(patient: Patient): string {
@@ -190,6 +208,13 @@ interface AppointmentFormProps {
    * mismo efecto que elegirlo a mano (duración y hora de fin).
    */
   defaultAppointmentTypeId?: string | null;
+  /**
+   * DX-562: ofrece «Repetir» (citas en serie, cada N semanas). Solo el diálogo
+   * de nueva cita de la agenda; sin `planItemIds` (un tratamiento reserva una
+   * sola cita). Con la serie creada llama a `onSeriesCreated`.
+   */
+  allowRepeat?: boolean;
+  onSeriesCreated?: (result: CreatedAppointmentSeries) => void;
 }
 
 /**
@@ -226,6 +251,8 @@ export function AppointmentForm({
   planItemIds,
   minimumDate,
   locationId,
+  allowRepeat = false,
+  onSeriesCreated,
 }: AppointmentFormProps) {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [patientsLoading, setPatientsLoading] = useState(true);
@@ -278,6 +305,14 @@ export function AppointmentForm({
   // DX-210: «Adelantar si hay hueco» (recepción, odontología y ADMIN).
   const [wantsEarlier, setWantsEarlier] = useState(false);
   const canMarkWantsEarlier = canChangeWantsEarlier(getTokenRole(token));
+  // DX-562: «Repetir». El paso 2 (vista previa) se pinta en el mismo diálogo
+  // mientras `seriesRequest` no es null; el paso 1 conserva lo escrito.
+  const canRepeat = allowRepeat && !planItemIds && onSeriesCreated !== undefined;
+  const [repeat, setRepeat] = useState(false);
+  const [recurrence, setRecurrence] = useState<RecurrenceDraft>({ intervalWeeks: '1', endMode: 'count', count: '4', until: '' });
+  const [repeatErrors, setRepeatErrors] = useState<RecurrenceErrors>({});
+  const [seriesRequest, setSeriesRequest] = useState<SeriesPreviewInput | null>(null);
+  const repeating = canRepeat && repeat;
 
   // Horario de atención de la sede activa: `null` = sin configurar => sin
   // restricción (misma semántica que el backend).
@@ -501,6 +536,8 @@ export function AppointmentForm({
     setWantsEarlier(false);
     setAppointmentTypeId('');
     setChairId('');
+    setRepeat(false);
+    setSeriesRequest(null);
   }
 
   function handlePatientSelect(patient: Patient) {
@@ -532,6 +569,7 @@ export function AppointmentForm({
     setSaveError(null);
     setOverridable(null);
     setOverrideError(null);
+    setRepeatErrors({});
 
     if (!patientId || !providerId || !date || !startTime || !endTime) {
       setValidationError(copy.validationMissingFields);
@@ -570,6 +608,29 @@ export function AppointmentForm({
     // antes de enviar y con el horario real del día en el mensaje.
     if (!fitsBusinessHoursLocal(date, startTime, endTime, hours)) {
       setValidationError(copy.validationOutsideHours(describeDay(civilWeekday(date), hours, clock.fmt)));
+      return;
+    }
+
+    if (repeating) {
+      const parsed = parseRecurrence(recurrence, date);
+      if (!parsed.ok) {
+        const { errors } = parsed;
+        setRepeatErrors(errors);
+        document
+          .getElementById(errors.interval ? 'appointment-repeat-interval' : errors.count ? 'appointment-repeat-count' : 'appointment-repeat-until')
+          ?.focus();
+        return;
+      }
+      setSeriesRequest({
+        patientId,
+        providerId,
+        start,
+        end,
+        ...(appointmentTypeId ? { appointmentTypeId } : {}),
+        ...(chairId ? { chairId } : {}),
+        ...(reason.trim() ? { reason: reason.trim() } : {}),
+        ...parsed.value,
+      });
       return;
     }
 
@@ -638,6 +699,25 @@ export function AppointmentForm({
     trimmedPatientQuery !== '' &&
     !patientsLoading &&
     patients.length === 0;
+
+  // DX-562: paso 2 de «Repetir», en el mismo diálogo.
+  if (repeating && seriesRequest && clock && onSeriesCreated) {
+    return (
+      <Suspense fallback={<p role="status" className="py-6 text-sm text-muted">{copy.repeatLoading}</p>}>
+        <SeriesPreviewStep
+          token={token}
+          locationId={locationId}
+          request={seriesRequest}
+          clock={clock}
+          onBack={() => setSeriesRequest(null)}
+          onCreated={(result) => {
+            resetForm();
+            onSeriesCreated(result);
+          }}
+        />
+      </Suspense>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} aria-label={copy.submit} className="flex flex-col gap-4">
@@ -993,7 +1073,35 @@ export function AppointmentForm({
         />
       </div>
 
-      {canMarkWantsEarlier ? (
+      {canRepeat ? (
+        <div className="flex flex-col gap-3">
+          <Checkbox
+            id="appointment-repeat"
+            checked={repeat}
+            onChange={(e) => {
+              setRepeat(e.target.checked);
+              setRepeatErrors({});
+            }}
+            label={copy.repeatLabel}
+            description={copy.repeatHint}
+          />
+          {repeat ? (
+            <Suspense fallback={<p role="status" className="text-sm text-muted">{copy.repeatLoading}</p>}>
+              <AppointmentRepeatFields
+                draft={recurrence}
+                onChange={(next) => {
+                  setRecurrence(next);
+                  setRepeatErrors({});
+                }}
+                errors={repeatErrors}
+                firstDay={date || today}
+              />
+            </Suspense>
+          ) : null}
+        </div>
+      ) : null}
+
+      {canMarkWantsEarlier && !repeating ? (
         <Checkbox
           id="appointment-wants-earlier"
           checked={wantsEarlier}
@@ -1045,7 +1153,7 @@ export function AppointmentForm({
 
       <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
         <Button type="submit" loading={submitting}>
-          {submitting ? copy.submitting : copy.submit}
+          {submitting ? copy.submitting : repeating ? copy.repeatSubmit : copy.submit}
         </Button>
       </div>
     </form>

@@ -7,6 +7,11 @@ import { updateAppointment, type Appointment } from '@/lib/appointments/appointm
 import { caracasSede, testAgendaClock } from '@/lib/test/sede-clock';
 import { wallInstant } from '@/lib/time/wall-clock';
 import { findOpenings } from '@/lib/appointments/waitlist-api';
+import {
+  moveAppointmentSeries,
+  previewMoveAppointmentSeries,
+  type SeriesPreview,
+} from '@/lib/appointments/appointment-series-api';
 
 /** Reloj de la sede de pruebas (UTC, 24 h): estas pruebas no tratan del reloj. */
 const CLOCK = testAgendaClock();
@@ -551,5 +556,137 @@ describe('MoveAppointmentDialog · sobrecupo que choca (DX-509-bis)', () => {
     expect(screen.getByText('El profesional ya tiene una cita en ese horario')).toBeInTheDocument();
     const offer = await screen.findByTestId('move-next-opening');
     await waitFor(() => expect(offer).toHaveTextContent('12:00 con Dr. Luis Gómez'));
+  });
+});
+
+// DX-562: mover una cita de una serie: «Solo esta cita» o «Esta y las siguientes».
+jest.mock('../../lib/appointments/appointment-series-api', () => ({
+  ...jest.requireActual('../../lib/appointments/appointment-series-api'),
+  previewMoveAppointmentSeries: jest.fn(),
+  moveAppointmentSeries: jest.fn(),
+}));
+
+describe('MoveAppointmentDialog · cita de una serie (DX-562)', () => {
+  const mockedMovePreview = jest.mocked(previewMoveAppointmentSeries);
+  const mockedMove = jest.mocked(moveAppointmentSeries);
+  const inSeries: Appointment = { ...appointment, series: { id: 's-1', index: 2, total: 6 } };
+  const newStart = wallInstant(FUTURE, 11 * 60, 'UTC').toISOString();
+
+  function plan(conflictOn: number | null): SeriesPreview {
+    return {
+      timeZone: 'UTC',
+      durationMinutes: 90,
+      occurrences: [2, 3].map((index) => ({
+        index,
+        appointmentId: `apt-${index}`,
+        start: index === 2 ? newStart : wallInstant(FUTURE, 11 * 60, 'UTC').toISOString(),
+        end: newStart,
+        status: index === conflictOn ? ('CONFLICT' as const) : ('OK' as const),
+        reasons:
+          index === conflictOn
+            ? [{ code: 'PATIENT_OVERLAP' as const, message: 'El paciente ya tiene otra cita en ese horario' }]
+            : [],
+        warnings: [],
+        warningCodes: [],
+        alternative: null,
+      })),
+    };
+  }
+
+  function renderSeries(appt: Appointment = inSeries) {
+    const onMoved = jest.fn();
+    const onSeriesMoved = jest.fn();
+    const onSeriesStale = jest.fn();
+    render(
+      <MoveAppointmentDialog
+        open
+        onOpenChange={() => {}}
+        token="tok"
+        appointment={appt}
+        clock={CLOCK}
+        providers={providers}
+        hours={null}
+        onMoved={onMoved}
+        onSeriesMoved={onSeriesMoved}
+        onSeriesStale={onSeriesStale}
+      />,
+    );
+    return { onMoved, onSeriesMoved, onSeriesStale };
+  }
+
+  beforeEach(() => {
+    mockedUpdate.mockReset();
+    mockedMovePreview.mockReset();
+    mockedMove.mockReset();
+  });
+
+  it('«Solo esta cita» (por defecto) mueve con el PATCH de siempre', async () => {
+    const user = userEvent.setup();
+    mockedUpdate.mockResolvedValue(inSeries as never);
+    renderSeries();
+    expect(screen.getByLabelText(/Solo esta cita/)).toBeChecked();
+    await typeTime(user, 'Hora de inicio', '11:00');
+    await user.click(screen.getByRole('button', { name: 'Mover cita' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalled());
+    expect(mockedMovePreview).not.toHaveBeenCalled();
+  });
+
+  it('«Esta y las siguientes»: vista previa sin choques y confirmar mueve la serie', async () => {
+    const user = userEvent.setup();
+    mockedMovePreview.mockResolvedValue(plan(null));
+    const change = { seriesId: 's-1', appointments: [] };
+    mockedMove.mockResolvedValue(change);
+    const { onSeriesMoved } = renderSeries();
+    await user.click(screen.getByLabelText(/Esta y las siguientes/));
+    // Solo cambia la hora: profesional y sillón se quedan.
+    expect(screen.queryByLabelText('Profesional')).not.toBeInTheDocument();
+    await typeTime(user, 'Hora de inicio', '11:00');
+    await user.click(screen.getByRole('button', { name: 'Ver fechas' }));
+
+    expect(await screen.findByTestId('series-move-preview')).toBeInTheDocument();
+    expect(mockedMovePreview).toHaveBeenCalledWith('tok', 's-1', { fromAppointmentId: 'apt-1', start: newStart });
+    await user.click(screen.getByRole('button', { name: 'Mover 2 citas' }));
+    await waitFor(() => expect(onSeriesMoved).toHaveBeenCalledWith(change));
+    expect(mockedMove).toHaveBeenCalledWith('tok', 's-1', { fromAppointmentId: 'apt-1', start: newStart });
+    expect(mockedUpdate).not.toHaveBeenCalled();
+  });
+
+  it('con choques no deja confirmar y explica que se ajusten una a una', async () => {
+    const user = userEvent.setup();
+    mockedMovePreview.mockResolvedValue(plan(3));
+    renderSeries();
+    await user.click(screen.getByLabelText(/Esta y las siguientes/));
+    await typeTime(user, 'Hora de inicio', '11:00');
+    await user.click(screen.getByRole('button', { name: 'Ver fechas' }));
+    expect(await screen.findByTestId('series-move-blocked')).toHaveTextContent(/1 fecha choca/);
+    expect(screen.getByText('El paciente ya tiene otra cita en ese horario')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mover 2 citas' })).toBeDisabled();
+    // «Cambiar la hora» vuelve a los campos.
+    await user.click(screen.getByRole('button', { name: 'Cambiar la hora' }));
+    expect(readTime('Hora de inicio')).toBe('11:00');
+    expect(readDate('Fecha')).toBe(FUTURE);
+  });
+
+  it('409 STALE al confirmar: lo dice y pide recargar la agenda', async () => {
+    const user = userEvent.setup();
+    mockedMovePreview.mockResolvedValue(plan(null));
+    mockedMove.mockRejectedValue(
+      new ApiError(409, 'Alguna cita de la serie cambió mientras tanto (otra persona la movió, la canceló o la atendió). Vuelve a abrir la serie y repite el cambio.', {
+        code: 'APPOINTMENT_SERIES_STALE',
+      }),
+    );
+    const { onSeriesStale, onSeriesMoved } = renderSeries();
+    await user.click(screen.getByLabelText(/Esta y las siguientes/));
+    await typeTime(user, 'Hora de inicio', '11:00');
+    await user.click(screen.getByRole('button', { name: 'Ver fechas' }));
+    await user.click(await screen.findByRole('button', { name: 'Mover 2 citas' }));
+    expect(await screen.findByText(/cambió mientras tanto/)).toBeInTheDocument();
+    expect(onSeriesStale).toHaveBeenCalled();
+    expect(onSeriesMoved).not.toHaveBeenCalled();
+  });
+
+  it('una cita de la serie ya atendida no ofrece mover las siguientes', () => {
+    renderSeries({ ...inSeries, status: 'COMPLETED' });
+    expect(screen.queryByRole('radiogroup', { name: 'Qué citas mover' })).not.toBeInTheDocument();
   });
 });

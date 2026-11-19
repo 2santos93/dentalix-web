@@ -130,6 +130,13 @@ import { OVERBOOK_SLOT_TAKEN, canWalkIn, type WalkInResult } from '@/lib/appoint
 import { KeepOverbookedDialog, type KeepOverbookedPrompt } from '@/components/appointments/keep-overbooked-dialog';
 import { OverbookedChip } from '@/components/appointments/overbooked-chip';
 import { OnlineChip } from '@/components/appointments/online-chip';
+import { SeriesChip } from '@/components/appointments/series-chip';
+import {
+  isPendingSeriesStatus,
+  SERIES_NOTIFY_REASON_LABELS,
+  type AppointmentSeriesChange,
+  type CreatedAppointmentSeries,
+} from '@/lib/appointments/appointment-series-api';
 import { canDownloadContingencyAgenda } from '@/lib/appointments/contingency-agenda-api';
 import { InClinicPanel, inClinicCopy } from '@/components/appointments/in-clinic-panel';
 import { focusLocationSwitcher } from '@/components/locations/location-switcher';
@@ -244,6 +251,16 @@ const copy = {
   chairsError: 'No pudimos cargar los sillones de la sede: la agenda se ve por profesional.',
   genericMoveError: 'No pudimos mover la cita.',
   moved: 'Cita movida.',
+  // DX-562: citas en serie.
+  seriesCreated: (n: number) => (n === 1 ? 'Se creó 1 cita en serie.' : `Se crearon ${n} citas en serie.`),
+  seriesNotified: 'El paciente recibirá un email con todas las fechas.',
+  seriesMoved: (n: number) => (n === 1 ? 'Se movió 1 cita de la serie.' : `Se movieron ${n} citas de la serie.`),
+  seriesCancelled: (n: number) =>
+    n === 0
+      ? 'No quedaban citas pendientes de la serie por cancelar.'
+      : n === 1
+        ? 'Se canceló 1 cita de la serie.'
+        : `Se cancelaron ${n} citas de la serie.`,
   // DX-479: por sillón se anuncia a dónde fue (el lector de pantalla no ve la columna).
   movedTo: (where: string, range: string | null) => (range ? `Cita movida a ${where}, ${range}.` : `Cita movida a ${where}.`),
   noChair: 'Sin sillón',
@@ -482,6 +499,8 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   const [showAllProviders, setShowAllProviders] = useState(false);
   const [movingAppointment, setMovingAppointment] = useState<Appointment | null>(null);
   // DX-509-bis: el arrastre de un sobrecupo que chocó abre «Mover a…» con el destino y el siguiente hueco.
+  // DX-562: el arrastre de una cita de serie abre «Mover a…» con ese destino.
+  const [moveInitialTarget, setMoveInitialTarget] = useState<MoveTarget | null>(null);
   const [moveCollision, setMoveCollision] = useState<{ target: MoveTarget; error: unknown; message: string } | null>(
     null,
   );
@@ -1054,6 +1073,17 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
     refreshAppointmentsInPlace();
   }
 
+  /** DX-562: la serie quedó creada: cuántas citas y si se avisó al paciente. */
+  function handleSeriesCreated(result: CreatedAppointmentSeries) {
+    setShowForm(false);
+    setSlotPrefill(null);
+    const notice = result.notifyReason ? SERIES_NOTIFY_REASON_LABELS[result.notifyReason] : null;
+    toast.success(copy.seriesCreated(result.appointments.length), {
+      description: result.patientNotified ? copy.seriesNotified : (notice ?? undefined),
+    });
+    refreshAppointmentsInPlace();
+  }
+
   /** `WeekTimeGrid`'s `onSelectDay` — jumps the day selector to the clicked column and switches back to Día view, mirroring a calendar "drill in" interaction. */
   function handleSelectDay(date: string) {
     setSelectedDate(date);
@@ -1114,6 +1144,19 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
    */
   async function handleDrop(appointment: Appointment, patch: MovePatch) {
     if (!token) return;
+    // DX-562: una cita pendiente de una serie pregunta «Solo esta cita» o
+    // «Esta y las siguientes»: el arrastre abre «Mover a…» con ese destino.
+    if (appointment.series && isPendingSeriesStatus(appointment.status) && clock.of(appointment.locationId)) {
+      setMoveCollision(null);
+      setMoveInitialTarget({
+        start: patch.start ?? appointment.start,
+        end: patch.end ?? appointment.end,
+        providerId: patch.providerId ?? appointment.providerId,
+        ...(patch.chairId === undefined ? {} : { chairId: patch.chairId }),
+      });
+      setMovingAppointment(appointment);
+      return;
+    }
     // DX-479: a un sillón con OTRO profesional por defecto: se pregunta antes
     // de mover (el profesional nunca cambia solo); «Mantener» es lo de siempre.
     const targetChair = typeof patch.chairId === 'string' ? chairs.find((c) => c.id === patch.chairId) : undefined;
@@ -1197,6 +1240,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
       return;
     }
     setMoveCollision(null);
+    setMoveInitialTarget(null);
     setMovingAppointment(appointment);
   }
 
@@ -1204,8 +1248,18 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
   function handleMoved(updated: Appointment) {
     setMovingAppointment(null);
     setMoveCollision(null);
+    setMoveInitialTarget(null);
     toast.success(copy.moved);
     announceAppointmentWarnings(updated);
+    void refreshAppointmentsInPlace();
+  }
+
+  /** DX-562: «Esta y las siguientes» movidas: cierra, lo anuncia y refresca. */
+  function handleSeriesMoved(result: AppointmentSeriesChange) {
+    setMovingAppointment(null);
+    setMoveCollision(null);
+    setMoveInitialTarget(null);
+    toast.success(copy.seriesMoved(result.appointments.length));
     void refreshAppointmentsInPlace();
   }
 
@@ -1403,6 +1457,13 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
     setInClinicReloadKey((k) => k + 1);
     notifyInClinicChanged();
     await refreshAppointmentsInPlace();
+  }
+
+  /** DX-562: «Esta y las siguientes» canceladas (sin ofrecer ocupar cada hueco). */
+  async function handleSeriesCancelled(result: AppointmentSeriesChange) {
+    setCancelling(null);
+    toast.success(copy.seriesCancelled(result.appointments.length));
+    await afterStatusChange();
   }
 
   /** DX-279: la cita quedó cancelada con su origen y motivo. */
@@ -1967,6 +2028,9 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
             fromStatus={cancelling.status}
             onCloseAutoFocus={restoreStatusFocus}
             onDone={() => void handleCancelled(cancelling)}
+            series={cancelling.series}
+            onSeriesDone={(result) => void handleSeriesCancelled(result)}
+            onSeriesStale={() => void refreshAppointmentsInPlace()}
           />
         ) : null}
 
@@ -1978,12 +2042,16 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
               if (!open) {
                 setMovingAppointment(null);
                 setMoveCollision(null);
+                setMoveInitialTarget(null);
               }
             }}
             token={token}
             appointment={movingAppointment}
             clock={movingClock}
             collision={moveCollision}
+            initialTarget={moveInitialTarget}
+            onSeriesMoved={handleSeriesMoved}
+            onSeriesStale={() => void refreshAppointmentsInPlace()}
             providers={staff}
             hours={hours}
             onMoved={handleMoved}
@@ -2024,6 +2092,8 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
             <AppointmentForm
               token={token}
               onCreated={handleAppointmentCreated}
+              allowRepeat
+              onSeriesCreated={handleSeriesCreated}
               defaultDate={slotPrefill?.date ?? selectedDate}
               defaultStartTime={slotPrefill?.startTime}
               defaultEndTime={slotPrefill?.endTime}
@@ -2106,6 +2176,8 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                 />
                 {/* DX-016: la reservó el paciente desde la reserva online. */}
                 <OnlineChip origin={liveDetailAppointment.origin} className="self-start" />
+                {/* DX-562: cita de una serie («Serie · 3 de 6»). */}
+                <SeriesChip series={liveDetailAppointment.series} className="self-start" />
                 {liveDetailAppointment.status === 'CANCELLED' &&
                 cancellationSummary(liveDetailAppointment) ? (
                   <p className="text-sm text-muted" data-testid="cancellation-summary">
