@@ -33,6 +33,9 @@ export interface CandidateRef {
   name: string;
 }
 
+/** DX-562: una fecha del 409 `APPOINTMENT_SERIES_CONFLICT` (índice, inicio y razones). */
+export type SeriesConflictRef = components['schemas']['SeriesConflictItemDto'];
+
 /** Las citas que nombra un 409 `SCHEDULE_AFFECTS_APPOINTMENTS` (DX-267). */
 export type AffectedAppointmentsRef = components['schemas']['ScheduleAffectedAppointmentsDto'];
 
@@ -116,6 +119,13 @@ export class ApiError extends Error {
   public readonly existingRecord: ExistingRecordRef | null;
   /** DX-556: los pacientes entre los que elegir al convertir (`LEAD_AMBIGUOUS_PATIENTS`). */
   public readonly candidates: readonly CandidateRef[] | null;
+  /**
+   * DX-562: las fechas que chocan en el 409 `APPOINTMENT_SERIES_CONFLICT` al
+   * crear o mover una serie (vacío si fue una carrera sin fecha concreta).
+   */
+  public readonly seriesConflicts: readonly SeriesConflictRef[] | null;
+  /** DX-562: las citas que cambiaron a la vez en el 409 `APPOINTMENT_SERIES_STALE`. */
+  public readonly appointmentIds: readonly string[] | null;
 
   constructor(
     public readonly status: number,
@@ -139,6 +149,8 @@ export class ApiError extends Error {
       sessionToken?: string | null;
       existingRecord?: ExistingRecordRef | null;
       candidates?: readonly CandidateRef[] | null;
+      seriesConflicts?: readonly SeriesConflictRef[] | null;
+      appointmentIds?: readonly string[] | null;
     } = {},
   ) {
     super(message);
@@ -161,6 +173,8 @@ export class ApiError extends Error {
     this.sessionToken = details.sessionToken ?? null;
     this.existingRecord = details.existingRecord ?? null;
     this.candidates = details.candidates ?? null;
+    this.seriesConflicts = details.seriesConflicts ?? null;
+    this.appointmentIds = details.appointmentIds ?? null;
   }
 }
 
