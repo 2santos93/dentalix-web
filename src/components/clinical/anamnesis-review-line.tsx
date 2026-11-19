@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { FieldError } from '@/components/errors/field-error';
 import { cn } from '@/lib/utils';
+import { endSentence } from '@/lib/format/text';
 
 const copy = {
   current: 'Anamnesis al día',
@@ -24,7 +25,7 @@ const copy = {
   noChangesToday: (time: string, by: string | null) =>
     `Sin cambios hoy · confirmado a las ${time}${by ? ` por ${by}` : ''}`,
   validity: (months: number) => `Vigencia de la clínica: ${months} ${months === 1 ? 'mes' : 'meses'}.`,
-  expiresOn: (date: string) => `Caduca el ${date}.`,
+  expiresOn: (date: string) => endSentence(`Caduca el ${date}`),
   confirm: 'Sin cambios hoy',
   dialogTitle: '¿Sin cambios en la salud del paciente?',
   dialogDescription:

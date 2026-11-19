@@ -28,6 +28,7 @@ import { NativeSelect } from '@/components/ui/native-select';
 import { RadioGroup, RadioOption } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { endSentence } from '@/lib/format/text';
 
 type ChannelChoice = PaymentLinkChannel | 'COPY';
 
@@ -54,7 +55,7 @@ export const sendPaymentLinkCopy = {
   genericError: 'No pudimos crear el enlace. Intenta de nuevo.',
   noTargets: 'Este paciente no tiene saldo pendiente que cobrar por enlace.',
   linkLabel: 'Enlace de pago',
-  expires: (when: string) => `Caduca el ${when}. Sirve para un solo reporte.`,
+  expires: (when: string) => `${endSentence(`Caduca el ${when}`)} Sirve para un solo reporte.`,
   copyLink: 'Copiar enlace',
   copied: 'Enlace copiado',
   copyFailed: 'No pudimos copiar automáticamente: cópialo a mano desde el campo.',

@@ -31,6 +31,7 @@ import { SectionHeader } from '@/components/ui/section-header';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { endSentence } from '@/lib/format/text';
 
 export const commissionPaymentsCopy = {
   summary: 'Pagos por moneda',
@@ -73,7 +74,7 @@ export const commissionPaymentsCopy = {
   receiptSubmit: 'Crear enlace',
   receiptError: 'No pudimos crear el enlace. Intenta de nuevo.',
   linkLabel: 'Enlace de conformidad',
-  expires: (when: string) => `Caduca el ${when}. Sirve para una sola firma.`,
+  expires: (when: string) => `${endSentence(`Caduca el ${when}`)} Sirve para una sola firma.`,
   copy: 'Copiar enlace',
   copied: 'Enlace copiado',
   copyFailed: 'No pudimos copiar automáticamente: cópialo a mano desde el campo.',
