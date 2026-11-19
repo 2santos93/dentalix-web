@@ -109,6 +109,12 @@ const FIELD_LABELS: Record<string, string> = {
   // DX-559: plantillas de plan de tratamiento.
   lineCount: "Nº de procedimientos",
   visitCount: "Nº de visitas",
+  // DX-172: «¿Cómo nos conoció?» del paciente y su catálogo (Ajustes › Origen de pacientes).
+  source: "Cómo nos conoció",
+  referredByPatientId: "Paciente que lo recomendó",
+  referredByName: "Profesional que lo derivó",
+  kind: "Tipo",
+  isActive: "Activa",
 };
 const FIELD_ORDER = Object.keys(FIELD_LABELS);
 
@@ -200,6 +206,21 @@ function quoteFollowUpValue(
   return null;
 }
 
+/** DX-172: el tipo de una fuente de «¿Cómo nos conoció?». */
+const PATIENT_SOURCE_KIND_LABELS: Record<string, string> = {
+  CHANNEL: "Canal",
+  PATIENT: "Recomendación de un paciente",
+  EXTERNAL_PROFESSIONAL: "Profesional externo",
+};
+
+/**
+ * DX-172: en la captación de un paciente los ids no se leen. `sourceId` sobra
+ * (va `source`, el nombre); del referente solo se dice que cambió.
+ */
+const ACQUISITION_REASON = "PATIENT_ACQUISITION_CHANGED";
+const ACQUISITION_DROPPED = new Set(["sourceId"]);
+const ACQUISITION_ID_FIELDS = new Set(["referredByPatientId"]);
+
 /** Eventos de configuración de DX-360 (también los que solo traen `changedFields`). */
 const CONFIG_REASON =
   /^(LOCATION_CREATED|DOMAIN_REGISTERED|PRIVACY_POLICY_PUBLISHED|REMINDER_SETTINGS_UPDATED|INVENTORY_MOVEMENT_RECORDED|RECALL_TYPE_TRIGGERS_UPDATED|(APPOINTMENT_TYPE|RECALL_TYPE|PAYER|CONSENT_TEMPLATE|PRESCRIPTION_TEMPLATE|INVENTORY_ITEM)_(CREATED|UPDATED|DELETED))$/;
@@ -231,6 +252,7 @@ function scalar(
       payerTypeLabel(value)
     );
   if (field === "status") return DOMAIN_STATUS_LABELS[value] ?? value;
+  if (field === "kind") return PATIENT_SOURCE_KIND_LABELS[value] ?? value;
   if (LANGUAGE_FIELDS.has(field)) return languageName(value);
   if (field === "hourCycle") return HOUR_CYCLE_LABELS[value] ?? value;
   if (field === "adjustmentType")
@@ -305,9 +327,12 @@ export function configChangeItems(
   const digest = metadata.reason === WEEKLY_DIGEST_REASON;
   const followUp = metadata.reason === QUOTE_FOLLOW_UP_REASON;
   const order = digest ? byDigestOrder : followUp ? byQuoteFollowUpOrder : byScreenOrder;
+  const acquisition = metadata.reason === ACQUISITION_REASON;
   const fields = [
     ...new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})]),
-  ].sort(order);
+  ]
+    .filter((f) => !(acquisition && ACQUISITION_DROPPED.has(f)))
+    .sort(order);
   const valueOf = (field: string, value: ConfigValue | undefined) =>
     (digest ? weeklyDigestValue(field, value, fmt) : null) ??
     (followUp ? quoteFollowUpValue(field, value, fmt) : null) ??
@@ -318,6 +343,7 @@ export function configChangeItems(
 
   const items: ConfigChangeItem[] = fields.map((field) => {
     const label = labelOf(field);
+    if (acquisition && ACQUISITION_ID_FIELDS.has(field)) return { field, label, kind: "hidden" };
     if (before && after) {
       const from = valueOf(field, before[field]);
       const to = valueOf(field, after[field]);
@@ -341,7 +367,7 @@ export function configChangeItems(
 
   // Lo que la API no guarda (texto libre o largo) figura solo en changedFields.
   const hidden = (metadata.changedFields ?? [])
-    .filter((f) => !fields.includes(f))
+    .filter((f) => !fields.includes(f) && !(acquisition && ACQUISITION_DROPPED.has(f)))
     .sort(order);
   for (const field of hidden)
     items.push({ field, label: labelOf(field), kind: "hidden" });

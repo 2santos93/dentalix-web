@@ -12,6 +12,7 @@ import {
   dentalLabDetail,
   postOpCheckDetail,
   patientAccessDetail,
+  acquisitionDetail,
   importBatchDetail,
   AUDIT_ACTION_LABELS,
   AUDIT_ACTION_OPTIONS,
@@ -1156,5 +1157,19 @@ describe('patientAccessDetail (DX-101)', () => {
     );
     expect(patientAccessDetail({ reason: 'POST_OP_CHECK_LIST' })).toBeNull();
     expect(patientAccessDetail({})).toBeNull();
+  });
+});
+
+describe('acquisitionDetail (DX-172)', () => {
+  it('nombra cada paso de la captación y del catálogo; null para lo demás', () => {
+    expect(acquisitionDetail({ reason: 'PATIENT_ACQUISITION_CHANGED' })).toBe('«¿Cómo nos conoció?» cambiado');
+    expect(acquisitionDetail({ reason: 'PATIENT_ACQUISITION' })).toBe(
+      'Consulta de «¿Cómo nos conoció?» y de sus recomendados',
+    );
+    expect(acquisitionDetail({ reason: 'ACQUISITION_REPORT' })).toBe('Informe de captación de pacientes');
+    expect(acquisitionDetail({ reason: 'PATIENT_SOURCE_CREATED' })).toBe('Origen de pacientes: fuente añadida');
+    expect(acquisitionDetail({ reason: 'PATIENT_SOURCE_UPDATED' })).toBe('Origen de pacientes: fuente cambiada');
+    expect(acquisitionDetail({ reason: 'OTRA' })).toBeNull();
+    expect(acquisitionDetail({})).toBeNull();
   });
 });
