@@ -10,6 +10,7 @@ import {
   NetworkError,
   type ExistingPatientRef,
   type AffectedAppointmentsRef,
+  type SeriesConflictRef,
   type ExistingRecordRef,
   type CandidateRef,
 } from './api-error';
@@ -355,6 +356,35 @@ export function apiErrorFromBody(
     // DX-556: el 409 del teléfono repetido y el de la conversión con varios pacientes.
     existingRecord: parseExistingRecord(data.existing),
     candidates: parseCandidates(data.candidates),
+    // DX-562: el 409 de una serie (fechas que chocan) y el de citas que cambiaron a la vez.
+    seriesConflicts: parseSeriesConflicts(data.conflicts),
+    appointmentIds: Array.isArray(data.appointmentIds)
+      ? data.appointmentIds.filter((id): id is string => typeof id === 'string' && id !== '')
+      : null,
+  });
+}
+
+function parseSeriesConflicts(value: unknown): SeriesConflictRef[] | null {
+  if (!Array.isArray(value)) return null;
+  return value.flatMap((c) => {
+    if (!c || typeof c !== 'object') return [];
+    const item = c as Record<string, unknown>;
+    if (typeof item.index !== 'number' || typeof item.start !== 'string') return [];
+    const reasons = Array.isArray(item.reasons)
+      ? item.reasons.filter(
+          (r): r is SeriesConflictRef['reasons'][number] =>
+            !!r && typeof r === 'object' && typeof (r as { message?: unknown }).message === 'string',
+        )
+      : [];
+    return [
+      {
+        index: item.index,
+        start: item.start,
+        end: typeof item.end === 'string' ? item.end : item.start,
+        reasons,
+        ...(typeof item.appointmentId === 'string' ? { appointmentId: item.appointmentId } : {}),
+      },
+    ];
   });
 }
 

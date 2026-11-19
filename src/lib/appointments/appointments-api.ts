@@ -93,6 +93,11 @@ export interface Appointment {
    * (marca «Online» en la agenda). Opcional aquí solo para los dobles de los tests.
    */
   origin?: components['schemas']['AppointmentOrigin'];
+  /**
+   * DX-562: la serie («cada N semanas») de la cita, con su posición y el total
+   * («Serie · 3 de 6»). Ausente en las citas sueltas.
+   */
+  series?: components['schemas']['AppointmentSeriesRefDto'];
   createdAt: string;
   updatedAt: string;
   /**

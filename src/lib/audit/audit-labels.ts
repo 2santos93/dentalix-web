@@ -899,6 +899,50 @@ export function cancellationDetail(metadata: AuditMetadata): string | null {
   return parts.join(' · ');
 }
 
+const APPOINTMENT_SERIES_REASONS: Record<string, string> = {
+  APPOINTMENT_SERIES_CREATED: 'Serie de citas creada',
+  APPOINTMENT_SERIES_CANCELLED: 'Citas de la serie canceladas',
+  APPOINTMENT_SERIES_MOVED: 'Citas de la serie movidas',
+};
+
+/**
+ * DX-562: un evento de una serie de citas («cada N semanas»). Crear: «Serie de
+ * citas creada · 5 citas · cada 4 semanas · 11/01/2027 9:00 a. m. → 31/05/2027
+ * 9:00 a. m.» (la primera y la última). Cancelar: cuántas y, de la primera
+ * cancelada, quién, el motivo, el aviso y si fue tardía. Mover: cuántas y la
+ * hora de la cita desde la que se movió, antes y después. Horas con el reloj de
+ * la sede (`clock`); sin él, «—». null si el evento no es de una serie.
+ */
+export function appointmentSeriesDetail(metadata: AuditMetadata, clock: SedeClock | null): string | null {
+  const what = metadata.reason ? APPOINTMENT_SERIES_REASONS[metadata.reason] : undefined;
+  if (!what) return null;
+  const series = metadata.appointmentSeries;
+  const parts = [what];
+  if (series) {
+    const n = series.appointmentIds.length;
+    parts.push(n === 1 ? '1 cita' : `${n} citas`);
+  }
+  const when = (iso: string) => (clock ? clock.fmt.dateTime(new Date(iso), clock.timeZone) : NO_SEDE_FORMAT);
+  if (metadata.reason === 'APPOINTMENT_SERIES_CREATED' && series) {
+    if (series.intervalWeeks) {
+      parts.push(series.intervalWeeks === 1 ? 'cada semana' : `cada ${series.intervalWeeks} semanas`);
+    }
+    const dates = series.dates ?? [];
+    if (dates.length > 0) parts.push(`${when(dates[0])} → ${when(dates[dates.length - 1])}`);
+  }
+  if (metadata.reason === 'APPOINTMENT_SERIES_CANCELLED' && metadata.cancellation) {
+    const c = metadata.cancellation;
+    parts.push(CANCELLATION_KIND_AUDIT[c.byKind] ?? c.byKind);
+    if (c.reasonCode) parts.push(CANCELLATION_REASON_AUDIT[c.reasonCode] ?? c.reasonCode);
+    parts.push(`aviso de ${c.noticeMinutes} min`);
+    if (c.lateCancellation) parts.push('tardía');
+  }
+  if (metadata.reason === 'APPOINTMENT_SERIES_MOVED' && metadata.move) {
+    parts.push(`Antes: ${when(metadata.move.from.start)}`, `Después: ${when(metadata.move.to.start)}`);
+  }
+  return parts.join(' · ');
+}
+
 /**
  * DX-319: el nº de registro sanitario de una sede y si sale en los documentos,
  * antes y después («Nº de registro sanitario: sin nº → «NRS-7» · En los
