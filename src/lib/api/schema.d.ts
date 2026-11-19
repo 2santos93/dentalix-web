@@ -2604,6 +2604,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/appointments/series/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AppointmentSeriesController_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AppointmentSeriesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/series/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AppointmentSeriesController_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/series/{id}/move/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AppointmentSeriesController_previewMove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/series/{id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AppointmentSeriesController_move"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/appointments": {
         parameters: {
             query?: never;
@@ -10797,6 +10877,14 @@ export interface components {
             noticeMinutes: number;
             lateCancellation: boolean;
         };
+        AuditAppointmentSeriesDto: {
+            /** Format: uuid */
+            seriesId: string;
+            appointmentIds: string[];
+            /** @description Al crear o mover: el inicio de cada cita, en el orden de `appointmentIds`. */
+            dates?: string[];
+            intervalWeeks?: number;
+        };
         AuditHealthRegistrationSideDto: {
             number: string | null;
             /** @description Si el nº sale en los documentos de la sede. */
@@ -10958,6 +11046,8 @@ export interface components {
             attribution?: components["schemas"]["AuditAttributionChangeDto"];
             /** @description DX-279: cita cancelada desde la agenda, en su único evento (`reason` APPOINTMENT_CANCELLED; PATIENT_FLOW si estaba en la clínica; COMPLETED_EXIT si estaba completada): quién, código del motivo, minutos de aviso y si fue tardía. Nunca el texto libre del motivo. */
             cancellation?: components["schemas"]["AuditCancellationDto"];
+            /** @description DX-562: serie de citas en UN evento (`reason` APPOINTMENT_SERIES_CREATED, APPOINTMENT_SERIES_CANCELLED o APPOINTMENT_SERIES_MOVED; `resourceId` = la primera cita tocada): la serie, sus citas y, al crear o mover, sus inicios. Al cancelar, `cancellation` es la de la primera cita cancelada (la de menos aviso). */
+            appointmentSeries?: components["schemas"]["AuditAppointmentSeriesDto"];
             /** @description DX-319: nº de registro sanitario de una sede y si sale en los documentos, antes y después (dato público de la sede, nunca de un paciente). */
             healthRegistration?: components["schemas"]["AuditHealthRegistrationChangeDto"];
             /** @description DX-359: accesos de un miembro antes y después (rol, sedes, nº de registro profesional, especialidad): solo lo que cambió, o un lado en un alta (invitación, aceptación, registro). Nunca el nombre, el email ni nada de la contraseña. */
@@ -15365,9 +15455,7 @@ export interface components {
             /** @description Anulación del registro; null si sigue vigente */
             void: components["schemas"]["ToothRecordVoidDto"] | null;
         };
-        CreateAppointmentDto: {
-            /** @description Ítems aceptados del mismo paciente para esta cita (DX-256). [] desvincula al editar. */
-            planItemIds?: string[];
+        PreviewAppointmentSeriesDto: {
             /** Format: uuid */
             patientId: string;
             /**
@@ -15394,10 +15482,132 @@ export interface components {
             appointmentTypeId?: string;
             reason?: string;
             notes?: string;
-            /** @description DX-210: «Adelantar si hay hueco». La cita sale como candidata para los huecos libres de días anteriores de su sede y profesional. Solo RECEPTION, DENTIST y ADMIN (403 para ASSISTANT); queda auditado. */
-            wantsEarlier?: boolean;
-            /** @description DX-446: «Agendar igualmente» en un hueco reservado (bloque RESERVED) con un tipo no permitido y sin liberar. Solo ADMIN y DENTIST (403 para el resto); 5–300 caracteres en una línea. El motivo queda en `appointment_reserved_overrides`; `audit_event` (`reservedSlotOverride`) solo guarda el id de esa fila y los bloques. */
-            overrideReason?: string;
+            /**
+             * @description Cada cuántas semanas se repite la cita (1–12).
+             * @example 4
+             */
+            intervalWeeks: number;
+            /**
+             * @description Cuántas citas en total, la base incluida (2–26). Uno de `count` o `until`.
+             * @example 6
+             */
+            count?: number;
+            /**
+             * @description Último día civil (AAAA-MM-DD, en la zona de la sede) que puede tener una cita, incluido; como mucho a un año de la base y sin pasar de 26 citas. Uno de `count` o `until`.
+             * @example 2027-06-28
+             */
+            until?: string;
+        };
+        SeriesSlotDto: {
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+        };
+        /**
+         * @description PAST (ya pasó), BUSINESS_HOURS (fuera del horario de la sede), LOCATION_HOLIDAY (festivo de la sede), PROVIDER_OFF_SCHEDULE (fuera del horario del profesional en modo estricto), SCHEDULE_BLOCKED (bloqueo que no deja agendar), RESERVED_SLOT (hueco reservado para otros tipos), PROVIDER_OVERLAP / PATIENT_OVERLAP / CHAIR_OVERLAP (otra cita del profesional, del paciente o en el sillón), SERIES_OVERLAP (choca con otra fecha de la misma serie).
+         * @enum {string}
+         */
+        SeriesConflictCode: "PAST" | "BUSINESS_HOURS" | "LOCATION_HOLIDAY" | "PROVIDER_OFF_SCHEDULE" | "SCHEDULE_BLOCKED" | "RESERVED_SLOT" | "PROVIDER_OVERLAP" | "PATIENT_OVERLAP" | "CHAIR_OVERLAP" | "SERIES_OVERLAP";
+        SeriesHolidayDto: {
+            /** @example 2027-02-08 */
+            date: string;
+            /** @example Carnaval */
+            name: string;
+        };
+        SeriesConflictReasonDto: {
+            /** @description PAST (ya pasó), BUSINESS_HOURS (fuera del horario de la sede), LOCATION_HOLIDAY (festivo de la sede), PROVIDER_OFF_SCHEDULE (fuera del horario del profesional en modo estricto), SCHEDULE_BLOCKED (bloqueo que no deja agendar), RESERVED_SLOT (hueco reservado para otros tipos), PROVIDER_OVERLAP / PATIENT_OVERLAP / CHAIR_OVERLAP (otra cita del profesional, del paciente o en el sillón), SERIES_OVERLAP (choca con otra fecha de la misma serie). */
+            code: components["schemas"]["SeriesConflictCode"];
+            /** @description El texto en español de la regla, el mismo de la cita suelta. */
+            message: string;
+            holiday?: components["schemas"]["SeriesHolidayDto"];
+        };
+        /** @enum {string} */
+        AppointmentWarningCode: "SCHEDULE_BLOCK" | "PROVIDER_OFF_SCHEDULE";
+        SeriesPreviewOccurrenceDto: {
+            /** @description Posición en la serie (al crear: 1..n de la propuesta). */
+            index: number;
+            /**
+             * Format: uuid
+             * @description Al mover: la cita de la serie.
+             */
+            appointmentId?: string;
+            /** @description Al mover: dónde está ahora. */
+            from?: components["schemas"]["SeriesSlotDto"];
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** @enum {string} */
+            status: "OK" | "CONFLICT";
+            /** @description Todas las reglas que impiden esa fecha (vacío si OK). */
+            reasons: components["schemas"]["SeriesConflictReasonDto"][];
+            /** @description Avisos que no la impiden (como al agendar), solo si OK. */
+            warnings: string[];
+            warningCodes: components["schemas"]["AppointmentWarningCode"][];
+            /** @description Si choca: el hueco libre del MISMO día más cercano a esa hora, para ese profesional, sillón y duración («Usar 15:30»); null si no queda ninguno o es festivo. Confirmar lo vuelve a revisar. */
+            alternative: components["schemas"]["SeriesSlotDto"] | null;
+        };
+        AppointmentSeriesPreviewDto: {
+            /** @example America/Caracas */
+            timeZone: string;
+            /** @example 45 */
+            durationMinutes: number;
+            occurrences: components["schemas"]["SeriesPreviewOccurrenceDto"][];
+        };
+        AppointmentSeriesOccurrenceInputDto: {
+            /** Format: date-time */
+            start: string;
+        };
+        CreateAppointmentSeriesDto: {
+            /** Format: uuid */
+            patientId: string;
+            /**
+             * Format: uuid
+             * @description Profesional de la cita. DX-211: opcional si viene `chairId` con profesional por defecto (se toma el del sillón); el elegido manda siempre. Sin ninguno, 400.
+             */
+            providerId?: string;
+            /**
+             * Format: uuid
+             * @description DX-211: sillón de la cita. De esta clínica (si no, 404), de la sede de la cita y activo (si no, 400). Otra cita viva en ese sillón y franja: 409 «El sillón X ya está ocupado de HH:MM a HH:MM» (horas de la sede). Sin él, nada cambia. `null` no es «sin sillón»: 400 (DX-492-bis).
+             */
+            chairId?: string;
+            /** Format: date-time */
+            start: string;
+            /**
+             * Format: date-time
+             * @description Opcional si viene `appointmentTypeId`: entonces la hora de fin es `start` + la duración del tipo (DX-121).
+             */
+            end?: string;
+            /**
+             * Format: uuid
+             * @description Tipo de cita (DX-121): de esta clínica y activo; si no, 400. Fija la duración si no viene `end`.
+             */
+            appointmentTypeId?: string;
+            reason?: string;
+            notes?: string;
+            /**
+             * @description Cada cuántas semanas se repite la cita (1–12).
+             * @example 4
+             */
+            intervalWeeks: number;
+            /**
+             * @description Cuántas citas en total, la base incluida (2–26). Uno de `count` o `until`.
+             * @example 6
+             */
+            count?: number;
+            /**
+             * @description Último día civil (AAAA-MM-DD, en la zona de la sede) que puede tener una cita, incluido; como mucho a un año de la base y sin pasar de 26 citas. Uno de `count` o `until`.
+             * @example 2027-06-28
+             */
+            until?: string;
+            /** @description Las fechas FINALES de la serie, tras la vista previa: cada una con su inicio (la propuesta, la alternativa elegida u otra hora del MISMO día civil de la sede); las omitidas no se envían. De 2 a 26, una por día de la propuesta (si no, 400: «Cada fecha tiene que caer en uno de los días de la serie…» o «Hay dos fechas para el mismo día de la serie.»). La duración de todas es la de la cita base (`end` − `start`, o la del tipo). La posición guardada en la serie (`series.index`) sale del orden por fecha entre las creadas; el `index` de un 409 es el de la vista previa. */
+            occurrences: components["schemas"]["AppointmentSeriesOccurrenceInputDto"][];
+            /**
+             * @description Mandar al paciente UN email con todas las fechas (plantilla `appointment-series`, en su idioma). Va a quien recibe los recordatorios (un menor o sin email: su responsable) y solo si su canal es email, no se dio de baja (DX-128) y cabe en el tope de emails (si no, la serie se crea igual: `notifyReason: QUOTA`). `false` = sin aviso.
+             * @default true
+             */
+            notifyPatient: boolean;
         };
         AppointmentTypeSummaryDto: {
             /** Format: uuid */
@@ -15441,11 +15651,236 @@ export interface components {
             /** @description false = el sillón se desactivó después: se muestra «(inactivo)». */
             active: boolean;
         };
+        AppointmentSeriesRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** @description Posición de la cita en la serie (1..n, por fecha al crearla). */
+            index: number;
+            /** @description Citas que se crearon con la serie. */
+            total: number | null;
+        };
+        AppointmentDto: {
+            planItemIds: string[];
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /**
+             * Format: uuid
+             * @description Sede donde ocurre la cita.
+             */
+            locationId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** @description Patient's first name, joined so a client can label the appointment without fetching the patient list. Null when the join is unavailable. */
+            patientFirstName: string | null;
+            patientLastName: string | null;
+            /** Format: uuid */
+            providerId: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** @enum {string} */
+            status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW" | "ARRIVED" | "IN_CHAIR" | "READY_FOR_CHECKOUT";
+            reason: string | null;
+            notes: string | null;
+            /** Format: uuid */
+            createdById: string | null;
+            /** Format: uuid */
+            appointmentTypeId: string | null;
+            /** @description DX-121: tipo embebido (nombre, duración, color #RRGGBB). Se mantiene aunque el tipo se desactive o retire después. */
+            appointmentType: components["schemas"]["AppointmentTypeSummaryDto"] | null;
+            /**
+             * Format: date-time
+             * @description Cuándo se generó el enlace de confirmación vigente (DX-005). null si nunca se envió o si la cita se reagendó / cambió de estado después.
+             */
+            confirmationSentAt: string | null;
+            /**
+             * Format: date-time
+             * @description El paciente pidió que lo llamen desde el enlace de confirmación (la cita sigue SCHEDULED).
+             */
+            callbackRequestedAt: string | null;
+            /** @description DX-210: «Adelantar si hay hueco». Se apaga al moverla a un hueco libre. */
+            wantsEarlier: boolean;
+            /** @description DX-437: franja en la que el paciente quiere adelantar la cita (solo con wantsEarlier). null = cualquiera / lo marcó el personal. */
+            earlierWindow: components["schemas"]["EarlierWindow"] | null;
+            /**
+             * Format: date-time
+             * @description DX-437: cuándo pidió EL PACIENTE adelantar la cita desde el enlace de confirmación. null = lo marcó el personal o no está marcada.
+             */
+            earlierRequestedAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-200: cuándo recepción marcó «Llegó» (reloj del servidor). null en las citas antiguas o si se deshizo la llegada.
+             */
+            arrivedAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-200: cuándo pasó al sillón.
+             */
+            seatedAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-200: cuándo quedó listo para cobrar.
+             */
+            readyForCheckoutAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-279: cuándo se canceló (reloj del servidor). Solo en CANCELLED; null en las canceladas antiguas.
+             */
+            cancelledAt: string | null;
+            /** @description DX-279: quién canceló — PATIENT_LINK (enlace del paciente), STAFF_FOR_PATIENT (el personal por el paciente) o CLINIC (la clínica; nunca tardía). */
+            cancelledByKind: components["schemas"]["CancellationByKind"] | null;
+            /** @description DX-279: motivo del catálogo cerrado. */
+            cancelReasonCode: components["schemas"]["CancellationReasonCode"] | null;
+            /** @description DX-279: detalle opcional del motivo (≤ 500). No sale en GET /appointments (como las notas). */
+            cancelReasonText: string | null;
+            /** @description DX-279: minutos de aviso entre la cancelación y el inicio (0 si ya había empezado). */
+            noticeMinutes: number | null;
+            /** @description DX-279: con menos aviso que el que pedía la política vigente de la sede. */
+            lateCancellation: boolean | null;
+            /**
+             * Format: date-time
+             * @description DX-279: cuándo se marcó la inasistencia (solo en NO_SHOW).
+             */
+            noShowMarkedAt: string | null;
+            /**
+             * Format: uuid
+             * @description DX-279: versión de la política comunicada al paciente (la rellena DX-291; hoy null).
+             */
+            policyVersionId: string | null;
+            /** @description DX-470: señales de triaje de recepción (dolor, inflamación, infección, fiebre, sangrado, traumatismo). Datos de salud: no salen en la agenda (GET /appointments), ni en vistas públicas ni recordatorios. */
+            triageFlags: components["schemas"]["TriageFlag"][];
+            /** @description DX-470: nota de triaje (≤ 200). Mismo alcance que `triageFlags`. */
+            triageNote: string | null;
+            /** @description DX-470: nació en «Atender sin cita». */
+            walkIn: boolean;
+            /** @description DX-016: STAFF = la agendó el personal; ONLINE = reserva online del paciente (marca «Online» en la agenda). */
+            origin: components["schemas"]["AppointmentOrigin"];
+            /** @description DX-470: sobrecupo anotado (sin hueco reservado libre). No ocupa el hueco del profesional: otra cita puede solaparse con ella. */
+            overbooked: boolean;
+            /**
+             * Format: uuid
+             * @description DX-211: sillón de la cita; null = sin sillón.
+             */
+            chairId: string | null;
+            /** @description DX-211: el sillón embebido (nombre y si sigue activo), aunque se haya desactivado después. */
+            chair: components["schemas"]["ChairSummaryDto"] | null;
+            /** @description DX-562: la serie («cada N semanas») que creó la cita, con su posición y el total. Ausente si no es de una serie. Mover o cancelar la cita suelta (`PATCH /appointments/:id`) no la saca de la serie; «esta y las siguientes» van por `/appointments/series/:id/…`. */
+            series?: components["schemas"]["AppointmentSeriesRefDto"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         /**
-         * @description DX-233: código de cada aviso, en el mismo orden que `warnings`: SCHEDULE_BLOCK (bloqueo que deja agendar, DX-122) o PROVIDER_OFF_SCHEDULE (fuera del horario del profesional en la sede).
+         * @description Si no se encoló el aviso, por qué (`null` si se encoló): DISABLED (`notifyPatient: false`); OPTED_OUT, CHANNEL_NONE, CHANNEL_WHATSAPP, NO_EMAIL (la regla de los envíos automáticos, DX-128/DX-203); QUOTA (el tope de emails de la clínica o del destinatario, comprobado en la misma transacción: la serie se crea igual, sin aviso); UNAVAILABLE (no se pudo preparar, p. ej. la sede sin formato regional). Encolado, queda además en el registro de envíos del paciente (`outbound_messages`, con la primera cita).
          * @enum {string}
          */
-        AppointmentWarningCode: "SCHEDULE_BLOCK" | "PROVIDER_OFF_SCHEDULE";
+        SeriesNotifySkipReason: "DISABLED" | "OPTED_OUT" | "CHANNEL_NONE" | "CHANNEL_WHATSAPP" | "NO_EMAIL" | "QUOTA" | "UNAVAILABLE";
+        CreatedAppointmentSeriesDto: {
+            /** Format: uuid */
+            seriesId: string;
+            intervalWeeks: number;
+            /** @description Las citas creadas, por posición (con `series`). */
+            appointments: components["schemas"]["AppointmentDto"][];
+            /** @description Si se encoló el aviso único al paciente. */
+            patientNotified: boolean;
+            /** @description Si no se encoló el aviso, por qué (`null` si se encoló): DISABLED (`notifyPatient: false`); OPTED_OUT, CHANNEL_NONE, CHANNEL_WHATSAPP, NO_EMAIL (la regla de los envíos automáticos, DX-128/DX-203); QUOTA (el tope de emails de la clínica o del destinatario, comprobado en la misma transacción: la serie se crea igual, sin aviso); UNAVAILABLE (no se pudo preparar, p. ej. la sede sin formato regional). Encolado, queda además en el registro de envíos del paciente (`outbound_messages`, con la primera cita). */
+            notifyReason: components["schemas"]["SeriesNotifySkipReason"] | null;
+        };
+        SeriesConflictItemDto: {
+            /** @description Al crear: la posición de esa fecha en la vista previa (la propuesta), la misma que `occurrences[].index` del preview, aunque se omitieran otras. Al mover: la posición de la cita en la serie (`series.index`). */
+            index: number;
+            /** Format: uuid */
+            appointmentId?: string;
+            /**
+             * Format: date-time
+             * @description Al crear: el inicio ENVIADO para esa fecha (tal cual). Al mover: el nuevo inicio propuesto.
+             */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            reasons: components["schemas"]["SeriesConflictReasonDto"][];
+        };
+        AppointmentSeriesConflictDto: {
+            /** @example 409 */
+            statusCode: number;
+            /** @enum {string} */
+            code: "APPOINTMENT_SERIES_CONFLICT";
+            message: string;
+            /** @description Las fechas que chocan, con su posición y sus razones. Vacío si otra escritura a la vez no dejó terminar (reintentar). */
+            conflicts: components["schemas"]["SeriesConflictItemDto"][];
+        };
+        CancelAppointmentSeriesDto: {
+            /**
+             * Format: uuid
+             * @description La cita desde la que se cancela (incluida), de esta serie. Se cancelan ella y las siguientes que siguen agendadas o confirmadas y aún no empezaron.
+             */
+            fromAppointmentId: string;
+            /**
+             * @description Quién cancela, como en `PATCH /appointments/:id`: STAFF_FOR_PATIENT (el paciente lo comunica) o CLINIC (la clínica cancela o reprograma; nunca tardía).
+             * @enum {string}
+             */
+            cancelledByKind: "STAFF_FOR_PATIENT" | "CLINIC";
+            /**
+             * @description Motivo del catálogo, como en `PATCH /appointments/:id`. El aviso y si es tardía se calculan por cita contra la política vigente de su sede.
+             * @enum {string}
+             */
+            cancelReasonCode: "ILLNESS" | "FORGOT" | "COST" | "TRANSPORT" | "WORK" | "CLINIC_RESCHEDULE" | "OTHER";
+            /** @description Detalle opcional del motivo (hasta 500 caracteres). No pidas datos de salud. */
+            cancelReasonText?: string;
+        };
+        AppointmentSeriesChangeDto: {
+            /** Format: uuid */
+            seriesId: string;
+            /** @description Las citas canceladas o movidas, por posición (vacío si no había ninguna pendiente que cancelar). */
+            appointments: components["schemas"]["AppointmentDto"][];
+        };
+        MoveAppointmentSeriesDto: {
+            /**
+             * Format: uuid
+             * @description La cita pivote (pendiente y futura) de esta serie: va a `start`; ella y las siguientes pendientes se desplazan los mismos días y toman la nueva hora de pared (zona de la sede), cada una con su duración.
+             */
+            fromAppointmentId: string;
+            /** Format: date-time */
+            start: string;
+        };
+        CreateAppointmentDto: {
+            /** @description Ítems aceptados del mismo paciente para esta cita (DX-256). [] desvincula al editar. */
+            planItemIds?: string[];
+            /** Format: uuid */
+            patientId: string;
+            /**
+             * Format: uuid
+             * @description Profesional de la cita. DX-211: opcional si viene `chairId` con profesional por defecto (se toma el del sillón); el elegido manda siempre. Sin ninguno, 400.
+             */
+            providerId?: string;
+            /**
+             * Format: uuid
+             * @description DX-211: sillón de la cita. De esta clínica (si no, 404), de la sede de la cita y activo (si no, 400). Otra cita viva en ese sillón y franja: 409 «El sillón X ya está ocupado de HH:MM a HH:MM» (horas de la sede). Sin él, nada cambia. `null` no es «sin sillón»: 400 (DX-492-bis).
+             */
+            chairId?: string;
+            /** Format: date-time */
+            start: string;
+            /**
+             * Format: date-time
+             * @description Opcional si viene `appointmentTypeId`: entonces la hora de fin es `start` + la duración del tipo (DX-121).
+             */
+            end?: string;
+            /**
+             * Format: uuid
+             * @description Tipo de cita (DX-121): de esta clínica y activo; si no, 400. Fija la duración si no viene `end`.
+             */
+            appointmentTypeId?: string;
+            reason?: string;
+            notes?: string;
+            /** @description DX-210: «Adelantar si hay hueco». La cita sale como candidata para los huecos libres de días anteriores de su sede y profesional. Solo RECEPTION, DENTIST y ADMIN (403 para ASSISTANT); queda auditado. */
+            wantsEarlier?: boolean;
+            /** @description DX-446: «Agendar igualmente» en un hueco reservado (bloque RESERVED) con un tipo no permitido y sin liberar. Solo ADMIN y DENTIST (403 para el resto); 5–300 caracteres en una línea. El motivo queda en `appointment_reserved_overrides`; `audit_event` (`reservedSlotOverride`) solo guarda el id de esa fila y los bloques. */
+            overrideReason?: string;
+        };
         PlanItemReservedElsewhereDto: {
             /** Format: uuid */
             planItemId: string;
@@ -15641,6 +16076,8 @@ export interface components {
             chairId: string | null;
             /** @description DX-211: el sillón embebido (nombre y si sigue activo), aunque se haya desactivado después. */
             chair: components["schemas"]["ChairSummaryDto"] | null;
+            /** @description DX-562: la serie («cada N semanas») que creó la cita, con su posición y el total. Ausente si no es de una serie. Mover o cancelar la cita suelta (`PATCH /appointments/:id`) no la saca de la serie; «esta y las siguientes» van por `/appointments/series/:id/…`. */
+            series?: components["schemas"]["AppointmentSeriesRefDto"];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -15783,6 +16220,8 @@ export interface components {
             chairId: string | null;
             /** @description DX-211: el sillón embebido (nombre y si sigue activo), aunque se haya desactivado después. */
             chair: components["schemas"]["ChairSummaryDto"] | null;
+            /** @description DX-562: la serie («cada N semanas») que creó la cita, con su posición y el total. Ausente si no es de una serie. Mover o cancelar la cita suelta (`PATCH /appointments/:id`) no la saca de la serie; «esta y las siguientes» van por `/appointments/series/:id/…`. */
+            series?: components["schemas"]["AppointmentSeriesRefDto"];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -15942,6 +16381,8 @@ export interface components {
             chairId: string | null;
             /** @description DX-211: el sillón embebido (nombre y si sigue activo), aunque se haya desactivado después. */
             chair: components["schemas"]["ChairSummaryDto"] | null;
+            /** @description DX-562: la serie («cada N semanas») que creó la cita, con su posición y el total. Ausente si no es de una serie. Mover o cancelar la cita suelta (`PATCH /appointments/:id`) no la saca de la serie; «esta y las siguientes» van por `/appointments/series/:id/…`. */
+            series?: components["schemas"]["AppointmentSeriesRefDto"];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -16107,119 +16548,6 @@ export interface components {
             lateCancellation: boolean;
             /** @description Política vigente de la sede de la cita; null = sin política. */
             policy: components["schemas"]["CancellationPolicyRefDto"] | null;
-        };
-        AppointmentDto: {
-            planItemIds: string[];
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            tenantId: string;
-            /**
-             * Format: uuid
-             * @description Sede donde ocurre la cita.
-             */
-            locationId: string;
-            /** Format: uuid */
-            patientId: string;
-            /** @description Patient's first name, joined so a client can label the appointment without fetching the patient list. Null when the join is unavailable. */
-            patientFirstName: string | null;
-            patientLastName: string | null;
-            /** Format: uuid */
-            providerId: string;
-            /** Format: date-time */
-            start: string;
-            /** Format: date-time */
-            end: string;
-            /** @enum {string} */
-            status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW" | "ARRIVED" | "IN_CHAIR" | "READY_FOR_CHECKOUT";
-            reason: string | null;
-            notes: string | null;
-            /** Format: uuid */
-            createdById: string | null;
-            /** Format: uuid */
-            appointmentTypeId: string | null;
-            /** @description DX-121: tipo embebido (nombre, duración, color #RRGGBB). Se mantiene aunque el tipo se desactive o retire después. */
-            appointmentType: components["schemas"]["AppointmentTypeSummaryDto"] | null;
-            /**
-             * Format: date-time
-             * @description Cuándo se generó el enlace de confirmación vigente (DX-005). null si nunca se envió o si la cita se reagendó / cambió de estado después.
-             */
-            confirmationSentAt: string | null;
-            /**
-             * Format: date-time
-             * @description El paciente pidió que lo llamen desde el enlace de confirmación (la cita sigue SCHEDULED).
-             */
-            callbackRequestedAt: string | null;
-            /** @description DX-210: «Adelantar si hay hueco». Se apaga al moverla a un hueco libre. */
-            wantsEarlier: boolean;
-            /** @description DX-437: franja en la que el paciente quiere adelantar la cita (solo con wantsEarlier). null = cualquiera / lo marcó el personal. */
-            earlierWindow: components["schemas"]["EarlierWindow"] | null;
-            /**
-             * Format: date-time
-             * @description DX-437: cuándo pidió EL PACIENTE adelantar la cita desde el enlace de confirmación. null = lo marcó el personal o no está marcada.
-             */
-            earlierRequestedAt: string | null;
-            /**
-             * Format: date-time
-             * @description DX-200: cuándo recepción marcó «Llegó» (reloj del servidor). null en las citas antiguas o si se deshizo la llegada.
-             */
-            arrivedAt: string | null;
-            /**
-             * Format: date-time
-             * @description DX-200: cuándo pasó al sillón.
-             */
-            seatedAt: string | null;
-            /**
-             * Format: date-time
-             * @description DX-200: cuándo quedó listo para cobrar.
-             */
-            readyForCheckoutAt: string | null;
-            /**
-             * Format: date-time
-             * @description DX-279: cuándo se canceló (reloj del servidor). Solo en CANCELLED; null en las canceladas antiguas.
-             */
-            cancelledAt: string | null;
-            /** @description DX-279: quién canceló — PATIENT_LINK (enlace del paciente), STAFF_FOR_PATIENT (el personal por el paciente) o CLINIC (la clínica; nunca tardía). */
-            cancelledByKind: components["schemas"]["CancellationByKind"] | null;
-            /** @description DX-279: motivo del catálogo cerrado. */
-            cancelReasonCode: components["schemas"]["CancellationReasonCode"] | null;
-            /** @description DX-279: detalle opcional del motivo (≤ 500). No sale en GET /appointments (como las notas). */
-            cancelReasonText: string | null;
-            /** @description DX-279: minutos de aviso entre la cancelación y el inicio (0 si ya había empezado). */
-            noticeMinutes: number | null;
-            /** @description DX-279: con menos aviso que el que pedía la política vigente de la sede. */
-            lateCancellation: boolean | null;
-            /**
-             * Format: date-time
-             * @description DX-279: cuándo se marcó la inasistencia (solo en NO_SHOW).
-             */
-            noShowMarkedAt: string | null;
-            /**
-             * Format: uuid
-             * @description DX-279: versión de la política comunicada al paciente (la rellena DX-291; hoy null).
-             */
-            policyVersionId: string | null;
-            /** @description DX-470: señales de triaje de recepción (dolor, inflamación, infección, fiebre, sangrado, traumatismo). Datos de salud: no salen en la agenda (GET /appointments), ni en vistas públicas ni recordatorios. */
-            triageFlags: components["schemas"]["TriageFlag"][];
-            /** @description DX-470: nota de triaje (≤ 200). Mismo alcance que `triageFlags`. */
-            triageNote: string | null;
-            /** @description DX-470: nació en «Atender sin cita». */
-            walkIn: boolean;
-            /** @description DX-016: STAFF = la agendó el personal; ONLINE = reserva online del paciente (marca «Online» en la agenda). */
-            origin: components["schemas"]["AppointmentOrigin"];
-            /** @description DX-470: sobrecupo anotado (sin hueco reservado libre). No ocupa el hueco del profesional: otra cita puede solaparse con ella. */
-            overbooked: boolean;
-            /**
-             * Format: uuid
-             * @description DX-211: sillón de la cita; null = sin sillón.
-             */
-            chairId: string | null;
-            /** @description DX-211: el sillón embebido (nombre y si sigue activo), aunque se haya desactivado después. */
-            chair: components["schemas"]["ChairSummaryDto"] | null;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
         };
         CheckoutRecallTypeDto: {
             /** Format: uuid */
@@ -38413,6 +38741,304 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ToothTimelineEntryDto"][];
                 };
+            };
+        };
+    };
+    AppointmentSeriesController_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewAppointmentSeriesDto"];
+            };
+        };
+        responses: {
+            /** @description D3: las fechas de la serie (la base primero) con la misma hora de pared en la zona de la sede y la misma duración, y si cada una se puede agendar: `OK`, o `CONFLICT` con TODAS sus razones (código estable y el texto de la cita suelta) y la alternativa del mismo día. No escribe nada. Sede: la de X-Location-Id (o la de escritura de la sesión). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentSeriesPreviewDto"];
+                };
+            };
+            /** @description Datos inválidos (como al agendar), intervalo fuera de 1–12, sin `count` ni `until` (o los dos), `count` fuera de 2–26, o `until` inválido, anterior a la base, a más de un año o con más de 26 citas. Una fecha en el pasado no es 400: sale como `CONFLICT` con `PAST` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no permitida al usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente, profesional o sillón de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AppointmentSeriesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAppointmentSeriesDto"];
+            };
+        };
+        responses: {
+            /** @description D4: crea la serie con las fechas finales, en UNA transacción (candado de la agenda, bloqueos y EXCLUDE de la BD como árbitro): todas o ninguna. Cada cita con `series` (posición y total); recordatorios por cita como siempre. El prospecto del paciente (DX-556) se mueve una vez. UN `audit_event` CREATE APPOINTMENT `APPOINTMENT_SERIES_CREATED` con la serie, sus citas y sus fechas. Con `notifyPatient` (por defecto), UN email con todas las fechas y el enlace de baja (DX-128), si cabe en el tope de emails; si no, la serie se crea igual (`notifyReason: QUOTA`). Lleva la MISMA recurrencia que la vista previa (`count`/`until`): el servidor regenera la propuesta y cada fecha enviada tiene que caer en uno de sus días. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedAppointmentSeriesDto"];
+                };
+            };
+            /** @description Datos inválidos (como al agendar o como la vista previa: `count`/`until` e intervalo), menos de 2 o más de 26 fechas, una fecha fuera de los días de la serie («Cada fecha tiene que caer en uno de los días de la serie…») o dos el mismo día («Hay dos fechas para el mismo día de la serie.») */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no permitida al usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente, profesional o sillón de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code: APPOINTMENT_SERIES_CONFLICT`: alguna fecha ya no se puede agendar (revisada otra vez en el servidor, o la BD resolvió una carrera). `conflicts` trae TODAS las que chocan, con su `index` (al crear, el de la vista previa; al mover, `series.index`), el `start` enviado o propuesto y sus razones (mismos códigos que la vista previa); no se escribió nada: vuelve a la vista previa. `conflicts` vacío = otra escritura a la vez no dejó terminar (reintentar). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentSeriesConflictDto"];
+                };
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AppointmentSeriesController_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelAppointmentSeriesDto"];
+            };
+        };
+        responses: {
+            /** @description D5 «Esta y las siguientes»: cancela en UNA transacción la cita `fromAppointmentId` y las siguientes de la serie que siguen agendadas o confirmadas y aún no empezaron, cada una con los datos y reglas de cancelarla suelta (origen, motivo, aviso y tardía contra la política de su sede). No toca atendidas, en clínica, canceladas ni anteriores, y a propósito NO las manda a «Pendientes por agendar». UN `audit_event` UPDATE APPOINTMENT `APPOINTMENT_SERIES_CANCELLED` con sus ids. Sin ninguna pendiente: 200 con la lista vacía. Cancelar solo esa cita sigue siendo `PATCH /appointments/:id`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentSeriesChangeDto"];
+                };
+            };
+            /** @description Id que no es UUID, o sin `cancelledByKind` / `cancelReasonCode` válidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin permiso para cancelar (las reglas de `PATCH /appointments/:id`) o sede no permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Serie de otra clínica, o la cita no es de la serie */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code: APPOINTMENT_SERIES_STALE` (`appointmentIds`): alguna cita cambió entre leer la serie y escribir (otra persona la movió, la canceló o la atendió); con las filas bloqueadas no coincide su estado o su hora y no se escribió nada. Un interbloqueo se replanifica una vez; si vuelve, `APPOINTMENT_SERIES_CONFLICT` con `conflicts: []`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AppointmentSeriesController_previewMove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveAppointmentSeriesDto"];
+            };
+        };
+        responses: {
+            /** @description D6: cómo quedarían la cita `fromAppointmentId` (a `start`) y las siguientes pendientes de la serie (los mismos días de desplazamiento y la nueva hora de pared, cada una con su duración), con las reglas de moverlas sueltas, sus razones y la alternativa del mismo día. No escribe nada. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentSeriesPreviewDto"];
+                };
+            };
+            /** @description Datos inválidos, o `start` igual a la hora de la cita */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no permitida al usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Serie de otra clínica, o la cita no es de la serie */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La cita no se puede mover (ya pasó, en curso, atendida o cancelada), o las citas de la serie están en sedes distintas */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AppointmentSeriesController_move: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveAppointmentSeriesDto"];
+            };
+        };
+        responses: {
+            /** @description D6 «Esta y las siguientes»: mueve en UNA transacción la cita y las siguientes pendientes como en la vista previa (anula su confirmación como al reagendar; siguen en la serie). Sin email nuevo. UN `audit_event` UPDATE APPOINTMENT `APPOINTMENT_SERIES_MOVED` con sus ids, sus nuevas fechas y el movimiento de la pivote. Mover solo esa cita sigue siendo `PATCH /appointments/:id`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentSeriesChangeDto"];
+                };
+            };
+            /** @description Datos inválidos, o `start` igual a la hora de la cita */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no permitida al usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Serie de otra clínica, o la cita no es de la serie */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `code: APPOINTMENT_SERIES_CONFLICT`: alguna fecha ya no se puede agendar (revisada otra vez en el servidor, o la BD resolvió una carrera). `conflicts` trae TODAS las que chocan, con su `index` (al crear, el de la vista previa; al mover, `series.index`), el `start` enviado o propuesto y sus razones (mismos códigos que la vista previa); no se escribió nada: vuelve a la vista previa. `conflicts` vacío = otra escritura a la vez no dejó terminar (reintentar). También: la cita no se puede mover, o las citas están en sedes distintas. `code: APPOINTMENT_SERIES_STALE` (`appointmentIds`): alguna cita cambió entre leer la serie y escribir (otra persona la movió, la canceló o la atendió); con las filas bloqueadas no coincide su estado o su hora y no se escribió nada. Un interbloqueo se replanifica una vez desde cero. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentSeriesConflictDto"];
+                };
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
