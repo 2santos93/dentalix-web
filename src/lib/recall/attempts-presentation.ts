@@ -1,3 +1,5 @@
+import { ApiError } from '@/lib/api/api-error';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { addCivilDays } from '@/lib/time/wall-clock';
 import type { RecallContactOutcome } from './recall-api';
 import { OUTCOME_ORDER } from './presentation';
@@ -45,4 +47,17 @@ export function callbackError(value: string | null, range: { min: string; max: s
   if (value < range.min) return callbackCopy.past;
   if (value > range.max) return callbackCopy.tooFar;
   return null;
+}
+
+/** 409 de la API cuando otra persona escribe a la vez en el mismo recall o paciente. */
+export const RECALL_WRITE_BUSY = 'RECALL_WRITE_BUSY';
+export const recallWriteBusyMessage = 'Otra persona está guardando a la vez; vuelve a intentarlo.';
+
+/**
+ * El texto de un fallo al guardar un intento, el lote o «Ya está corregido»:
+ * el 409 `RECALL_WRITE_BUSY` dice que se reintente; el resto, `apiErrorMessage`.
+ */
+export function recallWriteError(err: unknown, fallback: string): string {
+  if (err instanceof ApiError && err.status === 409 && err.code === RECALL_WRITE_BUSY) return recallWriteBusyMessage;
+  return apiErrorMessage(err, { fallback });
 }

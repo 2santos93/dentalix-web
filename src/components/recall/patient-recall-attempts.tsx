@@ -2,10 +2,9 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { PhoneOff } from 'lucide-react';
-import { apiErrorMessage } from '@/lib/api/error-message';
 import type { SedePainters } from '@/lib/locations/sede-stamp';
 import { CHANNEL_LABELS, OUTCOME_LABELS } from '@/lib/recall/presentation';
-import { attemptsLabel } from '@/lib/recall/attempts-presentation';
+import { attemptsLabel, recallWriteError } from '@/lib/recall/attempts-presentation';
 import type { PatientRecall, RecallContact } from '@/lib/recall/recall-api';
 import { clearPhoneReview, type RecallPhoneReview } from '@/lib/recall/recall-attempts-api';
 import { recallTypeLabel } from '@/lib/recall/recall-types';
@@ -114,7 +113,7 @@ export function PhoneReviewNotice({
       await clearPhoneReview(token, patientId);
       onCleared();
     } catch (err) {
-      setError(apiErrorMessage(err, { fallback: copy.clearError }));
+      setError(recallWriteError(err, copy.clearError));
     } finally {
       setBusy(false);
     }

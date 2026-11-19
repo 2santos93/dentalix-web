@@ -2,7 +2,6 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { ShieldAlert } from 'lucide-react';
-import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   createRecallContact,
   type RecallContact,
@@ -10,7 +9,7 @@ import {
   type RecallContactOutcome,
 } from '@/lib/recall/recall-api';
 import { CHANNEL_LABELS, CHANNEL_ORDER, OUTCOME_LABELS, OUTCOME_ORDER, RECALL_NOTE_MAX } from '@/lib/recall/presentation';
-import { callbackError, callbackRange } from '@/lib/recall/attempts-presentation';
+import { callbackError, callbackRange, recallWriteError } from '@/lib/recall/attempts-presentation';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
@@ -120,7 +119,7 @@ export function RecallContactDialog({
       onSaved(contact);
       onOpenChange(false);
     } catch (err) {
-      setSubmitError(apiErrorMessage(err, { fallback: copy.saveError }));
+      setSubmitError(recallWriteError(err, copy.saveError));
     } finally {
       setSubmitting(false);
     }

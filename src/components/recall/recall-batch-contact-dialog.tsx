@@ -3,11 +3,10 @@ import * as React from 'react';
 import { useState } from 'react';
 import { ShieldAlert } from 'lucide-react';
 import { ApiError } from '@/lib/api/api-error';
-import { apiErrorMessage } from '@/lib/api/error-message';
 import type { RecallContactChannel, RecallContactOutcome, RecallDueItem } from '@/lib/recall/recall-api';
 import { createRecallContactsBatch } from '@/lib/recall/recall-attempts-api';
 import { CHANNEL_LABELS, CHANNEL_ORDER, OUTCOME_LABELS, RECALL_NOTE_MAX } from '@/lib/recall/presentation';
-import { BATCH_OUTCOME_ORDER, callbackError, callbackRange } from '@/lib/recall/attempts-presentation';
+import { BATCH_OUTCOME_ORDER, callbackError, callbackRange, recallWriteError } from '@/lib/recall/attempts-presentation';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
 import { Callout } from '@/components/ui/callout';
@@ -108,8 +107,8 @@ export function RecallBatchContactDialog({
         // Rol sin la lista o algún paciente de otra sede: en los dos casos, nada guardado.
         setSubmitError(copy.forbidden);
       } else {
-        // 400 (fecha, nota), 409 (sede sin zona) y 429 (demasiados lotes seguidos) con el texto de la API.
-        setSubmitError(apiErrorMessage(err, { fallback: copy.saveError }));
+        // 400 (fecha, nota), 409 (sede sin zona u otra persona guardando a la vez) y 429 (demasiados lotes seguidos) con el texto de la API.
+        setSubmitError(recallWriteError(err, copy.saveError));
       }
     } finally {
       setSubmitting(false);

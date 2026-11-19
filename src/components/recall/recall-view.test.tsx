@@ -13,7 +13,7 @@ import {
   type RecallType,
 } from '@/lib/recall/recall-api';
 import { overdueLabel, recallMessage } from '@/lib/recall/presentation';
-import { callbackCopy } from '@/lib/recall/attempts-presentation';
+import { callbackCopy, recallWriteBusyMessage } from '@/lib/recall/attempts-presentation';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { addCivilDays } from '@/lib/time/wall-clock';
 import { typeDate } from '@/components/patients/date-test-utils';
@@ -629,6 +629,21 @@ describe('RecallView · intentos (DX-465)', () => {
       expect(screen.getByRole('dialog', { name: batchContactCopy.title(1) })).toBeInTheDocument();
       // El diálogo sigue abierto (el resto de la pantalla queda inerte para el lector).
       expect(screen.getByRole('checkbox', { name: recallCopy.selectRow('Luis Gómez'), hidden: true })).not.toBeChecked();
+    });
+
+    it('409 RECALL_WRITE_BUSY: pide reintentar, sin cerrar', async () => {
+      const user = userEvent.setup();
+      mockedList.mockResolvedValue(two());
+      mockedBatch.mockRejectedValueOnce(new ApiError(409, 'busy', { code: 'RECALL_WRITE_BUSY' }));
+      render(<RecallView token="tok" />);
+      await screen.findByText('Ana Pérez');
+      await user.click(screen.getByRole('checkbox', { name: recallCopy.selectRow('Ana Pérez') }));
+      await user.click(screen.getByRole('button', { name: selectionBarCopy.register(1) }));
+      const dialog = await screen.findByRole('dialog', { name: batchContactCopy.title(1) });
+      await user.selectOptions(within(dialog).getByLabelText('Canal'), 'CALL');
+      await user.selectOptions(within(dialog).getByLabelText('Resultado'), 'NO_ANSWER');
+      await user.click(within(dialog).getByRole('button', { name: batchContactCopy.submit(1) }));
+      expect(await within(dialog).findByText(recallWriteBusyMessage)).toBeInTheDocument();
     });
 
     it('429 y 403: el motivo en el diálogo, sin cerrarlo', async () => {
