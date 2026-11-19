@@ -52,6 +52,9 @@ const ACCESS = {
 
 export type InicioBlock = keyof typeof ACCESS;
 
+/** Todos los bloques (el contrato de roles con la API los recorre, DX-208). */
+export const INICIO_BLOCKS = Object.keys(ACCESS) as InicioBlock[];
+
 export function canSeeBlock(block: InicioBlock, role: ClinicRole | null): boolean {
   return role !== null && (ACCESS[block] as readonly ClinicRole[]).includes(role);
 }

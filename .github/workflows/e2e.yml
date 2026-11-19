@@ -103,8 +103,8 @@ jobs:
     # Si un paso se pasa, falla ESE paso (la run queda `failure`) y el informe
     # se sube igual; si se pasara el job, GitHub la marcaría `cancelled` y el
     # rojo no se vería. ~3 min de checkout y Node más la suma de los topes de
-    # los pasos, con el de «Playwright» = `matrix.timeout` (35, 50 o 200): 107,
-    # 122 o 272, y caben en 110, 125 y 275. Lo comprueba
+    # los pasos, con el de «Playwright» = `matrix.timeout` (35, 50 o 200): 109,
+    # 124 o 274, y caben en 110, 125 y 275. Lo comprueba
     # scripts/workflows-playwright-deps.test.ts para las tres variantes.
     timeout-minutes: ${{ (inputs.repeat_each != '' && inputs.repeat_each != '1') && 275 || inputs.grep != '' && 125 || 110 }}
     services:
@@ -391,6 +391,13 @@ jobs:
       - name: Esquema de la API al día (schema.d.ts)
         timeout-minutes: 2
         run: scripts/e2e-ci.sh schema
+
+      # DX-208: el menú (y la paleta, Ajustes, Reportes e Inicio) enseñan a
+      # cada rol lo que la matriz de autorización de ESTA API (`api_ref`) le
+      # deja abrir. Segundos: exporta la matriz y corre un test de jest.
+      - name: Contrato de roles del menú (route-access.json)
+        timeout-minutes: 2
+        run: scripts/e2e-ci.sh contract
 
       - name: Web (next build y next start)
         timeout-minutes: 8

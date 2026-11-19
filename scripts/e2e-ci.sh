@@ -5,7 +5,7 @@
 # propio paso y en local se corren todas con `all`.
 #
 #   scripts/e2e-ci.sh all                # todo, y para los servidores al final
-#   scripts/e2e-ci.sh setup|sync|db|api|schema|web|test|skips|stop   # una fase
+#   scripts/e2e-ci.sh setup|sync|db|api|schema|contract|web|test|skips|stop   # una fase
 #
 # `sync` (DX-350) falla si una lista que la API posee y la web copia byte a
 # byte (moneda sin decimales, zonas IANA, vectores de formato, países) diverge de la
@@ -14,6 +14,12 @@
 # `schema` (DX-537) falla si src/lib/api/schema.d.ts no es lo que genera la API
 # que está corriendo (la de $API_DIR, tras `api`): muestra el diff y el comando
 # para regenerarlo (README, «Regenerar el esquema de la API»).
+#
+# `contract` (DX-208) exporta la matriz de roles de la API de $API_DIR
+# (`npm run matrix:export`) y corre contra ella el contrato de roles del menú
+# (src/lib/auth/nav-roles-contract.test.ts), que además exige que la copia
+# src/lib/auth/route-access.snapshot.json sea la de esa API. No toca BD ni
+# servidores; necesita el cliente de Prisma generado en la API (`db` o `api`).
 #
 # `skips` (DX-252) falla si el informe de `test` tiene tests saltados fuera de
 # e2e/allowed-skips.json, y los nombra (scripts/check-e2e-skips.mjs).
@@ -333,6 +339,28 @@ phase_schema() {
   return "$status"
 }
 
+# DX-208: el contrato de roles corre contra la matriz de ESTA API (`api_ref`):
+# cambiar los roles de una ruta en route-access-matrix.ts sin tocar el menú de
+# la web lo pone en rojo aquí, con la entrada y el rol que no cuadran.
+phase_contract() {
+  group "Contrato de roles del menú con la matriz de la API (route-access.json)"
+  local exported="$STATE_DIR/route-access.json" status=0
+  if ! grep -q '"matrix:export"' "$API_DIR/package.json"; then
+    echo "::error::La API de $API_DIR no tiene 'npm run matrix:export' (DX-208): es anterior al contrato de roles. Mezcla main en esa rama de la API." >&2
+    endgroup
+    return 1
+  fi
+  (cd "$API_DIR" && npm run -s matrix:export -- "$exported") || status=$?
+  if [[ "$status" -eq 0 ]]; then
+    (cd "$WEB_DIR" && ROUTE_ACCESS_JSON="$exported" ./node_modules/.bin/jest --ci src/lib/auth/nav-roles-contract.test.ts) || status=$?
+    if [[ "$status" -ne 0 ]]; then
+      echo "::error file=src/lib/auth/nav-roles-contract.test.ts::El menú, la paleta, Ajustes, Reportes o Inicio de la web no cuadran con la matriz de roles de la API de este run (o la copia route-access.snapshot.json está desfasada). El test dice qué entrada y qué rol; la copia se regenera con ROUTE_ACCESS_UPDATE=1 (cabecera del test)."
+    fi
+  fi
+  endgroup
+  return "$status"
+}
+
 phase_web() {
   load_env
   group "Web: next build y next start en :$E2E_WEB_PORT"
@@ -414,6 +442,7 @@ case "$cmd" in
   db) phase_db ;;
   api) phase_api ;;
   schema) phase_schema ;;
+  contract) phase_contract ;;
   web) phase_web ;;
   test) phase_test "$@" ;;
   skips) phase_skips ;;
@@ -425,6 +454,7 @@ case "$cmd" in
     phase_db
     phase_api
     phase_schema
+    phase_contract
     phase_web
     # La guardia corre aunque Playwright falle (dice qué no se ejecutó). Si la
     # guardia falla sale con su código (set -e); si no, con el de Playwright.
@@ -434,7 +464,7 @@ case "$cmd" in
     exit "$st"
     ;;
   *)
-    echo "uso: $0 [all|setup|sync|db|api|schema|web|test|skips|stop] [args de playwright]" >&2
+    echo "uso: $0 [all|setup|sync|db|api|schema|contract|web|test|skips|stop] [args de playwright]" >&2
     exit 2
     ;;
 esac

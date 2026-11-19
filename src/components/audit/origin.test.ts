@@ -19,10 +19,27 @@ describe('origen legible', () => {
     expect(deviceLabel(null)).toBeNull();
   });
 
+  it('DX-582: la etiqueta que ya resume el servidor se pinta igual que la del navegador', () => {
+    expect(deviceLabel('Chrome en macOS')).toBe('Chrome · macOS');
+    expect(deviceLabel('Safari en iOS')).toBe('Safari · iOS');
+    expect(deviceLabel('Firefox')).toBe('Firefox');
+    expect(deviceLabel('Linux')).toBe('Linux');
+    expect(deviceLabel('Dispositivo desconocido')).toBeNull();
+    expect(originLabel('190.202.15.0/24', 'Edge en Windows')).toEqual({
+      device: 'Edge · Windows',
+      ip: '190.202.15.0/24',
+      userAgent: 'Edge en Windows',
+    });
+    expect(originLabel(null, 'Dispositivo desconocido').device).toBe('Dispositivo desconocido');
+    // Un texto que solo se le parece no es una etiqueta del servidor.
+    expect(deviceLabel('Opera en macOS')).toBe('Opera');
+  });
+
   it('el loopback es este equipo; sin IP lo dice', () => {
     expect(ipLabel('::1')).toBe('Este equipo (local)');
     expect(ipLabel('127.0.0.1')).toBe('Este equipo (local)');
     expect(ipLabel('::ffff:127.0.0.1')).toBe('Este equipo (local)');
+    expect(ipLabel('127.0.0.0/24')).toBe('Este equipo (local)');
     expect(ipLabel('203.0.113.7')).toBe('203.0.113.7');
     expect(ipLabel(null)).toBe('Sin IP');
   });

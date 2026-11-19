@@ -85,13 +85,25 @@ export function reportTabsFor(
   role: ClinicRole | null,
   permissions: readonly ExtraPermission[] = [],
 ): readonly ReportTab[] {
-  const tabs = REPORT_TABS.filter(
-    (tab) =>
-      role !== null &&
-      ((tab.roles as readonly ClinicRole[]).includes(role) ||
-        ('permissions' in tab && (tab.permissions as readonly ExtraPermission[]).some((p) => permissions.includes(p)))),
-  );
+  const tabs = REPORT_TABS.filter((tab) => canSeeReportTab(tab, role, permissions));
   return tabs.length > 0 ? tabs : [REPORT_TABS[0]];
+}
+
+/**
+ * ¿Puede `role` (con sus permisos efectivos) abrir la pestaña? Es la regla de
+ * `reportTabsFor` sin el respaldo de «la primera»; la usa también el contrato
+ * de roles con la API (DX-208, `nav-roles-contract.test.ts`).
+ */
+export function canSeeReportTab(
+  tab: ReportTab,
+  role: ClinicRole | null,
+  permissions: readonly ExtraPermission[] = [],
+): boolean {
+  return (
+    role !== null &&
+    ((tab.roles as readonly ClinicRole[]).includes(role) ||
+      ('permissions' in tab && (tab.permissions as readonly ExtraPermission[]).some((p) => permissions.includes(p))))
+  );
 }
 
 const copy = {
