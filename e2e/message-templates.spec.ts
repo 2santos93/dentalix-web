@@ -20,8 +20,9 @@ import { tenantOrigin } from './support/urls';
  *    y el texto nuevo.
  * 4. Una variable que no existe en el recordatorio ({importe}) muestra el
  *    motivo junto al texto y no guarda.
- * 5. «Restablecer» (con confirmación) vuelve a «Por defecto».
- * 6. Recepción no ve la pantalla (ni en el índice de Ajustes).
+ * 5. Cerrar con cambios sin guardar pregunta antes de descartarlos.
+ * 6. «Restablecer» (con confirmación) vuelve a «Por defecto».
+ * 7. Recepción no ve la pantalla (ni en el índice de Ajustes).
  */
 const suffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase();
 const subdomain = `mensajes-${suffix}`.slice(0, 40);
@@ -136,7 +137,12 @@ test.describe('Ajustes › Mensajes (DX-565)', () => {
     await expect(dialog.getByText(/\{importe\} no se puede usar en el recordatorio/)).toBeVisible({ timeout: 15_000 });
     await expect(body).toHaveAttribute('aria-invalid', 'true');
     await shot(page, 'mensajes-invalido', 1440);
+    // Cerrar con el borrador sin guardar pregunta antes de descartarlo.
     await page.keyboard.press('Escape');
+    const discard = page.getByRole('dialog', { name: 'Descartar los cambios sin guardar' });
+    await expect(discard).toBeVisible();
+    await expectNoViolations(page, discard, 'descartar');
+    await discard.getByRole('button', { name: 'Descartar y cerrar' }).click();
     await expect(dialog).toHaveCount(0);
 
     await page.reload();

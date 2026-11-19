@@ -304,6 +304,52 @@ describe('Ajustes › Mensajes (DX-565)', () => {
   });
 });
 
+describe('Ajustes › Mensajes: cerrar con cambios sin guardar (DX-565)', () => {
+  beforeEach(() => {
+    jest.mocked(listMessageTemplates).mockReset().mockResolvedValue(catalog());
+    jest.mocked(previewMessageTemplate).mockReset().mockResolvedValue(EMAIL_PREVIEW);
+  });
+
+  it('sin cambios, Cancelar cierra directamente', async () => {
+    const { user, dialog } = await openReminder();
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Recordatorio de cita' })).not.toBeInTheDocument());
+    expect(screen.queryByRole('dialog', { name: copy.discardTitle })).not.toBeInTheDocument();
+  });
+
+  it('con cambios, Escape pregunta; «Seguir editando» (o Escape) conserva el borrador; «Descartar y cerrar» cierra', async () => {
+    const { user, dialog } = await openReminder();
+    const body = within(dialog).getByLabelText(copy.body);
+    fireEvent.change(body, { target: { value: 'Hola {paciente}' } });
+
+    await user.keyboard('{Escape}');
+    let confirm = await screen.findByRole('dialog', { name: copy.discardTitle });
+    await user.click(within(confirm).getByRole('button', { name: copy.discardCancel }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: copy.discardTitle })).not.toBeInTheDocument());
+    expect(within(dialog).getByLabelText(copy.body)).toHaveValue('Hola {paciente}');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    confirm = await screen.findByRole('dialog', { name: copy.discardTitle });
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: copy.discardTitle })).not.toBeInTheDocument());
+    expect(screen.getByRole('dialog', { name: 'Recordatorio de cita' })).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    confirm = await screen.findByRole('dialog', { name: copy.discardTitle });
+    await user.click(within(confirm).getByRole('button', { name: copy.discardConfirm }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Recordatorio de cita' })).not.toBeInTheDocument());
+  });
+
+  it('un borrador en otra pestaña de idioma también cuenta', async () => {
+    const { user, dialog } = await openReminder();
+    await user.click(within(dialog).getByRole('tab', { name: /English|Inglés/ }));
+    fireEvent.change(await within(dialog).findByLabelText(copy.body), { target: { value: 'Hi {paciente}' } });
+    await user.click(within(dialog).getByRole('tab', { name: /Español/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    expect(await screen.findByRole('dialog', { name: copy.discardTitle })).toBeInTheDocument();
+  });
+});
+
 describe('withTemplate', () => {
   it('sustituye solo la combinación guardada y quita un idioma retirado ya restablecido', () => {
     const base = catalog();

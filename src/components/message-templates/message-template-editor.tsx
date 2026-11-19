@@ -69,6 +69,10 @@ export const messageEditorCopy = {
     `El texto en ${language} vuelve al de por defecto en los siguientes envíos. Lo que escribiste se pierde.`,
   resetConfirm: 'Restablecer',
   resetDone: 'Texto restablecido: vuelve el de por defecto.',
+  discardTitle: 'Descartar los cambios sin guardar',
+  discardDescription: 'Hay textos cambiados que no guardaste. Si cierras, se pierden.',
+  discardConfirm: 'Descartar y cerrar',
+  discardCancel: 'Seguir editando',
   retiredTitle: 'Idiomas que la clínica ya no ofrece',
   retired: (language: string) =>
     `Queda un texto guardado en ${language}, que ya no está en los idiomas de la clínica: no se usa. Puedes restablecerlo.`,
@@ -133,6 +137,7 @@ export function MessageTemplateEditor({ token, message, onOpenChange, onSaved }:
   const [resetTarget, setResetTarget] = useState<MessageTarget | null>(null);
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   const channelEntry = message.channels.find((c) => c.channel === channel) ?? firstChannel;
   const offered = offeredLanguages(channelEntry);
@@ -209,6 +214,15 @@ export function MessageTemplateEditor({ token, message, onOpenChange, onSaved }:
   }
 
   const retired = channelEntry.languages.filter((l) => !l.offered && l.custom);
+  // Algún borrador de cualquier canal o idioma distinto de su texto vigente.
+  const anyDirty = message.channels.some((ch) => offeredLanguages(ch).some((entry) => isDirty(ch, entry)));
+
+  /** Cerrar (X, Cancelar, Escape, fondo): con cambios sin guardar, se pregunta antes. */
+  function requestClose(open: boolean) {
+    if (open) return;
+    if (anyDirty) setConfirmDiscard(true);
+    else onOpenChange(false);
+  }
 
   const panel = (ch: MessageChannelEntry, entry: MessageLanguageEntry) => (
     <MessageTextPanel
@@ -260,7 +274,7 @@ export function MessageTemplateEditor({ token, message, onOpenChange, onSaved }:
     <>
       <FormModal
         open
-        onOpenChange={onOpenChange}
+        onOpenChange={requestClose}
         title={message.title}
         description={copy.description}
         size="lg"
@@ -333,6 +347,18 @@ export function MessageTemplateEditor({ token, message, onOpenChange, onSaved }:
         onConfirm={() => void handleReset()}
         confirming={resetting}
         error={resetError}
+      />
+      <ConfirmDialog
+        open={confirmDiscard}
+        onOpenChange={setConfirmDiscard}
+        title={copy.discardTitle}
+        description={copy.discardDescription}
+        confirmLabel={copy.discardConfirm}
+        cancelLabel={copy.discardCancel}
+        onConfirm={() => {
+          setConfirmDiscard(false);
+          onOpenChange(false);
+        }}
       />
     </>
   );
