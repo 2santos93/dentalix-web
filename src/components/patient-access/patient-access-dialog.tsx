@@ -32,6 +32,7 @@ import { RadioGroup, RadioOption } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fieldErrorId } from '@/components/shared/form-field';
 import { PATIENT_ACCESS_ACTION } from './patient-access-action';
+import { endSentence } from '@/lib/format/text';
 
 export const patientAccessCopy = {
   title: PATIENT_ACCESS_ACTION,
@@ -53,7 +54,7 @@ export const patientAccessCopy = {
   editPatient: 'Editar la ficha',
   linkLabel: 'Enlace para el paciente',
   onlyOnce: 'Copia el enlace ahora: no se podrá volver a ver.',
-  expires: (when: string) => `Caduca el ${when}.`,
+  expires: (when: string) => endSentence(`Caduca el ${when}`),
   copyLink: 'Copiar',
   copied: 'Enlace copiado',
   copyFailed: 'No pudimos copiar automáticamente: cópialo a mano desde el campo.',
