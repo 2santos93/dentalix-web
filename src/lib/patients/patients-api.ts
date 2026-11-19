@@ -133,6 +133,15 @@ export interface Patient {
   reminderOptOutSource?: components['schemas']['ReminderOptOutSource'] | null;
   /** DX-497: idioma preferido (BCP 47); null = «Idioma de la clínica». */
   preferredLanguage?: string | null;
+  /**
+   * DX-172: «¿Cómo nos conoció?» (fuente del catálogo), el paciente que lo
+   * recomendó y el profesional externo que lo derivó; null = sin dato. Los
+   * nombres, en `GET /patients/:id/acquisition`. Opcionales: los fixtures
+   * anteriores no los traen.
+   */
+  sourceId?: string | null;
+  referredByPatientId?: string | null;
+  referredByName?: string | null;
   createdAt: string;
   updatedAt: string;
 }

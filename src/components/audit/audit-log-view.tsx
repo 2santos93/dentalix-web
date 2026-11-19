@@ -40,6 +40,7 @@ import {
   cancellationDetail,
   healthRegistrationDetail,
   clinicSettingsDetail,
+  acquisitionDetail,
   receiptDetail,
   receiptsSummaryPeriodDetail,
   exchangeRateBackupDetail,
@@ -604,7 +605,8 @@ function eventDetail(
     commissionPaymentDetail(event.metadata) ??
     dentalLabDetail(event.metadata) ??
     postOpCheckDetail(event.metadata) ??
-    patientAccessDetail(event.metadata)
+    patientAccessDetail(event.metadata) ??
+    acquisitionDetail(event.metadata)
   );
 }
 

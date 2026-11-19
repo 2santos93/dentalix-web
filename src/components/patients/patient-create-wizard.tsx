@@ -36,6 +36,13 @@ import {
   type PrivacyPolicyVersion,
 } from '@/lib/data-consents/data-consents-api';
 import { PatientConsentStep } from '@/components/data-consents/patient-consent-step';
+import {
+  acquisitionPayload,
+  EMPTY_ACQUISITION,
+  referredByNameTooLong,
+  type AcquisitionDraft,
+} from '@/lib/patients/patient-sources-api';
+import { AcquisitionFields, acquisitionFieldsCopy, sourceKindOf, usePatientSources } from './acquisition-fields';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -99,7 +106,7 @@ const sexOptions: { value: Sex; label: string }[] = [
  * y el email siguen las reglas de la API: su 400 saldría en el paso 5, lejos
  * del campo.
  */
-const CHECKED_FIELDS = ['firstName', 'lastName', 'docType', 'docTypeLabel', 'email'] as const;
+const CHECKED_FIELDS = ['firstName', 'lastName', 'docType', 'docTypeLabel', 'email', 'referredByName'] as const;
 type CheckedField = (typeof CHECKED_FIELDS)[number];
 type MissingFields = Partial<Record<CheckedField, string>>;
 
@@ -153,6 +160,10 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
   const [docTypeLabel, setDocTypeLabel] = useState('');
   const docTypeLabelRef = React.useRef<HTMLInputElement>(null);
   const emailRef = React.useRef<HTMLInputElement>(null);
+  // DX-172: «¿Cómo nos conoció?» (opcional; recepción también la fija).
+  const patientSources = usePatientSources(token);
+  const [acquisition, setAcquisition] = useState<AcquisitionDraft>(EMPTY_ACQUISITION);
+  const referredByNameRef = React.useRef<HTMLInputElement>(null);
   // Cada petición es un objeto nuevo: el efecto enfoca aunque se repita el campo.
   const [focusRequest, setFocusRequest] = useState<{ field: CheckedField } | null>(null);
   React.useEffect(() => {
@@ -163,6 +174,7 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
       docType: docTypeRef,
       docTypeLabel: docTypeLabelRef,
       email: emailRef,
+      referredByName: referredByNameRef,
     };
     refs[focusRequest.field].current?.focus();
   }, [focusRequest]);
@@ -194,12 +206,16 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
 
   const labelError = docTypeLabelFieldError(docTypeLabel);
   const emailInvalid = email.trim() !== '' && !isEmailAddress(email.trim());
+  const acquisitionKind = sourceKindOf(patientSources, acquisition.sourceId);
+  const referredByNameInvalid =
+    acquisitionKind === 'EXTERNAL_PROFESSIONAL' && referredByNameTooLong(acquisition.referredByName);
   const isBasicInfoValid =
     firstName.trim() !== '' &&
     lastName.trim() !== '' &&
     docType !== '' &&
     !labelError &&
-    !emailInvalid;
+    !emailInvalid &&
+    !referredByNameInvalid;
 
   /** Marca lo que falta o sobra y lleva el foco al primer campo con error. */
   function flagMissingBasics() {
@@ -209,6 +225,7 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
       ...(docType === '' ? { docType: copy.docTypeRequired } : {}),
       ...(labelError ? { docTypeLabel: labelError } : {}),
       ...(emailInvalid ? { email: copy.emailInvalid } : {}),
+      ...(referredByNameInvalid ? { referredByName: acquisitionFieldsCopy.nameTooLong } : {}),
     };
     const missingRequired = Boolean(found.firstName || found.lastName || found.docType);
     setValidationError(missingRequired ? copy.requiredError : null);
@@ -253,6 +270,8 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
       // ninguna autorización (el silencio no autoriza).
       const decisions = decisionsFromSelection(consentSelection);
       const label = normalizeDocTypeLabel(docTypeLabel);
+      // DX-172: solo lo que encaja con el tipo de la fuente; sin fuente, nada.
+      const acquired = acquisitionPayload(acquisition, acquisitionKind);
       const input: CreatePatientInput = {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
@@ -266,6 +285,9 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
         ...(address.trim() ? { address: address.trim() } : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
         ...(preferredLanguage ? { preferredLanguage } : {}),
+        ...(acquired.sourceId ? { sourceId: acquired.sourceId } : {}),
+        ...(acquired.referredByPatientId ? { referredByPatientId: acquired.referredByPatientId } : {}),
+        ...(acquired.referredByName ? { referredByName: acquired.referredByName } : {}),
         // `CreatePatientInput.medicalHistory` is typed as
         // `ClinicalHistoryValue` (patients-api.ts overrides the generated
         // field, whose nested shape Swagger can't introspect), so `history`
@@ -458,6 +480,19 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
                 </NativeSelect>
               </FormField>
             ) : null}
+
+            <AcquisitionFields
+              idPrefix="pcw"
+              token={token}
+              sources={patientSources}
+              value={acquisition}
+              onChange={(next) => {
+                setAcquisition(next);
+                clearMissing('referredByName');
+              }}
+              nameError={missing.referredByName}
+              nameRef={referredByNameRef}
+            />
 
             <FormField htmlFor="pcw-notes" label={copy.notesLabel}>
               <Textarea

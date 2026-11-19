@@ -45,6 +45,7 @@ import {
   Smile,
   Factory,
   Percent,
+  Megaphone,
 } from 'lucide-react';
 import { canManageOrthoSettings } from '@/lib/ortho/ortho-roles';
 import { canManageDentalLabs } from '@/lib/lab-orders/lab-orders-roles';
@@ -61,6 +62,7 @@ import { canManageSlotOfferSettings } from '@/lib/appointments/slot-offer-settin
 import { canManageOnlineBooking } from '@/lib/online-booking/online-booking-api';
 import { canManageChairs } from '@/lib/chairs/chairs-api';
 import { canManageLeadSettings } from '@/lib/leads/leads-api';
+import { canManagePatientSources } from '@/lib/patients/patient-sources-api';
 import { canManageEquipment } from '@/lib/equipment/equipment-api';
 import { canManagePayers } from '@/lib/payers/payers-api';
 import { canManagePriceLists } from '@/lib/price-lists/price-lists-api';
@@ -255,6 +257,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Motivos de interés y de pérdida de los prospectos, y cuánto se conservan los perdidos.',
         icon: UserPlus,
         visible: canManageLeadSettings,
+      },
+      // DX-172: las opciones de «¿Cómo nos conoció?».
+      {
+        href: '/settings/origen-de-pacientes',
+        label: 'Origen de pacientes',
+        description: 'Las opciones de «¿Cómo nos conoció?» al dar de alta un paciente: canales, recomendaciones y profesionales externos.',
+        icon: Megaphone,
+        visible: canManagePatientSources,
       },
       // DX-026.
       {

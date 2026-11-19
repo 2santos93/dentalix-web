@@ -4,12 +4,34 @@ import { PatientEditModal } from './patient-edit-modal';
 import { updatePatient } from '@/lib/patients/patients-api';
 import type { Patient } from '@/lib/patients/patients-api';
 import { getDocumentTypeNames } from '@/lib/patients/document-type-names-api';
+import { getPatientAcquisition, listPatientSources, type PatientSource } from '@/lib/patients/patient-sources-api';
 
 // jest.mock con ruta RELATIVA: el transform SWC no reescribe `@/`.
 jest.mock('../../lib/patients/patients-api', () => ({ updatePatient: jest.fn() }));
 // El modal no pide los nombres: se los pasa la ficha (sin un segundo GET).
 jest.mock('../../lib/patients/document-type-names-api', () => ({ getDocumentTypeNames: jest.fn() }));
+jest.mock('../../lib/patients/patient-sources-api', () => ({
+  ...jest.requireActual('../../lib/patients/patient-sources-api'),
+  listPatientSources: jest.fn(),
+  getPatientAcquisition: jest.fn(),
+}));
 const mockedUpdate = updatePatient as jest.MockedFunction<typeof updatePatient>;
+const mockedSources = jest.mocked(listPatientSources);
+const mockedAcquisition = jest.mocked(getPatientAcquisition);
+const src = (id: string, name: string, kind: PatientSource['kind'], isActive = true): PatientSource => ({
+  id,
+  name,
+  kind,
+  isActive,
+  systemKey: null,
+  sortOrder: 0,
+});
+const SOURCES = [
+  src('s-ref', 'Recomendación de paciente', 'PATIENT'),
+  src('s-ig', 'Instagram', 'CHANNEL'),
+  src('s-radio', 'Radio', 'CHANNEL', false),
+  src('s-tv', 'Televisión', 'CHANNEL', false),
+];
 
 const patient = {
   id: 'p1',
@@ -45,7 +67,10 @@ const patient = {
 } as Patient;
 
 describe('PatientEditModal', () => {
-  beforeEach(() => mockedUpdate.mockReset());
+  beforeEach(() => {
+    mockedUpdate.mockReset();
+    mockedSources.mockResolvedValue([]);
+  });
 
   it('precarga los datos actuales del paciente', () => {
     render(
@@ -464,5 +489,89 @@ describe('PatientEditModal', () => {
     await user.click(screen.getByRole('button', { name: /guardar/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Documento duplicado');
+  });
+  describe('DX-172: «¿Cómo nos conoció?»', () => {
+    beforeEach(() => {
+      mockedSources.mockReset();
+      mockedSources.mockResolvedValue(SOURCES);
+      mockedAcquisition.mockReset();
+    });
+
+    it('ofrece la fuente desactivada que ya tiene el paciente, no las demás desactivadas', async () => {
+      render(
+        <PatientEditModal
+          open
+          patient={{ ...patient, sourceId: 's-radio' }}
+          token="tok"
+          onOpenChange={() => {}}
+          onSaved={() => {}}
+        />,
+      );
+      const select = screen.getByLabelText(/cómo nos conoció/i);
+      await screen.findByRole('option', { name: 'Radio (desactivada)' });
+      expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual([
+        'Sin indicar',
+        'Recomendación de paciente',
+        'Instagram',
+        'Radio (desactivada)',
+      ]);
+      expect(select).toHaveValue('s-radio');
+    });
+
+    it('enseña el referente guardado por su nombre y, al pasar a un canal, envía los tres campos con el referente vacío', async () => {
+      mockedAcquisition.mockResolvedValue({
+        source: { id: 's-ref', name: 'Recomendación de paciente', kind: 'PATIENT', isActive: true },
+        referredByPatient: { id: 'p-ref', fullName: 'Luisa Márquez', patientCode: '1001' },
+        referredByName: null,
+        referrals: { count: 0, recent: [] },
+      });
+      mockedUpdate.mockResolvedValue(patient);
+      const user = userEvent.setup();
+      render(
+        <PatientEditModal
+          open
+          patient={{ ...patient, sourceId: 's-ref', referredByPatientId: 'p-ref' }}
+          token="tok"
+          onOpenChange={() => {}}
+          onSaved={() => {}}
+        />,
+      );
+      expect(await screen.findByText('Luisa Márquez')).toBeInTheDocument();
+      expect(mockedAcquisition).toHaveBeenCalledWith('tok', 'p1');
+      await user.selectOptions(screen.getByLabelText(/cómo nos conoció/i), 's-ig');
+      expect(screen.queryByText('Luisa Márquez')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /guardar/i }));
+      await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+      expect(mockedUpdate.mock.calls[0][2]).toEqual({
+        sourceId: 's-ig',
+        referredByPatientId: null,
+        referredByName: null,
+      });
+    });
+
+    it('sin tocar la captación no la envía', async () => {
+      mockedAcquisition.mockResolvedValue({
+        source: null,
+        referredByPatient: { id: 'p-ref', fullName: 'Luisa Márquez', patientCode: '1001' },
+        referredByName: null,
+        referrals: { count: 0, recent: [] },
+      });
+      mockedUpdate.mockResolvedValue(patient);
+      const user = userEvent.setup();
+      render(
+        <PatientEditModal
+          open
+          patient={{ ...patient, sourceId: 's-ref', referredByPatientId: 'p-ref' }}
+          token="tok"
+          onOpenChange={() => {}}
+          onSaved={() => {}}
+        />,
+      );
+      await screen.findByText('Luisa Márquez');
+      await user.type(screen.getByLabelText(/ocupación/i), 'Docente');
+      await user.click(screen.getByRole('button', { name: /guardar/i }));
+      await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+      expect(mockedUpdate.mock.calls[0][2]).toEqual({ occupation: 'Docente' });
+    });
   });
 });
