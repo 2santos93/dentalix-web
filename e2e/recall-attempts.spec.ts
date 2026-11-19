@@ -16,7 +16,8 @@ import { API_URL, tenantOrigin } from './support/urls';
  * Datos por la API (clínica nueva, un control vencido por paciente). Recepción
  * registra «No contesta» y el paciente sale de la lista; «Incluir contactados»
  * lo enseña con «1 de 3». «Número erróneo» marca el teléfono: la ficha dice
- * «Teléfono por revisar» y «Ya está corregido» lo quita. A 390 px, el lote de
+ * «Teléfono por revisar» y «Ya está corregido» lo quita (y los intentos vuelven
+ * a cero). A 390 px, el lote de
  * dos pacientes desde las casillas y la barra fija. El ADMIN baja el tope de la
  * sede a 1 en Ajustes › Recall (persiste) y el siguiente intento lleva al
  * paciente a «Intentos agotados». axe en claro y oscuro, capturas `qa-shot`.
@@ -164,9 +165,11 @@ test('recepción, 1440: un intento lo saca de la lista; «Incluir contactados» 
   await notice.getByRole('button', { name: 'Ya está corregido' }).click();
   await expect(page.getByText('Teléfono marcado como corregido.')).toBeVisible();
   await expect(notice).toBeHidden();
+  // Corregir el teléfono vuelve a contar los intentos desde cero.
   await page.reload();
-  await expect(page.getByTestId('recall-cycle')).toBeVisible();
+  await expect(page.getByTestId('recall-row-CHECKUP')).toBeVisible();
   await expect(page.getByTestId('phone-review')).toHaveCount(0);
+  await expect(page.getByTestId('patient-recall')).not.toContainText('Intentos: 1 de 3');
 });
 
 test('recepción, 390: lote de 2 pacientes desde las casillas, con la barra fija', async ({ page }) => {
