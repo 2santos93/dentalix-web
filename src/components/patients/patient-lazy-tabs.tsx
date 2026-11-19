@@ -50,6 +50,12 @@ export const ClinicalAlertBanner = dynamic(
   { ssr: false },
 );
 
+// DX-172: «Origen» de la pestaña Datos (su única petición sale al montarse).
+export const PatientAcquisitionSection = dynamic(
+  () => import('@/components/patients/patient-acquisition-section').then((m) => m.PatientAcquisitionSection),
+  { ssr: false },
+);
+
 // Odontograma, periodontograma y plan de tratamiento.
 export const OdontogramTab = dynamic(
   () => import('@/components/odontogram/odontogram-tab').then((m) => m.OdontogramTab),

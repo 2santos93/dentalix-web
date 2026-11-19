@@ -73,6 +73,7 @@ import {
   PatientPrescriptionsTab,
   PatientRetentionDialogs,
   PatientAccessDialog,
+  PatientAcquisitionSection,
   PatientCertificatesTab,
   OrthoTab,
   PerioTab,
@@ -553,6 +554,14 @@ function PatientDetailView() {
             />
             {anamnesisBlock('data')}
             <PatientDataPanel patient={patient} docTypeNames={docTypeNames} stamp={stamp} />
+            {/* DX-172: cómo nos conoció, quién lo recomendó y a quién ha recomendado
+                (trozo aparte; se relee tras «Editar»). */}
+            <PatientAcquisitionSection
+              key={`acquisition-${patient.updatedAt}`}
+              token={accessToken}
+              patientId={patientId}
+              stamp={stamp}
+            />
             {/* DX-128: canal de los recordatorios, móvil, opt-in y baja. Lo ven
                 todos; lo cambian recepción y ADMIN. */}
             <PatientCommunicationSection
