@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { ClipboardList, NotebookPen } from 'lucide-react';
@@ -12,7 +12,7 @@ import { useSedeStamp, type SedePainters } from '@/lib/locations/sede-stamp';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { SectionError } from '@/components/errors/section-error';
-import { notifyError } from '@/components/errors/notify';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { Callout } from '@/components/ui/callout';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import type { AnamnesisStatus } from '@/lib/clinical/medical-alerts';
@@ -33,8 +33,13 @@ const copy = {
   rejected: (reason: string | null) => (reason ? `Rechazada: ${reason}` : 'Rechazada.'),
   review: 'Revisar',
   revoke: 'Anular enlace',
+  revokeTitle: '¿Anular el enlace de anamnesis?',
+  revokeDescription:
+    'El paciente ya no podrá responder con este enlace, aunque ya se lo hayas enviado. No se puede deshacer: para pedírsela otra vez hay que enviar un enlace nuevo.',
+  revokeCancel: 'Mantener el enlace',
+  revoking: 'Anulando…',
   revoked: 'Enlace anulado.',
-  revokeError: 'No pudimos anular el enlace.',
+  revokeError: 'No pudimos anular el enlace. Intenta de nuevo.',
 };
 
 /** Cada solicitud con el reloj de SU sede (`location.id`), no el de la pantalla (DX-354b). */
@@ -97,6 +102,11 @@ export function PatientAnamnesisSection({
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [revoking, setRevoking] = useState(false);
+  // DX-298 (FE-072): anular es irreversible: se confirma, y al terminar se anuncia.
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState('');
+  const announceRef = useRef<HTMLParagraphElement>(null);
   const stamp = useSedeStamp(
     token,
     rows.map((r) => r.location.id),
@@ -127,13 +137,24 @@ export function PatientAnamnesisSection({
   const pendingReview = rows.filter((r) => r.status === 'SUBMITTED');
   const visible = rows[0] && rows[0].status !== 'SUBMITTED' ? [...pendingReview, rows[0]] : pendingReview;
 
-  async function handleRevoke(id: string) {
+  function askRevoke(id: string) {
+    setRevokeError(null);
+    setAnnouncement('');
+    setConfirmId(id);
+  }
+
+  async function handleRevoke() {
+    if (!confirmId) return;
     setRevoking(true);
+    setRevokeError(null);
     try {
-      const updated = await revokeAnamnesisRequest(token, id);
+      const updated = await revokeAnamnesisRequest(token, confirmId);
       setRows((current) => current.map((r) => (r.id === updated.id ? updated : r)));
+      setAnnouncement(copy.revoked);
+      setConfirmId(null);
     } catch (err) {
-      notifyError(apiErrorMessage(err, copy.revokeError), { onRetry: () => void handleRevoke(id) });
+      // Con el diálogo abierto, el error va dentro (un aviso flotante quedaría inerte).
+      setRevokeError(apiErrorMessage(err, copy.revokeError));
     } finally {
       setRevoking(false);
     }
@@ -142,7 +163,7 @@ export function PatientAnamnesisSection({
   const missing = status === 'MISSING';
   // Mientras carga no se reserva hueco: el bloque aparece si hay algo que decir.
   const showRows = !loading && !error && visible.length > 0;
-  if (!missing && !reviewLine && !showRows && !error) return null;
+  if (!missing && !reviewLine && !showRows && !error && !announcement) return null;
 
   return (
     <section
@@ -204,8 +225,8 @@ export function PatientAnamnesisSection({
                   variant="ghost"
                   size="sm"
                   className="self-start sm:self-auto"
-                  loading={revoking}
-                  onClick={() => void handleRevoke(item.id)}
+                  disabled={revoking}
+                  onClick={() => askRevoke(item.id)}
                 >
                   {copy.revoke}
                 </Button>
@@ -214,6 +235,36 @@ export function PatientAnamnesisSection({
           ))}
         </ul>
       ) : null}
+      {/* Siempre montada (las regiones vivas anuncian cambios, no apariciones).
+          Tras anular recibe el foco: el botón que lo tenía ya no existe. */}
+      <p
+        ref={announceRef}
+        role="status"
+        tabIndex={-1}
+        data-testid="anamnesis-revoke-status"
+        className="rounded-sm text-sm text-muted empty:hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
+      >
+        {announcement}
+      </p>
+      <ConfirmDialog
+        open={confirmId !== null}
+        onOpenChange={(open) => {
+          if (!open && !revoking) setConfirmId(null);
+        }}
+        title={copy.revokeTitle}
+        description={copy.revokeDescription}
+        confirmLabel={copy.revoke}
+        confirmingLabel={copy.revoking}
+        cancelLabel={copy.revokeCancel}
+        onConfirm={() => void handleRevoke()}
+        confirming={revoking}
+        error={revokeError}
+        onCloseAutoFocus={(event) => {
+          if (!announceRef.current?.textContent) return;
+          event.preventDefault();
+          announceRef.current.focus();
+        }}
+      />
     </section>
   );
 }

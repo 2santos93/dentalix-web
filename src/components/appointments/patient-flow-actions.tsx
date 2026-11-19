@@ -175,9 +175,13 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
       toast.success(reservationCopy.claimed(reservedItemLabel(item)));
       return true;
     } catch (err) {
-      notifyError(apiErrorMessage(err, reservationCopy.claimError), {
-        onRetry: () => void claim(appointmentId, item),
-      });
+      // DX-298 (FE-074): un rechazo (409: la reserva ya es de otra cita de hoy,
+      // o la cita no tiene al paciente en la clínica) daría lo mismo otra vez:
+      // aviso sin Reintentar. Solo la red o un 5xx se reintentan.
+      notifyError(
+        apiErrorMessage(err, reservationCopy.claimError),
+        isRejection(err) ? undefined : { onRetry: () => void claim(appointmentId, item) },
+      );
       return false;
     } finally {
       setClaimingKey(null);

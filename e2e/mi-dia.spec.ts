@@ -101,7 +101,7 @@ test('ADMIN: los números son los de la API, lo que está a 0 se pliega y cada f
   await expect(page).toHaveURL(/\/inventory$/);
 });
 
-test('DX-503-bis: al abrir Inicio sale UNA lectura de las listas (todas), no la del menú antes', async ({ page }) => {
+test('DX-503-bis y DX-298: al abrir Inicio, UNA lectura de las listas (todas); navegar no relee, un cambio sí', async ({ page }) => {
   await loginAs(page, origin, admin.email, PASSWORD);
   const reads: string[] = [];
   page.on('request', (req) => {
@@ -114,11 +114,18 @@ test('DX-503-bis: al abrir Inicio sale UNA lectura de las listas (todas), no la 
   await page.waitForLoadState('networkidle');
   expect(reads).toHaveLength(1);
   expect(reads[0]).not.toContain('keys=');
-  // Fuera de Inicio, el menú vuelve a pedir solo sus listas.
+  // DX-298 (FE-073): navegar no relee. La lectura de Inicio (todas las listas)
+  // cubre las del menú durante un minuto.
   await page.getByRole('link', { name: 'Pacientes' }).first().click();
   await expect(page).toHaveURL(/\/patients/);
-  await expect.poll(() => reads.length).toBeGreaterThan(1);
-  expect(reads.at(-1)).toContain('keys=');
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(1_000);
+  expect(reads).toHaveLength(1);
+  // Un cambio en una cola (WORK_QUEUES_CHANGED_EVENT) relee, y fuera de Inicio
+  // pide solo las listas del menú.
+  await page.evaluate(() => window.dispatchEvent(new Event('dentalix:closing-queue-changed')));
+  await expect.poll(() => reads.length).toBe(2);
+  expect(reads[1]).toContain('keys=');
 });
 
 test('ADMIN: una lista que falla avisa en su fila con Reintentar y las demás siguen', async ({ page }) => {

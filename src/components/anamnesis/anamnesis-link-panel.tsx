@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { InlineError } from '@/components/errors/inline-error';
 import { ExternalLink } from '@/components/shared/external-link';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 
 const copy = {
   heading: 'Anamnesis por enlace',
@@ -17,7 +18,8 @@ const copy = {
   send: 'Enviar anamnesis',
   resend: 'Generar otro enlace',
   linkLabel: 'Enlace de anamnesis',
-  expires: (when: string) => `Caduca el ${when}. Sirve una sola vez.`,
+  // Sin punto tras la hora: en 12 h ya termina en «a. m.» y saldría «a. m..».
+  expires: (when: string) => `Sirve una sola vez y caduca el ${when}`,
   resendNote: 'Generar otro enlace anula el anterior que aún no se haya respondido.',
   consentNote: 'El paciente no tiene vigente la autorización de datos de salud: el formulario se la pedirá antes.',
   copy: 'Copiar enlace',
@@ -25,7 +27,18 @@ const copy = {
   copyFailed: 'No pudimos copiar automáticamente: cópialo a mano desde el campo.',
   whatsapp: 'Abrir WhatsApp',
   genericError: 'No pudimos generar el enlace. Intenta de nuevo.',
+  resendTitle: '¿Generar otro enlace?',
+  resendDescription:
+    'El enlace que acabas de generar dejará de funcionar. Si ya se lo enviaste al paciente, tendrás que mandarle el nuevo.',
+  resendCancel: 'Mantener este enlace',
+  generating: 'Generando…',
+  regenerated: 'Enlace nuevo listo; el anterior quedó anulado.',
 };
+
+/** Un enlace vivo: generado aquí y aún sin caducar (al responderlo, la API lo da por usado). */
+function isLive(link: AnamnesisRequestCreated | null): boolean {
+  return link !== null && new Date(link.expiresAt).getTime() > Date.now();
+}
 
 interface AnamnesisLinkPanelProps {
   token: string;
@@ -47,6 +60,10 @@ interface AnamnesisLinkPanelProps {
  * nada clínico, como la confirmación de cita (DX-005). El enlace solo existe
  * aquí: la API guarda su hash, así que al cerrar hay que generar otro (que
  * anula el anterior). Recepción también puede enviarlo.
+ *
+ * DX-298 (FE-072): «Generar otro enlace» con uno vivo pide confirmación,
+ * porque anula el que quizá ya se mandó por WhatsApp. «Enviar anamnesis» es
+ * secundario: la ficha y la cita ya tienen su acción principal.
  */
 export function AnamnesisLinkPanel({
   token,
@@ -62,6 +79,8 @@ export function AnamnesisLinkPanel({
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [confirmResend, setConfirmResend] = useState(false);
+  const [regenerated, setRegenerated] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const ids = useId();
   const linkId = `${ids}-link`;
@@ -73,13 +92,24 @@ export function AnamnesisLinkPanel({
     setCopyState('idle');
     try {
       const created = await createAnamnesisRequest(token, patientId, appointmentId ? { appointmentId } : {});
+      setRegenerated(link !== null);
       setLink(created);
+      setConfirmResend(false);
       onCreated?.(created);
     } catch (err) {
       setError(apiErrorMessage(err, copy.genericError));
     } finally {
       setGenerating(false);
     }
+  }
+
+  function requestGenerate() {
+    if (isLive(link)) {
+      setError(null);
+      setConfirmResend(true);
+      return;
+    }
+    void handleGenerate();
   }
 
   async function handleCopy() {
@@ -107,14 +137,28 @@ export function AnamnesisLinkPanel({
       <p className="text-sm text-muted">{copy.hint}</p>
       <Button
         type="button"
-        variant={link ? 'secondary' : 'default'}
-        onClick={() => void handleGenerate()}
-        loading={generating}
+        variant="secondary"
+        onClick={requestGenerate}
+        loading={generating && !confirmResend}
         className="w-full sm:w-auto sm:self-start"
       >
         <ClipboardList aria-hidden /> {link ? copy.resend : copy.send}
       </Button>
-      {error && <InlineError>{error}</InlineError>}
+      {error && !confirmResend && <InlineError>{error}</InlineError>}
+      <ConfirmDialog
+        open={confirmResend}
+        onOpenChange={(open) => {
+          if (!open && !generating) setConfirmResend(false);
+        }}
+        title={copy.resendTitle}
+        description={copy.resendDescription}
+        confirmLabel={copy.resend}
+        confirmingLabel={copy.generating}
+        cancelLabel={copy.resendCancel}
+        onConfirm={() => void handleGenerate()}
+        confirming={generating}
+        error={error}
+      />
 
       {link && (
         <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-2 p-3">
@@ -141,13 +185,25 @@ export function AnamnesisLinkPanel({
                 </ExternalLink>
               </Button>
             ) : (
-              <Button type="button" disabled aria-describedby={noPhoneId} className="w-full sm:w-auto">
+              <Button
+                type="button"
+                disabled
+                // Solo si la API dio el motivo: un id que no existe no describe nada.
+                aria-describedby={link.whatsappUnavailableReason ? noPhoneId : undefined}
+                className="w-full sm:w-auto"
+              >
                 <MessageCircle aria-hidden /> {copy.whatsapp}
               </Button>
             )}
           </div>
           <p role="status" aria-live="polite" className="text-xs text-muted empty:hidden">
-            {copyState === 'copied' ? copy.copied : copyState === 'failed' ? copy.copyFailed : ''}
+            {copyState === 'copied'
+              ? copy.copied
+              : copyState === 'failed'
+                ? copy.copyFailed
+                : regenerated
+                  ? copy.regenerated
+                  : ''}
           </p>
           {!link.whatsapp && link.whatsappUnavailableReason && (
             <p id={noPhoneId} className="text-xs text-muted">

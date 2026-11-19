@@ -5,6 +5,7 @@ import { readJwtClaims } from '@/lib/auth/jwt-claims';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { onLocationChange } from '@/lib/locations/location-store';
 import { getMe, type MyProfile } from '@/lib/me/me-api';
+import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import { registerTestReset } from './test-resets';
 
 /**
@@ -27,6 +28,11 @@ import { registerTestReset } from './test-resets';
  *   editar o desactivar una en Ajustes → Sedes (`invalidateLocations()`), al
  *   cerrar sesión (aquí o en otra pestaña: el token pasa a `null`) y al cambiar
  *   de sesión.
+ *
+ * DX-298 (FE-073): también el equipo que atiende (`GET /staff`) para «Marcar
+ * como realizado», que lo pedía en cada apertura. Ese dato cambia desde otras
+ * pestañas y otros usuarios (altas, sedes, roles), así que caduca a los
+ * `STAFF_MAX_AGE_MS` además de invalidarse al cambiar de sesión.
  *
  * Es el ÚNICO módulo que llama a `listLocations` y a `getMe` (guarda en
  * `src/architecture/session-store-guard.test.ts`). La API sigue siendo la
@@ -66,8 +72,18 @@ class SessionResource<T> {
   snap: Snapshot<T> = IDLE;
   private promise: Promise<T> | null = null;
   private listeners = new Set<() => void>();
+  /** Cuándo llegó el dato vigente (para `maxAgeMs`). */
+  private fetchedAt = 0;
 
-  constructor(private readonly fetcher: (token: string) => Promise<T>) {}
+  constructor(
+    private readonly fetcher: (token: string) => Promise<T>,
+    /** Sin él, el dato vale toda la sesión; con él, pasado ese tiempo se relee. */
+    private readonly maxAgeMs?: number,
+  ) {}
+
+  private expired(): boolean {
+    return this.maxAgeMs !== undefined && Date.now() - this.fetchedAt >= this.maxAgeMs;
+  }
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
@@ -93,7 +109,7 @@ class SessionResource<T> {
     // token): se responde sin tocar la caché, para no vaciársela a los demás.
     if (!adoptSession(token)) return this.fetcher(token);
     const current = this.snap;
-    if (current.data !== undefined && !current.stale) return Promise.resolve(current.data);
+    if (current.data !== undefined && !current.stale && !this.expired()) return Promise.resolve(current.data);
     if (this.promise) return this.promise;
     // Una respuesta vacía cuenta como fallo: «sin dato» es el estado que dispara
     // la lectura, y guardarla así volvería a pedirla sin fin.
@@ -106,6 +122,7 @@ class SessionResource<T> {
         (data) => {
           if (this.promise === request) {
             this.promise = null;
+            this.fetchedAt = Date.now();
             this.set({
               ...this.snap,
               data,
@@ -133,6 +150,7 @@ class SessionResource<T> {
   put(token: string, data: T) {
     if (!adoptSession(token)) return;
     this.promise = null;
+    this.fetchedAt = Date.now();
     this.set({
       ...this.snap,
       data,
@@ -176,6 +194,9 @@ class SessionResource<T> {
 
 const meResource = new SessionResource<MyProfile>(getMe);
 const locationsResource = new SessionResource<ClinicLocation[]>(listLocations);
+/** El equipo cambia fuera de esta pestaña: cinco minutos bastan para no repetir la lectura al marcar seguido. */
+export const STAFF_MAX_AGE_MS = 5 * 60_000;
+const staffResource = new SessionResource<StaffMember[]>(listStaff, STAFF_MAX_AGE_MS);
 
 /** El token de la pestaña (store de auth), o `null` si no hay o no se puede leer. */
 function currentAuthToken(): string | null {
@@ -197,6 +218,7 @@ function adoptSession(token: string): boolean {
   sessionKey = key;
   meResource.reset();
   locationsResource.reset();
+  staffResource.reset();
   return true;
 }
 
@@ -212,12 +234,14 @@ export function clearSessionStore(): void {
   sessionKey = null;
   meResource.reset();
   locationsResource.reset();
+  staffResource.reset();
 }
 
 registerTestReset(() => {
   sessionKey = null;
   meResource.forget();
   locationsResource.forget();
+  staffResource.forget();
   unlistenLocationChange?.();
   unlistenLocationChange = null;
 });
@@ -230,6 +254,15 @@ export function loadLocations(token: string): Promise<ClinicLocation[]> {
 /** Tras crear, editar o desactivar una sede: todos los consumidores releen. */
 export function invalidateLocations(): void {
   locationsResource.invalidate();
+}
+
+/**
+ * Equipo de la clínica (`GET /staff`), compartido y con caducidad
+ * (`STAFF_MAX_AGE_MS`). Reintentar pasa `{ fresh: true }`: vuelve a la API.
+ */
+export function loadStaff(token: string, opts: { fresh?: boolean } = {}): Promise<StaffMember[]> {
+  if (opts.fresh) staffResource.invalidate();
+  return staffResource.load(token);
 }
 
 /** Perfil del usuario de la sesión (`GET /me`), compartido. */
@@ -271,7 +304,9 @@ function useSessionResource<T>(resource: SessionResource<T>): SessionResourceSta
     if (!token) {
       // Sin sesión (logout aquí, en otra pestaña o sesión caducada): nada que
       // conservar. Solo si queda algo, para no despertar a los suscriptores.
-      if (sessionKey !== null || !meResource.isEmpty() || !locationsResource.isEmpty()) clearSessionStore();
+      if (sessionKey !== null || !meResource.isEmpty() || !locationsResource.isEmpty() || !staffResource.isEmpty()) {
+        clearSessionStore();
+      }
       return;
     }
     // Se lee si no hay nada (ni dato ni error) o si se invalidó; un error se
