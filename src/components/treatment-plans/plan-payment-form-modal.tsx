@@ -6,7 +6,17 @@ import { apiErrorMessage, sedeCivilDateOption } from '@/lib/api/error-message';
 import { parseMoneyInput } from '@/lib/format/money';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { SEDE_TIME_ZONE_ERROR, readyTimeZone, sedeToday, type SedeZoneState } from '@/lib/locations/use-sede-time-zone';
-import { recordPayment, type PlanBalance, type RecordPaymentInput } from '@/lib/payments/payments-api';
+import { recordPayment, type PlanBalance, type RecordPlanPaymentInput } from '@/lib/payments/payments-api';
+import { ApiError } from '@/lib/api/api-error';
+import { CASH_CHANGE_REMAINDER } from '@/lib/payments/cash-change';
+import {
+  CashChangeFields,
+  cashChangeBody,
+  cashChangeCopy,
+  isCashMethod,
+  useCashChange,
+  useCashChangeComputed,
+} from '@/components/payments/cash-change-fields';
 import type { TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
@@ -108,6 +118,17 @@ export function PlanPaymentFormModal({
   const rates = useExchangeRates(token, paymentDate, open && inOtherCurrency);
   const parsedAmount = paymentCurrency ? parseMoneyInput(paymentAmount, paymentCurrency) : null;
   const previewAmount = parsedAmount?.ok && parsedAmount.value > 0 ? parsedAmount.value : null;
+  // DX-570: «Recibido» y el vuelto, con un medio de efectivo.
+  const cash = useCashChange();
+  const cashActive = isCashMethod(paymentMethodFields.selected);
+  const cashComputed = useCashChangeComputed(cash, {
+    token,
+    active: open && cashActive,
+    method: paymentMethodFields.selected,
+    amount: previewAmount,
+    currency: paymentCurrency,
+    date: paymentDate,
+  });
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -160,10 +181,27 @@ export function PlanPaymentFormModal({
     // DX-395: la referencia o el motivo que faltan se marcan en su campo,
     // que recibe el foco.
     if (!paymentMethodFields.validate()) return;
+    // DX-570: lo recibido y el vuelto, validados junto a su campo.
+    let change = {};
+    if (cashActive) {
+      const result = cashChangeBody(
+        cash,
+        cashComputed,
+        paymentMethodFields.methods.methods,
+        stamp.money,
+        currencyValue,
+        'tp-payment',
+      );
+      if ('focus' in result) {
+        document.getElementById(result.focus)?.focus();
+        return;
+      }
+      change = result.body;
+    }
 
     setSubmitting(true);
     try {
-      const input: RecordPaymentInput = {
+      const input: RecordPlanPaymentInput = {
         amount: parsed.value,
         currency: currencyValue,
         // DX-097: el DÍA elegido; la API lo guarda al mediodía de la sede.
@@ -171,11 +209,23 @@ export function PlanPaymentFormModal({
         ...paymentMethodFields.body(),
         ...(paymentNotes.trim() ? { notes: paymentNotes.trim() } : {}),
         ...(lockOverrideReason ? { lockOverrideReason } : {}),
+        ...change,
       };
       const saved = await recordPayment(token, plan.id, input, idempotencyKey);
+      const savedChange = saved.cashChange;
       // Éxito con el sistema de avisos del repo (sonner): visible en cualquier
       // alto de pantalla, sin depender de dónde esté el scroll.
-      notifySuccess(copy.paymentRecorded(stamp.money(saved.amount, saved.currency)));
+      notifySuccess(
+        copy.paymentRecorded(stamp.money(saved.amount, saved.currency)) +
+          (savedChange
+            ? cashChangeCopy.recorded(
+                stamp.money(savedChange.tendered, saved.currency),
+                savedChange.lines.length > 0
+                  ? savedChange.lines.map((l) => `${stamp.money(l.amount, l.currency)} (${l.paymentMethodName})`).join(' + ')
+                  : stamp.money(0, saved.currency),
+              )
+            : ''),
+      );
       onOpenChange(false);
       await onRecorded();
     } catch (err) {
@@ -183,6 +233,11 @@ export function PlanPaymentFormModal({
       // para que el backend lo deduplique en vez de cobrar dos veces.
       // DX-377: la referencia repetida se avisa junto al campo y pide motivo.
       if (paymentMethodFields.catchDuplicate(err)) return;
+      // DX-570: la API ve una diferencia sin devolver: se confirma junto al vuelto.
+      if (err instanceof ApiError && err.code === CASH_CHANGE_REMAINDER) {
+        cash.setConfirmError(apiErrorMessage(err, { fallback: cashChangeCopy.confirmMissing }));
+        return;
+      }
       // Un 400 técnico (importe/moneda) se dice en español (apiErrorMessage).
       setSubmitError(
         apiErrorMessage(err, { fallback: copy.genericAddPaymentError, ...sedeCivilDateOption(sedeFmt) }),
@@ -292,6 +347,19 @@ export function PlanPaymentFormModal({
       ) : null}
 
       <PaymentReferenceFields fields={paymentMethodFields} idPrefix="tp-payment" />
+
+      {cashActive ? (
+        <CashChangeFields
+          cash={cash}
+          computed={cashComputed}
+          methods={paymentMethodFields.methods.methods}
+          currency={paymentCurrency}
+          token={token}
+          money={stamp.money}
+          disabled={submitting}
+          idPrefix="tp-payment"
+        />
+      ) : null}
 
       <FormField htmlFor="tp-payment-notes" label={copy.paymentNotesLabel}>
         <Textarea

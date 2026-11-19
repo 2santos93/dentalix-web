@@ -33,3 +33,11 @@ export function roundAmount(amount: number): number {
 export function amountText(amount: number, digits: number): string {
   return amount.toFixed(digits);
 }
+
+/**
+ * DX-570: importe → céntimos enteros HACIA ABAJO (el vuelto sugerido nunca se
+ * pasa), con 1e-6 de tolerancia para el ruido de coma flotante.
+ */
+export function floorAmountCents(amount: number): number {
+  return Math.floor(amount * 100 + 1e-6);
+}

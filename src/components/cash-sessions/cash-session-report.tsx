@@ -73,6 +73,11 @@ const copy = {
   paymentsTitle: 'Cobros del turno',
   // DX-516: ajustes por medio de pago que entran con los abonos.
   paymentAdjustments: (amount: string) => `${amount} por ajustes del medio`,
+  // DX-570: lo recibido de más que se devolvió y el vuelto entregado desde este grupo.
+  changeIn: (amount: string) => `+${amount} recibido para vuelto`,
+  changeOut: (amount: string) => `−${amount} de vuelto entregado`,
+  paymentChange: (tendered: string, change: string) =>
+    change ? `Recibido ${tendered} · vuelto ${change}` : `Recibido ${tendered}`,
   paymentsLabel: 'Cobros del turno',
   colDate: 'Fecha',
   colPatient: 'Paciente',
@@ -130,6 +135,9 @@ interface ArqueoRow {
   payments: number | null;
   /** DX-516: ajustes por medio de pago de esos cobros, con signo (0 o null: ninguno). */
   paymentAdjustments: number | null;
+  /** DX-570: recibido de más (el vuelto que sale) y vuelto entregado desde este grupo. */
+  changeIn: number | null;
+  changeOut: number | null;
   adjustments: number | null;
   outflows: number | null;
   expected: number | null;
@@ -161,6 +169,8 @@ function arqueoRows(session: CashSessionDetail): ArqueoRow[] {
         opening: line.opening,
         payments: breakdown?.payments ?? null,
         paymentAdjustments: breakdown?.paymentAdjustments ?? null,
+        changeIn: breakdown?.changeIn ?? null,
+        changeOut: breakdown?.changeOut ?? null,
         adjustments: breakdown?.adjustments ?? null,
         outflows: breakdown?.outflows ?? null,
         expected: line.expected,
@@ -177,6 +187,8 @@ function arqueoRows(session: CashSessionDetail): ArqueoRow[] {
     opening: line.opening,
     payments: line.payments,
     paymentAdjustments: line.paymentAdjustments,
+    changeIn: line.changeIn,
+    changeOut: line.changeOut,
     adjustments: line.adjustments,
     outflows: line.outflows,
     expected: line.expected,
@@ -312,6 +324,11 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
                             )}
                           </span>
                         ) : null}
+                        {!row.hidden && row.changeIn ? (
+                          <span className="block t-caption text-muted">
+                            {copy.changeIn(txt.amount(row.changeIn, row.currency))}
+                          </span>
+                        ) : null}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {figure(row.adjustments)}
@@ -319,6 +336,11 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
                       <TableCell className="text-right tabular-nums">
                         {/* Se restan: con signo, para que la fila se lea como una suma. */}
                         {figure(row.outflows ? -row.outflows : row.outflows)}
+                        {!row.hidden && row.changeOut ? (
+                          <span className="block t-caption text-muted">
+                            {copy.changeOut(txt.amount(row.changeOut, row.currency))}
+                          </span>
+                        ) : null}
                       </TableCell>
                       <TableCell
                        
@@ -411,6 +433,17 @@ export function CashSessionReport({ session, linkSessions = true, titleAs: Title
                       </TableCell>
                       <TableCell className="text-right font-medium tabular-nums">
                         {txt.amount(p.amount, p.currency)}
+                        {/* DX-570: lo recibido y el vuelto entregado (su moneda y medio). */}
+                        {p.cashChange ? (
+                          <span className="block t-caption font-normal text-muted">
+                            {copy.paymentChange(
+                              txt.amount(p.cashChange.tendered, p.currency),
+                              p.cashChange.lines
+                                .map((l) => `${txt.amount(l.amount, l.currency)} · ${l.paymentMethodName}`)
+                                .join(' + '),
+                            )}
+                          </span>
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   ))}

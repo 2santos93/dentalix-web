@@ -9,7 +9,7 @@
  * importe es otra cosa (`formatCurrency`, dígitos de formato CLDR).
  */
 
-import { amountCents, centsToAmount } from './round';
+import { amountCents, centsToAmount, floorAmountCents } from './round';
 
 /** Decimales del redondeo por línea: los importes tienen como mucho 2. */
 export type RoundingDigits = 0 | 1 | 2;
@@ -111,4 +111,16 @@ export function contractRoundingDigits(
 ): RoundingDigits | null {
   const value = digits?.roundingDigits;
   return value === 0 || value === 1 || value === 2 ? value : null;
+}
+
+/**
+ * DX-570: un importe redondeado HACIA ABAJO a los decimales de su moneda (el
+ * vuelto sugerido nunca se pasa de lo debido). Corta al céntimo con una
+ * tolerancia de 1e-6 para el ruido de coma flotante (182,4999999… es 182,50).
+ */
+export function floorToDigits(amount: number, digits: RoundingDigits): number {
+  if (!(amount > 0)) return 0;
+  const cents = BigInt(floorAmountCents(amount));
+  const unit = unitCents(digits);
+  return centsToAmount(Number(cents - (cents % unit)));
 }

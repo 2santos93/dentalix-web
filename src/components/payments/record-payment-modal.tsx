@@ -12,6 +12,7 @@ import {
   type SplitPaymentLineInput,
 } from '@/lib/payments/payments-api';
 import { ApiError } from '@/lib/api/api-error';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { Button } from '@/components/ui/button';
 import type { AccountStatementOpeningBalance } from '@/lib/account-statement/account-statement-api';
 import { PAYMENT_PROOF_REJECTED } from '@/lib/payments/payment-proof-api';
@@ -68,6 +69,15 @@ import {
   useSplitLines,
 } from './split-payment-lines';
 import { amountCents } from '@/lib/money/round';
+import {
+  CashChangeFields,
+  cashChangeBody,
+  cashChangeCopy,
+  isCashMethod,
+  useCashChange,
+  useCashChangeComputed,
+} from './cash-change-fields';
+import { CASH_CHANGE_REMAINDER } from '@/lib/payments/cash-change';
 
 // Copy como constantes (i18n-ready).
 export const recordPaymentCopy = {
@@ -219,6 +229,8 @@ export function RecordPaymentModal({
   const [proofError, setProofError] = useState<string | null>(null);
   const [confirmCredit, setConfirmCredit] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
+  // DX-570: «Recibido» y el vuelto de un abono en efectivo.
+  const cash = useCashChange();
   // Tras un 409 de «lo pendiente cambió» se vuelve a leer el saldo del plan.
   const [balanceRefresh, setBalanceRefresh] = useState(0);
   // El foco tras añadir (su importe) o quitar (el botón de añadir) una forma
@@ -277,6 +289,7 @@ export function RecordPaymentModal({
       setProofError(null);
       setConfirmCredit(false);
       setConfirmError(null);
+      cash.reset();
     }
   }
 
@@ -334,6 +347,16 @@ export function RecordPaymentModal({
         : 'loading';
   const parsedAmount = currency ? parseMoneyInput(form.amount, currency) : null;
   const previewAmount = parsedAmount?.ok && parsedAmount.value > 0 ? parsedAmount.value : null;
+  // DX-570: el vuelto, solo en un abono suelto a un plan con un medio de efectivo.
+  const cashActive = plan !== null && opening === null && !isSplit && isCashMethod(methodFields.selected);
+  const cashComputed = useCashChangeComputed(cash, {
+    token,
+    active: open && cashActive,
+    method: methodFields.selected,
+    amount: previewAmount,
+    currency,
+    date: form.date,
+  });
 
   function patch(next: Partial<FormState>) {
     setForm((f) => ({ ...f, ...next }));
@@ -571,6 +594,16 @@ export function RecordPaymentModal({
       }
     }
     setProofError(null);
+    // DX-570: lo recibido y el vuelto, validados junto a su campo.
+    let change = {};
+    if (cashActive) {
+      const result = cashChangeBody(cash, cashComputed, methodFields.methods.methods, money, currency, 'rp');
+      if ('focus' in result) {
+        focusField(result.focus);
+        return;
+      }
+      change = result.body;
+    }
     setSubmitting(true);
     try {
       const proofUploadId = proofShown ? proofUpload.uploadId : undefined;
@@ -581,6 +614,7 @@ export function RecordPaymentModal({
         ...methodFields.body(),
         ...(proofUploadId ? { proofUploadId } : {}),
         ...(lockOverrideReason ? { lockOverrideReason } : {}),
+        ...change,
       };
       const key = keyFor([
         opening ? `ob:${opening.id}` : (plan as NonNullable<typeof plan>).id,
@@ -590,6 +624,7 @@ export function RecordPaymentModal({
         body.paymentMethodId ?? null,
         body.reference ?? null,
         proofUploadId ?? null,
+        change,
       ]);
       const saved = opening
         ? await recordOpeningBalancePayment(token, opening.id, body, key)
@@ -611,12 +646,29 @@ export function RecordPaymentModal({
             : '',
       );
       const withoutRate = saved.exchangeRateStatus === 'MISSING';
-      onRecorded(withoutRate ? `${recorded} ${copy.recordedWithoutRate}` : recorded, { persistent: withoutRate });
+      // DX-570: lo recibido y el vuelto, como los guardó la API.
+      const savedChange = saved.cashChange;
+      const withChange = savedChange
+        ? `${recorded}${cashChangeCopy.recorded(
+            money(savedChange.tendered, saved.currency),
+            savedChange.lines.length > 0
+              ? savedChange.lines.map((l) => `${money(l.amount, l.currency)} (${l.paymentMethodName})`).join(' + ')
+              : money(0, saved.currency),
+          )}`
+        : recorded;
+      onRecorded(withoutRate ? `${withChange} ${copy.recordedWithoutRate}` : withChange, {
+        persistent: withoutRate || savedChange != null,
+      });
     } catch (err) {
       // La clave NO cambia: el reintento de este mismo abono la reusa y el
       // servidor lo deduplica en vez de cobrar dos veces.
       if (methodFields.catchDuplicate(err)) return;
       // DX-389: la API borró un comprobante que no es lo que dice ser: se elige otro.
+      // DX-570: la API ve una diferencia sin devolver: se confirma junto al vuelto.
+      if (err instanceof ApiError && err.code === CASH_CHANGE_REMAINDER) {
+        cash.setConfirmError(apiErrorMessage(err, { fallback: cashChangeCopy.confirmMissing }));
+        return;
+      }
       if (err instanceof ApiError && err.code === PAYMENT_PROOF_REJECTED) {
         proofUpload.clear();
         setProofError(copy.proofRejected);
@@ -816,6 +868,18 @@ export function RecordPaymentModal({
                   currency={currency}
                   money={money}
                 />
+                {cashActive ? (
+                  <CashChangeFields
+                    cash={cash}
+                    computed={cashComputed}
+                    methods={methodFields.methods.methods}
+                    currency={currency}
+                    token={token}
+                    money={money}
+                    disabled={submitting}
+                    idPrefix="rp"
+                  />
+                ) : null}
               </div>
               {plan && !opening
                 ? split.lines.map((line, index) => (

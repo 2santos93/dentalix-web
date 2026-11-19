@@ -1,3 +1,4 @@
+import { Fragment, type ReactNode } from 'react';
 import { taxIdLine } from '@/lib/clinic/clinic-settings-api';
 import { cn } from '@/lib/utils';
 import { documentFormat, NO_DOCUMENT_FORMAT } from '@/lib/format/document-format';
@@ -65,6 +66,13 @@ const copy = {
   // DX-516: ajustes por medio de pago congelados en el abono.
   adjustments: 'Ajustes por medio de pago',
   collected: 'Total cobrado',
+  // DX-570: cobro en efectivo con vuelto.
+  cashChange: 'Efectivo recibido y vuelto',
+  tendered: 'Recibido',
+  applied: 'Aplicado al plan',
+  changeLine: 'Vuelto',
+  changeRate: (pair: string, date: string) => `tasa ${pair} del ${date}`,
+  remainderToCredit: 'Sin devolver, sumado al abono',
   signature: 'Firma y sello',
 };
 
@@ -322,6 +330,16 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
                 <span className="font-mono">{payment.reference}</span>
               </Field>
             ) : null}
+            {snapshot.cashChange ? (
+              <ReceiptCashChange
+                change={snapshot.cashChange}
+                paidOn={payment.paidOn}
+                narrow={narrow}
+                voided={receipt.voided}
+                money={money}
+                civilDate={civilDate}
+              />
+            ) : null}
           </>
         )}
         <Field label={copy.paidOn}>
@@ -420,6 +438,71 @@ function SplitFields({
         </dd>
       </div>
     </>
+  );
+}
+
+/**
+ * DX-570: recibido, aplicado y cada línea del vuelto con su medio, su
+ * referencia, su equivalente y la tasa con su día (la congelada al emitir).
+ */
+function ReceiptCashChange({
+  change,
+  paidOn,
+  narrow,
+  voided,
+  money,
+  civilDate,
+}: {
+  change: NonNullable<PaymentReceipt['snapshot']['cashChange']>;
+  paidOn: string;
+  narrow: boolean;
+  voided: boolean;
+  money: (amount: number, currency: string) => string;
+  civilDate: (value: string | null | undefined) => string;
+}) {
+  const row = (label: ReactNode, value: string, strong = false) => (
+    <li className={cn('flex flex-wrap items-baseline justify-between gap-x-3', strong && 'font-semibold')}>
+      <span className="min-w-0 break-words">{label}</span>
+      <span className={cn('text-right tabular-nums', voided && 'line-through')}>{value}</span>
+    </li>
+  );
+  return (
+    <div data-testid="receipt-cash-change" className={cn('min-w-0', !narrow && 'sm:col-span-2')}>
+      <dt className="text-xs font-medium uppercase tracking-wide text-[#6b7280]">{copy.cashChange}</dt>
+      <dd>
+        <ul className="mt-1 flex w-full flex-col gap-0.5 text-xs">
+          {row(copy.tendered, money(change.tendered, change.currency), true)}
+          {row(copy.applied, money(change.applied, change.currency))}
+          {change.lines.map((line) => (
+            <Fragment key={line.line}>
+              {row(
+                <>
+                  {copy.changeLine} · {line.paymentMethodName}
+                  {line.reference ? <span className="font-mono text-[#4b5563]"> · {copy.reference} {line.reference}</span> : null}
+                  {line.rate ? (
+                    <span className="block text-[#4b5563]">
+                      {copy.changeRate(
+                        ratePairLabel(
+                          line.currency,
+                          { currency: change.currency, fromPerBase: line.rate.fromPerBase, toPerBase: line.rate.toPerBase },
+                          money,
+                        ),
+                        rateDayLabel(line.rate.date, paidOn, civilDate),
+                      )}{' '}
+                      · {copy.splitEquivalent(money(line.equivalentAmount, change.currency))}
+                    </span>
+                  ) : null}
+                </>,
+                `−${money(line.amount, line.currency)}`,
+              )}
+            </Fragment>
+          ))}
+          {change.remainderToCredit > 0
+            ? row(copy.remainderToCredit, money(change.remainderToCredit, change.currency))
+            : null}
+        </ul>
+      </dd>
+    </div>
   );
 }
 
