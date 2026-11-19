@@ -7,12 +7,11 @@ import {
   createConfirmationLink,
   type ConfirmationLink,
 } from '@/lib/appointments/confirmations-api';
-import { confirmationMessage, whatsAppUrl } from '@/lib/appointments/confirmation-message';
+import { whatsAppUrl } from '@/lib/appointments/confirmation-message';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { InlineError } from '@/components/errors/inline-error';
 import { ConfirmationBadge, STATUS_LABELS } from './appointment-display';
-import type { SedeClock } from '@/lib/locations/sede-clock';
 import { sedeConfigErrorCopy } from '@/components/locations/sede-config-error';
 import { ExternalLink } from '@/components/shared/external-link';
 
@@ -60,20 +59,19 @@ function blockedReason(appointment: Appointment): string | null {
 interface ConfirmationLinkPanelProps {
   token: string;
   appointment: Appointment;
-  /** DX-378: reloj de la sede de la cita, con el que el mensaje dice el día y la hora; `null` si le falta. */
-  clock: SedeClock | null;
   /** Tras generar el enlace — p. ej. refrescar la agenda para que la tarjeta muestre "Confirmación pendiente". */
   onLinkCreated?: () => void;
 }
 
 /**
  * Bloque del detalle de la cita (DX-005): recepción genera el enlace firmado y
- * lo copia o lo manda por WhatsApp con un mensaje prellenado (`wa.me`; el envío
+ * lo copia o lo manda por WhatsApp con el mensaje prellenado que compone la API
+ * (`whatsappText`, DX-565: la plantilla de la clínica; `wa.me`; el envío
  * automático es otra tarea). El enlace solo existe en este panel: el backend
  * guarda únicamente su hash, así que cerrar el detalle lo pierde y hay que
  * generar otro (que anula el anterior).
  */
-export function ConfirmationLinkPanel({ token, appointment, clock, onLinkCreated }: ConfirmationLinkPanelProps) {
+export function ConfirmationLinkPanel({ token, appointment, onLinkCreated }: ConfirmationLinkPanelProps) {
   const [link, setLink] = useState<ConfirmationLink | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -159,9 +157,9 @@ export function ConfirmationLinkPanel({ token, appointment, clock, onLinkCreated
             <Button type="button" variant="secondary" onClick={() => void handleCopy()} className="w-full sm:w-auto">
               {copyState === 'copied' ? <Check aria-hidden /> : <Copy aria-hidden />} {copy.copy}
             </Button>
-            {link.whatsappPhone && clock ? (
+            {link.whatsappPhone && link.whatsappText ? (
               <Button asChild className="w-full sm:w-auto">
-                <ExternalLink href={whatsAppUrl(link.whatsappPhone, confirmationMessage({ ...link, clock }))}>
+                <ExternalLink href={whatsAppUrl(link.whatsappPhone, link.whatsappText)}>
                   <MessageCircle aria-hidden /> {copy.whatsapp}
                 </ExternalLink>
               </Button>
@@ -174,7 +172,7 @@ export function ConfirmationLinkPanel({ token, appointment, clock, onLinkCreated
           <p role="status" aria-live="polite" className="text-xs text-muted empty:hidden">
             {copyState === 'copied' ? copy.copied : copyState === 'failed' ? copy.copyFailed : ''}
           </p>
-          {!link.whatsappPhone || !clock ? (
+          {!link.whatsappPhone || !link.whatsappText ? (
             <p id={noPhoneId} className="text-xs text-muted">
               {link.whatsappPhone ? copy.noClock : copy.noPhone}
             </p>

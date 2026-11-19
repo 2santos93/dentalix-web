@@ -40,6 +40,7 @@ import {
   UserPlus,
   Languages,
   MailCheck,
+  MessageSquareText,
   UserRound,
   Wallet,
   Smile,
@@ -86,6 +87,7 @@ import { canReadSupportAccesses } from '@/lib/support-accesses/support-accesses-
 import { canReadAuditLog } from '@/lib/audit/audit-api';
 import { canManageClinicSettings } from '@/lib/clinic/clinic-settings-api';
 import { canManageWeeklyDigest } from '@/lib/clinic/weekly-digest-api';
+import { canManageMessageTemplates } from '@/lib/message-templates/message-templates-api';
 import { canManageSecurityPolicy } from '@/lib/auth/mfa-api';
 
 export interface SettingsEntry {
@@ -188,6 +190,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Los idiomas en que se puede escribir a cada paciente: recordatorio y página para confirmar la cita.',
         icon: Languages,
         visible: canManagePatientLanguages,
+      },
+      // DX-565: los textos de los mensajes al paciente (email y WhatsApp).
+      {
+        href: '/settings/mensajes',
+        label: 'Mensajes',
+        description: 'Los textos de los emails y WhatsApp que reciben los pacientes, en cada idioma.',
+        icon: MessageSquareText,
+        visible: canManageMessageTemplates,
       },
       // DX-568: el email semanal con las cifras de cada sede.
       {

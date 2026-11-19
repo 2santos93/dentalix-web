@@ -4020,6 +4020,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/message-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Mensajes al paciente editables: canales, variables, textos por defecto y los de la clínica (DX-565) */
+        get: operations["MessageTemplatesController_index"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-templates/{key}/{channel}/{language}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Guarda el texto de un mensaje en un idioma (DX-565)
+         * @description Crea o cambia la fila y lo audita en la misma transacción (CLINIC_SETTINGS, MESSAGE_TEMPLATE_UPDATED: CREATE o UPDATE con el asunto antes/después y del cuerpo su longitud y huella; el cuerpo, oculto). Sin cambios, no hay evento. Afecta a los envíos siguientes, nunca a los ya encolados.
+         */
+        put: operations["MessageTemplatesController_update"];
+        post?: never;
+        /**
+         * Restablece el texto por defecto de un mensaje en un idioma (DX-565)
+         * @description Borra el texto guardado y lo audita (CLINIC_SETTINGS, MESSAGE_TEMPLATE_RESET, DELETE con el antes). Sin texto guardado no hace nada. Vale también para un idioma que la clínica ya retiró.
+         */
+        delete: operations["MessageTemplatesController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-templates/{key}/{channel}/{language}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vista previa de un borrador con datos de ejemplo (DX-565)
+         * @description No guarda ni envía nada. Email: asunto, HTML y texto con la marca de la clínica. WhatsApp: el texto prellenado.
+         */
+        post: operations["MessageTemplatesController_render"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/message-templates/{key}/{channel}/{language}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Envía a tu correo una prueba del email con datos de ejemplo (DX-565)
+         * @description El borrador (o, sin `body`, lo guardado o el texto por defecto), con «[Prueba]» en el asunto y sin enlace de baja, solo a tu correo confirmado. Una cada 5 minutos por persona; gasta del tope diario de la clínica. Queda en la auditoría (VIEW de CLINIC_SETTINGS, MESSAGE_TEMPLATE_TEST_SENT).
+         */
+        post: operations["MessageTemplatesController_test"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/booking": {
         parameters: {
             query?: never;
@@ -18885,6 +18966,8 @@ export interface components {
             url: string | null;
             /** @description DX-435, solo `LINK_WA_ME`: E.164 sin `+` para wa.me. */
             whatsappPhone: string | null;
+            /** @description DX-565, solo `LINK_WA_ME`: el texto prellenado de wa.me ya compuesto (la plantilla «Oferta de hueco» de la clínica por WhatsApp o el de siempre). La web lo usa tal cual: `https://wa.me/<whatsappPhone>?text=<encodeURIComponent(whatsappText)>`. null en los demás canales o si la sede no tiene zona, formato y reloj. */
+            whatsappText: string | null;
         };
         RecordWaitlistOfferOutcomeDto: {
             /** @enum {string} */
@@ -19007,6 +19090,136 @@ export interface components {
              * @example 20
              */
             minLeadMinutes: number;
+        };
+        MessageVariableDto: {
+            /**
+             * @example paciente
+             * @enum {string}
+             */
+            name: "paciente" | "clinica" | "sede" | "direccion" | "fecha" | "hora" | "profesional" | "enlace" | "caduca" | "cantidad";
+            description: string;
+            /**
+             * @description Valor de la vista previa.
+             * @example Ana
+             */
+            sample: string;
+        };
+        MessageTextDto: {
+            /** @description Asunto; null en WhatsApp. */
+            subject: string | null;
+            body: string;
+        };
+        MessageCustomDto: {
+            /** @description Asunto; null en WhatsApp. */
+            subject: string | null;
+            body: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /**
+             * @description Quién lo guardó por última vez.
+             * @example Laura Gómez
+             */
+            updatedByName: string | null;
+            /** @description Por qué este texto ya no sale y en su lugar sale el de por defecto (p. ej. el catálogo cambió); null si sale. Mismo texto que el 400 al guardar. */
+            invalid: string | null;
+        };
+        MessageLanguageDto: {
+            /**
+             * @example es
+             * @enum {string}
+             */
+            language: "es" | "en";
+            /** @description En la lista de idiomas de la clínica. false: la clínica lo retiró y solo queda restablecer su texto guardado. */
+            offered: boolean;
+            /** @description El texto por defecto (el que sale sin texto guardado). */
+            default: components["schemas"]["MessageTextDto"];
+            /** @description El texto guardado; null = «Por defecto». */
+            custom: components["schemas"]["MessageCustomDto"] | null;
+        };
+        MessageChannelDto: {
+            /** @enum {string} */
+            channel: "EMAIL" | "WHATSAPP";
+            variables: components["schemas"]["MessageVariableDto"][];
+            /** @description Variables que el texto tiene que llevar (fuera de corchetes). */
+            required: ("paciente" | "clinica" | "sede" | "direccion" | "fecha" | "hora" | "profesional" | "enlace" | "caduca" | "cantidad")[];
+            /**
+             * @description null en WhatsApp.
+             * @example 150
+             */
+            subjectMaxLength: number | null;
+            /** @example 2000 */
+            bodyMaxLength: number;
+            languages: components["schemas"]["MessageLanguageDto"][];
+        };
+        MessageDto: {
+            /** @enum {string} */
+            key: "appointment-reminder" | "appointment-confirmation" | "slot-offer" | "quote-follow-up" | "appointment-series" | "signature-request";
+            /** @example Recordatorio de cita */
+            title: string;
+            description: string;
+            /** @description Al responsable de un menor le llega siempre el texto por defecto (el editable habla de «tu cita»). */
+            guardianUsesDefault: boolean;
+            channels: components["schemas"]["MessageChannelDto"][];
+        };
+        MessageTemplatesDto: {
+            /** @description Idiomas de la clínica con texto en el catálogo (español siempre, primero). */
+            languages: ("es" | "en")[];
+            /** @description Ayuda de la sintaxis para el editor: variables, tramos opcionales, párrafos y que las llaves y los corchetes no se pueden escribir como texto. */
+            syntaxHelp: string;
+            messages: components["schemas"]["MessageDto"][];
+        };
+        MessageTemplateTextDto: {
+            /**
+             * @description Asunto (solo email, obligatorio en él; hasta 150 caracteres, una línea). En WhatsApp, ausente, null o vacío.
+             * @example Recordatorio de tu cita en {clinica}
+             */
+            subject?: string | null;
+            /**
+             * @description Texto plano con `{variable}` y tramos opcionales «[ con {profesional}]» (salen solo si sus variables tienen valor). Una línea en blanco separa párrafos. Sin HTML ni enlaces: el enlace va con `{enlace}` (WhatsApp) o en el botón (email). Hasta 2000 caracteres en email y 1000 en WhatsApp.
+             * @example Te recordamos tu cita en {clinica}.
+             *
+             *     Fecha y hora: {fecha} a las {hora} (hora de la sede)
+             */
+            body: string;
+        };
+        MessageTemplateDto: {
+            /**
+             * @example es
+             * @enum {string}
+             */
+            language: "es" | "en";
+            /** @description En la lista de idiomas de la clínica. false: la clínica lo retiró y solo queda restablecer su texto guardado. */
+            offered: boolean;
+            /** @description El texto por defecto (el que sale sin texto guardado). */
+            default: components["schemas"]["MessageTextDto"];
+            /** @description El texto guardado; null = «Por defecto». */
+            custom: components["schemas"]["MessageCustomDto"] | null;
+            /** @enum {string} */
+            key: "appointment-reminder" | "appointment-confirmation" | "slot-offer" | "quote-follow-up" | "appointment-series" | "signature-request";
+            /** @enum {string} */
+            channel: "EMAIL" | "WHATSAPP";
+        };
+        MessagePreviewDto: {
+            /** @enum {string} */
+            channel: "EMAIL" | "WHATSAPP";
+            /** @description null en WhatsApp. */
+            subject: string | null;
+            /** @description El email entero en HTML (para un iframe aislado); null en WhatsApp. */
+            html: string | null;
+            /** @description Email: la versión de texto plano. WhatsApp: el mensaje tal como se prellena. */
+            text: string;
+        };
+        MessageTemplateTestDto: {
+            subject?: string | null;
+            /** @description El borrador a probar. Sin él, se prueba el texto guardado (o el de por defecto si no hay). */
+            body?: string | null;
+        };
+        MessageTestResultDto: {
+            /**
+             * @description Enmascarado.
+             * @example ma***@clinica.com
+             */
+            sentTo: string;
         };
         /** @enum {string} */
         OnlineBookingMode: "REQUEST" | "DIRECT";
@@ -19394,6 +19607,8 @@ export interface components {
             expiresAt: string;
             /** @description Teléfono del paciente en E.164 sin "+", listo para https://wa.me/<número>. null si no hay uno utilizable. */
             whatsappPhone: string | null;
+            /** @description DX-565: el mensaje prellenado de WhatsApp ya compuesto, en el idioma del paciente (la plantilla «Confirmación de cita por WhatsApp» de la clínica o el de siempre) con el cuestionario de salud y «Antes de tu cita» detrás; hasta 1500 caracteres. La web lo usa tal cual: `https://wa.me/<whatsappPhone>?text=<encodeURIComponent(whatsappText)>`. null si la sede de la cita no tiene zona, formato y reloj. */
+            whatsappText: string | null;
             appointment: components["schemas"]["PublicConfirmationAppointmentDto"];
             /** @description DX-290: enlace de un solo uso al cuestionario de salud, para el mismo mensaje, si la sede envía la anamnesis con el recordatorio y el paciente es nuevo o su anamnesis caduca el día de la cita. Contiene el token en claro: se entrega solo aquí. null si no toca. */
             anamnesisUrl: string | null;
@@ -43471,6 +43686,234 @@ export interface operations {
             };
             /** @description Solo un administrador puede cambiar los ajustes de las ofertas de hueco. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MessageTemplatesController_index: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageTemplatesDto"];
+                };
+            };
+            /** @description Solo un administrador puede ver y cambiar los textos de los mensajes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MessageTemplatesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: "appointment-reminder" | "appointment-confirmation" | "slot-offer" | "quote-follow-up" | "appointment-series" | "signature-request";
+                channel: "EMAIL" | "WHATSAPP";
+                language: "es" | "en";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageTemplateTextDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageTemplateDto"];
+                };
+            };
+            /** @description MESSAGE_TEMPLATE_INVALID con `field` (`subject` | `body`) y el motivo: «La variable {x} no existe.», «{x} no se puede usar en el recordatorio.», «{importe} no se puede usar en …: los mensajes al paciente no llevan importes ni datos clínicos.», «La confirmación por WhatsApp tiene que llevar {enlace}.», topes, llaves o corchetes mal cerrados, enlaces o HTML. Sin `code`: «Ese mensaje no se puede escribir en ese idioma: elige uno de la lista de idiomas de los pacientes de la clínica (Ajustes › Idiomas de los pacientes).». */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar los textos de los mensajes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ese mensaje no existe o no se envía por ese canal. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MessageTemplatesController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: "appointment-reminder" | "appointment-confirmation" | "slot-offer" | "quote-follow-up" | "appointment-series" | "signature-request";
+                channel: "EMAIL" | "WHATSAPP";
+                language: "es" | "en";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageTemplateDto"];
+                };
+            };
+            /** @description Ese mensaje no se puede escribir en ese idioma: elige uno de la lista de idiomas de los pacientes de la clínica (Ajustes › Idiomas de los pacientes). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar los textos de los mensajes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ese mensaje no existe o no se envía por ese canal. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MessageTemplatesController_render: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: "appointment-reminder" | "appointment-confirmation" | "slot-offer" | "quote-follow-up" | "appointment-series" | "signature-request";
+                channel: "EMAIL" | "WHATSAPP";
+                language: "es" | "en";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageTemplateTextDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessagePreviewDto"];
+                };
+            };
+            /** @description MESSAGE_TEMPLATE_INVALID con `field` (`subject` | `body`) y el motivo: «La variable {x} no existe.», «{x} no se puede usar en el recordatorio.», «{importe} no se puede usar en …: los mensajes al paciente no llevan importes ni datos clínicos.», «La confirmación por WhatsApp tiene que llevar {enlace}.», topes, llaves o corchetes mal cerrados, enlaces o HTML. Sin `code`: «Ese mensaje no se puede escribir en ese idioma: elige uno de la lista de idiomas de los pacientes de la clínica (Ajustes › Idiomas de los pacientes).». */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar los textos de los mensajes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ese mensaje no existe o no se envía por ese canal. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MessageTemplatesController_test: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: "appointment-reminder" | "appointment-confirmation" | "slot-offer" | "quote-follow-up" | "appointment-series" | "signature-request";
+                channel: "EMAIL" | "WHATSAPP";
+                language: "es" | "en";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageTemplateTestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageTestResultDto"];
+                };
+            };
+            /** @description MESSAGE_TEMPLATE_INVALID con `field` (`subject` | `body`) y el motivo: «La variable {x} no existe.», «{x} no se puede usar en el recordatorio.», «{importe} no se puede usar en …: los mensajes al paciente no llevan importes ni datos clínicos.», «La confirmación por WhatsApp tiene que llevar {enlace}.», topes, llaves o corchetes mal cerrados, enlaces o HTML. Sin `code`: «Ese mensaje no se puede escribir en ese idioma: elige uno de la lista de idiomas de los pacientes de la clínica (Ajustes › Idiomas de los pacientes).». WhatsApp: «La prueba solo se envía por email. Para WhatsApp, copia el texto de la vista previa.» */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar los textos de los mensajes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ese mensaje no existe o no se envía por ese canal. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description EMAIL_NOT_VERIFIED: «Confirma tu correo antes de pedir una prueba: solo se envía a correos confirmados.» */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya pediste una prueba hace menos de 5 minutos (o se alcanzó el tope de correos); `retryAfterSeconds` dice cuánto esperar. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

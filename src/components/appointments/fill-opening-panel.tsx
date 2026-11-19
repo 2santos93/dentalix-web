@@ -479,9 +479,6 @@ export function FillOpeningPanel({
             onOpenChange={setLinkDialogOpen}
             token={token}
             slot={slot}
-            clock={clock}
-            providerName={providerName}
-            locationName={locationName}
             candidates={selectedCandidates}
             onSent={() => {
               setSelected([]);
