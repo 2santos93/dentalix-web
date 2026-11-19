@@ -5921,6 +5921,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/receivables/aging/summary.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Totales de la cartera por antigüedad en CSV, sin pacientes
+         * @description Los `totals` de GET /receivables/aging/summary con los mismos filtros: una línea por moneda con deudores, deuda, tramos (por vencer, 0–30, 31–60, 61–90, >90 días), saldo a favor y neto; la fecha y la sede en la cabecera. Sin pacientes ni teléfonos. Solo ADMIN; cada descarga deja un evento EXPORT. UTF-8 con BOM; celdas protegidas contra fórmulas.
+         */
+        get: operations["ReceivablesController_summaryCsv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/receivables/aging.csv": {
         parameters: {
             query?: never;
@@ -6465,6 +6485,86 @@ export interface paths {
          * @description Pacientes dados de alta en el período por «¿Cómo nos conoció?» (DX-172) y lo cobrado a esos pacientes en el período: abonos no anulados, por moneda, sin convertir. La sede de captación de un paciente es la de su PRIMERA cita (la ficha es de la clínica); sin citas, no es de ninguna y solo cuenta en «Todas las sedes» para quien las ve todas. Día civil: el de esa sede (sin sede, el de la principal); el de un abono, el de su sede. Filas: las fuentes activas (también con 0), las desactivadas que trajeron pacientes y «Sin dato»; y los 10 pacientes que más pacientes nuevos recomendaron. Solo las sedes que ve quien consulta (DX-089). Una fila por fuente y el total, con lo cobrado en una columna por moneda; cabecera con período y sede. Sin datos de pacientes. UTF-8 con BOM; celdas protegidas contra fórmulas. Auditado (EXPORT).
          */
         get: operations["AcquisitionController_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/professional-productivity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Productividad por profesional: producción, cobrado, citas atendidas y no-show
+         * @description Una fila por profesional con algo en el período: producción atribuible (Σ precio − descuento de los procedimientos que REALIZÓ, DX-050, por `completedAt` en la zona de la sede donde se realizaron y moneda del plan), cobrado atribuible (lo imputado a esos procedimientos desde abonos vivos con `paidAt` en el período, en la moneda del plan) y sus citas atendidas, no asistidas y canceladas tarde (DX-279) con el no-show % de kpi-definitions. Importes por moneda, nunca sumados entre monedas. Solo las sedes que ve quien consulta (DX-089). ADMIN o FINANCIAL_REPORTS_VIEW ve todo el equipo (scope CLINIC); un DENTIST, solo su fila (scope OWN); recepción y asistente, 403. Sin datos de pacientes.
+         */
+        get: operations["ProfessionalReportsController_getProductivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/professional-productivity.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Productividad por profesional en CSV (mismos filtros)
+         * @description Una fila por profesional con algo en el período: producción atribuible (Σ precio − descuento de los procedimientos que REALIZÓ, DX-050, por `completedAt` en la zona de la sede donde se realizaron y moneda del plan), cobrado atribuible (lo imputado a esos procedimientos desde abonos vivos con `paidAt` en el período, en la moneda del plan) y sus citas atendidas, no asistidas y canceladas tarde (DX-279) con el no-show % de kpi-definitions. Importes por moneda, nunca sumados entre monedas. Solo las sedes que ve quien consulta (DX-089). ADMIN o FINANCIAL_REPORTS_VIEW ve todo el equipo (scope CLINIC); un DENTIST, solo su fila (scope OWN); recepción y asistente, 403. Sin datos de pacientes. Las mismas filas que la pantalla (una línea por profesional y moneda; las citas, en la primera) y el total por moneda, con el período y los filtros en la cabecera; UTF-8 con BOM; celdas protegidas contra fórmulas.
+         */
+        get: operations["ProfessionalReportsController_productivityCsv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/no-shows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Inasistencias: no-show % del período y lista de citas no asistidas y canceladas tarde
+         * @description El no-show % del período con la definición de kpi-definitions (no asistió ÷ atendidas + no asistió + cancelaciones tardías, DX-279) y la lista de las citas «No asistió» y canceladas tarde, de la más reciente a la más antigua (`page`/`pageSize`, 25 por defecto, máx. 100), con paciente, profesional, sede, tipo, motivo y aviso. Por inicio de la cita en la zona de su sede y solo en las sedes que ve quien consulta (DX-089). ADMIN o FINANCIAL_REPORTS_VIEW ve toda la clínica; un DENTIST, solo las de su agenda; recepción y asistente, 403. Lleva el nombre del paciente: auditado (VIEW).
+         */
+        get: operations["ProfessionalReportsController_getNoShows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/no-shows.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Inasistencias en CSV (mismos filtros, sin paginar)
+         * @description El resumen y las citas del período (como mucho 10000, las más recientes; si hay más, lo avisa la cabecera), con fecha y hora en la zona de su sede. Lleva nombres de pacientes: solo ADMIN, y cada descarga deja un evento EXPORT en la auditoría. UTF-8 con BOM; celdas protegidas contra fórmulas.
+         */
+        get: operations["ProfessionalReportsController_noShowsCsv"];
         put?: never;
         post?: never;
         delete?: never;
@@ -16401,6 +16501,22 @@ export interface components {
             /** Format: date-time */
             start: string;
         };
+        /**
+         * @description Por dónde se habló con el paciente
+         * @enum {string}
+         */
+        RecallContactChannel: "CALL" | "WHATSAPP_LINK" | "EMAIL" | "IN_PERSON";
+        AppointmentRecallContactDto: {
+            /**
+             * Format: uuid
+             * @description El recall desde el que se agenda
+             */
+            recallId: string;
+            /** @description Por dónde se habló con el paciente */
+            channel: components["schemas"]["RecallContactChannel"];
+            /** @description Nota corta del contacto (sin datos clínicos). Nunca va a la auditoría. */
+            note?: string | null;
+        };
         CreateAppointmentDto: {
             /** @description Ítems aceptados del mismo paciente para esta cita (DX-256). [] desvincula al editar. */
             planItemIds?: string[];
@@ -16434,6 +16550,8 @@ export interface components {
             wantsEarlier?: boolean;
             /** @description DX-446: «Agendar igualmente» en un hueco reservado (bloque RESERVED) con un tipo no permitido y sin liberar. Solo ADMIN y DENTIST (403 para el resto); 5–300 caracteres en una línea. El motivo queda en `appointment_reserved_overrides`; `audit_event` (`reservedSlotOverride`) solo guarda el id de esa fila y los bloques. */
             overrideReason?: string;
+            /** @description DX-465: agendar desde la lista de recall. En la MISMA transacción, el «Agendó» de ese recall con este canal y esta nota (y el ciclo de intentos cerrado), aunque su tipo no cierre con el tipo de esta cita. Solo ADMIN y RECEPTION (los que registran contactos de recall; si no, 403 «Tu rol no gestiona la lista de recall: es para administración y recepción.»). El recall tiene que estar activo y existir (si no, 404), ser del paciente (si no, 400) y de una sede permitida (403). En cualquier caso, no se crea la cita. Los demás recalls que cierre la cita siguen con el canal del último contacto y sin nota. */
+            recallContact?: components["schemas"]["AppointmentRecallContactDto"];
         };
         PlanItemReservedElsewhereDto: {
             /** Format: uuid */
@@ -25862,6 +25980,149 @@ export interface components {
             /** @description Algún paciente nuevo en el período. */
             hasActivity: boolean;
         };
+        ProfessionalReportFiltersDto: {
+            /** Format: uuid */
+            locationId: string | null;
+            locationName: string | null;
+            /**
+             * Format: uuid
+             * @description En scope OWN, siempre quien consulta
+             */
+            professionalId: string | null;
+            professionalName: string | null;
+        };
+        ProfessionalReportOptionsDto: {
+            /** @description Las sedes que ve quien consulta (DX-089) */
+            locations: components["schemas"]["ProductionLocationOptionDto"][];
+            /** @description Quien atiende citas o realizó procedimientos en esas sedes; en scope OWN, solo quien consulta */
+            professionals: components["schemas"]["ProductionProfessionalOptionDto"][];
+        };
+        ProducedAmountDto: {
+            /** @description Código ISO 4217 de 3 letras (la del plan). */
+            currency: string;
+            /** @description Procedimientos realizados */
+            count: number;
+            /** @description Σ (precio − descuento) */
+            net: number;
+        };
+        CollectedAmountDto: {
+            /** @description Código ISO 4217 de 3 letras (la del plan). */
+            currency: string;
+            /** @description Σ de lo imputado a sus procedimientos */
+            amount: number;
+        };
+        ProductivityRowDto: {
+            /** @description Por moneda, nunca sumadas entre sí */
+            production: components["schemas"]["ProducedAmountDto"][];
+            /** @description Por moneda, nunca sumadas entre sí */
+            collected: components["schemas"]["CollectedAmountDto"][];
+            completedAppointments: number;
+            /** @description Citas «No asistió» */
+            noShows: number;
+            /** @description Cancelaciones tardías (DX-279) */
+            lateCancellations: number;
+            /** @description No-show % (2 decimales) con la definición de kpi-definitions; null sin citas que cuenten */
+            noShowRate: number | null;
+            /** Format: uuid */
+            professionalId: string;
+            fullName: string;
+        };
+        ProductivityFiguresDto: {
+            /** @description Por moneda, nunca sumadas entre sí */
+            production: components["schemas"]["ProducedAmountDto"][];
+            /** @description Por moneda, nunca sumadas entre sí */
+            collected: components["schemas"]["CollectedAmountDto"][];
+            completedAppointments: number;
+            /** @description Citas «No asistió» */
+            noShows: number;
+            /** @description Cancelaciones tardías (DX-279) */
+            lateCancellations: number;
+            /** @description No-show % (2 decimales) con la definición de kpi-definitions; null sin citas que cuenten */
+            noShowRate: number | null;
+        };
+        ProfessionalProductivityDto: {
+            /** @example 2026-11-01 */
+            from: string;
+            /** @example 2026-11-30 */
+            to: string;
+            /**
+             * @description CLINIC: todo el equipo (ADMIN o FINANCIAL_REPORTS_VIEW); OWN: solo su fila (DENTIST)
+             * @enum {string}
+             */
+            scope: "CLINIC" | "OWN";
+            filters: components["schemas"]["ProfessionalReportFiltersDto"];
+            options: components["schemas"]["ProfessionalReportOptionsDto"];
+            /** @description Una fila por profesional con algo en el período, por nombre. En OWN, como mucho la suya */
+            rows: components["schemas"]["ProductivityRowDto"][];
+            /** @description Suma de las filas: importes por moneda */
+            totals: components["schemas"]["ProductivityFiguresDto"];
+            /** @description «Cómo se calcula» de cada columna */
+            definitions: components["schemas"]["KpiDefinitionDto"][];
+            /** @description ¿Hay alguna fila? */
+            hasActivity: boolean;
+        };
+        NoShowsSummaryDto: {
+            completedAppointments: number;
+            noShows: number;
+            lateCancellations: number;
+            /** @description No asistió ÷ (atendidas + no asistió + tardías), en % con 2 decimales; null sin citas que cuenten */
+            noShowRate: number | null;
+        };
+        MissedAppointmentDto: {
+            /** Format: uuid */
+            appointmentId: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            status: components["schemas"]["AppointmentStatus"];
+            /** @enum {string} */
+            kind: "NO_SHOW" | "LATE_CANCELLATION";
+            /** @description Motivo de la cancelación; null en las inasistencias */
+            cancelReasonCode: components["schemas"]["CancellationReasonCode"] | null;
+            /** @description Minutos de aviso de la cancelación; null en las inasistencias */
+            noticeMinutes: number | null;
+            /** Format: uuid */
+            patientId: string;
+            patientName: string;
+            /** @description Paciente archivado: no se enlaza a su ficha (la cita sí) */
+            patientArchived: boolean;
+            appointmentTypeName: string | null;
+            /** Format: uuid */
+            professionalId: string;
+            professionalName: string | null;
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            /**
+             * @description Zona de la sede: la fecha y la hora se pintan con ella
+             * @example America/Caracas
+             */
+            timeZone: string;
+        };
+        NoShowsReportDto: {
+            /** @example 2026-11-01 */
+            from: string;
+            /** @example 2026-11-30 */
+            to: string;
+            /**
+             * @description CLINIC: toda la clínica (ADMIN o FINANCIAL_REPORTS_VIEW); OWN: solo su agenda (DENTIST)
+             * @enum {string}
+             */
+            scope: "CLINIC" | "OWN";
+            filters: components["schemas"]["ProfessionalReportFiltersDto"];
+            options: components["schemas"]["ProfessionalReportOptionsDto"];
+            summary: components["schemas"]["NoShowsSummaryDto"];
+            /** @description La definición del no-show % de kpi-definitions */
+            definition: components["schemas"]["KpiDefinitionDto"];
+            /** @description Citas «No asistió» y canceladas tarde del período, de la más reciente a la más antigua */
+            items: components["schemas"]["MissedAppointmentDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+            /** @description Hay más citas después de esta página */
+            truncated: boolean;
+        };
         /**
          * @description Las secciones que ve el rol: ADMIN las tres, DENTIST EVOLUTION y TREATMENT, RECEPTION OUTCOME
          * @enum {string}
@@ -32249,8 +32510,6 @@ export interface components {
         RecallKind: "HYGIENE" | "CHECKUP";
         /** @enum {string} */
         RecallDueSort: "MOST_OVERDUE" | "LEAST_OVERDUE";
-        /** @enum {string} */
-        RecallContactChannel: "CALL" | "WHATSAPP_LINK" | "EMAIL" | "IN_PERSON";
         /** @enum {string} */
         RecallContactOutcome: "NO_ANSWER" | "LEFT_MESSAGE" | "CALL_BACK" | "WILL_BOOK" | "DECLINED" | "WRONG_NUMBER" | "BOOKED";
         RecallLastContactDto: {
@@ -49463,6 +49722,56 @@ export interface operations {
             };
         };
     };
+    ReceivablesController_summaryCsv: {
+        parameters: {
+            query?: {
+                /** @description Sede de la deuda. Sin él, la de la cabecera X-Location-Id; sin ninguna, toda la clínica. */
+                locationId?: string;
+                /** @description Solo esta moneda (ISO 4217), sin convertir */
+                currency?: string;
+                /** @description Deuda mínima del paciente en alguna moneda (en `currency`, si se da) */
+                minBalance?: number;
+                /** @description Días mínimos de la deuda vencida más antigua (91 = «más de 90 días») */
+                minAgeDays?: number;
+                /** @description DX-150: solo los pacientes cuya última cita atendida fue con este profesional */
+                providerId?: string;
+                /** @description DX-150: true = solo con compromiso de pago abierto; false = solo sin él */
+                hasPromise?: boolean;
+            };
+            header?: {
+                /** @description Sede activa. El parámetro `locationId` manda sobre ella; sin ninguno, toda la clínica. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Filtro inválido o sede que no es de esta clínica */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración puede exportar la cartera. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     ReceivablesController_csv: {
         parameters: {
             query?: {
@@ -50755,6 +51064,206 @@ export interface operations {
                 content?: never;
             };
             /** @description LOCATION_TIMEZONE_REQUIRED: una sede con abonos no tiene zona horaria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProfessionalReportsController_getProductivity: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, días civiles en la zona de cada sede). Como mucho 24 meses por calendario; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo esta sede (la de la cita; en producción y cobrado, donde se realizó el procedimiento). 403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen. Sin él, todas las que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo este profesional (el de la cita; en producción y cobrado, quien realizó el procedimiento). Un DENTIST solo puede pedirse a sí mismo (403 si no); sin él, ve igualmente solo lo suyo. */
+                professionalId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfessionalProductivityDto"];
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 24 meses. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y los odontólogos ven la productividad por profesional. / Solo puedes ver tu propia productividad. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con citas o realizados no tiene zona horaria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProfessionalReportsController_productivityCsv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, días civiles en la zona de cada sede). Como mucho 24 meses por calendario; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo esta sede (la de la cita; en producción y cobrado, donde se realizó el procedimiento). 403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen. Sin él, todas las que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo este profesional (el de la cita; en producción y cobrado, quien realizó el procedimiento). Un DENTIST solo puede pedirse a sí mismo (403 si no); sin él, ve igualmente solo lo suyo. */
+                professionalId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 24 meses. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y los odontólogos ven la productividad por profesional. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con citas o realizados no tiene zona horaria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProfessionalReportsController_getNoShows: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, días civiles en la zona de cada sede). Como mucho 24 meses por calendario; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo esta sede (la de la cita; en producción y cobrado, donde se realizó el procedimiento). 403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen. Sin él, todas las que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo este profesional (el de la cita; en producción y cobrado, quien realizó el procedimiento). Un DENTIST solo puede pedirse a sí mismo (403 si no); sin él, ve igualmente solo lo suyo. */
+                professionalId?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoShowsReportDto"];
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 24 meses. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y los odontólogos ven las inasistencias. / Solo puedes ver las inasistencias de tu agenda. / sede fuera de las del usuario */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con citas o realizados no tiene zona horaria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProfessionalReportsController_noShowsCsv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, días civiles en la zona de cada sede). Como mucho 24 meses por calendario; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo esta sede (la de la cita; en producción y cobrado, donde se realizó el procedimiento). 403 si no es de las del usuario o no es de la clínica: la misma respuesta, sin decir qué sedes existen. Sin él, todas las que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo este profesional (el de la cita; en producción y cobrado, quien realizó el procedimiento). Un DENTIST solo puede pedirse a sí mismo (403 si no); sin él, ve igualmente solo lo suyo. */
+                professionalId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 24 meses. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración puede exportar las inasistencias: llevan nombres de pacientes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con citas o realizados no tiene zona horaria */
             409: {
                 headers: {
                     [name: string]: unknown;
