@@ -1,22 +1,26 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { CalendarPlus, Lock, MessageCircle, NotebookPen, Phone, PhoneCall } from 'lucide-react';
+import { CalendarPlus, Lock, MessageCircle, NotebookPen, Phone, PhoneCall, PhoneOff } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { fetchClinicName } from '@/lib/clinic-branding';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import { useMediaQuery } from '@/lib/hooks/use-media-query';
+import { CHANNEL_LABELS, OUTCOME_LABELS, RECALL_SOON_DAYS, intervalLabel, overdueLabel, recallWhatsAppHref } from '@/lib/recall/presentation';
+import { attemptsLabel } from '@/lib/recall/attempts-presentation';
 import {
-  CHANNEL_LABELS,
-  OUTCOME_LABELS,
-  RECALL_SOON_DAYS,
-  intervalLabel,
-  overdueLabel,
-  recallWhatsAppHref,
-} from '@/lib/recall/presentation';
+  attemptsQuery,
+  parseRecallFilters,
+  recallFiltersQuery,
+  windowQuery,
+  type RecallAttemptsFilter,
+  type RecallListFilters,
+  type RecallListView,
+} from '@/lib/recall/recall-filters';
 import {
   listRecallDue,
   listRecallTypes,
@@ -37,14 +41,22 @@ import { Pagination } from '@/components/shared/pagination';
 import type { RowAction } from '@/components/shared/row-actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { DataList, DATA_LIST_PHONE_QUERY, type DataListColumn } from '@/components/ui/data-list';
+import { DATA_LIST_PHONE_QUERY, type DataListColumn } from '@/components/ui/data-list';
+import { SelectableDataList } from '@/components/ui/selectable-data-list';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Tooltip } from '@/components/ui/tooltip';
 import { RecallContactDialog } from './recall-contact-dialog';
+import { RecallSelectionBar } from './recall-selection-bar';
 import { RecallScheduleDialog } from './recall-schedule-dialog';
 import { ExternalLink } from '@/components/shared/external-link';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { RecallUnconfiguredList } from './recall-unconfigured-list';
+
+// DX-465: el lote llega en su propio trozo al abrirlo.
+const RecallBatchContactDialog = dynamic(
+  () => import('./recall-batch-contact-dialog').then((m) => m.RecallBatchContactDialog),
+  { ssr: false },
+);
 
 export const recallCopy = {
   title: 'Recall',
@@ -61,15 +73,26 @@ export const recallCopy = {
   sortLabel: 'Orden',
   sortMost: 'Más vencidos primero',
   sortLeast: 'Menos vencidos primero',
+  // DX-465: qué parte del ciclo de intentos se ve.
+  attemptsLabel: 'Intentos',
+  attemptsDue: 'Por llamar ahora',
+  attemptsContacted: 'Incluir contactados',
+  attemptsExhausted: 'Intentos agotados',
   listLabel: 'Pacientes por llamar',
   countNoun: 'paciente',
   countNounPlural: 'pacientes',
   colPatient: 'Paciente',
   colKind: 'Tipo',
   colDue: 'Vencimiento',
-  colLastContact: 'Último contacto',
+  colAttempts: 'Intentos',
+  colLastAttempt: 'Último intento',
   colContact: 'Contacto',
-  noContact: 'Sin contactos',
+  noContact: 'Sin intentos',
+  attemptsOf: (label: string) => `${label} intentos`,
+  exhausted: 'Agotados',
+  callbackOn: (day: string) => `Llamar el ${day}`,
+  hiddenUntil: (day: string) => `Vuelve el ${day}`,
+  phoneReview: 'Teléfono por revisar',
   noPhone: 'Sin teléfono',
   optedOut: 'No quiere avisos',
   call: 'Llamar',
@@ -78,29 +101,53 @@ export const recallCopy = {
   whatsapp: 'WhatsApp',
   whatsappLabel: (name: string) => `Escribir a ${name} por WhatsApp`,
   schedule: 'Agendar',
-  register: 'Registrar contacto',
+  register: 'Registrar intento',
   openRecord: 'Abrir ficha',
   emptyTitle: 'Nadie pendiente de control',
   emptyHint: 'Cuando a un paciente se le venza el control y no tenga cita, aparecerá aquí. Prueba también con otros filtros.',
+  emptyContactedHint:
+    'Ni por llamar ni contactados hace poco con estos filtros. Prueba con otro tipo o con los próximos 30 días.',
+  emptyExhaustedTitle: 'Nadie con los intentos agotados',
+  emptyExhaustedHint:
+    'Aquí salen los pacientes que llegaron al tope de intentos de su sede sin agendar. El tope se cambia en Ajustes › Recall.',
   loadError: 'No pudimos cargar la lista de recall.',
   forbiddenTitle: 'Tu rol no tiene acceso a la lista de recall.',
   forbiddenHint: 'La lista es para administración y recepción. Pídele acceso a quien administra la clínica.',
-  contactSaved: (name: string) => `Contacto registrado para ${name}.`,
+  contactSaved: (name: string) => `Intento registrado para ${name}.`,
+  contactSavedHidden: (name: string) =>
+    `Intento registrado para ${name}: sale de la lista hasta que toque volver a llamarle (míralo en «Incluir contactados»).`,
+  batchSaved: (n: number) => (n === 1 ? 'Intento registrado para 1 paciente.' : `Intento registrado para ${n} pacientes.`),
+  selectRow: (name: string) => `Seleccionar a ${name}`,
+  selectAll: 'Seleccionar todos los de esta página',
   scheduled: (name: string) => `Cita agendada para ${name}: ya salió de la lista.`,
 };
 const copy = recallCopy;
 
 /**
- * El diálogo abierto. «Agendar» puede venir de «Registrar contacto» con
+ * El diálogo abierto. «Agendar» puede venir de «Registrar intento» con
  * «Agendó» (D23): trae el canal y la nota elegidos allí.
  */
 type Dialog =
   | { kind: 'contact'; item: RecallDueItem }
   | { kind: 'schedule'; item: RecallDueItem; channel?: RecallContactChannel; note?: string }
   | null;
-type RecallListView = 'due' | 'unconfigured';
+
+/** Los filtros al montar: los de la URL (la vista solo existe en el cliente, tras el token). */
+function initialFilters(): RecallListFilters {
+  return parseRecallFilters(new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search));
+}
 
 const recordHref = (item: RecallDueItem) => `/patients/${item.patientId}`;
+
+/** DX-465: un «Número erróneo» marcó el teléfono; se quita en la ficha o al cambiarlo. */
+function PhoneReviewBadge({ className }: { className?: string }) {
+  return (
+    <Badge variant="warning" className={className}>
+      <PhoneOff aria-hidden className="size-3" />
+      {copy.phoneReview}
+    </Badge>
+  );
+}
 
 function ContactButtons({
   item,
@@ -139,22 +186,32 @@ function ContactButtons({
  * Lista de llamada de recall (DX-015), de la sede activa: filtros, `DataList`
  * y páginas, como la cartera. Toda la fila abre la ficha; «Llamar» y
  * «WhatsApp» son iconos en la tabla y van al «⋯» en el teléfono, junto a
- * «Agendar» y «Registrar contacto». Con baja de avisos (DX-128) no se ofrece
+ * «Agendar» y «Registrar intento». Con baja de avisos (DX-128) no se ofrece
  * contacto: el paciente sigue en la lista para agendarle si llama él.
  */
 export function RecallView({ token }: { token: string }) {
   const router = useRouter();
   const isPhone = useMediaQuery(DATA_LIST_PHONE_QUERY);
-  const [view, setView] = useState<RecallListView>('due');
-  // DX-015-bis: el filtro es un tipo de la clínica (`ref`: su id o, en el respaldo, su clave).
-  const [typeRef, setTypeRef] = useState<string>('ALL');
+  // DX-465: selección múltiple de la página que se ve, por `recallId`.
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  // DX-465: los filtros viven en la URL (enlazables, sobreviven a recargar).
+  const [filters, setFilters] = useState<RecallListFilters>(initialFilters);
+  const { view, typeRef, soon, sort, attempts, page } = filters;
+  // Otra página u otros filtros: la selección es de lo que se ve, se vacía.
+  function setFilter(next: Partial<RecallListFilters>) {
+    // Cambiar un filtro vuelve a la primera página; cambiar de página, no.
+    setFilters((prev) => ({ ...prev, page: 1, ...next }));
+    setSelected(new Set());
+  }
+  const setView = (next: RecallListView) => setFilter({ view: next });
+  const setPage = (next: number) => {
+    setFilters((prev) => ({ ...prev, page: next }));
+    setSelected(new Set());
+  };
   // Hasta que llegan los tipos el filtro solo ofrece «Todos» (deshabilitado):
   // así no se elige una clave del respaldo que luego no esté entre las opciones.
   const [types, setTypes] = useState<RecallType[] | 'loading' | 'failed'>('loading');
   const typeOptions = types === 'loading' ? [] : recallTypeOptions(types === 'failed' ? null : types);
-  const [soon, setSoon] = useState(false);
-  const [sort, setSort] = useState<RecallDueSort>('MOST_OVERDUE');
-  const [page, setPage] = useState(1);
   const [data, setData] = useState<RecallDuePage | null>(null);
   // DX-354b: cada fila con el formato y el reloj de SU sede (`locationId`); un solo aviso por pantalla.
   const stamp = useSedeStamp(
@@ -168,6 +225,14 @@ export function RecallView({ token }: { token: string }) {
   const [clinicName, setClinicName] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
+  const [batchOpen, setBatchOpen] = useState(false);
+
+  // La URL sigue a los filtros, sin entrada nueva en el historial.
+  useEffect(() => {
+    const query = recallFiltersQuery(filters);
+    const next = `${window.location.pathname}${query ? `?${query}` : ''}`;
+    if (next !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, '', next);
+  }, [filters]);
 
   useEffect(() => {
     if (view !== 'due') return;
@@ -177,7 +242,8 @@ export function RecallView({ token }: { token: string }) {
       try {
         const res = await listRecallDue(token, {
           ...(typeRef === 'ALL' ? {} : recallTypeFilter(typeRef)),
-          ...(soon ? { withinDays: RECALL_SOON_DAYS } : {}),
+          ...windowQuery(soon),
+          ...attemptsQuery(attempts),
           sort,
           page,
         });
@@ -201,7 +267,7 @@ export function RecallView({ token }: { token: string }) {
     return () => {
       cancelled = true;
     };
-  }, [token, view, typeRef, soon, sort, page, reloadKey]);
+  }, [token, view, typeRef, soon, sort, attempts, page, reloadKey]);
 
   // Los tipos del filtro: si la lectura falla, Higiene y Control (respaldo).
   useEffect(() => {
@@ -282,9 +348,17 @@ export function RecallView({ token }: { token: string }) {
           {r.patientPhone ? (
             <span className="block whitespace-nowrap text-xs font-normal text-muted tabular-nums">{r.patientPhone}</span>
           ) : null}
+          {r.phoneReview ? <PhoneReviewBadge className="mt-1" /> : null}
         </span>
       ),
-      mobileCell: (r) => r.patientName,
+      mobileCell: (r) =>
+        r.phoneReview ? (
+          <>
+            {r.patientName} <PhoneReviewBadge />
+          </>
+        ) : (
+          r.patientName
+        ),
     },
     {
       id: 'kind',
@@ -311,22 +385,43 @@ export function RecallView({ token }: { token: string }) {
       mobileCell: (r) => overdueLabel(r.daysOverdue),
     },
     {
-      id: 'last-contact',
-      header: copy.colLastContact,
+      id: 'attempts',
+      header: copy.colAttempts,
+      headerClassName: 'whitespace-nowrap',
+      cell: (r) => {
+        const when = attemptsWhen(r);
+        return (
+          <span className="block whitespace-nowrap tabular-nums">
+            <span className="flex items-center gap-2">
+              {attemptsLabel(r.attempts, r.maxAttempts)}
+              {r.exhausted ? <Badge variant="warning">{copy.exhausted}</Badge> : null}
+            </span>
+            {when ? <span className="block text-xs text-muted">{when}</span> : null}
+          </span>
+        );
+      },
+      mobileCell: (r) => {
+        const when = attemptsWhen(r);
+        const label = copy.attemptsOf(attemptsLabel(r.attempts, r.maxAttempts));
+        return when ? `${label} · ${when}` : label;
+      },
+    },
+    {
+      id: 'last-attempt',
+      header: copy.colLastAttempt,
       showFrom: 'lg',
       cell: (r) =>
-        r.lastContact ? (
+        r.lastAttempt ? (
           <span className="block">
             <span className="block">
-              {CHANNEL_LABELS[r.lastContact.channel]} · {OUTCOME_LABELS[r.lastContact.outcome]}
+              {OUTCOME_LABELS[r.lastAttempt.outcome]} · {CHANNEL_LABELS[r.lastAttempt.channel]}
             </span>
-            <span className="block text-xs text-muted tabular-nums">{stamp.dateTime(r.lastContact.createdAt, r.locationId)}</span>
+            <span className="block text-xs text-muted tabular-nums">{stamp.dateTime(r.lastAttempt.at, r.locationId)}</span>
           </span>
         ) : (
           <span className="text-muted">{copy.noContact}</span>
         ),
-      mobileCell: (r) =>
-        r.lastContact ? OUTCOME_LABELS[r.lastContact.outcome] : null,
+      mobileCell: (r) => (r.lastAttempt ? OUTCOME_LABELS[r.lastAttempt.outcome] : null),
     },
     {
       id: 'contact',
@@ -337,7 +432,25 @@ export function RecallView({ token }: { token: string }) {
     },
   ];
 
+  /** «Llamar el 12/12/2026» o «Vuelve el …»: cuándo vuelve a la lista. Sin fecha de la sede, nada. */
+  function attemptsWhen(r: RecallDueItem): string | null {
+    if (r.callbackOn) {
+      const day = stamp.maybe.civilDate(r.callbackOn, r.locationId);
+      return day ? copy.callbackOn(day) : null;
+    }
+    if (r.hiddenUntil) {
+      const day = stamp.maybe.civilDate(r.hiddenUntil, r.locationId);
+      return day ? copy.hiddenUntil(day) : null;
+    }
+    return null;
+  }
+
   const items = data?.items ?? [];
+  const selectedItems = items.filter((i) => selected.has(i.recallId));
+  const empty =
+    attempts === 'exhausted'
+      ? { title: copy.emptyExhaustedTitle, hint: copy.emptyExhaustedHint }
+      : { title: copy.emptyTitle, hint: attempts === 'contacted' ? copy.emptyContactedHint : copy.emptyHint };
 
   return (
     <>
@@ -365,10 +478,7 @@ export function RecallView({ token }: { token: string }) {
               aria-label={copy.kindLabel}
               value={typeRef}
               disabled={types === 'loading'}
-              onChange={(e) => {
-                setTypeRef(e.target.value);
-                setPage(1);
-              }}
+              onChange={(e) => setFilter({ typeRef: e.target.value })}
               className="sm:w-48"
             >
               <option value="ALL">{copy.kindAll}</option>
@@ -383,10 +493,7 @@ export function RecallView({ token }: { token: string }) {
             <NativeSelect
               aria-label={copy.windowLabel}
               value={soon ? 'soon' : 'due'}
-              onChange={(e) => {
-                setSoon(e.target.value === 'soon');
-                setPage(1);
-              }}
+              onChange={(e) => setFilter({ soon: e.target.value === 'soon' })}
               className="sm:w-64"
             >
               <option value="due">{copy.windowDue}</option>
@@ -395,14 +502,21 @@ export function RecallView({ token }: { token: string }) {
             <NativeSelect
               aria-label={copy.sortLabel}
               value={sort}
-              onChange={(e) => {
-                setSort(e.target.value as RecallDueSort);
-                setPage(1);
-              }}
+              onChange={(e) => setFilter({ sort: e.target.value as RecallDueSort })}
               className="sm:w-56"
             >
               <option value="MOST_OVERDUE">{copy.sortMost}</option>
               <option value="LEAST_OVERDUE">{copy.sortLeast}</option>
+            </NativeSelect>
+            <NativeSelect
+              aria-label={copy.attemptsLabel}
+              value={attempts}
+              onChange={(e) => setFilter({ attempts: e.target.value as RecallAttemptsFilter })}
+              className="sm:w-52"
+            >
+              <option value="due">{copy.attemptsDue}</option>
+              <option value="contacted">{copy.attemptsContacted}</option>
+              <option value="exhausted">{copy.attemptsExhausted}</option>
             </NativeSelect>
           </div>
         ) : null}
@@ -423,13 +537,13 @@ export function RecallView({ token }: { token: string }) {
               error={loadError}
               onRetry={() => setReloadKey((k) => k + 1)}
               isEmpty={items.length === 0}
-              emptyTitle={copy.emptyTitle}
-              emptyDescription={copy.emptyHint}
+              emptyTitle={empty.title}
+              emptyDescription={empty.hint}
               emptyIcon={<PhoneCall aria-hidden />}
               skeleton={<TableSkeleton rows={5} />}
             >
               <ResultCount total={data?.total ?? 0} noun={copy.countNoun} nounPlural={copy.countNounPlural} />
-              <DataList
+              <SelectableDataList
                 label={copy.listLabel}
                 rows={items}
                 columns={columns}
@@ -437,8 +551,21 @@ export function RecallView({ token }: { token: string }) {
                 getRowHref={recordHref}
                 getRowLabel={(r) => r.patientName}
                 rowActions={rowActions}
+                selection={{
+                  selectedKeys: selected,
+                  onChange: setSelected,
+                  getRowLabel: (r) => copy.selectRow(r.patientName),
+                  allLabel: copy.selectAll,
+                }}
               />
             </AsyncSection>
+            {selectedItems.length > 0 ? (
+              <RecallSelectionBar
+                count={selectedItems.length}
+                onRegister={() => setBatchOpen(true)}
+                onClear={() => setSelected(new Set())}
+              />
+            ) : null}
             {!loadError ? (
               <Pagination
                 page={page}
@@ -461,11 +588,37 @@ export function RecallView({ token }: { token: string }) {
           token={token}
           recallId={dialog.item.recallId}
           patientName={dialog.item.patientName}
-          onSaved={() => {
-            setNotice(copy.contactSaved(dialog.item.patientName));
+          timeZone={stamp.clock?.of(dialog.item.locationId)?.timeZone ?? null}
+          onSaved={(contact) => {
+            // Con el filtro por defecto, un intento (salvo «Agendó») lo saca de la lista unos días.
+            setNotice(
+              attempts === 'due' && contact.outcome !== 'BOOKED'
+                ? copy.contactSavedHidden(dialog.item.patientName)
+                : copy.contactSaved(dialog.item.patientName),
+            );
             setReloadKey((k) => k + 1);
           }}
           onBook={({ channel, note }) => setDialog({ kind: 'schedule', item: dialog.item, channel, note })}
+        />
+      ) : null}
+      {batchOpen ? (
+        <RecallBatchContactDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setBatchOpen(false);
+          }}
+          token={token}
+          items={selectedItems}
+          timeZoneOf={(locationId) => stamp.clock?.of(locationId)?.timeZone ?? null}
+          onSaved={(count) => {
+            setNotice(copy.batchSaved(count));
+            setSelected(new Set());
+            setReloadKey((k) => k + 1);
+          }}
+          onMissing={(recallIds) => {
+            setSelected((prev) => new Set([...prev].filter((id) => !recallIds.includes(id))));
+            setReloadKey((k) => k + 1);
+          }}
         />
       ) : null}
       {dialog?.kind === 'schedule' ? (

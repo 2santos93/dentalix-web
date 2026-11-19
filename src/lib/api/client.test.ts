@@ -232,6 +232,22 @@ describe('apiFetch', () => {
     expect(new ApiError(409, 'x').existingPatientId).toBeNull();
   });
 
+  it('DX-465: expone `recallIds` del 404 del lote de intentos (y null si no viene)', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      headers: { get: () => null },
+      json: async () => ({
+        statusCode: 404,
+        message: 'Algún recall de la lista no existe en esta clínica.',
+        recallIds: ['r-1', 7, ''],
+      }),
+    }) as unknown as typeof fetch;
+    const err = await apiFetch('/recall/contacts/batch', { method: 'POST', body: {} }).catch((e: unknown) => e);
+    expect((err as ApiError).recallIds).toEqual(['r-1']);
+    expect(new ApiError(404, 'x').recallIds).toBeNull();
+  });
+
   it('DX-470 (QA): expone `existingPatient` (id y nombre) del 409 PATIENT_DUPLICATE; ignora uno mal formado', async () => {
     const reply = (existingPatient: unknown) =>
       (global.fetch = jest.fn().mockResolvedValue({

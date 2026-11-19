@@ -10,6 +10,7 @@ import {
   type PatientRecalls,
   type RecallType,
 } from '@/lib/recall/recall-api';
+import { clearPhoneReview } from '@/lib/recall/recall-attempts-api';
 import { PatientRecallSection } from './patient-recall-section';
 import { listLocations } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
@@ -22,6 +23,7 @@ jest.mock('../../lib/recall/recall-api', () => ({
   setPatientRecall: jest.fn(),
   createRecallContact: jest.fn(),
 }));
+jest.mock('../../lib/recall/recall-attempts-api', () => ({ clearPhoneReview: jest.fn() }));
 const mockedGet = getPatientRecalls as jest.MockedFunction<typeof getPatientRecalls>;
 const mockedSet = setPatientRecall as jest.MockedFunction<typeof setPatientRecall>;
 const mockedContact = createRecallContact as jest.MockedFunction<typeof createRecallContact>;
@@ -67,6 +69,12 @@ const recall: PatientRecall = {
   status: 'DUE',
   updatedAt: '2026-04-10T12:00:00.000Z',
   updatedBy: { id: 'u1', fullName: 'Dra. Ruiz' },
+  attempts: 0,
+  maxAttempts: 3,
+  exhausted: false,
+  lastAttemptAt: null,
+  hiddenUntil: null,
+  callbackOn: null,
 };
 const data: PatientRecalls = {
   recalls: [recall],
@@ -83,10 +91,12 @@ const data: PatientRecalls = {
       outcome: 'NO_ANSWER',
       note: 'Volver a llamar',
       appointmentId: null,
+      callbackOn: null,
       author: { id: 'u2', fullName: 'Rita' },
       createdAt: '2026-10-20T15:00:00.000Z',
     },
   ],
+  phoneReview: null,
 };
 
 describe('PatientRecallSection (DX-015)', () => {
@@ -178,19 +188,19 @@ describe('PatientRecallSection (DX-015)', () => {
     ).toBeInTheDocument();
   });
 
-  it('el mostrador registra un contacto y exige canal y resultado', async () => {
+  it('el mostrador registra un intento y exige canal y resultado', async () => {
     mockedGet.mockResolvedValue(data);
     mockedContact.mockResolvedValue(data.contacts[0]);
     render(<PatientRecallSection token="tok" patient={patient} canSet={false} canContact />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Registrar contacto de control' }));
-    await userEvent.click(await screen.findByRole('button', { name: 'Guardar contacto' }));
-    expect(await screen.findByText('Elige el canal del contacto.')).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Registrar intento de control' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Guardar intento' }));
+    expect(await screen.findByText('Elige el canal del intento.')).toBeInTheDocument();
     expect(mockedContact).not.toHaveBeenCalled();
     await userEvent.selectOptions(screen.getByLabelText('Canal'), 'CALL');
     // D23: en la ficha no hay desde dónde agendar: sin «Agendó».
     expect(within(screen.getByLabelText('Resultado')).queryByRole('option', { name: 'Agendó' })).not.toBeInTheDocument();
     await userEvent.selectOptions(screen.getByLabelText('Resultado'), 'NO_ANSWER');
-    await userEvent.click(screen.getByRole('button', { name: 'Guardar contacto' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar intento' }));
     await waitFor(() => expect(mockedContact).toHaveBeenCalledWith('tok', 'r1', { channel: 'CALL', outcome: 'NO_ANSWER' }));
   });
 
@@ -233,7 +243,7 @@ describe('PatientRecallSection (DX-015)', () => {
     it('cambiar solo el intervalo no manda fecha: ni el día del procedimiento ni lo fijado (revisión 1, MAJOR-1)', async () => {
       // Fijado en enero; una profilaxis de junio da la base.
       const both = { ...recall, manualDoneAt: '2026-01-10', lastDoneAt: '2026-06-10', lastDoneItemId: 'item-1' };
-      mockedGet.mockResolvedValue({ recalls: [both], contacts: [] });
+      mockedGet.mockResolvedValue({ recalls: [both], contacts: [], phoneReview: null });
       mockedSet.mockResolvedValue({ ...data, recallUpdates: [] });
       render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
       await userEvent.click(await screen.findByRole('button', { name: 'Cambiar recall de control' }));
@@ -251,7 +261,7 @@ describe('PatientRecallSection (DX-015)', () => {
 
     it('un recall nacido de un procedimiento abre con la fecha vacía y, sin tocarla, no la manda', async () => {
       const born = { ...recall, manualDoneAt: null, lastDoneAt: '2026-06-10', lastDoneItemId: 'item-1', source: 'PROCEDURE' as const };
-      mockedGet.mockResolvedValue({ recalls: [born], contacts: [] });
+      mockedGet.mockResolvedValue({ recalls: [born], contacts: [], phoneReview: null });
       mockedSet.mockResolvedValue({ ...data, recallUpdates: [] });
       render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
       await userEvent.click(await screen.findByRole('button', { name: 'Cambiar recall de control' }));
@@ -265,7 +275,7 @@ describe('PatientRecallSection (DX-015)', () => {
 
     it('si el clínico cambia la fecha, se manda', async () => {
       const born = { ...recall, manualDoneAt: null, lastDoneAt: '2026-06-10', lastDoneItemId: 'item-1', source: 'PROCEDURE' as const };
-      mockedGet.mockResolvedValue({ recalls: [born], contacts: [] });
+      mockedGet.mockResolvedValue({ recalls: [born], contacts: [], phoneReview: null });
       mockedSet.mockResolvedValue({ ...data, recallUpdates: [] });
       const user = userEvent.setup();
       render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
@@ -280,8 +290,8 @@ describe('PatientRecallSection (DX-015)', () => {
     });
 
     it('un recall nuevo sin fecha no la manda (la API pone hoy); con fecha, sí', async () => {
-      mockedGet.mockResolvedValue({ recalls: [], contacts: [] });
-      mockedSet.mockResolvedValue({ recalls: [], contacts: [], recallUpdates: [] });
+      mockedGet.mockResolvedValue({ recalls: [], contacts: [], phoneReview: null });
+      mockedSet.mockResolvedValue({ recalls: [], contacts: [], phoneReview: null, recallUpdates: [] });
       const user = userEvent.setup();
       render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
       await user.click(await screen.findByRole('button', { name: 'Fijar recall de higiene' }));
@@ -303,6 +313,7 @@ describe('PatientRecallSection (DX-015)', () => {
       mockedGet.mockResolvedValue({
         recalls: [{ ...recall, id: 'r9', kind: null, recallTypeId: 't-gone', recallTypeName: 'Ortodoncia' }],
         contacts: [],
+        phoneReview: null,
       });
       render(<PatientRecallSection token="tok" patient={patient} canSet canContact={false} />);
       const row = await screen.findByTestId('recall-row-t-gone');
@@ -318,6 +329,7 @@ describe('PatientRecallSection (DX-015)', () => {
       mockedGet.mockResolvedValue({
         recalls: [{ ...recall, id: 'r9', kind: null, recallTypeId: 't-perio', recallTypeName: 'Mantenimiento periodontal' }],
         contacts: [],
+        phoneReview: null,
       });
       render(<PatientRecallSection token="tok" patient={patient} canSet={false} canContact={false} />);
       const row = await screen.findByTestId('recall-row-t-perio');
@@ -339,7 +351,7 @@ describe('PatientRecallSection (DX-015)', () => {
       ['lo fijado a mano', {}, 'Cuenta desde el'],
     ])('dice de dónde cuenta el plazo: %s', async (_name, over, text) => {
       (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([{ ...STAMP_SEDES.caracas, id: 'l1' }]);
-      mockedGet.mockResolvedValue({ recalls: [{ ...recall, ...over }], contacts: [] });
+      mockedGet.mockResolvedValue({ recalls: [{ ...recall, ...over }], contacts: [], phoneReview: null });
       render(<PatientRecallSection token="tok" patient={patient} canSet={false} canContact={false} />);
       const row = await screen.findByTestId('recall-row-CHECKUP');
       const day = STAMP_FORMATS.caracas.civilDate('2026-04-10');
@@ -347,6 +359,63 @@ describe('PatientRecallSection (DX-015)', () => {
       expect(within(row).getByTestId('recall-basis')).toHaveTextContent(day);
       const manual = over === undefined || Object.keys(over).length === 0;
       expect(within(row).getByTestId('recall-basis').textContent?.includes('fijado a mano')).toBe(manual);
+    });
+  });
+
+  describe('DX-465: intentos y teléfono por revisar', () => {
+    it('el ciclo del recall: intentos y tope, «Llamar el» y agotados; el historial con su fecha de volver a llamar', async () => {
+      mockedGet.mockResolvedValue({
+        ...data,
+        recalls: [{ ...recall, attempts: 3, maxAttempts: 3, exhausted: true, callbackOn: '2026-12-12', hiddenUntil: '2026-12-12' }],
+        contacts: [{ ...data.contacts[0], outcome: 'CALL_BACK', callbackOn: '2026-12-12', locationId: 'l1' }],
+      });
+      render(<PatientRecallSection token="tok" patient={patient} canSet={false} canContact={false} />);
+      const cycle = await screen.findByTestId('recall-cycle');
+      const day = STAMP_FORMATS.caracas.civilDate('2026-12-12');
+      await waitFor(() => expect(cycle).toHaveTextContent(`Intentos: 3 de 3 · Llamar el ${day}`));
+      expect(within(cycle).getByText('Intentos agotados')).toBeInTheDocument();
+      const contact = screen.getByTestId('recall-contact-row');
+      expect(contact).toHaveTextContent('Control · Llamada · Llamar luego');
+      expect(contact).toHaveTextContent(`Volver a llamar el ${day}`);
+    });
+
+    it('sin intentos no pinta la línea del ciclo', async () => {
+      mockedGet.mockResolvedValue(data);
+      render(<PatientRecallSection token="tok" patient={patient} canSet={false} canContact={false} />);
+      await screen.findByTestId('recall-row-CHECKUP');
+      expect(screen.queryByTestId('recall-cycle')).toBeNull();
+      expect(screen.queryByTestId('phone-review')).toBeNull();
+    });
+
+    it('«Teléfono por revisar» con quién y cuándo; «Ya está corregido» lo quita y relee', async () => {
+      const mockedClear = jest.mocked(clearPhoneReview);
+      mockedClear.mockReset().mockResolvedValue({ patientId: 'pat-1', cleared: true });
+      mockedGet
+        .mockResolvedValueOnce({
+          ...data,
+          phoneReview: { flaggedAt: '2026-11-10T15:00:00.000Z', flaggedBy: { id: 'u2', fullName: 'Rita' } },
+        })
+        .mockResolvedValue(data);
+      render(<PatientRecallSection token="tok" patient={patient} canSet={false} canContact={false} />);
+      const notice = await screen.findByTestId('phone-review');
+      await waitFor(() => expect(notice).toHaveTextContent(/número erróneo el .+, Rita/));
+      await userEvent.click(within(notice).getByRole('button', { name: 'Ya está corregido' }));
+      expect(mockedClear).toHaveBeenCalledWith('tok', 'pat-1');
+      expect(await screen.findByText('Teléfono marcado como corregido.')).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByTestId('phone-review')).toBeNull());
+    });
+
+    it('si quitar la marca falla, el motivo junto al botón y la marca sigue', async () => {
+      const mockedClear = jest.mocked(clearPhoneReview);
+      mockedClear.mockReset().mockRejectedValue(new ApiError(500, 'boom'));
+      mockedGet.mockResolvedValue({
+        ...data,
+        phoneReview: { flaggedAt: '2026-11-10T15:00:00.000Z', flaggedBy: { id: 'u2', fullName: null } },
+      });
+      render(<PatientRecallSection token="tok" patient={patient} canSet={false} canContact={false} />);
+      const notice = await screen.findByTestId('phone-review');
+      await userEvent.click(within(notice).getByRole('button', { name: 'Ya está corregido' }));
+      expect(await within(notice).findByRole('alert')).toHaveTextContent('No pudimos quitar la marca del teléfono.');
     });
   });
 });

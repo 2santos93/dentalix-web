@@ -42,6 +42,10 @@ export interface RecallDueFilters {
   /** DX-015-bis: un tipo de la clínica (`GET /recall-types`). */
   recallTypeId?: string;
   withinDays?: number;
+  /** DX-465: también los ocultos tras un intento y los que rechazaron (no los agotados). */
+  includeContacted?: boolean;
+  /** DX-465: SOLO los que llegaron al tope de intentos de su sede. */
+  exhausted?: boolean;
   sort?: RecallDueSort;
   page?: number;
   pageSize?: number;
@@ -51,7 +55,8 @@ export interface RecallDueFilters {
 export function listRecallDue(token: string, filters: RecallDueFilters = {}): Promise<RecallDuePage> {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {
-    if (value !== undefined) search.set(key, String(value));
+    // Un filtro booleano apagado no viaja: es el valor por defecto de la API.
+    if (value !== undefined && value !== false) search.set(key, String(value));
   }
   const query = search.toString();
   return apiFetch<RecallDuePage>(`/recall/due${query ? `?${query}` : ''}`, { token });
