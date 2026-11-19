@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import { setupUser } from '@/lib/test/user';
 import { DataList, type DataListColumn } from './data-list';
@@ -247,6 +248,74 @@ describe('DataList', () => {
       render(<DataList label="Fechas" rows={when} columns={[{ id: 'at', header: 'Fecha', mobile: 'primary', cell: (r) => r.at }]} getRowKey={(r) => r.id} />);
       expect(screen.getByText('Sin dato')).toBeInTheDocument();
       restore();
+    });
+  });
+
+  describe('selección múltiple (DX-465)', () => {
+    function Selectable({ initial = [] as string[], onChange = jest.fn() }) {
+      const [keys, setKeys] = React.useState<ReadonlySet<string>>(new Set(initial));
+      return (
+        <DataList
+          label="Pacientes"
+          rows={rows}
+          columns={columns}
+          getRowKey={(r) => r.id}
+          getRowHref={(r) => `/patients/${r.id}`}
+          selection={{
+            selectedKeys: keys,
+            onChange: (next) => {
+              setKeys(next);
+              onChange(next);
+            },
+            getRowLabel: (r) => `Seleccionar a ${r.name}`,
+            allLabel: 'Seleccionar todos los de esta página',
+          }}
+        />
+      );
+    }
+
+    it('tabla: casilla por fila con el nombre del paciente y «Seleccionar todo» con estado mixto', async () => {
+      const user = setupUser();
+      const onChange = jest.fn();
+      render(<Selectable onChange={onChange} />);
+      const all = screen.getByRole('checkbox', { name: 'Seleccionar todos los de esta página' });
+      expect(all).not.toBeChecked();
+      await user.click(screen.getByRole('checkbox', { name: 'Seleccionar a Ana García' }));
+      expect([...onChange.mock.calls.at(-1)[0]]).toEqual(['1']);
+      expect(all).toBePartiallyChecked();
+      await user.click(all);
+      expect([...onChange.mock.calls.at(-1)[0]].sort()).toEqual(['1', '2']);
+      expect(all).toBeChecked();
+      await user.click(all);
+      expect([...onChange.mock.calls.at(-1)[0]]).toEqual([]);
+      // La casilla no es el enlace de la fila: sigue habiendo UN enlace por fila.
+      expect(screen.getAllByRole('link')).toHaveLength(2);
+    });
+
+    it('teclado: Espacio marca la casilla enfocada', async () => {
+      const user = setupUser();
+      render(<Selectable />);
+      const box = screen.getByRole('checkbox', { name: 'Seleccionar a Luis Pérez' });
+      box.focus();
+      await user.keyboard(' ');
+      expect(box).toBeChecked();
+    });
+
+    it('teléfono: casilla fuera del enlace de la tarjeta y «Seleccionar todo» con su texto', async () => {
+      const restore = mockPhone(true);
+      try {
+        const user = setupUser();
+        render(<Selectable initial={['2']} />);
+        const list = screen.getByRole('list', { name: 'Pacientes' });
+        const items = within(list).getAllByRole('listitem');
+        const box = within(items[0]).getByRole('checkbox', { name: 'Seleccionar a Ana García' });
+        expect(box.closest('a')).toBeNull();
+        expect(within(items[1]).getByRole('checkbox', { name: 'Seleccionar a Luis Pérez' })).toBeChecked();
+        await user.click(screen.getByRole('checkbox', { name: 'Seleccionar todos los de esta página' }));
+        expect(box).toBeChecked();
+      } finally {
+        restore();
+      }
     });
   });
 });
