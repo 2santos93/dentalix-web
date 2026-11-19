@@ -16,6 +16,23 @@ export interface ExistingPatientRef {
   lastName: string;
 }
 
+/**
+ * DX-556: lo que ya tiene el teléfono en el 409 `LEAD_PHONE_TAKEN` del alta o
+ * la edición de un prospecto. `id` y `name` llegan `null` si es un prospecto de
+ * una sede que el usuario no ve: entonces solo se avisa.
+ */
+export interface ExistingRecordRef {
+  kind: 'PATIENT' | 'LEAD';
+  id: string | null;
+  name: string | null;
+}
+
+/** DX-556: un paciente candidato del 409 `LEAD_AMBIGUOUS_PATIENTS` al convertir un prospecto. */
+export interface CandidateRef {
+  id: string;
+  name: string;
+}
+
 /** Las citas que nombra un 409 `SCHEDULE_AFFECTS_APPOINTMENTS` (DX-267). */
 export type AffectedAppointmentsRef = components['schemas']['ScheduleAffectedAppointmentsDto'];
 
@@ -95,6 +112,10 @@ export class ApiError extends Error {
    * datos del paciente nuevo (su ficha ya se creó). Solo vive en memoria.
    */
   public readonly sessionToken: string | null;
+  /** DX-556: el paciente o prospecto que ya tiene el teléfono (`LEAD_PHONE_TAKEN`). */
+  public readonly existingRecord: ExistingRecordRef | null;
+  /** DX-556: los pacientes entre los que elegir al convertir (`LEAD_AMBIGUOUS_PATIENTS`). */
+  public readonly candidates: readonly CandidateRef[] | null;
 
   constructor(
     public readonly status: number,
@@ -116,6 +137,8 @@ export class ApiError extends Error {
       lineId?: string | null;
       lockedThrough?: string | null;
       sessionToken?: string | null;
+      existingRecord?: ExistingRecordRef | null;
+      candidates?: readonly CandidateRef[] | null;
     } = {},
   ) {
     super(message);
@@ -136,6 +159,8 @@ export class ApiError extends Error {
     this.lineId = details.lineId ?? null;
     this.lockedThrough = details.lockedThrough ?? null;
     this.sessionToken = details.sessionToken ?? null;
+    this.existingRecord = details.existingRecord ?? null;
+    this.candidates = details.candidates ?? null;
   }
 }
 

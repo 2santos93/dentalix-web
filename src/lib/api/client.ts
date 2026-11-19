@@ -5,7 +5,14 @@ import {
   setActiveLocationId,
 } from '@/lib/locations/location-store';
 import { apiBaseUrl } from './api-base';
-import { ApiError, NetworkError, type ExistingPatientRef, type AffectedAppointmentsRef } from './api-error';
+import {
+  ApiError,
+  NetworkError,
+  type ExistingPatientRef,
+  type AffectedAppointmentsRef,
+  type ExistingRecordRef,
+  type CandidateRef,
+} from './api-error';
 import { reportNetworkFailure, reportNetworkSuccess } from '@/lib/offline/connectivity';
 import { parseRetryAfter } from './error-message';
 import { rememberIdleLogout } from '@/lib/auth/idle-logout';
@@ -345,6 +352,25 @@ export function apiErrorFromBody(
         : null,
     // DX-016: la sesión de reintento del 409 de la reserva online.
     sessionToken: text(data.sessionToken),
+    // DX-556: el 409 del teléfono repetido y el de la conversión con varios pacientes.
+    existingRecord: parseExistingRecord(data.existing),
+    candidates: parseCandidates(data.candidates),
+  });
+}
+
+function parseExistingRecord(value: unknown): ExistingRecordRef | null {
+  if (!value || typeof value !== 'object') return null;
+  const { kind, id, name } = value as Record<string, unknown>;
+  if (kind !== 'PATIENT' && kind !== 'LEAD') return null;
+  return { kind, id: text(id), name: text(name) };
+}
+
+function parseCandidates(value: unknown): CandidateRef[] | null {
+  if (!Array.isArray(value)) return null;
+  return value.flatMap((c) => {
+    if (!c || typeof c !== 'object') return [];
+    const { id, name } = c as Record<string, unknown>;
+    return typeof id === 'string' && id ? [{ id, name: typeof name === 'string' ? name : '' }] : [];
   });
 }
 

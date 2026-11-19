@@ -16,13 +16,26 @@ describe('caller-lookup-api (DX-224)', () => {
 
     const out = await lookupCaller('tok', '  0412-123.45.67 ');
 
-    expect(out).toEqual({ matches, truncated: true });
+    // DX-556: sin `leads` en la respuesta, lista vacía.
+    expect(out).toEqual({ matches, truncated: true, leads: [] });
     const [url, init] = spy.mock.calls[0];
     expect(String(url)).toMatch(/\/patients\/lookup-by-phone$/);
     expect(String(url)).not.toContain('123');
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body)).toEqual({ phone: '0412-123.45.67' });
     expect(init.headers.Authorization).toBe('Bearer tok');
+  });
+
+  it('DX-556: devuelve los prospectos que manda la API', async () => {
+    const leads = [{ id: 'l1', fullName: 'Luis Rangel' }];
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ matches: [], truncated: false, leads }),
+    }) as unknown as typeof fetch;
+
+    const out = await lookupCaller('tok', '0412 765 4321');
+
+    expect(out).toEqual({ matches: [], truncated: false, leads });
   });
 
   it('cuenta los dígitos como la API: 7 o más', () => {

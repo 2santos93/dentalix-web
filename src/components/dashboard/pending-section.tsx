@@ -10,6 +10,7 @@ import { getCurrentCashSession, type CurrentCashSession } from '@/lib/cash-sessi
 import type { WorkQueueItem, WorkQueueKey } from '@/lib/work-queues/work-queues-api';
 import { useWorkQueuesView } from '@/components/work-queues/work-queues-context';
 import { POST_OP_CHECKS_HREF } from '@/lib/post-op-checks/post-op-checks-api';
+import { LEADS_STALE_HREF } from '@/lib/leads/leads-api';
 import { getOnlinePendingCount, ONLINE_REQUESTS_HREF } from '@/lib/online-booking/online-booking-api';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
@@ -32,6 +33,11 @@ export const pendingCopy = {
   anamnesis: { label: 'Anamnesis por revisar', hint: 'Enviadas por los pacientes desde su enlace' },
   // DX-566: llamadas de control a los pacientes operados.
   postOpChecks: { label: 'Controles postoperatorios', hint: 'Llamadas de control de hoy y las vencidas' },
+  // DX-556: prospectos abiertos a los que nadie ha escrito en un día.
+  leadsUncontacted: {
+    label: 'Prospectos sin contactar',
+    hint: 'Hace más de 24 h y sin próxima acción pendiente',
+  },
   followUp: { label: 'Presupuestos por seguir', hint: 'Presentados hace más de 7 días, sin respuesta ni cita' },
   unscheduled: { label: 'Aceptados sin agendar', hint: 'Planes aceptados con visitas por agendar' },
   waitlist: { label: 'Pendientes por agendar', hint: 'Lista de espera: cancelaron o no vinieron' },
@@ -85,6 +91,8 @@ function queueRow(key: WorkQueueKey, role: ClinicRole): QueueRow {
       return { id: 'anamnesis', ...copy.anamnesis, href: ANAMNESIS_HREF };
     case 'POST_OP_CHECKS':
       return { id: 'post-op-checks', ...copy.postOpChecks, href: POST_OP_CHECKS_HREF };
+    case 'LEADS_UNCONTACTED':
+      return { id: 'leads-uncontacted', ...copy.leadsUncontacted, href: LEADS_STALE_HREF };
     case 'QUOTE_FOLLOW_UP':
       return { id: 'follow-up', ...copy.followUp, href: '/presupuestos' };
     case 'ACCEPTED_UNSCHEDULED':

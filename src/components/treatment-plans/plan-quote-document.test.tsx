@@ -227,6 +227,28 @@ describe('PlanQuoteDocument (DX-012)', () => {
     });
   });
 
+  it('DX-101-bis: aceptado desde el portal, «Aceptado por el paciente desde el portal» sin «Registró la firma»', () => {
+    const FORMAT_VE = documentFormat(REGIONAL_VE)!;
+    render(
+      <PlanQuoteDocument
+        format={FORMAT_VE}
+        quote={planQuoteFixture({
+          planStatus: 'ACCEPTED',
+          acceptance: {
+            ...SIGNED_ACCEPTANCE,
+            signerName: 'María José Pérez',
+            acceptedAt: '2026-10-31T02:30:00.000Z',
+            portal: { patientAccessLinkId: 'link-1' },
+          },
+        })}
+      />,
+    );
+    const signature = screen.getByTestId('quote-signature');
+    expect(text(signature)).toContain('Aceptado por el paciente desde el portal');
+    expect(text(signature)).toContain('Firmado por María José Pérez el 30/10/2026 10:30 p. m.');
+    expect(signature).not.toHaveTextContent(/Registró la firma|a distancia|Enviado por/);
+  });
+
   it('avisa si la huella no coincide con lo guardado', () => {
     render(
       <PlanQuoteDocument format={FORMAT_ES}

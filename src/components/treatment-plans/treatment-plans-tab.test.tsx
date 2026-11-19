@@ -1553,7 +1553,7 @@ describe('TreatmentPlansTab', () => {
         createdAt: '2026-10-20T15:00:00.000Z',
         splitFromPlanId: 'plan-1',
         acceptedAt: '2026-10-27T15:00:00.000Z',
-        acceptance: { signerName: 'Ana', acceptedAt: '2026-10-27T15:00:00.000Z', remote: null },
+        acceptance: { signerName: 'Ana', acceptedAt: '2026-10-27T15:00:00.000Z', remote: null, portal: null },
       });
       mockedListPlans.mockResolvedValue([accepted, original]);
       mockedGetPlan.mockImplementation(async (_t, id) =>
@@ -2548,7 +2548,7 @@ describe('TreatmentPlansTab', () => {
       ...plan1Detail,
       status: 'ACCEPTED' as const,
       items: [{ ...item1, status: 'ACCEPTED' as const }, item2],
-      acceptance: { signerName: 'Ana García', acceptedAt: '2026-10-16T15:30:00.000Z', remote: null },
+      acceptance: { signerName: 'Ana García', acceptedAt: '2026-10-16T15:30:00.000Z', remote: null, portal: null },
     };
 
     it('ofrece «Imprimir presupuesto» y «Aceptar con firma» en un plan sin firmar', async () => {

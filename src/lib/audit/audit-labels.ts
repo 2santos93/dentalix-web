@@ -177,6 +177,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   PATIENT_ACCESS_LINK: 'Enlace de acceso del paciente',
   // DX-016: reserva online (código, solicitud, reserva, aceptar y rechazar).
   ONLINE_BOOKING: 'Reserva online',
+  // DX-556: prospectos (alta, edición, etapa, notas, conversión y anonimizado).
+  LEAD: 'Prospecto',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];

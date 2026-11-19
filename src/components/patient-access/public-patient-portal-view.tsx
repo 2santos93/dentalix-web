@@ -1,6 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { LinkIcon, LogOut, ShieldCheck } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -9,12 +10,15 @@ import {
   PATIENT_ACCESS_LOCKED,
   PATIENT_ACCESS_SCOPE_LABELS,
   PATIENT_ACCESS_SCOPES,
+  acceptPortalPlan,
   confirmPortalAppointment,
+  portalAcceptFailure,
   getPatientPortal,
   logoutPatientPortal,
   verifyPatientAccess,
   type PatientAccessScope,
   type PatientPortal,
+  type PortalPlan,
 } from '@/lib/patient-access/patient-access-api';
 import { useClinicBranding } from '@/components/brand/branding-context';
 import { ClinicBrand } from '@/components/brand/clinic-brand';
@@ -30,7 +34,16 @@ import { Callout } from '@/components/ui/callout';
 import { DateField } from '@/components/ui/date-field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PortalAccount, PortalAppointments, PortalPlans } from './portal-sections';
+import { PortalAccount, PortalAppointments, PortalPlans, portalPlanTitleId } from './portal-sections';
+import type { PortalAcceptInput } from './portal-accept-dialog';
+
+// DX-101-bis: la aceptación con firma (lienzo, firma escrita) llega en su propio
+// trozo de JS al pulsar «Aceptar presupuesto»: el portal no lo paga al cargar.
+// Sin `loading`: mientras llega no hay nada abierto que pintar.
+const PortalAcceptDialog = dynamic(
+  () => import('./portal-accept-dialog').then((m) => m.PortalAcceptDialog),
+  { ssr: false },
+);
 
 // Copy como constantes (i18n-ready). Español neutro y de «tú», sin nada de un país.
 export const publicPortalCopy = {
@@ -55,13 +68,17 @@ export const publicPortalCopy = {
   loadError: 'No pudimos cargar tus datos. Revisa tu conexión.',
   retry: 'Reintentar',
   greeting: (name: string) => `Hola, ${name}`,
-  lead: 'Esto es lo que la clínica compartió contigo. Solo puedes consultarlo.',
+  lead: 'Esto es lo que la clínica compartió contigo.',
   minor: 'Este enlace es de un paciente menor de edad: lo consulta su responsable.',
   tabsLabel: 'Apartados',
   logout: 'Salir',
   goneTitle: 'Este enlace ya no está disponible',
   goneMessage: 'Pide uno nuevo a la clínica.',
   confirmError: 'No pudimos confirmar la cita. Intenta de nuevo.',
+  acceptChanged: 'El presupuesto ha cambiado. Recarga la página para ver la versión actual.',
+  acceptNotAcceptable: 'Este presupuesto ya no se puede aceptar desde aquí. Contacta con la clínica.',
+  acceptRateLimited: 'Demasiados intentos seguidos. Espera un minuto e intenta de nuevo.',
+  acceptError: 'No pudimos registrar tu aceptación. Revisa tu conexión e intenta de nuevo.',
   privacy: 'La sesión se cierra sola a los 30 minutos. En un dispositivo compartido, pulsa «Salir» al terminar.',
 };
 const copy = publicPortalCopy;
@@ -76,6 +93,9 @@ type State =
   | { kind: 'gone' };
 
 type Printing = { kind: 'plan'; planId: string } | { kind: 'account' } | null;
+
+/** El plan que se está aceptando (diálogo abierto) y su etiqueta A/B. */
+type Accepting = { plan: PortalPlan; optionLabel: string | null } | null;
 
 /** Los apartados que se ven: los de `scopes` cuyo contenido llegó (los no compartidos llegan `null`). */
 export function visibleScopes(data: PatientPortal): PatientAccessScope[] {
@@ -221,6 +241,12 @@ export function PublicPatientPortalView({ linkToken }: { linkToken: string }) {
   const [confirmError, setConfirmError] = useState<{ id: string; message: string } | null>(null);
   const [confirmedId, setConfirmedId] = useState<string | null>(null);
   const [printing, setPrinting] = useState<Printing>(null);
+  const [accepting, setAccepting] = useState<Accepting>(null);
+  const [acceptOpen, setAcceptOpen] = useState(false);
+  const [acceptSubmitting, setAcceptSubmitting] = useState(false);
+  const [acceptDialogError, setAcceptDialogError] = useState<string | null>(null);
+  const [acceptError, setAcceptError] = useState<string | null>(null);
+  const [acceptedId, setAcceptedId] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -229,6 +255,10 @@ export function PublicPatientPortalView({ linkToken }: { linkToken: string }) {
 
   /** 401 → a la verificación; 410 → sin datos. `true` si lo trató. */
   const handleSessionError = useCallback((err: unknown): boolean => {
+    if (isStatus(err, 410) || isStatus(err, 401)) {
+      setAcceptOpen(false);
+      setAccepting(null);
+    }
     if (isStatus(err, 410)) {
       setPrinting(null);
       setState({ kind: 'gone' });
@@ -299,6 +329,74 @@ export function PublicPatientPortalView({ linkToken }: { linkToken: string }) {
     }
     setConfirmedId(appointmentId);
     setConfirming(null);
+  }
+
+  function openAccept(plan: PortalPlan, optionLabel: string | null) {
+    setAccepting({ plan, optionLabel });
+    setAcceptDialogError(null);
+    setAcceptError(null);
+    setAcceptedId(null);
+    setAcceptOpen(true);
+  }
+
+  /** Sustituye un plan por el que devolvió la API (antes de releer `me`). */
+  function replacePlan(updated: PortalPlan) {
+    setState((prev) =>
+      prev.kind === 'ready' && prev.data.plans
+        ? { kind: 'ready', data: { ...prev.data, plans: prev.data.plans.map((p) => (p.id === updated.id ? updated : p)) } }
+        : prev,
+    );
+  }
+
+  async function refreshAfterAccept() {
+    // Las otras opciones del grupo dejan de ser aceptables: se releen los datos.
+    // Si no hay red, se queda lo que hay (el plan aceptado ya está al día).
+    await loadPortal('refresh').catch(() => undefined);
+  }
+
+  async function handleAccept(input: PortalAcceptInput) {
+    if (!accepting || acceptSubmitting) return;
+    const { plan } = accepting;
+    setAcceptSubmitting(true);
+    setAcceptDialogError(null);
+    let updated: PortalPlan;
+    try {
+      updated = await acceptPortalPlan(plan.id, {
+        signerName: input.signerName,
+        signature: input.signature,
+        contentHash: plan.contentHash,
+        consent: true,
+      });
+    } catch (err) {
+      setAcceptSubmitting(false);
+      const failure = portalAcceptFailure(err);
+      if (failure === 'session') {
+        handleSessionError(err);
+        return;
+      }
+      if (failure === 'changed' || failure === 'notAcceptable') {
+        // Fuera del diálogo, con los datos de nuevo: lo que se veía ya no vale.
+        setAcceptOpen(false);
+        setAcceptError(
+          apiErrorMessage(err, failure === 'changed' ? copy.acceptChanged : copy.acceptNotAcceptable),
+        );
+        await refreshAfterAccept();
+        return;
+      }
+      setAcceptDialogError(
+        failure === 'rateLimited'
+          ? copy.acceptRateLimited
+          : failure === 'invalid'
+            ? apiErrorMessage(err, copy.acceptError)
+            : copy.acceptError,
+      );
+      return;
+    }
+    replacePlan(updated);
+    setAcceptedId(updated.id);
+    setAcceptSubmitting(false);
+    setAcceptOpen(false);
+    await refreshAfterAccept();
   }
 
   async function handleLogout() {
@@ -401,7 +499,13 @@ export function PublicPatientPortalView({ linkToken }: { linkToken: string }) {
                   ) : null}
                   {data.plans ? (
                     <TabsContent value={SCOPE_TAB.PLANS}>
-                      <PortalPlans plans={data.plans} onPrint={(planId) => setPrinting({ kind: 'plan', planId })} />
+                      <PortalPlans
+                        plans={data.plans}
+                        onPrint={(planId) => setPrinting({ kind: 'plan', planId })}
+                        onAccept={openAccept}
+                        accepted={acceptedId !== null}
+                        acceptError={acceptError}
+                      />
                     </TabsContent>
                   ) : null}
                   {data.account ? (
@@ -416,6 +520,31 @@ export function PublicPatientPortalView({ linkToken }: { linkToken: string }) {
           ) : null}
         </main>
       </div>
+
+      {accepting && state.kind === 'ready' ? (
+        <PortalAcceptDialog
+          key={accepting.plan.id}
+          open={acceptOpen}
+          onOpenChange={(open) => {
+            if (!open && acceptSubmitting) return;
+            setAcceptOpen(open);
+          }}
+          plan={accepting.plan}
+          optionLabel={accepting.optionLabel}
+          submitting={acceptSubmitting}
+          error={acceptDialogError}
+          onSubmit={(input) => void handleAccept(input)}
+          onCloseAutoFocus={(event) => {
+            // Aceptado o rechazado por la API, el botón que lo abrió ya no está:
+            // el foco va al título de la tarjeta (o, si no existe, al encabezado).
+            const done = acceptedId ?? (acceptError ? accepting.plan.id : null);
+            if (!done) return;
+            event.preventDefault();
+            const target = document.getElementById(portalPlanTitleId(done)) ?? headingRef.current;
+            target?.focus();
+          }}
+        />
+      ) : null}
 
       {/* La vista de impresión: fuera de pantalla, sola en el papel (print CSS de cada documento). */}
       {printPlan ? (

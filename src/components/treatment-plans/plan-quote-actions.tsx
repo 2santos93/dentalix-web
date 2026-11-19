@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button';
 import { AcceptPartialPlanModal } from './accept-partial-plan-modal';
 import { AcceptPlanModal } from './accept-plan-modal';
 import { RepricePlanModal } from './reprice-plan-modal';
-import { RemoteAcceptanceEvidence, RemoteBudgetPanel } from './remote-budget-panel';
+import { PortalAcceptanceEvidence, RemoteAcceptanceEvidence, RemoteBudgetPanel } from './remote-budget-panel';
 import { ExternalLink } from '@/components/shared/external-link';
 
 const copy = {
@@ -35,6 +35,9 @@ const copy = {
   acceptPartial: 'Aceptar en parte',
   acceptedBy: (name: string, when: string) => `Aceptado y firmado por ${name} el ${when}`,
   acceptedRemotely: (name: string, when: string) => `Aceptado a distancia por ${name} el ${when}`,
+  // DX-101-bis: el paciente (o su responsable) lo aceptó con su firma desde el portal.
+  acceptedViaPortal: (name: string, when: string) =>
+    `Aceptado por el paciente desde el portal el ${when} · firmó ${name}`,
   locked: 'Sus procedimientos y precios ya no se pueden cambiar.',
   needsItems: 'Agrega procedimientos para poder aceptarlo con firma.',
   reprice: 'Actualizar precios',
@@ -135,7 +138,11 @@ export function PlanQuoteActions({
           <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-success-text" />
           <p className="min-w-0 break-words">
             <span className="font-medium text-ink tabular-nums">
-              {(acceptance.remote ? copy.acceptedRemotely : copy.acceptedBy)(
+              {(acceptance.remote
+                ? copy.acceptedRemotely
+                : acceptance.portal
+                  ? copy.acceptedViaPortal
+                  : copy.acceptedBy)(
                 acceptance.signerName,
                 stamp.dateTime(acceptance.acceptedAt, plan.acceptedLocationId),
               )}
@@ -147,6 +154,7 @@ export function PlanQuoteActions({
       {acceptance?.remote ? (
         <RemoteAcceptanceEvidence remote={acceptance.remote} stamp={stamp} locationId={plan.acceptedLocationId} />
       ) : null}
+      {acceptance?.portal ? <PortalAcceptanceEvidence portal={acceptance.portal} /> : null}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         {canPrintPlanQuote(role) && (plan.items?.length ?? 0) > 0 ? (
