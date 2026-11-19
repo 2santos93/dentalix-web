@@ -100,8 +100,11 @@ async function expectForbidden(page: Page, href: string): Promise<void> {
   await expect(main.getByText(FORBIDDEN_NOTICE).first(), `${href}: aviso en español`).toBeVisible({
     timeout: 15_000,
   });
-  // Un permiso no es un fallo de carga: nada de «No se pudo cargar» + «Reintentar».
-  await expect(main.getByText('No se pudo cargar'), `${href}: el permiso no se pinta como fallo de red`).toHaveCount(0);
+  // Un permiso no se arregla reintentando: el aviso no ofrece «Reintentar».
+  await expect(
+    main.getByRole('button', { name: 'Reintentar' }),
+    `${href}: el aviso de permiso no ofrece reintentar`,
+  ).toHaveCount(0);
   const enabledWrites: string[] = [];
   for (const button of await main.getByRole('button').all()) {
     const name = ((await button.getAttribute('aria-label')) ?? (await button.innerText())).trim();
