@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
 import { InClinicPanel } from './in-clinic-panel';
@@ -139,7 +139,7 @@ describe('Tratamiento reservado en otra cita (DX-273)', () => {
     expect(mockedGet).toHaveBeenCalledTimes(2);
   });
 
-  it('si falla, aviso en español con Reintentar y el aviso sigue', async () => {
+  it('DX-298 (FE-074): un 409 avisa en español SIN Reintentar (repetiría el mismo 409) y el aviso sigue', async () => {
     mockedGet.mockResolvedValue(view([item()]));
     mockedClaim.mockRejectedValue(
       new ApiError(409, 'Solo se trae un tratamiento a una cita con el paciente en la clínica (llegó, en sillón o listo para cobrar).', undefined),
@@ -148,9 +148,22 @@ describe('Tratamiento reservado en otra cita (DX-273)', () => {
     await userEvent.click(await screen.findByRole('button', { name: /Traer a esta cita/ }));
     expect(toast.error).toHaveBeenCalledWith(
       'Solo se trae un tratamiento a una cita con el paciente en la clínica (llegó, en sillón o listo para cobrar).',
-      expect.objectContaining({ action: expect.objectContaining({ label: 'Reintentar' }) }),
+      expect.objectContaining({ action: undefined }),
     );
     expect(screen.getByText(MESSAGE)).toBeInTheDocument();
+  });
+
+  it('DX-298 (FE-074): un 503 sí ofrece Reintentar, que repite «Traer a esta cita»', async () => {
+    mockedGet.mockResolvedValue(view([item()]));
+    mockedClaim.mockRejectedValueOnce(new ApiError(503, 'HTTP 503', undefined)).mockResolvedValueOnce({} as never);
+    render(<Harness />);
+    await userEvent.click(await screen.findByRole('button', { name: /Traer a esta cita/ }));
+    const call = jest.mocked(toast.error).mock.calls.at(-1);
+    expect(call?.[1]).toEqual(expect.objectContaining({ action: expect.objectContaining({ label: 'Reintentar' }) }));
+    const action = (call?.[1] as unknown as { action: { onClick: () => void } }).action;
+    await act(async () => action.onClick());
+    expect(mockedClaim).toHaveBeenCalledTimes(2);
+    expect(mockedClaim).toHaveBeenLastCalledWith('T', 'a1', 'i1');
   });
 
   it('mientras se trae, el botón queda ocupado (no se repite)', async () => {

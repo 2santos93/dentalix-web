@@ -111,6 +111,36 @@ describe('MarkDoneModal (DX-050)', () => {
     await user.click(screen.getByRole('button', { name: 'Marcar realizado' }));
     expect(await screen.findByText('Elige qué profesional lo realizó.')).toBeInTheDocument();
     expect(mockedUpdate).not.toHaveBeenCalled();
+    // DX-298 (FE-032): el error va junto al campo, que lo nombra y recibe el foco.
+    expect(select).toHaveAttribute('aria-invalid', 'true');
+    expect(select).toHaveAccessibleDescription('Elige qué profesional lo realizó.');
+    expect(select).toHaveFocus();
+    await user.selectOptions(select, 'laura');
+    expect(select).not.toHaveAttribute('aria-describedby');
+    expect(screen.queryByText('Elige qué profesional lo realizó.')).not.toBeInTheDocument();
+  });
+
+  it('DX-298 (FE-073): abrir «Marcar como realizado» 3 veces seguidas hace como mucho 1 GET /staff', async () => {
+    const props = {
+      onOpenChange: jest.fn(),
+      onSaved: jest.fn(),
+      onRetryLocations: jest.fn(),
+      token: 'tok',
+      planId: 'plan-1',
+      subject: 'Resina · diente 16',
+      mode: 'done' as const,
+      activeLocationId: 'loc-main',
+      locationName: 'Sede Principal',
+    };
+    for (const id of ['item-1', 'item-2', 'item-3']) {
+      // Como el plan: una `key` por ítem, montado al abrir y desmontado al cerrar.
+      const { unmount } = render(<MarkDoneModal key={id} open item={{ ...item, id }} {...props} />);
+      await waitFor(() =>
+        expect(screen.getByRole('combobox', { name: 'Profesional que lo realizó' })).toHaveValue('laura'),
+      );
+      unmount();
+    }
+    expect(mockedStaff).toHaveBeenCalledTimes(1);
   });
 
   it('con un solo profesional posible, lo preselecciona', async () => {
@@ -171,6 +201,8 @@ describe('MarkDoneModal (DX-050)', () => {
         name: 'Profesional que lo realizó',
       }),
     ).toBeInTheDocument();
+    // Un fallo no se cachea: Reintentar volvió a la API.
+    expect(mockedStaff).toHaveBeenCalledTimes(2);
   });
 
   it('corregir (ADMIN): parte de quien lo realizó y solo envía el profesional', async () => {

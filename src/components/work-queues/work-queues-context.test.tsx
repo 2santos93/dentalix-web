@@ -122,6 +122,104 @@ describe('WorkQueuesProvider (DX-503)', () => {
     }
   });
 
+  describe('DX-298 (FE-073): ni navegar ni volver enseguida a la pestaña releen', () => {
+    const setVisibility = (state: DocumentVisibilityState) => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: state });
+    };
+    beforeEach(() => jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] }));
+    afterEach(() => {
+      setVisibility('visible');
+      jest.useRealTimers();
+    });
+
+    function Shell({ pathname }: { pathname: string }) {
+      return (
+        <WorkQueuesProvider token={tokenForRole('ADMIN')} pathname={pathname}>
+          <Badge k="ANAMNESIS_REVIEW" />
+        </WorkQueuesProvider>
+      );
+    }
+
+    it('navegar entre 5 pantallas no lanza ningún GET /work-queues/summary extra', async () => {
+      const { rerender } = render(<Shell pathname="/agenda" />);
+      await act(async () => {});
+      expect(summary).toHaveBeenCalledTimes(1);
+      for (const pathname of ['/patients', '/caja', '/presupuestos', '/anamnesis-por-revisar', '/reportes']) {
+        rerender(<Shell pathname={pathname} />);
+        await act(async () => {
+          jest.advanceTimersByTime(5_000);
+        });
+      }
+      expect(summary).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('badge-ANAMNESIS_REVIEW')).toHaveTextContent('1');
+    });
+
+    it('de Inicio (todas las listas) a otra pantalla y de vuelta: la misma lectura', async () => {
+      const { rerender } = render(
+        <WorkQueuesProvider token={tokenForRole('ADMIN')} pathname="/dashboard">
+          <MyDay />
+        </WorkQueuesProvider>,
+      );
+      await act(async () => {});
+      expect(summary).toHaveBeenCalledTimes(1);
+      rerender(
+        <WorkQueuesProvider token={tokenForRole('ADMIN')} pathname="/agenda">
+          <span />
+        </WorkQueuesProvider>,
+      );
+      await act(async () => {});
+      rerender(
+        <WorkQueuesProvider token={tokenForRole('ADMIN')} pathname="/dashboard">
+          <MyDay />
+        </WorkQueuesProvider>,
+      );
+      await act(async () => {});
+      expect(summary).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('view')).toHaveTextContent('LOW_STOCK=4');
+    });
+
+    it('el sondeo sigue cada minuto aunque se navegue entre medias', async () => {
+      const { rerender } = render(<Shell pathname="/agenda" />);
+      await act(async () => {});
+      await act(async () => {
+        jest.advanceTimersByTime(40_000);
+      });
+      rerender(<Shell pathname="/patients" />);
+      await act(async () => {
+        jest.advanceTimersByTime(20_000);
+      });
+      expect(summary).toHaveBeenCalledTimes(2);
+    });
+
+    it('con la pestaña oculta no sondea; al volver antes de 60 s no relee y después de 60 s relee una vez', async () => {
+      render(<Shell pathname="/agenda" />);
+      await act(async () => {});
+      expect(summary).toHaveBeenCalledTimes(1);
+
+      setVisibility('hidden');
+      await act(async () => {
+        jest.advanceTimersByTime(30_000);
+      });
+      setVisibility('visible');
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      expect(summary).toHaveBeenCalledTimes(1);
+
+      setVisibility('hidden');
+      await act(async () => {
+        jest.advanceTimersByTime(300_000);
+      });
+      expect(summary).toHaveBeenCalledTimes(1);
+      setVisibility('visible');
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'));
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      expect(summary).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('sin «Mi día» montado pide solo las listas del menú', async () => {
     render(
       <WorkQueuesProvider token={tokenForRole('ADMIN')} pathname="/patients">
