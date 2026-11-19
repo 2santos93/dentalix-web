@@ -17,6 +17,8 @@ describe('RouteRoleGate (DX-096)', () => {
     ['/staff', 'RECEPTION'],
     ['/staff', 'DENTIST'],
     ['/staff', 'ASSISTANT'],
+    // DX-208: la bandeja de anamnesis es dato clínico (CLINICAL_ROLES).
+    ['/anamnesis-por-revisar', 'RECEPTION'],
   ] as const)('%s con %s: lo dice en español, con salida y sin botones de la pantalla', (href, role) => {
     screenFor(href, tokenForRole(role));
     expect(screen.getByText(routeRoleGateCopy.title)).toBeInTheDocument();
@@ -29,6 +31,7 @@ describe('RouteRoleGate (DX-096)', () => {
     ['/catalog', 'DENTIST'],
     ['/inventory', 'ASSISTANT'],
     ['/staff', 'ADMIN'],
+    ['/anamnesis-por-revisar', 'ASSISTANT'],
   ] as const)('%s con %s: la pantalla, igual que en el menú', (href, role) => {
     screenFor(href, tokenForRole(role));
     expect(screen.getByRole('button', { name: 'Añadir' })).toBeInTheDocument();
