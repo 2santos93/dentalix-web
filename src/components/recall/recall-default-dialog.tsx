@@ -19,6 +19,7 @@ import { FormField } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { announceRecallQueueChanged } from './recall-work-queues';
 
 export const recallDefaultCopy = {
   title: (name: string) => `Programar recall de ${name}`,
@@ -91,6 +92,7 @@ export function RecallDefaultDialog({
     try {
       const result = await createDefaultPatientRecall(token, patient.id, type.ref);
       announceRecallChanged(patient.id);
+      announceRecallQueueChanged();
       onSaved(result, type.name);
       onOpenChange(false);
     } catch (err) {
