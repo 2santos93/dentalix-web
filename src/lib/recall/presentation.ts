@@ -37,7 +37,7 @@ export const OUTCOME_LABELS: Record<RecallContactOutcome, string> = {
   BOOKED: 'Agendó',
 };
 /**
- * Los resultados de «Registrar contacto». «Agendó» (DX-015-bis, D23) no se
+ * Los resultados de «Registrar intento». «Agendó» (DX-015-bis, D23) no se
  * guarda ahí: exige la cita, así que abre «Agendar» con el canal y la nota, y
  * el contacto se registra al crearla.
  */

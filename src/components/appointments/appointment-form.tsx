@@ -217,6 +217,12 @@ interface AppointmentFormProps {
   defaultAppointmentTypeId?: string | null;
   /** DX-562: añadido de quien usa el formulario (la agenda: «Repetir»). */
   extension?: AppointmentFormExtension;
+  /**
+   * DX-465: agendar desde la lista de recall. Va en el alta de la cita y la API
+   * escribe en la misma transacción el «Agendó» de ese recall con este canal y
+   * esta nota.
+   */
+  recallContact?: CreateAppointmentInput['recallContact'];
 }
 
 /**
@@ -254,6 +260,7 @@ export function AppointmentForm({
   minimumDate,
   locationId,
   extension,
+  recallContact,
 }: AppointmentFormProps) {
   const extending = extension?.active === true;
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -630,6 +637,7 @@ export function AppointmentForm({
         ...(chairId ? { chairId } : {}),
         ...(reason.trim() ? { reason: reason.trim() } : {}),
         ...(wantsEarlier ? { wantsEarlier: true } : {}),
+        ...(recallContact ? { recallContact } : {}),
       };
       await save(input);
     } finally {

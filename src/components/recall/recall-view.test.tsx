@@ -13,6 +13,13 @@ import {
   type RecallType,
 } from '@/lib/recall/recall-api';
 import { overdueLabel, recallMessage } from '@/lib/recall/presentation';
+import { callbackCopy, recallWriteBusyMessage } from '@/lib/recall/attempts-presentation';
+import { sedeToday } from '@/lib/locations/use-sede-time-zone';
+import { addCivilDays } from '@/lib/time/wall-clock';
+import { typeDate } from '@/components/patients/date-test-utils';
+import { selectionBarCopy } from './recall-selection-bar';
+import { batchContactCopy } from './recall-batch-contact-dialog';
+import { createRecallContactsBatch } from '@/lib/recall/recall-attempts-api';
 import { RecallView, recallCopy } from './recall-view';
 import { recallUnconfiguredCopy } from './recall-unconfigured-list';
 import { recallDefaultCopy } from './recall-default-dialog';
@@ -44,6 +51,7 @@ jest.mock('./recall-schedule-dialog', () => ({
     </div>
   ),
 }));
+jest.mock('../../lib/recall/recall-attempts-api', () => ({ createRecallContactsBatch: jest.fn() }));
 jest.mock('../../lib/recall/recall-api', () => ({
   listRecallDue: jest.fn(),
   listRecallTypes: jest.fn(),
@@ -89,6 +97,13 @@ const item = (over: Partial<RecallDueItem> = {}): RecallDueItem => ({
   daysOverdue: 22,
   locationId: 'l1',
   lastContact: null,
+  lastAttempt: null,
+  attempts: 0,
+  maxAttempts: 3,
+  exhausted: false,
+  hiddenUntil: null,
+  callbackOn: null,
+  phoneReview: false,
   ...over,
 });
 const page = (items: RecallDueItem[]): RecallDuePage => ({ items, total: items.length, page: 1, pageSize: 20 });
@@ -99,6 +114,8 @@ describe('RecallView (DX-015)', () => {
     mockedTypes.mockReset();
     mockedTypes.mockResolvedValue(TYPES);
     (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([clinicLocation({ id: 'l1' })]);
+    // DX-465: los filtros viven en la URL; cada test empieza sin ellos.
+    window.history.replaceState(null, '', '/recall');
   });
 
   it('DX-354b: el vencimiento y el último contacto de cada fila salen con el formato y el reloj de SU sede', async () => {
@@ -108,11 +125,13 @@ describe('RecallView (DX-015)', () => {
       STAMP_SEDES.miami,
     ]);
     const contact = { channel: 'CALL', outcome: 'NO_ANSWER', createdAt: '2026-10-20T15:00:00.000Z' } as const;
+    const attempt = { channel: 'CALL', outcome: 'NO_ANSWER', at: contact.createdAt } as const;
+    const last = { lastContact: contact, lastAttempt: attempt };
     mockedList.mockResolvedValue(
       page([
-        item({ recallId: 'r1', patientName: 'Ana Pérez', locationId: 'l1', lastContact: contact }),
-        item({ recallId: 'r2', patientName: 'Luis Gómez', locationId: STAMP_SEDES.berlin.id, lastContact: contact }),
-        item({ recallId: 'r3', patientName: 'Eva Ruiz', locationId: STAMP_SEDES.miami.id, lastContact: contact }),
+        item({ recallId: 'r1', patientName: 'Ana Pérez', locationId: 'l1', ...last }),
+        item({ recallId: 'r2', patientName: 'Luis Gómez', locationId: STAMP_SEDES.berlin.id, ...last }),
+        item({ recallId: 'r3', patientName: 'Eva Ruiz', locationId: STAMP_SEDES.miami.id, ...last }),
       ]),
     );
     render(<RecallView token="tok" />);
@@ -151,13 +170,18 @@ describe('RecallView (DX-015)', () => {
   it('pinta la fila con llamar, WhatsApp sin datos clínicos, vencimiento y último contacto', async () => {
     mockedList.mockResolvedValue(
       page([
-        item({ lastContact: { channel: 'CALL', outcome: 'NO_ANSWER', createdAt: '2026-10-20T15:00:00.000Z' } }),
+        item({
+          lastContact: { channel: 'CALL', outcome: 'NO_ANSWER', createdAt: '2026-10-20T15:00:00.000Z' },
+          lastAttempt: { channel: 'CALL', outcome: 'NO_ANSWER', at: '2026-10-20T15:00:00.000Z' },
+          attempts: 1,
+        }),
       ]),
     );
     render(<RecallView token="tok" />);
     const row = (await screen.findByText('Ana Pérez')).closest('tr')!;
     expect(within(row).getByText('Hace 22 días')).toBeInTheDocument();
-    expect(within(row).getByText('Llamada · No contesta')).toBeInTheDocument();
+    expect(within(row).getByText('No contesta · Llamada')).toBeInTheDocument();
+    expect(within(row).getByText('1 de 3')).toBeInTheDocument();
     expect(within(row).getByRole('link', { name: /^Llamar a Ana Pérez/ })).toHaveAttribute('href', 'tel:+584125550101');
     await waitFor(() =>
       expect(within(row).getByRole('link', { name: /WhatsApp/ }).getAttribute('href')).toContain('Cl%C3%ADnica%20Sol'),
@@ -192,15 +216,15 @@ describe('RecallView (DX-015)', () => {
       expect(mockedTypes).toHaveBeenCalledTimes(1);
     });
 
-    it('«Registrar contacto» con «Agendó» no guarda: abre «Agendar» con el canal y la nota', async () => {
+    it('«Registrar intento» con «Agendó» no guarda: abre «Agendar» con el canal y la nota', async () => {
       const user = userEvent.setup();
       mockedList.mockResolvedValue(page([item()]));
       render(<RecallView token="tok" />);
       await openMenu(recallCopy.register);
-      const contact = await screen.findByRole('dialog', { name: 'Registrar contacto' });
+      const contact = await screen.findByRole('dialog', { name: 'Registrar intento' });
       await user.selectOptions(within(contact).getByLabelText('Canal'), 'WHATSAPP_LINK');
       await user.selectOptions(within(contact).getByLabelText('Resultado'), 'BOOKED');
-      expect(within(contact).queryByRole('button', { name: 'Guardar contacto' })).not.toBeInTheDocument();
+      expect(within(contact).queryByRole('button', { name: 'Guardar intento' })).not.toBeInTheDocument();
       await user.type(within(contact).getByLabelText('Nota (opcional)'), 'Prefiere la tarde');
       await user.click(within(contact).getByRole('button', { name: 'Agendar cita…' }));
 
@@ -209,7 +233,7 @@ describe('RecallView (DX-015)', () => {
       expect(schedule).toHaveAttribute('data-note', 'Prefiere la tarde');
       expect(schedule).toHaveAttribute('data-type', 'a-val');
       expect(createRecallContact).not.toHaveBeenCalled();
-      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Registrar contacto' })).not.toBeInTheDocument());
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Registrar intento' })).not.toBeInTheDocument());
 
       const calls = mockedList.mock.calls.length;
       await user.click(within(schedule).getByRole('button', { name: 'Crear cita' }));
@@ -369,7 +393,7 @@ describe('RecallView · «Sin recall configurado» (DX-015-bis D17)', () => {
     mockedUnconfigured
       .mockResolvedValueOnce({ items: [row()], total: 1, page: 1, pageSize: 20 })
       .mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 });
-    mockedCreate.mockResolvedValue({ recalls: [], contacts: [], recallUpdates: [] });
+    mockedCreate.mockResolvedValue({ recalls: [], contacts: [], phoneReview: null, recallUpdates: [] });
     await openUnconfigured();
     const tr = (await screen.findByText('María Rondón')).closest('tr')!;
     await userEvent.click(within(tr).getByRole('button', { name: 'Acciones de María Rondón' }));
@@ -405,5 +429,240 @@ describe('RecallView · «Sin recall configurado» (DX-015-bis D17)', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: recallDefaultCopy.submit }));
     expect(await within(dialog).findByText(recallDefaultCopy.alreadySet('Higiene'))).toBeInTheDocument();
     expect(within(dialog).getByRole('link', { name: recallDefaultCopy.openRecord })).toHaveAttribute('href', '/patients/p9');
+  });
+});
+
+describe('RecallView · intentos (DX-465)', () => {
+  const mockedContact = jest.mocked(createRecallContact);
+  const mockedBatch = jest.mocked(createRecallContactsBatch);
+  const today = sedeToday('America/Caracas');
+
+  beforeEach(() => {
+    mockedList.mockReset();
+    mockedTypes.mockReset();
+    mockedTypes.mockResolvedValue(TYPES);
+    mockedContact.mockReset();
+    mockedBatch.mockReset();
+    (listLocations as jest.MockedFunction<typeof listLocations>).mockResolvedValue([clinicLocation({ id: 'l1' })]);
+    window.history.replaceState(null, '', '/recall');
+  });
+
+  it('pinta intentos y tope, «Llamar el», agotados y el teléfono por revisar', async () => {
+    mockedList.mockResolvedValue(
+      page([
+        item({ attempts: 2, maxAttempts: 3, callbackOn: '2026-12-12', hiddenUntil: '2026-12-12' }),
+        item({ recallId: 'r2', patientName: 'Luis Gómez', attempts: 3, exhausted: true, phoneReview: true }),
+      ]),
+    );
+    render(<RecallView token="tok" />);
+    const ana = (await screen.findByText('Ana Pérez')).closest('tr')!;
+    expect(within(ana).getByText('2 de 3')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(within(ana).getByText(recallCopy.callbackOn(STAMP_FORMATS.caracas.civilDate('2026-12-12')))).toBeInTheDocument(),
+    );
+    const luis = screen.getByText('Luis Gómez').closest('tr')!;
+    expect(within(luis).getByText('3 de 3')).toBeInTheDocument();
+    expect(within(luis).getByText(recallCopy.exhausted)).toBeInTheDocument();
+    expect(within(luis).getByText(recallCopy.phoneReview)).toBeInTheDocument();
+  });
+
+  it('«Incluir contactados» e «Intentos agotados» van a la API y a la URL; la URL los trae al volver', async () => {
+    mockedList.mockResolvedValue(page([item()]));
+    const { unmount } = render(<RecallView token="tok" />);
+    await screen.findByText('Ana Pérez');
+    await userEvent.selectOptions(screen.getByLabelText(recallCopy.attemptsLabel), 'contacted');
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenLastCalledWith('tok', { includeContacted: true, sort: 'MOST_OVERDUE', page: 1 }),
+    );
+    expect(window.location.search).toBe('?intentos=contactados');
+    await userEvent.selectOptions(screen.getByLabelText(recallCopy.attemptsLabel), 'exhausted');
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenLastCalledWith('tok', { exhausted: true, sort: 'MOST_OVERDUE', page: 1 }),
+    );
+    expect(window.location.search).toBe('?intentos=agotados');
+    unmount();
+
+    mockedList.mockClear();
+    render(<RecallView token="tok" />);
+    await screen.findByText('Ana Pérez');
+    expect(screen.getByLabelText(recallCopy.attemptsLabel)).toHaveValue('exhausted');
+    expect(mockedList).toHaveBeenCalledWith('tok', { exhausted: true, sort: 'MOST_OVERDUE', page: 1 });
+  });
+
+  it('vacío propio de «Intentos agotados»', async () => {
+    window.history.replaceState(null, '', '/recall?intentos=agotados');
+    mockedList.mockResolvedValue(page([]));
+    render(<RecallView token="tok" />);
+    expect(await screen.findByText(recallCopy.emptyExhaustedTitle)).toBeInTheDocument();
+  });
+
+  it('«Llamar luego» desde la fila pide el día y lo manda; sin él no guarda', async () => {
+    const user = userEvent.setup();
+    mockedList.mockResolvedValue(page([item()]));
+    mockedContact.mockResolvedValue({ outcome: 'CALL_BACK' } as never);
+    render(<RecallView token="tok" />);
+    const row = (await screen.findByText('Ana Pérez')).closest('tr')!;
+    await user.click(within(row).getByRole('button', { name: 'Acciones de Ana Pérez' }));
+    await user.click(await screen.findByRole('menuitem', { name: recallCopy.register }));
+    const dialog = await screen.findByRole('dialog', { name: 'Registrar intento' });
+    await user.selectOptions(within(dialog).getByLabelText('Canal'), 'CALL');
+    await user.selectOptions(within(dialog).getByLabelText('Resultado'), 'CALL_BACK');
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar intento' }));
+    expect(await within(dialog).findByText(callbackCopy.required)).toBeInTheDocument();
+    expect(mockedContact).not.toHaveBeenCalled();
+
+    const day = addCivilDays(today, 5);
+    await typeDate(user, within(dialog).getByRole('group', { name: callbackCopy.label }), day);
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar intento' }));
+    await waitFor(() =>
+      expect(mockedContact).toHaveBeenCalledWith('tok', 'r1', { channel: 'CALL', outcome: 'CALL_BACK', callbackOn: day }),
+    );
+    expect(await screen.findByText(recallCopy.contactSavedHidden('Ana Pérez'))).toBeInTheDocument();
+  });
+
+  it('«Llamar luego» más allá de 90 días: el error junto al campo', async () => {
+    const user = userEvent.setup();
+    mockedList.mockResolvedValue(page([item()]));
+    render(<RecallView token="tok" />);
+    const row = (await screen.findByText('Ana Pérez')).closest('tr')!;
+    await user.click(within(row).getByRole('button', { name: 'Acciones de Ana Pérez' }));
+    await user.click(await screen.findByRole('menuitem', { name: recallCopy.register }));
+    const dialog = await screen.findByRole('dialog', { name: 'Registrar intento' });
+    await user.selectOptions(within(dialog).getByLabelText('Canal'), 'CALL');
+    await user.selectOptions(within(dialog).getByLabelText('Resultado'), 'CALL_BACK');
+    await typeDate(user, within(dialog).getByRole('group', { name: callbackCopy.label }), addCivilDays(today, 91));
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar intento' }));
+    expect(await within(dialog).findByText(callbackCopy.tooFar)).toBeInTheDocument();
+    expect(mockedContact).not.toHaveBeenCalled();
+  });
+
+  describe('selección múltiple y lote', () => {
+    const two = () =>
+      page([item(), item({ recallId: 'r2', patientId: 'p2', patientName: 'Luis Gómez' })]);
+
+    it('las casillas por fila y «Seleccionar todo» (accesibles por su nombre) muestran la barra', async () => {
+      mockedList.mockResolvedValue(two());
+      render(<RecallView token="tok" />);
+      await screen.findByText('Ana Pérez');
+      expect(screen.queryByRole('region', { name: selectionBarCopy.region })).toBeNull();
+      await userEvent.click(screen.getByRole('checkbox', { name: recallCopy.selectRow('Ana Pérez') }));
+      const bar = screen.getByRole('region', { name: selectionBarCopy.region });
+      expect(within(bar).getByRole('button', { name: selectionBarCopy.register(1) })).toBeInTheDocument();
+      const all = screen.getByRole('checkbox', { name: recallCopy.selectAll });
+      expect(all).toBePartiallyChecked();
+      await userEvent.click(all);
+      expect(screen.getByRole('checkbox', { name: recallCopy.selectRow('Luis Gómez') })).toBeChecked();
+      expect(within(bar).getByRole('button', { name: selectionBarCopy.register(2) })).toBeInTheDocument();
+      await userEvent.click(all);
+      expect(screen.queryByRole('region', { name: selectionBarCopy.region })).toBeNull();
+    });
+
+    it('registra el mismo intento para los marcados, recarga y limpia la selección', async () => {
+      const user = userEvent.setup();
+      mockedList.mockResolvedValue(two());
+      mockedBatch.mockResolvedValue({ contacts: [{}, {}] } as never);
+      render(<RecallView token="tok" />);
+      await screen.findByText('Ana Pérez');
+      await user.click(screen.getByRole('checkbox', { name: recallCopy.selectAll }));
+      await user.click(screen.getByRole('button', { name: selectionBarCopy.register(2) }));
+      const dialog = await screen.findByRole('dialog', { name: batchContactCopy.title(2) });
+      expect(within(dialog).getByText('Luis Gómez')).toBeInTheDocument();
+      // Sin «Agendó» en el lote.
+      expect(within(within(dialog).getByLabelText('Resultado')).queryByRole('option', { name: 'Agendó' })).toBeNull();
+      await user.selectOptions(within(dialog).getByLabelText('Canal'), 'WHATSAPP_LINK');
+      await user.selectOptions(within(dialog).getByLabelText('Resultado'), 'LEFT_MESSAGE');
+      await user.type(within(dialog).getByLabelText('Nota (opcional)'), 'Mensaje de control');
+      const calls = mockedList.mock.calls.length;
+      await user.click(within(dialog).getByRole('button', { name: batchContactCopy.submit(2) }));
+      expect(mockedBatch).toHaveBeenCalledWith('tok', {
+        items: [{ recallId: 'r1' }, { recallId: 'r2' }],
+        channel: 'WHATSAPP_LINK',
+        outcome: 'LEFT_MESSAGE',
+        note: 'Mensaje de control',
+      });
+      expect(await screen.findByText(recallCopy.batchSaved(2))).toBeInTheDocument();
+      await waitFor(() => expect(mockedList.mock.calls.length).toBeGreaterThan(calls));
+      expect(screen.queryByRole('region', { name: selectionBarCopy.region })).toBeNull();
+    });
+
+    it('«Llamar luego» en lote exige el día y lo manda', async () => {
+      const user = userEvent.setup();
+      mockedList.mockResolvedValue(two());
+      mockedBatch.mockResolvedValue({ contacts: [{}, {}] } as never);
+      render(<RecallView token="tok" />);
+      await screen.findByText('Ana Pérez');
+      await user.click(screen.getByRole('checkbox', { name: recallCopy.selectAll }));
+      await user.click(screen.getByRole('button', { name: selectionBarCopy.register(2) }));
+      const dialog = await screen.findByRole('dialog', { name: batchContactCopy.title(2) });
+      await user.selectOptions(within(dialog).getByLabelText('Canal'), 'CALL');
+      await user.selectOptions(within(dialog).getByLabelText('Resultado'), 'CALL_BACK');
+      await user.click(within(dialog).getByRole('button', { name: batchContactCopy.submit(2) }));
+      expect(await within(dialog).findByText(callbackCopy.required)).toBeInTheDocument();
+      const day = addCivilDays(today, 10);
+      await typeDate(user, within(dialog).getByRole('group', { name: callbackCopy.label }), day);
+      await user.click(within(dialog).getByRole('button', { name: batchContactCopy.submit(2) }));
+      await waitFor(() =>
+        expect(mockedBatch).toHaveBeenCalledWith('tok', {
+          items: [{ recallId: 'r1' }, { recallId: 'r2' }],
+          channel: 'CALL',
+          outcome: 'CALL_BACK',
+          callbackOn: day,
+        }),
+      );
+    });
+
+    it('404 con `recallIds`: dice quién ya no está, lo quita de la selección y no guarda nada', async () => {
+      const user = userEvent.setup();
+      mockedList.mockResolvedValue(two());
+      mockedBatch.mockRejectedValue(
+        new ApiError(404, 'Algún recall de la lista no existe en esta clínica.', { recallIds: ['r2'] }),
+      );
+      render(<RecallView token="tok" />);
+      await screen.findByText('Ana Pérez');
+      await user.click(screen.getByRole('checkbox', { name: recallCopy.selectAll }));
+      await user.click(screen.getByRole('button', { name: selectionBarCopy.register(2) }));
+      const dialog = await screen.findByRole('dialog', { name: batchContactCopy.title(2) });
+      await user.selectOptions(within(dialog).getByLabelText('Canal'), 'CALL');
+      await user.selectOptions(within(dialog).getByLabelText('Resultado'), 'NO_ANSWER');
+      await user.click(within(dialog).getByRole('button', { name: batchContactCopy.submit(2) }));
+      expect(await screen.findByText(batchContactCopy.missing(['Luis Gómez']))).toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: batchContactCopy.title(1) })).toBeInTheDocument();
+      // El diálogo sigue abierto (el resto de la pantalla queda inerte para el lector).
+      expect(screen.getByRole('checkbox', { name: recallCopy.selectRow('Luis Gómez'), hidden: true })).not.toBeChecked();
+    });
+
+    it('409 RECALL_WRITE_BUSY: pide reintentar, sin cerrar', async () => {
+      const user = userEvent.setup();
+      mockedList.mockResolvedValue(two());
+      mockedBatch.mockRejectedValueOnce(new ApiError(409, 'busy', { code: 'RECALL_WRITE_BUSY' }));
+      render(<RecallView token="tok" />);
+      await screen.findByText('Ana Pérez');
+      await user.click(screen.getByRole('checkbox', { name: recallCopy.selectRow('Ana Pérez') }));
+      await user.click(screen.getByRole('button', { name: selectionBarCopy.register(1) }));
+      const dialog = await screen.findByRole('dialog', { name: batchContactCopy.title(1) });
+      await user.selectOptions(within(dialog).getByLabelText('Canal'), 'CALL');
+      await user.selectOptions(within(dialog).getByLabelText('Resultado'), 'NO_ANSWER');
+      await user.click(within(dialog).getByRole('button', { name: batchContactCopy.submit(1) }));
+      expect(await within(dialog).findByText(recallWriteBusyMessage)).toBeInTheDocument();
+    });
+
+    it('429 y 403: el motivo en el diálogo, sin cerrarlo', async () => {
+      const user = userEvent.setup();
+      mockedList.mockResolvedValue(two());
+      mockedBatch
+        .mockRejectedValueOnce(new ApiError(429, 'Too Many Requests', { retryAfterSeconds: 30 }))
+        .mockRejectedValueOnce(new ApiError(403, 'Forbidden', { code: 'LOCATION_NOT_ALLOWED' }));
+      render(<RecallView token="tok" />);
+      await screen.findByText('Ana Pérez');
+      await user.click(screen.getByRole('checkbox', { name: recallCopy.selectRow('Ana Pérez') }));
+      await user.click(screen.getByRole('button', { name: selectionBarCopy.register(1) }));
+      const dialog = await screen.findByRole('dialog', { name: batchContactCopy.title(1) });
+      await user.selectOptions(within(dialog).getByLabelText('Canal'), 'CALL');
+      await user.selectOptions(within(dialog).getByLabelText('Resultado'), 'NO_ANSWER');
+      await user.click(within(dialog).getByRole('button', { name: batchContactCopy.submit(1) }));
+      expect(await within(dialog).findByText(/30 segundos/)).toBeInTheDocument();
+      await user.click(within(dialog).getByRole('button', { name: batchContactCopy.submit(1) }));
+      expect(await within(dialog).findByText(batchContactCopy.forbidden)).toBeInTheDocument();
+    });
   });
 });

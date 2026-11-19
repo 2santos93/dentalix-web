@@ -1,5 +1,6 @@
 import { ApiError } from '@/lib/api/api-error';
-import { createDefaultPatientRecall, isRecallAlreadySet } from './recall-api';
+import { createDefaultPatientRecall, isRecallAlreadySet, listRecallDue } from './recall-api';
+import { clearPhoneReview, createRecallContactsBatch, listRecallSettings, updateRecallSettings } from './recall-attempts-api';
 import { apiFetch } from '../api/client';
 
 jest.mock('../api/client', () => ({ apiFetch: jest.fn(), apiFetchOrNull: jest.fn() }));
@@ -34,5 +35,35 @@ describe('isRecallAlreadySet', () => {
     expect(isRecallAlreadySet(new ApiError(409, 'Sin zona', { code: 'LOCATION_TIMEZONE_REQUIRED' }))).toBe(false);
     expect(isRecallAlreadySet(new ApiError(422, 'Cita no válida'))).toBe(false);
     expect(isRecallAlreadySet(new Error('red'))).toBe(false);
+  });
+});
+
+describe('cliente de intentos (DX-465)', () => {
+  beforeEach(() => {
+    mockedFetch.mockReset();
+    mockedFetch.mockResolvedValue({} as never);
+  });
+
+  it('los filtros de intentos solo viajan encendidos', async () => {
+    await listRecallDue('tok', { includeContacted: true, exhausted: false, page: 1 });
+    expect(mockedFetch).toHaveBeenCalledWith('/recall/due?includeContacted=true&page=1', { token: 'tok' });
+    await listRecallDue('tok', { exhausted: true });
+    expect(mockedFetch).toHaveBeenLastCalledWith('/recall/due?exhausted=true', { token: 'tok' });
+  });
+
+  it('el lote, los ajustes por sede y «Ya está corregido» van a sus rutas', async () => {
+    const batch = { items: [{ recallId: 'r1' }], channel: 'CALL' as const, outcome: 'CALL_BACK' as const, callbackOn: '2026-12-01' };
+    await createRecallContactsBatch('tok', batch);
+    expect(mockedFetch).toHaveBeenLastCalledWith('/recall/contacts/batch', { token: 'tok', method: 'POST', body: batch });
+    await listRecallSettings('tok');
+    expect(mockedFetch).toHaveBeenLastCalledWith('/recall-settings', { token: 'tok' });
+    await updateRecallSettings('tok', 'l1', { hideDays: 10, maxAttempts: 4 });
+    expect(mockedFetch).toHaveBeenLastCalledWith('/recall-settings/l1', {
+      token: 'tok',
+      method: 'PUT',
+      body: { hideDays: 10, maxAttempts: 4 },
+    });
+    await clearPhoneReview('tok', 'p1');
+    expect(mockedFetch).toHaveBeenLastCalledWith('/patients/p1/phone-review/clear', { token: 'tok', method: 'POST' });
   });
 });
