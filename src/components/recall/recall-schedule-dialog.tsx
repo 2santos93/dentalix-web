@@ -32,6 +32,12 @@ export const scheduleDialogCopy = {
 /**
  * D22: registra el contacto «Agendó» de una cita ya creada. Si falla, la cita
  * se queda y un aviso reintenta solo el contacto (nunca otra cita).
+ *
+ * DX-465: el servidor ya cierra el ciclo al crear una cita del tipo del recall
+ * (y escribe su «Agendó»); este POST es idempotente para el mismo recall y la
+ * misma cita (200 con el existente), así que no hay doble «Agendó». Se mantiene
+ * porque cubre lo que el servidor no cierra: una cita de otro tipo, o un tipo
+ * de recall sin tipo de cita enlazado.
  */
 export async function registerBookedContact(
   token: string,
