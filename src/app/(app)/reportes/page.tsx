@@ -40,6 +40,20 @@ const ScheduledProductionView = dynamic(
   { ssr: false, loading: () => <SectionSkeleton /> },
 );
 
+// DX-304: «Profesionales», «Inasistencias» y «Cartera», igual.
+const ProfessionalProductivityView = dynamic(
+  () => import('@/components/reports/professional-productivity-view').then((m) => m.ProfessionalProductivityView),
+  { ssr: false, loading: () => <SectionSkeleton /> },
+);
+const NoShowsView = dynamic(
+  () => import('@/components/reports/no-shows-view').then((m) => m.NoShowsView),
+  { ssr: false, loading: () => <SectionSkeleton /> },
+);
+const ReceivablesAgingReportView = dynamic(
+  () => import('@/components/reports/receivables-aging-report-view').then((m) => m.ReceivablesAgingReportView),
+  { ssr: false, loading: () => <SectionSkeleton /> },
+);
+
 // DX-172: «Captación», igual.
 const AcquisitionView = dynamic(
   () => import('@/components/reports/acquisition-view').then((m) => m.AcquisitionView),
@@ -55,7 +69,7 @@ const copy = {
   title: 'Reportes',
   description: 'Cómo van tus sedes: producción, cobros, rentabilidad, citas y ocupación, y qué procedimientos sostienen la clínica.',
   descriptionOwn:
-    'Solo lo tuyo: qué procedimientos realizaste y a qué honorario frente al de catálogo, qué pasó con los presupuestos que elaboraste y cuánto tienes agendado.',
+    'Solo lo tuyo: qué procedimientos realizaste y a qué honorario frente al de catálogo, qué pasó con los presupuestos que elaboraste, cuánto tienes agendado, tu productividad y las citas a las que no vinieron.',
   // DX-018: los honorarios viven en su pantalla; aquí, el enlace.
   commissions: 'Honorarios',
   descriptionCollections: 'Los abonos con algo sin imputar a ítems del plan: cuánto está imputado y cuánto queda a cuenta, descontado lo ya devuelto o traspasado.',
@@ -92,7 +106,10 @@ function ReportesRoute() {
   }
 
   // El odontólogo sin FINANCIAL_REPORTS_VIEW: solo pestañas con «lo suyo» (scope OWN en la API).
-  const ownOnly = tabs.every((t) => t.key === 'produccion' || t.key === 'presupuestos' || t.key === 'prevision');
+  const ownOnly = tabs.every((t) =>
+    ['produccion', 'presupuestos', 'prevision', 'profesionales', 'inasistencias'].includes(t.key),
+  );
+  const ownByRole = role === 'DENTIST' && !canViewFinancialReports(role, permissions);
   const collectionsOnly = tabs.length === 1 && tabs[0].key === 'sin-imputar';
   const view =
     tab === 'produccion' ? (
@@ -116,6 +133,12 @@ function ReportesRoute() {
         token={accessToken}
         ownByRole={role === 'DENTIST' && !canViewFinancialReports(role, permissions)}
       />
+    ) : tab === 'profesionales' ? (
+      <ProfessionalProductivityView token={accessToken} ownByRole={ownByRole} />
+    ) : tab === 'inasistencias' ? (
+      <NoShowsView token={accessToken} isAdmin={role === 'ADMIN'} ownByRole={ownByRole} />
+    ) : tab === 'cartera' ? (
+      <ReceivablesAgingReportView token={accessToken} isAdmin={role === 'ADMIN'} />
     ) : tab === 'captacion' ? (
       <AcquisitionView token={accessToken} isAdmin={role === 'ADMIN'} />
     ) : tab === 'sin-imputar' ? (

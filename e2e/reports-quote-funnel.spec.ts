@@ -268,7 +268,7 @@ test('DENTIST: solo sus presupuestos, sin filtro de profesional ni CSV', async (
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 1440, height: 900 });
   await openTab(page, dentist.email);
-  await expect(page.getByRole('tab')).toHaveText(['Producción por procedimiento', 'Presupuestos', 'Previsión']);
+  await expect(page.getByRole('tab')).toHaveText(['Producción por procedimiento', 'Presupuestos', 'Previsión', 'Profesionales', 'Inasistencias']);
   await expect(page.getByTestId('quote-funnel-scope')).toContainText('Solo tus presupuestos');
   await expect(step(page, 'PRESENTED')).toHaveText(`4 · ${pct(100)} · ${money(400)}`);
   await expect(step(page, 'ACCEPTED')).toHaveText(`1 · ${pct(25)} · ${money(100)}`);
