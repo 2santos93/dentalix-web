@@ -23,6 +23,13 @@ import { DOC_TYPES, docTypeOptionLabel, normalizeDocTypeLabel } from '@/lib/pati
 import { isEmailAddress } from '@/lib/format/email';
 import { DocTypeLabelField, docTypeLabelFieldError } from './doc-type-label-field';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
+import {
+  acquisitionPayload,
+  EMPTY_ACQUISITION,
+  referredByNameTooLong,
+  type AcquisitionDraft,
+} from '@/lib/patients/patient-sources-api';
+import { AcquisitionFields, acquisitionFieldsCopy, sourceKindOf, usePatientSources } from './acquisition-fields';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -63,7 +70,7 @@ const sexOptions: { value: Sex; label: string }[] = [
  * así que sus 400 no se alcanzan desde aquí (hoy la API no ata ningún 400 de
  * pacientes a un campo).
  */
-const CHECKED_FIELDS = ['firstName', 'lastName', 'docType', 'docTypeLabel', 'email'] as const;
+const CHECKED_FIELDS = ['firstName', 'lastName', 'docType', 'docTypeLabel', 'email', 'referredByName'] as const;
 type CheckedField = (typeof CHECKED_FIELDS)[number];
 type FieldErrors = Partial<Record<CheckedField, string>>;
 
@@ -73,6 +80,7 @@ const FIELD_IDS: Record<CheckedField, string> = {
   docType: 'patient-doc-type',
   docTypeLabel: 'patient-doc-type-label',
   email: 'patient-email',
+  referredByName: 'patient-referred-name',
 };
 
 /** `aria-invalid`/`aria-describedby` de un control con su error. */
@@ -124,6 +132,11 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
   const [countryCode, setCountryCode] = useState('');
   const [city, setCity] = useState<CitySelection | null>(null);
   const [notes, setNotes] = useState('');
+  // DX-172: «¿Cómo nos conoció?» (opcional).
+  const patientSources = usePatientSources(token);
+  const [acquisition, setAcquisition] = useState<AcquisitionDraft>(EMPTY_ACQUISITION);
+  const referredByNameRef = React.useRef<HTMLInputElement>(null);
+  const acquisitionKind = sourceKindOf(patientSources, acquisition.sourceId);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -149,6 +162,7 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
       docType: docTypeRef,
       docTypeLabel: docTypeLabelRef,
       email: emailRef,
+      referredByName: referredByNameRef,
     };
     refs[focusRequest.field].current?.focus();
   }, [focusRequest]);
@@ -173,6 +187,9 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
     // La regla de `@IsEmail()` de la API, más estricta que la del navegador
     // (que acepta «ana@x»).
     if (email.trim() && !isEmailAddress(email.trim())) found.email = copy.emailInvalid;
+    if (acquisitionKind === 'EXTERNAL_PROFESSIONAL' && referredByNameTooLong(acquisition.referredByName)) {
+      found.referredByName = acquisitionFieldsCopy.nameTooLong;
+    }
     return found;
   }
 
@@ -195,6 +212,7 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
     setSubmitting(true);
     try {
       const label = normalizeDocTypeLabel(docTypeLabel);
+      const acquired = acquisitionPayload(acquisition, acquisitionKind);
       const input: CreatePatientInput = {
         firstName,
         lastName,
@@ -209,6 +227,9 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
         ...(countryCode ? { countryCode } : {}),
         ...(city ? { cityId: city.id } : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
+        ...(acquired.sourceId ? { sourceId: acquired.sourceId } : {}),
+        ...(acquired.referredByPatientId ? { referredByPatientId: acquired.referredByPatientId } : {}),
+        ...(acquired.referredByName ? { referredByName: acquired.referredByName } : {}),
       };
       const created = await createPatient(token, input);
       if (onCreated) {
@@ -403,6 +424,19 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
           />
         </FormField>
       </div>
+
+      <AcquisitionFields
+        idPrefix="patient"
+        token={token}
+        sources={patientSources}
+        value={acquisition}
+        onChange={(next) => {
+          setAcquisition(next);
+          clearFieldError('referredByName');
+        }}
+        nameError={fieldErrors.referredByName}
+        nameRef={referredByNameRef}
+      />
 
       <FormField htmlFor="patient-notes" label={copy.notesLabel}>
         <Textarea

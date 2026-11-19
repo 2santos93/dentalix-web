@@ -2,20 +2,21 @@ import { render, screen } from '@testing-library/react';
 import { REPORT_TABS, ReportsTabs, reportTabsFor, resolveReportTab } from './reports-tabs';
 
 describe('pestañas de Reportes por rol (DX-423, DX-399, DX-558, DX-567)', () => {
-  it('ADMIN ve las nueve; DENTIST «Producción por procedimiento», «Presupuestos» y «Previsión»; RECEPTION solo «Cobrado sin imputar»; el resto, la primera (su 403)', () => {
-    expect(reportTabsFor('ADMIN').map((t) => t.key)).toEqual(['comparar-sedes', 'rentabilidad', 'produccion', 'presupuestos', 'prevision', 'sin-imputar', 'huecos-recuperados', 'ocupacion-sillones', 'enlaces-paciente']);
+  it('ADMIN ve las diez; DENTIST «Producción por procedimiento», «Presupuestos» y «Previsión»; RECEPTION solo «Cobrado sin imputar»; el resto, la primera (su 403)', () => {
+    expect(reportTabsFor('ADMIN').map((t) => t.key)).toEqual(['comparar-sedes', 'rentabilidad', 'produccion', 'presupuestos', 'prevision', 'captacion', 'sin-imputar', 'huecos-recuperados', 'ocupacion-sillones', 'enlaces-paciente']);
     expect(reportTabsFor('DENTIST').map((t) => t.key)).toEqual(['produccion', 'presupuestos', 'prevision']);
     expect(reportTabsFor('RECEPTION').map((t) => t.key)).toEqual(['sin-imputar']);
     expect(reportTabsFor('ASSISTANT').map((t) => t.key)).toEqual(['comparar-sedes']);
     expect(reportTabsFor(null).map((t) => t.key)).toEqual(['comparar-sedes']);
   });
 
-  it('DX-090: FINANCIAL_REPORTS_VIEW suma las financieras (comparar, rentabilidad, presupuestos, previsión, sin imputar); PAYMENT_REGISTER no', () => {
+  it('DX-090: FINANCIAL_REPORTS_VIEW suma las financieras (comparar, rentabilidad, presupuestos, previsión, captación, sin imputar); PAYMENT_REGISTER no', () => {
     expect(reportTabsFor('ASSISTANT', ['FINANCIAL_REPORTS_VIEW']).map((t) => t.key)).toEqual([
       'comparar-sedes',
       'rentabilidad',
       'presupuestos',
       'prevision',
+      'captacion',
       'sin-imputar',
     ]);
     expect(reportTabsFor('DENTIST', ['FINANCIAL_REPORTS_VIEW']).map((t) => t.key)).toEqual([
@@ -24,6 +25,7 @@ describe('pestañas de Reportes por rol (DX-423, DX-399, DX-558, DX-567)', () =>
       'produccion',
       'presupuestos',
       'prevision',
+      'captacion',
       'sin-imputar',
     ]);
     expect(reportTabsFor('ASSISTANT', ['PAYMENT_REGISTER']).map((t) => t.key)).toEqual(['comparar-sedes']);
@@ -51,6 +53,9 @@ describe('pestañas de Reportes por rol (DX-423, DX-399, DX-558, DX-567)', () =>
     expect(resolveReportTab('prevision', reportTabsFor('RECEPTION'))).toBe('sin-imputar');
     expect(resolveReportTab('prevision', reportTabsFor('ASSISTANT'))).toBe('comparar-sedes');
     expect(resolveReportTab('prevision', reportTabsFor('RECEPTION', ['FINANCIAL_REPORTS_VIEW']))).toBe('prevision');
+    expect(resolveReportTab('captacion', reportTabsFor('ADMIN'))).toBe('captacion');
+    expect(resolveReportTab('captacion', reportTabsFor('DENTIST'))).toBe('produccion');
+    expect(resolveReportTab('captacion', reportTabsFor('RECEPTION', ['FINANCIAL_REPORTS_VIEW']))).toBe('captacion');
     expect(resolveReportTab('otra')).toBe(REPORT_TABS[0].key);
   });
 

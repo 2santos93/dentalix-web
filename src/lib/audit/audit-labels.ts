@@ -419,6 +419,25 @@ export function patientAccessDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && PATIENT_ACCESS_REASONS[metadata.reason]) ?? null;
 }
 
+/**
+ * DX-172: «¿Cómo nos conoció?». La captación de un paciente (el antes y el
+ * después de la fuente los pinta `configChangeItems`; el nombre del
+ * profesional va oculto), su consulta en la ficha, el informe de captación
+ * (consulta y CSV) y el catálogo de fuentes de Ajustes.
+ */
+const ACQUISITION_REASONS: Record<string, string> = {
+  PATIENT_ACQUISITION_CHANGED: '«¿Cómo nos conoció?» cambiado',
+  PATIENT_ACQUISITION: 'Consulta de «¿Cómo nos conoció?» y de sus recomendados',
+  ACQUISITION_REPORT: 'Informe de captación de pacientes',
+  PATIENT_SOURCE_CREATED: 'Origen de pacientes: fuente añadida',
+  PATIENT_SOURCE_UPDATED: 'Origen de pacientes: fuente cambiada',
+};
+
+/** DX-172: el paso de la captación del paciente o de su catálogo, o null si no es de ellos. */
+export function acquisitionDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && ACQUISITION_REASONS[metadata.reason]) ?? null;
+}
+
 /** DX-017: el paso de la orden de laboratorio o del laboratorio, o null si no es de ellos. */
 export function dentalLabDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && DENTAL_LAB_REASONS[metadata.reason]) ?? null;
