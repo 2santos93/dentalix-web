@@ -21969,7 +21969,23 @@ export interface components {
             /** @description SEC-043: rige el arqueo ciego y quien consulta no es ADMIN: el resumen no suma los abonos que cuentan en una caja aún abierta y esas filas van sin importe (`amountHidden`). Las cifras vuelven al cerrarla. */
             blindHidden: boolean;
         };
-        RecordPaymentDto: {
+        CashChangeLineDto: {
+            /**
+             * Format: uuid
+             * @description Medio ACTIVO del catálogo de la clínica por el que se entrega el vuelto (efectivo, transferencia inmediata…).
+             */
+            paymentMethodId: string;
+            /** @description Código ISO 4217 de 3 letras: la moneda en que se entrega. */
+            currency: string;
+            /**
+             * @description Importe entregado, en su moneda, con los decimales de redondeo de la moneda (DX-340).
+             * @example 182.5
+             */
+            amount: number;
+            /** @description Referencia de la entrega. Obligatoria si el medio la pide (400). */
+            reference?: string;
+        };
+        RecordPlanPaymentDto: {
             /**
              * @description Número finito mayor que 0, con como mucho 2 decimales.
              * @example 100
@@ -22007,6 +22023,15 @@ export interface components {
              * @example Abono del 15/09 que recepción olvidó registrar; cuadrado con el extracto del banco
              */
             lockOverrideReason?: string;
+            /**
+             * @description DX-570: «Recibido», lo que entrega el paciente en la moneda del abono. Solo con un medio de tipo efectivo (400). Tiene que cubrir lo cobrado (importe ± ajustes por medio de pago, DX-516; 400). Sin él, el cobro es el de siempre.
+             * @example 50
+             */
+            tendered?: number;
+            /** @description DX-570: el vuelto, de 1 a 3 líneas (medio, moneda, importe, referencia). Cada línea en otra moneda congela la tasa del día del abono en su sede (422 si no la hay). El vuelto en la moneda del abono no puede superar lo recibido menos lo cobrado (422). Requiere `tendered` (400). */
+            change?: components["schemas"]["CashChangeLineDto"][];
+            /** @description DX-570: confirma que la diferencia no devuelta (lo recibido − lo cobrado − el vuelto) se suma al abono; si supera lo pendiente queda como saldo a favor. Sin ella, esa diferencia es 422 `CASH_CHANGE_REMAINDER` con `remainder` y `currency`. No se admite si el medio tiene ajustes (422). */
+            changeRemainderToCredit?: boolean;
         };
         FrozenExchangeRateDto: {
             /** @description Moneda de destino: la del plan (o la del saldo migrado) */
@@ -22034,6 +22059,52 @@ export interface components {
          * @enum {string}
          */
         PaymentExchangeRateStatus: "NOT_NEEDED" | "FROZEN" | "MISSING" | "LEGACY";
+        PaymentChangeRateDto: {
+            /** @description Unidades de la moneda de la línea por 1 USD. */
+            fromPerBase: number;
+            /** @description Unidades de la moneda del abono por 1 USD. */
+            toPerBase: number;
+            source: components["schemas"]["ExchangeRateSource"];
+            /**
+             * @description Día civil de la tasa.
+             * @example 2026-11-19
+             */
+            date: string;
+        };
+        PaymentChangeLineDto: {
+            line: number;
+            /** Format: uuid */
+            paymentMethodId: string;
+            /** @example Pago móvil */
+            paymentMethodName: string;
+            /** @description Tipo base del medio: el grupo del arqueo de la caja. */
+            method: components["schemas"]["PaymentMethod"];
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @example 182.5 */
+            amount: number;
+            reference: string | null;
+            /**
+             * @description La línea en la moneda del abono.
+             * @example 5
+             */
+            equivalentAmount: number;
+            /** @description null en la misma moneda del abono. */
+            rate: components["schemas"]["PaymentChangeRateDto"] | null;
+        };
+        PaymentCashChangeDto: {
+            /**
+             * @description Lo recibido, en la moneda del abono.
+             * @example 50
+             */
+            tendered: number;
+            /**
+             * @description La diferencia no devuelta que, confirmada, se sumó al importe (0 si nada).
+             * @example 0
+             */
+            remainderToCredit: number;
+            lines: components["schemas"]["PaymentChangeLineDto"][];
+        };
         PaymentDto: {
             /** Format: uuid */
             id: string;
@@ -22116,6 +22187,8 @@ export interface components {
             collectedAmount: number;
             /** @description DX-389: el abono tiene comprobante del cobro. La clave del almacén no sale nunca: se ve con `GET /payments/:id/proof/url`. */
             hasProof: boolean;
+            /** @description DX-570: lo recibido y el vuelto de un abono en efectivo; null sin vuelto. Recibido = lo cobrado + Σ equivalentes del vuelto. */
+            cashChange?: components["schemas"]["PaymentCashChangeDto"] | null;
         };
         SplitPaymentLineDto: {
             /** @example 50 */
@@ -22170,6 +22243,45 @@ export interface components {
             total: number | null;
             /** @description Un abono por línea, en orden (`splitLine`). */
             payments: components["schemas"]["PaymentDto"][];
+        };
+        RecordOpeningBalancePaymentDto: {
+            /**
+             * @description Número finito mayor que 0, con como mucho 2 decimales.
+             * @example 100
+             */
+            amount: number;
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /**
+             * @description Cuándo se pagó el abono: un instante ISO 8601 con hora (p. ej. `2026-10-17T01:00:00.000Z`, que es el 16/10 a las 20:00 en UTC−5) o solo el día civil `YYYY-MM-DD`, que se guarda al mediodía de la zona horaria de la sede del abono (DX-097). La caja y el dashboard lo cuentan en su día civil en la zona de la sede. GET .../balance busca la tasa de cambio por su fecha UTC. DX-075: un día civil posterior a hoy en la zona de la sede es 400 («La fecha del abono no puede ser posterior a hoy en la sede.»). DX-054: un instante a más de 24 h en el futuro es 400 (también un día civil si la sede no tiene zona); las fechas pasadas no tienen límite. También en el abono al saldo migrado.
+             * @example 2026-10-16
+             */
+            paidAt: string;
+            /**
+             * @description Método antiguo (clientes anteriores a DX-377). Con `paymentMethodId` se ignora: el método sale del tipo base del medio. Solo con él, el abono se enlaza al medio inicial de ese método.
+             * @enum {string}
+             */
+            method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+            /**
+             * Format: uuid
+             * @description Medio de pago ACTIVO del catálogo de la clínica (GET /payment-methods).
+             */
+            paymentMethodId?: string;
+            /** @description Referencia del pago. Obligatoria si el medio la pide (400). Se compara sin espacios, puntos ni guiones y en mayúsculas (DX-395: «123-456», «123.456» y «123 456» son la misma): si el mismo medio ya la tiene en un abono vivo de ±90 días, 409 `PAYMENT_REFERENCE_DUPLICATE` con `matches`. Más de 60 caracteres: 400 en español. */
+            reference?: string;
+            /** @description Motivo para confirmar una referencia repetida tras el 409. Se guarda en el abono; la auditoría registra la confirmación y los abonos repetidos. Más de 300 caracteres: 400 en español. */
+            duplicateReferenceReason?: string;
+            /**
+             * Format: uuid
+             * @description DX-389: el `uploadId` de `POST /payments/proofs/upload-url` (el comprobante ya subido al almacén). Si el medio «Pide comprobante» = REQUIRED y no llega: 400; si es NONE y llega: 400. Se comprueba (tamaño, huella y tipo por contenido: JPG, PNG, WebP o PDF de hasta 10 MB) al registrar el abono.
+             */
+            proofUploadId?: string;
+            notes?: string;
+            /**
+             * @description DX-091: motivo para hacerlo en un período contable cerrado. Solo vale para ADMIN y si la clínica admite la exención (`financialLockAdminExempt`); entonces es obligatorio (3–300 caracteres, 400 sin él) y queda registrado con quién y cuándo. Para cualquier otro rol se ignora y el período cerrado da 409 `PERIOD_LOCKED`.
+             * @example Abono del 15/09 que recepción olvidó registrar; cuadrado con el extracto del banco
+             */
+            lockOverrideReason?: string;
         };
         PaymentWithoutRateDto: {
             /** Format: uuid */
@@ -22481,6 +22593,58 @@ export interface components {
             lines: components["schemas"]["ReceiptSplitLineDto"][];
             total: components["schemas"]["ReceiptSplitTotalDto"];
         };
+        ReceiptChangeRateDto: {
+            /** @description Unidades de la moneda de la línea por 1 USD. */
+            fromPerBase: number;
+            /** @description Unidades de la moneda del abono por 1 USD. */
+            toPerBase: number;
+            source: components["schemas"]["ExchangeRateSource"];
+            /**
+             * @description Día civil de la tasa.
+             * @example 2026-11-19
+             */
+            date: string;
+        };
+        ReceiptChangeLineDto: {
+            line: number;
+            /** @example Pago móvil */
+            paymentMethodName: string;
+            method: components["schemas"]["PaymentMethod"];
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /** @example 182.5 */
+            amount: number;
+            reference: string | null;
+            /**
+             * @description En la moneda del abono.
+             * @example 5
+             */
+            equivalentAmount: number;
+            /** @description null en la misma moneda del abono. */
+            rate: components["schemas"]["ReceiptChangeRateDto"] | null;
+        };
+        ReceiptCashChangeDto: {
+            /** @description Moneda del abono (la de recibido y aplicado). */
+            currency: string;
+            /** @example 50 */
+            tendered: number;
+            /**
+             * @description Lo acreditado al plan.
+             * @example 45
+             */
+            applied: number;
+            /**
+             * @description Lo cobrado: importe ± ajustes por medio de pago (DX-516).
+             * @example 45
+             */
+            collected: number;
+            /**
+             * @description La diferencia no devuelta que se sumó al abono (0 si nada).
+             * @example 0
+             */
+            remainderToCredit: number;
+            lines: components["schemas"]["ReceiptChangeLineDto"][];
+        };
         ReceiptSnapshotDto: {
             /** @enum {number} */
             version: 1;
@@ -22500,6 +22664,8 @@ export interface components {
             cashier: components["schemas"]["ReceiptCashierDto"] | null;
             /** @description DX-390: las formas de pago del cobro dividido y su total al emitir; ausente o null en un abono suelto (`payment` es entonces su línea 1). */
             split?: components["schemas"]["ReceiptSnapshotSplitDto"] | null;
+            /** @description DX-570: recibido, aplicado y vuelto (con su tasa y su día) de un cobro en efectivo; ausente sin vuelto. */
+            cashChange?: components["schemas"]["ReceiptCashChangeDto"];
             /** @example Este documento no es factura */
             legalNotice: string;
             /**
@@ -26650,15 +26816,37 @@ export interface components {
             paymentsCount: number | null;
             /** @description DX-516: ajustes por medio de pago de esos abonos, con signo (impuestos y recargos +, descuentos −); 0 sin ajustes. */
             paymentAdjustments: number | null;
+            /** @description DX-570: lo recibido de más en los abonos con vuelto de este grupo (el vuelto que sale, en la moneda del abono); 0 sin vuelto. */
+            changeIn: number | null;
+            /** @description DX-570: vuelto entregado desde este grupo (su moneda y medio), en positivo: se resta. */
+            changeOut: number | null;
+            changeOutCount: number | null;
             /** @description Ajustes que entraron en esta caja (con signo) */
             adjustments: number | null;
             /** @description Salidas de caja menor del turno (DX-274), en positivo: se restan. Solo en efectivo. */
             outflows: number | null;
             outflowsCount: number | null;
-            /** @description opening + payments + paymentAdjustments + adjustments − outflows (puede ser negativo) */
+            /** @description opening + payments + paymentAdjustments + changeIn − changeOut + adjustments − outflows (puede ser negativo) */
             expected: number | null;
             /** @description SEC-043: con arqueo ciego y sin ser ADMIN, en una caja cerrada con una anulación posterior que cuenta en otra caja abierta o pendiente, las cifras del grupo (salvo el fondo) van a null. */
             amountHidden: boolean;
+        };
+        CashPaymentChangeLineDto: {
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            method: components["schemas"]["PaymentMethod"];
+            /** @example Pago móvil */
+            paymentMethodName: string;
+            /** @example 182.5 */
+            amount: number;
+        };
+        CashPaymentChangeDto: {
+            /**
+             * @description Lo recibido, en la moneda del abono.
+             * @example 50
+             */
+            tendered: number;
+            lines: components["schemas"]["CashPaymentChangeLineDto"][];
         };
         CashSessionPaymentDto: {
             /** Format: uuid */
@@ -26683,6 +26871,8 @@ export interface components {
             createdBy: components["schemas"]["CashStaffRefDto"] | null;
             /** @description DX-516: lo cobrado = importe + impuestos + recargos − descuentos (sin ajustes, el importe). */
             collectedAmount: number;
+            /** @description DX-570: lo recibido y el vuelto entregado (en efectivo); null sin vuelto. SEC-043: null con `amountHidden`. */
+            cashChange: components["schemas"]["CashPaymentChangeDto"] | null;
         };
         CashVoidedPaymentDto: {
             /** Format: uuid */
@@ -26704,6 +26894,8 @@ export interface components {
             receiptNumber: string | null;
             patient: components["schemas"]["CashPatientRefDto"];
             createdBy: components["schemas"]["CashStaffRefDto"] | null;
+            /** @description DX-570: lo recibido y el vuelto entregado (en efectivo); null sin vuelto. SEC-043: null con `amountHidden`. */
+            cashChange: components["schemas"]["CashPaymentChangeDto"] | null;
             /** @description SEC-043: null con `amountHidden`. */
             amount: number | null;
             /** @description SEC-043: null con `amountHidden`. */
@@ -26777,10 +26969,10 @@ export interface components {
             patient: components["schemas"]["CashPatientRefDto"];
         };
         /**
-         * @description VOID: anulación de un abono de una caja cerrada. LATE_PAYMENT: abono con fecha de un día ya cerrado. CORRECTION: corrección de un ADMIN. OUTFLOW_VOID: anulación (positiva) de una salida de caja de una caja cerrada.
+         * @description VOID: anulación de un abono de una caja cerrada. LATE_PAYMENT: abono con fecha de un día ya cerrado. CORRECTION: corrección de un ADMIN. OUTFLOW_VOID: anulación (positiva) de una salida de caja de una caja cerrada. DX-570: CHANGE_LATE: vuelto (negativo) de un abono con fecha de un día ya cerrado; CHANGE_VOID: devolución (positiva) del vuelto al anular un abono de una caja cerrada.
          * @enum {string}
          */
-        CashAdjustmentKind: "VOID" | "LATE_PAYMENT" | "CORRECTION" | "OUTFLOW_VOID";
+        CashAdjustmentKind: "VOID" | "LATE_PAYMENT" | "CORRECTION" | "OUTFLOW_VOID" | "CHANGE_LATE" | "CHANGE_VOID";
         CashAdjustmentPaymentDto: {
             /** Format: uuid */
             id: string;
@@ -26808,7 +27000,7 @@ export interface components {
         CashAdjustmentDto: {
             /** Format: uuid */
             id: string;
-            /** @description VOID: anulación de un abono de una caja cerrada. LATE_PAYMENT: abono con fecha de un día ya cerrado. CORRECTION: corrección de un ADMIN. OUTFLOW_VOID: anulación (positiva) de una salida de caja de una caja cerrada. */
+            /** @description VOID: anulación de un abono de una caja cerrada. LATE_PAYMENT: abono con fecha de un día ya cerrado. CORRECTION: corrección de un ADMIN. OUTFLOW_VOID: anulación (positiva) de una salida de caja de una caja cerrada. DX-570: CHANGE_LATE: vuelto (negativo) de un abono con fecha de un día ya cerrado; CHANGE_VOID: devolución (positiva) del vuelto al anular un abono de una caja cerrada. */
             kind: components["schemas"]["CashAdjustmentKind"];
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
@@ -47162,7 +47354,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RecordPaymentDto"];
+                "application/json": components["schemas"]["RecordPlanPaymentDto"];
             };
         };
         responses: {
@@ -47189,7 +47381,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description La Idempotency-Key ya se usó con otro plan u otro cuerpo (DX-109): genera una clave nueva. */
+            /** @description La Idempotency-Key ya se usó con otro plan u otro cuerpo (DX-109): genera una clave nueva. DX-570: el vuelto supera lo recibido menos lo cobrado; no hay tasa del día para una línea en otra moneda; queda una diferencia sin devolver (`code: CASH_CHANGE_REMAINDER`, con `remainder` y `currency`: se confirma con `changeRemainderToCredit`), o el medio tiene ajustes y el vuelto no cubre toda la diferencia. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -47270,7 +47462,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RecordPaymentDto"];
+                "application/json": components["schemas"]["RecordOpeningBalancePaymentDto"];
             };
         };
         responses: {

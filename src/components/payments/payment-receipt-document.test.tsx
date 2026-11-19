@@ -512,3 +512,53 @@ describe('texto propio de cada moneda (DX-517)', () => {
     expect(text(doc)).not.toContain('Dól.');
   });
 });
+
+// DX-570: cobro en efectivo con vuelto en otra moneda y por otro medio.
+it('DX-570: muestra recibido, aplicado y vuelto con su medio, su referencia, su tasa y su fecha', () => {
+  const receipt = paymentReceiptFixture();
+  render(
+    <PaymentReceiptDocument
+      receipt={{
+        ...receipt,
+        snapshot: {
+          ...receipt.snapshot,
+          payment: { ...receipt.snapshot.payment, amount: 45, currency: 'USD' },
+          cashChange: {
+            currency: 'USD',
+            tendered: 50,
+            applied: 45,
+            collected: 45,
+            remainderToCredit: 0,
+            lines: [
+              {
+                line: 1,
+                paymentMethodName: 'Pago móvil',
+                method: 'TRANSFER',
+                currency: 'VES',
+                amount: 182.5,
+                reference: '0412-5551234',
+                equivalentAmount: 5,
+                rate: { fromPerBase: 36.5, toPerBase: 1, source: 'MANUAL', date: '2026-10-17' },
+              },
+            ],
+          },
+        },
+      }}
+    />,
+  );
+  const block = text(screen.getByTestId('receipt-cash-change'));
+  expect(block).toContain('Recibido');
+  expect(block).toContain('50,00 USD');
+  expect(block).toContain('Aplicado al plan');
+  expect(block).toContain('45,00 USD');
+  expect(block).toContain('Vuelto · Pago móvil');
+  expect(block).toContain('0412-5551234');
+  expect(block).toContain('−182,50 VES');
+  expect(block).toMatch(/1 USD = 36,50 VES del 17\/10\/2026/);
+  expect(block).toContain('equivale a 5,00 USD');
+});
+
+it('DX-570: sin vuelto, el recibo es el de antes', () => {
+  render(<PaymentReceiptDocument receipt={paymentReceiptFixture()} />);
+  expect(screen.queryByTestId('receipt-cash-change')).not.toBeInTheDocument();
+});

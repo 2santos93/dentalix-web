@@ -25,6 +25,9 @@ export const ADJUSTMENT_KIND_LABELS: Record<CashAdjustmentKind, string> = {
   LATE_PAYMENT: 'Abono con fecha de un día cerrado',
   CORRECTION: 'Corrección de un cierre',
   OUTFLOW_VOID: 'Anulación de salida',
+  // DX-570: el vuelto de un abono, cuando el abono es tardío o se anula con la caja cerrada.
+  CHANGE_LATE: 'Vuelto de un abono con fecha de un día cerrado',
+  CHANGE_VOID: 'Vuelto devuelto al anular un abono',
 };
 
 /**
