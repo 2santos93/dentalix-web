@@ -849,6 +849,22 @@ policies) — and each entry's label is **exactly** its page's title.
   AA in light and dark, under any tenant accent. Without a photo: `surface-sunken` and the caption.
 - Below `lg` there is no photo and it is never downloaded (lazy image inside a `display: none` panel).
 
+### Waiting-room screen (TV, `/sala/[token]`)
+A read-only board for the waiting-room television (DX-588), read from 4–5 m. It breaks the
+desktop scale on purpose and is the only screen that does:
+- **Always dark** (a `.dark` container, so tokens and the tenant's dark accent family apply even
+  when the system is light), `color-scheme: dark`, no cursor, nothing focusable or interactive.
+- **Type in `vh` with `clamp`** (`components/waiting-room/waiting-room-board.tsx` documents the
+  table): at 1920×1080, names ≈ 60 px (≥ 56), secondary lines ≈ 39 px (≥ 36), nothing below
+  32 px. Smaller landscapes (1366×768, 1280×720) scale down with the height but never under the
+  32 px floor.
+- **No scroll, ever:** each column measures how many rows fit and ends with «y N más».
+- Two columns: «En espera» (arrival order, «hace N min») and «Pasando a consulta» (chair ·
+  provider, newest first). A new arrival in the second column gets `primary-subtle` + an «Ahora»
+  pill for 8 s (accent = selection, not a status). «Sin conexión» is a warning pill in the header;
+  the last data stays on screen.
+- Empty columns say so in words («Nadie en espera»), never a blank area.
+
 ### Odontogram (signature)
 - FDI-numbered tooth map on a paper field; teeth are precise vector marks, 5 selectable surfaces
   each, colored only from the catalog/semantic tokens. Selection uses the accent; keyboard-navigable.
