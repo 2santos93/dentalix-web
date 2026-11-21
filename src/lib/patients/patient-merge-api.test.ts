@@ -7,10 +7,13 @@ import {
   effectiveChoices,
   getMergePreview,
   groupDiffers,
+  leftoverLines,
   listDuplicates,
+  listMergeLeftovers,
   MERGE_FIELD_GROUPS,
   mergeFieldsBody,
   mergePatients,
+  moveMergeLeftovers,
   type MergeSide,
 } from './patient-merge-api';
 import { mergeFields } from '@/lib/test/patient-merge';
@@ -139,5 +142,34 @@ describe('patient-merge-api (DX-266)', () => {
       phone: 'ABSORBED',
       email: 'KEPT',
     });
+  });
+});
+
+describe('lo que quedó en una ficha fusionada (DX-266-bis)', () => {
+  beforeEach(() => mockedFetch.mockReset());
+
+  it('pide la lista del conservado y pasa el absorbido', async () => {
+    mockedFetch.mockResolvedValueOnce({ items: [] });
+    await expect(listMergeLeftovers('tok', 'kept-1')).resolves.toEqual([]);
+    expect(mockedFetch).toHaveBeenCalledWith('/patient-duplicates/merge-leftovers?keptId=kept-1', { token: 'tok' });
+    mockedFetch.mockResolvedValueOnce({ moved: [] });
+    await moveMergeLeftovers('tok', 'abs-1');
+    expect(mockedFetch).toHaveBeenLastCalledWith('/patient-duplicates/merge-leftovers', {
+      method: 'POST',
+      body: { absorbedId: 'abs-1' },
+      token: 'tok',
+    });
+  });
+
+  it('las líneas en el orden de la ficha; «otros» al final, como «más» si hay otras', () => {
+    expect(
+      leftoverLines([
+        { category: 'other', count: 2 },
+        { category: 'payments', count: 1 },
+        { category: 'appointments', count: 3 },
+      ]),
+    ).toEqual(['3 citas', '1 pago', '2 registros más']);
+    expect(leftoverLines([{ category: 'other', count: 1 }])).toEqual(['1 registro']);
+    expect(leftoverLines([])).toEqual([]);
   });
 });

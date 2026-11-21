@@ -3903,6 +3903,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patient-duplicates/merge-leftovers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lo que quedó en los pacientes fusionados en este (solo ADMIN)
+         * @description DX-266-bis. Una escritura que validó al absorbido justo antes de la fusión y confirmó justo después (p. ej. una cita creada en ese mismo segundo) queda en el absorbido. Lista los pacientes fusionados en `keptId` que tienen algo así, con cuántas filas por tabla y por categoría. Vacío casi siempre. Solo recuentos: ningún dato de las filas.
+         */
+        get: operations["PatientDuplicatesController_leftovers"];
+        put?: never;
+        /**
+         * Volver a pasar al conservado lo que llegó tarde (solo ADMIN)
+         * @description DX-266-bis. Sobre un paciente ya fusionado: la misma fusión de la BD (misma lista de tablas, mismo orden de bloqueo, mismos bloqueos de negocio y «uno por paciente») pasa al conservado lo que quedó en el absorbido y anula sus enlaces públicos vivos. Idempotente: sin nada pendiente no cambia nada ni deja auditoría. Con algo, un audit_event (UPDATE de PATIENT, `PATIENT_MERGE_LEFTOVERS_MOVED`) en cada paciente con lo movido por tabla y cantidad.
+         */
+        post: operations["PatientDuplicatesController_move"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/waitlist": {
         parameters: {
             query?: never;
@@ -19319,6 +19343,52 @@ export interface components {
             resolved: components["schemas"]["MergeResolvedDto"][];
             revokedLinks: components["schemas"]["LivePublicLinksDto"];
             fieldsFromAbsorbed: components["schemas"]["MergeFieldGroup"][];
+        };
+        MergeLeftoverDto: {
+            /**
+             * Format: uuid
+             * @description El paciente absorbido.
+             */
+            absorbedPatientId: string;
+            /** @description Código corto del absorbido (DX-484). */
+            patientCode: string;
+            firstName: string;
+            lastName: string;
+            /**
+             * Format: date-time
+             * @description Cuándo se fusionó.
+             */
+            mergedAt: string;
+            /** @description Filas que quedaron en el absorbido, por tabla de la base (`patients`: pacientes que recomendó). */
+            tables: components["schemas"]["MergeMovedDto"][];
+            /** @description Lo mismo agrupado como la vista previa de la fusión. */
+            categories: components["schemas"]["MergeCategoryCountDto"][];
+            /** @description Total de filas pendientes. */
+            total: number;
+        };
+        MergeLeftoverListDto: {
+            /** @description Solo los absorbidos con algo pendiente; vacío casi siempre. */
+            items: components["schemas"]["MergeLeftoverDto"][];
+        };
+        MoveMergeLeftoversDto: {
+            /**
+             * Format: uuid
+             * @description El paciente absorbido (ya fusionado): lo suyo pasa al paciente en el que se fusionó.
+             */
+            absorbedId: string;
+        };
+        MergeLeftoversResultDto: {
+            /**
+             * Format: uuid
+             * @description El paciente que se conserva.
+             */
+            patientId: string;
+            /** Format: uuid */
+            absorbedPatientId: string;
+            /** @description Vacío si no había nada que mover. */
+            moved: components["schemas"]["MergeMovedDto"][];
+            resolved: components["schemas"]["MergeResolvedDto"][];
+            revokedLinks: components["schemas"]["LivePublicLinksDto"];
         };
         /** @enum {string} */
         WaitlistStatus: "OPEN" | "SCHEDULED" | "DISMISSED";
@@ -44839,6 +44909,100 @@ export interface operations {
                 content?: never;
             };
             /** @description Alguno ya está archivado o fusionado (`MERGE_PATIENT_INACTIVE`), tienen citas a la misma hora (`MERGE_OVERLAPPING_APPOINTMENTS`), saldos migrados del mismo lote (`MERGE_OPENING_BALANCE_CONFLICT`), dos compromisos de pago abiertos (`MERGE_OPEN_PAYMENT_PROMISES`), dos casos de ortodoncia activos (`MERGE_TWO_ACTIVE_ORTHO_CASES`) o el documento elegido ya es de otro paciente. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientDuplicatesController_leftovers: {
+        parameters: {
+            query: {
+                /** @description El paciente que se conservó en la fusión. */
+                keptId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeLeftoverListDto"];
+                };
+            };
+            /** @description Parámetros no válidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede revisar y fusionar pacientes duplicados. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El paciente no existe en la clínica o está archivado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientDuplicatesController_move: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveMergeLeftoversDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeLeftoversResultDto"];
+                };
+            };
+            /** @description Parámetros no válidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede revisar y fusionar pacientes duplicados. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El paciente no existe en la clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El paciente no está fusionado (`MERGE_PATIENT_NOT_MERGED`), el conservado está archivado o se fusionó con otro mientras tanto (`MERGE_PATIENT_INACTIVE`), o lo que quedó choca con el conservado (`MERGE_OVERLAPPING_APPOINTMENTS`, `MERGE_OPENING_BALANCE_CONFLICT`, `MERGE_OPEN_PAYMENT_PROMISES`, `MERGE_TWO_ACTIVE_ORTHO_CASES`). */
             409: {
                 headers: {
                     [name: string]: unknown;
