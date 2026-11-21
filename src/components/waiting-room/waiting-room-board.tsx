@@ -19,7 +19,6 @@ import {
   visibleCapacity,
 } from '@/lib/waiting-room/board-logic';
 import { locationRegionalFormat } from '@/lib/locations/location-settings';
-import type { HourCycle } from '@/lib/format/regional-format';
 import { useClinicBranding } from '@/components/brand/branding-context';
 import { cn } from '@/lib/utils';
 
@@ -210,7 +209,7 @@ function useChime() {
   }, []);
 }
 
-/** Cuántas filas caben en la lista (mide la primera fila y el hueco de la lista). */
+/** Cuántas filas caben en la lista de `count` en total (mide la primera fila y el hueco de la lista). */
 function useCapacity(count: number) {
   const listRef = useRef<HTMLUListElement>(null);
   const [capacity, setCapacity] = useState(count);
@@ -245,7 +244,7 @@ function useClock(board: WaitingRoomBoard | null, offsetMs: number): string | nu
     return () => clearInterval(id);
   }, []);
   if (!board) return null;
-  const fmt = locationRegionalFormat({ locale: board.locale, hourCycle: board.hourCycle as HourCycle | null });
+  const fmt = locationRegionalFormat({ locale: board.locale, hourCycle: board.hourCycle });
   if (!fmt) return null;
   try {
     return fmt.time(new Date(now + offsetMs), board.timeZone);
@@ -365,8 +364,16 @@ export function WaitingRoomBoardView({ screenToken }: { screenToken: string }) {
         </main>
       ) : board ? (
         <main className="grid min-h-0 flex-1 grid-cols-2 gap-[3vw] px-[3vw] py-[3vh]">
-          <WaitingColumn items={board.waiting} turnMode={board.nameMode === 'TURN_NUMBER'} />
-          <CalledColumn items={board.called} highlighted={highlighted} />
+          <WaitingColumn
+            items={board.waiting}
+            total={Math.max(board.waitingTotal, board.waiting.length)}
+            turnMode={board.nameMode === 'TURN_NUMBER'}
+          />
+          <CalledColumn
+            items={board.called}
+            total={Math.max(board.calledTotal, board.called.length)}
+            highlighted={highlighted}
+          />
         </main>
       ) : (
         <main className="flex min-h-0 flex-1 items-center justify-center">
@@ -415,8 +422,17 @@ function MoreRow({ hidden }: { hidden: number }) {
   );
 }
 
-function WaitingColumn({ items, turnMode }: { items: PublicWaitingRoomWaitingItemDto[]; turnMode: boolean }) {
-  const [listRef, capacity] = useCapacity(items.length);
+function WaitingColumn({
+  items,
+  total,
+  turnMode,
+}: {
+  items: PublicWaitingRoomWaitingItemDto[];
+  /** Cuántos esperan en total (la API manda como mucho 40 filas). */
+  total: number;
+  turnMode: boolean;
+}) {
+  const [listRef, capacity] = useCapacity(total);
   const shown = items.slice(0, capacity);
   return (
     <section
@@ -446,7 +462,7 @@ function WaitingColumn({ items, turnMode }: { items: PublicWaitingRoomWaitingIte
               </span>
             </li>
           ))}
-          <MoreRow hidden={items.length - shown.length} />
+          <MoreRow hidden={total - shown.length} />
         </ul>
       )}
     </section>
@@ -455,12 +471,15 @@ function WaitingColumn({ items, turnMode }: { items: PublicWaitingRoomWaitingIte
 
 function CalledColumn({
   items,
+  total,
   highlighted,
 }: {
   items: PublicWaitingRoomCalledItemDto[];
+  /** Cuántos pasan a consulta en total (la API manda como mucho 40 filas). */
+  total: number;
   highlighted: ReadonlySet<string>;
 }) {
-  const [listRef, capacity] = useCapacity(items.length);
+  const [listRef, capacity] = useCapacity(total);
   const shown = items.slice(0, capacity);
   return (
     <section aria-labelledby="wr-called" data-testid="waiting-room-called" className="flex min-h-0 flex-col gap-[2vh]">
@@ -503,7 +522,7 @@ function CalledColumn({
               </li>
             );
           })}
-          <MoreRow hidden={items.length - shown.length} />
+          <MoreRow hidden={total - shown.length} />
         </ul>
       )}
     </section>

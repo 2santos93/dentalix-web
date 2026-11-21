@@ -13,6 +13,13 @@ jest.mock('next/navigation', () => ({ usePathname: () => '/sala/tok' }));
 const mockedGet = getPublicWaitingRoomBoard as jest.MockedFunction<typeof getPublicWaitingRoomBoard>;
 
 function board(over: Partial<WaitingRoomBoard> = {}): WaitingRoomBoard {
+  const waiting = over.waiting ?? [
+    { key: 'w1', label: 'Ana R.', minutesWaiting: 12 },
+    { key: 'w2', label: 'José P.', minutesWaiting: 0 },
+  ];
+  const called = over.called ?? [
+    { key: 'c1', label: 'María G.', chairName: 'Sillón 2', providerName: 'Dra. Pérez', minutesSinceCalled: 3 },
+  ];
   return {
     screenName: 'Televisor recepción',
     locationName: 'Sede Chacao',
@@ -24,14 +31,11 @@ function board(over: Partial<WaitingRoomBoard> = {}): WaitingRoomBoard {
     hourCycle: 'h12',
     now: '2026-11-21T14:05:00.000Z',
     refreshSeconds: 8,
-    waiting: [
-      { key: 'w1', label: 'Ana R.', minutesWaiting: 12 },
-      { key: 'w2', label: 'José P.', minutesWaiting: 0 },
-    ],
-    called: [
-      { key: 'c1', label: 'María G.', chairName: 'Sillón 2', providerName: 'Dra. Pérez', minutesSinceCalled: 3 },
-    ],
+    waitingTotal: waiting.length,
+    calledTotal: called.length,
     ...over,
+    waiting,
+    called,
   };
 }
 
@@ -116,6 +120,43 @@ describe('DX-588 · pantalla de sala de espera', () => {
       expect(text).not.toContain(forbidden);
     }
     expect(screen.getByText(copy.calledTo(null, null))).toBeInTheDocument();
+  });
+
+  it('lista blanca del contrato: las claves del tablero y de cada fila', () => {
+    const b = board();
+    expect(Object.keys(b).sort()).toEqual(
+      [
+        'screenName',
+        'locationName',
+        'nameMode',
+        'messages',
+        'soundEnabled',
+        'timeZone',
+        'locale',
+        'hourCycle',
+        'now',
+        'refreshSeconds',
+        'waiting',
+        'waitingTotal',
+        'called',
+        'calledTotal',
+      ].sort(),
+    );
+    expect(Object.keys(b.waiting[0]).sort()).toEqual(['key', 'label', 'minutesWaiting']);
+    expect(Object.keys(b.called[0]).sort()).toEqual(
+      ['key', 'label', 'chairName', 'providerName', 'minutesSinceCalled'].sort(),
+    );
+  });
+
+  it('«y N más» cuenta el total de la API (corta cada columna a 40 filas), no solo las filas recibidas', async () => {
+    mockedGet.mockResolvedValue(board({ waitingTotal: 45, calledTotal: 1 }));
+    renderBoard();
+    await advance(0);
+    // jsdom no mide: se pintan las 2 filas recibidas y el resto hasta 45 va en «y N más».
+    expect(screen.getAllByTestId('waiting-room-waiting-item')).toHaveLength(2);
+    expect(screen.getByTestId('waiting-room-more')).toHaveTextContent(copy.more(43));
+    // En «Pasando a consulta» caben todas: no hay «y N más» visible.
+    expect(within(screen.getByRole('region', { name: copy.called })).queryByTestId('waiting-room-more')).toBeNull();
   });
 
   it('modo turno: solo «Turno N», sin nombres, con la pista del turno', async () => {

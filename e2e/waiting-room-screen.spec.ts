@@ -60,6 +60,15 @@ function board(over: Record<string, unknown> = {}) {
   };
 }
 
+/** El tablero con los totales que manda la API (por defecto, las filas que trae). */
+function withTotals(body: ReturnType<typeof board>) {
+  return {
+    ...body,
+    waitingTotal: (body as { waitingTotal?: number }).waitingTotal ?? (body.waiting as unknown[]).length,
+    calledTotal: (body as { calledTotal?: number }).calledTotal ?? (body.called as unknown[]).length,
+  };
+}
+
 type Reply = { status: number; body?: unknown } | 'abort';
 
 /** La API pública simulada: cada sondeo toma la respuesta que diga `next()`. */
@@ -73,7 +82,9 @@ async function mockBoard(page: Page, next: () => Reply) {
       status: reply.status,
       contentType: 'application/json',
       headers: { 'cache-control': 'no-store' },
-      body: JSON.stringify(reply.body ?? {}),
+      body: JSON.stringify(
+        reply.status === 200 ? withTotals(reply.body as ReturnType<typeof board>) : (reply.body ?? {}),
+      ),
     });
   });
   return calls;
@@ -165,6 +176,16 @@ test.describe('DX-588 · pantalla de sala de espera (televisor)', () => {
 
     expect(await axeViolations(page, page.locator('body'))).toEqual([]);
     await shot(page, 'sala-lista', 1920);
+  });
+
+  test('«y N más» suma el total de la API aunque solo mande 40 filas', async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await mockBoard(page, () => ({ status: 200, body: board({ waitingTotal: 52 }) }));
+    await openBoard(page);
+    const waiting = page.getByTestId('waiting-room-waiting');
+    await expect(waiting.getByTestId('waiting-room-waiting-item').first()).toBeVisible();
+    const shown = await waiting.getByTestId('waiting-room-waiting-item').count();
+    await expect(waiting.getByTestId('waiting-room-more')).toHaveText(`y ${52 - shown} más`);
   });
 
   for (const viewport of [
