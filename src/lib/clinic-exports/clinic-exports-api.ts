@@ -41,6 +41,15 @@ export function downloadClinicExport(token: string, id: string): Promise<ClinicE
   });
 }
 
+/**
+ * Un decimal con coma: no es dinero, así que no pasa por @/lib/money/round
+ * (y sin toFixed, que la guarda DX-488-bis trata como redondeo de importes).
+ */
+const FILE_SIZE_NUMBER = new Intl.NumberFormat('es-VE', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+
 /** «2,4 MB»: tamaño de un fichero (no es dinero ni una fecha). */
 export function fileSizeLabel(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -51,5 +60,5 @@ export function fileSizeLabel(bytes: number): string {
     value /= 1024;
     unit += 1;
   }
-  return `${value.toFixed(1).replace('.', ',')} ${units[unit]}`;
+  return `${FILE_SIZE_NUMBER.format(value)} ${units[unit]}`;
 }
