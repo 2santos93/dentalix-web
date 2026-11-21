@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup as cleanupAll, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { tokenForRole } from '@/lib/test/data-consents';
 import { listLocations } from '@/lib/locations/locations-api';
@@ -7,17 +7,23 @@ import { clearSessionStore } from '@/lib/session/session-store';
 import {
   EXCHANGE_RATES_CHANGED_EVENT,
   getExchangeHeader,
+  refreshExchangeRates,
   type ExchangeHeader,
 } from '@/lib/exchange/exchange-header-api';
+import { ApiError } from '@/lib/api/api-error';
+import { resetRateRefreshForTests } from '@/lib/exchange/rate-refresh-store';
+import { rateRefreshCopy } from './rate-refresh-control';
 import { EXCHANGE_HEADER_POLL_MS, ExchangeHeaderProvider, ExchangeHeaderTestProvider } from './exchange-header-context';
-import { RATE_SETTINGS_HREF, RateIndicator, rateIndicatorCopy as copy } from './rate-indicator';
+import { RATE_REGISTER_HREF, RATE_SETTINGS_HREF, RateIndicator, rateIndicatorCopy as copy } from './rate-indicator';
 
 jest.mock('../../lib/exchange/exchange-header-api', () => ({
   ...jest.requireActual('../../lib/exchange/exchange-header-api'),
   getExchangeHeader: jest.fn(),
+  refreshExchangeRates: jest.fn(),
 }));
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 const mockedHeader = jest.mocked(getExchangeHeader);
+const mockedRefresh = jest.mocked(refreshExchangeRates);
 
 const usd = {
   currency: 'USD',
@@ -45,6 +51,8 @@ function header(overrides: Partial<ExchangeHeader> = {}): ExchangeHeader {
 beforeEach(() => {
   clearSessionStore();
   mockedHeader.mockReset();
+  mockedRefresh.mockReset();
+  resetRateRefreshForTests();
   jest.mocked(listLocations).mockResolvedValue([clinicLocation({ currency: 'VES' })]);
 });
 
@@ -247,5 +255,102 @@ describe('RateIndicatorSlot (DX-584)', () => {
       </ExchangeHeaderTestProvider>,
     );
     expect(await screen.findByTestId('rate-indicator')).toHaveTextContent('1 USD = 918,77 Bs.');
+  });
+});
+
+describe('«Actualizar tasa» (DX-586)', () => {
+  async function openPopover(value: ExchangeHeader, role: string) {
+    const user = userEvent.setup();
+    renderFixed(value, role);
+    await user.click(await screen.findByTestId('rate-indicator'));
+    return { user, popover: await screen.findByTestId('rate-indicator-popover') };
+  }
+
+  it('recepción la actualiza: carga, «Tasa actualizada.», el menú se relee y queda deshabilitado 5 min', async () => {
+    const onChanged = jest.fn();
+    window.addEventListener(EXCHANGE_RATES_CHANGED_EVENT, onChanged);
+    let resolve: (v: Awaited<ReturnType<typeof refreshExchangeRates>>) => void = () => {};
+    mockedRefresh.mockImplementation(() => new Promise((r) => (resolve = r)));
+    const { user, popover } = await openPopover(header(), 'RECEPTION');
+    const button = within(popover).getByRole('button', { name: rateRefreshCopy.refresh });
+    await user.click(button);
+    expect(await within(popover).findByRole('button', { name: rateRefreshCopy.refreshing })).toBeDisabled();
+    await act(async () => resolve({ ...header(), refresh: { ok: true, code: null, message: null } }));
+    expect(await within(popover).findByRole('status')).toHaveTextContent(rateRefreshCopy.done);
+    expect(onChanged).toHaveBeenCalledTimes(1);
+    const again = within(popover).getByRole('button', { name: rateRefreshCopy.refresh });
+    expect(again).toBeDisabled();
+    expect(again).toHaveAccessibleDescription(rateRefreshCopy.wait(5));
+    expect(mockedRefresh).toHaveBeenCalledWith(tokenForRole('RECEPTION'));
+    window.removeEventListener(EXCHANGE_RATES_CHANGED_EVENT, onChanged);
+  });
+
+  it('si la fuente no da la tasa, dice el mensaje de la API y no relee el menú', async () => {
+    const onChanged = jest.fn();
+    window.addEventListener(EXCHANGE_RATES_CHANGED_EVENT, onChanged);
+    const message = 'No pudimos consultar el BCV ni su respaldo. Se sigue usando la última tasa guardada.';
+    mockedRefresh.mockResolvedValue({
+      ...header(),
+      refresh: { ok: false, code: 'EXCHANGE_RATE_UNAVAILABLE', message },
+    });
+    const { user, popover } = await openPopover(header(), 'ADMIN');
+    await user.click(within(popover).getByRole('button', { name: rateRefreshCopy.refresh }));
+    expect(await within(popover).findByRole('status')).toHaveTextContent(message);
+    expect(onChanged).not.toHaveBeenCalled();
+    window.removeEventListener(EXCHANGE_RATES_CHANGED_EVENT, onChanged);
+  });
+
+  it('un 429 dice cuándo volver a intentarlo y deshabilita el botón ese tiempo', async () => {
+    mockedRefresh.mockRejectedValue(
+      new ApiError(429, 'Vuelve a intentarlo en 3 min.', {
+        retryAfterSeconds: 180,
+        code: 'EXCHANGE_RATE_REFRESH_TOO_SOON',
+      }),
+    );
+    const { user, popover } = await openPopover(header(), 'RECEPTION');
+    await user.click(within(popover).getByRole('button', { name: rateRefreshCopy.refresh }));
+    await waitFor(() => expect(within(popover).getByRole('button', { name: rateRefreshCopy.refresh })).toBeDisabled());
+    expect(within(popover).getByRole('button', { name: rateRefreshCopy.refresh })).toHaveAccessibleDescription(
+      rateRefreshCopy.wait(3),
+    );
+  });
+
+  it('el turno vale para todos los indicadores: al reabrir sigue deshabilitado', async () => {
+    mockedRefresh.mockResolvedValue({ ...header(), refresh: { ok: true, code: null, message: null } });
+    const { user, popover } = await openPopover(header(), 'RECEPTION');
+    await user.click(within(popover).getByRole('button', { name: rateRefreshCopy.refresh }));
+    await within(popover).findByText(rateRefreshCopy.done);
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByTestId('rate-indicator-popover')).toBeNull());
+    await user.click(screen.getByTestId('rate-indicator'));
+    const reopened = await screen.findByTestId('rate-indicator-popover');
+    expect(within(reopened).getByRole('button', { name: rateRefreshCopy.refresh })).toBeDisabled();
+  });
+
+  it('DENTIST y ASSISTANT sin permiso de cobro no lo ven', async () => {
+    for (const role of ['DENTIST', 'ASSISTANT']) {
+      const user = userEvent.setup();
+      const view = renderFixed(header(), role);
+      await user.click(await screen.findByTestId('rate-indicator'));
+      const popover = await screen.findByTestId('rate-indicator-popover');
+      expect(within(popover).queryByRole('button', { name: rateRefreshCopy.refresh })).toBeNull();
+      view.unmount();
+    }
+  });
+
+  it('con tasa manual no hay nada que consultar: ADMIN tiene «Registrar tasa»; recepción, quién la registra', async () => {
+    const manual = header({ rates: [{ ...usd, source: 'MANUAL' }] });
+    const admin = await openPopover(manual, 'ADMIN');
+    expect(within(admin.popover).queryByRole('button', { name: rateRefreshCopy.refresh })).toBeNull();
+    expect(within(admin.popover).getByRole('link', { name: copy.registerManual })).toHaveAttribute(
+      'href',
+      RATE_REGISTER_HREF,
+    );
+    await admin.user.keyboard('{Escape}');
+    cleanupAll();
+    const reception = await openPopover(manual, 'RECEPTION');
+    expect(within(reception.popover).queryByRole('button', { name: rateRefreshCopy.refresh })).toBeNull();
+    expect(within(reception.popover).queryByRole('link')).toBeNull();
+    expect(reception.popover).toHaveTextContent(copy.manualByAdmin);
   });
 });

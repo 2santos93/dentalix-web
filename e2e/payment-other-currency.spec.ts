@@ -18,7 +18,7 @@ import { fillDate } from './support/dates';
  *  1. «Registrar abono» (estado de cuenta): antes de guardar, el equivalente
  *     en USD, la tasa con su fuente y su día y lo pendiente tras el abono, a
  *     1440 y 390 px sin desplazamiento lateral.
- *  2. Recibo de cada abono: «Tasa aplicada: 1 USD = … VES (automática, día)» y
+ *  2. Recibo de cada abono: «Tasa usada: 1 USD = … VES (automática, cuándo se cotizó)» (DX-586) y
  *     el equivalente; la reimpresión tras cambiar la tasa de ese día da lo
  *     mismo (la tasa congelada del abono, DX-375).
  */
@@ -137,7 +137,7 @@ async function payInVes(page: Page, amount: string, day: string, rateText: strin
   // DX-386: con el formato de la sede y el código ISO, como la tasa congelada.
   await expect(preview).toContainText(/USD\s50,00/);
   await expect(preview).not.toContainText('US$');
-  await expect(preview).toContainText(`Tasa: 1 USD = VES ${rateText} · automática · ${ddmmyyyy(day)}`);
+  await expect(preview).toContainText(`Se cobrará con 1 USD = VES ${rateText} (automática · ${ddmmyyyy(day)})`);
   await expect(preview).toContainText(pending);
   await expectNoHorizontalScroll(page);
 
@@ -185,7 +185,8 @@ test('el recibo de cada abono imprime su tasa congelada y la reimpresión no cam
       await receipts.nth(i).click();
       await page.getByRole('menuitem', { name: 'Recibo' }).click();
       const doc = page.getByTestId('receipt-document');
-      await expect(doc).toContainText('Tasa aplicada', { timeout: 15_000 });
+      // DX-586: qué tasa y cuándo se cotizó («Tasa usada: … (automática, día hora)»).
+      await expect(doc).toContainText('Tasa usada', { timeout: 15_000 });
       await expect(doc).toContainText(/Equivalente en USD/);
       // El formato de la sede separa importe y moneda con un espacio duro (U+00A0):
       // se normaliza para comparar con el texto esperado.
@@ -197,8 +198,9 @@ test('el recibo de cada abono imprime su tasa congelada y la reimpresión no cam
   }
 
   const first = await readReceipts();
-  for (const { pair, day } of expectations) {
-    expect(first.some((t) => t.includes(`Tasa aplicada: ${pair} (automática, ${ddmmyyyy(day)})`))).toBe(true);
+  // Los dos se cotizaron hoy, al registrarlos (el de ayer, con la tasa de ayer).
+  for (const { pair } of expectations) {
+    expect(first.some((t) => t.includes(`Tasa usada: ${pair} (automática, ${ddmmyyyy(TODAY)}`))).toBe(true);
   }
 
   // La tasa de ayer cambia después: la reimpresión usa la congelada del abono.

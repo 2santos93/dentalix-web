@@ -1,8 +1,18 @@
 import type { RegionalFormat } from '@/lib/format/regional-format';
-import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
+import { NO_SEDE_FORMAT, sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import type { Payment } from './payments-api';
 import { roundAmount } from '@/lib/money/round';
 import type { ExchangeRateSource } from '@/lib/exchange/exchange-settings-api';
+import type { components } from '@/lib/api/schema';
+
+/**
+ * DX-586: la tasa con que se cobró un abono, tal como la congeló la API: «1
+ * `unit` = `rate` `currency`» (`unit`, la más fuerte de las dos), su fuente, la
+ * fecha valor del BCV (solo con BCV), cuándo se cotizó (hora de la BD) y su
+ * referencia estable (`BCV:<fecha valor>`, `MANUAL:<id>`, …). `null` en los
+ * abonos sin conversión, «sin tasa» o congelados antes de DX-586.
+ */
+export type PaymentRateUsed = components['schemas']['PaymentRateUsedDto'];
 
 /** Estado de la tasa de un abono (DX-375). */
 export type PaymentExchangeRateStatus = Payment['exchangeRateStatus'];
@@ -18,7 +28,56 @@ export const paymentRateCopy = {
   frozen: (pair: string, source: string, date: string) => `Tasa congelada: ${pair} · ${source} · ${date}`,
   /** DX-384: la tasa es la última registrada, de un día anterior al del abono. */
   rateOfDay: (date: string) => `tasa del ${date}`,
+  /** DX-586: «Tasa usada: 1 USD = Bs. 918,77 (BCV, fecha valor 20/11/2026)». */
+  used: (pair: string, detail: string) => `Tasa usada: ${pair} (${detail})`,
+  /** DX-586: sin fecha valor, la fuente y cuándo se cotizó: «manual, 21/11/2026 14:35». */
+  usedAt: (source: string, when: string) => `${source}, ${when}`,
+  /** DX-586: la tasa cambió entre abrir el cobro y confirmarlo. */
+  changed: (used: string, shown: string) =>
+    `La tasa cambió mientras cobrabas: se cobró con ${used}, no con ${shown}, que era la que se veía.`,
 };
+
+/** Lo que hace falta para pintar la tasa usada: importes, días y un instante, en el formato que toque. */
+export interface RateUsedPainters {
+  money: (amount: number, currency: string) => string;
+  civilDate: (day: string) => string;
+  /** Fecha y hora de un instante en la zona de la sede. */
+  dateTime: (iso: string) => string;
+}
+
+/** DX-586: «1 USD = Bs. 918,77», de la tasa usada (la moneda más fuerte a la izquierda). */
+export function rateUsedPair(used: PaymentRateUsed, money: RateUsedPainters['money']): string {
+  return `1 ${used.unit} = ${money(used.rate, used.currency)}`;
+}
+
+/**
+ * DX-586: de dónde salió la tasa usada: «BCV, fecha valor 20/11/2026» o, sin
+ * fecha valor, la fuente y cuándo se cotizó («manual, 21/11/2026 14:35»).
+ */
+export function rateUsedDetail(used: PaymentRateUsed, painters: Omit<RateUsedPainters, 'money'>): string {
+  if (used.source === 'BCV' && used.valueDate) return paymentRateCopy.bcvValueDate(painters.civilDate(used.valueDate));
+  return paymentRateCopy.usedAt(paymentRateCopy.source[used.source], painters.dateTime(used.quotedAt));
+}
+
+/** DX-586: «Tasa usada: 1 USD = Bs. 918,77 (BCV, fecha valor 20/11/2026)». */
+export function rateUsedLabel(used: PaymentRateUsed, painters: RateUsedPainters): string {
+  return paymentRateCopy.used(rateUsedPair(used, painters.money), rateUsedDetail(used, painters));
+}
+
+/**
+ * DX-586: ¿la tasa con que la API cobró es la que se enseñó antes de
+ * confirmar? Compara la cifra (no la referencia): si dos tasas valen lo mismo,
+ * el abono vale lo mismo. Tolerancia relativa de 1e-7 (la API guarda 8 decimales).
+ */
+export function rateUsedMatchesQuote(used: PaymentRateUsed, paymentCurrency: string, quote: RateQuote): boolean {
+  // Unidades de la moneda del abono por 1 de la de destino.
+  const paymentPerTarget = quote.fromPerBase / quote.toPerBase;
+  let expected: number;
+  if (used.unit === quote.currency && used.currency === paymentCurrency) expected = paymentPerTarget;
+  else if (used.unit === paymentCurrency && used.currency === quote.currency) expected = 1 / paymentPerTarget;
+  else return false;
+  return Math.abs(used.rate - expected) <= Math.abs(expected) * 1e-7;
+}
 
 /**
  * DX-384: el día de la tasa para mostrarlo junto a un abono (o a su vista
@@ -142,11 +201,21 @@ export function convertWithRate(amount: number, rate: Pick<RateQuote, 'fromPerBa
  * congeló ninguna.
  */
 export function frozenRateLabel(
-  payment: Pick<Payment, 'currency' | 'frozenRate' | 'paidOn'>,
+  payment: Pick<Payment, 'currency' | 'frozenRate' | 'paidOn'> & { rateUsed?: PaymentRateUsed | null },
   fmt: RegionalFormat | null,
+  timeZone: string | null = null,
 ): string | null {
   const rate = payment.frozenRate;
   if (!rate) return null;
-  const pair = ratePairLabel(payment.currency, rate, (amount, currency) => sedeMoney(amount, currency, fmt));
+  const money = (amount: number, currency: string) => sedeMoney(amount, currency, fmt);
+  // DX-586: con la tasa usada, qué tasa y cuándo (fecha valor del BCV u hora de la cotización).
+  if (payment.rateUsed) {
+    return rateUsedLabel(payment.rateUsed, {
+      money,
+      civilDate: (day) => sedeCivilDate(day, fmt),
+      dateTime: (iso) => (fmt && timeZone ? fmt.dateTime(new Date(iso), timeZone) : NO_SEDE_FORMAT),
+    });
+  }
+  const pair = ratePairLabel(payment.currency, rate, money);
   return paymentRateCopy.frozen(pair, paymentRateCopy.source[rate.source], rateDayLabel(rate.date, payment.paidOn, (day) => sedeCivilDate(day, fmt)));
 }

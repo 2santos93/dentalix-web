@@ -3,13 +3,19 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { ArrowLeftRight, TriangleAlert } from 'lucide-react';
 import { getTokenRole } from '@/lib/auth/token-role';
+import { canRegisterPayments, useEffectivePermissions } from '@/lib/auth/permissions';
 import { canManageExchangeRates, type ExchangeRateSource } from '@/lib/exchange/exchange-settings-api';
-import type { ExchangeHeader, ExchangeHeaderRate } from '@/lib/exchange/exchange-header-api';
+import {
+  RATE_REGISTER_HASH,
+  type ExchangeHeader,
+  type ExchangeHeaderRate,
+} from '@/lib/exchange/exchange-header-api';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { useExchangeHeader } from './exchange-header-context';
+import { RateRefreshControl } from './rate-refresh-control';
 
 export const rateIndicatorCopy = {
   heading: 'Tasa de hoy',
@@ -31,11 +37,15 @@ export const rateIndicatorCopy = {
   bcvMeta: (valueDate: string) => `BCV · fecha valor ${valueDate}`,
   missingMeta: 'Aún no hay tasa de hoy: los abonos en esta moneda la toman en cuanto llegue.',
   settings: 'Ajustes de la tasa',
+  /** DX-586: con la fuente manual no hay nada que consultar: la tasa nueva se registra. */
+  registerManual: 'Registrar tasa',
+  manualByAdmin: 'Con la tasa manual, la registra administración en Ajustes.',
   noFormat: '—',
 };
 
 const copy = rateIndicatorCopy;
 export const RATE_SETTINGS_HREF = '/settings/tasa-de-cambio';
+export const RATE_REGISTER_HREF = `${RATE_SETTINGS_HREF}#${RATE_REGISTER_HASH}`;
 
 /**
  * La tasa con su escala: ≥ 1 con 2 decimales («918,77»); por debajo, hasta 6
@@ -114,6 +124,7 @@ export type RateIndicatorVariant = 'block' | 'rail' | 'phone';
 export function RateIndicator({ token, variant }: { token: string; variant: RateIndicatorVariant }) {
   const state = useExchangeHeader();
   const fmt = readyFormat(useSedeFormat(token));
+  const permissions = useEffectivePermissions();
   if (state.status !== 'ready') return null;
   const { header } = state;
   if (!header.visible || header.rates.length === 0) return null;
@@ -121,7 +132,11 @@ export function RateIndicator({ token, variant }: { token: string; variant: Rate
   const [first] = header.rates;
   const more = header.rates.length - 1;
   const line = describeRate(header, first, fmt, more);
-  const admin = canManageExchangeRates(getTokenRole(token));
+  const role = getTokenRole(token);
+  const admin = canManageExchangeRates(role);
+  // DX-586: «Actualizar tasa», para quien cobra (los mismos roles que registrar abonos).
+  const canRefresh = canRegisterPayments(role, permissions);
+  const manual = first.source === 'MANUAL';
 
   const Icon = line.missing ? TriangleAlert : ArrowLeftRight;
   const toneText = line.missing ? 'text-warning-text' : 'text-ink';
@@ -209,6 +224,19 @@ export function RateIndicator({ token, variant }: { token: string; variant: Rate
             );
           })}
         </ul>
+        {canRefresh && !manual ? <RateRefreshControl token={token} /> : null}
+        {manual && admin ? (
+          <PopoverClose asChild>
+            <Link
+              href={RATE_REGISTER_HREF}
+              className="mt-3 flex text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
+            >
+              {copy.registerManual}
+            </Link>
+          </PopoverClose>
+        ) : manual && canRefresh ? (
+          <p className="mt-3 text-xs text-muted">{copy.manualByAdmin}</p>
+        ) : null}
         {admin ? (
           <PopoverClose asChild>
             <Link

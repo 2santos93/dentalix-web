@@ -35,7 +35,7 @@ export function makeRuleRow(over: Partial<ProfessionalCommissionRule> = {}): Pro
 }
 
 export function makeLine(over: Partial<CommissionLine> = {}): CommissionLine {
-  return {
+  const line: Omit<CommissionLine, 'deductions'> = {
     id: null,
     kind: 'ACCRUAL',
     adjustsLineId: null,
@@ -56,6 +56,17 @@ export function makeLine(over: Partial<CommissionLine> = {}): CommissionLine {
     amount: 35,
     paidInPaymentId: null,
     ...over,
+  };
+  // Sin descuentos (DX-018-bis), la base bruta es la base.
+  return {
+    ...line,
+    deductions: over.deductions ?? {
+      grossBase: line.base,
+      labCost: 0,
+      cardFeePercent: null,
+      cardFee: 0,
+      labCostSkippedCurrencies: [],
+    },
   };
 }
 
@@ -109,6 +120,8 @@ export function makeSettlement(over: Partial<CommissionSettlement> = {}): Commis
     basis: 'COLLECTED',
     releaseMode: 'PER_ITEM',
     percent: 35,
+    deductLabCost: false,
+    deductCardFee: false,
     closedAt: '2026-11-02T14:00:00.000Z',
     closedBy: { userId: 'admin', name: 'Dr. Owner' },
     lockDateBefore: null,
@@ -154,8 +167,22 @@ export function makePayment(over: Partial<CommissionPayment> = {}): CommissionPa
 
 /** DX-464: la fila de la lista de liquidaciones. */
 export function makeSettlementSummary(over: Partial<CommissionSettlementSummary> = {}): CommissionSettlementSummary {
-  const { id, professional, period, basis, releaseMode, percent, closedAt, closedBy, lockDateBefore, lockDateAfter, totals, payment } =
-    makeSettlement();
+  const {
+    id,
+    professional,
+    period,
+    basis,
+    releaseMode,
+    percent,
+    deductLabCost,
+    deductCardFee,
+    closedAt,
+    closedBy,
+    lockDateBefore,
+    lockDateAfter,
+    totals,
+    payment,
+  } = makeSettlement();
   return {
     id,
     professional,
@@ -163,6 +190,8 @@ export function makeSettlementSummary(over: Partial<CommissionSettlementSummary>
     basis,
     releaseMode,
     percent,
+    deductLabCost,
+    deductCardFee,
     closedAt,
     closedBy,
     lockDateBefore,

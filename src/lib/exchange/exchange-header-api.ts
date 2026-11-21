@@ -23,3 +23,25 @@ export const EXCHANGE_RATES_CHANGED_EVENT = 'dentalix:exchange-rates-changed';
 export function notifyExchangeRatesChanged(): void {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(EXCHANGE_RATES_CHANGED_EVENT));
 }
+
+/**
+ * DX-586: «Actualizar tasa». `POST /exchange/refresh` vuelve a consultar la
+ * tasa de hoy en el acto (BCV: oficial → respaldo; automática: el proveedor) y
+ * responde el mismo cuerpo que `GET /exchange/header`, ya recalculado, más
+ * `refresh`: `ok`, o `ok: false` con el mensaje si la fuente no dio la tasa
+ * (siempre 200: nunca un 5xx por la fuente). Lo pueden ADMIN, recepción y
+ * quien cobra con PAYMENT_REGISTER. Con fuente manual, 409
+ * `EXCHANGE_RATE_REFRESH_MANUAL`; más de una vez cada 5 min por clínica, 429
+ * `EXCHANGE_RATE_REFRESH_TOO_SOON` con `retryAfterSeconds`.
+ */
+export type ExchangeRefresh = components['schemas']['ExchangeRefreshDto'];
+
+/** Cada cuánto deja la API volver a consultar (por clínica). */
+export const EXCHANGE_REFRESH_COOLDOWN_MS = 5 * 60_000;
+
+export function refreshExchangeRates(token: string): Promise<ExchangeRefresh> {
+  return apiFetch<ExchangeRefresh>('/exchange/refresh', { method: 'POST', token });
+}
+
+/** DX-586: el ancla de Ajustes › Tasa de cambio que abre «Registrar tasa» al llegar (enlace del popover con tasa manual). */
+export const RATE_REGISTER_HASH = 'registrar-tasa';

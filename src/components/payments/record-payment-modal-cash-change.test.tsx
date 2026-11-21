@@ -99,6 +99,7 @@ function saved(cashChange: unknown) {
     receiptNumber: 'PRI-000001',
     exchangeRateCurrency: 'USD',
     frozenRate: null,
+    rateUsed: null,
     exchangeRateStatus: 'NOT_NEEDED' as const,
     adjustments: [],
     collectedAmount: 45,

@@ -186,7 +186,7 @@ describe('PatientLabOrdersTab (DX-017)', () => {
     const user = setupUser();
     const onShortcutConsumed = jest.fn();
     mockedList.mockResolvedValue(labOrderPage([]));
-    jest.mocked(createLabOrder).mockResolvedValue(makeLabOrder({ treatmentPlanItem: { id: 'item1', planId: 'plan1', toothNumber: '16', procedureName: 'Corona de zirconio' } }));
+    jest.mocked(createLabOrder).mockResolvedValue(makeLabOrder({ treatmentPlanItem: { id: 'item1', planId: 'plan1', toothNumber: '16', procedureName: 'Corona de zirconio', planCurrency: 'USD' } }));
     render(<PatientLabOrdersTab token={DENTIST} patientId="p1" planItemId="item1" onShortcutConsumed={onShortcutConsumed} />);
     const dialog = await screen.findByRole('dialog', { name: 'Nueva orden de laboratorio' });
     await waitFor(() => expect(within(dialog).getByLabelText('Trabajo')).toHaveValue('Corona de zirconio'));

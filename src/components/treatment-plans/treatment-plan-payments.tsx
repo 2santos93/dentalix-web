@@ -3,7 +3,7 @@ import type { TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
 import { PLAN_STATUS_LABELS } from '@/lib/treatment-plans/plan-status';
 import type { Payment, PlanBalance } from '@/lib/payments/payments-api';
 import type { PlanPrimaryAction } from '@/lib/treatment-plans/plan-primary-action';
-import type { SedeZoneState } from '@/lib/locations/use-sede-time-zone';
+import { readyTimeZone, type SedeZoneState } from '@/lib/locations/use-sede-time-zone';
 import type { readyFormat } from '@/lib/locations/use-sede-format';
 import { Button } from '@/components/ui/button';
 import { SectionHeader } from '@/components/ui/section-header';
@@ -169,6 +169,7 @@ export function PlanBillingSection({
               onViewAllocation={onViewAllocation}
               onViewProof={onViewProof}
               fmt={sedeFmt}
+              timeZone={readyTimeZone(sedeZone)}
               onExternalInvoice={onExternalInvoice}
             />
           </Disclosure>

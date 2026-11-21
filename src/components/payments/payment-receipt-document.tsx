@@ -6,7 +6,7 @@ import { moneyWithCode } from '@/lib/format/sede-number';
 import { NO_CURRENCY_TEXTS, type CurrencyTexts } from '@/lib/format/currency-text';
 import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
-import { paymentRateCopy, ratePairLabel, rateDayLabel } from '@/lib/payments/payment-rate';
+import { paymentRateCopy, ratePairLabel, rateDayLabel, rateUsedLabel } from '@/lib/payments/payment-rate';
 import type { PaymentReceipt, ReceiptPrintFormat } from '@/lib/payments/payment-receipts-api';
 import {
   PAYMENT_ADJUSTMENT_TYPE_LABELS,
@@ -277,7 +277,14 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
           </Field>
         ) : null}
         {split ? (
-          <SplitFields split={split} narrow={narrow} voided={receipt.voided} money={money} />
+          <SplitFields
+            split={split}
+            narrow={narrow}
+            voided={receipt.voided}
+            money={money}
+            civilDate={civilDate}
+            dateTime={dateTime}
+          />
         ) : (
           <>
             <Field label={copy.amount}>
@@ -312,7 +319,10 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
               <div data-testid="receipt-rate" className={cn('min-w-0 text-xs text-[#4b5563]', !narrow && 'sm:col-span-2')}>
                 <dt className="sr-only">{copy.rateTerm}</dt>
                 <dd className="break-words tabular-nums">
-                  {frozen
+                  {frozen && exchange?.rateUsed
+                    ? // DX-586: qué tasa y cuándo: «Tasa usada: 1 USD = Bs. 918,77 (BCV, fecha valor 20/11/2026)».
+                      rateUsedLabel(exchange.rateUsed, { money, civilDate, dateTime })
+                    : frozen
                     ? copy.rateApplied(
                         ratePairLabel(payment.currency, frozen.rate, money),
                         paymentRateCopy.source[frozen.rate.source],
@@ -386,10 +396,15 @@ function SplitFields({
   narrow,
   voided,
   money,
+  civilDate,
+  dateTime,
 }: {
   split: NonNullable<PaymentReceipt['split']>;
   narrow: boolean;
   voided: boolean;
+  /** DX-586: para la tasa usada de cada línea (fecha valor u hora de la cotización). */
+  civilDate: (value: string) => string;
+  dateTime: (value: string) => string;
   /** El formato de importes del recibo (con los textos de moneda de su foto). */
   money: (amount: number, currency: string) => string;
 }) {
@@ -426,6 +441,11 @@ function SplitFields({
                       {line.equivalentAmount !== null
                         ? copy.splitEquivalent(money(line.equivalentAmount, split.total.currency))
                         : copy.splitWithoutRate}
+                    </span>
+                  ) : null}
+                  {line.currency !== split.total.currency && line.exchangeRate?.rateUsed ? (
+                    <span data-testid="receipt-split-rate" className="block text-xs text-[#4b5563]">
+                      {rateUsedLabel(line.exchangeRate.rateUsed, { money, civilDate, dateTime })}
                     </span>
                   ) : null}
                 </span>

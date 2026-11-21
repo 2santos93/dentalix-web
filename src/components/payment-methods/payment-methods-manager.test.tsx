@@ -41,6 +41,7 @@ const cash: ClinicPaymentMethod = {
   requiresReference: false,
   proofPolicy: 'NONE' as const,
   allowInPaymentLink: false,
+  gatewayFeePercent: null,
   legacyMethod: 'CASH',
   adjustments: [],
   createdAt: '2026-10-01T00:00:00.000Z',
