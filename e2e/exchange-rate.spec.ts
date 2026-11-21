@@ -4,7 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { addStaffViaApi, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
 import { axeInBothThemes } from './support/axe';
-import { fillDate, readDate } from './support/dates';
+import { fillDate, fillTime, readDate } from './support/dates';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { E2E_REGION } from './support/regional';
 import { API_URL } from './support/urls';
@@ -164,14 +164,16 @@ test('the ADMIN switches to manual, registers today’s rate and the day’s rat
   await rateDialog.getByRole('button', { name: 'Registrar tasa' }).click();
   await expect(rateDialog).toBeHidden();
 
-  const table = page.getByRole('table', { name: 'Tasas manuales' });
+  // DX-586: la lista va por día (una tabla por día, «Tasas manuales del …»).
+  const table = page.getByRole('region', { name: 'Tasas manuales' }).getByRole('table').first();
   await expect(table.getByRole('row').filter({ hasText: CURRENCY })).toHaveCount(1);
   await expect(page.getByText(`Tasa de ${CURRENCY} registrada.`)).toBeVisible();
   await shoot(page, 'dx374-lista', table);
 
   const res = await request.get(`${API_URL}/exchange/rates?date=${sedeToday()}`, { headers: admin.headers });
   expect(res.ok()).toBeTruthy();
-  expect(await res.json()).toEqual({
+  // DX-586: además trae `manualRates` (las que rigen) y `manualDay` (las del día).
+  expect(await res.json()).toMatchObject({
     base: 'USD',
     source: 'MANUAL',
     rates: { [CURRENCY]: 0.91 },
@@ -222,12 +224,17 @@ test('the ADMIN changes how many days the latest registered rate is used, with t
   await expect(page.getByTestId('exchange-rate-max-age')).toHaveText('Usar la última tasa registrada hasta 3 días');
 });
 
-test('registering the same currency twice the same day keeps the modal open with the Spanish 409', async ({ page }) => {
+test('registering the same currency from the same time keeps the modal open with the Spanish 409', async ({ page }) => {
   await openPage(page, adminEmail);
   const dialog = await fillRate(page, '0,95');
+  // DX-586: varias tasas el mismo día valen, cada una desde su hora; la primera
+  // rige desde el inicio del día, así que otra «desde las 00:00» choca con ella.
+  await fillTime(dialog, 'Desde (hora)', '00:00');
   await dialog.getByRole('button', { name: 'Registrar tasa' }).click();
   await expect(
-    dialog.getByText('Ya hay una tasa registrada para esa moneda en ese día. Si ningún abono la usó, corrígela en la lista.'),
+    dialog.getByText(
+      'Ya hay una tasa registrada para esa moneda desde esa misma hora. Registra la nueva con otra hora o, si ningún abono la usó, corrígela en la lista.',
+    ),
   ).toBeVisible();
   await expect(dialog).toBeVisible();
 });
@@ -243,7 +250,7 @@ test('reception does not see the entry and gets the permission notice by URL', a
 
 test('the screen fits 390 px and has no axe violations in light and dark', async ({ page }) => {
   await openPage(page, adminEmail);
-  await expect(page.getByRole('table', { name: 'Tasas manuales' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Tasas manuales' }).getByRole('table').first()).toBeVisible();
   await expect(page.getByTestId('exchange-rate-max-age')).toBeVisible();
   await page.setViewportSize(VIEWPORTS[1]);
   await expectNoHorizontalScroll(page);
