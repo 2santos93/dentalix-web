@@ -26,6 +26,7 @@ import { todayRatesCopy } from './today-rates';
 import { ApiError } from '@/lib/api/api-error';
 import { regionalFormat } from '@/lib/format/regional-format';
 import { setupUser } from '@/lib/test/user';
+import { EXCHANGE_RATES_CHANGED_EVENT } from '@/lib/exchange/exchange-header-api';
 
 jest.mock('../../lib/exchange/exchange-settings-api', () => ({
   ...jest.requireActual('../../lib/exchange/exchange-settings-api'),
@@ -76,14 +77,26 @@ const AUTO = {
   manualSince: null,
   manualRateMaxAgeDays: 3,
   baseCurrency: 'USD',
+  acceptedCurrencies: [] as string[],
+  rateReferenceCurrency: null,
+  showRateInHeader: null,
 } as const;
 const MANUAL = {
   source: 'MANUAL',
   manualSince: '2026-10-30',
   manualRateMaxAgeDays: 3,
   baseCurrency: 'USD',
+  acceptedCurrencies: [] as string[],
+  rateReferenceCurrency: null,
+  showRateInHeader: null,
 } as const;
 const rateLabel = rateFormCopy.rate('USD');
+const cleanups: (() => void)[] = [];
+/** Limpieza al terminar la prueba (listeners de ventana). */
+const afterTest = (fn: () => void) => cleanups.push(fn);
+afterEach(() => {
+  while (cleanups.length) cleanups.pop()!();
+});
 
 const ves: ManualExchangeRate = {
   id: 'r-ves',
@@ -259,6 +272,9 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
   });
 
   it('cambia la fuente a manual en un modal accesible', async () => {
+    const onRatesChanged = jest.fn();
+    window.addEventListener(EXCHANGE_RATES_CHANGED_EVENT, onRatesChanged);
+    afterTest(() => window.removeEventListener(EXCHANGE_RATES_CHANGED_EVENT, onRatesChanged));
     mockedGet.mockResolvedValue(AUTO);
     mockedList.mockResolvedValue([]);
     mockedSave.mockResolvedValue(MANUAL);
@@ -270,6 +286,8 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     await user.click(within(dialog).getByRole('radio', { name: /Manual/ }));
     await user.click(within(dialog).getByRole('button', { name: copy.save }));
     await waitFor(() => expect(mockedSave).toHaveBeenCalledWith('tok', 'MANUAL'));
+    // DX-584: el menú relee la tasa al momento.
+    await waitFor(() => expect(onRatesChanged).toHaveBeenCalledTimes(1));
     expect(await screen.findByTestId('exchange-rate-source')).toHaveTextContent(
       copy.manualSince(fmt.civilDate('2026-10-30')),
     );
@@ -395,6 +413,9 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
   });
 
   it('registra la tasa del día: hoy de la sede por defecto y como máximo, coma decimal y sin la moneda base', async () => {
+    const onRatesChanged = jest.fn();
+    window.addEventListener(EXCHANGE_RATES_CHANGED_EVENT, onRatesChanged);
+    afterTest(() => window.removeEventListener(EXCHANGE_RATES_CHANGED_EVENT, onRatesChanged));
     mockedGet.mockResolvedValue(MANUAL);
     mockedList.mockResolvedValue([]);
     mockedRegister.mockResolvedValue({ ...ves, id: 'r-new', date: '2026-10-30', rate: 36.5 });
@@ -427,6 +448,8 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     );
     expect(await screen.findByRole('table', { name: copy.ratesHeading })).toBeInTheDocument();
     expect(screen.getByText(copy.rateSaved('VES'))).toBeInTheDocument();
+    // DX-584: el menú relee la tasa al momento.
+    expect(onRatesChanged).toHaveBeenCalledTimes(1);
   });
 
   it('valida en el modal antes de enviar: moneda y tasa', async () => {

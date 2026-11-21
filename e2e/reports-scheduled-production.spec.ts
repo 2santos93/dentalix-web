@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { test, expect, type APIRequestContext, type Page } from './support/test';
 import { loginAs } from './support/auth';
 import { addStaffViaApi, apiLogin, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
-import { atSede, sedeDayFromToday } from './support/clock';
+import { addDays, atSede, sedeWeekdayFromToday } from './support/clock';
 import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
 import { E2E_REGION } from './support/regional';
 import { API_URL } from './support/urls';
@@ -34,8 +34,18 @@ const LAST = `Prevision${suffix}`;
 const fmt = regionalFormat(E2E_REGION);
 const money = (amount: number) => moneyWithCode(amount, 'USD', fmt);
 const MIN = 60_000;
-const TOMORROW = sedeDayFromToday(1);
-const AFTER = sedeDayFromToday(2);
+// Días de lunes a viernes: la sede de alta no abre el domingo y el sábado solo
+// por la mañana, así que «mañana» literal fallaba los sábados (422 «La sede no
+// atiende los domingos»). AFTER es el siguiente día laborable tras TOMORROW.
+const TOMORROW = sedeWeekdayFromToday(1);
+const AFTER = nextWeekday(TOMORROW);
+
+function nextWeekday(day: string): string {
+  for (let next = addDays(day, 1); ; next = addDays(next, 1)) {
+    const weekday = new Date(`${next}T12:00:00Z`).getUTCDay();
+    if (weekday >= 1 && weekday <= 5) return next;
+  }
+}
 const REPORT_URL = `/reportes?tab=prevision&periodo=custom&desde=${TOMORROW}&hasta=${AFTER}`;
 
 test.describe.configure({ mode: 'serial' });

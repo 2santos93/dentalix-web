@@ -18,6 +18,7 @@ import {
   useCashChangeComputed,
 } from '@/components/payments/cash-change-fields';
 import type { TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
+import { useAcceptedPaymentCurrencies } from '@/components/exchange/exchange-header-context';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
@@ -84,6 +85,8 @@ export function PlanPaymentFormModal({
   onRecorded,
 }: PlanPaymentFormModalProps) {
   const stamp = useSedeStamp(token);
+  // DX-584: solo las monedas que acepta la clínica.
+  const acceptedCurrencies = useAcceptedPaymentCurrencies();
   const sedeTimeZone = readyTimeZone(sedeZone);
   // DX-377: medio de la clínica, referencia y aviso de repetida (el mismo que
   // «Registrar abono» del estado de cuenta).
@@ -282,7 +285,13 @@ export function PlanPaymentFormModal({
         </FormField>
 
         <FormField htmlFor="tp-payment-currency" label={copy.paymentCurrencyLabel}>
-          <CurrencySelect id="tp-payment-currency" token={token} value={paymentCurrency} onChange={setPaymentCurrency} />
+          <CurrencySelect
+            id="tp-payment-currency"
+            token={token}
+            value={paymentCurrency}
+            onChange={setPaymentCurrency}
+            only={acceptedCurrencies}
+          />
         </FormField>
       </div>
 

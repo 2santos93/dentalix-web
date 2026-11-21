@@ -1293,7 +1293,7 @@ export interface paths {
         get: operations["ExchangeSettingsController_settings"];
         /**
          * Cambia la fuente de la tasa de cambio de la clínica; queda en la auditoría
-         * @description DX-374. Pasar a MANUAL fija `manualSince` = hoy en la sede principal: desde ese día la tasa sale de las manuales y los días anteriores siguen con la automática, así que los saldos de antes del cambio no se mueven. Guardar MANUAL otra vez conserva el día. Volver a AUTOMATIC lo limpia: los días del periodo manual vuelven a la tasa automática hasta que cada abono congele su tasa (DX-375). DX-402: con MANUAL, la tasa manual de un día anterior a `manualSince` sirve de tasa de respaldo a los abonos de ese día que siguen sin tasa (si el proveedor no tiene la de ese día). Evento CLINIC_SETTINGS con reason EXCHANGE_RATE_SOURCE y el antes y el después; si la fuente no cambia, 200 sin evento. DX-384: `manualRateMaxAgeDays` (0..30, 3 por defecto) es hasta cuántos días de antigüedad puede tener la última tasa manual que se usa cuando no hay la del día del abono (0 = solo la del mismo día); cualquiera de los dos campos puede ir solo. Si cambia, evento CLINIC_SETTINGS con reason EXCHANGE_RATE_MAX_AGE y el antes y el después, en la misma transacción, y los abonos aplazados «sin tasa» se intentan ya. Solo ADMIN (403 al resto).
+         * @description DX-374. Pasar a MANUAL fija `manualSince` = hoy en la sede principal: desde ese día la tasa sale de las manuales y los días anteriores siguen con la automática, así que los saldos de antes del cambio no se mueven. Guardar MANUAL otra vez conserva el día. Volver a AUTOMATIC lo limpia: los días del periodo manual vuelven a la tasa automática hasta que cada abono congele su tasa (DX-375). DX-402: con MANUAL, la tasa manual de un día anterior a `manualSince` sirve de tasa de respaldo a los abonos de ese día que siguen sin tasa (si el proveedor no tiene la de ese día). Evento CLINIC_SETTINGS con reason EXCHANGE_RATE_SOURCE y el antes y el después; si la fuente no cambia, 200 sin evento. DX-384: `manualRateMaxAgeDays` (0..30, 3 por defecto) es hasta cuántos días de antigüedad puede tener la última tasa manual que se usa cuando no hay la del día del abono (0 = solo la del mismo día); cualquiera de los dos campos puede ir solo. Si cambia, evento CLINIC_SETTINGS con reason EXCHANGE_RATE_MAX_AGE y el antes y el después, en la misma transacción, y los abonos aplazados «sin tasa» se intentan ya. DX-584: `acceptedCurrencies`, `rateReferenceCurrency` y `showRateInHeader` (cada uno opcional; se valida el resultado: monedas del catálogo, sin repetidas, de 0 a 8, y la de referencia entre las aceptadas o la de alguna sede). Si cambian, evento CLINIC_SETTINGS con reason CLINIC_CURRENCIES y el antes y el después, en la misma transacción. Las monedas se guardan antes que la fuente y el plazo: un 400 de monedas no cambia nada. Solo ADMIN (403 al resto).
          */
         put: operations["ExchangeSettingsController_updateClinicSettings"];
         post?: never;
@@ -1361,6 +1361,26 @@ export interface paths {
          * @description DX-517. Sustituye la lista entera; vacía = sin textos propios. El texto ocupa el lugar del código ISO en la posición que da el formato de la sede. Queda en la auditoría con el antes y el después. Los recibos ya emitidos conservan su foto.
          */
         put: operations["ClinicCurrencyTextsController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exchange/header": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tasa del día que enseña el menú de la sede activa (DX-584)
+         * @description Una fila por moneda aceptada distinta de la de referencia (la de la clínica o, sin ella, la de la sede activa), con «1 {moneda} = N {referencia}» cruzado vía USD con las tasas de hoy en la sede. Las tasas salen como en GET /exchange/rates: la fuente de la clínica (AUTOMATIC, o MANUAL con el plazo de DX-384) y, con AUTOMATIC, la caché y los presupuestos del proveedor (SEC-054). Sin tasa (proveedor caído, presupuesto agotado, MANUAL sin registrar) la fila lleva `perReference: null`; nunca 429/503 por el proveedor. `visible` false (y `rates` vacía, sin leer tasas) con «Nunca», sin sede utilizable, sin moneda de referencia o sin ninguna moneda que enseñar.
+         */
+        get: operations["ExchangeHeaderController_header"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -13528,6 +13548,21 @@ export interface components {
             manualRateMaxAgeDays: number;
             /** @description Moneda base de las tasas: cada tasa son unidades de la moneda por 1 de esta. No lleva tasa propia. */
             baseCurrency: string;
+            /**
+             * @description DX-584. Monedas en que la clínica acepta cobros (ISO 4217 de la lista de monedas, sin repetidas, de 0 a 8), en el orden en que el menú las enseña. Vacía = cualquier moneda (lo de antes). Con alguna, registrar un abono (suelto, dividido o las líneas del vuelto) en otra moneda da 400 `CURRENCY_NOT_ACCEPTED`; los abonos ya registrados no cambian.
+             * @example [
+             *       "USD",
+             *       "VES"
+             *     ]
+             */
+            acceptedCurrencies: string[];
+            /** @description DX-584. Moneda contra la que el menú muestra las equivalencias («1 USD = N Bs.»). Tiene que ser una de las aceptadas o la moneda de alguna sede. null = la de la sede activa. */
+            rateReferenceCurrency: string | null;
+            /**
+             * @description DX-584. Mostrar la tasa en el menú: null = automático (si hay alguna moneda aceptada distinta de la de referencia), true = siempre (sin monedas aceptadas, enseña la del USD), false = nunca.
+             * @example null
+             */
+            showRateInHeader: boolean | null;
         };
         UpdateExchangeRateSettingsDto: {
             /**
@@ -13540,6 +13575,21 @@ export interface components {
              * @example 3
              */
             manualRateMaxAgeDays?: number;
+            /**
+             * @description DX-584. Monedas en que la clínica acepta cobros (ISO 4217 de la lista de monedas, sin repetidas, de 0 a 8), en el orden en que el menú las enseña. Vacía = cualquier moneda (lo de antes). Con alguna, registrar un abono (suelto, dividido o las líneas del vuelto) en otra moneda da 400 `CURRENCY_NOT_ACCEPTED`; los abonos ya registrados no cambian. Sin este campo no cambian; `[]` las quita todas.
+             * @example [
+             *       "USD",
+             *       "VES"
+             *     ]
+             */
+            acceptedCurrencies?: string[];
+            /** @description DX-584. Moneda contra la que el menú muestra las equivalencias («1 USD = N Bs.»). Tiene que ser una de las aceptadas o la moneda de alguna sede. null = la de la sede activa. Sin este campo no cambia. */
+            rateReferenceCurrency?: string | null;
+            /**
+             * @description DX-584. Mostrar la tasa en el menú: null = automático (si hay alguna moneda aceptada distinta de la de referencia), true = siempre (sin monedas aceptadas, enseña la del USD), false = nunca. Sin este campo no cambia.
+             * @example null
+             */
+            showRateInHeader?: boolean | null;
         };
         ManualExchangeRateAuthorDto: {
             /** Format: uuid */
@@ -13601,6 +13651,58 @@ export interface components {
         ClinicCurrencyTextsDto: {
             /** @description El mapa entero, en orden de código. Vacío = nada configurado: los importes llevan el código ISO (DX-378). */
             entries: components["schemas"]["CurrencyTextEntryDto"][];
+        };
+        ExchangeHeaderRateDto: {
+            /** @description Moneda aceptada (ISO 4217). */
+            currency: string;
+            /**
+             * @description Unidades de la moneda de referencia por 1 de `currency`, cruzadas vía USD con las tasas del día (hasta 8 decimales). null = sin tasa (proveedor sin la del día, o MANUAL sin tasa registrada dentro del plazo).
+             * @example 918.77
+             */
+            perReference: number | null;
+            /**
+             * @description Texto propio de `currency` (DX-517); null = se muestra el código ISO.
+             * @example $
+             */
+            label: string | null;
+            /** @description De dónde sale la tasa: AUTOMATIC (proveedor) o MANUAL. */
+            source: components["schemas"]["ExchangeRateSource"];
+            /**
+             * @description Día civil (AAAA-MM-DD) de la tasa: hoy en la sede activa o, con MANUAL y el plazo de DX-384, el último día anterior con tasa registrada.
+             * @example 2026-11-21
+             */
+            date: string;
+            /**
+             * Format: date-time
+             * @description Con AUTOMATIC, cuándo se guardó la tasa del proveedor. null con MANUAL o sin tasa.
+             */
+            fetchedAt: string | null;
+        };
+        ExchangeHeaderDto: {
+            /** @description Si el menú enseña el indicador. false con «Nunca», sin sede utilizable, sin moneda de referencia o sin ninguna moneda que enseñar (en automático: ninguna aceptada distinta de la de referencia). */
+            visible: boolean;
+            /** @description Moneda de referencia: la de la clínica o, sin ella, la de la sede activa (o la principal). */
+            reference: string | null;
+            /**
+             * @description Texto propio de la de referencia (DX-517); null = el código ISO (y siempre null con `visible: false`).
+             * @example Bs.
+             */
+            referenceLabel: string | null;
+            /** @description Una fila por moneda aceptada distinta de la de referencia, en el orden de la clínica. Vacía con `visible: false`. */
+            rates: components["schemas"]["ExchangeHeaderRateDto"][];
+            /**
+             * @description Monedas en que la clínica acepta cobros, en su orden (vacía = cualquiera): para filtrar el selector de moneda del cobro con cualquier rol. Va siempre, también con `visible: false`.
+             * @example [
+             *       "USD",
+             *       "VES"
+             *     ]
+             */
+            acceptedCurrencies: string[];
+            /**
+             * Format: date-time
+             * @description Cuándo se calculó la respuesta.
+             */
+            updatedAt: string;
         };
         /** @enum {string} */
         PayerType: "INSURER" | "PREPAID_PLAN" | "PUBLIC_SYSTEM" | "EMPLOYER" | "OTHER";
@@ -36673,7 +36775,7 @@ export interface operations {
                     "application/json": components["schemas"]["ExchangeRateSettingsDto"];
                 };
             };
-            /** @description Fuente que no es AUTOMATIC ni MANUAL, plazo que no es un entero de 0 a 30, o ninguno de los dos campos */
+            /** @description Fuente que no es AUTOMATIC ni MANUAL, plazo que no es un entero de 0 a 30, ningún campo, o (DX-584) una moneda que no está en la lista, repetida, más de 8, o una moneda de referencia que no es aceptada ni de ninguna sede */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -36871,6 +36973,32 @@ export interface operations {
             };
             /** @description Solo administración configura cómo se escribe cada moneda. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExchangeHeaderController_header: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExchangeHeaderDto"];
+                };
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -48347,7 +48475,7 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentDto"];
                 };
             };
-            /** @description Id que no es UUID. DX-377: el medio pide referencia y no llegó, o el medio no es de la clínica o está desactivado. DX-075: `paidAt` como día civil posterior a hoy en la sede («La fecha del abono no puede ser posterior a hoy en la sede.»). DX-054: `paidAt` como instante a más de 24 h en el futuro («La fecha del abono no puede estar más de 24 horas en el futuro.»). */
+            /** @description Id que no es UUID. DX-377: el medio pide referencia y no llegó, o el medio no es de la clínica o está desactivado. DX-075: `paidAt` como día civil posterior a hoy en la sede («La fecha del abono no puede ser posterior a hoy en la sede.»). DX-054: `paidAt` como instante a más de 24 h en el futuro («La fecha del abono no puede estar más de 24 horas en el futuro.»). DX-584: `code: CURRENCY_NOT_ACCEPTED` (con `currency`) si la clínica tiene monedas aceptadas y el abono o una línea del vuelto va en otra. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -48394,7 +48522,7 @@ export interface operations {
                     "application/json": components["schemas"]["SplitPaymentDto"];
                 };
             };
-            /** @description Menos de 2 o más de 5 líneas, una línea sin medio, un medio de otra clínica o desactivado, una referencia que falta, o dos líneas con el mismo medio y referencia. DX-075: `paidAt` como día civil posterior a hoy en la sede. DX-054: `paidAt` como instante a más de 24 h en el futuro. */
+            /** @description Menos de 2 o más de 5 líneas, una línea sin medio, un medio de otra clínica o desactivado, una referencia que falta, o dos líneas con el mismo medio y referencia. DX-075: `paidAt` como día civil posterior a hoy en la sede. DX-054: `paidAt` como instante a más de 24 h en el futuro. DX-584: `code: CURRENCY_NOT_ACCEPTED` (con `currency`) si la clínica tiene monedas aceptadas y una línea va en otra; no se registra ninguna. */
             400: {
                 headers: {
                     [name: string]: unknown;
