@@ -1,5 +1,5 @@
 import type { ExchangeRatesState } from '@/components/payments/use-exchange-rates';
-import { quoteFromRates, ratePerBase } from '@/lib/payments/payment-rate';
+import { bcvValueDateFor, quoteFromRates, ratePerBase } from '@/lib/payments/payment-rate';
 import type { QuoteSecondCurrency } from './plan-quote-document';
 
 /**
@@ -21,5 +21,6 @@ export function secondCurrencyOf(
   }
   const { fromPerBase, toPerBase } = quote;
   const { source } = state.rates;
-  return { value: { currency: second, fromPerBase, toPerBase, source, date } };
+  const valueDate = bcvValueDateFor(state.rates, planCurrency, second);
+  return { value: { currency: second, fromPerBase, toPerBase, source, date, valueDate } };
 }

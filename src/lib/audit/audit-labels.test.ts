@@ -547,6 +547,8 @@ describe('clinicSettingsDetail (DX-328)', () => {
   it.each([
     ['AUTOMATIC', 'MANUAL', 'Tasa de cambio: automática → manual'],
     ['MANUAL', 'AUTOMATIC', 'Tasa de cambio: manual → automática'],
+    ['AUTOMATIC', 'BCV', 'Tasa de cambio: automática → BCV oficial'],
+    ['BCV', 'MANUAL', 'Tasa de cambio: BCV oficial → manual'],
   ])('EXCHANGE_RATE_SOURCE %s → %s (DX-374)', (from, to, text) => {
     expect(clinicSettingsDetail({ reason: 'EXCHANGE_RATE_SOURCE', statusChange: { from, to } })).toBe(text);
   });

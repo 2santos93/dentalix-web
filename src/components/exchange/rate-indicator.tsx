@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { ArrowLeftRight, TriangleAlert } from 'lucide-react';
 import { getTokenRole } from '@/lib/auth/token-role';
-import { canManageExchangeRates } from '@/lib/exchange/exchange-settings-api';
+import { canManageExchangeRates, type ExchangeRateSource } from '@/lib/exchange/exchange-settings-api';
 import type { ExchangeHeader, ExchangeHeaderRate } from '@/lib/exchange/exchange-header-api';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
@@ -21,10 +21,14 @@ export const rateIndicatorCopy = {
     `Tasa de hoy: ${visible}, fuente ${source}${more > 0 ? `, y ${more} ${more === 1 ? 'moneda' : 'monedas'} más` : ''}`,
   missingName: (visible: string, currency: string, reference: string, more: number) =>
     `${visible}: falta la de 1 ${currency} en ${reference}${more > 0 ? `, y ${more} ${more === 1 ? 'moneda' : 'monedas'} más` : ''}`,
-  source: { AUTOMATIC: 'automática', MANUAL: 'manual' } as const,
-  sourceLabel: { AUTOMATIC: 'Automática', MANUAL: 'Manual' } as const,
+  source: { AUTOMATIC: 'automática', MANUAL: 'manual', BCV: 'BCV' } satisfies Record<ExchangeRateSource, string>,
+  sourceLabel: { AUTOMATIC: 'Automática', MANUAL: 'Manual', BCV: 'BCV' } satisfies Record<ExchangeRateSource, string>,
+  /** DX-585: en el nombre accesible, «BCV, fecha valor 20/11/2026». */
+  bcvSource: (valueDate: string) => `BCV, fecha valor ${valueDate}`,
   /** «Automática · del 21/11/2026» */
   meta: (source: string, day: string) => `${source} · del ${day}`,
+  /** DX-585: «BCV · fecha valor 20/11/2026» (la del BCV que rige hoy; un fin de semana, la del último día hábil). */
+  bcvMeta: (valueDate: string) => `BCV · fecha valor ${valueDate}`,
   missingMeta: 'Aún no hay tasa de hoy: los abonos en esta moneda la toman en cuanto llegue.',
   settings: 'Ajustes de la tasa',
   noFormat: '—',
@@ -64,7 +68,33 @@ function describeRate(
     };
   }
   const visible = copy.pair(currency, formatRate(rate.perReference, fmt), reference);
-  return { visible, name: copy.name(visible, copy.source[rate.source], more), missing: false };
+  const source = rowSource(rate);
+  const name = copy.name(
+    visible,
+    source === 'BCV' && rate.valueDate ? copy.bcvSource(day(rate.valueDate, fmt)) : copy.source[source],
+    more,
+  );
+  return { visible, name, missing: false };
+}
+
+function day(date: string, fmt: RegionalFormat | null): string {
+  return fmt ? fmt.civilDate(date) : copy.noFormat;
+}
+
+/**
+ * DX-585: de dónde sale la cifra de la fila. Con la fuente BCV, la API da
+ * `valueDate` solo en las filas que usan VES o EUR (las que salen del BCV);
+ * el resto sale del proveedor y se rotula «automática», para no dar a
+ * entender que el BCV publica esa moneda.
+ */
+function rowSource(rate: ExchangeHeaderRate): ExchangeRateSource {
+  return rate.source === 'BCV' && !rate.valueDate ? 'AUTOMATIC' : rate.source;
+}
+
+/** Lo que va bajo la cifra en el popover: fuente y día, o la fecha valor del BCV. */
+function rowMeta(rate: ExchangeHeaderRate, fmt: RegionalFormat | null): string {
+  if (rate.source === 'BCV' && rate.valueDate) return copy.bcvMeta(day(rate.valueDate, fmt));
+  return copy.meta(copy.sourceLabel[rowSource(rate)], day(rate.date, fmt));
 }
 
 export type RateIndicatorVariant = 'block' | 'rail' | 'phone';
@@ -173,9 +203,7 @@ export function RateIndicator({ token, variant }: { token: string; variant: Rate
                   {row.missing ? `${rate.label ?? rate.currency}: ${copy.missing}` : row.visible}
                 </span>
                 <span className="text-xs text-muted">
-                  {row.missing
-                    ? copy.missingMeta
-                    : copy.meta(copy.sourceLabel[rate.source], fmt ? fmt.civilDate(rate.date) : copy.noFormat)}
+                  {row.missing ? copy.missingMeta : rowMeta(rate, fmt)}
                 </span>
               </li>
             );

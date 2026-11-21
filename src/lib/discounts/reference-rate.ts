@@ -10,6 +10,7 @@ export type ReferenceRate = components['schemas']['ReferenceRateDto'];
 const SOURCE_LABELS: Record<ReferenceRate['source'], string> = {
   AUTOMATIC: 'automática',
   MANUAL: 'manual',
+  BCV: 'BCV',
 };
 
 /**

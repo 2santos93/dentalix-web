@@ -130,6 +130,20 @@ describe('WithoutRateNotice (DX-375)', () => {
     expect(screen.queryByText(withoutRateCopy.adminHint)).not.toBeInTheDocument();
   });
 
+  it('DX-585: con fuente BCV dice que espera la del BCV (o la del proveedor) y también explica pasar a manual', async () => {
+    mockedSettings.mockResolvedValue({ ...AUTOMATIC, source: 'BCV' });
+    render(
+      <WithoutRateNotice
+        token={tokenForRole('ADMIN')}
+        payments={[{ paymentId: 'p1', amount: 50, currency: 'VES', paidOn: today() }]}
+      />,
+    );
+    expect(await screen.findByText(withoutRateCopy.bcv)).toBeInTheDocument();
+    expect(screen.queryByText(withoutRateCopy.automatic)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: withoutRateCopy.switchToManualLink })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: withoutRateCopy.adminLink })).not.toBeInTheDocument();
+  });
+
   // DX-402: con la fuente manual, la tasa manual del día de un abono anterior
   // al paso a manual le sirve de respaldo si el proveedor no la da.
   it('con fuente manual, un abono de antes del paso a manual espera al proveedor o toma la manual de su día como respaldo', async () => {
@@ -215,7 +229,10 @@ describe('WithoutRateNotice (DX-375)', () => {
     await screen.findByRole('link', { name: withoutRateCopy.adminLink });
     const text = screen.getByRole('status').textContent ?? '';
     expect(text).toContain(withoutRateCopy.title(2));
-    expect(JSON.stringify(withoutRateCopy)).not.toMatch(/venezuela|colom[b]ia|españa|méxico|banco central|bcv|banrep/i);
+    // DX-585: solo el texto de la fuente BCV (que la clínica elige) nombra el banco.
+    const { bcv, ...generic } = withoutRateCopy;
+    expect(bcv).toMatch(/BCV/);
+    expect(JSON.stringify(generic)).not.toMatch(/venezuela|colom[b]ia|españa|méxico|banco central|bcv|banrep/i);
     expect(text).not.toMatch(/venezuela|colom[b]ia|españa|méxico|banco central|bcv|banrep/i);
   });
 });

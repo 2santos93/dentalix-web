@@ -26,6 +26,7 @@ const usd = {
   source: 'AUTOMATIC' as const,
   date: '2026-11-21',
   fetchedAt: '2026-11-21T13:00:00.000Z',
+  valueDate: null as string | null,
 };
 const eur = { ...usd, currency: 'EUR', perReference: 1001.5, label: '€' };
 
@@ -109,6 +110,33 @@ describe('RateIndicator (DX-584)', () => {
       }),
     );
     expect(await screen.findByRole('button', { name: /1 Bs\. = 0,001088 USD/ })).toBeInTheDocument();
+  });
+
+  it('DX-585: con BCV, «BCV» y la fecha valor en el nombre y en el popover; una moneda del proveedor, «Automática»', async () => {
+    const user = userEvent.setup();
+    const bcvUsd = { ...usd, source: 'BCV' as const, perReference: 918.7662, valueDate: '2026-11-20' };
+    // BRL no sale del BCV: la API no le da fecha valor y su cifra es la del proveedor.
+    const brl = { ...usd, currency: 'BRL', label: null, perReference: 0.2301, source: 'BCV' as const };
+    renderFixed(header({ rates: [bcvUsd, brl] }), 'ADMIN');
+    const button = await screen.findByRole('button', {
+      name: 'Tasa de hoy: 1 USD = 918,77 Bs., fuente BCV, fecha valor 20/11/2026, y 1 moneda más',
+    });
+    await user.click(button);
+    const popover = await screen.findByTestId('rate-indicator-popover');
+    expect(within(popover).getByText('BCV · fecha valor 20/11/2026')).toBeInTheDocument();
+    expect(within(popover).getByText('Automática · del 21/11/2026')).toBeInTheDocument();
+  });
+
+  it('DX-585: con BCV y sin fecha valor en la fila (la referencia no es VES ni EUR), «automática»', async () => {
+    renderFixed(header({ rates: [{ ...usd, source: 'BCV' }] }));
+    expect(
+      await screen.findByRole('button', { name: 'Tasa de hoy: 1 USD = 918,77 Bs., fuente automática' }),
+    ).toBeInTheDocument();
+  });
+
+  it('DX-585: las etiquetas de fuente cubren todas las fuentes', () => {
+    expect(copy.source).toEqual({ AUTOMATIC: 'automática', MANUAL: 'manual', BCV: 'BCV' });
+    expect(copy.sourceLabel.BCV).toBe('BCV');
   });
 
   it('no pinta nada con visible: false, sin filas, cargando o con error', () => {

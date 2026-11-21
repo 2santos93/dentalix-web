@@ -1098,6 +1098,7 @@ function documentTypeNamesDetail(changedFields: string[] | undefined): string | 
 const EXCHANGE_RATE_SOURCE_LABELS: Record<string, string> = {
   AUTOMATIC: 'automática',
   MANUAL: 'manual',
+  BCV: 'BCV oficial',
 };
 
 /** DX-374: fuente de la tasa de cambio antes y después, o null con códigos desconocidos. */

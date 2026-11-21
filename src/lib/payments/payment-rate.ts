@@ -2,15 +2,19 @@ import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import type { Payment } from './payments-api';
 import { roundAmount } from '@/lib/money/round';
+import type { ExchangeRateSource } from '@/lib/exchange/exchange-settings-api';
 
 /** Estado de la tasa de un abono (DX-375). */
 export type PaymentExchangeRateStatus = Payment['exchangeRateStatus'];
 
-// Copy como constantes (i18n-ready). Ningún texto nombra un país ni un banco.
+// Copy como constantes (i18n-ready). Solo la fuente BCV (DX-585), que elige
+// la clínica, nombra un banco; el resto de textos no nombra país ni banco.
 export const paymentRateCopy = {
   missing: 'Sin tasa',
   missingHelp: 'Falta la tasa de cambio de su día: el saldo no lo cuenta todavía.',
-  source: { AUTOMATIC: 'automática', MANUAL: 'manual' } as const,
+  source: { AUTOMATIC: 'automática', MANUAL: 'manual', BCV: 'BCV' } satisfies Record<ExchangeRateSource, string>,
+  /** DX-585: «BCV, fecha valor 20/11/2026». */
+  bcvValueDate: (date: string) => `BCV, fecha valor ${date}`,
   frozen: (pair: string, source: string, date: string) => `Tasa congelada: ${pair} · ${source} · ${date}`,
   /** DX-384: la tasa es la última registrada, de un día anterior al del abono. */
   rateOfDay: (date: string) => `tasa del ${date}`,
@@ -26,6 +30,36 @@ export const paymentRateCopy = {
 export function rateDayLabel(rateDate: string, paidOn: string, formatDay: (day: string) => string): string {
   const day = formatDay(rateDate);
   return rateDate === paidOn ? day : paymentRateCopy.rateOfDay(day);
+}
+
+/** DX-585: las monedas que, con la fuente BCV, salen del BCV (el resto, del proveedor). */
+export const BCV_CURRENCIES: readonly string[] = ['VES', 'EUR'];
+
+/**
+ * DX-585: la fuente de una tasa, legible: «automática», «manual», «BCV» o,
+ * con la fecha valor del BCV (si la API la da), «BCV, fecha valor 20/11/2026».
+ */
+export function rateSourceText(
+  source: ExchangeRateSource,
+  valueDate: string | null | undefined,
+  formatDay: (day: string) => string,
+): string {
+  if (source === 'BCV' && valueDate) return paymentRateCopy.bcvValueDate(formatDay(valueDate));
+  return paymentRateCopy.source[source];
+}
+
+/**
+ * DX-585: la fecha valor del BCV que aplica a una conversión entre `from` y
+ * `to` con las tasas de un día: solo con fuente BCV y si alguna de las dos
+ * monedas sale del BCV (VES o EUR). `null` en cualquier otro caso.
+ */
+export function bcvValueDateFor(
+  day: { source: ExchangeRateSource; bcv?: { valueDate: string } | null },
+  from: string,
+  to: string,
+): string | null {
+  if (day.source !== 'BCV' || !day.bcv) return null;
+  return BCV_CURRENCIES.includes(from) || BCV_CURRENCIES.includes(to) ? day.bcv.valueDate : null;
 }
 
 /**
