@@ -11,7 +11,7 @@ import { shot } from './support/qa-shot';
 import { API_URL } from './support/urls';
 
 /**
- * e2e DX-585: la fuente de la tasa «BCV oficial (Venezuela)».
+ * e2e DX-585: la fuente de la tasa «BCV oficial».
  *
  * Una clínica de Venezuela (sede en VES, acepta USD y VES, «Bs.») pasa en
  * Ajustes › Tasa de cambio a la fuente BCV y el menú enseña la tasa del BCV
@@ -78,7 +78,7 @@ test.describe('Fuente de la tasa BCV oficial (DX-585)', () => {
     await apiPut(request, admin, '/exchange/settings', { source: 'AUTOMATIC' });
   });
 
-  test('1440: Ajustes ofrece «BCV oficial (Venezuela)» y el menú enseña «BCV» con la fecha valor', async ({ page }) => {
+  test('1440: Ajustes ofrece «BCV oficial» y el menú enseña «BCV» con la fecha valor', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await loginAs(page, admin!.origin, ve.email, PASSWORD);
     await page.goto(`${admin!.origin}/settings/tasa-de-cambio`);
@@ -88,16 +88,16 @@ test.describe('Fuente de la tasa BCV oficial (DX-585)', () => {
     await source.getByRole('button', { name: 'Cambiar', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Cambiar de dónde sale la tasa' });
     await expect(dialog.getByRole('radio')).toHaveCount(3);
-    const bcv = dialog.getByRole('radio', { name: /BCV oficial \(Venezuela\)/ });
+    const bcv = dialog.getByRole('radio', { name: /^BCV oficial/ });
     await bcv.check();
-    await expect(dialog).toContainText('Banco Central de Venezuela');
+    await expect(dialog).toContainText('VES y EUR con la tasa oficial del BCV');
     const dialogAxe = await axeInBothThemes(page, dialog);
     expect(dialogAxe.light, 'axe del diálogo (claro)').toEqual([]);
     expect(dialogAxe.dark, 'axe del diálogo (oscuro)').toEqual([]);
     await shot(page, 'source-dialog', 1440);
     await dialog.getByRole('button', { name: 'Guardar' }).click();
     await expect(dialog).toBeHidden();
-    await expect(source.getByTestId('exchange-rate-source')).toHaveText('BCV oficial (Venezuela)');
+    await expect(source.getByTestId('exchange-rate-source')).toHaveText('BCV oficial');
 
     // «Tasa de hoy»: la del BCV con su fecha valor.
     const today = page.getByRole('region', { name: 'Tasa de hoy' });

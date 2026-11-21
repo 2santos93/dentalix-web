@@ -47,14 +47,14 @@ export const exchangeRateCopy = {
   sourceLabels: {
     AUTOMATIC: 'Automática',
     MANUAL: 'Manual',
-    BCV: 'BCV oficial (Venezuela)',
+    BCV: 'BCV oficial',
   } satisfies Record<ExchangeRateSource, string>,
   sourceHints: {
     AUTOMATIC: 'La tasa del día la da un proveedor de tasas de cambio. Es la opción con la que empieza toda clínica.',
     MANUAL:
       'Desde el día en que se elige, la clínica registra cada día la tasa de cada moneda. Un día sin tasa registrada se usa la última registrada, hasta el plazo de abajo; pasado el plazo, los abonos en esa moneda quedan sin tasa. Los días anteriores siguen con la tasa automática; si un abono de un día anterior se quedó sin ella, la tasa manual que registres para ese día le sirve de respaldo.',
-    // DX-585: decisión del dueño para las clínicas que cobran con la tasa oficial venezolana.
-    BCV: 'VES y EUR con la tasa del Banco Central de Venezuela, que se publica en días hábiles con su fecha valor: un fin de semana o feriado rige la del último día hábil. El resto de monedas, con la automática.',
+    // DX-585: decisión del dueño (la tasa oficial del BCV). Sin nombrar el país (DX-312).
+    BCV: 'VES y EUR con la tasa oficial del BCV, que se publica en días hábiles con su fecha valor: un fin de semana o feriado rige la del último día hábil. El resto de monedas, con la automática.',
   } satisfies Record<ExchangeRateSource, string>,
   /** Con la fecha en el formato de la sede; sin formato, sin fecha (R11). */
   manualSince: (date: string | null) => (date ? `Manual desde el ${date}` : 'Manual'),

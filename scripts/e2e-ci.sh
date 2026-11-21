@@ -111,7 +111,7 @@ load_env() {
   # DX-585: la fuente BCV consulta su portada (y su respaldo) al arrancar el
   # worker y cada hora en días hábiles. Sin NODE_ENV=test eso sería la red
   # real: aquí las dos URLs apuntan al BCV falso (scripts/bcv-stub.mjs), que
-  # arranca `api` antes que la API.
+  # arrancan `db` (la siembra levanta la app con su worker) y `api`.
   export E2E_BCV_STUB_PORT="${E2E_BCV_STUB_PORT:-3599}"
   export BCV_BASE_URL="http://127.0.0.1:${E2E_BCV_STUB_PORT}"
   export BCV_FALLBACK_BASE_URL="http://127.0.0.1:${E2E_BCV_STUB_PORT}/respaldo"
@@ -248,8 +248,22 @@ phase_sync() {
   return "$status"
 }
 
+# DX-585: el BCV falso, antes que cualquier proceso de la API. `seed:demo`
+# arranca la app con su worker y encola la consulta del BCV de hoy
+# (`bcv-startup:<día>`): si el BCV falso no está, falla y se reintenta a los
+# 10 min, y la API de `api` no encola otra (misma clave). Idempotente.
+start_bcv_stub() {
+  local pidfile="$STATE_DIR/bcv-stub.pid"
+  if [[ -f "$pidfile" ]] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+    return 0
+  fi
+  start_bg bcv-stub "$WEB_DIR" node scripts/bcv-stub.mjs "$E2E_BCV_STUB_PORT"
+  wait_for "${BCV_BASE_URL}/health" "BCV falso" "$LOG_DIR/bcv-stub.log" "$pidfile"
+}
+
 phase_db() {
   load_env
+  start_bcv_stub
   group "Base $E2E_DB_NAME: rol de la app, migraciones y siembra"
   if [[ -z "$(psql_owner -d postgres -c "SELECT 1 FROM pg_database WHERE datname = '$E2E_DB_NAME'")" ]]; then
     psql_owner -d postgres -c "CREATE DATABASE \"$E2E_DB_NAME\""
@@ -284,8 +298,7 @@ phase_api() {
   # uno de ellos antes de que llegara el nuevo («Enlace no válido»).
   rm -rf "$MAIL_FILE_DIR"
   mkdir -p "$MAIL_FILE_DIR"
-  start_bg bcv-stub "$WEB_DIR" node scripts/bcv-stub.mjs "$E2E_BCV_STUB_PORT"
-  wait_for "${BCV_BASE_URL}/health" "BCV falso" "$LOG_DIR/bcv-stub.log" "$STATE_DIR/bcv-stub.pid"
+  start_bcv_stub
   start_bg api "$API_DIR" npm run start:prod
   wait_for "${API_URL}/health/ready" API "$LOG_DIR/api.log" "$STATE_DIR/api.pid"
   wait_for_worker

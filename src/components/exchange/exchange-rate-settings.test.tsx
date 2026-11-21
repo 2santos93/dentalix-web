@@ -321,16 +321,16 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
       const dialog = await screen.findByRole('dialog', { name: copy.sourceDialogTitle });
       const radios = within(dialog).getAllByRole('radio');
       expect(radios).toHaveLength(3);
-      const bcv = within(dialog).getByRole('radio', { name: /BCV oficial \(Venezuela\)/ });
+      const bcv = within(dialog).getByRole('radio', { name: /^BCV oficial/ });
       expect(within(dialog).getByText(copy.sourceHints.BCV)).toBeInTheDocument();
-      expect(copy.sourceHints.BCV).toMatch(/Banco Central de Venezuela/);
+      expect(copy.sourceHints.BCV).toMatch(/tasa oficial del BCV/);
       expect(copy.sourceHints.BCV).toMatch(/fecha valor/);
       expect(copy.sourceHints.BCV).toMatch(/resto de monedas, con la automática/);
       await user.click(bcv);
       await user.click(within(dialog).getByRole('button', { name: copy.save }));
       await waitFor(() => expect(mockedSave).toHaveBeenCalledWith('tok', 'BCV'));
       await waitFor(() => expect(onRatesChanged).toHaveBeenCalledTimes(1));
-      expect(await screen.findByTestId('exchange-rate-source')).toHaveTextContent('BCV oficial (Venezuela)');
+      expect(await screen.findByTestId('exchange-rate-source')).toHaveTextContent('BCV oficial');
       expect(screen.getByText(copy.ratesHint.BCV)).toBeInTheDocument();
     });
 
@@ -694,7 +694,7 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     const { missingBcv, ...genericToday } = todayRatesCopy;
     expect(bcvNote).toMatch(/BCV/);
     expect(missingBcv).toMatch(/BCV/);
-    expect(copy.sourceLabels.BCV).toBe('BCV oficial (Venezuela)');
+    expect(copy.sourceLabels.BCV).toBe('BCV oficial');
     const texts = JSON.stringify({
       exchangeRateCopy: {
         ...exchangeRateCopy,
