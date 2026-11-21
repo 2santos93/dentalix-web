@@ -69,6 +69,8 @@ function proxyToApi(req: NextRequest): NextResponse {
  * DX-101: y el portal del paciente (`/mi-clinica/<token>`), con sus citas,
  * presupuestos y estado de cuenta.
  * DX-016: y la reserva online (`/reservar`), con los datos del paciente.
+ * DX-265: y el QR de llegada de la sede (`/llegada/<token>`), con documento y
+ * fecha de nacimiento.
  */
 export const HEALTH_FORM_HEADERS: Record<string, string> = {
   'Referrer-Policy': 'no-referrer',
@@ -76,7 +78,7 @@ export const HEALTH_FORM_HEADERS: Record<string, string> = {
   'X-Robots-Tag': 'noindex, nofollow',
 };
 
-const HEALTH_FORM_PREFIXES = ['/anamnesis', '/firmar', '/hueco', '/copia', '/receta', '/certificado', '/pago', '/orden', '/resumen', '/conformidad', '/mi-clinica', '/reservar', '/sala'];
+const HEALTH_FORM_PREFIXES = ['/anamnesis', '/firmar', '/hueco', '/copia', '/receta', '/certificado', '/pago', '/orden', '/resumen', '/conformidad', '/mi-clinica', '/reservar', '/sala', '/llegada'];
 
 function isHealthFormPath(pathname: string): boolean {
   return HEALTH_FORM_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));

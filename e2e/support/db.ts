@@ -115,3 +115,20 @@ export function backdateResponsibleParty(partyId: string, days: number): void {
     },
   );
 }
+
+/**
+ * DX-265: trae una cita (agendada lejos, a mediodía de la sede) a «dentro de
+ * `minutes` minutos» con el reloj de la BD, de 5 minutos de duración: la API no
+ * deja agendar en la ventana de «Ya llegué» sin depender de la hora a la que
+ * corra la suite. La sede va en una zona lejos de su medianoche.
+ */
+export function moveAppointmentToNow(appointmentId: string, minutes: number): void {
+  if (!E2E_DATABASE_URL) throw new Error('E2E_DATABASE_URL no definido');
+  execFileSync(
+    'psql',
+    [E2E_DATABASE_URL, '-v', 'ON_ERROR_STOP=1', '-v', `id=${appointmentId}`, '-v', `m=${Math.trunc(minutes)}`],
+    {
+      input: `UPDATE appointments SET "start" = timezone('UTC', now()) + make_interval(mins => :m), "end" = timezone('UTC', now()) + make_interval(mins => :m + 5) WHERE id = :'id';`,
+    },
+  );
+}
