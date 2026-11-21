@@ -23,6 +23,8 @@ const origin = tenantOrigin(subdomain);
 const password = 'Password123!';
 const admin = { fullName: 'Ana Titular', email: `ana.${suffix}@example.com` };
 const dentist = { fullName: 'Luis Pérez', email: `luis.${suffix}@example.com` };
+// El apellido tal como se guarda (la API admite hasta 40): con él se buscan la fila y la fuga.
+const PATIENT_LAST_NAME = `Rodríguez${suffix}`.slice(0, 40);
 const SCREEN_NAME = 'Televisor de recepción';
 
 let session: ApiSession;
@@ -76,7 +78,7 @@ test.beforeAll(async ({ request }) => {
   patientId = (
     await apiPost<{ id: string }>(request, session, '/patients', {
       firstName: 'Ana',
-      lastName: `Rodríguez${suffix}`.slice(0, 40),
+      lastName: PATIENT_LAST_NAME,
       docType: 'NATIONAL_ID',
       docNumber: `SALA${suffix}`.slice(0, 20),
       sex: 'F',
@@ -163,7 +165,7 @@ test('el televisor: quien llega sale en menos de 15 s, al sillón pasa a consult
     const waiting = page.getByTestId('waiting-room-waiting-item');
     await expect(waiting).toHaveText([/^Ana R\./], { timeout: 15_000 });
     // Nunca el apellido entero.
-    await expect(page.getByTestId('waiting-room-board')).not.toContainText(`Rodríguez${suffix}`);
+    await expect(page.getByTestId('waiting-room-board')).not.toContainText(PATIENT_LAST_NAME);
 
     await api(request, 'patch', `/appointments/${walkIn.id}`, { status: 'IN_CHAIR' });
     const called = page.getByTestId('waiting-room-called-item');
@@ -203,7 +205,7 @@ test('«Turno N» en En clínica; revocar con confirmación deja el televisor en
     await loginAs(page, origin, admin.email, password);
     // «En clínica» enseña al personal el turno que sale en el televisor.
     await page.goto(`${origin}/agenda/en-clinica`);
-    const row = page.getByTestId('in-clinic-item').filter({ hasText: `Rodríguez${suffix}` });
+    const row = page.getByTestId('in-clinic-item').filter({ hasText: PATIENT_LAST_NAME });
     await expect(row.getByTestId('in-clinic-turn')).toHaveText(/^Turno \d+$/, { timeout: 15_000 });
 
     await openSettings(page);
