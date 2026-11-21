@@ -54,8 +54,10 @@ interface EquipmentLifeSheetProps {
 function Fact({ label, value, numeric }: { label: string; value: React.ReactNode; numeric?: boolean }) {
   return (
     <>
+      {/* DX-587: en el teléfono, la etiqueta encima del valor; a dos columnas,
+          a 320 px un «Sin programar» no cabía en lo que dejaba la etiqueta. */}
       <dt className="text-muted">{label}</dt>
-      <dd className={numeric ? 'tabular-nums' : undefined}>{value}</dd>
+      <dd className={numeric ? 'tabular-nums max-sm:mb-2' : 'max-sm:mb-2'}>{value}</dd>
     </>
   );
 }
@@ -91,7 +93,7 @@ export function EquipmentLifeSheet({ equipment, stamp, maintenanceActions }: Equ
           <h3 id="life-sheet-data" className="t-label text-muted">
             {copy.dataHeading}
           </h3>
-          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm [overflow-wrap:anywhere]">
+          <dl className="grid gap-x-3 gap-y-1 text-sm [overflow-wrap:anywhere] sm:grid-cols-[auto_minmax(0,1fr)]">
             <Fact label={copy.location} value={equipment.locationName} />
             <Fact label={copy.chair} value={equipment.chairName ?? copy.none} />
             <Fact label={copy.category} value={EQUIPMENT_CATEGORY_LABELS[equipment.category]} />
@@ -111,7 +113,7 @@ export function EquipmentLifeSheet({ equipment, stamp, maintenanceActions }: Equ
           <h3 id="life-sheet-program" className="t-label text-muted">
             {copy.programHeading}
           </h3>
-          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm [overflow-wrap:anywhere]">
+          <dl className="grid gap-x-3 gap-y-1 text-sm [overflow-wrap:anywhere] sm:grid-cols-[auto_minmax(0,1fr)]">
             <Fact
               label={copy.interval}
               value={

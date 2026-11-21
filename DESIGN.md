@@ -268,6 +268,29 @@ rest — the page's largest interval — then 12px inside the bar → count → 
 block, which reads as one gesture. Lists render through `DataList` (see Components → Tables):
 a real table from `sm` up, compact two-line cards on phones.
 
+### Supported widths and how they are tested (DX-587)
+Every screen — app, settings, public links, access pages — must work at these seven sizes:
+**320×640** (WCAG 2.2 SC 1.4.10 Reflow), **360×740** (low-end Android, common in Venezuela),
+**390×844** (phone, touch), **768×1024** (tablet portrait, touch: the sidebar is the icon rail —
+see Navigation), **1024×768** (small laptop), **1440×900** (desktop) and **844×390** (phone in
+landscape, touch).
+- **Reflow at 320.** No two-dimensional scrolling: the page (and `<main>`, which is the shell's
+  scroller) never scrolls sideways. Content that genuinely needs width (comparison tables, the
+  odontogram, a calendar grid) scrolls *inside its own frame* (`ScrollFrame` / `overflow-x-auto`).
+- **Landscape (390px tall).** The top bar and the bottom tab bar are rows of the `100dvh` shell,
+  never `fixed` over content; full-screen sheets scroll their body and keep the footer actions
+  visible. The page's `h1` is on screen on load and nothing covers it.
+- **Text never escapes its box.** It wraps (`min-w-0`, `break-words`), or truncates with an
+  ellipsis *and* says the whole text (`title` or the control's accessible name).
+- **Touch (390, 768, 844×390).** Every visible control measures ≥ 44×44 — its own box, its
+  `<label>`, or a stretched `::after` hit area (inline links inside a sentence are the WCAG 2.5.8
+  exception).
+- **The guard** is `e2e/responsive-sweep/` (one spec file per size so CI shards spread it): it opens
+  every route of `src/app` for ADMIN, DENTIST and RECEPTION (the ones the menu and Ajustes offer
+  each role) plus the public pages, on a clinic seeded through the API, and checks page scroll,
+  escaping elements and text, `h1`/primary action not covered, touch targets and axe. A new route
+  joins the sweep's list in `e2e/support/responsive-sweep.ts`.
+
 ## Elevation & Depth
 
 **Flat by default.** Surfaces sit on the paper with a 1px border, not a shadow. Depth
@@ -720,7 +743,7 @@ screen it opens; a group with no visible entries disappears.
   accepts a currency other than the reference one, or the ADMIN forced «Siempre»), the shell shows
   the rate as *context of the sede*, right above the sede switcher: «1 USD = 918,77 Bs.» (the
   DX-517 text when the clinic has one), the first accepted currency plus a neutral «+N» counter
-  for the rest. Expanded sidebar: a 36px row (`border` + surface, ink, tabular); rail: a 40px icon
+  for the rest. Expanded sidebar: a 36px row (`border` + surface, ink, tabular); rail: a 40px (44px by touch) icon
   button (name and `title` carry the text); phone: a 44px two-line pill after the sede pill
   («1 USD =» muted / «918,77 Bs.» ink, max 7.5rem). Without a rate: «Sin tasa hoy» in
   `warning-text` with the alert icon — never red, nothing is broken. Every variant opens the same

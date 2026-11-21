@@ -226,7 +226,7 @@ export function PriceListItemsView({ token, priceListId }: PriceListItemsViewPro
   const backLink = (
     <Link
       href="/settings/listas-de-precios"
-      className="mb-4 inline-flex items-center gap-1 rounded-sm text-sm font-medium text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text max-md:min-h-11"
+      className="mb-4 inline-flex items-center gap-1 rounded-sm text-sm font-medium text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text max-md:min-h-11 pointer-coarse:min-h-11"
     >
       <ChevronLeft aria-hidden className="size-4" />
       {copy.back}

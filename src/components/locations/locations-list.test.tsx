@@ -87,7 +87,7 @@ describe('LocationsList (G1, spec §6.3)', () => {
     expect(screen.getByRole('link', { name: 'Abrir Sede Sur' })).toHaveAttribute('href', '/settings/sedes/loc%202');
     expect(screen.getByText('Sede Sur').closest('li')).toHaveTextContent('Inactiva');
     // El calendario está en la ficha, no en la lista.
-    expect(screen.queryByRole('link', { name: /^Calendario/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /calendario/i })).not.toBeInTheDocument();
   });
 
   it('lists the clock of each location; a location without one is «Por configurar»', async () => {

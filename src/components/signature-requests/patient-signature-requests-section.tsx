@@ -482,7 +482,7 @@ export function PatientSignatureRequestsSection({
                           type="button"
                           variant="secondary"
                           size="sm"
-                          className="min-h-11 sm:min-h-9"
+                          className="min-h-11 sm:pointer-fine:min-h-9"
                           loading={pdfBusy.has(r.id)}
                           disabled={pdfBusy.has(r.id)}
                           onClick={() => void handleRetryPdf(r)}

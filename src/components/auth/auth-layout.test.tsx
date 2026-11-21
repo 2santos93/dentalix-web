@@ -56,7 +56,7 @@ describe('AuthLayout', () => {
     // El panel es el único con foto, y la frase sigue ahí, en blanco.
     expect(container.querySelectorAll('img')).toHaveLength(1);
     expect(screen.getByText('Tu clínica, siempre al día')).toHaveClass('text-white');
-    expect(img.closest('div')).toHaveClass('hidden', 'lg:flex');
+    expect(img.closest('aside')).toHaveClass('hidden', 'lg:flex');
     // Velo neutro, sin color de marca.
     expect(container.querySelector('[aria-hidden].bg-gradient-to-t')?.className).toMatch(/from-black\//);
   });

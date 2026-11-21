@@ -90,14 +90,16 @@ jobs:
       # como en la API (DX-396). Con 3 shards el más lento tarda ~15-19 min
       # (DX-457): el 55 % de 35, con margen para que la suite crezca; cuando
       # el aviso del 70 % empiece a saltar, se sube N (4: [1,2,3,4] y [4]).
+      # DX-587: 4 desde el barrido responsive (e2e/responsive-sweep/, siete
+      # ficheros de ~50 tests de ~3 s): suma ~20-30 min de runner repartidos.
       # DX-413: `grep` o `repeat_each` > 1 (solo workflow_dispatch) corren en
       # UN shard (`total` 1) con la semántica de siempre: todas las
       # repeticiones de un test en el mismo runner (repartidas, las de un
       # mismo fichero caerían en shards distintos), sin reintentos y con los
       # topes largos (50 min filtrado; 200 repetido).
       matrix:
-        shard: ${{ fromJSON((inputs.grep != '' || (inputs.repeat_each != '' && inputs.repeat_each != '1')) && '[1]' || '[1, 2, 3]') }}
-        total: ${{ fromJSON((inputs.grep != '' || (inputs.repeat_each != '' && inputs.repeat_each != '1')) && '[1]' || '[3]') }}
+        shard: ${{ fromJSON((inputs.grep != '' || (inputs.repeat_each != '' && inputs.repeat_each != '1')) && '[1]' || '[1, 2, 3, 4]') }}
+        total: ${{ fromJSON((inputs.grep != '' || (inputs.repeat_each != '' && inputs.repeat_each != '1')) && '[1]' || '[4]') }}
         timeout: ${{ fromJSON((inputs.repeat_each != '' && inputs.repeat_each != '1') && '[200]' || inputs.grep != '' && '[50]' || '[35]') }}
     # DX-292 (TST-033): cada paso lleva su propio tope y la suma cabe aquí.
     # Si un paso se pasa, falla ESE paso (la run queda `failure`) y el informe
@@ -529,7 +531,7 @@ jobs:
     timeout-minutes: 45
     env:
       # El mismo N que la matriz de `playwright` (1 con grep o repeat_each).
-      SHARD_TOTAL: ${{ (inputs.grep != '' || (inputs.repeat_each != '' && inputs.repeat_each != '1')) && 1 || 3 }}
+      SHARD_TOTAL: ${{ (inputs.grep != '' || (inputs.repeat_each != '' && inputs.repeat_each != '1')) && 1 || 4 }}
     steps:
       # Shards cancelados (un push nuevo al PR, o a mano): rojo en el acto y
       # sin gastar el runner. El job sigue con `if: always()` para que el

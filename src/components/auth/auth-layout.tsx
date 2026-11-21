@@ -141,7 +141,9 @@ export function AuthLayout({ clinic: serverClinic, fromHost = false, task, descr
         </main>
       </div>
 
-      <div
+      {/* DX-587: `<aside>` y no `<div>`: la foto y la frase quedaban fuera de
+          todo landmark (axe `region`). */}
+      <aside
         className={`relative hidden overflow-hidden border-l border-border-subtle lg:flex lg:w-1/2 lg:flex-col lg:justify-end lg:p-12 ${
           heroImage ? 'bg-black' : 'bg-surface-sunken'
         }`}
@@ -159,7 +161,7 @@ export function AuthLayout({ clinic: serverClinic, fromHost = false, task, descr
             <p className={`t-display ${heroImage ? 'text-white' : 'text-muted'}`}>{caption}</p>
           </div>
         ) : null}
-      </div>
+      </aside>
     </div>
   );
 }

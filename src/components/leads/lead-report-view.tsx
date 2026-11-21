@@ -40,6 +40,9 @@ export const leadReportCopy = {
   period: 'Período',
   byChannel: 'Por canal',
   byOwner: 'Por responsable',
+  // DX-587: la tabla no se llama como su sección (axe landmark-unique cuando se desplaza).
+  byChannelTable: 'Prospectos por canal',
+  byOwnerTable: 'Prospectos por responsable',
   total: 'Total',
   noOwner: 'Sin responsable',
   colChannel: 'Canal',
@@ -127,7 +130,8 @@ export function LeadReportView({ token }: { token: string }) {
       <Link
         href={reportFigureHref(range, { channel: row.channel, ownerId: row.ownerId }, reached)}
         aria-label={copy.figureLabel(value, what, row.rowLabel)}
-        className="relative z-10 tabular-nums text-primary-text underline-offset-4 hover:underline"
+        // DX-587: con el dedo, la cifra es un objetivo de 44×44 (alineada a la derecha de su celda).
+        className="relative z-10 tabular-nums text-primary-text underline-offset-4 hover:underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:items-center pointer-coarse:justify-end"
       >
         {text}
       </Link>
@@ -230,7 +234,7 @@ export function LeadReportView({ token }: { token: string }) {
             <section aria-labelledby="lead-report-channel" className="flex flex-col gap-3">
               <SectionHeader title={copy.byChannel} titleId="lead-report-channel" />
               <DataList
-                label={copy.byChannel}
+                label={copy.byChannelTable}
                 rows={[...byChannel, total]}
                 columns={columns(copy.colChannel)}
                 getRowKey={(r) => `c:${r.channel ?? 'total'}`}
@@ -243,7 +247,7 @@ export function LeadReportView({ token }: { token: string }) {
                 titleId="lead-report-owner"
               />
               <DataList
-                label={copy.byOwner}
+                label={copy.byOwnerTable}
                 rows={[...byOwner, total]}
                 columns={columns(copy.colOwner)}
                 getRowKey={(r) => `o:${r === total ? 'total' : (r.ownerId ?? 'none')}`}

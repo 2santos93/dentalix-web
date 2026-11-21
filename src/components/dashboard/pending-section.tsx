@@ -256,7 +256,7 @@ export function PendingSection({
                 aria-expanded={unfolded}
                 aria-controls={foldId}
                 onClick={() => setUnfolded((v) => !v)}
-                className="flex min-h-11 items-center justify-between gap-3 rounded-md px-1 text-left text-sm text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-primary-text sm:min-h-9"
+                className="flex min-h-11 items-center justify-between gap-3 rounded-md px-1 text-left text-sm text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-primary-text sm:pointer-fine:min-h-9"
                 data-testid="pending-folded-toggle"
               >
                 <span>{copy.folded(clear.length + (onlineClear ? 1 : 0))}</span>

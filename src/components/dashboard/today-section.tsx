@@ -320,7 +320,7 @@ function TodaySkeleton() {
 }
 
 export const sectionLinkClass =
-  'inline-flex items-center whitespace-nowrap rounded-sm text-sm font-medium text-primary-text hover:underline max-md:min-h-11';
+  'inline-flex items-center whitespace-nowrap rounded-sm text-sm font-medium text-primary-text hover:underline max-md:min-h-11 pointer-coarse:min-h-11';
 
 export function capitalize(text: string): string {
   return text.charAt(0).toLocaleUpperCase('es') + text.slice(1);

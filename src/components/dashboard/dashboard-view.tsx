@@ -97,7 +97,7 @@ export function DashboardView({ token }: DashboardViewProps) {
           {role === 'ADMIN' ? (
             <Link
               href={note.settingsHref}
-              className="rounded-sm text-primary-text hover:underline max-md:inline-flex max-md:min-h-11 max-md:items-center"
+              className="rounded-sm text-primary-text hover:underline max-md:inline-flex max-md:min-h-11 max-md:items-center pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
             >
               {sedeZoneNoteCopy.change}
             </Link>

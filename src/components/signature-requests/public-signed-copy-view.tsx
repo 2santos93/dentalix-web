@@ -135,6 +135,7 @@ export function PublicSignedCopyView({ token }: { token: string }) {
             icon={LinkIcon}
             title={publicSignedCopyCopy.invalidTitle}
             message={publicSignedCopyCopy.invalidMessage}
+            headingLevel={1}
           />
         )}
 

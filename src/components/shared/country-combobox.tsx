@@ -256,7 +256,7 @@ export function CountryCombobox<T extends ComboboxOption = CountryOption>({
             aria-disabled="true"
             aria-selected={false}
             onMouseDown={(e) => e.preventDefault()}
-            className="flex min-h-11 items-center px-3 py-2 text-sm text-muted sm:min-h-9">
+            className="flex min-h-11 items-center px-3 py-2 text-sm text-muted sm:pointer-fine:min-h-9">
             {copy.noMatch}
           </li>
         ) : null}
@@ -274,7 +274,7 @@ export function CountryCombobox<T extends ComboboxOption = CountryOption>({
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => pick(item)}
             className={cn(
-              'flex min-h-11 cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm text-ink sm:min-h-9',
+              'flex min-h-11 cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm text-ink sm:pointer-fine:min-h-9',
               index === active ? 'bg-surface-sunken' : 'hover:bg-surface-sunken',
             )}
           >

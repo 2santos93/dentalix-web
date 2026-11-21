@@ -45,7 +45,8 @@ export const locationDetailCopy = {
   calendarLabel: 'Días hábiles y festivos',
   calendarHelp: 'Para los plazos que se cuentan en días hábiles.',
   calendarOpen: 'Abrir',
-  calendarFor: (name: string) => `Calendario ${name}`,
+  // DX-587 (WCAG 2.5.3): el nombre empieza por lo que se lee, «Abrir».
+  calendarFor: (name: string) => `Abrir el calendario de ${name}`,
 };
 
 const copy = locationDetailCopy;

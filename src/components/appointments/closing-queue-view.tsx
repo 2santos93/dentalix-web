@@ -277,7 +277,7 @@ export function ClosingQueueView({ token }: { token: string }) {
                         heading.scrollIntoView({ block: 'start' });
                         heading.focus();
                       }}
-                      className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm font-medium text-ink hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text sm:min-h-9"
+                      className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm font-medium text-ink hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text sm:pointer-fine:min-h-9"
                     >
                       {CLOSING_SECTION_TITLES[s]}
                       <span
