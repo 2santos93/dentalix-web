@@ -41,7 +41,7 @@ function board(over: Record<string, unknown> = {}) {
     screenName: 'Televisor recepción',
     locationName: 'Sede Chacao',
     nameMode: 'NAME_INITIAL',
-    messages: ['Horario: lunes a viernes de 8:00 a 17:00', 'Recuerda traer tu cédula'],
+    messages: ['Horario: lunes a viernes de 8:00 a 17:00', 'Wifi para pacientes: Clinica-Invitados'],
     soundEnabled: false,
     timeZone: 'America/Caracas',
     locale: 'es-VE',
