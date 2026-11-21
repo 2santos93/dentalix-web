@@ -6,6 +6,7 @@ import {
   listPaymentMethods,
   listPaymentMethodInstructions,
   updatePaymentAdjustment,
+  setPaymentMethodGatewayFee,
   updatePaymentMethod,
   type ClinicPaymentMethod,
 } from '@/lib/payments/payment-methods-api';
@@ -17,6 +18,7 @@ jest.mock('../../lib/payments/payment-methods-api', () => ({
   listPaymentMethods: jest.fn(),
   createPaymentMethod: jest.fn(),
   updatePaymentMethod: jest.fn(),
+  setPaymentMethodGatewayFee: jest.fn(),
   createPaymentAdjustment: jest.fn(),
   updatePaymentAdjustment: jest.fn(),
   listPaymentMethodInstructions: jest.fn(),
@@ -41,6 +43,7 @@ const cash: ClinicPaymentMethod = {
   requiresReference: false,
   proofPolicy: 'NONE' as const,
   allowInPaymentLink: false,
+  gatewayFeePercent: null,
   legacyMethod: 'CASH',
   adjustments: [],
   createdAt: '2026-10-01T00:00:00.000Z',
@@ -173,6 +176,30 @@ describe('PaymentMethodsManager (DX-377)', () => {
     // Permitido y sin datos para pagar: el aviso de que no saldrá en el enlace.
     expect(await screen.findByText('«Efectivo»: no se mostrará en el enlace hasta que tenga datos para pagar.')).toBeInTheDocument();
     expect(within(table).getByText('Permitido')).toBeInTheDocument();
+  });
+
+  it('DX-018-bis: la comisión de la pasarela se ve en la lista, se valida y se guarda aparte', async () => {
+    const user = setupUser();
+    const card = { ...cash, id: 'pm-card', name: 'Tarjeta', kind: 'CARD' as const, legacyMethod: 'CARD' as const };
+    mockedList.mockResolvedValue([card]);
+    mockedUpdate.mockResolvedValue(card);
+    jest.mocked(setPaymentMethodGatewayFee).mockResolvedValue({ ...card, gatewayFeePercent: 3.5 });
+    render(<PaymentMethodsManager token="tok" allowed />);
+    const table = await screen.findByRole('table', { name: 'Medios de pago' });
+    expect(within(table).getByText('Sin comisión')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Acciones de Tarjeta' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Editar' }));
+    const dialog = await screen.findByRole('dialog');
+    const fee = within(dialog).getByLabelText('Comisión de la pasarela (%)');
+    await user.type(fee, '120');
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+    expect(await within(dialog).findByText(/mayor que 0 y como mucho 100/)).toBeInTheDocument();
+    expect(mockedUpdate).not.toHaveBeenCalled();
+    await user.clear(fee);
+    await user.type(fee, '3,5');
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+    await waitFor(() => expect(setPaymentMethodGatewayFee).toHaveBeenCalledWith('tok', 'pm-card', 3.5));
+    expect(await within(table).findByText(/^3,5\s%$/)).toBeInTheDocument();
   });
 
   it('DX-569: sin permiso de escritura (recepción) se ven los medios, sin crear ni editar', async () => {

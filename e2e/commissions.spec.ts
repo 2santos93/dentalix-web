@@ -50,7 +50,7 @@ async function qaShots(page: Page, name: string, prepare: () => Promise<Locator 
 
 async function seed(request: APIRequestContext, origin: string, accessToken: string): Promise<void> {
   const headers = { Authorization: `Bearer ${accessToken}`, 'X-Tenant-Host': new URL(origin).host };
-  async function call<T>(method: 'post' | 'patch', path: string, data: object): Promise<T> {
+  async function call<T>(method: 'post' | 'patch' | 'put', path: string, data: object): Promise<T> {
     const res = await request[method](`${API}${path}`, { headers, data });
     expect(res.ok(), `${method.toUpperCase()} ${path} falló: ${await res.text()}`).toBeTruthy();
     return (await res.json()) as T;
@@ -80,11 +80,25 @@ async function seed(request: APIRequestContext, origin: string, accessToken: str
   await call('patch', itemPath, { status: 'DONE' });
   // Realizada el mes pasado (el ADMIN corrige la fecha de un ítem ya hecho).
   await call('patch', itemPath, { completedAt: atSede(DONE_ON, '10:00', E2E_REGION.timeZone).toISOString() });
+  // DX-018-bis: la corona va al laboratorio (costo 50 USD) y se cobra con
+  // tarjeta, cuya pasarela cobra el 3 % a la clínica.
+  const lab = await call<{ id: string }>('post', '/dental-labs', { name: `Laboratorio Caracas ${suffix}`.slice(0, 60) });
+  const order = await call<{ id: string }>('post', `/patients/${patient.id}/lab-orders`, {
+    labId: lab.id,
+    description: 'Perno colado',
+    toothNumbers: ['11'],
+    treatmentPlanItemId: item.id,
+  });
+  await call('put', `/lab-orders/${order.id}/cost`, { cost: '50', currency: 'USD' });
+  const methodsRes = await request.get(`${API}/payment-methods`, { headers });
+  const methods = (await methodsRes.json()) as { id: string; legacyMethod: string | null }[];
+  const card = methods.find((m) => m.legacyMethod === 'CARD')!;
+  await call('put', `/payment-methods/${card.id}/gateway-fee`, { percent: 3 });
   await call('post', `/treatment-plans/${plan.id}/payments`, {
     amount: 200,
     currency: 'USD',
     paidAt: PAID_ON,
-    method: 'CASH',
+    method: 'CARD',
   });
 }
 
@@ -109,11 +123,14 @@ test('honorarios: configurar la regla y cerrar la liquidación del mes pasado', 
   await page.getByRole('menuitem', { name: 'Configurar' }).click();
   const dialog = page.getByRole('dialog', { name: 'Honorarios de Ana Admin' });
   await dialog.getByRole('textbox', { name: 'Porcentaje general' }).fill('35');
-  await expect(dialog.getByRole('switch', { name: 'Descontar el costo de laboratorio' })).toBeDisabled();
+  // DX-018-bis: base = 200 − laboratorio 50 − pasarela 3 % (6) = 144 → 35 % = 50,40.
+  await dialog.getByRole('switch', { name: 'Descontar el costo de laboratorio' }).click();
+  await dialog.getByRole('switch', { name: 'Descontar la comisión de la pasarela de pago' }).click();
   await qaShots(page, 'honorarios-regla', async () => dialog.getByRole('textbox', { name: 'Porcentaje general' }));
   await dialog.getByRole('button', { name: 'Guardar regla' }).click();
   await expect(dialog).toBeHidden({ timeout: 10_000 });
   await expect(table).toContainText('35 % de lo cobrado, por prestación');
+  await expect(table).toContainText('descuenta laboratorio y pasarela');
 
   // --- /honorarios: vista previa del mes pasado ---
   await page.goto(`${origin}/honorarios`);
@@ -123,7 +140,9 @@ test('honorarios: configurar la regla y cerrar la liquidación del mes pasado', 
   await expect(detail).toContainText('35 %');
   const totals = page.getByRole('region', { name: 'Totales por moneda' });
   await expect(totals).toContainText('A pagar en USD');
-  await expect(totals).toContainText('70');
+  await expect(totals).toContainText('50,40');
+  await expect(detail).toContainText('Antes de descuentos');
+  await expect(detail).toContainText('Pasarela 3');
   await qaShots(page, 'honorarios-vista-previa', async () => page.getByRole('heading', { name: 'Vista previa' }));
   await qaShots(page, 'honorarios-detalle', async () => page.getByRole('heading', { name: 'Devengado en el período' }));
 

@@ -78,6 +78,39 @@ describe('Liquidación cerrada (DX-018)', () => {
     expect(within(totals).getByRole('rowheader', { name: 'VES' })).toBeInTheDocument();
   });
 
+  it('DX-018-bis: el documento lleva los descuentos de la regla y el desglose de la base', () => {
+    const base = makeSettlement();
+    render(
+      <CommissionSettlementDocument
+        data={{
+          ...base,
+          deductLabCost: true,
+          deductCardFee: true,
+          lines: base.lines.map((l, i) =>
+            i === 0
+              ? {
+                  ...l,
+                  base: 66.5,
+                  deductions: {
+                    grossBase: 100,
+                    labCost: 30,
+                    cardFeePercent: 3.5,
+                    cardFee: 3.5,
+                    labCostSkippedCurrencies: ['VES'],
+                  },
+                }
+              : l,
+          ),
+        }}
+        stamp={stampPainters(null)}
+        clinic={{ name: 'Clínica Ávila', logoUrl: null }}
+      />,
+    );
+    expect(screen.getByText('Descuenta laboratorio y pasarela antes del porcentaje')).toBeInTheDocument();
+    expect(screen.getByText(/Antes de descuentos .+ · Laboratorio .+ · Pasarela 3,5\s%: .+/)).toBeInTheDocument();
+    expect(screen.getByText(/Laboratorio en VES sin descontar/)).toBeInTheDocument();
+  });
+
   it('Ajustes › Honorarios: profesionales con su regla o «Sin regla»', async () => {
     jest.mocked(listCommissionRules).mockResolvedValue({
       professionals: [
