@@ -5,18 +5,21 @@ import { Button } from '@/components/ui/button';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import {
+  BCV_CURRENCIES,
+  bcvValueDateFor,
   convertWithRate,
-  paymentRateCopy,
   quoteFromRates,
   ratePairLabel,
   ratePerBase,
   rateDayLabel,
+  rateSourceText,
 } from '@/lib/payments/payment-rate';
 import { rateProviderCopy } from './rate-provider-notice';
 import type { ExchangeRatesState } from './use-exchange-rates';
 import { roundAmount } from '@/lib/money/round';
 
-// Copy como constantes (i18n-ready). Ningún texto nombra un país ni un banco.
+// Copy como constantes (i18n-ready). Solo la fuente BCV (DX-585), que elige la
+// clínica, nombra un banco.
 export const ratePreviewCopy = {
   title: (currency: string) => `En la moneda del plan (${currency})`,
   loading: 'Consultando la tasa de cambio…',
@@ -26,7 +29,8 @@ export const ratePreviewCopy = {
   // DX-386: fuente automática sin la tasa del día todavía (el proveedor no la dio).
   unavailable: (date: string) =>
     `La tasa del proveedor para el ${date} aún no está disponible; reintentamos solos. El abono se guarda igual y queda «sin tasa» hasta que llegue.`,
-  rate: (pair: string, source: string, date: string) => `Tasa: ${pair} · ${source} · ${date}`,
+  /** DX-586: antes de confirmar, con qué tasa se cobrará: «Se cobrará con 1 USD = Bs. 918,77 (BCV, fecha valor 20/11/2026 · 21/11/2026)». */
+  rate: (pair: string, source: string, date: string) => `Se cobrará con ${pair} (${source} · ${date})`,
   typeAmount: 'Escribe el importe para ver cuánto cubre del plan.',
   equivalent: (currency: string) => `Equivalente en ${currency}`,
   pendingAfter: 'Pendiente tras el abono',
@@ -39,6 +43,9 @@ export const ratePreviewCopy = {
       : `No cuenta ${n} abonos anteriores «sin tasa»: lo pendiente real será menor cuando se registre su tasa.`,
   missing: (currency: string, date: string) =>
     `No hay tasa de ${currency} para el ${date}: el abono se guarda igual y queda «sin tasa» hasta que haya tasa de ese día.`,
+  // DX-585: con la fuente BCV, VES y EUR solo salen del BCV (nunca del proveedor).
+  missingBcv: (currency: string, date: string) =>
+    `No hay tasa del BCV de ${currency} para el ${date}: aún no se publicó o no se pudo consultar. El abono se guarda igual y la toma sola en cuanto llegue.`,
 };
 const copy = ratePreviewCopy;
 
@@ -154,16 +161,20 @@ function PreviewBody({
   const rate = quoteFromRates(state.rates, paymentCurrency, planCurrency);
   if (rate === null) {
     const missing = ratePerBase(state.rates, paymentCurrency) === null ? paymentCurrency : planCurrency;
+    const fromBcv = source === 'BCV' && BCV_CURRENCIES.includes(missing);
     return (
       <p className="mt-1 flex items-start gap-2">
         <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning-text" />
-        <span>{copy.missing(missing, sedeCivilDate(date, fmt))}</span>
+        <span>{(fromBcv ? copy.missingBcv : copy.missing)(missing, sedeCivilDate(date, fmt))}</span>
       </p>
     );
   }
   const rateLine = copy.rate(
     ratePairLabel(paymentCurrency, rate, money),
-    paymentRateCopy.source[source],
+    // DX-585: con BCV y VES o EUR en el par, «BCV, fecha valor 20/11/2026».
+    rateSourceText(source, bcvValueDateFor(state.rates, paymentCurrency, planCurrency), (day) =>
+      sedeCivilDate(day, fmt),
+    ),
     // DX-384: «tasa del 30/10/2026» si es la última registrada, de un día anterior al del abono.
     // (`rateDate` falta en la API anterior al despliegue: el día del abono.)
     rateDayLabel(state.rates.rateDate ?? date, date, (day) => sedeCivilDate(day, fmt)),

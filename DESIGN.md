@@ -716,14 +716,31 @@ screen it opens; a group with no visible entries disappears.
   hover = `surface-sunken`. Header: brand + collapse control, then a search trigger showing
   the shortcut (⌘K / Ctrl K). Footer: sede switcher above the account card; the role under the
   name is `muted`, never the accent.
+- **Today's rate (DX-584).** When the API says so (`GET /exchange/header` → `visible`: the clinic
+  accepts a currency other than the reference one, or the ADMIN forced «Siempre»), the shell shows
+  the rate as *context of the sede*, right above the sede switcher: «1 USD = 918,77 Bs.» (the
+  DX-517 text when the clinic has one), the first accepted currency plus a neutral «+N» counter
+  for the rest. Expanded sidebar: a 36px row (`border` + surface, ink, tabular); rail: a 40px icon
+  button (name and `title` carry the text); phone: a 44px two-line pill after the sede pill
+  («1 USD =» muted / «918,77 Bs.» ink, max 7.5rem). Without a rate: «Sin tasa hoy» in
+  `warning-text` with the alert icon — never red, nothing is broken. Every variant opens the same
+  `Popover` (all rates, source and day; ADMIN gets «Ajustes de la tasa»), so the control is
+  one button with one behaviour for every role. Its accessible name starts with the visible text
+  («Tasa de hoy: 1 USD = 918,77 Bs., fuente automática»). With the BCV source (DX-585) the rows that
+  come from the BCV (VES/EUR) say «BCV · fecha valor 20/11/2026» in the popover and «fuente BCV,
+  fecha valor …» in the name; any other currency still reads «Automática». It never shows a loading or error state:
+  until the first good read, or if it fails, there is simply no row (the rate a payment uses is
+  decided by the API when it is recorded). Single-currency clinics never see it. *Budget note:*
+  the row costs 44px of the expanded footer (48px in the rail), so with the indicator visible the
+  ADMIN menu scrolls slightly at 900px; the 900px guard runs on single-currency clinics.
 - **Tablet (768–1023px):** the same sidebar, as the icon rail by default (names in
   `aria-label` + `title`); it can be expanded for the moment without changing the desktop
   preference.
 - **Phone (<768px):**
   - *Top app bar* (56px + `env(safe-area-inset-top)`): clinic brand left (it gets the width),
     sede switcher as a 44px pill — map-pin + short label («Norte», «Todas», max ~6.5rem) over an
-    invisible native select, accessible name «Sede: {full name}» — search button (opens the
-    palette), account avatar. It
+    invisible native select, accessible name «Sede: {full name}» — today's rate pill when the
+    clinic shows it (DX-584) — search button (opens the palette), account avatar. It
     does **not** repeat the page title — the page's H1 is the title.
   - *Bottom tab bar* (56px row inside a container padded with `env(safe-area-inset-bottom)`):
     four role-based destinations + «Más», icon 20px + label always visible. ADMIN: Inicio,

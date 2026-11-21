@@ -1,7 +1,12 @@
 'use client';
 import * as React from 'react';
 import type { SedeStamp } from '@/lib/locations/sede-stamp';
-import { percentText, type CommissionLine, type CommissionTotal } from '@/lib/commissions/commissions-api';
+import {
+  lineHasDeductions,
+  percentText,
+  type CommissionLine,
+  type CommissionTotal,
+} from '@/lib/commissions/commissions-api';
 import { DataList, type DataListColumn } from '@/components/ui/data-list';
 import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
 import { SectionHeader } from '@/components/ui/section-header';
@@ -32,7 +37,36 @@ export const commissionLinesCopy = {
   totalAdjustments: 'Ajustes',
   totalToPay: (currency: string) => `A pagar en ${currency}`,
   noLines: 'Nada que liquidar en este período.',
+  // DX-018-bis: lo que la base descontó (base = antes de descuentos − laboratorio − pasarela).
+  gross: (amount: string) => `Antes de descuentos ${amount}`,
+  labCost: (amount: string) => `Laboratorio ${amount}`,
+  cardFee: (percent: string, amount: string) => `Pasarela ${percent}: ${amount}`,
+  labSkipped: (currencies: string) => `Laboratorio en ${currencies} sin descontar: no se convierte a la moneda del plan.`,
 };
+
+/**
+ * DX-018-bis: el desglose de la base de una línea («Antes de descuentos USD
+ * 300,00 · Laboratorio −USD 120,00 · Pasarela 3,5 %: −USD 10,50») y, si un
+ * costo de laboratorio está en otra moneda, el aviso de que no se descontó.
+ */
+export function lineDeductionTexts(
+  l: CommissionLine,
+  money: (amount: number) => string,
+): { detail: string | null; skipped: string | null } {
+  if (!lineHasDeductions(l)) return { detail: null, skipped: null };
+  const d = l.deductions;
+  const parts = [
+    d.labCost !== 0 ? commissionLinesCopy.labCost(money(-d.labCost)) : null,
+    d.cardFee !== 0 && d.cardFeePercent !== null
+      ? commissionLinesCopy.cardFee(percentText(d.cardFeePercent), money(-d.cardFee))
+      : null,
+  ].filter((p): p is string => p !== null);
+  return {
+    detail: parts.length > 0 ? [commissionLinesCopy.gross(money(d.grossBase)), ...parts].join(' · ') : null,
+    skipped:
+      d.labCostSkippedCurrencies.length > 0 ? commissionLinesCopy.labSkipped(d.labCostSkippedCurrencies.join(', ')) : null,
+  };
+}
 
 const copy = commissionLinesCopy;
 
@@ -105,9 +139,31 @@ function lineColumns(stamp: SedeStamp, showPayment: boolean): DataListColumn<Com
       header: copy.colBase,
       numeric: true,
       align: 'end',
-      cell: (l) => stamp.money(l.base, l.currency, l.locationId),
-      // En la tarjeta, base y % juntos: «Base USD 200,00 al 35 %».
-      mobileCell: (l) => copy.baseAt(stamp.money(l.base, l.currency, l.locationId), percentText(l.percent)),
+      cell: (l) => {
+        const base = stamp.money(l.base, l.currency, l.locationId);
+        const { detail, skipped } = lineDeductionTexts(l, (n) => stamp.money(n, l.currency, l.locationId));
+        if (!detail && !skipped) return base;
+        return (
+          <span className="flex flex-col items-end gap-0.5">
+            <span>{base}</span>
+            {detail ? <span className="t-caption max-w-[18rem] text-right text-muted">{detail}</span> : null}
+            {skipped ? <span className="t-caption max-w-[18rem] text-right text-warning-text">{skipped}</span> : null}
+          </span>
+        );
+      },
+      // En la tarjeta, base y % juntos: «Base USD 200,00 al 35 %», y el desglose debajo.
+      mobileCell: (l) => {
+        const baseAt = copy.baseAt(stamp.money(l.base, l.currency, l.locationId), percentText(l.percent));
+        const { detail, skipped } = lineDeductionTexts(l, (n) => stamp.money(n, l.currency, l.locationId));
+        if (!detail && !skipped) return baseAt;
+        return (
+          <span className="flex flex-col gap-0.5">
+            <span>{baseAt}</span>
+            {detail ? <span className="t-caption text-muted">{detail}</span> : null}
+            {skipped ? <span className="t-caption text-warning-text">{skipped}</span> : null}
+          </span>
+        );
+      },
     },
     {
       id: 'percent',

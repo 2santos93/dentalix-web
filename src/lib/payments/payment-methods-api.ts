@@ -66,6 +66,25 @@ export async function createPaymentMethod(
   });
 }
 
+/**
+ * DX-018-bis: `PUT /payment-methods/:id/gateway-fee` (solo ADMIN): el % que la
+ * pasarela cobra a la clínica por cada cobro con el medio; null lo quita.
+ */
+export async function setPaymentMethodGatewayFee(
+  token: string,
+  id: string,
+  percent: number | null,
+): Promise<ClinicPaymentMethod> {
+  return apiFetch<ClinicPaymentMethod>(`/payment-methods/${id}/gateway-fee`, {
+    method: 'PUT',
+    body: { percent },
+    token,
+  });
+}
+
+/** DX-018-bis: rango de la comisión de la pasarela (0 < p ≤ 100, 2 decimales). */
+export const GATEWAY_FEE_MAX = 100;
+
 export async function updatePaymentMethod(
   token: string,
   id: string,

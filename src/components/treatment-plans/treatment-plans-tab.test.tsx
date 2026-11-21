@@ -1296,7 +1296,7 @@ describe('TreatmentPlansTab', () => {
     const preview = await screen.findByTestId('rp-rate-preview');
     await waitFor(() => expect(preview.textContent?.replace(/\s/g, ' ')).toContain('Equivalente en USDUSD 6,25'));
     expect(preview.textContent?.replace(/\s/g, ' ')).toContain('Pendiente tras el abonoUSD 79.993,75');
-    expect(preview.textContent?.replace(/\s/g, ' ')).toMatch(/Tasa: 1 USD = VES 4\.000,00 · manual · \d{2}\/\d{2}\/\d{4}/);
+    expect(preview.textContent?.replace(/\s/g, ' ')).toMatch(/Se cobrará con 1 USD = VES 4\.000,00 \(manual · \d{2}\/\d{2}\/\d{4}\)/);
     // DX-386: el mismo formato que la «Tasa congelada» de cada abono, sin «US$».
     expect(preview).not.toHaveTextContent('US$');
 

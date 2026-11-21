@@ -26,6 +26,8 @@ import { todayRatesCopy } from './today-rates';
 import { ApiError } from '@/lib/api/api-error';
 import { regionalFormat } from '@/lib/format/regional-format';
 import { setupUser } from '@/lib/test/user';
+import { typeTime } from '@/components/appointments/date-segments-for-tests';
+import { EXCHANGE_RATES_CHANGED_EVENT } from '@/lib/exchange/exchange-header-api';
 
 jest.mock('../../lib/exchange/exchange-settings-api', () => ({
   ...jest.requireActual('../../lib/exchange/exchange-settings-api'),
@@ -76,20 +78,34 @@ const AUTO = {
   manualSince: null,
   manualRateMaxAgeDays: 3,
   baseCurrency: 'USD',
+  acceptedCurrencies: [] as string[],
+  rateReferenceCurrency: null,
+  showRateInHeader: null,
 } as const;
 const MANUAL = {
   source: 'MANUAL',
   manualSince: '2026-10-30',
   manualRateMaxAgeDays: 3,
   baseCurrency: 'USD',
+  acceptedCurrencies: [] as string[],
+  rateReferenceCurrency: null,
+  showRateInHeader: null,
 } as const;
 const rateLabel = rateFormCopy.rate('USD');
+const cleanups: (() => void)[] = [];
+/** Limpieza al terminar la prueba (listeners de ventana). */
+const afterTest = (fn: () => void) => cleanups.push(fn);
+afterEach(() => {
+  while (cleanups.length) cleanups.pop()!();
+});
 
 const ves: ManualExchangeRate = {
   id: 'r-ves',
   date: '2026-10-29',
   currency: 'VES',
   rate: 36.12345678,
+  // Las anteriores a DX-586 (y la primera de cada día): desde el inicio del día en Caracas.
+  effectiveFrom: '2026-10-29T04:00:00.000Z',
   createdBy: { userId: 'u1', fullName: 'Dra. Admin' },
   createdAt: '2026-10-29T13:00:00.000Z',
   inUse: false,
@@ -245,9 +261,11 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     mockedGet.mockResolvedValue(MANUAL);
     mockedList.mockResolvedValue([ves]);
     renderView();
-    const table = await screen.findByRole('table', { name: copy.ratesHeading });
+    const table = await screen.findByRole('table', { name: copy.dayList(fmt.civilDate('2026-10-29')) });
     const row = within(table).getAllByRole('row')[1];
-    expect(row).toHaveTextContent(fmt.civilDate('2026-10-29'));
+    // DX-586: la lista va por día; cada fila dice desde qué hora rige.
+    expect(screen.getByRole('heading', { level: 3, name: fmt.civilDate('2026-10-29') })).toBeInTheDocument();
+    expect(row).toHaveTextContent(copy.fromDayStart);
     expect(row).toHaveTextContent('VES');
     expect(row).toHaveTextContent(fmt.number(36.12345678, { min: 0, max: 8 }));
     expect(row).toHaveTextContent('Dra. Admin');
@@ -259,6 +277,9 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
   });
 
   it('cambia la fuente a manual en un modal accesible', async () => {
+    const onRatesChanged = jest.fn();
+    window.addEventListener(EXCHANGE_RATES_CHANGED_EVENT, onRatesChanged);
+    afterTest(() => window.removeEventListener(EXCHANGE_RATES_CHANGED_EVENT, onRatesChanged));
     mockedGet.mockResolvedValue(AUTO);
     mockedList.mockResolvedValue([]);
     mockedSave.mockResolvedValue(MANUAL);
@@ -270,10 +291,96 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     await user.click(within(dialog).getByRole('radio', { name: /Manual/ }));
     await user.click(within(dialog).getByRole('button', { name: copy.save }));
     await waitFor(() => expect(mockedSave).toHaveBeenCalledWith('tok', 'MANUAL'));
+    // DX-584: el menú relee la tasa al momento.
+    await waitFor(() => expect(onRatesChanged).toHaveBeenCalledTimes(1));
     expect(await screen.findByTestId('exchange-rate-source')).toHaveTextContent(
       copy.manualSince(fmt.civilDate('2026-10-30')),
     );
     expect(screen.getByText(copy.sourceSaved)).toBeInTheDocument();
+  });
+
+  // DX-585: tercera fuente, la tasa oficial del BCV.
+  describe('fuente BCV oficial (DX-585)', () => {
+    const BCV = { ...AUTO, source: 'BCV' } as const;
+    const bcvRates = (valueDate: string | null) =>
+      mockedRates.mockImplementation((_token, date) =>
+        Promise.resolve({
+          base: 'USD',
+          source: 'BCV',
+          rates: (valueDate ? { VES: 918.7662, EUR: 0.90860842 } : {}) as Record<string, number>,
+          rateDate: date,
+          bcv: valueDate ? { valueDate, fetchedAt: '2026-10-29T21:00:00.000Z' } : null,
+        }),
+      );
+
+    it('el diálogo ofrece las tres fuentes, con la explicación del BCV, y guarda BCV', async () => {
+      const onRatesChanged = jest.fn();
+      window.addEventListener(EXCHANGE_RATES_CHANGED_EVENT, onRatesChanged);
+      afterTest(() => window.removeEventListener(EXCHANGE_RATES_CHANGED_EVENT, onRatesChanged));
+      mockedGet.mockResolvedValue(AUTO);
+      mockedList.mockResolvedValue([]);
+      mockedSave.mockResolvedValue(BCV);
+      const user = setupUser();
+      renderView();
+      await user.click(await screen.findByRole('button', { name: copy.change }));
+      const dialog = await screen.findByRole('dialog', { name: copy.sourceDialogTitle });
+      const radios = within(dialog).getAllByRole('radio');
+      expect(radios).toHaveLength(3);
+      const bcv = within(dialog).getByRole('radio', { name: /^BCV oficial/ });
+      expect(within(dialog).getByText(copy.sourceHints.BCV)).toBeInTheDocument();
+      expect(copy.sourceHints.BCV).toMatch(/tasa oficial del BCV/);
+      expect(copy.sourceHints.BCV).toMatch(/fecha valor/);
+      expect(copy.sourceHints.BCV).toMatch(/resto de monedas, con la automática/);
+      await user.click(bcv);
+      await user.click(within(dialog).getByRole('button', { name: copy.save }));
+      await waitFor(() => expect(mockedSave).toHaveBeenCalledWith('tok', 'BCV'));
+      await waitFor(() => expect(onRatesChanged).toHaveBeenCalledTimes(1));
+      expect(await screen.findByTestId('exchange-rate-source')).toHaveTextContent('BCV oficial');
+      expect(screen.getByText(copy.ratesHint.BCV)).toBeInTheDocument();
+    });
+
+    it('«Tasa de hoy» dice que VES y EUR salen del BCV con su fecha valor', async () => {
+      mockedGet.mockResolvedValue(BCV);
+      mockedList.mockResolvedValue([]);
+      bcvRates('2026-10-29');
+      renderView();
+      expect(await screen.findByTestId('exchange-rate-today')).toHaveTextContent(fmt.number(918.7662, { min: 0, max: 8 }));
+      expect(
+        screen.getByText(todayRatesCopy.bcv(fmt.civilDate('2026-10-30'), fmt.civilDate('2026-10-29'))),
+      ).toBeInTheDocument();
+      expect(todayRatesCopy.bcv('30/10/2026', '29/10/2026')).toContain('BCV (fecha valor 29/10/2026)');
+      expect(screen.queryByText(todayRatesCopy.missingBcv)).not.toBeInTheDocument();
+      // Solo las monedas de las sedes: con VES la API no consulta al proveedor.
+      expect(mockedRates).toHaveBeenCalledWith('tok', '2026-10-30', ['VES']);
+    });
+
+    it('sin tasa del BCV que rija hoy, lo dice sin inventar otra', async () => {
+      mockedGet.mockResolvedValue(BCV);
+      mockedList.mockResolvedValue([]);
+      bcvRates(null);
+      renderView();
+      expect(await screen.findByTestId('exchange-rate-today')).toHaveTextContent(todayRatesCopy.missing);
+      expect(screen.getByText(todayRatesCopy.missingBcv)).toBeInTheDocument();
+      expect(screen.getByText(todayRatesCopy.bcv(fmt.civilDate('2026-10-30'), null))).toBeInTheDocument();
+    });
+
+    it('registrar una tasa manual con BCV avisa de que no se usa', async () => {
+      mockedGet.mockResolvedValue(BCV);
+      mockedList.mockResolvedValue([]);
+      bcvRates('2026-10-29');
+      const user = setupUser();
+      renderView();
+      await user.click(await screen.findByRole('button', { name: copy.register }));
+      const dialog = await screen.findByRole('dialog', { name: rateFormCopy.title });
+      expect(within(dialog).getByText(rateFormCopy.bcvNote)).toBeInTheDocument();
+      expect(within(dialog).queryByText(rateFormCopy.automaticNote)).not.toBeInTheDocument();
+    });
+
+    it('cada fuente tiene etiqueta, explicación y nota de tasas manuales', () => {
+      for (const map of [copy.sourceLabels, copy.sourceHints, copy.ratesHint]) {
+        expect(Object.keys(map).sort()).toEqual(['AUTOMATIC', 'BCV', 'MANUAL']);
+      }
+    });
   });
 
   // DX-384: hasta cuántos días puede tener la última tasa registrada.
@@ -395,6 +502,9 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
   });
 
   it('registra la tasa del día: hoy de la sede por defecto y como máximo, coma decimal y sin la moneda base', async () => {
+    const onRatesChanged = jest.fn();
+    window.addEventListener(EXCHANGE_RATES_CHANGED_EVENT, onRatesChanged);
+    afterTest(() => window.removeEventListener(EXCHANGE_RATES_CHANGED_EVENT, onRatesChanged));
     mockedGet.mockResolvedValue(MANUAL);
     mockedList.mockResolvedValue([]);
     mockedRegister.mockResolvedValue({ ...ves, id: 'r-new', date: '2026-10-30', rate: 36.5 });
@@ -425,8 +535,10 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     await waitFor(() =>
       expect(mockedRegister).toHaveBeenCalledWith('tok', { date: '2026-10-30', currency: 'VES', rate: 36.5 }),
     );
-    expect(await screen.findByRole('table', { name: copy.ratesHeading })).toBeInTheDocument();
+    expect(await screen.findByRole('table', { name: copy.dayList(fmt.civilDate('2026-10-30')) })).toBeInTheDocument();
     expect(screen.getByText(copy.rateSaved('VES'))).toBeInTheDocument();
+    // DX-584: el menú relee la tasa al momento.
+    expect(onRatesChanged).toHaveBeenCalledTimes(1);
   });
 
   it('valida en el modal antes de enviar: moneda y tasa', async () => {
@@ -462,6 +574,125 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     expect(within(dialog).getByLabelText(rateLabel)).toHaveAttribute('aria-invalid', 'true');
   });
 
+  describe('varias tasas el mismo día (DX-586)', () => {
+    const morning: ManualExchangeRate = {
+      ...ves,
+      id: 'r-ves-am',
+      date: '2026-10-30',
+      rate: 36.5,
+      effectiveFrom: '2026-10-30T04:00:00.000Z',
+      inUse: true,
+    };
+    const afternoon: ManualExchangeRate = {
+      ...morning,
+      id: 'r-ves-pm',
+      rate: 37.25,
+      // 14:30 en Caracas (UTC−4).
+      effectiveFrom: '2026-10-30T18:30:00.000Z',
+      inUse: false,
+    };
+
+    it('la lista va por día, la más reciente arriba, y cada fila dice desde qué hora rige', async () => {
+      mockedGet.mockResolvedValue(MANUAL);
+      mockedList.mockResolvedValue([morning, ves, afternoon]);
+      renderView();
+      const days = await screen.findAllByTestId('manual-rates-day');
+      expect(days).toHaveLength(2);
+      expect(within(days[0]).getByRole('heading', { level: 3 })).toHaveTextContent(fmt.civilDate('2026-10-30'));
+      expect(within(days[1]).getByRole('heading', { level: 3 })).toHaveTextContent(fmt.civilDate('2026-10-29'));
+      const today = within(days[0]).getByRole('table', { name: copy.dayList(fmt.civilDate('2026-10-30')) });
+      const rows = within(today).getAllByRole('row').slice(1);
+      expect(rows).toHaveLength(2);
+      const time = fmt.time(new Date(afternoon.effectiveFrom), 'America/Caracas');
+      expect(rows[0]).toHaveTextContent(copy.fromTime(time));
+      expect(rows[0]).toHaveTextContent(fmt.number(37.25, { min: 0, max: 8 }));
+      expect(rows[1]).toHaveTextContent(copy.fromDayStart);
+      // La de la tarde (sin usar) se corrige; su nombre lleva la hora para no confundirla con la de la mañana.
+      expect(
+        within(today).getByRole('button', {
+          name: `Acciones de ${copy.rowLabel('VES', fmt.civilDate('2026-10-30'), time)}`,
+        }),
+      ).toBeInTheDocument();
+    });
+
+    it('registra una tasa «desde las 14:30» de un día: manda el instante con zona', async () => {
+      mockedGet.mockResolvedValue(MANUAL);
+      mockedList.mockResolvedValue([morning]);
+      mockedRegister.mockResolvedValue({ ...afternoon, date: '2026-10-29', effectiveFrom: '2026-10-29T18:30:00.000Z' });
+      const user = setupUser();
+      renderView();
+      await user.click(await screen.findByRole('button', { name: copy.register }));
+      const dialog = await screen.findByRole('dialog', { name: rateFormCopy.title });
+      await typeDate(user, dialog, '29102026');
+      await typeTime(user, rateFormCopy.effectiveFrom, '14:30', dialog);
+      expect(within(dialog).getByText(rateFormCopy.effectiveFromHint)).toBeInTheDocument();
+      const select = within(dialog).getByLabelText(rateFormCopy.currency);
+      await waitFor(() => expect(within(select).getByRole('option', { name: /Bolívar/ })).toBeInTheDocument());
+      await user.selectOptions(select, 'VES');
+      await user.type(within(dialog).getByLabelText(rateLabel), '37,25');
+      await user.click(within(dialog).getByRole('button', { name: rateFormCopy.submit }));
+      await waitFor(() =>
+        expect(mockedRegister).toHaveBeenCalledWith('tok', {
+          date: '2026-10-29',
+          currency: 'VES',
+          rate: 37.25,
+          effectiveFrom: '2026-10-29T18:30:00.000Z',
+        }),
+      );
+      expect(await screen.findByText(copy.rateSaved('VES'))).toBeInTheDocument();
+    });
+
+    it('una hora de hoy que aún no llega se marca en el campo, sin llamar a la API', async () => {
+      // Hoy en la sede (mock) es el 30/10/2026; son las 10:00 en Caracas.
+      jest.useFakeTimers({ now: new Date('2026-10-30T14:00:00.000Z'), advanceTimers: true });
+      try {
+        mockedGet.mockResolvedValue(MANUAL);
+        mockedList.mockResolvedValue([morning]);
+        const user = setupUser();
+        renderView();
+        await user.click(await screen.findByRole('button', { name: copy.register }));
+        const dialog = await screen.findByRole('dialog', { name: rateFormCopy.title });
+        await typeTime(user, rateFormCopy.effectiveFrom, '11:00', dialog);
+        const select = within(dialog).getByLabelText(rateFormCopy.currency);
+        await waitFor(() => expect(within(select).getByRole('option', { name: /Bolívar/ })).toBeInTheDocument());
+        await user.selectOptions(select, 'VES');
+        await user.type(within(dialog).getByLabelText(rateLabel), '37');
+        await user.click(within(dialog).getByRole('button', { name: rateFormCopy.submit }));
+        expect(await within(dialog).findByText(rateFormCopy.effectiveFromFuture)).toBeInTheDocument();
+        expect(mockedRegister).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('un 400 de la API sobre la hora va junto al campo', async () => {
+      mockedGet.mockResolvedValue(MANUAL);
+      mockedList.mockResolvedValue([]);
+      const sameDay = 'La hora desde la que rige la tasa tiene que ser del mismo día de la tasa en la sede.';
+      mockedRegister.mockRejectedValue(new ApiError(400, sameDay, { field: 'effectiveFrom', messages: [sameDay] }));
+      const user = setupUser();
+      renderView();
+      await user.click(await screen.findByRole('button', { name: copy.register }));
+      const dialog = await screen.findByRole('dialog', { name: rateFormCopy.title });
+      const select = within(dialog).getByLabelText(rateFormCopy.currency);
+      await waitFor(() => expect(within(select).getByRole('option', { name: /Bolívar/ })).toBeInTheDocument());
+      await user.selectOptions(select, 'VES');
+      await user.type(within(dialog).getByLabelText(rateLabel), '37');
+      await user.click(within(dialog).getByRole('button', { name: rateFormCopy.submit }));
+      expect(await within(dialog).findByText(sameDay)).toBeInTheDocument();
+      expect(document.getElementById('manual-rate-form-effectiveFrom-error')).toHaveTextContent(sameDay);
+    });
+
+    it('«Registrar tasa» del menú (#registrar-tasa) abre el formulario al cargar y limpia el ancla', async () => {
+      window.history.replaceState(null, '', '/settings/tasa-de-cambio#registrar-tasa');
+      mockedGet.mockResolvedValue(MANUAL);
+      mockedList.mockResolvedValue([morning]);
+      renderView();
+      expect(await screen.findByRole('dialog', { name: rateFormCopy.title })).toBeInTheDocument();
+      expect(window.location.hash).toBe('');
+    });
+  });
+
   it('un 409 (ya hay tasa ese día) se enseña arriba del modal con el texto de la API', async () => {
     mockedGet.mockResolvedValue(MANUAL);
     mockedList.mockResolvedValue([]);
@@ -493,7 +724,7 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     };
     mockedList.mockResolvedValue([eur, ves]);
     renderView();
-    const table = await screen.findByRole('table', { name: copy.ratesHeading });
+    const table = await screen.findByRole('table', { name: copy.dayList(fmt.civilDate('2026-10-29')) });
     const [, eurRow, vesRow] = within(table).getAllByRole('row');
     expect(eurRow).toHaveTextContent(copy.inUse);
     expect(within(eurRow).queryByRole('button')).not.toBeInTheDocument();
@@ -525,7 +756,7 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     await user.click(within(dialog).getByRole('button', { name: correctRateCopy.submit }));
     await waitFor(() => expect(mockedCorrect).toHaveBeenCalledWith('tok', 'r-ves', 36.75));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    const table = screen.getByRole('table', { name: copy.ratesHeading });
+    const table = screen.getByRole('table', { name: copy.dayList(fmt.civilDate('2026-10-29')) });
     expect(within(table).getAllByRole('row')[1]).toHaveTextContent(fmt.number(36.75, { min: 0, max: 8 }));
     expect(screen.getByText(copy.rateCorrected('VES'))).toBeInTheDocument();
   });
@@ -573,22 +804,34 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     expect(await within(dialog).findByText(inUse)).toBeInTheDocument();
     await user.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    const table = screen.getByRole('table', { name: copy.ratesHeading });
+    const table = screen.getByRole('table', { name: copy.dayList(fmt.civilDate('2026-10-29')) });
     const row = within(table).getAllByRole('row')[1];
     expect(row).toHaveTextContent(copy.inUse);
     expect(within(row).queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('ningún texto de la pantalla nombra un país ni un banco central', () => {
+  it('ningún texto de la pantalla nombra un país ni un banco central, salvo los de la fuente BCV', () => {
     const backup = rateFormCopy.backup;
+    // DX-585: la fuente BCV la elige la clínica; solo sus textos nombran el banco y el país.
+    const withoutBcv = <T extends object>(o: T) => Object.fromEntries(Object.entries(o).filter(([k]) => k !== 'BCV'));
+    const { bcvNote, ...genericForm } = rateFormCopy;
+    const { missingBcv, ...genericToday } = todayRatesCopy;
+    expect(bcvNote).toMatch(/BCV/);
+    expect(missingBcv).toMatch(/BCV/);
+    expect(copy.sourceLabels.BCV).toBe('BCV oficial');
     const texts = JSON.stringify({
-      exchangeRateCopy,
-      rateFormCopy,
+      exchangeRateCopy: {
+        ...exchangeRateCopy,
+        sourceLabels: withoutBcv(exchangeRateCopy.sourceLabels),
+        sourceHints: withoutBcv(exchangeRateCopy.sourceHints),
+        ratesHint: withoutBcv(exchangeRateCopy.ratesHint),
+      },
+      rateFormCopy: genericForm,
       RATE_INPUT_COPY,
       correctRateCopy,
       fns: [
-        copy.ratesHint,
-        todayRatesCopy,
+        withoutBcv(copy.ratesHint),
+        genericToday,
         todayRatesCopy.automatic('30/10/2026'),
         todayRatesCopy.noCurrencies('USD'),
         copy.colRate('USD'),

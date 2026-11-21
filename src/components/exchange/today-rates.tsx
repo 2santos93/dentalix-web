@@ -9,6 +9,7 @@ import type { ExchangeRateSource } from '@/lib/exchange/exchange-settings-api';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { loadLocations } from '@/lib/session/session-store';
 import { locationCurrency } from '@/lib/locations/location-settings';
+import { BCV_CURRENCIES } from '@/lib/payments/payment-rate';
 import { SectionError } from '@/components/errors/section-error';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
@@ -20,6 +21,11 @@ export const todayRatesCopy = {
   heading: 'Tasa de hoy',
   automatic: (day: string) => `La del proveedor de tasas para hoy, ${day}. Con ella se convierten los abonos de hoy.`,
   manual: (day: string) => `La que registró la clínica para hoy, ${day}. Con ella se convierten los abonos de hoy.`,
+  // DX-585: VES y EUR del BCV (con su fecha valor, si ya se sabe); el resto, del proveedor.
+  bcv: (day: string, valueDate: string | null) =>
+    `VES y EUR, la oficial del BCV${valueDate ? ` (fecha valor ${valueDate})` : ''}; el resto, la del proveedor. Con ella se convierten los abonos de hoy, ${day}.`,
+  missingBcv:
+    'Todavía no hay tasa del BCV que rija hoy: aún no se publicó o no se pudo consultar. Los abonos de hoy en VES o EUR quedan sin tasa y la toman solos en cuanto llegue.',
   per: (currency: string, base: string) => `${currency} por 1 ${base}`,
   missing: 'Sin tasa hoy',
   missingManual:
@@ -54,6 +60,11 @@ interface TodayRatesProps {
   version: number;
 }
 
+/** Las monedas de las sedes activas (`null` si una no tiene). */
+function activeCurrencies(locations: Awaited<ReturnType<typeof loadLocations>>): (string | null)[] {
+  return locations.filter((l) => l.isActive).map((l) => locationCurrency(l));
+}
+
 /** Monedas de las sedes distintas de la de referencia, ordenadas. */
 function sedeCurrencies(currencies: (string | null)[], base: string): string[] {
   return [...new Set(currencies.filter((c): c is string => c !== null && c !== base))].sort();
@@ -76,13 +87,21 @@ export function TodayRates({ token, baseCurrency, source, today, fmt, version }:
     if (!today) return;
     let cancelled = false;
     const requestKey = `${today}|${source}|${version}|${reloadKey}`;
-    Promise.all([getExchangeRates(token, today), loadLocations(token)])
+    // DX-585: con BCV se piden solo las monedas de las sedes. Si son VES o EUR,
+    // la API no consulta al proveedor y la tasa del BCV se ve aunque el
+    // proveedor esté caído. Con las otras fuentes, la lectura de siempre (con
+    // manual, pedir monedas traería la última registrada en el plazo, DX-384).
+    const load =
+      source === 'BCV'
+        ? loadLocations(token).then(async (locations) => {
+            const wanted = sedeCurrencies(activeCurrencies(locations), baseCurrency);
+            return [await getExchangeRates(token, today, wanted), locations] as const;
+          })
+        : Promise.all([getExchangeRates(token, today), loadLocations(token)]);
+    load
       .then(([rates, locations]) => {
         if (cancelled) return;
-        let currencies = sedeCurrencies(
-          locations.filter((l) => l.isActive).map((l) => locationCurrency(l)),
-          baseCurrency,
-        );
+        let currencies = sedeCurrencies(activeCurrencies(locations), baseCurrency);
         // Sin sedes en otra moneda, las que tengan tasa manual hoy (si las hay).
         if (currencies.length === 0 && rates.source === 'MANUAL') {
           currencies = sedeCurrencies(Object.keys(rates.rates), baseCurrency);
@@ -167,6 +186,11 @@ export function TodayRates({ token, baseCurrency, source, today, fmt, version }:
             <p>{copy.missingManual}</p>
           </Callout>
         ) : null}
+        {rates.source === 'BCV' && missing.some((c) => BCV_CURRENCIES.includes(c)) ? (
+          <Callout tone="warning">
+            <p>{copy.missingBcv}</p>
+          </Callout>
+        ) : null}
       </div>
     );
   }
@@ -176,9 +200,28 @@ export function TodayRates({ token, baseCurrency, source, today, fmt, version }:
       <SectionHeader
         titleId={headingId}
         title={copy.heading}
-        description={source === 'MANUAL' ? copy.manual(day) : copy.automatic(day)}
+        description={describeSource(source, day, current, fmt)}
       />
       {body}
     </section>
   );
+}
+
+/** La línea bajo «Tasa de hoy»: de dónde sale la tasa (con BCV, su fecha valor en cuanto se lee). */
+function describeSource(
+  source: ExchangeRateSource,
+  day: string,
+  current: TodayState,
+  fmt: RegionalFormat | null,
+): string {
+  switch (source) {
+    case 'MANUAL':
+      return copy.manual(day);
+    case 'AUTOMATIC':
+      return copy.automatic(day);
+    case 'BCV': {
+      const valueDate = current.status === 'ready' ? (current.rates.bcv?.valueDate ?? null) : null;
+      return copy.bcv(day, valueDate && fmt ? fmt.civilDate(valueDate) : null);
+    }
+  }
 }

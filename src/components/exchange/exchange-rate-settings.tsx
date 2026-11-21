@@ -37,15 +37,26 @@ import { RadioCard, RadioGroup } from '@/components/ui/radio-group';
 import { SectionHeader } from '@/components/ui/section-header';
 import { SettingRow, SettingRows } from '@/components/settings/settings-page';
 import { Skeleton } from '@/components/ui/skeleton';
+import { notifyExchangeRatesChanged, RATE_REGISTER_HASH } from '@/lib/exchange/exchange-header-api';
+import { wallDay, wallInstant, wallMinuteOfDay } from '@/lib/time/wall-clock';
+import { TimeField } from '@/components/ui/date-field';
+import { ClinicCurrenciesSettings } from './clinic-currencies-settings';
 import { TodayRates } from './today-rates';
 
 export const exchangeRateCopy = {
   sourceHeading: 'De dónde sale la tasa',
-  sourceLabels: { AUTOMATIC: 'Automática', MANUAL: 'Manual' } satisfies Record<ExchangeRateSource, string>,
+  /** El orden es el de las opciones del diálogo. */
+  sourceLabels: {
+    AUTOMATIC: 'Automática',
+    MANUAL: 'Manual',
+    BCV: 'BCV oficial',
+  } satisfies Record<ExchangeRateSource, string>,
   sourceHints: {
     AUTOMATIC: 'La tasa del día la da un proveedor de tasas de cambio. Es la opción con la que empieza toda clínica.',
     MANUAL:
       'Desde el día en que se elige, la clínica registra cada día la tasa de cada moneda. Un día sin tasa registrada se usa la última registrada, hasta el plazo de abajo; pasado el plazo, los abonos en esa moneda quedan sin tasa. Los días anteriores siguen con la tasa automática; si un abono de un día anterior se quedó sin ella, la tasa manual que registres para ese día le sirve de respaldo.',
+    // DX-585: decisión del dueño (la tasa oficial del BCV). Sin nombrar el país (DX-312).
+    BCV: 'VES y EUR con la tasa oficial del BCV, que se publica en días hábiles con su fecha valor: un fin de semana o feriado rige la del último día hábil. El resto de monedas, con la automática.',
   } satisfies Record<ExchangeRateSource, string>,
   /** Con la fecha en el formato de la sede; sin formato, sin fecha (R11). */
   manualSince: (date: string | null) => (date ? `Manual desde el ${date}` : 'Manual'),
@@ -82,11 +93,18 @@ export const exchangeRateCopy = {
       'Rigen desde que la clínica pasó a manual; la de un día anterior sirve de respaldo a los abonos de ese día sin tasa. Se corrigen hasta que un abono las use.',
     AUTOMATIC:
       'Con la fuente automática no se usan: puedes dejar registrada la de hoy antes de pasar a manual. Se corrigen hasta que un abono las use.',
+    BCV: 'Con la fuente BCV no se usan: puedes dejar registrada la de hoy antes de pasar a manual. Se corrigen hasta que un abono las use.',
   } satisfies Record<ExchangeRateSource, string>,
   register: 'Registrar tasa',
   emptyTitle: 'Aún no hay tasas manuales',
   emptyDescription: 'Registra la tasa del día de cada moneda en la que cobra la clínica.',
   colDate: 'Fecha',
+  // DX-586: varias tasas el mismo día, cada una desde su hora.
+  colFrom: 'Desde',
+  fromDayStart: 'Inicio del día',
+  fromTime: (time: string) => `Desde las ${time}`,
+  /** La lista va agrupada por día: el nombre de cada tabla. */
+  dayList: (date: string) => `Tasas manuales del ${date}`,
   colCurrency: 'Moneda',
   colRate: (base: string) => `Tasa por 1 ${base}`,
   colAuthor: 'Registrada por',
@@ -95,7 +113,8 @@ export const exchangeRateCopy = {
   inUseHelp: 'Ya la usa al menos un abono: no se puede cambiar.',
   correct: 'Corregir',
   /** Nombre de la fila para su «⋯»: «Acciones de EUR del 30/10/2026». */
-  rowLabel: (currency: string, date: string) => `${currency} del ${date}`,
+  rowLabel: (currency: string, date: string, time?: string | null) =>
+    time ? `${currency} del ${date} desde las ${time}` : `${currency} del ${date}`,
   rateCorrected: (currency: string) => `Tasa de ${currency} corregida.`,
   unknownAuthor: 'Usuario no disponible',
   noFormat: '—',
@@ -117,6 +136,11 @@ export const rateFormCopy = {
   rateHint: (base: string) => `Cuántas unidades de la moneda equivalen a 1 ${base}, con hasta 8 decimales. Por ejemplo, 36,5.`,
   ratePlaceholder: 'Por ejemplo, 36,5',
   submit: 'Registrar tasa',
+  // DX-586: varias tasas el mismo día, cada una desde su hora.
+  effectiveFrom: 'Desde (hora)',
+  effectiveFromHint:
+    'Opcional. Sin hora, rige desde ahora (la primera del día de esa moneda, desde el inicio del día). Cada abono usa la que regía al cobrarlo.',
+  effectiveFromFuture: 'Esa hora aún no ha llegado en la sede.',
   dateMissing: 'Elige el día de la tasa.',
   dateFuture: 'Ese día aún no ha llegado en la sede.',
   currencyMissing: 'Elige la moneda.',
@@ -124,6 +148,9 @@ export const rateFormCopy = {
   // DX-402: con la fuente automática ninguna tasa manual se usa.
   automaticNote:
     'Con la fuente automática esta tasa no se usa. Si pasas a manual, la de un día anterior servirá de respaldo a los abonos de ese día que sigan sin tasa.',
+  // DX-585: lo mismo con la fuente BCV.
+  bcvNote:
+    'Con la fuente BCV esta tasa no se usa. Si pasas a manual, la de un día anterior servirá de respaldo a los abonos de ese día que sigan sin tasa.',
   // DX-402: un día anterior a «manual desde»: la tasa solo sirve de respaldo
   // a los abonos de ese día que siguen sin tasa (y sin tasa del proveedor).
   backup: {
@@ -169,11 +196,40 @@ interface LoadedState extends ExchangeRateSettings {
   rates: ManualExchangeRate[];
 }
 
-/** Mismo orden que la API: día más reciente primero y, dentro del día, por moneda. */
+/**
+ * Mismo orden que la API: día más reciente primero y, dentro del día, por
+ * moneda y (DX-586) de la más reciente a la más antigua.
+ */
 function sortRates(rates: ManualExchangeRate[]): ManualExchangeRate[] {
-  return [...rates].sort((a, b) =>
-    a.date === b.date ? a.currency.localeCompare(b.currency) : b.date.localeCompare(a.date),
-  );
+  return [...rates].sort((a, b) => {
+    if (a.date !== b.date) return b.date.localeCompare(a.date);
+    if (a.currency !== b.currency) return a.currency.localeCompare(b.currency);
+    return b.effectiveFrom.localeCompare(a.effectiveFrom);
+  });
+}
+
+/** DX-586: las tasas por día, en el orden de `sortRates`. */
+function groupByDay(rates: ManualExchangeRate[]): { date: string; rates: ManualExchangeRate[] }[] {
+  const groups: { date: string; rates: ManualExchangeRate[] }[] = [];
+  for (const rate of sortRates(rates)) {
+    const last = groups[groups.length - 1];
+    if (last && last.date === rate.date) last.rates.push(rate);
+    else groups.push({ date: rate.date, rates: [rate] });
+  }
+  return groups;
+}
+
+/**
+ * DX-586: la hora desde la que rige una tasa en la sede («14:30»), o `null`
+ * si rige desde el inicio de su día (las anteriores a DX-586 y la primera de
+ * cada día) o aún no se sabe la zona.
+ */
+function effectiveTime(rate: ManualExchangeRate, fmt: RegionalFormat | null, timeZone: string | null): string | null {
+  if (!fmt || !timeZone) return null;
+  const at = new Date(rate.effectiveFrom);
+  if (Number.isNaN(at.getTime())) return null;
+  if (wallMinuteOfDay(at, timeZone) === 0 && wallDay(at, timeZone) === rate.date) return null;
+  return fmt.time(at, timeZone);
 }
 
 /**
@@ -214,6 +270,13 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
         if (cancelled) return;
         setState({ ...settings, rates });
         setLoadError(null);
+        // DX-586: «Registrar tasa» del popover del menú (con tasa manual) llega
+        // con `#registrar-tasa`: el formulario se abre en cuanto la pantalla carga.
+        if (window.location.hash === `#${RATE_REGISTER_HASH}`) {
+          window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
+          setRateKey((k) => (k ?? 0) + 1);
+          setRateOpen(true);
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled)
@@ -289,12 +352,16 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
     </Button>
   );
 
+  // DX-586: la lista va por día (un encabezado por día) y cada fila dice desde qué hora rige.
   const rateColumns: DataListColumn<ManualExchangeRate>[] = [
     {
-      id: 'date',
-      header: copy.colDate,
+      id: 'from',
+      header: copy.colFrom,
       mobile: 'primary',
-      cell: (r) => (fmt ? fmt.civilDate(r.date) : copy.noFormat),
+      cell: (r) => {
+        const time = effectiveTime(r, fmt, timeZone);
+        return time ? copy.fromTime(time) : copy.fromDayStart;
+      },
       cellClassName: 'whitespace-nowrap tabular-nums',
     },
     {
@@ -392,6 +459,15 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
         </p>
       </section>
 
+      <ClinicCurrenciesSettings
+        token={token}
+        settings={state}
+        onSaved={(saved) => {
+          setState((prev) => (prev ? { ...prev, ...saved } : prev));
+          notifyExchangeRatesChanged();
+        }}
+      />
+
       <section aria-labelledby={ratesHeadingId} className="flex flex-col gap-4">
         <SectionHeader
           titleId={ratesHeadingId}
@@ -399,24 +475,41 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
           description={copy.ratesHint[state.source]}
           actions={state.rates.length > 0 ? registerButton : null}
         />
-        <DataList
-          label={copy.ratesHeading}
-          rows={state.rates}
-          columns={rateColumns}
-          getRowKey={(r) => r.id}
-          // Una tasa que ya usó algún abono no se toca: su «⋯» no ofrece nada.
-          rowActions={(r) => (r.inUse ? [] : [{ label: copy.correct, onSelect: () => openCorrect(r) }])}
-          getRowLabel={(r) => copy.rowLabel(r.currency, sedeCivilDate(r.date, fmt))}
-          empty={
-            <EmptyState
-              icon={<ArrowLeftRight aria-hidden />}
-              title={copy.emptyTitle}
-              description={copy.emptyDescription}
-              actionClassName="w-full sm:w-auto"
-              action={registerButton}
-            />
-          }
-        />
+        {state.rates.length === 0 ? (
+          <DataList
+            label={copy.ratesHeading}
+            rows={state.rates}
+            columns={rateColumns}
+            getRowKey={(r) => r.id}
+            empty={
+              <EmptyState
+                icon={<ArrowLeftRight aria-hidden />}
+                title={copy.emptyTitle}
+                description={copy.emptyDescription}
+                actionClassName="w-full sm:w-auto"
+                action={registerButton}
+              />
+            }
+          />
+        ) : (
+          groupByDay(state.rates).map((group) => {
+            const day = sedeCivilDate(group.date, fmt);
+            return (
+              <div key={group.date} className="flex flex-col gap-2" data-testid="manual-rates-day">
+                <h3 className="t-label text-muted tabular-nums">{day}</h3>
+                <DataList
+                  label={copy.dayList(day)}
+                  rows={group.rates}
+                  columns={rateColumns}
+                  getRowKey={(r) => r.id}
+                  // Una tasa que ya usó algún abono no se toca: su «⋯» no ofrece nada.
+                  rowActions={(r) => (r.inUse ? [] : [{ label: copy.correct, onSelect: () => openCorrect(r) }])}
+                  getRowLabel={(r) => copy.rowLabel(r.currency, day, effectiveTime(r, fmt, timeZone))}
+                />
+              </div>
+            );
+          })
+        )}
       </section>
 
       {sourceKey !== null ? (
@@ -429,6 +522,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
           onSaved={(saved) => {
             setState((prev) => (prev ? { ...prev, ...saved } : prev));
             setVersion((v) => v + 1);
+            notifyExchangeRatesChanged();
             setNotice(copy.sourceSaved);
           }}
         />
@@ -442,6 +536,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
           current={state.manualRateMaxAgeDays}
           onSaved={(saved) => {
             setState((prev) => (prev ? { ...prev, ...saved } : prev));
+            notifyExchangeRatesChanged();
             setNotice(copy.maxAge.saved);
           }}
         />
@@ -458,6 +553,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
           onSaved={(rate) => {
             setState((prev) => (prev ? { ...prev, rates: sortRates([rate, ...prev.rates]) } : prev));
             setVersion((v) => v + 1);
+            notifyExchangeRatesChanged();
             setNotice(copy.rateSaved(rate.currency));
           }}
         />
@@ -481,6 +577,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
                 : prev,
             );
             setVersion((v) => v + 1);
+            notifyExchangeRatesChanged();
             setNotice(copy.rateCorrected(saved.currency));
           }}
           onInUse={(id) =>
@@ -655,7 +752,7 @@ function SourceModal({ open, onOpenChange, token, current, onSaved }: SourceModa
         disabled={saving}
         optionsClassName="gap-2"
       >
-        {(['AUTOMATIC', 'MANUAL'] as const).map((source) => (
+        {(Object.keys(copy.sourceLabels) as ExchangeRateSource[]).map((source) => (
           <RadioCard
             key={source}
             value={source}
@@ -763,11 +860,23 @@ function MaxAgeModal({ open, onOpenChange, token, current, onSaved }: MaxAgeModa
   );
 }
 
-type RateField = 'date' | 'currency' | 'rate';
+type RateField = 'date' | 'effectiveFrom' | 'currency' | 'rate';
 type RateErrors = Partial<Record<RateField, string>>;
-const RATE_FIELDS: readonly RateField[] = ['date', 'currency', 'rate'];
+const RATE_FIELDS: readonly RateField[] = ['date', 'effectiveFrom', 'currency', 'rate'];
 const RATE_FORM_ID = 'manual-rate-form';
 const rateInputId = (field: RateField) => `${RATE_FORM_ID}-${field}`;
+
+/** El foco en un campo; en los de fecha y hora (grupo de segmentos), en su primer segmento. */
+function focusRateField(field: RateField): void {
+  const el = document.getElementById(rateInputId(field));
+  (el?.querySelector<HTMLElement>('[role="spinbutton"]') ?? el)?.focus();
+}
+
+/** 'HH:mm' → minuto del día. */
+function minuteOf(time: string): number {
+  const [h, m] = time.split(':').map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+}
 
 interface RateFormModalProps {
   /** Moneda base de las tasas (la da la API): no se ofrece y nombra la tasa. */
@@ -805,6 +914,8 @@ export function RateFormModal({
   const [date, setDate] = useState<string | null>(null);
   const [currency, setCurrency] = useState('');
   const [rate, setRate] = useState('');
+  // DX-586: «Desde (hora)», opcional: 'HH:mm' en la zona de la sede.
+  const [time, setTime] = useState<string | null>(null);
   const [errors, setErrors] = useState<RateErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -821,6 +932,9 @@ export function RateFormModal({
     const found: RateErrors = {};
     if (dateValue === '') found.date = rateFormCopy.dateMissing;
     else if (today && dateValue > today) found.date = rateFormCopy.dateFuture;
+    if (time && dateValue !== '' && today && dateValue === today && timeZone) {
+      if (minuteOf(time) > wallMinuteOfDay(new Date(), timeZone)) found.effectiveFrom = rateFormCopy.effectiveFromFuture;
+    }
     if (currency === '') found.currency = rateFormCopy.currencyMissing;
     const parsed = parseRateInput(rate);
     if (!parsed.ok) found.rate = parsed.error;
@@ -834,7 +948,7 @@ export function RateFormModal({
     setFormError(null);
     const first = RATE_FIELDS.find((f) => found[f]);
     if (first || value === null) {
-      if (first) document.getElementById(rateInputId(first))?.focus();
+      if (first) focusRateField(first);
       return;
     }
     setSubmitting(true);
@@ -843,6 +957,7 @@ export function RateFormModal({
         date: dateValue,
         currency,
         rate: value,
+        ...(time && timeZone ? { effectiveFrom: wallInstant(dateValue, minuteOf(time), timeZone).toISOString() } : {}),
       });
       onSaved(saved);
       onOpenChange(false);
@@ -856,7 +971,7 @@ export function RateFormModal({
       ) {
         const field = err.field as RateField;
         setErrors((prev) => ({ ...prev, [field]: text }));
-        document.getElementById(rateInputId(field))?.focus();
+        focusRateField(field);
         return;
       }
       setFormError(text);
@@ -890,6 +1005,28 @@ export function RateFormModal({
           required
           aria-invalid={errors.date ? true : undefined}
           aria-describedby={errors.date ? fieldErrorId(rateInputId('date')) : undefined}
+        />
+      </FormField>
+      <FormField
+        htmlFor={rateInputId('effectiveFrom')}
+        label={rateFormCopy.effectiveFrom}
+        error={errors.effectiveFrom}
+        hint={rateFormCopy.effectiveFromHint}
+        hintId={`${rateInputId('effectiveFrom')}-hint`}
+      >
+        <TimeField
+          id={rateInputId('effectiveFrom')}
+          value={time}
+          onChange={(next) => {
+            setTime(next);
+            clearError('effectiveFrom');
+          }}
+          aria-invalid={errors.effectiveFrom ? true : undefined}
+          aria-describedby={
+            errors.effectiveFrom
+              ? fieldErrorId(rateInputId('effectiveFrom'))
+              : `${rateInputId('effectiveFrom')}-hint`
+          }
         />
       </FormField>
       <FormField htmlFor={rateInputId('currency')} label={rateFormCopy.currency} error={errors.currency}>
@@ -931,7 +1068,9 @@ export function RateFormModal({
           className="tabular-nums"
         />
       </FormField>
-      {source === 'AUTOMATIC' ? <p className="t-body text-muted">{rateFormCopy.automaticNote}</p> : null}
+      {source === 'MANUAL' ? null : (
+        <p className="t-body text-muted">{source === 'BCV' ? rateFormCopy.bcvNote : rateFormCopy.automaticNote}</p>
+      )}
       {backupSince ? (
         <BackupRateNotice
           token={token}

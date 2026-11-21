@@ -80,4 +80,47 @@ describe('CurrencySelect', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(mocked).toHaveBeenCalledTimes(2);
   });
+
+  // DX-584: las monedas que acepta la clínica en el cobro.
+  describe('only', () => {
+    beforeEach(() => {
+      mocked.mockResolvedValue([
+        { code: 'EUR', name: 'Euro', symbol: '€' },
+        { code: 'USD', name: 'Dólar estadounidense', symbol: '$' },
+        { code: 'VES', name: 'Bolívar venezolano', symbol: 'Bs.' },
+      ]);
+    });
+
+    it('ofrece solo esas monedas y en ese orden (no el del catálogo)', async () => {
+      render(<CurrencySelect id="cur" token="tok" value="USD" onChange={() => {}} only={['VES', 'USD']} />);
+      const el = screen.getByRole('combobox') as HTMLSelectElement;
+      await waitFor(() =>
+        expect(Array.from(el.options).map((o) => o.textContent)).toEqual([
+          'Bolívar venezolano (Bs.)',
+          'Dólar estadounidense ($)',
+        ]),
+      );
+    });
+
+    it('si el valor no se acepta, pasa a la primera aceptada', async () => {
+      const onChange = jest.fn();
+      render(<CurrencySelect id="cur" token="tok" value="EUR" onChange={onChange} only={['VES', 'USD']} />);
+      await waitFor(() => expect(onChange).toHaveBeenCalledWith('VES'));
+    });
+
+    it('deshabilitado no cambia el valor y lo sigue enseñando', async () => {
+      const onChange = jest.fn();
+      render(<CurrencySelect id="cur" token="tok" value="EUR" onChange={onChange} only={['VES']} disabled />);
+      const el = screen.getByRole('combobox') as HTMLSelectElement;
+      await waitFor(() => expect(Array.from(el.options).map((o) => o.value)).toEqual(['EUR', 'VES']));
+      expect(el).toHaveValue('EUR');
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it('vacía o null: todas', async () => {
+      render(<CurrencySelect id="cur" token="tok" value="USD" onChange={() => {}} only={[]} />);
+      const el = screen.getByRole('combobox') as HTMLSelectElement;
+      await waitFor(() => expect(Array.from(el.options).map((o) => o.value)).toEqual(['EUR', 'USD', 'VES']));
+    });
+  });
 });

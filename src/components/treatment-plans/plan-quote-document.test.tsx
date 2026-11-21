@@ -351,6 +351,19 @@ describe('DX-376: segunda moneda opcional al imprimir', () => {
     expect(screen.queryByTestId('quote-second-currency')).not.toBeInTheDocument();
   });
 
+  it('DX-585: con la fuente BCV, «BCV» y su fecha valor', () => {
+    render(
+      <PlanQuoteDocument
+        format={FORMAT_ES}
+        quote={planQuoteFixture()}
+        secondCurrency={{ ...SECOND, source: 'BCV', valueDate: '2026-10-29' }}
+      />,
+    );
+    expect(text(screen.getByTestId('quote-second-currency'))).toContain(
+      'Tasa: 1 USD = 4000,00 VES (BCV, fecha valor 29/10/2026, 30/10/2026).',
+    );
+  });
+
   it('ningún texto nombra un país ni un banco central', () => {
     render(<PlanQuoteDocument format={FORMAT_ES} quote={planQuoteFixture()} secondCurrency={SECOND} />);
     expect(text(screen.getByTestId('quote-second-currency'))).not.toMatch(/venezuela|colom[b]ia|bcv|banco central/i);
