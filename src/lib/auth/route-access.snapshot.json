@@ -831,6 +831,13 @@
       ],
       "permissions": []
     },
+    "GET /waiting-room-screens": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
     "GET /waitlist": {
       "kind": "roles",
       "roles": [
@@ -971,6 +978,13 @@
       "permissions": []
     },
     "POST /treatment-plan-templates": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "POST /waiting-room-screens": {
       "kind": "roles",
       "roles": [
         "ADMIN"
