@@ -19,7 +19,7 @@ function renderDialog(row = makeRuleRow({ rule: null }), onSaved = jest.fn()) {
       token="tok"
       row={row}
       categories={['Endodoncia', 'Higiene']}
-      deductionsAvailable={{ labCost: false, cardFee: false }}
+      deductionsAvailable={{ labCost: true, cardFee: true }}
       onSaved={onSaved}
     />,
   );
@@ -77,11 +77,56 @@ describe('CommissionRuleDialog (DX-018)', () => {
     expect(mockedSave).not.toHaveBeenCalled();
   });
 
-  it('costo de laboratorio y comisión de la pasarela: desactivados con el porqué', () => {
+  it('DX-018-bis: activa «descontar laboratorio» y «descontar pasarela» y los manda a la API', async () => {
+    const user = setupUser();
+    mockedSave.mockResolvedValue(makeRuleRow());
     renderDialog();
+    expect(screen.getByText(copy.labCostHint)).toBeInTheDocument();
+    expect(screen.getByText(copy.cardFeeHint)).toBeInTheDocument();
+    await user.type(screen.getByRole('textbox', { name: copy.percent }), '40');
+    await user.click(screen.getByRole('switch', { name: copy.labCost }));
+    await user.click(screen.getByRole('switch', { name: copy.cardFee }));
+    await user.click(screen.getByRole('button', { name: copy.save }));
+    await waitFor(() =>
+      expect(mockedSave).toHaveBeenCalledWith(
+        'tok',
+        DRA_X.userId,
+        expect.objectContaining({ percent: 40, deductLabCost: true, deductCardFee: true }),
+      ),
+    );
+  });
+
+  it('DX-018-bis: sobre lo producido la pasarela no aplica (desactivada con el porqué y no se manda)', async () => {
+    const user = setupUser();
+    mockedSave.mockResolvedValue(makeRuleRow());
+    renderDialog(makeRuleRow({ rule: { ...makeRuleRow().rule!, deductCardFee: true, deductLabCost: true } }));
+    await user.click(screen.getByRole('radio', { name: /Lo producido/ }));
+    expect(screen.getByRole('switch', { name: copy.cardFee })).toBeDisabled();
+    expect(screen.getByText(copy.cardFeeProduced)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: copy.save }));
+    await waitFor(() =>
+      expect(mockedSave).toHaveBeenCalledWith(
+        'tok',
+        DRA_X.userId,
+        expect.objectContaining({ basis: 'PRODUCED', deductLabCost: true, deductCardFee: false }),
+      ),
+    );
+  });
+
+  it('sin datos de origen en la clínica: desactivados con el porqué', () => {
+    render(
+      <CommissionRuleDialog
+        open
+        onOpenChange={jest.fn()}
+        token="tok"
+        row={makeRuleRow({ rule: null })}
+        categories={[]}
+        deductionsAvailable={{ labCost: false, cardFee: false }}
+        onSaved={jest.fn()}
+      />,
+    );
     expect(screen.getByRole('switch', { name: copy.labCost })).toBeDisabled();
     expect(screen.getByRole('switch', { name: copy.cardFee })).toBeDisabled();
-    expect(screen.getByText(copy.labCostUnavailable)).toBeInTheDocument();
-    expect(screen.getByText(copy.cardFeeUnavailable)).toBeInTheDocument();
+    expect(screen.getAllByText(copy.labCostUnavailable)).toHaveLength(2);
   });
 });

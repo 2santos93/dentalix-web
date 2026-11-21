@@ -1255,7 +1255,7 @@ export interface paths {
         };
         /**
          * Tasas de un día para la clínica, según su fuente (DX-374)
-         * @description Con fuente AUTOMATIC, las del proveedor (caché diaria). Con MANUAL, solo las que la clínica registró para ese día: una moneda sin tasa NO aparece en `rates` y nunca se pide al proveedor. SEC-054: un día sin guardar solo se pide al proveedor dentro de la ventana de la clínica y con su presupuesto de fallos de caché (429 al superarlo). DX-384: con MANUAL y `currencies`, si alguna no tiene tasa ese día se devuelve la última fecha anterior, dentro del plazo de la clínica, que las tiene todas; `rateDate` dice de qué día son las tasas.
+         * @description Con fuente AUTOMATIC, las del proveedor (caché diaria). Con MANUAL, solo las que la clínica registró para ese día: una moneda sin tasa NO aparece en `rates` y nunca se pide al proveedor. SEC-054: un día sin guardar solo se pide al proveedor dentro de la ventana de la clínica y con su presupuesto de fallos de caché (429 al superarlo). DX-384: con MANUAL y `currencies`, si alguna no tiene tasa ese día se devuelve la última fecha anterior, dentro del plazo de la clínica, que las tiene todas; `rateDate` dice de qué día son las tasas. DX-586: con varias tasas manuales el mismo día, rige la de mayor `effectiveFrom` ≤ ahora (la última del día si es pasado); `manualRates` dice cuáles y `manualDay` lista todas las del día pedido.
          */
         get: operations["ExchangeController_rates"];
         put?: never;
@@ -1312,13 +1312,13 @@ export interface paths {
         };
         /**
          * Últimas tasas de cambio manuales de la clínica (DX-374)
-         * @description Del día más reciente al más antiguo y, dentro del día, por moneda.
+         * @description Del día más reciente al más antiguo y, dentro del día, por moneda y (DX-586) de la más reciente a la más antigua (`effectiveFrom`).
          */
         get: operations["ExchangeSettingsController_manualRates"];
         put?: never;
         /**
          * Registra la tasa de cambio de un día y una moneda; queda en la auditoría
-         * @description DX-374. Unidades de la moneda por 1 USD. Se usa cuando la fuente de la clínica es MANUAL, para los días desde `manualSince` (se puede dejar registrada antes de cambiarla). DX-402: la de un día anterior a `manualSince` sirve, con MANUAL, de tasa de respaldo a los abonos de ese día que siguen sin tasa si el proveedor no tiene la de ese día (GET /payments/rate-backlog/day dice cuántos); nunca cambia una tasa ya congelada. Una tasa ya registrada para ese día y moneda no se sobrescribe: si ningún abono la usó, se corrige con PUT /exchange/manual-rates/:id.
+         * @description DX-374. Unidades de la moneda por 1 USD. Se usa cuando la fuente de la clínica es MANUAL, para los días desde `manualSince` (se puede dejar registrada antes de cambiarla). DX-402: la de un día anterior a `manualSince` sirve, con MANUAL, de tasa de respaldo a los abonos de ese día que siguen sin tasa si el proveedor no tiene la de ese día (GET /payments/rate-backlog/day dice cuántos); nunca cambia una tasa ya congelada. DX-586: puede haber varias el mismo día y moneda, cada una desde su `effectiveFrom` (por defecto, ahora); un abono usa la de mayor `effectiveFrom` ≤ su instante. Una tasa ya registrada para esa moneda desde ese mismo instante no se sobrescribe (409): si ningún abono la usó, se corrige con PUT /exchange/manual-rates/:id.
          */
         post: operations["ExchangeSettingsController_register"];
         delete?: never;
@@ -1382,6 +1382,26 @@ export interface paths {
         get: operations["ExchangeHeaderController_header"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exchange/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vuelve a consultar la tasa de hoy ya (DX-586)
+         * @description Con fuente BCV, consulta el BCV en el acto (página oficial → respaldo), con la misma cordura que el trabajo programado y su arranque en frío. Con AUTOMATIC, vuelve a pedir al proveedor las tasas de hoy en la sede aunque estén en caché (gasta del presupuesto de la clínica, SEC-054). Con MANUAL, 409 `EXCHANGE_RATE_REFRESH_MANUAL`. Una vez cada 5 minutos por clínica: antes, 429 `EXCHANGE_RATE_REFRESH_TOO_SOON` con «Vuelve a intentarlo en N min», `retryAfterSeconds` y `Retry-After`. El turno se gasta aunque la consulta falle. Si sale bien, los abonos sin tasa se reintentan ya y queda el evento CLINIC_SETTINGS con reason EXCHANGE_RATE_REFRESH. Devuelve siempre 200 con el mismo cuerpo que GET /exchange/header, ya recalculado, más `refresh`: `ok` o, si la fuente no dio la tasa (caída, presupuesto agotado o cordura del BCV), `ok: false` con `code` y `message` (como el indicador, nunca un 5xx por la fuente).
+         */
+        post: operations["ExchangeRefreshController_refreshRates"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3737,6 +3757,26 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["PaymentMethodsController_changeAdjustment"];
+        trace?: never;
+    };
+    "/api/v1/payment-methods/{id}/gateway-fee": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Pone o quita la comisión de la pasarela del medio
+         * @description DX-018-bis. Lo que la pasarela cobra a la CLÍNICA por cada cobro con este medio (no es un ajuste al paciente de DX-516). Con «descontar pasarela» en la regla de honorarios, la base cobrada de cada abono se reduce en este %; al cerrar la liquidación queda congelado.
+         */
+        put: operations["PaymentMethodsController_gatewayFee"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/payment-methods/{id}/instructions": {
@@ -9926,6 +9966,26 @@ export interface paths {
         patch: operations["LabOrdersController_update"];
         trace?: never;
     };
+    "/api/v1/lab-orders/{id}/cost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Pone o quita el costo del laboratorio de la orden (solo ADMIN)
+         * @description En cualquier estado salvo anulada (también tras «Enviada»: el laboratorio factura al entregar). Con «descontar laboratorio» en la regla de honorarios, el costo en la moneda del plan del ítem se descuenta de la base; en otra moneda no se convierte: se avisa y no se descuenta.
+         */
+        put: operations["LabOrdersController_setCost"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lab-orders/{id}/send": {
         parameters: {
             query?: never;
@@ -13505,6 +13565,27 @@ export interface components {
              */
             fetchedAt: string;
         };
+        ManualRateUsedDto: {
+            /** Format: uuid */
+            id: string;
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /**
+             * @description Unidades de la moneda por 1 USD.
+             * @example 918.77
+             */
+            rate: number;
+            /**
+             * @description Día civil de la tasa.
+             * @example 2026-11-20
+             */
+            date: string;
+            /**
+             * Format: date-time
+             * @description Desde qué instante del día rige.
+             */
+            effectiveFrom: string;
+        };
         RatesResponseDto: {
             /** @enum {string} */
             base: "USD";
@@ -13521,6 +13602,10 @@ export interface components {
             rateDate: string;
             /** @description DX-585: solo con fuente BCV. La tasa del BCV de la que salen VES y EUR (como mucho 7 días anterior al día pedido); null si no hay ninguna y VES y EUR no aparecen en `rates` («sin tasa»). Con las otras fuentes no viene. */
             bcv?: components["schemas"]["BcvRateInfoDto"] | null;
+            /** @description DX-586: solo con tasas manuales. Las que rigen en `rates`: por moneda, la de mayor `effectiveFrom` ≤ ahora del día `rateDate` (la última del día si es pasado). Es la tasa que congelaría un abono registrado ahora (`MANUAL:<id>`). */
+            manualRates?: components["schemas"]["ManualRateUsedDto"][];
+            /** @description DX-586: solo con fuente MANUAL. Todas las tasas registradas para el día pedido (`date`), por moneda y hora (`effectiveFrom`), para la lista del día. Solo id, moneda, tasa, día y hora: ni el autor ni si un abono la usó (GET /exchange/manual-rates, solo ADMIN). */
+            manualDay?: components["schemas"]["ManualRateUsedDto"][];
         };
         ConvertResponseDto: {
             /** @example 100 */
@@ -13626,6 +13711,11 @@ export interface components {
              * @example 36.5
              */
             rate: number;
+            /**
+             * Format: date-time
+             * @description DX-586: desde qué instante del día rige. Las anteriores a DX-586, desde el inicio del día en la sede principal.
+             */
+            effectiveFrom: string;
             createdBy: components["schemas"]["ManualExchangeRateAuthorDto"];
             /** Format: date-time */
             createdAt: string;
@@ -13648,6 +13738,12 @@ export interface components {
              * @example 36.5
              */
             rate: number;
+            /**
+             * Format: date-time
+             * @description DX-586: desde qué instante del día `date` rige (ISO 8601 con Z o desfase). Nunca futuro y del mismo día civil que `date` en la sede. Sin él: ahora si `date` es hoy; el inicio del día si es anterior. Así se registran varias tasas el mismo día («desde las 14:30»): cada abono usa la de mayor `effectiveFrom` ≤ su instante.
+             * @example 2026-11-20T14:30:00-04:00
+             */
+            effectiveFrom?: string;
         };
         CorrectManualExchangeRateDto: {
             /**
@@ -13722,6 +13818,44 @@ export interface components {
              * @description Cuándo se calculó la respuesta.
              */
             updatedAt: string;
+        };
+        ExchangeRefreshOutcomeDto: {
+            /** @description La tasa se consultó y quedó guardada. */
+            ok: boolean;
+            /**
+             * @description Sin `ok`: la fuente no dio la tasa, el presupuesto del proveedor está agotado (SEC-054) o la tasa del BCV no pasó la cordura. null con `ok`.
+             * @enum {string|null}
+             */
+            code: "EXCHANGE_RATE_UNAVAILABLE" | "EXCHANGE_RATE_BUDGET_EXCEEDED" | "EXCHANGE_RATE_BCV_REJECTED" | null;
+            /** @description Sin `ok`: el mensaje en español para la persona. */
+            message: string | null;
+        };
+        ExchangeRefreshDto: {
+            /** @description Si el menú enseña el indicador. false con «Nunca», sin sede utilizable, sin moneda de referencia o sin ninguna moneda que enseñar (en automático: ninguna aceptada distinta de la de referencia). */
+            visible: boolean;
+            /** @description Moneda de referencia: la de la clínica o, sin ella, la de la sede activa (o la principal). */
+            reference: string | null;
+            /**
+             * @description Texto propio de la de referencia (DX-517); null = el código ISO (y siempre null con `visible: false`).
+             * @example Bs.
+             */
+            referenceLabel: string | null;
+            /** @description Una fila por moneda aceptada distinta de la de referencia, en el orden de la clínica. Vacía con `visible: false`. */
+            rates: components["schemas"]["ExchangeHeaderRateDto"][];
+            /**
+             * @description Monedas en que la clínica acepta cobros, en su orden (vacía = cualquiera): para filtrar el selector de moneda del cobro con cualquier rol. Va siempre, también con `visible: false`.
+             * @example [
+             *       "USD",
+             *       "VES"
+             *     ]
+             */
+            acceptedCurrencies: string[];
+            /**
+             * Format: date-time
+             * @description Cuándo se calculó la respuesta.
+             */
+            updatedAt: string;
+            refresh: components["schemas"]["ExchangeRefreshOutcomeDto"];
         };
         /** @enum {string} */
         PayerType: "INSURER" | "PREPAID_PLAN" | "PUBLIC_SYSTEM" | "EMPLOYER" | "OTHER";
@@ -18903,6 +19037,11 @@ export interface components {
             proofPolicy: components["schemas"]["PaymentProofPolicy"];
             /** @description DX-569 «Permitir en el enlace de pago»: el paciente lo ve en su enlace si además está activo y tiene datos para pagar en la sede del enlace (o de toda la clínica). */
             allowInPaymentLink: boolean;
+            /**
+             * @description DX-018-bis: % que la pasarela cobra a la clínica por cada cobro con este medio (null = ninguno). Los honorarios pueden descontarlo.
+             * @example 3.5
+             */
+            gatewayFeePercent: number | null;
             /** @description Medio inicial equivalente a este método antiguo; null si lo creó la clínica. */
             legacyMethod: components["schemas"]["PaymentMethod"] | null;
             /** @description DX-516: sus ajustes (activos o no; hasta 5 activos). Vacío por defecto. */
@@ -18965,6 +19104,13 @@ export interface components {
             fixedCurrency?: string | null;
             /** @description Sin indicarlo, activo. */
             active?: boolean;
+        };
+        SetPaymentMethodGatewayFeeDto: {
+            /**
+             * @description Mayor que 0 y como mucho 100, con hasta 2 decimales; null la quita.
+             * @example 3.5
+             */
+            percent: number | null;
         };
         PaymentMethodInstructionDto: {
             /** Format: uuid */
@@ -22304,6 +22450,33 @@ export interface components {
             /** @example Saldo migrado */
             concept: string;
         };
+        PaymentRateUsedDto: {
+            /**
+             * @description Unidades de `currency` por 1 `unit` (hasta 8 decimales). `unit` es la más fuerte de las dos monedas.
+             * @example 918.77
+             */
+            rate: number;
+            /** @description La moneda de la que se da 1 (código ISO 4217). */
+            unit: string;
+            /** @description La moneda en que se da la tasa (código ISO 4217). */
+            currency: string;
+            source: components["schemas"]["ExchangeRateSource"];
+            /**
+             * @description «Fecha Valor» del BCV (solo con fuente BCV); si no, null.
+             * @example 2026-11-20
+             */
+            valueDate: string | null;
+            /**
+             * Format: date-time
+             * @description Cuándo se cotizó (hora de la BD al congelar).
+             */
+            quotedAt: string;
+            /**
+             * @description Referencia estable a la tasa usada (ver `FrozenExchangeRateDto.ref`).
+             * @example BCV:2026-11-20
+             */
+            ref: string;
+        };
         PaymentAdjustmentLineDto: {
             type: components["schemas"]["PaymentAdjustmentType"];
             /** @example Impuesto 3 % */
@@ -22391,6 +22564,8 @@ export interface components {
             hasProof: boolean;
             /** @description DX-571: conciliado con un movimiento del extracto del banco (Caja › Conciliación). */
             reconciled: boolean;
+            /** @description DX-586: la tasa con que se cobró: qué tasa, de qué fuente, con qué fecha valor (BCV), cuándo se cotizó y su referencia. null si el abono no convierte, sigue «sin tasa» o congeló su tasa antes de DX-586 (esos no cambian). */
+            rateUsed: components["schemas"]["PaymentRateUsedDto"] | null;
             /** @description DX-516: ajustes por medio de pago congelados en el abono (vacío sin ajustes). */
             adjustments: components["schemas"]["PaymentAdjustmentLineDto"][];
             /**
@@ -22577,6 +22752,21 @@ export interface components {
              * @example 2026-10-30
              */
             date: string;
+            /**
+             * @description DX-586: referencia estable a la tasa usada: `BCV:<fecha valor>`, `AUTOMATIC:<día>`, `MANUAL:<id de la tasa manual>` (dos unidas con «+» si las dos monedas no son USD) u `OVERRIDE:<día>` (la que fijó recepción). null en las tasas congeladas antes de DX-586.
+             * @example BCV:2026-11-20
+             */
+            ref?: string | null;
+            /**
+             * @description DX-586: «Fecha Valor» del BCV de la tasa (solo con fuente BCV); null en las demás.
+             * @example 2026-11-20
+             */
+            valueDate?: string | null;
+            /**
+             * Format: date-time
+             * @description DX-586: cuándo se cotizó (hora de la BD al congelar: al registrar o en el barrido). null en las tasas congeladas antes de DX-586.
+             */
+            quotedAt?: string | null;
         };
         /**
          * @description DX-375: la tasa del abono. NOT_NEEDED: está en la moneda de su destino. FROZEN: congeló su tasa al registrarse (o el barrido, si se cobró sin tasa) y saldos y totales la usan siempre, aunque la tasa cambie después. MISSING: «sin tasa»: no había tasa de su día; no cuenta en el saldo del plan hasta que se registre (Ajustes › Tasa de cambio) y el barrido de cada minuto la congele. LEGACY: anterior a la tasa congelada y aún sin congelar: se convierte con la tasa de su día, como antes, hasta que el barrido la congele.
@@ -22700,6 +22890,8 @@ export interface components {
             exchangeRateCurrency: string | null;
             /** @description DX-375: la tasa que congeló el abono; null en su misma moneda, «sin tasa» o anterior aún sin congelar. */
             frozenRate: components["schemas"]["FrozenExchangeRateDto"] | null;
+            /** @description DX-586: la tasa con que se cobró: qué tasa, de qué fuente, con qué fecha valor (BCV), cuándo se cotizó y su referencia. null si el abono no convierte, sigue «sin tasa» o congeló su tasa antes de DX-586 (esos no cambian). */
+            rateUsed: components["schemas"]["PaymentRateUsedDto"] | null;
             /** @description DX-375: la tasa del abono. NOT_NEEDED: está en la moneda de su destino. FROZEN: congeló su tasa al registrarse (o el barrido, si se cobró sin tasa) y saldos y totales la usan siempre, aunque la tasa cambie después. MISSING: «sin tasa»: no había tasa de su día; no cuenta en el saldo del plan hasta que se registre (Ajustes › Tasa de cambio) y el barrido de cada minuto la congele. LEGACY: anterior a la tasa congelada y aún sin congelar: se convierte con la tasa de su día, como antes, hasta que el barrido la congele. */
             exchangeRateStatus: components["schemas"]["PaymentExchangeRateStatus"];
             /** @description DX-516: ajustes por medio de pago congelados en el abono (vacío sin ajustes). */
@@ -22949,6 +23141,8 @@ export interface components {
             status: components["schemas"]["ReceiptExchangeRateStatus"];
             /** @description La tasa congelada (moneda de destino, fuente y día); null si no la congeló. */
             rate: components["schemas"]["FrozenExchangeRateDto"] | null;
+            /** @description DX-586: la tasa con que se cobró: qué tasa, de qué fuente, con qué fecha valor (BCV), cuándo se cotizó y su referencia. null si el abono no convierte, sigue «sin tasa» o congeló su tasa antes de DX-586 (esos no cambian). El recibo la enseña como «Tasa usada: 918,77 Bs. por USD (BCV, fecha valor 20/11/2026)». */
+            rateUsed: components["schemas"]["PaymentRateUsedDto"] | null;
             /**
              * @description El abono en la moneda de destino (`rate.currency`) con la tasa congelada, redondeado a céntimos; null sin tasa.
              * @example 50
@@ -31532,6 +31726,17 @@ export interface components {
             toothNumber: string;
             /** @example Corona de zirconio */
             procedureName: string;
+            /** @description DX-018-bis: moneda del plan. Un costo en otra moneda no se descuenta de los honorarios. */
+            planCurrency: string;
+        };
+        LabOrderCostDto: {
+            /**
+             * @description Decimal en texto.
+             * @example 180.00
+             */
+            amount: string;
+            /** @description Código ISO 4217. */
+            currency: string;
         };
         LabOrderAppointmentRefDto: {
             /** Format: uuid */
@@ -31609,6 +31814,8 @@ export interface components {
             cancelledBy: components["schemas"]["LabOrderPersonDto"] | null;
             cancelReason: string | null;
             treatmentPlanItem: components["schemas"]["LabOrderPlanItemRefDto"] | null;
+            /** @description DX-018-bis: costo del trabajo. Solo ADMIN lo ve (null para el resto y en la impresión). */
+            cost: components["schemas"]["LabOrderCostDto"] | null;
             appointment: components["schemas"]["LabOrderAppointmentRefDto"] | null;
             /** @description La orden anterior que esta corrige */
             replacesOrder: components["schemas"]["LabOrderNumberRefDto"] | null;
@@ -31699,6 +31906,15 @@ export interface components {
             appointmentId?: string | null;
             /** Format: uuid */
             replacesOrderId?: string | null;
+        };
+        SetLabOrderCostDto: {
+            /**
+             * @description Lo que cobra el laboratorio: decimal ≥ 0 con hasta 2 decimales, en texto. null lo quita (con la moneda en null).
+             * @example 180.00
+             */
+            cost: string | null;
+            /** @description Moneda del costo (ISO 4217). Si no es la del plan del ítem, no se descuenta de los honorarios. */
+            currency: string | null;
         };
         SendLabOrderDto: {
             /**
@@ -31959,9 +32175,9 @@ export interface components {
             rule: components["schemas"]["CommissionRuleDto"] | null;
         };
         CommissionDeductionsDto: {
-            /** @description Se puede descontar el costo de laboratorio (hoy no: sin datos). */
+            /** @description Se puede descontar el costo de laboratorio (DX-018-bis: sí). */
             labCost: boolean;
-            /** @description Se puede descontar la comisión de la pasarela (hoy no: sin datos). */
+            /** @description Se puede descontar la comisión de la pasarela (DX-018-bis: sí). */
             cardFee: boolean;
         };
         CommissionRulesDto: {
@@ -31994,12 +32210,12 @@ export interface components {
              */
             active: boolean;
             /**
-             * @description Descontar el costo de laboratorio. Aún no disponible (las órdenes de laboratorio no guardan su costo): true → 400.
+             * @description DX-018-bis: descontar antes del % el costo de laboratorio del ítem (sus órdenes vivas con costo en la moneda del plan; en otra moneda no se convierte: se avisa y no se descuenta).
              * @default false
              */
             deductLabCost: boolean;
             /**
-             * @description Descontar la comisión de la pasarela del medio de pago. Aún no disponible (los medios de pago no guardan ese %): true → 400.
+             * @description DX-018-bis: descontar antes del % la comisión de la pasarela (el % del medio de pago del abono; solo base «cobrado»).
              * @default false
              */
             deductCardFee: boolean;
@@ -32026,6 +32242,18 @@ export interface components {
             amount: number;
             /** @description Moneda del abono. */
             currency: string;
+        };
+        CommissionLineDeductionsDto: {
+            /** @description Base antes de descuentos (sin descuentos, = base). */
+            grossBase: number;
+            /** @description Costo de laboratorio descontado. */
+            labCost: number;
+            /** @description % de la pasarela aplicado; null si no se descontó. */
+            cardFeePercent: number | null;
+            /** @description Comisión de la pasarela descontada. */
+            cardFee: number;
+            /** @description Monedas de costos de laboratorio distintas a la del plan: no se convierten ni se descuentan (aviso). */
+            labCostSkippedCurrencies: string[];
         };
         CommissionLineDto: {
             /**
@@ -32068,6 +32296,7 @@ export interface components {
             percent: number;
             /** @description Honorario en la moneda de la línea (un ajuste, con signo). */
             amount: number;
+            deductions: components["schemas"]["CommissionLineDeductionsDto"];
             /**
              * Format: uuid
              * @description DX-464: el pago vivo de la liquidación que cubre la línea; null en la vista previa o si está pendiente.
@@ -32192,6 +32421,10 @@ export interface components {
             basis: components["schemas"]["CommissionBasis"];
             releaseMode: components["schemas"]["CommissionReleaseMode"];
             percent: number;
+            /** @description DX-018-bis: la regla descontaba el laboratorio al cerrar. */
+            deductLabCost: boolean;
+            /** @description DX-018-bis: la regla descontaba la pasarela al cerrar. */
+            deductCardFee: boolean;
             /** Format: date-time */
             closedAt: string;
             closedBy: components["schemas"]["CommissionClosedByDto"];
@@ -32222,6 +32455,10 @@ export interface components {
             basis: components["schemas"]["CommissionBasis"];
             releaseMode: components["schemas"]["CommissionReleaseMode"];
             percent: number;
+            /** @description DX-018-bis: la regla descontaba el laboratorio al cerrar. */
+            deductLabCost: boolean;
+            /** @description DX-018-bis: la regla descontaba la pasarela al cerrar. */
+            deductCardFee: boolean;
             /** Format: date-time */
             closedAt: string;
             closedBy: components["schemas"]["CommissionClosedByDto"];
@@ -36860,7 +37097,7 @@ export interface operations {
                     "application/json": components["schemas"]["ManualExchangeRateDto"];
                 };
             };
-            /** @description Tasa que no es > 0 con hasta 8 decimales, moneda fuera de la lista o USD, o fecha inválida o futura en la zona de la sede */
+            /** @description Tasa que no es > 0 con hasta 8 decimales, moneda fuera de la lista o USD, fecha inválida o futura en la zona de la sede, o (DX-586) `effectiveFrom` sin zona, futuro o de otro día */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -36874,7 +37111,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Ya hay una tasa registrada para esa moneda en ese día. Si ningún abono la usó, corrígela en la lista. */
+            /** @description Ya hay una tasa registrada para esa moneda desde esa misma hora. Registra la nueva con otra hora o, si ningún abono la usó, corrígela en la lista. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -37017,6 +37254,46 @@ export interface operations {
                 };
             };
             /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExchangeRefreshController_refreshRates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExchangeRefreshDto"];
+                };
+            };
+            /** @description Rol que no cobra */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Con tasa manual, registra la nueva tasa en Ajustes. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `EXCHANGE_RATE_REFRESH_TOO_SOON` (una vez cada 5 min por clínica) o el límite global de peticiones. Retry-After en segundos. */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -44223,6 +44500,52 @@ export interface operations {
             };
             /** @description Etiqueta repetida en el medio o tope de ajustes activos */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentMethodsController_gatewayFee: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPaymentMethodGatewayFeeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodDto"];
+                };
+            };
+            /** @description Porcentaje fuera de (0, 100] o con más de 2 decimales */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Medio no encontrado en esta clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -60407,6 +60730,66 @@ export interface operations {
                 content?: never;
             };
             /** @description Ítem, cita u orden corregida de otro paciente; laboratorio o servicio inactivo */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LabOrdersController_setCost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetLabOrderCostDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabOrderDto"];
+                };
+            };
+            /** @description Costo o moneda inválidos, uno sin el otro, o sin cambios */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración pone el costo del laboratorio. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Orden de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Orden anulada o cambiada a la vez */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La moneda no existe */
             422: {
                 headers: {
                     [name: string]: unknown;

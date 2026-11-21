@@ -471,10 +471,12 @@ test('the exchange rate settings list today rate for VES, BRL and GBP', async ({
     // (los abonos en bolívares la usan, aunque ninguna sede cobre en VES).
     const manual = page.getByRole('region', { name: 'Tasas manuales' });
     for (const [currency, rate] of Object.entries(rates)) {
+      // DX-586: la lista va por día (su encabezado lleva la fecha) y cada fila, desde qué hora rige.
       const row = manual
+        .getByTestId('manual-rates-day')
+        .filter({ has: page.getByRole('heading', { level: 3, name: fmt.civilDate(today), exact: true }) })
         .locator('tr, li')
-        .filter({ visible: true, has: page.getByText(fmt.civilDate(today), { exact: true }) })
-        .filter({ hasText: currency });
+        .filter({ visible: true, hasText: currency });
       await expect(row, `fila de hoy de ${currency}`).toHaveCount(1, { timeout: 15_000 });
       await expect(row).toContainText(fmt.number(rate, { min: 0, max: 8 }));
     }

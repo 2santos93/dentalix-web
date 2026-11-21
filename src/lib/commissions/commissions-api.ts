@@ -62,14 +62,30 @@ export function percentText(percent: number): string {
   return `${String(percent).replace('.', ',')}\u00a0%`;
 }
 
-export function ruleSummary(rule: Pick<CommissionRule, 'basis' | 'releaseMode' | 'percent' | 'categories'>): string {
+export function ruleSummary(
+  rule: Pick<CommissionRule, 'basis' | 'releaseMode' | 'percent' | 'categories'> &
+    Partial<Pick<CommissionRule, 'deductLabCost' | 'deductCardFee'>>,
+): string {
   const base = `${percentText(rule.percent)} de ${COMMISSION_BASIS_LABELS[rule.basis].toLowerCase()}`;
   const release = COMMISSION_RELEASE_LABELS[rule.releaseMode].toLowerCase();
   const categories =
     rule.categories.length === 0
       ? ''
       : ` · ${rule.categories.length === 1 ? '1 categoría' : `${rule.categories.length} categorías`} con % propio`;
-  return `${base}, ${release}${categories}`;
+  const deductions = deductionsSummary(rule);
+  return `${base}, ${release}${categories}${deductions ? ` · ${deductions}` : ''}`;
+}
+
+/** DX-018-bis: «descuenta laboratorio y pasarela» (o uno), o null sin descuentos. */
+export function deductionsSummary(rule: { deductLabCost?: boolean; deductCardFee?: boolean }): string | null {
+  const parts = [rule.deductLabCost ? 'laboratorio' : null, rule.deductCardFee ? 'pasarela' : null].filter(Boolean);
+  return parts.length === 0 ? null : `descuenta ${parts.join(' y ')}`;
+}
+
+/** DX-018-bis: la línea descontó algo de su base (o avisa de un laboratorio en otra moneda). */
+export function lineHasDeductions(line: Pick<CommissionLine, 'deductions'>): boolean {
+  const d = line.deductions;
+  return d.labCost !== 0 || d.cardFee !== 0 || d.labCostSkippedCurrencies.length > 0;
 }
 
 // ── Rutas ───────────────────────────────────────────────────────────────────

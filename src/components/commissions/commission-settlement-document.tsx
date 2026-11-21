@@ -1,9 +1,11 @@
 'use client';
 import * as React from 'react';
 import type { SedePainters } from '@/lib/locations/sede-stamp';
+import { lineDeductionTexts } from './commission-lines';
 import {
   COMMISSION_BASIS_LABELS,
   COMMISSION_RELEASE_LABELS,
+  deductionsSummary,
   percentText,
   type CommissionLine,
   type CommissionSettlement,
@@ -36,6 +38,10 @@ export const commissionDocumentCopy = {
   frozen: 'Documento congelado: lo que cambie después se corrige como ajuste en la siguiente liquidación.',
   periodValue: (from: string, to: string) => `${from} – ${to}`,
   ruleValue: (percent: string, basis: string, release: string) => `${percent} de ${basis}, ${release}`,
+  // DX-018-bis: los descuentos de la regla al cerrar.
+  deductions: 'Descuentos de la base',
+  deductionsValue: (summary: string | null) =>
+    summary ? `${summary[0].toUpperCase()}${summary.slice(1)} antes del porcentaje` : 'Ninguno',
 };
 
 const copy = commissionDocumentCopy;
@@ -69,7 +75,18 @@ function LinesTable({ title, lines, stamp }: { title: string; lines: readonly Co
                   ? `${stamp.date(l.payment.paidAt, l.locationId)} · ${stamp.money(l.payment.amount, l.payment.currency, l.locationId)}`
                   : copy.produced}
               </td>
-              <td className="py-1.5 pr-2 text-right tabular-nums">{stamp.money(l.base, l.currency, l.locationId)}</td>
+              <td className="py-1.5 pr-2 text-right tabular-nums">
+                {stamp.money(l.base, l.currency, l.locationId)}
+                {(() => {
+                  const { detail, skipped } = lineDeductionTexts(l, (n) => stamp.money(n, l.currency, l.locationId));
+                  return (
+                    <>
+                      {detail ? <span className="block text-[#4b5563]">{detail}</span> : null}
+                      {skipped ? <span className="block text-[#834B14]">{skipped}</span> : null}
+                    </>
+                  );
+                })()}
+              </td>
               <td className="py-1.5 pr-2 text-right tabular-nums">{percentText(l.percent)}</td>
               <td className="py-1.5 text-right font-medium tabular-nums">{stamp.money(l.amount, l.currency, l.locationId)}</td>
             </tr>
@@ -128,6 +145,10 @@ export function CommissionSettlementDocument({
               COMMISSION_RELEASE_LABELS[data.releaseMode].toLowerCase(),
             )}
           </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-[#4b5563]">{copy.deductions}</dt>
+          <dd>{copy.deductionsValue(deductionsSummary(data))}</dd>
         </div>
         {data.categoryPercents.length > 0 ? (
           <div className="col-span-2 sm:col-span-3 print:col-span-3">

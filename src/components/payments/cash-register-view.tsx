@@ -60,6 +60,7 @@ import { getTokenAllowedLocationIds, getTokenRole } from '@/lib/auth/token-role'
 import { periodLockCopy } from './period-lock-field';
 import { canManagePayments, canRegisterPayments, useEffectivePermissions } from '@/lib/auth/permissions';
 import { cn } from '@/lib/utils';
+import { rateUsedLabel } from '@/lib/payments/payment-rate';
 
 // Copy como constantes (i18n-ready), igual que el resto de vistas.
 const copy = {
@@ -437,6 +438,8 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
           payment.externalInvoiceNumber ? externalInvoiceCopy.inline(payment.externalInvoiceNumber) : null,
           splitPaymentLabel(payment),
           reconciledLabel(payment.reconciled),
+          // DX-586: la tasa con que se cobró (también con el arqueo ciego: es una tasa, no un importe).
+          cashRateUsedText(payment, stamp),
         ]
           .filter(Boolean)
           .join(' · ') || null,
@@ -469,6 +472,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
               {copy.collectedRow(stamp.money(payment.collectedAmount ?? payment.amount, payment.currency, payment.location.id))}
             </span>
           ) : null}
+          <CashRateUsed payment={payment} stamp={stamp} />
         </span>
         ),
     },
@@ -771,6 +775,28 @@ function mediumOptionLabel(medium: ClinicPaymentMethod): string {
  * abono con fecha de pago antigua: la regla mira el día de registro en la sede,
  * y ese día (`registeredOn`, `registeredToday`) lo calcula la API.
  */
+/** DX-586: «Tasa usada: 1 USD = Bs. 918,77 (BCV, fecha valor 20/11/2026)», o `null` si el abono no convirtió. */
+function cashRateUsedText(payment: CashPayment, stamp: SedeStamp): string | null {
+  if (!payment.rateUsed) return null;
+  const at = payment.location.id;
+  return rateUsedLabel(payment.rateUsed, {
+    money: (amount, currency) => stamp.money(amount, currency, at),
+    civilDate: (day) => stamp.civilDate(day, at),
+    dateTime: (iso) => stamp.dateTime(iso, at),
+  });
+}
+
+function CashRateUsed({ payment, stamp }: { payment: CashPayment; stamp: SedeStamp }) {
+  const text = cashRateUsedText(payment, stamp);
+  if (!text) return null;
+  // En el teléfono va con el medio (su `mobileCell`), no junto al importe.
+  return (
+    <span data-testid="cash-rate-used" className="t-caption max-w-64 text-right text-muted tabular-nums max-sm:hidden">
+      {text}
+    </span>
+  );
+}
+
 function RegisteredNote({ payment, stamp }: { payment: CashPayment; stamp: SedeStamp }) {
   if (payment.registeredOn === payment.paidOn) return null;
   return (

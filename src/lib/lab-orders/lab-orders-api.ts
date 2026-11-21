@@ -134,6 +134,35 @@ export function checkLabOrder(token: string, id: string): Promise<LabOrder> {
   return apiFetch<LabOrder>(orderPath(id, '/check'), { method: 'POST', body: {}, token });
 }
 
+/**
+ * DX-018-bis: `PUT /lab-orders/:id/cost` (solo ADMIN). Lo que cobra el
+ * laboratorio (decimal de 2 cifras en texto) y su moneda; los dos en null lo
+ * quitan.
+ */
+export function setLabOrderCost(
+  token: string,
+  id: string,
+  cost: { amount: string; currency: string } | null,
+): Promise<LabOrder> {
+  return apiFetch<LabOrder>(`/lab-orders/${id}/cost`, {
+    method: 'PUT',
+    body: { cost: cost?.amount ?? null, currency: cost?.currency ?? null },
+    token,
+  });
+}
+
+/** DX-018-bis: el costo de la orden como importe; `null` sin costo (o para quien no es ADMIN). */
+export function labOrderCostAmount(order: Pick<LabOrder, 'cost'>): number | null {
+  if (order.cost === null) return null;
+  const value = Number(order.cost.amount);
+  return Number.isFinite(value) ? value : null;
+}
+
+/** DX-018-bis: el costo está en otra moneda que el plan del ítem (no se descuenta de los honorarios). */
+export function labOrderCostOtherCurrency(order: Pick<LabOrder, 'cost' | 'treatmentPlanItem'>): boolean {
+  return order.cost !== null && order.treatmentPlanItem !== null && order.cost.currency !== order.treatmentPlanItem.planCurrency;
+}
+
 export function cancelLabOrder(token: string, id: string, reason: string): Promise<LabOrder> {
   return apiFetch<LabOrder>(orderPath(id, '/cancel'), { method: 'POST', body: { reason }, token });
 }

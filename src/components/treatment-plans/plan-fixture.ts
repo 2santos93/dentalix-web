@@ -62,6 +62,8 @@ export const ITEM_WITHOUT_DISCOUNT = {
 export const PAYMENT_IN_PLAN_CURRENCY = {
   exchangeRateCurrency: null,
   frozenRate: null,
+  // DX-586: sin conversión no hay tasa usada.
+  rateUsed: null,
   exchangeRateStatus: 'NOT_NEEDED',
 } as const;
 
