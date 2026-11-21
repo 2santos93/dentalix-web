@@ -27,6 +27,10 @@ describe('DX-588 · lógica del tablero de sala de espera', () => {
     expect(visibleCapacity(7, 0, 0)).toBe(7);
     expect(visibleCapacity(0, 1000, 100)).toBe(0);
     expect(visibleCapacity(5, 50, 100)).toBe(1);
+    // «y N más» más bajo que una fila: cabe una fila más.
+    expect(visibleCapacity(12, 1000, 100, 50)).toBe(9);
+    expect(visibleCapacity(12, 1000, 100, 40)).toBe(9);
+    expect(visibleCapacity(12, 1050, 100, 40)).toBe(10);
   });
 
   it('«hace N min»', () => {

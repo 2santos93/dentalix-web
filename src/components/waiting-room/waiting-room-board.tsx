@@ -221,12 +221,18 @@ function useCapacity(count: number) {
       const first = el.querySelector<HTMLElement>('[data-board-row]');
       if (!first) return setCapacity(count);
       const gap = parseFloat(getComputedStyle(el).rowGap) || 0;
-      setCapacity(visibleCapacity(count, el.clientHeight + gap, first.offsetHeight + gap));
+      const more = el.querySelector<HTMLElement>('[data-board-more]');
+      const step = first.offsetHeight + gap;
+      setCapacity(visibleCapacity(count, el.clientHeight + gap, step, more ? more.offsetHeight + gap : step));
     };
     measure();
     if (typeof ResizeObserver === 'undefined') return;
+    // La lista y también su primera fila: al cargar la fuente cambia el alto de
+    // la fila sin que cambie el de la lista.
     const observer = new ResizeObserver(measure);
     observer.observe(el);
+    const first = el.querySelector('[data-board-row]');
+    if (first) observer.observe(first);
     return () => observer.disconnect();
   }, [count]);
   return [listRef, Math.min(capacity, count)] as const;
@@ -395,11 +401,16 @@ function ColumnHeading({ id, children, hint }: { id: string; children: React.Rea
   );
 }
 
+/** «y N más». Siempre en el DOM (invisible si no sobra nadie) para medir cuánto ocupa. */
 function MoreRow({ hidden }: { hidden: number }) {
-  if (hidden <= 0) return null;
   return (
-    <li data-testid="waiting-room-more" className="text-[length:var(--wr-meta)] leading-tight text-muted">
-      {copy.more(hidden)}
+    <li
+      data-board-more
+      data-testid={hidden > 0 ? 'waiting-room-more' : undefined}
+      aria-hidden={hidden > 0 ? undefined : true}
+      className={cn('shrink-0 text-[length:var(--wr-meta)] leading-tight text-muted', hidden <= 0 && 'invisible')}
+    >
+      {copy.more(Math.max(hidden, 1))}
     </li>
   );
 }

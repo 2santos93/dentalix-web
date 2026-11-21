@@ -34,15 +34,15 @@ export function newKeys(previous: ReadonlySet<string>, next: readonly { key: str
 
 /**
  * Cuántas filas caben en una lista de alto `available` px, con filas de paso
- * `step` px (alto + separación). Si no caben todas, la última plaza es para
- * «y N más». Sin medidas (0, p. ej. en jsdom) se muestran todas.
+ * `step` px (alto + separación). Si no caben todas, se reservan `reserve` px
+ * (por defecto una fila) para «y N más». Sin medidas (0, p. ej. en jsdom) se
+ * muestran todas.
  */
-export function visibleCapacity(count: number, available: number, step: number): number {
+export function visibleCapacity(count: number, available: number, step: number, reserve: number = step): number {
   if (count <= 0) return 0;
   if (!(available > 0) || !(step > 0)) return count;
-  const fit = Math.floor(available / step);
-  if (fit >= count) return count;
-  return Math.max(1, fit - 1);
+  if (Math.floor(available / step) >= count) return count;
+  return Math.max(1, Math.floor((available - reserve) / step));
 }
 
 /** «hace 5 min», «hace 1 h 10 min»; 0 → «Acaba de llegar». */
