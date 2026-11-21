@@ -50,6 +50,13 @@ export const ClinicalAlertBanner = dynamic(
   { ssr: false },
 );
 
+// DX-266-bis: lo que quedó en una ficha fusionada con esta (solo ADMIN; casi
+// siempre no pinta nada, así que no pesa en la primera carga).
+export const MergeLeftoversBanner = dynamic(
+  () => import('@/components/patients/merge-leftovers-banner').then((m) => m.MergeLeftoversBanner),
+  { ssr: false },
+);
+
 // DX-172: «Origen» de la pestaña Datos (su única petición sale al montarse).
 export const PatientAcquisitionSection = dynamic(
   () => import('@/components/patients/patient-acquisition-section').then((m) => m.PatientAcquisitionSection),
