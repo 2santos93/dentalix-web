@@ -97,9 +97,9 @@ test('ADMIN: Ajustes a 1440 y 390 px, claro y oscuro, axe limpio; crear muestra 
 
   await main.getByRole('button', { name: 'Nueva pantalla' }).click();
   const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('Nombre').fill(SCREEN_NAME);
+  await dialog.getByLabel('Nombre', { exact: true }).fill(SCREEN_NAME);
   await dialog.getByRole('button', { name: 'Añadir mensaje' }).click();
-  await dialog.getByLabel('Mensaje 1').fill('Horario: lunes a viernes de 8:00 a 17:00');
+  await dialog.getByLabel('Mensaje 1', { exact: true }).fill('Horario: lunes a viernes de 8:00 a 17:00');
   const form = await axeInBothThemes(page, dialog);
   expect(form.light, 'axe del formulario en claro').toEqual([]);
   expect(form.dark, 'axe del formulario en oscuro').toEqual([]);
