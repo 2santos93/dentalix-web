@@ -50,11 +50,14 @@ export const commissionRuleDialogCopy = {
   noCategories: 'El catálogo aún no tiene categorías.',
   deductions: 'Descuentos antes del porcentaje',
   labCost: 'Descontar el costo de laboratorio',
-  labCostUnavailable:
-    'Aún no disponible: las órdenes de laboratorio no guardan su costo. Cuando lo guarden se podrá activar.',
+  labCostHint:
+    'Resta de la base lo que cobra el laboratorio por el trabajo (el costo de sus órdenes de laboratorio). Un costo en otra moneda que la del plan no se convierte: se avisa y no se descuenta.',
+  labCostUnavailable: 'Aún no disponible en esta clínica.',
   cardFee: 'Descontar la comisión de la pasarela de pago',
-  cardFeeUnavailable:
-    'Aún no disponible: los medios de pago no guardan el porcentaje que cobra la pasarela. Cuando lo guarden se podrá activar.',
+  cardFeeHint:
+    'Resta de cada abono el porcentaje que la pasarela cobra a la clínica por ese medio de pago (Ajustes › Medios de pago).',
+  cardFeeProduced: 'Solo con «lo cobrado»: sobre lo producido no hay abono del que descontarla.',
+  cardFeeUnavailable: 'Aún no disponible en esta clínica.',
   active: 'Regla activa',
   activeHint: 'Desactivada, no se pueden cerrar liquidaciones de este profesional.',
   save: 'Guardar regla',
@@ -95,9 +98,9 @@ interface CommissionRuleDialogProps {
 
 /**
  * Regla de honorarios de un profesional (DX-018, solo ADMIN): base, cuándo se
- * libera, % general y % por categoría del catálogo. Los descuentos de costo de
- * laboratorio y de comisión de la pasarela se ven desactivados con el porqué
- * mientras no haya datos de origen. El padre lo monta con una `key` por apertura.
+ * libera, % general y % por categoría del catálogo. DX-018-bis: descontar el
+ * costo de laboratorio y la comisión de la pasarela antes del %. El padre lo
+ * monta con una `key` por apertura.
  */
 export function CommissionRuleDialog({
   open,
@@ -113,6 +116,10 @@ export function CommissionRuleDialog({
   const [releaseMode, setReleaseMode] = useState<CommissionReleaseMode>(rule?.releaseMode ?? 'PER_ITEM');
   const [percent, setPercent] = useState(percentFieldText(rule?.percent));
   const [active, setActive] = useState(rule?.active ?? true);
+  const [deductLabCost, setDeductLabCost] = useState(rule?.deductLabCost ?? false);
+  const [deductCardFee, setDeductCardFee] = useState(rule?.deductCardFee ?? false);
+  // La pasarela se descuenta de un abono: sobre lo producido no aplica.
+  const cardFeeApplies = basis === 'COLLECTED';
   const nextKey = React.useRef(rule?.categories.length ?? 0);
   const [rows, setRows] = useState<CategoryDraft[]>(
     (rule?.categories ?? []).map((c, i) => ({ key: i, category: c.category, percent: percentFieldText(c.percent) })),
@@ -174,9 +181,8 @@ export function CommissionRuleDialog({
         percent: general,
         categories: parsedRows,
         active,
-        // Sin datos de origen todavía: la API respondería 400 con true.
-        deductLabCost: false,
-        deductCardFee: false,
+        deductLabCost: deductionsAvailable.labCost && deductLabCost,
+        deductCardFee: deductionsAvailable.cardFee && cardFeeApplies && deductCardFee,
       });
       onSaved(saved);
       onOpenChange(false);
@@ -320,19 +326,21 @@ export function CommissionRuleDialog({
         <legend className="text-sm font-medium text-ink">{copy.deductions}</legend>
         <Switch
           id="rule-lab-cost"
-          checked={false}
+          checked={deductionsAvailable.labCost && deductLabCost}
           disabled={!deductionsAvailable.labCost}
           label={copy.labCost}
-          description={copy.labCostUnavailable}
-          onChange={() => undefined}
+          description={deductionsAvailable.labCost ? copy.labCostHint : copy.labCostUnavailable}
+          onChange={(e) => setDeductLabCost(e.target.checked)}
         />
         <Switch
           id="rule-card-fee"
-          checked={false}
-          disabled={!deductionsAvailable.cardFee}
+          checked={deductionsAvailable.cardFee && cardFeeApplies && deductCardFee}
+          disabled={!deductionsAvailable.cardFee || !cardFeeApplies}
           label={copy.cardFee}
-          description={copy.cardFeeUnavailable}
-          onChange={() => undefined}
+          description={
+            !deductionsAvailable.cardFee ? copy.cardFeeUnavailable : cardFeeApplies ? copy.cardFeeHint : copy.cardFeeProduced
+          }
+          onChange={(e) => setDeductCardFee(e.target.checked)}
         />
       </fieldset>
 

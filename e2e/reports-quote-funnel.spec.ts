@@ -96,6 +96,14 @@ test.beforeAll(async ({ request }) => {
     email: admin.email,
     password,
   });
+  // DX-304-bis: sin horario de atención la sede no restringe días. La clínica
+  // nueva cierra los domingos y estos specs agendan «mañana»: un sábado daba
+  // 422 «La sede no atiende los domingos».
+  const schedule = await request.put(`${API_URL}/locations/schedule`, {
+    headers: session.headers,
+    data: { ranges: [] },
+  });
+  expect(schedule.ok(), `horario: ${await schedule.text()}`).toBeTruthy();
   await addStaffViaApi(request, session, { ...dentist, role: 'DENTIST', password });
   const dentistSession = await apiLogin(request, session.origin, dentist.email, password);
   const staff = (await (await request.get(`${API_URL}/staff`, { headers: session.headers })).json()) as {

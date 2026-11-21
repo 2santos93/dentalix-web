@@ -54,6 +54,10 @@ export const paymentMethodsCopy = {
   deactivate: 'Desactivar',
   activate: 'Activar',
   toggleError: (name: string) => `No pudimos cambiar el estado de «${name}».`,
+  // DX-018-bis: lo que la pasarela cobra a la clínica.
+  colGatewayFee: 'Pasarela',
+  noGatewayFee: 'Sin comisión',
+  gatewayFee: (percent: string) => `${percent}\u00a0%`,
   // DX-516: ajustes por medio de pago.
   colAdjustments: 'Ajustes',
   noAdjustments: 'Ninguno',
@@ -293,6 +297,17 @@ export function PaymentMethodsManager({ token, allowed, canEdit = true }: Paymen
       header: copy.colPaymentLink,
       cell: (m) =>
         m.allowInPaymentLink ? copy.paymentLinkAllowed : <span className="text-muted">{copy.paymentLinkNo}</span>,
+    },
+    {
+      id: 'gateway-fee',
+      header: copy.colGatewayFee,
+      cellClassName: 'tabular-nums',
+      cell: (m) =>
+        m.gatewayFeePercent == null ? (
+          <span className="text-muted">{copy.noGatewayFee}</span>
+        ) : (
+          copy.gatewayFee(String(m.gatewayFeePercent).replace('.', ','))
+        ),
     },
     {
       id: 'adjustments',

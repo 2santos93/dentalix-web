@@ -7,6 +7,9 @@ import {
   quoteFromRates,
   rateDayLabel,
   rateSourceText,
+  rateUsedLabel,
+  rateUsedMatchesQuote,
+  type PaymentRateUsed,
 } from './payment-rate';
 import type { Payment } from './payments-api';
 
@@ -160,5 +163,65 @@ describe('fuente BCV (DX-585)', () => {
     expect(bcvValueDateFor(bcvDay, 'BRL', 'USD')).toBeNull();
     expect(bcvValueDateFor({ source: 'BCV', bcv: null }, 'VES', 'USD')).toBeNull();
     expect(bcvValueDateFor({ source: 'AUTOMATIC' }, 'VES', 'USD')).toBeNull();
+  });
+});
+
+describe('tasa usada (DX-586)', () => {
+  const bcv: PaymentRateUsed = {
+    rate: 918.7662,
+    unit: 'USD',
+    currency: 'VES',
+    source: 'BCV',
+    valueDate: '2026-11-20',
+    quotedAt: '2026-11-21T14:15:00.000Z',
+    ref: 'BCV:2026-11-20',
+  };
+  const manual: PaymentRateUsed = {
+    ...bcv,
+    rate: 920.1,
+    source: 'MANUAL',
+    valueDate: null,
+    ref: 'MANUAL:7c1f',
+    quotedAt: '2026-11-21T18:35:00.000Z',
+  };
+  const painters = {
+    money: (amount: number, currency: string) => ES_VE.money(amount, currency),
+    civilDate: (day: string) => ES_VE.civilDate(day),
+    dateTime: (iso: string) => ES_VE.dateTime(new Date(iso), 'America/Caracas'),
+  };
+  const norm = (text: string | null) => text?.replace(/\s/g, ' ');
+
+  it('con BCV, la fecha valor; sin ella, la fuente y la hora de la cotización en la sede', () => {
+    expect(norm(rateUsedLabel(bcv, painters))).toBe(
+      `Tasa usada: 1 USD = ${norm(ES_VE.money(918.7662, 'VES'))} (BCV, fecha valor 20/11/2026)`,
+    );
+    const at = norm(ES_VE.dateTime(new Date(manual.quotedAt), 'America/Caracas'));
+    expect(norm(rateUsedLabel(manual, painters))).toBe(
+      `Tasa usada: 1 USD = ${norm(ES_VE.money(920.1, 'VES'))} (manual, ${at})`,
+    );
+  });
+
+  it('frozenRateLabel prefiere la tasa usada; sin zona, la hora sale «—»', () => {
+    const payment = {
+      currency: 'VES',
+      paidOn: '2026-11-21',
+      frozenRate: { currency: 'USD', fromPerBase: 920.1, toPerBase: 1, source: 'MANUAL' as const, date: '2026-11-21' },
+      rateUsed: manual,
+    };
+    expect(norm(frozenRateLabel(payment, ES_VE, 'America/Caracas'))).toMatch(/^Tasa usada: 1 USD = .* \(manual, 21\/11\/2026/);
+    expect(norm(frozenRateLabel(payment, ES_VE))).toMatch(/\(manual, —\)$/);
+    // Un abono congelado antes de DX-586 sigue con su texto de siempre.
+    expect(frozenRateLabel({ ...payment, rateUsed: null }, ES_VE)).toMatch(/^Tasa congelada:/);
+  });
+
+  it('rateUsedMatchesQuote compara la cifra en cualquier sentido del par', () => {
+    // Abono en VES a un plan en USD: 920,1 VES por USD.
+    const quote = { currency: 'USD', fromPerBase: 920.1, toPerBase: 1 };
+    expect(rateUsedMatchesQuote(manual, 'VES', quote)).toBe(true);
+    expect(rateUsedMatchesQuote(bcv, 'VES', quote)).toBe(false);
+    // Abono en USD a un plan en VES: la tasa usada sigue siendo «1 USD = 920,1 VES».
+    expect(rateUsedMatchesQuote(manual, 'USD', { currency: 'VES', fromPerBase: 1, toPerBase: 920.1 })).toBe(true);
+    // Otro par: no casa.
+    expect(rateUsedMatchesQuote(manual, 'EUR', quote)).toBe(false);
   });
 });

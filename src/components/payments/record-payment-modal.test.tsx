@@ -204,6 +204,7 @@ function savedPayment(
     receiptNumber: 'PRI-000001',
     exchangeRateCurrency: 'EUR',
     frozenRate: null,
+    rateUsed: null,
     exchangeRateStatus: 'NOT_NEEDED',
     adjustments: [],
     collectedAmount: 150000,
@@ -845,8 +846,54 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
     expect(mockedRates).toHaveBeenCalledWith('tok', date, ['USD', 'VES']);
     const [y, m, d] = date.split('-');
     const text = money(preview(dialog).textContent);
-    expect(text).toContain(`Tasa: 1 USD = VES 36,50 · automática · ${d}/${m}/${y}`);
+    expect(text).toContain(`Se cobrará con 1 USD = VES 36,50 (automática · ${d}/${m}/${y})`);
     expect(text).toContain('Pendiente tras el abonoUSD 450,00');
+  });
+
+  // DX-586: la API cobra con la tasa que rige al registrar; si cambió desde que se abrió el modal, se dice.
+  const usedRate = (rate: number) => ({
+    rate,
+    unit: 'USD',
+    currency: 'VES',
+    source: 'MANUAL' as const,
+    valueDate: null,
+    quotedAt: '2026-10-30T18:35:00.000Z',
+    ref: 'MANUAL:r-pm',
+  });
+  const inVes = (rate: number) =>
+    savedPayment({
+      treatmentPlanId: usdPlan.id,
+      amount: 1825,
+      currency: 'VES',
+      exchangeRateCurrency: 'USD',
+      exchangeRateStatus: 'FROZEN',
+      frozenRate: { currency: 'USD', fromPerBase: rate, toPerBase: 1, source: 'MANUAL', date: '2026-10-30' },
+      rateUsed: usedRate(rate),
+    });
+
+  async function payVes(rate: number) {
+    mockedRecord.mockResolvedValue(inVes(rate));
+    const { user, dialog, onRecorded } = await openUsdPlan();
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
+    await user.type(within(dialog).getByLabelText('Importe'), '1825');
+    await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Se cobrará con 1 USD = VES 36,50'));
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+    await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
+    return onRecorded;
+  }
+
+  it('DX-586: si la tasa cambió entre abrir el cobro y confirmarlo, el aviso lo dice y no se cierra solo', async () => {
+    const onRecorded = await payVes(37.25);
+    const notice = money(onRecorded.mock.calls[0][0] as string);
+    expect(notice).toContain(
+      'La tasa cambió mientras cobrabas: se cobró con 1 USD = VES 37,25, no con 1 USD = VES 36,50, que era la que se veía.',
+    );
+    expect(onRecorded.mock.calls[0][1]).toEqual(expect.objectContaining({ persistent: true }));
+  });
+
+  it('DX-586: con la misma tasa que se veía, el aviso de siempre', async () => {
+    const onRecorded = await payVes(36.5);
+    expect(onRecorded.mock.calls[0][0]).not.toContain('La tasa cambió');
   });
 
   // DX-384: la clínica no registró la tasa del día y se usa la última registrada, de un día anterior.
@@ -858,7 +905,7 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'VES');
     await user.type(within(dialog).getByLabelText('Importe'), '1825');
     await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USDUSD 50,00'));
-    expect(money(preview(dialog).textContent)).toContain('Tasa: 1 USD = VES 36,50 · manual · tasa del 30/10/2026');
+    expect(money(preview(dialog).textContent)).toContain('Se cobrará con 1 USD = VES 36,50 (manual · tasa del 30/10/2026)');
     expect(mockedRates).toHaveBeenCalledWith('tok', paymentDate(dialog), ['USD', 'VES']);
   });
 
@@ -966,7 +1013,7 @@ describe('DX-376: cobro en otra moneda que la del plan', () => {
     await waitFor(() => expect(money(preview(dialog).textContent)).toContain('Equivalente en USD50,00 USD'));
     const date = paymentDate(dialog);
     const [y, m, d] = date.split('-');
-    expect(money(preview(dialog).textContent)).toContain(`Tasa: 1 USD = 36,50 VES · automática · ${d}.${m}.${y}`);
+    expect(money(preview(dialog).textContent)).toContain(`Se cobrará con 1 USD = 36,50 VES (automática · ${d}.${m}.${y})`);
     expect(preview(dialog)).not.toHaveTextContent('US$');
   });
 

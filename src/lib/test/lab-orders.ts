@@ -52,6 +52,7 @@ export function makeLabOrder(overrides: Partial<LabOrder> = {}): LabOrder {
     material: 'Zirconio monolítico',
     instructions: null,
     clinicalRedacted: false,
+    cost: null,
     dueOn: '2026-11-20',
     sentAt: null,
     sentBy: null,

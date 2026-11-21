@@ -31,8 +31,17 @@ function PaymentMissingRateBadge({ payment }: { payment: Payment }) {
 }
 
 /** DX-375: la tasa que congeló un abono en otra moneda, bajo su importe, con el formato de la sede (DX-378). */
-function PaymentFrozenRate({ payment, fmt }: { payment: Payment; fmt: RegionalFormat | null }) {
-  const label = frozenRateLabel(payment, fmt);
+function PaymentFrozenRate({
+  payment,
+  fmt,
+  timeZone,
+}: {
+  payment: Payment;
+  fmt: RegionalFormat | null;
+  timeZone: string | null;
+}) {
+  // DX-586: con la tasa usada, «Tasa usada: … (BCV, fecha valor …)» o con la hora de la cotización.
+  const label = frozenRateLabel(payment, fmt, timeZone);
   if (!label) return null;
   return <span className="t-caption mt-0.5 block font-normal text-muted tabular-nums">{label}</span>;
 }
@@ -54,6 +63,8 @@ interface PlanPaymentsListProps {
   onViewAllocation?: (paymentId: string) => void;
   /** DX-375/DX-378/DX-386: formato de la sede para importe, día y tasa congelada; `null` mientras carga («—»). */
   fmt: RegionalFormat | null;
+  /** DX-586: zona de la sede, para la hora de la tasa usada; `null` mientras carga («—»). */
+  timeZone?: string | null;
   /** DX-515: anota el nº de la factura fiscal externa del abono (ADMIN y recepción). */
   onExternalInvoice?: (payment: Payment) => void;
   /** DX-389: abre el comprobante del cobro; solo ADMIN y recepción (y solo si el abono lo tiene). */
@@ -97,6 +108,7 @@ export function PlanPaymentsList({
   onAllocate,
   onViewAllocation,
   fmt,
+  timeZone,
   onExternalInvoice,
   onViewProof,
 }: PlanPaymentsListProps) {
@@ -167,7 +179,7 @@ export function PlanPaymentsList({
             <PaymentMissingRateBadge payment={p} />
             {sedeMoney(p.amount, p.currency, fmt)}
           </span>
-          <PaymentFrozenRate payment={p} fmt={fmt} />
+          <PaymentFrozenRate payment={p} fmt={fmt} timeZone={timeZone ?? null} />
         </span>
       ),
       mobileCell: (p) => sedeMoney(p.amount, p.currency, fmt),

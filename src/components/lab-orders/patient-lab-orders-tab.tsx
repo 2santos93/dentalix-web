@@ -3,14 +3,17 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { Ban, CheckCheck, FilePenLine, PackageCheck, Pencil, Plus, Printer, Send, Factory } from 'lucide-react';
+import { Ban, CheckCheck, CircleDollarSign, FilePenLine, PackageCheck, Pencil, Plus, Printer, Send, Factory } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getTokenRole } from '@/lib/auth/token-role';
 import {
   canCheckLabOrders,
   canPrintLabOrders,
   canSendLabOrders,
+  canSetLabOrderCost,
   canWriteLabOrders,
+  labOrderCostAmount,
+  labOrderCostOtherCurrency,
   labOrderNumberLabel,
   labOrderPrintHref,
   labOrderSteps,
@@ -38,6 +41,9 @@ const LabOrderFormDialog = dynamic(() => import('./lab-order-form-dialog').then(
   ssr: false,
 });
 const LabOrderStepDialog = dynamic(() => import('./lab-order-step-dialog').then((m) => m.LabOrderStepDialog), {
+  ssr: false,
+});
+const LabOrderCostDialog = dynamic(() => import('./lab-order-cost-dialog').then((m) => m.LabOrderCostDialog), {
   ssr: false,
 });
 const CancelLabOrderDialog = dynamic(() => import('./cancel-lab-order-dialog').then((m) => m.CancelLabOrderDialog), {
@@ -75,6 +81,10 @@ export const patientLabOrdersCopy = {
   correct: 'Corregir',
   cancel: 'Anular',
   print: 'Imprimir',
+  // DX-018-bis: lo que cobra el laboratorio (solo administración).
+  cost: 'Costo del laboratorio',
+  costValue: (amount: string) => `Costo ${amount}`,
+  costOtherCurrency: 'En otra moneda que el plan: no se descuenta de los honorarios',
 };
 
 const copy = patientLabOrdersCopy;
@@ -103,6 +113,7 @@ type Dialog =
   | { kind: 'form'; mode: LabOrderFormMode; key: number }
   | { kind: 'step'; step: LabOrderStepKind; order: LabOrder }
   | { kind: 'cancel'; order: LabOrder }
+  | { kind: 'cost'; order: LabOrder }
   | null;
 
 /**
@@ -118,6 +129,7 @@ export function PatientLabOrdersTab({ token, patientId, planItemId = null, onSho
   const canWrite = canWriteLabOrders(role);
   const actor = { canWrite, canSend: canSendLabOrders(role), canCheck: canCheckLabOrders(role) };
   const canPrint = canPrintLabOrders(role);
+  const canCost = canSetLabOrderCost(role);
   const [orders, setOrders] = useState<LabOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -209,6 +221,13 @@ export function PatientLabOrdersTab({ token, patientId, planItemId = null, onSho
         });
       }
     }
+    if (canCost && order.status !== 'CANCELLED') {
+      actions.push({
+        label: copy.cost,
+        icon: <CircleDollarSign aria-hidden />,
+        onSelect: () => setDialog({ kind: 'cost', order }),
+      });
+    }
     if (canPrint) {
       actions.push({
         label: copy.print,
@@ -260,7 +279,24 @@ export function PatientLabOrdersTab({ token, patientId, planItemId = null, onSho
       <span className="flex min-w-0 flex-col gap-0.5 [overflow-wrap:anywhere]">
         <span>{order.lab.name}</span>
         {order.service ? <span className="t-caption text-muted">{order.service.name}</span> : null}
+        {costLine(order)}
       </span>
+    );
+  }
+
+  /** DX-018-bis: el costo (la API solo lo manda a ADMIN). */
+  function costLine(order: LabOrder) {
+    const amount = labOrderCostAmount(order);
+    if (amount === null || order.cost === null) return null;
+    return (
+      <>
+        <span className="t-caption text-muted tabular-nums">
+          {copy.costValue(stamp.money(amount, order.cost.currency, order.locationId))}
+        </span>
+        {labOrderCostOtherCurrency(order) ? (
+          <span className="t-caption text-warning-text">{copy.costOtherCurrency}</span>
+        ) : null}
+      </>
     );
   }
 
@@ -390,6 +426,16 @@ export function PatientLabOrdersTab({ token, patientId, planItemId = null, onSho
           step={dialog.step}
           order={dialog.order}
           onDone={upsert}
+        />
+      ) : null}
+      {dialog?.kind === 'cost' ? (
+        <LabOrderCostDialog
+          key={`cost-${dialog.order.id}`}
+          open
+          onOpenChange={(o) => !o && closeDialog()}
+          token={token}
+          order={dialog.order}
+          onSaved={upsert}
         />
       ) : null}
       {dialog?.kind === 'cancel' ? (

@@ -567,6 +567,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
       receiptNumber: 'PRI-000007',
       exchangeRateCurrency: 'VES',
       frozenRate: null,
+      rateUsed: null,
       exchangeRateStatus: 'NOT_NEEDED',
       adjustments: [],
       collectedAmount: 50000,

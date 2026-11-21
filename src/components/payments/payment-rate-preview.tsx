@@ -29,7 +29,8 @@ export const ratePreviewCopy = {
   // DX-386: fuente automática sin la tasa del día todavía (el proveedor no la dio).
   unavailable: (date: string) =>
     `La tasa del proveedor para el ${date} aún no está disponible; reintentamos solos. El abono se guarda igual y queda «sin tasa» hasta que llegue.`,
-  rate: (pair: string, source: string, date: string) => `Tasa: ${pair} · ${source} · ${date}`,
+  /** DX-586: antes de confirmar, con qué tasa se cobrará: «Se cobrará con 1 USD = Bs. 918,77 (BCV, fecha valor 20/11/2026 · 21/11/2026)». */
+  rate: (pair: string, source: string, date: string) => `Se cobrará con ${pair} (${source} · ${date})`,
   typeAmount: 'Escribe el importe para ver cuánto cubre del plan.',
   equivalent: (currency: string) => `Equivalente en ${currency}`,
   pendingAfter: 'Pendiente tras el abono',
