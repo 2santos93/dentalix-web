@@ -237,6 +237,25 @@ describe('cashSessionDetail (DX-027)', () => {
     ).toBe('Deshacer llegada · En espera → Agendada');
     expect(patientFlowDetail({ reason: 'APPOINTMENT_MOVED' })).toBeNull();
   });
+
+  it('DX-265: «Ya llegué» del paciente dice desde dónde y el estado', () => {
+    expect(
+      patientFlowDetail({
+        reason: 'PATIENT_SELF_CHECK_IN',
+        origin: 'SEDE_QR',
+        status: { from: 'CONFIRMED', to: 'ARRIVED' },
+      }),
+    ).toBe('«Ya llegué» del paciente · con el QR de la sede · Confirmada → En espera');
+    expect(
+      patientFlowDetail({
+        reason: 'PATIENT_SELF_CHECK_IN',
+        origin: 'PATIENT_LINK',
+        status: { from: 'SCHEDULED', to: 'ARRIVED' },
+      }),
+    ).toBe('«Ya llegué» del paciente · desde el enlace de su cita · Agendada → En espera');
+    expect(isPatientOptOut({ reason: 'PATIENT_SELF_CHECK_IN', origin: 'SEDE_QR' })).toBe(true);
+    expect(locationCalendarDetail({ reason: 'CHECK_IN_QR_CREATED' })).toBe('Llegada de pacientes: QR generado');
+  });
 });
 
 const H23 = regionalFormat({ locale: 'es', hourCycle: 'h23' });

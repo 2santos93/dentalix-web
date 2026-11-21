@@ -221,6 +221,9 @@ const ORIGIN_LABELS: Record<AuditOrigin, string> = {
   PUBLIC_LINK: 'desde el enlace de la oferta',
   // DX-016: el paciente desde la página pública de reserva online.
   ONLINE_BOOKING: 'desde la reserva online',
+  // DX-265: «Ya llegué» desde el enlace de la cita o con el QR de la sede.
+  PATIENT_LINK: 'desde el enlace de su cita',
+  SEDE_QR: 'con el QR de la sede',
 };
 
 /**
@@ -258,6 +261,7 @@ const PATIENT_CONFIRMATION_REASONS = new Set([
  * DX-243: y los pasos del enlace de firma a distancia.
  * DX-361: y su respuesta al enlace de confirmación de la cita.
  * DX-572: y la apertura y la descarga de la orden con su enlace.
+ * DX-265: y su «Ya llegué» (enlace de la cita o QR de la sede).
  */
 export function isPatientOptOut(metadata: AuditMetadata): boolean {
   return (
@@ -267,6 +271,8 @@ export function isPatientOptOut(metadata: AuditMetadata): boolean {
     // DX-572: el paciente abre y descarga la orden con su enlace.
     metadata.reason === 'EXTERNAL_ORDER_COPY_OPENED' ||
     metadata.reason === 'EXTERNAL_ORDER_COPY_DOWNLOADED' ||
+    // DX-265: el paciente marca «Ya llegué».
+    metadata.reason === 'PATIENT_SELF_CHECK_IN' ||
     (metadata.reason !== undefined &&
       (PATIENT_SIGNATURE_REASONS.has(metadata.reason) ||
         PATIENT_CONFIRMATION_REASONS.has(metadata.reason)))
@@ -829,6 +835,8 @@ const APPOINTMENT_STATUS_LABELS: Record<string, string> = {
 const PATIENT_FLOW_REASONS: Record<string, string> = {
   PATIENT_FLOW: 'Flujo en la clínica',
   ARRIVAL_UNDONE: 'Deshacer llegada',
+  // DX-265: el propio paciente marcó su llegada.
+  PATIENT_SELF_CHECK_IN: '«Ya llegué» del paciente',
 };
 
 /**
@@ -836,8 +844,13 @@ const PATIENT_FLOW_REASONS: Record<string, string> = {
  * después («Flujo en la clínica · Confirmada → En espera»). null si no lo es.
  */
 export function patientFlowDetail(metadata: AuditMetadata): string | null {
-  const what = metadata.reason ? PATIENT_FLOW_REASONS[metadata.reason] : undefined;
-  if (!what) return null;
+  const found = metadata.reason ? PATIENT_FLOW_REASONS[metadata.reason] : undefined;
+  if (!found) return null;
+  // DX-265: «Ya llegué · con el QR de la sede · Confirmada → En espera».
+  const what =
+    metadata.reason === 'PATIENT_SELF_CHECK_IN' && metadata.origin
+      ? `${found} · ${ORIGIN_LABELS[metadata.origin]}`
+      : found;
   const status = metadata.status;
   if (!status) return what;
   const label = (code: string) => APPOINTMENT_STATUS_LABELS[code] ?? code;
@@ -1180,6 +1193,10 @@ export function clinicSettingsDetail(metadata: AuditMetadata): string | null {
 }
 
 const LOCATION_CALENDAR_REASONS: Record<string, string> = {
+  // DX-265: «Ya llegué» de la sede (ajustes y QR; nunca el token).
+  CHECK_IN_SETTINGS_UPDATED: 'Llegada de pacientes: ajustes cambiados',
+  CHECK_IN_QR_CREATED: 'Llegada de pacientes: QR generado',
+  CHECK_IN_QR_REVOKED: 'Llegada de pacientes: QR retirado',
   WORKING_WEEKDAYS_CHANGED: 'Días hábiles cambiados',
   HOLIDAY_CREATED: 'Festivo añadido',
   HOLIDAY_UPDATED: 'Festivo editado',

@@ -7,6 +7,7 @@ import {
   type PublicConfirmation,
 } from '../../lib/appointments/confirmations-api';
 import { ApiError } from '../../lib/api/client';
+import { getLinkArrival, postLinkArrival } from '../../lib/appointments/arrival-api';
 import { PUBLIC_REGIONAL_VE } from '@/lib/test/document-regional';
 
 // jest.mock no reescribe alias: rutas relativas (ver otros *.test.tsx).
@@ -15,12 +16,33 @@ jest.mock('../../lib/appointments/confirmations-api', () => ({
   respondPublicConfirmation: jest.fn(),
   setPublicWantsEarlier: jest.fn(),
 }));
+// DX-265: «Ya llegué». Por defecto no se ofrece (la página sigue como siempre).
+jest.mock('../../lib/appointments/arrival-api', () => ({
+  getLinkArrival: jest.fn(),
+  postLinkArrival: jest.fn(),
+}));
 jest.mock('../../lib/api/client', () => ({
   // La clase real: `apiErrorMessage` la reconoce con `instanceof`.
   ApiError: jest.requireActual('../../lib/api/api-error').ApiError,
 }));
 
 const get = getPublicConfirmation as jest.Mock;
+const getArrival = getLinkArrival as jest.Mock;
+const postArrival = postLinkArrival as jest.Mock;
+const UNAVAILABLE = {
+  state: 'UNAVAILABLE',
+  opensAt: null,
+  closesAt: null,
+  result: null,
+  turnNumber: null,
+  appointment: null,
+};
+const ARRIVAL_APPOINTMENT = {
+  patientFirstName: 'Ana',
+  start: '2026-10-20T14:00:00.000Z',
+  locationName: 'Sede Norte',
+  ...PUBLIC_REGIONAL_VE,
+};
 const respond = respondPublicConfirmation as jest.Mock;
 const setEarlier = setPublicWantsEarlier as jest.Mock;
 
@@ -63,6 +85,71 @@ describe('PublicConfirmationView', () => {
   beforeEach(() => {
     get.mockReset();
     respond.mockReset();
+    getArrival.mockReset();
+    postArrival.mockReset();
+    getArrival.mockResolvedValue(UNAVAILABLE);
+  });
+
+  describe('DX-265 · «Ya llegué»', () => {
+    it('dentro de la ventana: el botón marca la llegada y dice «Toma asiento» con el turno', async () => {
+      get.mockResolvedValue(view());
+      getArrival.mockResolvedValueOnce({
+        ...UNAVAILABLE,
+        state: 'AVAILABLE',
+        opensAt: '2026-10-20T13:30:00.000Z',
+        closesAt: '2026-10-20T14:30:00.000Z',
+        appointment: ARRIVAL_APPOINTMENT,
+      });
+      postArrival.mockResolvedValueOnce({
+        ...UNAVAILABLE,
+        state: 'ARRIVED',
+        result: 'TAKE_SEAT',
+        turnNumber: 7,
+        appointment: ARRIVAL_APPOINTMENT,
+      });
+      getArrival.mockResolvedValue({
+        ...UNAVAILABLE,
+        state: 'ARRIVED',
+        result: 'TAKE_SEAT',
+        turnNumber: 7,
+        appointment: ARRIVAL_APPOINTMENT,
+      });
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Ya llegué' }));
+      expect(postArrival).toHaveBeenCalledWith('tok-1');
+      expect(await screen.findByRole('heading', { name: 'Listo, Ana' })).toBeInTheDocument();
+      expect(screen.getByText(/toma asiento/i)).toBeInTheDocument();
+      expect(screen.getByTestId('arrival-turn')).toHaveTextContent('Tu turno: 7');
+    });
+
+    it('con algo pendiente dice «pasa por recepción» sin decir qué; el enlace caducado no tapa la llegada', async () => {
+      get.mockResolvedValue(view({ status: 'EXPIRED', appointment: null }));
+      getArrival.mockResolvedValue({
+        ...UNAVAILABLE,
+        state: 'ARRIVED',
+        result: 'SEE_RECEPTION',
+        turnNumber: 3,
+        appointment: ARRIVAL_APPOINTMENT,
+      });
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      expect(await screen.findByText(/pasa por recepción/i)).toBeInTheDocument();
+      expect(screen.queryByText(/ya no es válido/i)).not.toBeInTheDocument();
+      expect(document.body.textContent).not.toMatch(/anamnesis|consentimiento/i);
+    });
+
+    it('antes de la ventana dice desde qué hora, sin botón', async () => {
+      get.mockResolvedValue(view());
+      getArrival.mockResolvedValue({
+        ...UNAVAILABLE,
+        state: 'TOO_EARLY',
+        opensAt: '2026-10-20T13:30:00.000Z',
+        closesAt: '2026-10-20T14:30:00.000Z',
+        appointment: ARRIVAL_APPOINTMENT,
+      });
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      expect(await screen.findByText(/desde las 9:30/i)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Ya llegué' })).not.toBeInTheDocument();
+    });
   });
 
   it('muestra "cargando" y luego clínica, fecha, hora, profesional y sede sin responder nada', async () => {
