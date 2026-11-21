@@ -21,6 +21,8 @@ export type MergeFieldSource = Schemas['MergeFieldSource'];
 export type MergeFieldChoices = Schemas['MergeFieldChoicesDto'];
 export type MergePatientsInput = Schemas['MergePatientsDto'];
 export type MergeResult = Schemas['MergeResultDto'];
+export type MergeLeftover = Schemas['MergeLeftoverDto'];
+export type MergeLeftoversResult = Schemas['MergeLeftoversResultDto'];
 
 /** La lista vive bajo Pacientes, sin entrada propia en el menú (presupuesto de 900 px). */
 export const DUPLICATES_HREF = '/patients/duplicados';
@@ -64,6 +66,28 @@ export function getMergePreview(token: string, keptId: string, absorbedId: strin
 /** `POST /patient-duplicates/merge` → 201. Sin deshacer. */
 export function mergePatients(token: string, input: MergePatientsInput): Promise<MergeResult> {
   return apiFetch<MergeResult>('/patient-duplicates/merge', { method: 'POST', body: input, token });
+}
+
+/**
+ * DX-266-bis: `GET /patient-duplicates/merge-leftovers?keptId` — los pacientes
+ * fusionados en este a los que les quedó algo (una escritura que llegó en el
+ * mismo instante que la fusión). Vacío casi siempre.
+ */
+export async function listMergeLeftovers(token: string, keptId: string): Promise<MergeLeftover[]> {
+  const search = new URLSearchParams({ keptId });
+  const res = await apiFetch<{ items: MergeLeftover[] }>(`/patient-duplicates/merge-leftovers?${search.toString()}`, {
+    token,
+  });
+  return res.items;
+}
+
+/** DX-266-bis: `POST /patient-duplicates/merge-leftovers` → 201. Idempotente. */
+export function moveMergeLeftovers(token: string, absorbedId: string): Promise<MergeLeftoversResult> {
+  return apiFetch<MergeLeftoversResult>('/patient-duplicates/merge-leftovers', {
+    method: 'POST',
+    body: { absorbedId },
+    token,
+  });
 }
 
 /** Por qué sale una pareja: una etiqueta corta (chip) y la frase que lo explica. */
@@ -119,6 +143,24 @@ export const MERGE_CATEGORY_COPY: Record<Exclude<MergeCategory, 'other'>, (n: nu
 };
 
 const COUNTED = Object.keys(MERGE_CATEGORY_COPY) as Exclude<MergeCategory, 'other'>[];
+
+/**
+ * DX-266-bis: las líneas de lo que quedó en un absorbido, en el orden de la
+ * ficha. Aquí `other` sí se cuenta (la API lo suma): «2 registros más».
+ */
+export function leftoverLines(counts: readonly { category: MergeCategory; count: number }[]): string[] {
+  const byCategory = new Map(counts.map((c) => [c.category, c.count]));
+  const lines = COUNTED.flatMap((category) => {
+    const n = byCategory.get(category) ?? 0;
+    return n > 0 ? [MERGE_CATEGORY_COPY[category](n)] : [];
+  });
+  const other = byCategory.get('other') ?? 0;
+  if (other > 0) {
+    const more = lines.length > 0;
+    lines.push(plural(other, more ? 'registro más' : 'registro', more ? 'registros más' : 'registros'));
+  }
+  return lines;
+}
 
 /** Las líneas «3 citas», «1 receta»… de un lado, en el orden de la ficha; sin ceros. */
 export function countLines(side: MergeSide): string[] {
