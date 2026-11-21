@@ -24,7 +24,7 @@ import {
   type InstallmentTerms,
 } from '@/lib/treatment-plans/installment-simulation';
 import { documentFormat, documentTexts } from '@/lib/format/document-format';
-import { convertWithRate, paymentRateCopy, ratePairLabel } from '@/lib/payments/payment-rate';
+import { convertWithRate, ratePairLabel, rateSourceText } from '@/lib/payments/payment-rate';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { useLocationsState } from '@/lib/locations/use-locations-state';
 import { locationCurrency } from '@/lib/locations/location-settings';
@@ -286,7 +286,7 @@ export function PlanPresentationView({
           amount: doc.amount(convertWithRate(model.total, secondResult.value), secondResult.value.currency),
           note: copy.secondNote(
             ratePairLabel(quote.currency, secondResult.value, doc.amount),
-            paymentRateCopy.source[secondResult.value.source],
+            rateSourceText(secondResult.value.source, secondResult.value.valueDate, doc.civilDate),
             doc.civilDate(secondResult.value.date),
             secondResult.value.currency,
           ),

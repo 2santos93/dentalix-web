@@ -16,7 +16,8 @@ export type PaymentWithoutRate = components['schemas']['PaymentWithoutRateDto'];
 /** Ajustes › Tasa de cambio (DX-374). */
 export const EXCHANGE_RATE_SETTINGS_HREF = '/settings/tasa-de-cambio';
 
-// Copy como constantes (i18n-ready). Ningún texto nombra un país ni un banco.
+// Copy como constantes (i18n-ready). Solo la fuente BCV (DX-585), que elige la
+// clínica, nombra un banco.
 export const withoutRateCopy = {
   title: (n: number) => (n === 1 ? '1 abono sin tasa' : `${n} abonos sin tasa`),
   body: 'El saldo todavía no los cuenta: falta la tasa de cambio de su día.',
@@ -31,6 +32,8 @@ export const withoutRateCopy = {
   // DX-386: con la fuente automática la tasa la da el proveedor: registrar
   // una manual no sirve mientras no se pase a manual.
   automatic: 'La tasa del proveedor aún no está disponible; reintentamos solos y el saldo los cuenta en cuanto llegue.',
+  // DX-585: con la fuente BCV, VES y EUR esperan la del BCV; el resto, la del proveedor.
+  bcv: 'La tasa de su día aún no está disponible (la del BCV para VES y EUR; la del proveedor para el resto); reintentamos solos y el saldo los cuenta en cuanto llegue.',
   switchToManualLink: 'Pasar a tasa manual en Ajustes › Tasa de cambio',
   switchToManualHint:
     'Solo si no puedes esperar: pasa a la tasa manual y registra la de su día; servirá de respaldo a estos abonos si el proveedor no la da. Desde el cambio, la clínica registra la tasa de cada día.',
@@ -124,11 +127,16 @@ function AdminAction({
   // posterior, pasar a manual no le sirve a ninguno: no se propone (ni mientras
   // no se sabe qué día es hoy en la sede).
   const today = timeZone ? civilDateInZone(new Date(), timeZone) : null;
+  // Con BCV (DX-585) pasar a manual también es la salida si no se puede esperar.
   const automatic =
-    settings.settings.source === 'AUTOMATIC' && today !== null && payments.some((p) => p.paidOn >= today);
+    settings.settings.source !== 'MANUAL' && today !== null && payments.some((p) => p.paidOn >= today);
   return (
     <>
-      {days.provider ? <p className="mt-1">{withoutRateCopy.automatic}</p> : null}
+      {days.provider ? (
+        <p className="mt-1">
+          {settings.settings.source === 'BCV' ? withoutRateCopy.bcv : withoutRateCopy.automatic}
+        </p>
+      ) : null}
       {days.manual || days.backup ? (
         <p className="mt-1">
           <Link href={EXCHANGE_RATE_SETTINGS_HREF} className={linkClass}>

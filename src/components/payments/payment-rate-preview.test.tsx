@@ -40,3 +40,55 @@ describe('PaymentRatePreview al cobrar (DX-472)', () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('PaymentRatePreview con la fuente BCV (DX-585)', () => {
+  const fmt = jest.requireActual('../../lib/format/regional-format').regionalFormat({
+    locale: 'es-VE',
+    hourCycle: 'h12',
+  });
+
+  function renderBcv(day: Record<string, unknown>, paymentCurrency = 'VES') {
+    render(
+      <PaymentRatePreview
+        state={{ status: 'ready', rates: day, retry: jest.fn() } as unknown as ExchangeRatesState}
+        amount={null}
+        paymentCurrency={paymentCurrency}
+        planCurrency="USD"
+        planBalance="loading"
+        onRetryBalance={jest.fn()}
+        date="2026-11-22"
+        fmt={fmt}
+      />,
+    );
+  }
+
+  it('la tasa dice «BCV» con su fecha valor', () => {
+    renderBcv({
+      base: 'USD',
+      source: 'BCV',
+      rates: { VES: 918.7662 },
+      rateDate: '2026-11-22',
+      bcv: { valueDate: '2026-11-20', fetchedAt: '2026-11-20T21:00:00.000Z' },
+    });
+    expect(screen.getByText(/· BCV, fecha valor 20\/11\/2026 · 22\/11\/2026$/)).toBeInTheDocument();
+  });
+
+  it('una moneda que no sale del BCV no lleva fecha valor', () => {
+    renderBcv(
+      {
+        base: 'USD',
+        source: 'BCV',
+        rates: { COP: 4000 },
+        rateDate: '2026-11-22',
+        bcv: { valueDate: '2026-11-20', fetchedAt: '2026-11-20T21:00:00.000Z' },
+      },
+      'COP',
+    );
+    expect(screen.getByText(/· BCV · 22\/11\/2026$/)).toBeInTheDocument();
+  });
+
+  it('sin tasa del BCV lo dice, sin tomar la del proveedor', () => {
+    renderBcv({ base: 'USD', source: 'BCV', rates: {}, rateDate: '2026-11-22', bcv: null });
+    expect(screen.getByText(ratePreviewCopy.missingBcv('VES', '22/11/2026'))).toBeInTheDocument();
+  });
+});

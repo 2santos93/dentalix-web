@@ -40,7 +40,7 @@ export const publicBudgetCopy = {
 type SecondCurrency = NonNullable<PublicBudgetPresentation['secondCurrency']>;
 
 function rateSource(source: string): string | null {
-  return source === 'AUTOMATIC' || source === 'MANUAL' ? paymentRateCopy.source[source] : null;
+  return source === 'AUTOMATIC' || source === 'MANUAL' || source === 'BCV' ? paymentRateCopy.source[source] : null;
 }
 
 const copy = publicBudgetCopy;

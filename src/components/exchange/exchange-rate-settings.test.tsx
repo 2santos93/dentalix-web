@@ -294,6 +294,90 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     expect(screen.getByText(copy.sourceSaved)).toBeInTheDocument();
   });
 
+  // DX-585: tercera fuente, la tasa oficial del BCV.
+  describe('fuente BCV oficial (DX-585)', () => {
+    const BCV = { ...AUTO, source: 'BCV' } as const;
+    const bcvRates = (valueDate: string | null) =>
+      mockedRates.mockImplementation((_token, date) =>
+        Promise.resolve({
+          base: 'USD',
+          source: 'BCV',
+          rates: (valueDate ? { VES: 918.7662, EUR: 0.90860842 } : {}) as Record<string, number>,
+          rateDate: date,
+          bcv: valueDate ? { valueDate, fetchedAt: '2026-10-29T21:00:00.000Z' } : null,
+        }),
+      );
+
+    it('el diálogo ofrece las tres fuentes, con la explicación del BCV, y guarda BCV', async () => {
+      const onRatesChanged = jest.fn();
+      window.addEventListener(EXCHANGE_RATES_CHANGED_EVENT, onRatesChanged);
+      afterTest(() => window.removeEventListener(EXCHANGE_RATES_CHANGED_EVENT, onRatesChanged));
+      mockedGet.mockResolvedValue(AUTO);
+      mockedList.mockResolvedValue([]);
+      mockedSave.mockResolvedValue(BCV);
+      const user = setupUser();
+      renderView();
+      await user.click(await screen.findByRole('button', { name: copy.change }));
+      const dialog = await screen.findByRole('dialog', { name: copy.sourceDialogTitle });
+      const radios = within(dialog).getAllByRole('radio');
+      expect(radios).toHaveLength(3);
+      const bcv = within(dialog).getByRole('radio', { name: /BCV oficial \(Venezuela\)/ });
+      expect(within(dialog).getByText(copy.sourceHints.BCV)).toBeInTheDocument();
+      expect(copy.sourceHints.BCV).toMatch(/Banco Central de Venezuela/);
+      expect(copy.sourceHints.BCV).toMatch(/fecha valor/);
+      expect(copy.sourceHints.BCV).toMatch(/resto de monedas, con la automática/);
+      await user.click(bcv);
+      await user.click(within(dialog).getByRole('button', { name: copy.save }));
+      await waitFor(() => expect(mockedSave).toHaveBeenCalledWith('tok', 'BCV'));
+      await waitFor(() => expect(onRatesChanged).toHaveBeenCalledTimes(1));
+      expect(await screen.findByTestId('exchange-rate-source')).toHaveTextContent('BCV oficial (Venezuela)');
+      expect(screen.getByText(copy.ratesHint.BCV)).toBeInTheDocument();
+    });
+
+    it('«Tasa de hoy» dice que VES y EUR salen del BCV con su fecha valor', async () => {
+      mockedGet.mockResolvedValue(BCV);
+      mockedList.mockResolvedValue([]);
+      bcvRates('2026-10-29');
+      renderView();
+      expect(await screen.findByTestId('exchange-rate-today')).toHaveTextContent(fmt.number(918.7662, { min: 0, max: 8 }));
+      expect(
+        screen.getByText(todayRatesCopy.bcv(fmt.civilDate('2026-10-30'), fmt.civilDate('2026-10-29'))),
+      ).toBeInTheDocument();
+      expect(todayRatesCopy.bcv('30/10/2026', '29/10/2026')).toContain('BCV (fecha valor 29/10/2026)');
+      expect(screen.queryByText(todayRatesCopy.missingBcv)).not.toBeInTheDocument();
+      // Solo las monedas de las sedes: con VES la API no consulta al proveedor.
+      expect(mockedRates).toHaveBeenCalledWith('tok', '2026-10-30', ['VES']);
+    });
+
+    it('sin tasa del BCV que rija hoy, lo dice sin inventar otra', async () => {
+      mockedGet.mockResolvedValue(BCV);
+      mockedList.mockResolvedValue([]);
+      bcvRates(null);
+      renderView();
+      expect(await screen.findByTestId('exchange-rate-today')).toHaveTextContent(todayRatesCopy.missing);
+      expect(screen.getByText(todayRatesCopy.missingBcv)).toBeInTheDocument();
+      expect(screen.getByText(todayRatesCopy.bcv(fmt.civilDate('2026-10-30'), null))).toBeInTheDocument();
+    });
+
+    it('registrar una tasa manual con BCV avisa de que no se usa', async () => {
+      mockedGet.mockResolvedValue(BCV);
+      mockedList.mockResolvedValue([]);
+      bcvRates('2026-10-29');
+      const user = setupUser();
+      renderView();
+      await user.click(await screen.findByRole('button', { name: copy.register }));
+      const dialog = await screen.findByRole('dialog', { name: rateFormCopy.title });
+      expect(within(dialog).getByText(rateFormCopy.bcvNote)).toBeInTheDocument();
+      expect(within(dialog).queryByText(rateFormCopy.automaticNote)).not.toBeInTheDocument();
+    });
+
+    it('cada fuente tiene etiqueta, explicación y nota de tasas manuales', () => {
+      for (const map of [copy.sourceLabels, copy.sourceHints, copy.ratesHint]) {
+        expect(Object.keys(map).sort()).toEqual(['AUTOMATIC', 'BCV', 'MANUAL']);
+      }
+    });
+  });
+
   // DX-384: hasta cuántos días puede tener la última tasa registrada.
   describe('plazo de la última tasa registrada (DX-384)', () => {
     const maxAge = copy.maxAge;
@@ -602,16 +686,28 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
     expect(within(row).queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('ningún texto de la pantalla nombra un país ni un banco central', () => {
+  it('ningún texto de la pantalla nombra un país ni un banco central, salvo los de la fuente BCV', () => {
     const backup = rateFormCopy.backup;
+    // DX-585: la fuente BCV la elige la clínica; solo sus textos nombran el banco y el país.
+    const withoutBcv = <T extends object>(o: T) => Object.fromEntries(Object.entries(o).filter(([k]) => k !== 'BCV'));
+    const { bcvNote, ...genericForm } = rateFormCopy;
+    const { missingBcv, ...genericToday } = todayRatesCopy;
+    expect(bcvNote).toMatch(/BCV/);
+    expect(missingBcv).toMatch(/BCV/);
+    expect(copy.sourceLabels.BCV).toBe('BCV oficial (Venezuela)');
     const texts = JSON.stringify({
-      exchangeRateCopy,
-      rateFormCopy,
+      exchangeRateCopy: {
+        ...exchangeRateCopy,
+        sourceLabels: withoutBcv(exchangeRateCopy.sourceLabels),
+        sourceHints: withoutBcv(exchangeRateCopy.sourceHints),
+        ratesHint: withoutBcv(exchangeRateCopy.ratesHint),
+      },
+      rateFormCopy: genericForm,
       RATE_INPUT_COPY,
       correctRateCopy,
       fns: [
-        copy.ratesHint,
-        todayRatesCopy,
+        withoutBcv(copy.ratesHint),
+        genericToday,
         todayRatesCopy.automatic('30/10/2026'),
         todayRatesCopy.noCurrencies('USD'),
         copy.colRate('USD'),

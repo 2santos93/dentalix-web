@@ -726,7 +726,9 @@ screen it opens; a group with no visible entries disappears.
   `warning-text` with the alert icon — never red, nothing is broken. Every variant opens the same
   `Popover` (all rates, source and day; ADMIN gets «Ajustes de la tasa»), so the control is
   one button with one behaviour for every role. Its accessible name starts with the visible text
-  («Tasa de hoy: 1 USD = 918,77 Bs., fuente automática»). It never shows a loading or error state:
+  («Tasa de hoy: 1 USD = 918,77 Bs., fuente automática»). With the BCV source (DX-585) the rows that
+  come from the BCV (VES/EUR) say «BCV · fecha valor 20/11/2026» in the popover and «fuente BCV,
+  fecha valor …» in the name; any other currency still reads «Automática». It never shows a loading or error state:
   until the first good read, or if it fails, there is simply no row (the rate a payment uses is
   decided by the API when it is recorded). Single-currency clinics never see it. *Budget note:*
   the row costs 44px of the expanded footer (48px in the rail), so with the indicator visible the

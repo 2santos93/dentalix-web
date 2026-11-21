@@ -13489,14 +13489,26 @@ export interface components {
             promises: components["schemas"]["PaymentPromiseDto"][];
         };
         /**
-         * @description DX-374: de dónde salen las tasas para la clínica: AUTOMATIC (el proveedor) o MANUAL (las que registró la clínica para ese día).
+         * @description DX-374: de dónde salen las tasas para la clínica: AUTOMATIC (el proveedor) o MANUAL (las que registró la clínica para ese día). DX-585: BCV: VES y EUR de la tasa oficial del BCV que rige ese día (ver `bcv`) y el resto del proveedor.
          * @enum {string}
          */
-        ExchangeRateSource: "AUTOMATIC" | "MANUAL";
+        ExchangeRateSource: "AUTOMATIC" | "MANUAL" | "BCV";
+        BcvRateInfoDto: {
+            /**
+             * @description «Fecha Valor» (AAAA-MM-DD) de la tasa del BCV: la más reciente que no es posterior al día pedido (un fin de semana o feriado, la del último día hábil).
+             * @example 2026-11-24
+             */
+            valueDate: string;
+            /**
+             * Format: date-time
+             * @description Cuándo se consultó la tasa del BCV.
+             */
+            fetchedAt: string;
+        };
         RatesResponseDto: {
             /** @enum {string} */
             base: "USD";
-            /** @description DX-374: de dónde salen las tasas para la clínica: AUTOMATIC (el proveedor) o MANUAL (las que registró la clínica para ese día). */
+            /** @description DX-374: de dónde salen las tasas para la clínica: AUTOMATIC (el proveedor) o MANUAL (las que registró la clínica para ese día). DX-585: BCV: VES y EUR de la tasa oficial del BCV que rige ese día (ver `bcv`) y el resto del proveedor. */
             source: components["schemas"]["ExchangeRateSource"];
             /** @description Units of each currency per 1 USD, for the requested date, keyed by its ISO 4217 code (3 letters). Con fuente MANUAL solo trae las monedas con tasa registrada ese día: una moneda que NO aparece está «sin tasa» (no se inventa, no se toma la de otro día ni se pide al proveedor) y convertirla responde 400 EXCHANGE_RATE_MISSING. */
             rates: {
@@ -13507,6 +13519,8 @@ export interface components {
              * @example 2026-10-30
              */
             rateDate: string;
+            /** @description DX-585: solo con fuente BCV. La tasa del BCV de la que salen VES y EUR (como mucho 7 días anterior al día pedido); null si no hay ninguna y VES y EUR no aparecen en `rates` («sin tasa»). Con las otras fuentes no viene. */
+            bcv?: components["schemas"]["BcvRateInfoDto"] | null;
         };
         ConvertResponseDto: {
             /** @example 100 */
@@ -13532,12 +13546,12 @@ export interface components {
         };
         ExchangeRateSettingsDto: {
             /**
-             * @description De dónde sale la tasa del día: AUTOMATIC (proveedor) o MANUAL (la que registra la clínica).
+             * @description De dónde sale la tasa del día: AUTOMATIC (proveedor), MANUAL (la que registra la clínica) o BCV (DX-585: VES y EUR del BCV, el resto del proveedor).
              * @example MANUAL
              */
             source: components["schemas"]["ExchangeRateSource"];
             /**
-             * @description Día civil (sede principal) desde el que rige la fuente MANUAL: los días anteriores se convierten con la tasa automática. Null con AUTOMATIC.
+             * @description Día civil (sede principal) desde el que rige la fuente MANUAL: los días anteriores se convierten con la tasa automática. Null con AUTOMATIC y con BCV.
              * @example 2026-10-30
              */
             manualSince: string | null;
@@ -13566,7 +13580,7 @@ export interface components {
         };
         UpdateExchangeRateSettingsDto: {
             /**
-             * @description AUTOMATIC: la tasa del día sale del proveedor (por defecto). MANUAL: desde hoy, la que registra la clínica para cada día y moneda; sin ella, la moneda queda «sin tasa» (salvo el plazo de `manualRateMaxAgeDays`). Los días anteriores al paso a MANUAL siguen con la automática. Sin este campo la fuente no cambia.
+             * @description AUTOMATIC: la tasa del día sale del proveedor (por defecto). MANUAL: desde hoy, la que registra la clínica para cada día y moneda; sin ella, la moneda queda «sin tasa» (salvo el plazo de `manualRateMaxAgeDays`). Los días anteriores al paso a MANUAL siguen con la automática. BCV (DX-585): VES y EUR de la tasa oficial del Banco Central de Venezuela (la de la «Fecha Valor» que rige el día); el resto de monedas, del proveedor; `manualSince` queda null, como con AUTOMATIC. Sin este campo la fuente no cambia.
              * @example MANUAL
              */
             source?: components["schemas"]["ExchangeRateSource"];
@@ -13665,7 +13679,7 @@ export interface components {
              * @example $
              */
             label: string | null;
-            /** @description De dónde sale la tasa: AUTOMATIC (proveedor) o MANUAL. */
+            /** @description De dónde sale la tasa (la fuente de la clínica): AUTOMATIC (proveedor), MANUAL o BCV (DX-585: VES y EUR del BCV, el resto del proveedor). */
             source: components["schemas"]["ExchangeRateSource"];
             /**
              * @description Día civil (AAAA-MM-DD) de la tasa: hoy en la sede activa o, con MANUAL y el plazo de DX-384, el último día anterior con tasa registrada.
@@ -13674,9 +13688,14 @@ export interface components {
             date: string;
             /**
              * Format: date-time
-             * @description Con AUTOMATIC, cuándo se guardó la tasa del proveedor. null con MANUAL o sin tasa.
+             * @description Con AUTOMATIC, cuándo se guardó la tasa del proveedor. Con BCV, cuándo se consultó la tasa del BCV si la fila usa VES o EUR (si no, la del proveedor). null con MANUAL o sin tasa.
              */
             fetchedAt: string | null;
+            /**
+             * @description DX-585: con BCV y una fila que usa VES o EUR (como moneda o como referencia), la «Fecha Valor» (AAAA-MM-DD) de la tasa del BCV: la más reciente que no es posterior a `date` (un fin de semana o feriado, la del último día hábil). null en cualquier otro caso.
+             * @example 2026-11-24
+             */
+            valueDate: string | null;
         };
         ExchangeHeaderDto: {
             /** @description Si el menú enseña el indicador. false con «Nunca», sin sede utilizable, sin moneda de referencia o sin ninguna moneda que enseñar (en automático: ninguna aceptada distinta de la de referencia). */
@@ -22551,7 +22570,7 @@ export interface components {
              * @example 1
              */
             toPerBase: number;
-            /** @description AUTOMATIC: la del proveedor; MANUAL: la que registró la clínica (para ese día o, DX-384, la última dentro del plazo de la clínica) */
+            /** @description AUTOMATIC: la del proveedor; MANUAL: la que registró la clínica (para ese día o, DX-384, la última dentro del plazo de la clínica); BCV (DX-585): VES y EUR de la tasa oficial del BCV que regía ese día, el resto del proveedor */
             source: components["schemas"]["ExchangeRateSource"];
             /**
              * @description Día civil (AAAA-MM-DD) de la tasa USADA. Es el del abono en su sede salvo con fuente MANUAL cuando la clínica no registró la de ese día y se usó la última dentro de su plazo (DX-384, `manualRateMaxAgeDays`): entonces es anterior al del abono. Se congela con el abono: registrar después la tasa del día no lo cambia.
