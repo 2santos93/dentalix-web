@@ -9,8 +9,16 @@ import {
   recordOpeningBalancePayment,
   recordPayment,
   recordSplitPayment,
+  type Payment,
   type SplitPaymentLineInput,
 } from '@/lib/payments/payments-api';
+import {
+  paymentRateCopy,
+  quoteFromRates,
+  ratePairLabel,
+  rateUsedMatchesQuote,
+  rateUsedPair,
+} from '@/lib/payments/payment-rate';
 import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { Button } from '@/components/ui/button';
@@ -37,7 +45,7 @@ import { CurrencySelect } from '@/components/shared/currency-select';
 import { BillablePlanField, BillablePlansEmpty } from './billable-plan-field';
 import { useBillablePlans } from './use-billable-plans';
 import { usePaymentLocationHint } from './use-payment-location-hint';
-import { useExchangeRates } from './use-exchange-rates';
+import { useExchangeRates, type ExchangeRatesState } from './use-exchange-rates';
 import { PaymentRatePreview, ratePreviewCopy, type PreviewPlanBalance } from './payment-rate-preview';
 import { usePlanBalance } from './use-plan-balance';
 import { readyPeriodLock, usePeriodLock } from './use-period-lock';
@@ -121,6 +129,24 @@ export const recordPaymentCopy = {
     'Este medio exige el comprobante del cobro: regístralo como un abono suelto o elige otro medio.',
 };
 const copy = recordPaymentCopy;
+
+/**
+ * DX-586: el aviso de que la API cobró con otra tasa que la que se veía al
+ * confirmar (se registró una tasa manual nueva, llegó la del BCV…), o `null`
+ * si es la misma, no hubo conversión o no había tasa a la vista con que comparar.
+ */
+export function rateChangedNotice(
+  payment: Pick<Payment, 'currency' | 'frozenRate' | 'rateUsed'>,
+  rates: ExchangeRatesState,
+  money: (amount: number, currency: string) => string,
+): string | null {
+  const used = payment.rateUsed;
+  const target = payment.frozenRate?.currency;
+  if (!used || !target || rates.status !== 'ready') return null;
+  const shown = quoteFromRates(rates.rates, payment.currency, target);
+  if (!shown || rateUsedMatchesQuote(used, payment.currency, shown)) return null;
+  return paymentRateCopy.changed(rateUsedPair(used, money), ratePairLabel(payment.currency, shown, money));
+}
 
 /** La casilla del saldo a favor del cobro dividido (`SplitPaymentSummary`). */
 const CONFIRM_CREDIT_ID = 'rp-confirm-credit';
@@ -505,8 +531,13 @@ export function RecordPaymentModal({
         saved.receiptNumber,
       );
       const withoutRate = saved.payments.some((p) => p.exchangeRateStatus === 'MISSING');
-      onRecorded(withoutRate ? `${recorded} ${copy.recordedWithoutRate}` : recorded, {
-        persistent: withoutRate || Boolean(saved.receiptNumber),
+      // DX-586: si la tasa cambió entre abrir el cobro y confirmarlo, se dice (una vez por moneda).
+      const changed = [
+        ...new Set(saved.payments.map((p) => rateChangedNotice(p, rates, money)).filter((n) => n !== null)),
+      ];
+      const base = withoutRate ? `${recorded} ${copy.recordedWithoutRate}` : recorded;
+      onRecorded(changed.length > 0 ? `${base} ${changed.join(' ')}` : base, {
+        persistent: withoutRate || Boolean(saved.receiptNumber) || changed.length > 0,
         paymentIds: saved.payments.map((p) => p.id),
       });
     } catch (err) {
@@ -681,8 +712,11 @@ export function RecordPaymentModal({
               : money(0, saved.currency),
           )}`
         : recorded;
-      onRecorded(withoutRate ? `${withChange} ${copy.recordedWithoutRate}` : withChange, {
-        persistent: withoutRate || savedChange != null,
+      // DX-586: si la tasa cambió entre abrir el cobro y confirmarlo, se dice.
+      const changed = rateChangedNotice(saved, rates, money);
+      const notice = withoutRate ? `${withChange} ${copy.recordedWithoutRate}` : withChange;
+      onRecorded(changed ? `${notice} ${changed}` : notice, {
+        persistent: withoutRate || savedChange != null || changed !== null,
         paymentIds: [saved.id],
       });
     } catch (err) {

@@ -210,6 +210,7 @@ describe('DX-376: abono en otra moneda', () => {
       source: 'MANUAL',
       date: '2026-10-17',
     },
+    rateUsed: null,
     equivalentAmount: 50,
   };
 
@@ -232,6 +233,7 @@ describe('DX-376: abono en otra moneda', () => {
         source: 'AUTOMATIC',
         date: '2026-10-17',
       },
+      rateUsed: null,
       equivalentAmount: 45.63,
     };
     render(<PaymentReceiptDocument receipt={inVes(other)} />);
@@ -243,8 +245,8 @@ describe('DX-376: abono en otra moneda', () => {
   // DX-384: la clínica no registró la tasa del día del abono y se usó la última, de un día anterior.
   it('si la tasa es de un día anterior al del abono dice «tasa del …» en el formato de la sede', () => {
     const earlier: PaymentReceipt['exchangeRate'] = {
-      ...FROZEN,
-      rate: { ...FROZEN.rate!, date: '2026-10-16' },
+      ...FROZEN!,
+      rate: { ...FROZEN!.rate!, date: '2026-10-16' },
     };
     render(<PaymentReceiptDocument receipt={inVes(earlier)} />);
     const doc = text(screen.getByTestId('receipt-document'));
@@ -254,7 +256,7 @@ describe('DX-376: abono en otra moneda', () => {
 
   it('un abono «sin tasa» lo dice en lugar de la tasa y el equivalente', () => {
     render(
-      <PaymentReceiptDocument receipt={inVes({ status: 'MISSING', rate: null, equivalentAmount: null })} />,
+      <PaymentReceiptDocument receipt={inVes({ status: 'MISSING', rate: null, rateUsed: null, equivalentAmount: null })} />,
     );
     const doc = text(screen.getByTestId('receipt-document'));
     expect(doc).toContain('Tasa aplicada: sin tasa de cambio de su día');
@@ -265,6 +267,45 @@ describe('DX-376: abono en otra moneda', () => {
     render(<PaymentReceiptDocument receipt={paymentReceiptFixture()} />);
     expect(screen.queryByText(/tasa aplicada/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/equivalente en/i)).not.toBeInTheDocument();
+  });
+
+  // DX-586: qué tasa y cuándo (los recibos congelados antes siguen con «Tasa aplicada»).
+  it('con la tasa usada: «Tasa usada: … (BCV, fecha valor …)»', () => {
+    const bcv: PaymentReceipt['exchangeRate'] = {
+      ...FROZEN!,
+      rate: { ...FROZEN!.rate!, fromPerBase: 918.7662, source: 'BCV', ref: 'BCV:2026-10-16', valueDate: '2026-10-16' },
+      rateUsed: {
+        rate: 918.7662,
+        unit: 'USD',
+        currency: 'VES',
+        source: 'BCV',
+        valueDate: '2026-10-16',
+        quotedAt: '2026-10-17T14:15:00.000Z',
+        ref: 'BCV:2026-10-16',
+      },
+    };
+    render(<PaymentReceiptDocument receipt={inVes(bcv)} />);
+    const doc = text(screen.getByTestId('receipt-rate'));
+    expect(doc).toBe('Tasa de cambioTasa usada: 1 USD = 918,77 VES (BCV, fecha valor 16/10/2026)');
+  });
+
+  it('con la tasa usada manual: la fuente y la hora de la cotización en la zona de la sede', () => {
+    const manual: PaymentReceipt['exchangeRate'] = {
+      ...FROZEN!,
+      rateUsed: {
+        rate: 36.5,
+        unit: 'USD',
+        currency: 'VES',
+        source: 'MANUAL',
+        valueDate: null,
+        quotedAt: '2026-10-17T18:35:00.000Z',
+        ref: 'MANUAL:r-1',
+      },
+    };
+    render(<PaymentReceiptDocument receipt={inVes(manual)} />);
+    const doc = text(screen.getByTestId('receipt-rate'));
+    expect(doc).toMatch(/^Tasa de cambioTasa usada: 1 USD = 36,50 VES \(manual, 17\/10\/2026.*\)$/);
+    expect(doc).not.toContain('Tasa aplicada');
   });
 
   it('ningún texto nombra un país ni un banco central', () => {
@@ -331,6 +372,39 @@ describe('DX-390: cobro dividido', () => {
     expect(text(lines)).toContain('Pago móvil · Referencia PM-77');
     // El «Valor» de un abono suelto no sale.
     expect(screen.queryByText('Valor')).not.toBeInTheDocument();
+  });
+
+  it('DX-586: la forma de pago en otra moneda dice con qué tasa se cobró', () => {
+    const ves = {
+      ...line(2, 100000, 'VES', 100000),
+      exchangeRate: {
+        status: 'FROZEN' as const,
+        rate: null,
+        rateUsed: {
+          rate: 4000,
+          unit: 'USD',
+          currency: 'VES',
+          source: 'BCV' as const,
+          valueDate: '2026-10-16',
+          quotedAt: '2026-10-17T14:15:00.000Z',
+          ref: 'BCV:2026-10-16',
+        },
+        equivalentAmount: 100000,
+      },
+    };
+    render(
+      <PaymentReceiptDocument
+        receipt={paymentReceiptFixture({
+          split: {
+            lines: [line(1, 50, 'USD', 200000), ves],
+            total: { currency: 'USD', amount: 75 },
+          },
+        })}
+      />,
+    );
+    const rates = screen.getAllByTestId('receipt-split-rate');
+    expect(rates).toHaveLength(1);
+    expect(text(rates[0])).toBe('Tasa usada: 1 USD = 4000,00 VES (BCV, fecha valor 16/10/2026)');
   });
 
   it('con una forma de pago sin tasa, lo dice y no inventa el total', () => {

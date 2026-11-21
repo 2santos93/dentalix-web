@@ -70,7 +70,7 @@ describe('PaymentRatePreview con la fuente BCV (DX-585)', () => {
       rateDate: '2026-11-22',
       bcv: { valueDate: '2026-11-20', fetchedAt: '2026-11-20T21:00:00.000Z' },
     });
-    expect(screen.getByText(/· BCV, fecha valor 20\/11\/2026 · 22\/11\/2026$/)).toBeInTheDocument();
+    expect(screen.getByText(/\(BCV, fecha valor 20\/11\/2026 · 22\/11\/2026\)$/)).toBeInTheDocument();
   });
 
   it('una moneda que no sale del BCV no lleva fecha valor', () => {
@@ -84,7 +84,7 @@ describe('PaymentRatePreview con la fuente BCV (DX-585)', () => {
       },
       'BRL',
     );
-    expect(screen.getByText(/· BCV · 22\/11\/2026$/)).toBeInTheDocument();
+    expect(screen.getByText(/\(BCV · 22\/11\/2026\)$/)).toBeInTheDocument();
   });
 
   it('sin tasa del BCV lo dice, sin tomar la del proveedor', () => {

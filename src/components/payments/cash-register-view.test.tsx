@@ -129,6 +129,7 @@ const anaCash: CashPayment = {
   adjustments: [],
   collectedAmount: 150000.5,
   hasProof: false,
+  rateUsed: null,
   reconciled: false,
 };
 const betoCard: CashPayment = {
@@ -351,6 +352,34 @@ it('DX-377: cada abono muestra su medio de pago y su referencia', async () => {
   render(<CashRegisterView token="tok" />);
   expect((await screen.findAllByText('Pago móvil')).length).toBeGreaterThan(0);
   expect(screen.getAllByText('Ref. 0412 555').length).toBeGreaterThan(0);
+});
+
+it('DX-586: un abono que convirtió dice con qué tasa se cobró; uno sin conversión, nada', async () => {
+  mockedList.mockResolvedValue(
+    response({
+      items: [
+        {
+          ...anaCash,
+          rateUsed: {
+            rate: 918.7662,
+            unit: 'USD',
+            currency: 'VES',
+            source: 'BCV',
+            valueDate: '2026-10-14',
+            quotedAt: '2026-10-15T14:15:00.000Z',
+            ref: 'BCV:2026-10-14',
+          },
+        },
+        betoCard,
+      ],
+    }),
+  );
+  render(<CashRegisterView token="tok" />);
+  const table = await screen.findByRole('table', { name: /abonos/i });
+  const rates = await within(table).findAllByTestId('cash-rate-used');
+  expect(rates).toHaveLength(1);
+  expect(money(rates[0].textContent)).toBe('Tasa usada: 1 USD = VES 918,77 (BCV, fecha valor 14/10/2026)');
+  expect(within(within(table).getByRole('row', { name: /ana gómez/i })).getByTestId('cash-rate-used')).toBeInTheDocument();
 });
 
 it('marca el alcance de sede: "Todas las sedes" sin sede activa, el nombre con una', async () => {

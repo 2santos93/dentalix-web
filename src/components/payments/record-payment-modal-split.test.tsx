@@ -140,6 +140,7 @@ function savedSplit(): SplitPayment {
     receiptNumber: 'PRI-000007',
     exchangeRateCurrency: 'VES',
     frozenRate: null,
+    rateUsed: null,
     exchangeRateStatus: 'NOT_NEEDED' as const,
     adjustments: [],
     collectedAmount: amount,
