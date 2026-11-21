@@ -84,7 +84,10 @@ export const inClinicCopy = {
   // DX-492: el sillón de cada paciente y cómo cambiarlo.
   moveTo: 'Mover a…',
   moveToFor: (patient: string) => `Mover a… la cita de ${patient}`,
+  // DX-588: el turno del día que sale en el televisor de la sala; se le dice al paciente.
+  turn: (n: number) => `Turno ${n}`,
 };
+
 
 type GroupKey = keyof typeof inClinicCopy.groups;
 const GROUPS: GroupKey[] = ['waiting', 'inChair', 'readyForCheckout'];
@@ -375,6 +378,7 @@ function InClinicGroup({
           {items.map((item) => {
             const name = patientName(item);
             const tz = view.timeZone;
+            const turn = item.turnNumber;
             return (
               <li
                 key={item.appointmentId}
@@ -389,6 +393,11 @@ function InClinicGroup({
                       <span className="truncate">{name}</span>
                       {/* DX-247: la misma alerta que la tarjeta de la agenda. */}
                       <MedicalAlertIndicator flags={item.medicalAlerts} patientName={name} size="default" />
+                      {turn !== null ? (
+                        <Badge variant="neutral" data-testid="in-clinic-turn" className="tabular-nums">
+                          {inClinicCopy.turn(turn)}
+                        </Badge>
+                      ) : null}
                     </p>
                     <p className="text-xs tabular-nums text-muted">
                       {inClinicCopy.appointmentAt(timeInZone(item.start, tz, fmt))}

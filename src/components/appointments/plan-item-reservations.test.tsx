@@ -78,6 +78,7 @@ function item(overrides: Partial<InClinicItem> = {}): InClinicItem {
     overbooked: false,
     triageFlags: [],
     triageNote: null,
+    turnNumber: null,
     ...overrides,
   };
 }

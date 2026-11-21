@@ -1,4 +1,5 @@
 import { canManageCommissions } from '@/lib/commissions/commissions-api';
+import { canManageWaitingRoomScreens } from '@/lib/waiting-room/waiting-room-api';
 import type { ComponentType } from 'react';
 import {
   Armchair,
@@ -32,6 +33,7 @@ import {
   LifeBuoy,
   ListChecks,
   ListOrdered,
+  MonitorPlay,
   NotebookPen,
   Pill,
   ScanBarcode,
@@ -235,6 +237,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Los sillones de cada sede, su orden en la agenda y su profesional por defecto.',
         icon: Armchair,
         visible: canManageChairs,
+      },
+      // DX-588: el televisor de la sala de espera.
+      {
+        href: '/settings/pantallas-de-sala',
+        label: 'Pantallas de sala de espera',
+        description: 'El televisor de la sala: quién espera y a quién llaman, por un enlace de solo lectura.',
+        icon: MonitorPlay,
+        visible: canManageWaitingRoomScreens,
       },
       // DX-542.
       {

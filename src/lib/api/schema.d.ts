@@ -7380,6 +7380,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/waiting-room-screens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pantallas de sala de espera (vivas primero) */
+        get: operations["WaitingRoomScreensController_list"];
+        put?: never;
+        /**
+         * Crear una pantalla para una sede
+         * @description Devuelve el token del enlace `/sala/<token>` UNA sola vez; en la BD solo queda su hash.
+         */
+        post: operations["WaitingRoomScreensController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/waiting-room-screens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Renombrar o ajustar una pantalla */
+        patch: operations["WaitingRoomScreensController_update"];
+        trace?: never;
+    };
+    "/api/v1/waiting-room-screens/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revocar una pantalla
+         * @description El televisor deja de ver el tablero en su siguiente petición («Esta pantalla ya no está activa»). Idempotente.
+         */
+        post: operations["WaitingRoomScreensController_revoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/waiting-room/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * El tablero de la sala de espera de la sede de la pantalla
+         * @description Quién espera (por orden de llegada) y quién pasa a consulta (con sillón y profesional). Nombre visible «Ana R.» o «Turno 7» según la pantalla; nunca motivo, tratamiento, teléfono, documento ni importes. El televisor lo pide cada `refreshSeconds`.
+         */
+        get: operations["PublicWaitingRoomController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quote-follow-up-settings": {
         parameters: {
             query?: never;
@@ -11410,7 +11488,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE" | "ORTHO_CASE" | "ORTHO_VISIT" | "DENTAL_LAB" | "DENTAL_LAB_ORDER" | "COMMISSION_SETTLEMENT" | "POST_OP_CHECK" | "PATIENT_ACCESS_LINK" | "ONLINE_BOOKING" | "LEAD" | "BANK_ACCOUNT" | "BANK_STATEMENT_IMPORT" | "BANK_RECONCILIATION_MATCH";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE" | "ORTHO_CASE" | "ORTHO_VISIT" | "DENTAL_LAB" | "DENTAL_LAB_ORDER" | "COMMISSION_SETTLEMENT" | "POST_OP_CHECK" | "PATIENT_ACCESS_LINK" | "ONLINE_BOOKING" | "LEAD" | "BANK_ACCOUNT" | "BANK_STATEMENT_IMPORT" | "BANK_RECONCILIATION_MATCH" | "WAITING_ROOM_SCREEN";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -17419,6 +17497,8 @@ export interface components {
             seatedAt: string | null;
             /** Format: date-time */
             readyForCheckoutAt: string | null;
+            /** @description DX-588: turno del día en la sede, dado al marcar «Llegó» (estable mientras dure la visita; el que ve el paciente en la pantalla de sala de espera en modo «Número de turno»). null si llegó antes de DX-588. */
+            turnNumber: number | null;
             /** @description Minutos (enteros, reloj del servidor) en el grupo actual: esperando desde la llegada, en el sillón desde que se sentó, o por cobrar desde que quedó listo. */
             minutesInStatus: number;
             /** @description Minutos que esperó desde la llegada hasta el sillón (o que lleva esperando). */
@@ -27473,6 +27553,145 @@ export interface components {
         ConfirmPatientImportDto: {
             /** @description SKIP: no tocar a los pacientes que ya existen · FILL_EMPTY: rellenar solo sus campos vacíos (nunca pisa un dato) */
             duplicateMode: components["schemas"]["PatientImportDuplicateMode"];
+        };
+        /**
+         * @description `NAME_INITIAL`: primer nombre e inicial del primer apellido («Ana R.», por defecto). `TURN_NUMBER`: el turno del día en la sede («Turno 7»), sin ningún nombre.
+         * @enum {string}
+         */
+        WaitingRoomNameMode: "NAME_INITIAL" | "TURN_NUMBER";
+        WaitingRoomScreenDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            locationId: string;
+            /** @example Televisor de la sala */
+            name: string;
+            /** @description `NAME_INITIAL`: primer nombre e inicial del primer apellido («Ana R.», por defecto). `TURN_NUMBER`: el turno del día en la sede («Turno 7»), sin ningún nombre. */
+            nameMode: components["schemas"]["WaitingRoomNameMode"];
+            /**
+             * @description Mensajes rotativos del televisor (horario, avisos).
+             * @example [
+             *       "Horario: lunes a viernes de 8:00 a 17:00"
+             *     ]
+             */
+            messages: string[];
+            /** @description Aviso sonoro al pasar alguien a consulta (si el navegador lo permite). */
+            soundEnabled: boolean;
+            /**
+             * Format: date-time
+             * @description Revocada: el televisor muestra «Esta pantalla ya no está activa».
+             */
+            revokedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateWaitingRoomScreenDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @example Televisor de la sala */
+            name: string;
+            /** @description `NAME_INITIAL`: primer nombre e inicial del primer apellido («Ana R.», por defecto). `TURN_NUMBER`: el turno del día en la sede («Turno 7»), sin ningún nombre. */
+            nameMode?: components["schemas"]["WaitingRoomNameMode"];
+            messages?: string[];
+            soundEnabled?: boolean;
+        };
+        CreatedWaitingRoomScreenDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            locationId: string;
+            /** @example Televisor de la sala */
+            name: string;
+            /** @description `NAME_INITIAL`: primer nombre e inicial del primer apellido («Ana R.», por defecto). `TURN_NUMBER`: el turno del día en la sede («Turno 7»), sin ningún nombre. */
+            nameMode: components["schemas"]["WaitingRoomNameMode"];
+            /**
+             * @description Mensajes rotativos del televisor (horario, avisos).
+             * @example [
+             *       "Horario: lunes a viernes de 8:00 a 17:00"
+             *     ]
+             */
+            messages: string[];
+            /** @description Aviso sonoro al pasar alguien a consulta (si el navegador lo permite). */
+            soundEnabled: boolean;
+            /**
+             * Format: date-time
+             * @description Revocada: el televisor muestra «Esta pantalla ya no está activa».
+             */
+            revokedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description Token del enlace `/sala/<token>` (43 caracteres base64url). Se muestra UNA sola vez: en la BD solo queda su hash. */
+            token: string;
+        };
+        UpdateWaitingRoomScreenDto: {
+            name?: string;
+            /** @description `NAME_INITIAL`: primer nombre e inicial del primer apellido («Ana R.», por defecto). `TURN_NUMBER`: el turno del día en la sede («Turno 7»), sin ningún nombre. */
+            nameMode?: components["schemas"]["WaitingRoomNameMode"];
+            messages?: string[];
+            soundEnabled?: boolean;
+        };
+        PublicWaitingRoomWaitingItemDto: {
+            /**
+             * @description Clave opaca y estable entre sondeos (no es un id interno).
+             * @example 3f2a9c1b7d4e6a08
+             */
+            key: string;
+            /**
+             * @description «Ana R.» o «Turno 7», según el modo de la pantalla.
+             * @example Ana R.
+             */
+            label: string;
+            /** @description Minutos desde que llegó. */
+            minutesWaiting: number;
+        };
+        PublicWaitingRoomCalledItemDto: {
+            /**
+             * @description Clave opaca y estable entre sondeos (no es un id interno).
+             * @example 9b0c4e2f1a7d3c55
+             */
+            key: string;
+            /** @example José P. */
+            label: string;
+            /** @example Sillón 2 */
+            chairName: string | null;
+            /** @example Dra. María González */
+            providerName: string | null;
+            /** @description Minutos desde que pasó al sillón. */
+            minutesSinceCalled: number;
+        };
+        PublicWaitingRoomBoardDto: {
+            /** @example Televisor de la sala */
+            screenName: string;
+            /** @example Sede Chacao */
+            locationName: string;
+            nameMode: components["schemas"]["WaitingRoomNameMode"];
+            messages: string[];
+            soundEnabled: boolean;
+            /** @example America/Caracas */
+            timeZone: string;
+            /** @example es-VE */
+            locale: string;
+            /** @enum {string} */
+            hourCycle: "h12" | "h23";
+            /**
+             * Format: date-time
+             * @description Reloj del servidor.
+             */
+            now: string;
+            /** @description Cada cuántos segundos volver a pedir el tablero. */
+            refreshSeconds: number;
+            /** @description En espera, por orden de llegada. */
+            waiting: components["schemas"]["PublicWaitingRoomWaitingItemDto"][];
+            /** @description Cuántos esperan en total (aunque la lista se corte). */
+            waitingTotal: number;
+            /** @description Pasando a consulta: quien acaba de pasar, primero. */
+            called: components["schemas"]["PublicWaitingRoomCalledItemDto"][];
+            /** @description Cuántos están en el sillón en total. */
+            calledTotal: number;
         };
         LocationQuoteFollowUpSettingsDto: {
             /** Format: uuid */
@@ -53847,6 +54066,202 @@ export interface operations {
             };
             /** @description El lote no está terminado o hay pacientes con actividad */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    WaitingRoomScreensController_list: {
+        parameters: {
+            query?: {
+                /** @description Solo las pantallas de esta sede; sin ella, las de las sedes permitidas. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitingRoomScreenDto"][];
+                };
+            };
+            /** @description Solo administración gestiona las pantallas de sala de espera. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    WaitingRoomScreensController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWaitingRoomScreenDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedWaitingRoomScreenDto"];
+                };
+            };
+            /** @description Nombre vacío o de más de 60, más de 5 mensajes o alguno de más de 140 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona las pantallas de sala de espera. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada o retirada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    WaitingRoomScreensController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWaitingRoomScreenDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitingRoomScreenDto"];
+                };
+            };
+            /** @description Campo inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona las pantallas de sala de espera. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pantalla no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La pantalla está revocada */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    WaitingRoomScreensController_revoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitingRoomScreenDto"];
+                };
+            };
+            /** @description Solo administración gestiona las pantallas de sala de espera. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pantalla no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicWaitingRoomController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicWaitingRoomBoardDto"];
+                };
+            };
+            /** @description `WAITING_ROOM_SCREEN_INACTIVE` «Esta pantalla ya no está activa.»: token malformado, desconocido, de otra clínica, revocado o de una sede retirada (la misma respuesta para todos). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

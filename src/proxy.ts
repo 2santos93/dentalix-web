@@ -76,7 +76,7 @@ export const HEALTH_FORM_HEADERS: Record<string, string> = {
   'X-Robots-Tag': 'noindex, nofollow',
 };
 
-const HEALTH_FORM_PREFIXES = ['/anamnesis', '/firmar', '/hueco', '/copia', '/receta', '/certificado', '/pago', '/orden', '/resumen', '/conformidad', '/mi-clinica', '/reservar'];
+const HEALTH_FORM_PREFIXES = ['/anamnesis', '/firmar', '/hueco', '/copia', '/receta', '/certificado', '/pago', '/orden', '/resumen', '/conformidad', '/mi-clinica', '/reservar', '/sala'];
 
 function isHealthFormPath(pathname: string): boolean {
   return HEALTH_FORM_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));

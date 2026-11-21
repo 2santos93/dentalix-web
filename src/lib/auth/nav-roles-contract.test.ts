@@ -183,6 +183,7 @@ const SETTINGS_CONTRACT: Record<string, Contract> = {
   '/settings/horarios': g('GET /locations/schedule'),
   '/settings/tipos-de-cita': w('POST /appointment-types', 'GET /appointment-types'),
   '/settings/sillones': w('POST /chairs', 'GET /chairs'),
+  '/settings/pantallas-de-sala': w('POST /waiting-room-screens', 'GET /waiting-room-screens'),
   '/settings/equipos': w('POST /equipment', 'GET /equipment'),
   '/settings/ofertas-de-hueco': w('PUT /slot-offer-settings', 'GET /slot-offer-settings'),
   '/settings/reserva-online': w('PUT /online-booking/settings', 'GET /online-booking/settings'),

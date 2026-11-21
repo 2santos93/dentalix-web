@@ -73,6 +73,7 @@ function item(overrides: Partial<InClinicItem> & { appointmentId: string }): InC
     overbooked: false,
     triageFlags: [],
     triageNote: null,
+    turnNumber: null,
     ...overrides,
   };
 }
@@ -109,6 +110,24 @@ function staticState(overrides: Partial<InClinicState>): InClinicState {
   return { view: null, loading: false, error: null, localeMissing: null, noLocation: false, reload: jest.fn(), ...overrides };
 }
 const noRunner = { pendingId: null, run: jest.fn() };
+
+describe('InClinicPanel: turno del día (DX-588)', () => {
+  it('chip «Turno N» en la tarjeta de quien tiene turno; nada en quien no', () => {
+    const withTurn = item({ appointmentId: 'a1', turnNumber: 7 });
+    const withoutTurn = item({ appointmentId: 'a2', turnNumber: null });
+    render(
+      <InClinicPanel
+        state={staticState({ view: view({ waiting: [withTurn], inChair: [withoutTurn] }) })}
+        role="RECEPTION"
+        runner={noRunner}
+      />,
+    );
+    const turns = screen.getAllByTestId('in-clinic-turn');
+    expect(turns).toHaveLength(1);
+    expect(turns[0]).toHaveTextContent('Turno 7');
+    expect(turns[0].closest('[data-appointment-id]')).toHaveAttribute('data-appointment-id', 'a1');
+  });
+});
 
 describe('InClinicPanel: sillón y «Mover a…» (DX-492)', () => {
   const chair = { id: 'ch-1', name: 'Sillón 1', active: true };

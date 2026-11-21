@@ -184,6 +184,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   BANK_ACCOUNT: 'Cuenta de conciliación',
   BANK_STATEMENT_IMPORT: 'Extracto del banco',
   BANK_RECONCILIATION_MATCH: 'Emparejado con el banco',
+  // DX-588: el televisor de la sala de espera (alta, edición y revocación).
+  WAITING_ROOM_SCREEN: 'Pantalla de sala de espera',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
