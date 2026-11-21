@@ -34,6 +34,11 @@ export function canCheckLabOrders(role: ClinicRole | null): boolean {
   return role === 'ADMIN' || role === 'DENTIST';
 }
 
+/** DX-018-bis: el costo del laboratorio de una orden (LAB_ORDER_COST_ROLES): solo ADMIN. */
+export function canSetLabOrderCost(role: ClinicRole | null): boolean {
+  return role === 'ADMIN';
+}
+
 /** La prescripción imprimible (`GET /lab-orders/:id/print`): CLINICAL_ROLES. */
 export function canPrintLabOrders(role: ClinicRole | null): boolean {
   return role === 'ADMIN' || role === 'DENTIST' || role === 'ASSISTANT';

@@ -106,7 +106,7 @@ export function makePreview(over: Partial<CommissionPreview> = {}): CommissionPr
     canClose: true,
     blocker: null,
     blockerMessage: null,
-    deductionsAvailable: { labCost: false, cardFee: false },
+    deductionsAvailable: { labCost: true, cardFee: true },
     ...over,
   };
 }
