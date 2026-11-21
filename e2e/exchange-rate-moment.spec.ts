@@ -58,8 +58,13 @@ async function apiPut(request: APIRequestContext, session: ApiSession, path: str
   expect(res.ok(), `PUT ${path} falló: ${await res.text()}`).toBeTruthy();
 }
 
-/** Clínica de Venezuela (VES), que acepta USD y VES con «Bs.», con un paciente y un plan aceptado de 1.000 USD. */
-async function venezuelanClinic(request: APIRequestContext, tag: string): Promise<Clinic> {
+/** Clínica de Venezuela (VES), que acepta USD y VES con «Bs.», con un paciente y un plan en USD aceptado. */
+async function venezuelanClinic(
+  request: APIRequestContext,
+  tag: string,
+  /** Deja la tasa de hoy antes del plan: el precio de catálogo (VES) se compara con el plan en USD. */
+  withRate: (session: ApiSession) => Promise<void>,
+): Promise<Clinic> {
   const email = `tasa.${tag}.${suffix}@example.com`;
   const session = await registerClinicViaApi(request, {
     subdomain: `tasa-${tag}-${suffix}`.slice(0, 40),
@@ -78,12 +83,14 @@ async function venezuelanClinic(request: APIRequestContext, tag: string): Promis
     docNumber: `V${tag}${suffix}`.slice(0, 20),
     sex: 'F',
   });
+  await withRate(session);
   const catalog = await apiPost<{ id: string }>(request, session, '/catalog/items', {
     code: `tm-${tag}-${suffix}`.slice(0, 40),
     kind: 'PROCEDURE',
     labelEs: `Corona ${tag}`,
     color: '#3366CC',
-    defaultPrice: 1000,
+    // En VES (la moneda de la sede): en el plan en USD queda por encima de lo que se cobra.
+    defaultPrice: 1_000_000,
   });
   const plan = await apiPost<{ id: string }>(request, session, `/patients/${patient.id}/treatment-plans`, {
     currency: 'USD',
@@ -145,25 +152,26 @@ test.describe('Tasa del momento (DX-586)', () => {
   test.describe.configure({ mode: 'serial' });
 
   test.beforeAll(async ({ request }) => {
-    bcv = await venezuelanClinic(request, 'bcv');
-    await apiPut(request, bcv.session, '/exchange/settings', { source: 'BCV' });
-    // La tasa del BCV falso la guarda el worker de la API al arrancar.
-    await expect
-      .poll(
-        async () => {
-          const res = await request.get(`${API_URL}/exchange/rates?date=${TODAY}&currencies=VES`, {
-            headers: bcv!.session.headers,
-          });
-          return res.ok() ? ((await res.json()) as { bcv?: { valueDate: string } | null }).bcv?.valueDate : null;
-        },
-        { message: 'la API no tiene la tasa del BCV falso de hoy', timeout: 60_000 },
-      )
-      .toBe(TODAY);
-
-    manual = await venezuelanClinic(request, 'man');
-    await apiPut(request, manual.session, '/exchange/settings', { source: 'MANUAL' });
-    // La primera del día: rige desde el inicio del día.
-    await apiPost(request, manual.session, '/exchange/manual-rates', { date: TODAY, currency: 'VES', rate: 36.5 });
+    bcv = await venezuelanClinic(request, 'bcv', async (session) => {
+      await apiPut(request, session, '/exchange/settings', { source: 'BCV' });
+      // La tasa del BCV falso la guarda el worker de la API al arrancar.
+      await expect
+        .poll(
+          async () => {
+            const res = await request.get(`${API_URL}/exchange/rates?date=${TODAY}&currencies=VES`, {
+              headers: session.headers,
+            });
+            return res.ok() ? ((await res.json()) as { bcv?: { valueDate: string } | null }).bcv?.valueDate : null;
+          },
+          { message: 'la API no tiene la tasa del BCV falso de hoy', timeout: 60_000 },
+        )
+        .toBe(TODAY);
+    });
+    manual = await venezuelanClinic(request, 'man', async (session) => {
+      await apiPut(request, session, '/exchange/settings', { source: 'MANUAL' });
+      // La primera del día: rige desde el inicio del día.
+      await apiPost(request, session, '/exchange/manual-rates', { date: TODAY, currency: 'VES', rate: 36.5 });
+    });
   });
 
   test('1440: «Actualizar tasa» consulta, lo dice y queda deshabilitado con el tiempo que falta', async ({ page }) => {
