@@ -24,12 +24,18 @@ const MANUAL = {
   manualSince: '2026-10-01',
   manualRateMaxAgeDays: 3,
   baseCurrency: 'USD',
+  acceptedCurrencies: [],
+  rateReferenceCurrency: null,
+  showRateInHeader: null,
 };
 const AUTOMATIC = {
   source: 'AUTOMATIC' as const,
   manualSince: null,
   manualRateMaxAgeDays: 3,
   baseCurrency: 'USD',
+  acceptedCurrencies: [],
+  rateReferenceCurrency: null,
+  showRateInHeader: null,
 };
 
 beforeEach(() => {

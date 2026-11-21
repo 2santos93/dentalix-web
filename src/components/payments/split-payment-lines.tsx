@@ -7,6 +7,7 @@ import { Callout } from '@/components/ui/callout';
 import { Checkbox } from '@/components/ui/checkbox';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
+import { useAcceptedPaymentCurrencies } from '@/components/exchange/exchange-header-context';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { PaymentAdjustmentsPreview } from './payment-adjustments-preview';
 import { InlineError } from '@/components/errors/inline-error';
@@ -138,6 +139,8 @@ export function SplitLineFields({
 }) {
   const n = index + 1;
   const prefix = `rp-line-${n}`;
+  // DX-584: solo las monedas que acepta la clínica.
+  const acceptedCurrencies = useAcceptedPaymentCurrencies();
   const titleId = `${prefix}-title`;
   const currency = line.currency || defaultCurrency;
   // Un <legend> dentro de un <div> no nombra el <fieldset>: el título visible
@@ -183,6 +186,7 @@ export function SplitLineFields({
         <FormField htmlFor={`${prefix}-currency`} label="Moneda">
           <CurrencySelect
             id={`${prefix}-currency`}
+            only={acceptedCurrencies}
             className="h-11 sm:h-10"
             token={token}
             value={currency}

@@ -37,6 +37,8 @@ import { RadioCard, RadioGroup } from '@/components/ui/radio-group';
 import { SectionHeader } from '@/components/ui/section-header';
 import { SettingRow, SettingRows } from '@/components/settings/settings-page';
 import { Skeleton } from '@/components/ui/skeleton';
+import { notifyExchangeRatesChanged } from '@/lib/exchange/exchange-header-api';
+import { ClinicCurrenciesSettings } from './clinic-currencies-settings';
 import { TodayRates } from './today-rates';
 
 export const exchangeRateCopy = {
@@ -392,6 +394,15 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
         </p>
       </section>
 
+      <ClinicCurrenciesSettings
+        token={token}
+        settings={state}
+        onSaved={(saved) => {
+          setState((prev) => (prev ? { ...prev, ...saved } : prev));
+          notifyExchangeRatesChanged();
+        }}
+      />
+
       <section aria-labelledby={ratesHeadingId} className="flex flex-col gap-4">
         <SectionHeader
           titleId={ratesHeadingId}
@@ -429,6 +440,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
           onSaved={(saved) => {
             setState((prev) => (prev ? { ...prev, ...saved } : prev));
             setVersion((v) => v + 1);
+            notifyExchangeRatesChanged();
             setNotice(copy.sourceSaved);
           }}
         />
@@ -442,6 +454,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
           current={state.manualRateMaxAgeDays}
           onSaved={(saved) => {
             setState((prev) => (prev ? { ...prev, ...saved } : prev));
+            notifyExchangeRatesChanged();
             setNotice(copy.maxAge.saved);
           }}
         />
@@ -458,6 +471,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
           onSaved={(rate) => {
             setState((prev) => (prev ? { ...prev, rates: sortRates([rate, ...prev.rates]) } : prev));
             setVersion((v) => v + 1);
+            notifyExchangeRatesChanged();
             setNotice(copy.rateSaved(rate.currency));
           }}
         />
@@ -481,6 +495,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
                 : prev,
             );
             setVersion((v) => v + 1);
+            notifyExchangeRatesChanged();
             setNotice(copy.rateCorrected(saved.currency));
           }}
           onInUse={(id) =>
