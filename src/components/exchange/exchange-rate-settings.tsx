@@ -37,15 +37,24 @@ import { RadioCard, RadioGroup } from '@/components/ui/radio-group';
 import { SectionHeader } from '@/components/ui/section-header';
 import { SettingRow, SettingRows } from '@/components/settings/settings-page';
 import { Skeleton } from '@/components/ui/skeleton';
+import { notifyExchangeRatesChanged } from '@/lib/exchange/exchange-header-api';
+import { ClinicCurrenciesSettings } from './clinic-currencies-settings';
 import { TodayRates } from './today-rates';
 
 export const exchangeRateCopy = {
   sourceHeading: 'De dónde sale la tasa',
-  sourceLabels: { AUTOMATIC: 'Automática', MANUAL: 'Manual' } satisfies Record<ExchangeRateSource, string>,
+  /** El orden es el de las opciones del diálogo. */
+  sourceLabels: {
+    AUTOMATIC: 'Automática',
+    MANUAL: 'Manual',
+    BCV: 'BCV oficial',
+  } satisfies Record<ExchangeRateSource, string>,
   sourceHints: {
     AUTOMATIC: 'La tasa del día la da un proveedor de tasas de cambio. Es la opción con la que empieza toda clínica.',
     MANUAL:
       'Desde el día en que se elige, la clínica registra cada día la tasa de cada moneda. Un día sin tasa registrada se usa la última registrada, hasta el plazo de abajo; pasado el plazo, los abonos en esa moneda quedan sin tasa. Los días anteriores siguen con la tasa automática; si un abono de un día anterior se quedó sin ella, la tasa manual que registres para ese día le sirve de respaldo.',
+    // DX-585: decisión del dueño (la tasa oficial del BCV). Sin nombrar el país (DX-312).
+    BCV: 'VES y EUR con la tasa oficial del BCV, que se publica en días hábiles con su fecha valor: un fin de semana o feriado rige la del último día hábil. El resto de monedas, con la automática.',
   } satisfies Record<ExchangeRateSource, string>,
   /** Con la fecha en el formato de la sede; sin formato, sin fecha (R11). */
   manualSince: (date: string | null) => (date ? `Manual desde el ${date}` : 'Manual'),
@@ -82,6 +91,7 @@ export const exchangeRateCopy = {
       'Rigen desde que la clínica pasó a manual; la de un día anterior sirve de respaldo a los abonos de ese día sin tasa. Se corrigen hasta que un abono las use.',
     AUTOMATIC:
       'Con la fuente automática no se usan: puedes dejar registrada la de hoy antes de pasar a manual. Se corrigen hasta que un abono las use.',
+    BCV: 'Con la fuente BCV no se usan: puedes dejar registrada la de hoy antes de pasar a manual. Se corrigen hasta que un abono las use.',
   } satisfies Record<ExchangeRateSource, string>,
   register: 'Registrar tasa',
   emptyTitle: 'Aún no hay tasas manuales',
@@ -124,6 +134,9 @@ export const rateFormCopy = {
   // DX-402: con la fuente automática ninguna tasa manual se usa.
   automaticNote:
     'Con la fuente automática esta tasa no se usa. Si pasas a manual, la de un día anterior servirá de respaldo a los abonos de ese día que sigan sin tasa.',
+  // DX-585: lo mismo con la fuente BCV.
+  bcvNote:
+    'Con la fuente BCV esta tasa no se usa. Si pasas a manual, la de un día anterior servirá de respaldo a los abonos de ese día que sigan sin tasa.',
   // DX-402: un día anterior a «manual desde»: la tasa solo sirve de respaldo
   // a los abonos de ese día que siguen sin tasa (y sin tasa del proveedor).
   backup: {
@@ -392,6 +405,15 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
         </p>
       </section>
 
+      <ClinicCurrenciesSettings
+        token={token}
+        settings={state}
+        onSaved={(saved) => {
+          setState((prev) => (prev ? { ...prev, ...saved } : prev));
+          notifyExchangeRatesChanged();
+        }}
+      />
+
       <section aria-labelledby={ratesHeadingId} className="flex flex-col gap-4">
         <SectionHeader
           titleId={ratesHeadingId}
@@ -429,6 +451,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
           onSaved={(saved) => {
             setState((prev) => (prev ? { ...prev, ...saved } : prev));
             setVersion((v) => v + 1);
+            notifyExchangeRatesChanged();
             setNotice(copy.sourceSaved);
           }}
         />
@@ -442,6 +465,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
           current={state.manualRateMaxAgeDays}
           onSaved={(saved) => {
             setState((prev) => (prev ? { ...prev, ...saved } : prev));
+            notifyExchangeRatesChanged();
             setNotice(copy.maxAge.saved);
           }}
         />
@@ -458,6 +482,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
           onSaved={(rate) => {
             setState((prev) => (prev ? { ...prev, rates: sortRates([rate, ...prev.rates]) } : prev));
             setVersion((v) => v + 1);
+            notifyExchangeRatesChanged();
             setNotice(copy.rateSaved(rate.currency));
           }}
         />
@@ -481,6 +506,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
                 : prev,
             );
             setVersion((v) => v + 1);
+            notifyExchangeRatesChanged();
             setNotice(copy.rateCorrected(saved.currency));
           }}
           onInUse={(id) =>
@@ -655,7 +681,7 @@ function SourceModal({ open, onOpenChange, token, current, onSaved }: SourceModa
         disabled={saving}
         optionsClassName="gap-2"
       >
-        {(['AUTOMATIC', 'MANUAL'] as const).map((source) => (
+        {(Object.keys(copy.sourceLabels) as ExchangeRateSource[]).map((source) => (
           <RadioCard
             key={source}
             value={source}
@@ -931,7 +957,9 @@ export function RateFormModal({
           className="tabular-nums"
         />
       </FormField>
-      {source === 'AUTOMATIC' ? <p className="t-body text-muted">{rateFormCopy.automaticNote}</p> : null}
+      {source === 'MANUAL' ? null : (
+        <p className="t-body text-muted">{source === 'BCV' ? rateFormCopy.bcvNote : rateFormCopy.automaticNote}</p>
+      )}
       {backupSince ? (
         <BackupRateNotice
           token={token}

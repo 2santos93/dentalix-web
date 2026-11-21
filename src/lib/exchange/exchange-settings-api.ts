@@ -43,6 +43,27 @@ export function saveManualRateMaxAgeDays(token: string, days: number): Promise<E
   });
 }
 
+/**
+ * DX-584: monedas de la clínica. Cada campo es opcional (sin él, no cambia):
+ * `acceptedCurrencies` `[]` = cualquier moneda; `rateReferenceCurrency` `null`
+ * = la de la sede activa; `showRateInHeader` `null` = automático. La API valida
+ * el resultado (lo guardado + el cambio) y responde los ajustes ya guardados.
+ */
+export type ClinicCurrenciesPatch = Partial<
+  Pick<ExchangeRateSettings, 'acceptedCurrencies' | 'rateReferenceCurrency' | 'showRateInHeader'>
+>;
+
+/** Hasta cuántas monedas puede aceptar la clínica (el mismo tope que la API). */
+export const ACCEPTED_CURRENCIES_MAX = 8;
+
+export function saveClinicCurrencies(token: string, patch: ClinicCurrenciesPatch): Promise<ExchangeRateSettings> {
+  return apiFetch<ExchangeRateSettings>('/exchange/settings', {
+    method: 'PUT',
+    body: patch,
+    token,
+  });
+}
+
 /** Las últimas tasas manuales de la clínica: día más reciente primero. */
 export function listManualExchangeRates(token: string, limit = MANUAL_RATES_SHOWN): Promise<ManualExchangeRate[]> {
   const search = new URLSearchParams({ limit: String(limit) });

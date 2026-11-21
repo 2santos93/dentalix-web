@@ -17,6 +17,8 @@ import { InClinicProvider, useInClinic } from '@/components/appointments/use-in-
 import { waitingForYouLabel } from '@/lib/appointments/patient-flow';
 import { useClosingQueueCount } from '@/components/appointments/closing-queue-count';
 import { WorkQueuesProvider, useWorkQueueCount } from '@/components/work-queues/work-queues-context';
+import { ExchangeHeaderProvider } from '@/components/exchange/exchange-header-context';
+import { RateIndicatorSlot } from '@/components/exchange/rate-indicator-slot';
 import { canSeeClosingQueue } from '@/lib/appointments/closing-queue-api';
 import { useClinicBranding } from '@/components/brand/branding-context';
 import { ClinicBrand, ClinicLogo } from '@/components/brand/clinic-brand';
@@ -69,7 +71,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <SedeDateLocaleProvider token={token}>
         {/* DX-503: una sola lectura de las listas de trabajo para el menú, la Agenda e Inicio. */}
         <WorkQueuesProvider token={token} pathname={pathname}>
-          <AppShellContent>{children}</AppShellContent>
+          {/* DX-584: una lectura de la tasa del menú y de las monedas aceptadas para toda la app. */}
+          <ExchangeHeaderProvider token={token}>
+            <AppShellContent>{children}</AppShellContent>
+          </ExchangeHeaderProvider>
         </WorkQueuesProvider>
       </SedeDateLocaleProvider>
     </InClinicProvider>;
@@ -406,6 +411,8 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
             collapsed && 'items-center px-2',
           )}
         >
+          {/* DX-584: la tasa de hoy, contexto de la sede como el selector. */}
+          <RateIndicatorSlot token={accessToken} variant={collapsed ? 'rail' : 'block'} />
           <LocationSwitcher variant={collapsed ? 'rail' : 'block'} />
           <UserMenu variant={collapsed ? 'rail' : 'card'} />
         </div>
@@ -428,6 +435,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
             </span>
           </div>
           <LocationSwitcher variant="phone" />
+          <RateIndicatorSlot token={accessToken} variant="phone" />
           {callerReady ? (
             <button
               type="button"

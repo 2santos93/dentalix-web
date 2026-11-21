@@ -11,7 +11,8 @@ import {
 import { SURFACE_LABELS } from '@/lib/odontogram/surface-labels';
 import { documentTexts, type DocumentFormat } from '@/lib/format/document-format';
 import type { InstallmentScenario, InstallmentSimulation } from '@/lib/treatment-plans/installment-simulation';
-import { convertWithRate, paymentRateCopy, ratePairLabel } from '@/lib/payments/payment-rate';
+import { convertWithRate, ratePairLabel, rateSourceText } from '@/lib/payments/payment-rate';
+import type { ExchangeRateSource } from '@/lib/exchange/exchange-settings-api';
 import {
   sedeListPriceFormat,
   type ListPriceFormat,
@@ -143,9 +144,11 @@ export interface QuoteSecondCurrency {
   fromPerBase: number;
   /** Unidades de `currency` por 1 de la base. */
   toPerBase: number;
-  source: 'AUTOMATIC' | 'MANUAL';
+  source: ExchangeRateSource;
   /** Día (AAAA-MM-DD) de la tasa. */
   date: string;
+  /** DX-585: con fuente BCV y VES o EUR en el par, la «fecha valor» (AAAA-MM-DD) de la tasa del BCV. */
+  valueDate?: string | null;
 }
 
 interface PlanQuoteDocumentProps {
@@ -412,7 +415,7 @@ export function PlanQuoteDocument({
           <p data-testid="quote-second-currency" className="mt-2 ml-auto max-w-xs text-xs text-[#4b5563]">
             {copy.secondRate(
               ratePairLabel(currency, secondCurrency, money),
-              paymentRateCopy.source[secondCurrency.source],
+              rateSourceText(secondCurrency.source, secondCurrency.valueDate, doc.civilDate),
               doc.civilDate(secondCurrency.date),
             )}{' '}
             {copy.secondNote(secondCurrency.currency)}

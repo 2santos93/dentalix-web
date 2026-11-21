@@ -17,6 +17,7 @@ import { parseMoneyInput } from '@/lib/format/money';
 import { amountCents, amountText, centsToAmount } from '@/lib/money/round';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
+import { useAcceptedPaymentCurrencies } from '@/components/exchange/exchange-header-context';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Input } from '@/components/ui/input';
@@ -501,6 +502,8 @@ function ChangeLineFields({
   idPrefix: string;
   equivalent: ChangeEquivalent | undefined;
 }) {
+  // DX-584: el vuelto, también solo en las monedas que acepta la clínica.
+  const acceptedCurrencies = useAcceptedPaymentCurrencies();
   const id = `${idPrefix}-change-${n}`;
   const lc = computed.lineCurrency(line);
   const medium = methods.find((m) => m.id === line.paymentMethodId) ?? null;
@@ -561,6 +564,7 @@ function ChangeLineFields({
           <CurrencySelect
             id={`${id}-currency`}
             token={token}
+            only={acceptedCurrencies}
             value={lc}
             disabled={disabled}
             onChange={(code) => cash.patchLine(line.key, { currency: code, amountTouched: false })}

@@ -38,6 +38,11 @@ type CurrencySelectProps = CurrencySource & {
   exclude?: readonly string[];
   /** Primera opción elegible con valor `''` (p. ej. «Sin segunda moneda»), para un campo opcional. */
   noneLabel?: string;
+  /**
+   * DX-584: solo estas monedas, en este orden (las aceptadas por la clínica en
+   * el cobro). `null`/vacía = todas. Si el valor actual no está, pasa a la primera.
+   */
+  only?: readonly string[] | null;
 };
 
 export function CurrencySelect({
@@ -55,6 +60,7 @@ export function CurrencySelect({
   required,
   exclude,
   noneLabel,
+  only,
 }: CurrencySelectProps) {
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [failed, setFailed] = useState(false);
@@ -74,6 +80,17 @@ export function CurrencySelect({
       cancelled = true;
     };
   }, [token, loader, attempt]);
+
+  const restricted = only && only.length > 0 ? only : null;
+  // DX-584: un cobro no puede quedarse en una moneda que la clínica no acepta
+  // (la API lo rechazaría): pasa a la primera aceptada, la que enseña el menú.
+  const outside = restricted !== null && value !== '' && !restricted.includes(value);
+  const firstAllowed = restricted?.[0] ?? '';
+  useEffect(() => {
+    if (outside && firstAllowed && !disabled) onChange(firstAllowed);
+    // `onChange` cambia de identidad en cada render del padre: solo cuenta el valor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outside, firstAllowed, disabled]);
 
   // Escalón 2 de la escalera de errores (DX-063): sin la lista, el select solo
   // ofrecería la moneda actual con cara de normal. Se sustituye en su sitio por
@@ -96,7 +113,17 @@ export function CurrencySelect({
   // empty and never loses the current selection.
   const loaded =
     currencies.length > 0 ? currencies : value ? [{ code: value, name: value, symbol: '' }] : [];
-  const options = exclude?.length ? loaded.filter((c) => !exclude.includes(c.code)) : loaded;
+  const allowed = restricted
+    ? restricted.map(
+        (code) =>
+          loaded.find((c) => c.code === code) ??
+          // Hasta que llega la lista (o si el catálogo ya no la tiene), el código.
+          { code, name: code, symbol: '' },
+      )
+    : loaded;
+  // Mientras el efecto la cambia (o deshabilitado), el select no miente sobre el valor.
+  if (outside) allowed.unshift(loaded.find((c) => c.code === value) ?? { code: value, name: value, symbol: '' });
+  const options = exclude?.length ? allowed.filter((c) => !exclude.includes(c.code)) : allowed;
 
   return (
     <NativeSelect

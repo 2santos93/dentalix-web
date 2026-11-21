@@ -32,6 +32,7 @@ import { MoneyInput } from '@/components/shared/money-input';
 import { PaymentAdjustmentsPreview } from './payment-adjustments-preview';
 import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
 import { FormModal } from '@/components/shared/form-modal';
+import { useAcceptedPaymentCurrencies } from '@/components/exchange/exchange-header-context';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { BillablePlanField, BillablePlansEmpty } from './billable-plan-field';
 import { useBillablePlans } from './use-billable-plans';
@@ -206,6 +207,8 @@ export function RecordPaymentModal({
   onRecorded,
   prefill,
 }: RecordPaymentModalProps) {
+  // DX-584: el cobro solo ofrece las monedas que acepta la clínica (si configuró alguna).
+  const acceptedCurrencies = useAcceptedPaymentCurrencies();
   const billable = useBillablePlans(token, patientId, open);
   const locationHint = usePaymentLocationHint(token, open);
   // «Hoy» de la sede (DX-097). Sin su zona la fecha empieza vacía y, si la
@@ -813,6 +816,8 @@ export function RecordPaymentModal({
                     <CurrencySelect
                       id="rp-currency"
                       token={token}
+                      // El abono al saldo migrado va en la moneda del saldo: la lista no lo limita.
+                      only={opening !== null ? null : acceptedCurrencies}
                       value={currency}
                       onChange={(code) => patch({ currency: code })}
                       disabled={opening !== null || submitting}

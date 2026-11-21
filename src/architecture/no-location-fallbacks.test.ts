@@ -29,6 +29,13 @@ const FORBIDDEN = new RegExp(
     String.raw`${FALLBACK}['"\`](?:${LOCALE_TAG}|UTC)['"\`]`,
 );
 const ZONE_LABEL_KEY = /^\s*'(?:America\/Bogota|Europe\/Madrid)':/;
+/**
+ * DX-585: única excepción de moneda, línea exacta. Con la fuente «BCV
+ * oficial» (que elige la clínica), VES y EUR salen del BCV y el resto del
+ * proveedor: es el alcance de esa fuente, no una moneda de reserva.
+ */
+const BCV_SOURCE_FILE = 'lib/payments/payment-rate.ts';
+const BCV_SOURCE_CURRENCIES = /^export const BCV_CURRENCIES: readonly string\[\] = \['VES', 'EUR'\];$/;
 /** Comentarios (JSDoc y `//`): describen datos, no los sustituyen. */
 const COMMENT_LINE = /^\s*(?:\*|\/\/|\/\*)/;
 
@@ -50,11 +57,18 @@ function scanned(path: string): boolean {
   return true;
 }
 
+function isBcvSourceLine(path: string, line: string): boolean {
+  return relative(SRC, path).split(sep).join('/') === BCV_SOURCE_FILE && BCV_SOURCE_CURRENCIES.test(line.trim());
+}
+
 function hits(path: string): string[] {
   return readFileSync(path, 'utf8')
     .split('\n')
     .map((line, i) => ({ line, n: i + 1 }))
-    .filter(({ line }) => FORBIDDEN.test(line) && !ZONE_LABEL_KEY.test(line) && !COMMENT_LINE.test(line))
+    .filter(
+      ({ line }) =>
+        FORBIDDEN.test(line) && !ZONE_LABEL_KEY.test(line) && !COMMENT_LINE.test(line) && !isBcvSourceLine(path, line),
+    )
     .map(({ line, n }) => `${relative(SRC, path)}:${n}: ${line.trim()}`);
 }
 
@@ -63,6 +77,15 @@ describe('arquitectura: sin moneda ni zona de reserva (GLOBAL-G1)', () => {
 
   it('src/ has no COUNTRY_CURRENCY, DEFAULT_SEDE_TIME_ZONE, Bogotá, COP or USD fallbacks', () => {
     expect(files.flatMap(hits)).toEqual([]);
+  });
+
+  it('the BCV exception (DX-585) is one exact line of payment-rate.ts and nothing else', () => {
+    const lines = readFileSync(join(SRC, BCV_SOURCE_FILE), 'utf8').split('\n');
+    expect(lines.filter((l) => BCV_SOURCE_CURRENCIES.test(l.trim()))).toHaveLength(1);
+    expect(isBcvSourceLine(join(SRC, 'lib/other.ts'), "export const BCV_CURRENCIES: readonly string[] = ['VES', 'EUR'];")).toBe(
+      false,
+    );
+    expect(isBcvSourceLine(join(SRC, BCV_SOURCE_FILE), "const fallback = currency ?? 'EUR';")).toBe(false);
   });
 
   it('the scan covers the screens of this unit and skips fixtures', () => {

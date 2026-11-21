@@ -1,5 +1,13 @@
 import { regionalFormat } from '@/lib/format/regional-format';
-import { convertWithRate, frozenRateLabel, paymentRateCopy, quoteFromRates, rateDayLabel } from './payment-rate';
+import {
+  bcvValueDateFor,
+  convertWithRate,
+  frozenRateLabel,
+  paymentRateCopy,
+  quoteFromRates,
+  rateDayLabel,
+  rateSourceText,
+} from './payment-rate';
 import type { Payment } from './payments-api';
 
 const frozen = (
@@ -81,7 +89,11 @@ describe('frozenRateLabel (DX-375)', () => {
   });
 
   it('los textos no nombran un país ni un banco central', () => {
-    expect(JSON.stringify(paymentRateCopy)).not.toMatch(/venezuela|colom[b]ia|banco central|bcv/i);
+    // DX-585: solo la etiqueta de la fuente BCV (que elige la clínica) nombra el banco.
+    const { source, ...generic } = paymentRateCopy;
+    expect(JSON.stringify({ ...generic, AUTOMATIC: source.AUTOMATIC, MANUAL: source.MANUAL })).not.toMatch(
+      /venezuela|colom[b]ia|banco central|bcv/i,
+    );
   });
 });
 
@@ -122,5 +134,31 @@ describe('rateDayLabel (DX-384)', () => {
 
   it('«tasa del …» cuando la tasa es de otro día', () => {
     expect(rateDayLabel('2026-10-30', '2026-10-31', day)).toBe('tasa del 30/10/2026');
+  });
+});
+
+describe('fuente BCV (DX-585)', () => {
+  const day = (d: string) => ES_VE.civilDate(d);
+
+  it('una tasa congelada con fuente BCV dice «BCV»', () => {
+    expect(frozenRateLabel(frozen({ source: 'BCV' }), ES_VE)?.replace(/\s/g, ' ')).toBe(
+      'Tasa congelada: 1 USD = GBP 4.000,00 · BCV · 30/10/2026',
+    );
+  });
+
+  it('rateSourceText: cada fuente con su etiqueta; BCV con la fecha valor si la hay', () => {
+    expect(rateSourceText('AUTOMATIC', null, day)).toBe('automática');
+    expect(rateSourceText('MANUAL', '2026-11-20', day)).toBe('manual');
+    expect(rateSourceText('BCV', null, day)).toBe('BCV');
+    expect(rateSourceText('BCV', '2026-11-20', day)).toBe('BCV, fecha valor 20/11/2026');
+  });
+
+  it('bcvValueDateFor: solo con BCV y VES o EUR en el par', () => {
+    const bcvDay = { source: 'BCV' as const, bcv: { valueDate: '2026-11-20' } };
+    expect(bcvValueDateFor(bcvDay, 'VES', 'USD')).toBe('2026-11-20');
+    expect(bcvValueDateFor(bcvDay, 'USD', 'EUR')).toBe('2026-11-20');
+    expect(bcvValueDateFor(bcvDay, 'BRL', 'USD')).toBeNull();
+    expect(bcvValueDateFor({ source: 'BCV', bcv: null }, 'VES', 'USD')).toBeNull();
+    expect(bcvValueDateFor({ source: 'AUTOMATIC' }, 'VES', 'USD')).toBeNull();
   });
 });
