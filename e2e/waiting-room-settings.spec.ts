@@ -59,6 +59,14 @@ test.beforeAll(async ({ request }) => {
     data: { ranges: [] },
   });
   expect(schedule.ok()).toBeTruthy();
+  // «Atender sin cita» (walk-in) exige un tipo de cita de urgencia activo, y una
+  // clínica recién registrada no tiene ninguno (409), como en chairs-in-clinic.
+  await api(request, 'post', '/appointment-types', {
+    name: 'Consulta de urgencia',
+    durationMinutes: 30,
+    color: '#DC2626',
+    isUrgent: true,
+  });
   const locations = await request.get(`${API_URL}/locations`, { headers: session.headers });
   locationId = ((await locations.json()) as { id: string }[])[0].id;
   const staff = await api<{ userId: string; fullName: string }[]>(request, 'get', '/staff');
