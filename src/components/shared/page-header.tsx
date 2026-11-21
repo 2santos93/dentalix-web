@@ -62,10 +62,10 @@ export function PageHeader({ title, description, meta, actions, back, titleRef }
           inside its own column instead of pushing the actions off-screen. */}
       <div className="min-w-0 break-words">
         {back ? (
-          // 44 px de alto en móvil (objetivo táctil); en escritorio, una línea.
+          // 44 px de alto en móvil y con el dedo (tableta táctil, DX-587); con ratón, una línea.
           <Link
             href={back.href}
-            className="mb-2 inline-flex items-center gap-1 rounded-sm text-sm font-medium text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text max-md:mb-0 max-md:min-h-11"
+            className="mb-2 inline-flex items-center gap-1 rounded-sm text-sm font-medium text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text max-md:mb-0 max-md:min-h-11 pointer-coarse:mb-0 pointer-coarse:min-h-11"
           >
             <ChevronLeft aria-hidden className="size-4" />
             {back.label}
@@ -92,7 +92,11 @@ export function PageHeader({ title, description, meta, actions, back, titleRef }
         ) : null}
         {meta ?? null}
       </div>
-      {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+      {actions ? (
+        <div data-page-primary-action className="flex shrink-0 items-center gap-2">
+          {actions}
+        </div>
+      ) : null}
     </div>
   );
 }

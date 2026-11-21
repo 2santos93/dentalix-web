@@ -116,7 +116,7 @@ export function CreditRefundPrintView({
                 href={refundPrintHref(refundId, f)}
                 aria-current={f === format ? 'page' : undefined}
                 className={cn(
-                  'focus-ring flex min-h-11 flex-1 items-center justify-center whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors sm:min-h-9',
+                  'focus-ring flex min-h-11 flex-1 items-center justify-center whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors sm:pointer-fine:min-h-9',
                   f === format ? 'bg-surface text-ink shadow-lift' : 'text-muted hover:bg-surface-active hover:text-ink',
                 )}
               >

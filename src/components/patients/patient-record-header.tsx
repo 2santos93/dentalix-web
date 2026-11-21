@@ -222,7 +222,7 @@ export function PatientRecordHeader({
     <header data-testid="patient-record-header" className="flex flex-col gap-3 pb-4">
       <Link
         href="/patients"
-        className="-my-1 inline-flex items-center gap-1 self-start rounded-sm text-sm font-medium text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text max-md:min-h-11"
+        className="-my-1 inline-flex items-center gap-1 self-start rounded-sm text-sm font-medium text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text max-md:min-h-11 pointer-coarse:min-h-11"
       >
         <ChevronLeft aria-hidden className="size-4" />
         {copy.backLink}

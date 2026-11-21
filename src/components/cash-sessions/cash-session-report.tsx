@@ -36,7 +36,8 @@ const copy = {
   notes: 'Notas de la apertura',
   reopened: (n: number) => (n === 1 ? 'Reabierta 1 vez' : `Reabierta ${n} veces`),
   arqueoTitle: 'Arqueo por moneda y método',
-  arqueoLabel: 'Arqueo por moneda y método',
+  // DX-587: distinto del título de su sección (axe landmark-unique cuando la tabla no cabe).
+  arqueoLabel: 'Tabla del arqueo por moneda y método',
   colLine: 'Moneda y método',
   colOpening: 'Fondo',
   colPayments: 'Cobros',
@@ -78,7 +79,7 @@ const copy = {
   changeOut: (amount: string) => `−${amount} de vuelto entregado`,
   paymentChange: (tendered: string, change: string) =>
     change ? `Recibido ${tendered} · vuelto ${change}` : `Recibido ${tendered}`,
-  paymentsLabel: 'Cobros del turno',
+  paymentsLabel: 'Tabla de cobros del turno',
   colDate: 'Fecha',
   colPatient: 'Paciente',
   colReceipt: 'Recibo',
@@ -105,7 +106,7 @@ const copy = {
   otherSession: 'Otra caja de la sede',
   noAdjustments: 'Sin ajustes.',
   outflowsTitle: 'Salidas de caja',
-  outflowsLabel: 'Salidas de caja',
+  outflowsLabel: 'Tabla de salidas de caja',
   voidedOutflowsLabel: 'Salidas anuladas',
   colTime: 'Hora',
   colCategory: 'Categoría',

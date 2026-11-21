@@ -62,7 +62,7 @@ describe('PaymentMethodsManager (DX-377)', () => {
 
   it('lista los medios con tipo base, referencia y estado (activos e inactivos)', async () => {
     render(<PaymentMethodsManager token="tok" allowed />);
-    const table = await screen.findByRole('table', { name: 'Medios de pago' });
+    const table = await screen.findByRole('table', { name: 'Lista de medios de pago' });
     const row = within(table).getAllByText('Efectivo')[0].closest('tr') as HTMLElement;
     expect(within(row).getByText('Activo')).toBeInTheDocument();
     expect(within(row).getByText('Opcional')).toBeInTheDocument();
@@ -92,7 +92,7 @@ describe('PaymentMethodsManager (DX-377)', () => {
       legacyMethod: null,
     });
     render(<PaymentMethodsManager token="tok" allowed />);
-    await screen.findByRole('table', { name: 'Medios de pago' });
+    await screen.findByRole('table', { name: 'Lista de medios de pago' });
     await user.click(screen.getByRole('button', { name: 'Nuevo medio' }));
     const dialog = await screen.findByRole('dialog');
     await user.type(within(dialog).getByLabelText('Nombre'), 'Pago móvil');
@@ -118,7 +118,7 @@ describe('PaymentMethodsManager (DX-377)', () => {
     ]);
     mockedCreate.mockResolvedValue({ ...cash, id: 'pm-zelle', name: 'Zelle', legacyMethod: null, proofPolicy: 'OPTIONAL' as const });
     render(<PaymentMethodsManager token="tok" allowed />);
-    const table = await screen.findByRole('table', { name: 'Medios de pago' });
+    const table = await screen.findByRole('table', { name: 'Lista de medios de pago' });
     const mobileRow = within(table).getAllByText('Pago móvil')[0].closest('tr') as HTMLElement;
     expect(within(mobileRow).getByText('Obligatorio')).toBeInTheDocument();
     const cashRow = within(table).getAllByText('Efectivo')[0].closest('tr') as HTMLElement;
@@ -141,7 +141,7 @@ describe('PaymentMethodsManager (DX-377)', () => {
     const user = setupUser();
     mockedUpdate.mockResolvedValue({ ...cash, proofPolicy: 'REQUIRED' as const });
     render(<PaymentMethodsManager token="tok" allowed />);
-    await screen.findByRole('table', { name: 'Medios de pago' });
+    await screen.findByRole('table', { name: 'Lista de medios de pago' });
     await user.click(screen.getByRole('button', { name: 'Acciones de Efectivo' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Editar' }));
     const dialog = await screen.findByRole('dialog');
@@ -156,7 +156,7 @@ describe('PaymentMethodsManager (DX-377)', () => {
     const user = setupUser();
     mockedUpdate.mockResolvedValue({ ...cash, allowInPaymentLink: true });
     render(<PaymentMethodsManager token="tok" allowed />);
-    const table = await screen.findByRole('table', { name: 'Medios de pago' });
+    const table = await screen.findByRole('table', { name: 'Lista de medios de pago' });
     expect(within(table).getByRole('columnheader', { name: 'Enlace de pago' })).toBeInTheDocument();
     const row = within(table).getAllByText('Efectivo')[0].closest('tr') as HTMLElement;
     expect(within(row).getByText('No')).toBeInTheDocument();
@@ -177,7 +177,7 @@ describe('PaymentMethodsManager (DX-377)', () => {
 
   it('DX-569: sin permiso de escritura (recepción) se ven los medios, sin crear ni editar', async () => {
     render(<PaymentMethodsManager token="tok" allowed canEdit={false} />);
-    await screen.findByRole('table', { name: 'Medios de pago' });
+    await screen.findByRole('table', { name: 'Lista de medios de pago' });
     expect(screen.queryByRole('button', { name: 'Nuevo medio' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Acciones de Efectivo' })).not.toBeInTheDocument();
     expect(await screen.findByText('Solo administración los cambia.')).toBeInTheDocument();
@@ -188,7 +188,7 @@ describe('PaymentMethodsManager (DX-377)', () => {
     const user = setupUser();
     mockedUpdate.mockResolvedValue({ ...cash, active: false });
     render(<PaymentMethodsManager token="tok" allowed />);
-    await screen.findByRole('table', { name: 'Medios de pago' });
+    await screen.findByRole('table', { name: 'Lista de medios de pago' });
     // B7: Editar / Desactivar viven en el «⋯» de la fila.
     await user.click(screen.getByRole('button', { name: 'Acciones de Efectivo' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Desactivar' }));
@@ -197,7 +197,7 @@ describe('PaymentMethodsManager (DX-377)', () => {
   it('un medio inicial no cambia de tipo base: el selector está desactivado y explica por qué', async () => {
     const user = setupUser();
     render(<PaymentMethodsManager token="tok" allowed />);
-    await screen.findByRole('table', { name: 'Medios de pago' });
+    await screen.findByRole('table', { name: 'Lista de medios de pago' });
     await user.click(screen.getByRole('button', { name: 'Acciones de Efectivo' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Editar' }));
     const dialog = await screen.findByRole('dialog');
@@ -209,7 +209,7 @@ describe('PaymentMethodsManager (DX-377)', () => {
   it('nombre vacío: el error va en el campo (aria-invalid) y no se envía', async () => {
     const user = setupUser();
     render(<PaymentMethodsManager token="tok" allowed />);
-    await screen.findByRole('table', { name: 'Medios de pago' });
+    await screen.findByRole('table', { name: 'Lista de medios de pago' });
     await user.click(screen.getByRole('button', { name: 'Nuevo medio' }));
     const dialog = await screen.findByRole('dialog');
     const nameInput = within(dialog).getByLabelText('Nombre');
@@ -224,7 +224,7 @@ describe('PaymentMethodsManager (DX-377)', () => {
   it('DX-395: nombre sin escribir: mensaje propio en el campo, sin el globo nativo del navegador', async () => {
     const user = setupUser();
     render(<PaymentMethodsManager token="tok" allowed />);
-    await screen.findByRole('table', { name: 'Medios de pago' });
+    await screen.findByRole('table', { name: 'Lista de medios de pago' });
     await user.click(screen.getByRole('button', { name: 'Nuevo medio' }));
     const dialog = await screen.findByRole('dialog');
     const nameInput = within(dialog).getByLabelText('Nombre');
@@ -240,7 +240,7 @@ describe('PaymentMethodsManager (DX-377)', () => {
   it('DX-395: a 390 px «Nuevo medio» y el modal miden al menos 44 px', async () => {
     const user = setupUser();
     render(<PaymentMethodsManager token="tok" allowed />);
-    await screen.findByRole('table', { name: 'Medios de pago' });
+    await screen.findByRole('table', { name: 'Lista de medios de pago' });
     // jsdom no mide: se comprueba la altura táctil por debajo de sm. Editar y
     // Desactivar viven en el «⋯» (DataList: 44 px en la tarjeta del teléfono).
     expect(screen.getByRole('button', { name: 'Nuevo medio' }).className).toContain('max-sm:min-h-11');
@@ -268,7 +268,7 @@ describe('PaymentMethodsManager (DX-377)', () => {
     it('por defecto ningún medio tiene ajustes', async () => {
       render(<PaymentMethodsManager token="tok" allowed />);
       expect(await screen.findByText('Ningún medio de pago tiene ajustes.')).toBeInTheDocument();
-      const table = await screen.findByRole('table', { name: 'Medios de pago' });
+      const table = await screen.findByRole('table', { name: 'Lista de medios de pago' });
       expect(within(table).getByText('Ninguno')).toBeInTheDocument();
     });
 
@@ -276,7 +276,7 @@ describe('PaymentMethodsManager (DX-377)', () => {
       const user = setupUser();
       mockedCreateAdjustment.mockResolvedValue(tax);
       render(<PaymentMethodsManager token="tok" allowed />);
-      await screen.findByRole('table', { name: 'Medios de pago' });
+      await screen.findByRole('table', { name: 'Lista de medios de pago' });
       await user.click(screen.getByRole('button', { name: 'Nuevo ajuste' }));
       const dialog = await screen.findByRole('dialog');
       await user.type(within(dialog).getByLabelText('Etiqueta'), 'Impuesto 3 %');
@@ -296,14 +296,14 @@ describe('PaymentMethodsManager (DX-377)', () => {
       const list = await screen.findByRole('table', { name: 'Ajustes por medio de pago' });
       expect(within(list).getByText('Impuesto 3 %')).toBeInTheDocument();
       expect(within(list).getByText('3 %')).toBeInTheDocument();
-      const methods = screen.getByRole('table', { name: 'Medios de pago' });
+      const methods = screen.getByRole('table', { name: 'Lista de medios de pago' });
       expect(within(methods).getByText('1 ajuste')).toBeInTheDocument();
     });
 
     it('valida en el campo: etiqueta vacía y porcentaje fuera de rango, sin enviar', async () => {
       const user = setupUser();
       render(<PaymentMethodsManager token="tok" allowed />);
-      await screen.findByRole('table', { name: 'Medios de pago' });
+      await screen.findByRole('table', { name: 'Lista de medios de pago' });
       await user.click(screen.getByRole('button', { name: 'Nuevo ajuste' }));
       const dialog = await screen.findByRole('dialog');
       await user.type(within(dialog).getByLabelText('Porcentaje'), '150');
@@ -320,7 +320,7 @@ describe('PaymentMethodsManager (DX-377)', () => {
     it('un recargo avisa, en genérico, de que puede no estar permitido', async () => {
       const user = setupUser();
       render(<PaymentMethodsManager token="tok" allowed />);
-      await screen.findByRole('table', { name: 'Medios de pago' });
+      await screen.findByRole('table', { name: 'Lista de medios de pago' });
       await user.click(screen.getByRole('button', { name: 'Nuevo ajuste' }));
       const dialog = await screen.findByRole('dialog');
       await user.selectOptions(within(dialog).getByLabelText('Tipo'), 'SURCHARGE');

@@ -75,7 +75,7 @@ export function SettingsPage({
       <Link
         href={back.href}
         className={cn(
-          'mb-2 inline-flex items-center gap-1 self-start rounded-sm text-sm font-medium text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text max-md:mb-0 max-md:min-h-11',
+          'mb-2 inline-flex items-center gap-1 self-start rounded-sm text-sm font-medium text-primary-text hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text max-md:mb-0 max-md:min-h-11 pointer-coarse:mb-0 pointer-coarse:min-h-11',
           backIsIndex && 'xl:hidden',
         )}
       >

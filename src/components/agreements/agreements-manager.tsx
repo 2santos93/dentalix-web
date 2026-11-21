@@ -270,7 +270,9 @@ export function AgreementsManager({ token, allowed }: AgreementsManagerProps) {
       cell: (a) => (
         <span className="flex min-w-0 flex-col">
           <span className="flex min-w-0 items-center gap-2">
-            <span className="min-w-0 truncate">{a.name}</span>
+            <span className="min-w-0 truncate" title={a.name}>
+              {a.name}
+            </span>
             {/* El estado solo se pinta cuando es la excepción (critique-settings). */}
             {a.active ? null : <Badge variant="neutral">{copy.inactive}</Badge>}
           </span>

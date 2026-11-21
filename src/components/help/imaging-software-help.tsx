@@ -73,7 +73,10 @@ export function ImagingSoftwareHelp() {
   const c = imagingHelpCopy;
   return (
     <article className="min-w-0 max-w-[68ch]">
-      <PageHeader title={c.title} description={c.description} />
+      {/* DX-587: sin nada enfocable, el contenido que se desplaza (en <main>) no
+          se alcanzaba con el teclado (axe scrollable-region-focusable). El
+          enlace de vuelta, como en Ajustes, es además la salida de la ayuda. */}
+      <PageHeader title={c.title} description={c.description} back={{ href: '/patients', label: 'Pacientes' }} />
       <div className="flex flex-col gap-8">
         <section aria-labelledby="como-funciona" className="flex flex-col gap-3">
           <h2 id="como-funciona" className="t-title text-ink">

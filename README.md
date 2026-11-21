@@ -127,9 +127,9 @@ difiere. En `push` y `pull_request` el `api_ref` es siempre `main`: solo
 
 ### La E2E en CI: shards y artefactos
 
-La E2E (`.github/workflows/e2e.yml`) reparte la suite en 3 shards (DX-457). Cada
-job `Playwright i/3 (web + API + Postgres 16)` levanta su propio Postgres, su API,
-su demo, su esquema y su web y corre `--shard=i/3`; el paso «Playwright» tiene
+La E2E (`.github/workflows/e2e.yml`) reparte la suite en 4 shards (DX-457; 4 desde DX-587). Cada
+job `Playwright i/4 (web + API + Postgres 16)` levanta su propio Postgres, su API,
+su demo, su esquema y su web y corre `--shard=i/4`; el paso «Playwright» tiene
 35 min de tope y su duración (con aviso al 70 %) sale en el resumen del shard.
 El check `Playwright (web + API + Postgres 16)` es el job de fusión: comprueba que
 cada fichero de la suite corrió en un shard y solo en uno, que llegaron los
@@ -161,9 +161,9 @@ Para reproducir un shard en local, con el mismo reparto que la CI (en local no
 hay `CI`: sin el reintento de la CI y con los reporters `list` y `json`):
 
 ```bash
-scripts/e2e-ci.sh all --shard=2/3
+scripts/e2e-ci.sh all --shard=2/4
 # qué ficheros le tocan, sin ejecutar nada
-E2E_WEB_SERVER=none npx playwright test --list --shard=2/3
+E2E_WEB_SERVER=none npx playwright test --list --shard=2/4
 ```
 
 Con `grep` o `repeat_each` (lanzamiento manual, DX-413) la run va en un solo shard

@@ -115,7 +115,7 @@ export function ListToolbar({
           mismos 12px que hay entre los selects, un botón del mismo ancho se lee
           como un filtro más de la pila. */}
       {action ? (
-        <div className="mt-1 flex shrink-0 flex-col sm:mt-0 sm:flex-row sm:items-center sm:gap-2">
+        <div data-page-primary-action className="mt-1 flex shrink-0 flex-col sm:mt-0 sm:flex-row sm:items-center sm:gap-2">
           {action}
         </div>
       ) : null}

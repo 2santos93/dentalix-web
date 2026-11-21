@@ -114,7 +114,7 @@ function sessionRole(token: string | null, profile: MyProfile): ClinicRole | nul
  * Clases de los ítems del menú de cuenta. Bajo `md` llegan a 44 px de alto
  * (FE-068): en el móvil es un objetivo táctil.
  */
-const ITEM = 'max-md:min-h-11';
+const ITEM = 'max-md:min-h-11 pointer-coarse:min-h-11';
 
 /**
  * Tema oscuro como `menuitemcheckbox`: entra en el recorrido con flechas (un
@@ -330,7 +330,7 @@ export function UserMenu({
             title={isRail ? (name ?? copy.account) : undefined}
             className={cn(
               'flex items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text',
-              isRail ? 'size-10 justify-center' : 'size-11 justify-center',
+              isRail ? 'size-10 justify-center pointer-coarse:size-11' : 'size-11 justify-center',
             )}
           >
             {avatar(isRail ? 'size-9' : 'size-8')}
@@ -354,7 +354,9 @@ export function UserMenu({
         >
           {avatar('size-9')}
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-semibold text-ink">
+            {/* DX-587: el nombre se corta con elipsis en el pie de 240px; el
+                `title` lo dice entero al pasar el ratón. */}
+            <span className="block truncate text-sm font-semibold text-ink" title={name ?? copy.account}>
               {name ?? copy.account}
             </span>
             {roleLabel && <span className="block truncate text-xs text-muted">{roleLabel}</span>}

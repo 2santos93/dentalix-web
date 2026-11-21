@@ -171,7 +171,7 @@ test('1440: el informe cuadra con la lista y Ajustes › Prospectos tiene los ca
   await page.goto(`${origin}/prospectos/informe`);
   await expect(page.getByRole('heading', { name: 'Informe de conversión', level: 1 })).toBeVisible({ timeout: 30_000 });
   // Los dos prospectos se dieron de alta este mes: uno por WhatsApp, otro por Instagram.
-  const byChannel = page.getByRole('table', { name: 'Por canal' });
+  const byChannel = page.getByRole('table', { name: 'Prospectos por canal' });
   await expect(byChannel.getByRole('row', { name: /^Total/ })).toContainText('2');
   await shot(page, 'leads-report', 1440);
   await expectAxeClean(page, 'informe');

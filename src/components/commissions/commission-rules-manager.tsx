@@ -134,7 +134,10 @@ export function CommissionRulesManager({ token }: { token: string }) {
           }
         />
         <p className="text-sm">
-          <Link href={COMMISSIONS_HREF} className="text-primary-text underline-offset-4 hover:underline">
+          <Link
+            href={COMMISSIONS_HREF}
+            className="text-primary-text underline-offset-4 hover:underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
+          >
             {copy.goToSettlements}
           </Link>
         </p>

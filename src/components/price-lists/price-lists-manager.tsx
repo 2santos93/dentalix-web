@@ -195,7 +195,9 @@ export function PriceListsManager({ token, allowed }: PriceListsManagerProps) {
       // El estado solo se pinta cuando es la excepción (critique-settings).
       cell: (l) => (
         <span className="flex min-w-0 items-center gap-2">
-          <span className="min-w-0 truncate">{l.name}</span>
+          <span className="min-w-0 truncate" title={l.name}>
+            {l.name}
+          </span>
           {l.active ? null : <Badge variant="neutral">{copy.inactive}</Badge>}
         </span>
       ),
