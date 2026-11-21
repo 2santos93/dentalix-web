@@ -110,6 +110,25 @@ function staticState(overrides: Partial<InClinicState>): InClinicState {
 }
 const noRunner = { pendingId: null, run: jest.fn() };
 
+describe('InClinicPanel: turno del día (DX-588)', () => {
+  it('chip «Turno N» en la tarjeta de quien tiene turno; nada en quien no', () => {
+    // TODO(DX-588): sin el cast cuando `turnNumber` esté en el schema.d.ts.
+    const withTurn = { ...item({ appointmentId: 'a1' }), turnNumber: 7 } as InClinicItem;
+    const withoutTurn = { ...item({ appointmentId: 'a2' }), turnNumber: null } as InClinicItem;
+    render(
+      <InClinicPanel
+        state={staticState({ view: view({ waiting: [withTurn], inChair: [withoutTurn] }) })}
+        role="RECEPTION"
+        runner={noRunner}
+      />,
+    );
+    const turns = screen.getAllByTestId('in-clinic-turn');
+    expect(turns).toHaveLength(1);
+    expect(turns[0]).toHaveTextContent('Turno 7');
+    expect(turns[0].closest('[data-appointment-id]')).toHaveAttribute('data-appointment-id', 'a1');
+  });
+});
+
 describe('InClinicPanel: sillón y «Mover a…» (DX-492)', () => {
   const chair = { id: 'ch-1', name: 'Sillón 1', active: true };
   const seated = item({ appointmentId: 'a1', chairId: 'ch-1', chair });
