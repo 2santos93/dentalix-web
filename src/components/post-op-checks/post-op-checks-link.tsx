@@ -21,7 +21,7 @@ export function PostOpChecksLink() {
   return (
     <Link
       href={POST_OP_CHECKS_HREF}
-      className="mt-2 inline-flex min-h-11 items-center gap-2 self-start rounded-md text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text sm:min-h-9"
+      className="mt-2 inline-flex min-h-11 items-center gap-2 self-start rounded-md text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text sm:pointer-fine:min-h-9"
     >
       <PhoneCall aria-hidden className="size-4" />
       {count > 0 ? copy.withCount(count) : copy.label}

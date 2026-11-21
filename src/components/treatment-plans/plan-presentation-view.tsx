@@ -305,61 +305,64 @@ export function PlanPresentationView({
 
   return (
     <div className="presentation-print-page flex min-h-dvh flex-1 flex-col bg-canvas print:min-h-0 print:bg-white">
-      <div
-        role="toolbar"
-        aria-label={copy.toolbar}
-        className="sticky top-0 z-10 flex flex-col gap-3 border-b border-border bg-surface px-4 py-3 lg:flex-row lg:items-center lg:justify-between print:hidden"
-      >
-        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
-          <Button asChild variant="ghost" className="justify-start self-start">
-            <Link href={closeHref} title={copy.closeHint}>
-              <X aria-hidden />
-              {copy.close}
-            </Link>
-          </Button>
-          <SegmentedControl
-            aria-label={copy.viewLabel}
-            value={mode}
-            onValueChange={onModeChange}
-            options={modeOptions}
-            fullWidthOnMobile
-          />
-        </div>
-        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-          {quote && showMoney ? (
-            <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
-              <label htmlFor="presentation-second-currency" className="text-sm text-ink">
-                {copy.secondCurrency}
-              </label>
-              <CurrencySelect
-                id="presentation-second-currency"
-                token={token}
-                value={second}
-                onChange={setChosenSecond}
-                exclude={[quote.currency]}
-                noneLabel={copy.secondNone}
-                className="sm:w-56"
-              />
-            </div>
-          ) : null}
-          {hasAlternatives && showMoney ? (
-            <Button
-              type="button"
-              variant="secondary"
-              aria-expanded={showAlternatives}
-              aria-controls="presentation-alternatives"
-              onClick={() => setShowAlternatives((v) => !v)}
-            >
-              <Columns2 aria-hidden />
-              {showAlternatives ? copy.hideAlternatives : copy.alternatives}
+      {/* DX-587: en un `<header>` (banner): fuera de todo landmark, axe `region`. */}
+      <header className="sticky top-0 z-10 print:hidden">
+        <div
+          role="toolbar"
+          aria-label={copy.toolbar}
+          className="flex flex-col gap-3 border-b border-border bg-surface px-4 py-3 lg:flex-row lg:items-center lg:justify-between"
+        >
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
+            <Button asChild variant="ghost" className="justify-start self-start">
+              <Link href={closeHref} title={copy.closeHint}>
+                <X aria-hidden />
+                {copy.close}
+              </Link>
             </Button>
-          ) : null}
-          <Button type="button" onClick={() => window.print()} disabled={!quote || format === null}>
-            <Printer aria-hidden />
-            {copy.print}
-          </Button>
+            <SegmentedControl
+              aria-label={copy.viewLabel}
+              value={mode}
+              onValueChange={onModeChange}
+              options={modeOptions}
+              fullWidthOnMobile
+            />
+          </div>
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            {quote && showMoney ? (
+              <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                <label htmlFor="presentation-second-currency" className="text-sm text-ink">
+                  {copy.secondCurrency}
+                </label>
+                <CurrencySelect
+                  id="presentation-second-currency"
+                  token={token}
+                  value={second}
+                  onChange={setChosenSecond}
+                  exclude={[quote.currency]}
+                  noneLabel={copy.secondNone}
+                  className="sm:w-56"
+                />
+              </div>
+            ) : null}
+            {hasAlternatives && showMoney ? (
+              <Button
+                type="button"
+                variant="secondary"
+                aria-expanded={showAlternatives}
+                aria-controls="presentation-alternatives"
+                onClick={() => setShowAlternatives((v) => !v)}
+              >
+                <Columns2 aria-hidden />
+                {showAlternatives ? copy.hideAlternatives : copy.alternatives}
+              </Button>
+            ) : null}
+            <Button type="button" onClick={() => window.print()} disabled={!quote || format === null}>
+              <Printer aria-hidden />
+              {copy.print}
+            </Button>
+          </div>
         </div>
-      </div>
+      </header>
 
       <main className="flex-1 px-4 py-6 sm:px-6 lg:py-8 print:p-0">
         {quote && model ? (

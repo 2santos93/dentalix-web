@@ -1,6 +1,7 @@
 'use client';
 import * as React from 'react';
 import { describedBy } from '@/lib/ui/compose-refs';
+import { cn } from '@/lib/utils';
 import { ChoiceControl, ChoiceRow } from './choice';
 
 export interface SwitchProps
@@ -26,7 +27,7 @@ export const Switch = React.forwardRef<HTMLInputElement, SwitchProps>(
     const descriptionId = `${inputId}-description`;
 
     const control = (
-      <ChoiceControl className={label ? undefined : className}>
+      <ChoiceControl>
         <input
           ref={ref}
           id={inputId}
@@ -45,7 +46,22 @@ export const Switch = React.forwardRef<HTMLInputElement, SwitchProps>(
       </ChoiceControl>
     );
 
-    if (!label) return control;
+    // DX-587: sin etiqueta visible, la pista (36×20) es todo el objetivo. Con el
+    // dedo, un `<label>` que la envuelve amplía el área a 60×44 sin mover nada
+    // (relleno y margen negativo iguales); con ratón no cambia.
+    if (!label) {
+      return (
+        <label
+          className={cn(
+            'inline-flex shrink-0 pointer-coarse:-m-3 pointer-coarse:p-3',
+            disabled ? 'cursor-not-allowed' : 'cursor-pointer',
+            className,
+          )}
+        >
+          {control}
+        </label>
+      );
+    }
     return (
       <ChoiceRow
         control={control}

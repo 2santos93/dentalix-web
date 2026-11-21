@@ -238,7 +238,10 @@ export function OnlineRequestsView({ token }: { token: string }) {
             fullWidthOnMobile
             className="max-w-full overflow-x-auto"
           />
-          <Link href={ONLINE_BOOKING_SETTINGS_HREF} className="text-sm font-medium text-primary-text hover:underline max-sm:min-h-11 max-sm:content-center">
+          <Link
+            href={ONLINE_BOOKING_SETTINGS_HREF}
+            className="text-sm font-medium text-primary-text hover:underline max-sm:min-h-11 max-sm:content-center pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
+          >
             {copy.settingsLink}
           </Link>
         </div>

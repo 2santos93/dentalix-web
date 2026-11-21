@@ -42,7 +42,7 @@ describe('LocationDetail (B6)', () => {
     expect(within(data).getByRole('button', { name: 'Editar Sede Norte' })).toBeInTheDocument();
     expect(screen.getByLabelText(/Nº de registro sanitario · Sede Norte/)).toHaveValue('NRS-1');
     expect(await screen.findByRole('region', { name: 'Política de cancelación' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Calendario Sede Norte' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Abrir el calendario de Sede Norte' })).toHaveAttribute(
       'href',
       '/settings/calendario?sede=norte',
     );
@@ -57,7 +57,7 @@ describe('LocationDetail (B6)', () => {
     expect(screen.queryByRole('button', { name: 'Editar Sede Sur' })).not.toBeInTheDocument();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Política de cancelación' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /^Calendario/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /calendario/i })).not.toBeInTheDocument();
   });
 
   it('una sede que no existe lo dice y lleva a la lista', async () => {

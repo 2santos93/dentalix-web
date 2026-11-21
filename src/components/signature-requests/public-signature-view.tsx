@@ -194,6 +194,7 @@ export function PublicSignatureView({ linkToken }: { linkToken: string }) {
             icon={LinkIcon}
             title={copy.goneTitle}
             message={state.locked ? copy.lockedMessage : copy.goneMessage}
+            headingLevel={1}
           />
         )}
 

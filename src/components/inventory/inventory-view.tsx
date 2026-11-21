@@ -695,7 +695,7 @@ export function InventoryView({ token }: InventoryViewProps) {
             label={copy.lowStockOnlyLabel}
             checked={lowStockOnly}
             onChange={(e) => setLowStockOnly(e.target.checked)}
-            className="items-center sm:h-10 sm:py-0"
+            className="items-center sm:h-10 sm:py-0 sm:pointer-coarse:h-11"
           />
         </ListToolbar>
 

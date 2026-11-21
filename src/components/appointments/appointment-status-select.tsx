@@ -91,7 +91,7 @@ export function AppointmentStatusSelect({
       </SelectTrigger>
       <SelectContent collisionPadding={16}>
         {options.map((status) => (
-          <SelectItem key={status} value={status} className="min-h-11 sm:min-h-9">
+          <SelectItem key={status} value={status} className="min-h-11 sm:pointer-fine:min-h-9">
             {STATUS_LABELS[status]}
           </SelectItem>
         ))}

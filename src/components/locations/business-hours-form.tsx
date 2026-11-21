@@ -341,7 +341,7 @@ export function BusinessHoursForm({ token }: BusinessHoursFormProps) {
                           variant="ghost"
                           size="icon-sm"
                           // Gris en reposo (catorce papeleras rojas gritan); rojo al apuntar.
-                          className="text-muted hover:bg-danger-subtle hover:text-danger-text"
+                          className="shrink-0 text-muted hover:bg-danger-subtle hover:text-danger-text"
                           onClick={() => removeRange(weekday, index)}
                           aria-label={`${copy.removeRange} ${label} ${index + 1}`}
                           title={`${copy.removeRange} ${index + 1}`}

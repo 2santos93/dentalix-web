@@ -280,7 +280,7 @@ for (const viewport of [
       await expect(printed).toContainText('Informe de cierre de caja', { timeout: 15_000 });
       await expect(printed.getByRole('columnheader', { name: 'Salidas' })).toBeAttached();
       await expect(printed).toContainText(figure(-55_000));
-      const outflows = printed.getByRole('table', { name: 'Salidas de caja' });
+      const outflows = printed.getByRole('table', { name: 'Tabla de salidas de caja' });
       await expect(outflows).toContainText('Mensajería');
       await expect(outflows).toContainText('Mensajeros Ya');
       await expect(outflows).toContainText('Papelería');

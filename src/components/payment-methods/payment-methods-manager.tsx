@@ -38,7 +38,9 @@ export const paymentMethodsCopy = {
   loadError: 'No pudimos cargar los medios de pago.',
   forbiddenTitle: 'Solo administración gestiona los medios de pago.',
   forbiddenHint: 'El resto del equipo los elige al registrar un abono.',
-  tableLabel: 'Medios de pago',
+  // DX-587: distinto del título de la sección; si la tabla no cabe, su marco es
+  // una región y dos regiones con el mismo nombre no se distinguen (axe landmark-unique).
+  tableLabel: 'Lista de medios de pago',
   colName: 'Medio',
   colKind: 'Tipo base',
   colReference: 'Referencia',

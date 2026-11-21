@@ -266,7 +266,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
               onClick={toggleSidebar}
               aria-label={copy.expand}
               title={copy.expand}
-              className="group flex size-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
+              className="group flex size-10 items-center justify-center rounded-lg text-muted pointer-coarse:size-11 transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text"
             >
               <span aria-hidden className="flex group-hover:hidden group-focus-visible:hidden">
                 <BrandMark name={branding.name} logoUrl={branding.logoUrl} />
@@ -301,7 +301,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
             title={collapsed ? `${copy.search} (⌘K / Ctrl K)` : undefined}
             className={cn(
               'flex items-center rounded-md border border-border bg-surface text-sm text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-text',
-              collapsed ? 'size-10 justify-center' : 'h-9 min-w-0 flex-1 gap-2 px-2.5',
+              collapsed ? 'size-10 justify-center pointer-coarse:size-11' : 'h-9 min-w-0 flex-1 gap-2 px-2.5',
             )}
           >
             <Search aria-hidden className="size-4 shrink-0" />

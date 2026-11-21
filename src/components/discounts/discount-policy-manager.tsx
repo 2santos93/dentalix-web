@@ -165,7 +165,7 @@ export function DiscountPolicyManager({ token, allowed }: DiscountPolicyManagerP
 
             <Link
               href="/caja/descuentos"
-              className="self-start text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
+              className="self-start text-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text max-sm:inline-flex max-sm:min-h-11 max-sm:items-center pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
             >
               {policyManagerCopy.reportLink}
             </Link>

@@ -159,7 +159,7 @@ export function RateIndicator({ token, variant }: { token: string; variant: Rate
         title={line.name}
         data-testid="rate-indicator"
         className={cn(
-          'relative flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text',
+          'relative flex size-10 shrink-0 pointer-coarse:size-11 items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text',
           line.missing ? 'text-warning-text' : 'text-muted hover:text-ink',
         )}
       >

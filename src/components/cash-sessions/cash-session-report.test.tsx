@@ -11,7 +11,7 @@ describe('CashSessionReport (DX-027)', () => {
     expect(within(doc).getByRole('heading', { name: 'Informe de cierre de caja' })).toBeInTheDocument();
     expect(doc).toHaveTextContent('Paola Martínez · 17/10/2026 9:00 a. m.');
     expect(doc).toHaveTextContent('Paola Martínez · 17/10/2026 7:00 p. m.');
-    const table = within(doc).getByRole('table', { name: 'Arqueo por moneda y método' });
+    const table = within(doc).getByRole('table', { name: 'Tabla del arqueo por moneda y método' });
     const cash = within(table).getAllByRole('row')[1];
     expect(cash).toHaveTextContent('Efectivo · USD');
     expect(cash).toHaveTextContent(/79\.?000,00/);
@@ -19,7 +19,7 @@ describe('CashSessionReport (DX-027)', () => {
     expect(doc).toHaveTextContent('Faltó cambio');
     expect(doc).toHaveTextContent('Fecha de bloqueo sugerida');
     expect(doc).toHaveTextContent('17/10/2026');
-    expect(within(doc).getByRole('table', { name: 'Cobros del turno' })).toHaveTextContent('PRI-000012');
+    expect(within(doc).getByRole('table', { name: 'Tabla de cobros del turno' })).toHaveTextContent('PRI-000012');
   });
 
   it('anulaciones aparte y ajustes con enlace a la caja original', () => {
@@ -167,7 +167,7 @@ describe('CashSessionReport (DX-027)', () => {
         }}
       />,
     );
-    const arqueo = screen.getByRole('table', { name: 'Arqueo por moneda y método' });
+    const arqueo = screen.getByRole('table', { name: 'Tabla del arqueo por moneda y método' });
     const [, cashRow, cardRow] = within(arqueo).getAllByRole('row');
     // Cobros, ajustes, salidas, esperado y diferencia: ocultos; fondo y contado, no.
     expect(within(cashRow).getAllByTestId('amount-hidden')).toHaveLength(5);
@@ -328,7 +328,7 @@ describe('CashSessionReport (DX-027)', () => {
         })}
       />,
     );
-    const arqueo = screen.getByRole('table', { name: 'Arqueo por moneda y método' });
+    const arqueo = screen.getByRole('table', { name: 'Tabla del arqueo por moneda y método' });
     const [, cashRow, cardRow] = within(arqueo).getAllByRole('row');
     expect(cashRow.textContent?.replace(/\s/g, ' ')).toMatch(/\+USD 900,00 por ajustes del medio/);
     expect(cashRow.textContent?.replace(/\s/g, ' ')).toMatch(/80\.900,00/);
@@ -356,13 +356,13 @@ describe('CashSessionReport (DX-027)', () => {
           })}
         />,
       );
-      const arqueo = screen.getByRole('table', { name: 'Arqueo por moneda y método' });
+      const arqueo = screen.getByRole('table', { name: 'Tabla del arqueo por moneda y método' });
       expect(within(arqueo).getByRole('columnheader', { name: 'Salidas' })).toBeInTheDocument();
       const [, cashRow, cardRow] = within(arqueo).getAllByRole('row');
       expect(within(cashRow).getAllByRole('cell')[4]).toHaveTextContent(/-8\.?000,00/);
       expect(within(cardRow).getAllByRole('cell')[4]).toHaveTextContent(/^USD\s0,00/);
 
-      const outflows = screen.getByRole('table', { name: 'Salidas de caja' });
+      const outflows = screen.getByRole('table', { name: 'Tabla de salidas de caja' });
       const row = within(outflows).getAllByRole('row')[1];
       expect(row).toHaveTextContent('12:30');
       expect(row).toHaveTextContent('Mensajería');
@@ -393,7 +393,7 @@ describe('CashSessionReport (DX-027)', () => {
           })}
         />,
       );
-      const arqueo = screen.getByRole('table', { name: 'Arqueo por moneda y método' });
+      const arqueo = screen.getByRole('table', { name: 'Tabla del arqueo por moneda y método' });
       const [, cashRow, cardRow] = within(arqueo).getAllByRole('row');
       expect(within(cashRow).getAllByRole('cell')[5]).toHaveTextContent(/-20\.?000,00/);
       expect(within(cashRow).getAllByRole('cell')[5]).toHaveClass('text-danger-text');
@@ -436,8 +436,8 @@ describe('CashSessionReport (DX-027)', () => {
           session={cashSessionFixture({ blindHidden: true, expected: null, payments: null, outflows: [outflowFixture()] })}
         />,
       );
-      expect(screen.queryByRole('table', { name: 'Arqueo por moneda y método' })).not.toBeInTheDocument();
-      expect(screen.getByRole('table', { name: 'Salidas de caja' })).toHaveTextContent('Mensajería');
+      expect(screen.queryByRole('table', { name: 'Tabla del arqueo por moneda y método' })).not.toBeInTheDocument();
+      expect(screen.getByRole('table', { name: 'Tabla de salidas de caja' })).toHaveTextContent('Mensajería');
       expect(screen.queryByText('Esperado')).not.toBeInTheDocument();
     });
 

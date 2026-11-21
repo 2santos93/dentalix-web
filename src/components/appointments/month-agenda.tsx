@@ -169,7 +169,7 @@ export function MonthAgenda({
                     ? 'font-semibold text-primary-subtle-text'
                     : day.inMonth
                       ? 'font-medium text-ink'
-                      : 'text-faint',
+                      : 'text-muted',
                 )}
               >
                 {dayNum}

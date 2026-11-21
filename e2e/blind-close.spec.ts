@@ -267,7 +267,7 @@ for (const viewport of [
       // Ronda 4: el grupo Efectivo · USD del arqueo de esa caja cerrada va sin
       // cobros, esperado ni diferencia (con los cobros vivos delataría la
       // anulación); el fondo y lo contado se quedan.
-      const arqueo = report.getByRole('table', { name: 'Arqueo por moneda y método' });
+      const arqueo = report.getByRole('table', { name: 'Tabla del arqueo por moneda y método' });
       const cashRow = arqueo.getByRole('row').filter({ hasText: 'Efectivo · USD' });
       await expect(cashRow.getByTestId('amount-hidden').first()).toBeVisible({ timeout: 15_000 });
       await expect(cashRow).not.toContainText('145,00');

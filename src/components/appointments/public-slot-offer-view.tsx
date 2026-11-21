@@ -169,7 +169,12 @@ export function PublicSlotOfferView({ token }: { token: string }) {
         )}
 
         {state.kind === 'invalid' && (
-          <Notice icon={LinkIcon} title={publicSlotOfferCopy.invalidTitle} message={publicSlotOfferCopy.invalidMessage} />
+          <Notice
+            icon={LinkIcon}
+            title={publicSlotOfferCopy.invalidTitle}
+            message={publicSlotOfferCopy.invalidMessage}
+            headingLevel={1}
+          />
         )}
 
         {data && (

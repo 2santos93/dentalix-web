@@ -1717,7 +1717,10 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
             </div>
           ) : null}
           {!wide || !phone ? (
-            <div className="flex w-full gap-2 sm:ml-auto sm:w-auto sm:flex-wrap sm:justify-end [&>button]:flex-1 sm:[&>button]:flex-none">
+            // DX-587: `flex-wrap` también en el teléfono: a 320 px «En clínica»,
+            // «Pendientes» y los tres iconos no caben en una fila y la agenda
+            // se desplazaba en horizontal; los iconos bajan a la siguiente.
+            <div className="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto sm:justify-end [&>button]:flex-1 sm:[&>button]:flex-none">
               {!wide ? (
                 <>
               {/* DX-200: «En clínica», en un cajón sin panel lateral. */}
