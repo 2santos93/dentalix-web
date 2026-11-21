@@ -1,74 +1,25 @@
 import { apiFetch } from '@/lib/api/client';
+import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 
 // DX-588: pantallas de sala de espera (el televisor de la sede).
 //
-// Tipos LOCALES con los nombres de los esquemas OpenAPI previstos, hasta que
-// la API publique el contrato y se regenere `schema.d.ts`; entonces pasan a
-// `components['schemas'][…]` sin cambiar ningún uso.
+// Los tipos salen del contrato generado (la API los documenta con @ApiProperty).
+type Schemas = components['schemas'];
 
-export type WaitingRoomNameMode = 'NAME_INITIAL' | 'TURN_NUMBER';
-
-export interface WaitingRoomScreenDto {
-  id: string;
-  locationId: string;
-  name: string;
-  nameMode: WaitingRoomNameMode;
-  messages: string[];
-  soundEnabled: boolean;
-  revokedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
+export type WaitingRoomNameMode = Schemas['WaitingRoomNameMode'];
+export type WaitingRoomScreenDto = Schemas['WaitingRoomScreenDto'];
 /** La pantalla recién creada: el token solo viaja en esta respuesta. */
-export interface CreatedWaitingRoomScreenDto extends WaitingRoomScreenDto {
-  token: string;
-}
-
-export interface CreateWaitingRoomScreenDto {
-  locationId: string;
-  name: string;
-  nameMode?: WaitingRoomNameMode;
-  messages?: string[];
-  soundEnabled?: boolean;
-}
-
-export interface UpdateWaitingRoomScreenDto {
-  name?: string;
-  nameMode?: WaitingRoomNameMode;
-  messages?: string[];
-  soundEnabled?: boolean;
-}
-
-export interface PublicWaitingRoomWaitingItemDto {
-  key: string;
-  label: string;
-  minutesWaiting: number;
-}
-
-export interface PublicWaitingRoomCalledItemDto {
-  key: string;
-  label: string;
-  chairName: string | null;
-  providerName: string | null;
-  minutesSinceCalled: number;
-}
-
-export interface PublicWaitingRoomBoardDto {
-  screenName: string;
-  locationName: string;
-  nameMode: WaitingRoomNameMode;
-  messages: string[];
-  soundEnabled: boolean;
-  timeZone: string;
-  locale: string;
-  hourCycle: string | null;
-  now: string;
-  refreshSeconds: number;
-  waiting: PublicWaitingRoomWaitingItemDto[];
-  called: PublicWaitingRoomCalledItemDto[];
-}
+export type CreatedWaitingRoomScreenDto = Schemas['CreatedWaitingRoomScreenDto'];
+export type CreateWaitingRoomScreenDto = Schemas['CreateWaitingRoomScreenDto'];
+export type UpdateWaitingRoomScreenDto = Schemas['UpdateWaitingRoomScreenDto'];
+export type PublicWaitingRoomWaitingItemDto = Schemas['PublicWaitingRoomWaitingItemDto'];
+export type PublicWaitingRoomCalledItemDto = Schemas['PublicWaitingRoomCalledItemDto'];
+/**
+ * El tablero. La API corta cada columna a 40 filas, pero `waitingTotal` y
+ * `calledTotal` dicen cuántas hay en total (para «y N más»).
+ */
+export type PublicWaitingRoomBoardDto = Schemas['PublicWaitingRoomBoardDto'];
 
 export type WaitingRoomScreen = WaitingRoomScreenDto;
 export type CreatedWaitingRoomScreen = CreatedWaitingRoomScreenDto;

@@ -88,14 +88,6 @@ export const inClinicCopy = {
   turn: (n: number) => `Turno ${n}`,
 };
 
-/**
- * DX-588: el turno del día (se asigna al marcar «Llegó»), o `null`.
- * TODO(DX-588): con el schema.d.ts regenerado, `item.turnNumber` directamente.
- */
-export function turnNumberOf(item: InClinicItem): number | null {
-  const value = (item as InClinicItem & { turnNumber?: number | null }).turnNumber;
-  return typeof value === 'number' ? value : null;
-}
 
 type GroupKey = keyof typeof inClinicCopy.groups;
 const GROUPS: GroupKey[] = ['waiting', 'inChair', 'readyForCheckout'];
@@ -386,7 +378,7 @@ function InClinicGroup({
           {items.map((item) => {
             const name = patientName(item);
             const tz = view.timeZone;
-            const turn = turnNumberOf(item);
+            const turn = item.turnNumber;
             return (
               <li
                 key={item.appointmentId}

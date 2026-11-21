@@ -3739,6 +3739,26 @@ export interface paths {
         patch: operations["PaymentMethodsController_changeAdjustment"];
         trace?: never;
     };
+    "/api/v1/payment-methods/{id}/gateway-fee": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Pone o quita la comisión de la pasarela del medio
+         * @description DX-018-bis. Lo que la pasarela cobra a la CLÍNICA por cada cobro con este medio (no es un ajuste al paciente de DX-516). Con «descontar pasarela» en la regla de honorarios, la base cobrada de cada abono se reduce en este %; al cerrar la liquidación queda congelado.
+         */
+        put: operations["PaymentMethodsController_gatewayFee"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payment-methods/{id}/instructions": {
         parameters: {
             query?: never;
@@ -7316,6 +7336,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/waiting-room-screens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pantallas de sala de espera (vivas primero) */
+        get: operations["WaitingRoomScreensController_list"];
+        put?: never;
+        /**
+         * Crear una pantalla para una sede
+         * @description Devuelve el token del enlace `/sala/<token>` UNA sola vez; en la BD solo queda su hash.
+         */
+        post: operations["WaitingRoomScreensController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/waiting-room-screens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Renombrar o ajustar una pantalla */
+        patch: operations["WaitingRoomScreensController_update"];
+        trace?: never;
+    };
+    "/api/v1/waiting-room-screens/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revocar una pantalla
+         * @description El televisor deja de ver el tablero en su siguiente petición («Esta pantalla ya no está activa»). Idempotente.
+         */
+        post: operations["WaitingRoomScreensController_revoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/waiting-room/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * El tablero de la sala de espera de la sede de la pantalla
+         * @description Quién espera (por orden de llegada) y quién pasa a consulta (con sillón y profesional). Nombre visible «Ana R.» o «Turno 7» según la pantalla; nunca motivo, tratamiento, teléfono, documento ni importes. El televisor lo pide cada `refreshSeconds`.
+         */
+        get: operations["PublicWaitingRoomController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quote-follow-up-settings": {
         parameters: {
             query?: never;
@@ -9926,6 +10024,26 @@ export interface paths {
         patch: operations["LabOrdersController_update"];
         trace?: never;
     };
+    "/api/v1/lab-orders/{id}/cost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Pone o quita el costo del laboratorio de la orden (solo ADMIN)
+         * @description En cualquier estado salvo anulada (también tras «Enviada»: el laboratorio factura al entregar). Con «descontar laboratorio» en la regla de honorarios, el costo en la moneda del plan del ítem se descuenta de la base; en otra moneda no se convierte: se avisa y no se descuenta.
+         */
+        put: operations["LabOrdersController_setCost"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lab-orders/{id}/send": {
         parameters: {
             query?: never;
@@ -11326,7 +11444,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE" | "ORTHO_CASE" | "ORTHO_VISIT" | "DENTAL_LAB" | "DENTAL_LAB_ORDER" | "COMMISSION_SETTLEMENT" | "POST_OP_CHECK" | "PATIENT_ACCESS_LINK" | "ONLINE_BOOKING" | "LEAD" | "BANK_ACCOUNT" | "BANK_STATEMENT_IMPORT" | "BANK_RECONCILIATION_MATCH";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE" | "ORTHO_CASE" | "ORTHO_VISIT" | "DENTAL_LAB" | "DENTAL_LAB_ORDER" | "COMMISSION_SETTLEMENT" | "POST_OP_CHECK" | "PATIENT_ACCESS_LINK" | "ONLINE_BOOKING" | "LEAD" | "BANK_ACCOUNT" | "BANK_STATEMENT_IMPORT" | "BANK_RECONCILIATION_MATCH" | "WAITING_ROOM_SCREEN";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -17261,6 +17379,8 @@ export interface components {
             seatedAt: string | null;
             /** Format: date-time */
             readyForCheckoutAt: string | null;
+            /** @description DX-588: turno del día en la sede, dado al marcar «Llegó» (estable mientras dure la visita; el que ve el paciente en la pantalla de sala de espera en modo «Número de turno»). null si llegó antes de DX-588. */
+            turnNumber: number | null;
             /** @description Minutos (enteros, reloj del servidor) en el grupo actual: esperando desde la llegada, en el sillón desde que se sentó, o por cobrar desde que quedó listo. */
             minutesInStatus: number;
             /** @description Minutos que esperó desde la llegada hasta el sillón (o que lleva esperando). */
@@ -18903,6 +19023,11 @@ export interface components {
             proofPolicy: components["schemas"]["PaymentProofPolicy"];
             /** @description DX-569 «Permitir en el enlace de pago»: el paciente lo ve en su enlace si además está activo y tiene datos para pagar en la sede del enlace (o de toda la clínica). */
             allowInPaymentLink: boolean;
+            /**
+             * @description DX-018-bis: % que la pasarela cobra a la clínica por cada cobro con este medio (null = ninguno). Los honorarios pueden descontarlo.
+             * @example 3.5
+             */
+            gatewayFeePercent: number | null;
             /** @description Medio inicial equivalente a este método antiguo; null si lo creó la clínica. */
             legacyMethod: components["schemas"]["PaymentMethod"] | null;
             /** @description DX-516: sus ajustes (activos o no; hasta 5 activos). Vacío por defecto. */
@@ -18965,6 +19090,13 @@ export interface components {
             fixedCurrency?: string | null;
             /** @description Sin indicarlo, activo. */
             active?: boolean;
+        };
+        SetPaymentMethodGatewayFeeDto: {
+            /**
+             * @description Mayor que 0 y como mucho 100, con hasta 2 decimales; null la quita.
+             * @example 3.5
+             */
+            percent: number | null;
         };
         PaymentMethodInstructionDto: {
             /** Format: uuid */
@@ -27210,6 +27342,145 @@ export interface components {
             /** @description SKIP: no tocar a los pacientes que ya existen · FILL_EMPTY: rellenar solo sus campos vacíos (nunca pisa un dato) */
             duplicateMode: components["schemas"]["PatientImportDuplicateMode"];
         };
+        /**
+         * @description `NAME_INITIAL`: primer nombre e inicial del primer apellido («Ana R.», por defecto). `TURN_NUMBER`: el turno del día en la sede («Turno 7»), sin ningún nombre.
+         * @enum {string}
+         */
+        WaitingRoomNameMode: "NAME_INITIAL" | "TURN_NUMBER";
+        WaitingRoomScreenDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            locationId: string;
+            /** @example Televisor de la sala */
+            name: string;
+            /** @description `NAME_INITIAL`: primer nombre e inicial del primer apellido («Ana R.», por defecto). `TURN_NUMBER`: el turno del día en la sede («Turno 7»), sin ningún nombre. */
+            nameMode: components["schemas"]["WaitingRoomNameMode"];
+            /**
+             * @description Mensajes rotativos del televisor (horario, avisos).
+             * @example [
+             *       "Horario: lunes a viernes de 8:00 a 17:00"
+             *     ]
+             */
+            messages: string[];
+            /** @description Aviso sonoro al pasar alguien a consulta (si el navegador lo permite). */
+            soundEnabled: boolean;
+            /**
+             * Format: date-time
+             * @description Revocada: el televisor muestra «Esta pantalla ya no está activa».
+             */
+            revokedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateWaitingRoomScreenDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @example Televisor de la sala */
+            name: string;
+            /** @description `NAME_INITIAL`: primer nombre e inicial del primer apellido («Ana R.», por defecto). `TURN_NUMBER`: el turno del día en la sede («Turno 7»), sin ningún nombre. */
+            nameMode?: components["schemas"]["WaitingRoomNameMode"];
+            messages?: string[];
+            soundEnabled?: boolean;
+        };
+        CreatedWaitingRoomScreenDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            locationId: string;
+            /** @example Televisor de la sala */
+            name: string;
+            /** @description `NAME_INITIAL`: primer nombre e inicial del primer apellido («Ana R.», por defecto). `TURN_NUMBER`: el turno del día en la sede («Turno 7»), sin ningún nombre. */
+            nameMode: components["schemas"]["WaitingRoomNameMode"];
+            /**
+             * @description Mensajes rotativos del televisor (horario, avisos).
+             * @example [
+             *       "Horario: lunes a viernes de 8:00 a 17:00"
+             *     ]
+             */
+            messages: string[];
+            /** @description Aviso sonoro al pasar alguien a consulta (si el navegador lo permite). */
+            soundEnabled: boolean;
+            /**
+             * Format: date-time
+             * @description Revocada: el televisor muestra «Esta pantalla ya no está activa».
+             */
+            revokedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description Token del enlace `/sala/<token>` (43 caracteres base64url). Se muestra UNA sola vez: en la BD solo queda su hash. */
+            token: string;
+        };
+        UpdateWaitingRoomScreenDto: {
+            name?: string;
+            /** @description `NAME_INITIAL`: primer nombre e inicial del primer apellido («Ana R.», por defecto). `TURN_NUMBER`: el turno del día en la sede («Turno 7»), sin ningún nombre. */
+            nameMode?: components["schemas"]["WaitingRoomNameMode"];
+            messages?: string[];
+            soundEnabled?: boolean;
+        };
+        PublicWaitingRoomWaitingItemDto: {
+            /**
+             * @description Clave opaca y estable entre sondeos (no es un id interno).
+             * @example 3f2a9c1b7d4e6a08
+             */
+            key: string;
+            /**
+             * @description «Ana R.» o «Turno 7», según el modo de la pantalla.
+             * @example Ana R.
+             */
+            label: string;
+            /** @description Minutos desde que llegó. */
+            minutesWaiting: number;
+        };
+        PublicWaitingRoomCalledItemDto: {
+            /**
+             * @description Clave opaca y estable entre sondeos (no es un id interno).
+             * @example 9b0c4e2f1a7d3c55
+             */
+            key: string;
+            /** @example José P. */
+            label: string;
+            /** @example Sillón 2 */
+            chairName: string | null;
+            /** @example Dra. María González */
+            providerName: string | null;
+            /** @description Minutos desde que pasó al sillón. */
+            minutesSinceCalled: number;
+        };
+        PublicWaitingRoomBoardDto: {
+            /** @example Televisor de la sala */
+            screenName: string;
+            /** @example Sede Chacao */
+            locationName: string;
+            nameMode: components["schemas"]["WaitingRoomNameMode"];
+            messages: string[];
+            soundEnabled: boolean;
+            /** @example America/Caracas */
+            timeZone: string;
+            /** @example es-VE */
+            locale: string;
+            /** @enum {string} */
+            hourCycle: "h12" | "h23";
+            /**
+             * Format: date-time
+             * @description Reloj del servidor.
+             */
+            now: string;
+            /** @description Cada cuántos segundos volver a pedir el tablero. */
+            refreshSeconds: number;
+            /** @description En espera, por orden de llegada. */
+            waiting: components["schemas"]["PublicWaitingRoomWaitingItemDto"][];
+            /** @description Cuántos esperan en total (aunque la lista se corte). */
+            waitingTotal: number;
+            /** @description Pasando a consulta: quien acaba de pasar, primero. */
+            called: components["schemas"]["PublicWaitingRoomCalledItemDto"][];
+            /** @description Cuántos están en el sillón en total. */
+            calledTotal: number;
+        };
         LocationQuoteFollowUpSettingsDto: {
             /** Format: uuid */
             locationId: string;
@@ -31532,6 +31803,17 @@ export interface components {
             toothNumber: string;
             /** @example Corona de zirconio */
             procedureName: string;
+            /** @description DX-018-bis: moneda del plan. Un costo en otra moneda no se descuenta de los honorarios. */
+            planCurrency: string;
+        };
+        LabOrderCostDto: {
+            /**
+             * @description Decimal en texto.
+             * @example 180.00
+             */
+            amount: string;
+            /** @description Código ISO 4217. */
+            currency: string;
         };
         LabOrderAppointmentRefDto: {
             /** Format: uuid */
@@ -31609,6 +31891,8 @@ export interface components {
             cancelledBy: components["schemas"]["LabOrderPersonDto"] | null;
             cancelReason: string | null;
             treatmentPlanItem: components["schemas"]["LabOrderPlanItemRefDto"] | null;
+            /** @description DX-018-bis: costo del trabajo. Solo ADMIN lo ve (null para el resto y en la impresión). */
+            cost: components["schemas"]["LabOrderCostDto"] | null;
             appointment: components["schemas"]["LabOrderAppointmentRefDto"] | null;
             /** @description La orden anterior que esta corrige */
             replacesOrder: components["schemas"]["LabOrderNumberRefDto"] | null;
@@ -31699,6 +31983,15 @@ export interface components {
             appointmentId?: string | null;
             /** Format: uuid */
             replacesOrderId?: string | null;
+        };
+        SetLabOrderCostDto: {
+            /**
+             * @description Lo que cobra el laboratorio: decimal ≥ 0 con hasta 2 decimales, en texto. null lo quita (con la moneda en null).
+             * @example 180.00
+             */
+            cost: string | null;
+            /** @description Moneda del costo (ISO 4217). Si no es la del plan del ítem, no se descuenta de los honorarios. */
+            currency: string | null;
         };
         SendLabOrderDto: {
             /**
@@ -31959,9 +32252,9 @@ export interface components {
             rule: components["schemas"]["CommissionRuleDto"] | null;
         };
         CommissionDeductionsDto: {
-            /** @description Se puede descontar el costo de laboratorio (hoy no: sin datos). */
+            /** @description Se puede descontar el costo de laboratorio (DX-018-bis: sí). */
             labCost: boolean;
-            /** @description Se puede descontar la comisión de la pasarela (hoy no: sin datos). */
+            /** @description Se puede descontar la comisión de la pasarela (DX-018-bis: sí). */
             cardFee: boolean;
         };
         CommissionRulesDto: {
@@ -31994,12 +32287,12 @@ export interface components {
              */
             active: boolean;
             /**
-             * @description Descontar el costo de laboratorio. Aún no disponible (las órdenes de laboratorio no guardan su costo): true → 400.
+             * @description DX-018-bis: descontar antes del % el costo de laboratorio del ítem (sus órdenes vivas con costo en la moneda del plan; en otra moneda no se convierte: se avisa y no se descuenta).
              * @default false
              */
             deductLabCost: boolean;
             /**
-             * @description Descontar la comisión de la pasarela del medio de pago. Aún no disponible (los medios de pago no guardan ese %): true → 400.
+             * @description DX-018-bis: descontar antes del % la comisión de la pasarela (el % del medio de pago del abono; solo base «cobrado»).
              * @default false
              */
             deductCardFee: boolean;
@@ -32026,6 +32319,18 @@ export interface components {
             amount: number;
             /** @description Moneda del abono. */
             currency: string;
+        };
+        CommissionLineDeductionsDto: {
+            /** @description Base antes de descuentos (sin descuentos, = base). */
+            grossBase: number;
+            /** @description Costo de laboratorio descontado. */
+            labCost: number;
+            /** @description % de la pasarela aplicado; null si no se descontó. */
+            cardFeePercent: number | null;
+            /** @description Comisión de la pasarela descontada. */
+            cardFee: number;
+            /** @description Monedas de costos de laboratorio distintas a la del plan: no se convierten ni se descuentan (aviso). */
+            labCostSkippedCurrencies: string[];
         };
         CommissionLineDto: {
             /**
@@ -32068,6 +32373,7 @@ export interface components {
             percent: number;
             /** @description Honorario en la moneda de la línea (un ajuste, con signo). */
             amount: number;
+            deductions: components["schemas"]["CommissionLineDeductionsDto"];
             /**
              * Format: uuid
              * @description DX-464: el pago vivo de la liquidación que cubre la línea; null en la vista previa o si está pendiente.
@@ -32192,6 +32498,10 @@ export interface components {
             basis: components["schemas"]["CommissionBasis"];
             releaseMode: components["schemas"]["CommissionReleaseMode"];
             percent: number;
+            /** @description DX-018-bis: la regla descontaba el laboratorio al cerrar. */
+            deductLabCost: boolean;
+            /** @description DX-018-bis: la regla descontaba la pasarela al cerrar. */
+            deductCardFee: boolean;
             /** Format: date-time */
             closedAt: string;
             closedBy: components["schemas"]["CommissionClosedByDto"];
@@ -32222,6 +32532,10 @@ export interface components {
             basis: components["schemas"]["CommissionBasis"];
             releaseMode: components["schemas"]["CommissionReleaseMode"];
             percent: number;
+            /** @description DX-018-bis: la regla descontaba el laboratorio al cerrar. */
+            deductLabCost: boolean;
+            /** @description DX-018-bis: la regla descontaba la pasarela al cerrar. */
+            deductCardFee: boolean;
             /** Format: date-time */
             closedAt: string;
             closedBy: components["schemas"]["CommissionClosedByDto"];
@@ -44230,6 +44544,52 @@ export interface operations {
             };
         };
     };
+    PaymentMethodsController_gatewayFee: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPaymentMethodGatewayFeeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodDto"];
+                };
+            };
+            /** @description Porcentaje fuera de (0, 100] o con más de 2 decimales */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Medio no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PaymentMethodsController_instructions: {
         parameters: {
             query?: never;
@@ -53367,6 +53727,202 @@ export interface operations {
             };
         };
     };
+    WaitingRoomScreensController_list: {
+        parameters: {
+            query?: {
+                /** @description Solo las pantallas de esta sede; sin ella, las de las sedes permitidas. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitingRoomScreenDto"][];
+                };
+            };
+            /** @description Solo administración gestiona las pantallas de sala de espera. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    WaitingRoomScreensController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWaitingRoomScreenDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedWaitingRoomScreenDto"];
+                };
+            };
+            /** @description Nombre vacío o de más de 60, más de 5 mensajes o alguno de más de 140 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona las pantallas de sala de espera. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada o retirada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    WaitingRoomScreensController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWaitingRoomScreenDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitingRoomScreenDto"];
+                };
+            };
+            /** @description Campo inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo administración gestiona las pantallas de sala de espera. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pantalla no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La pantalla está revocada */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    WaitingRoomScreensController_revoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitingRoomScreenDto"];
+                };
+            };
+            /** @description Solo administración gestiona las pantallas de sala de espera. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pantalla no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicWaitingRoomController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicWaitingRoomBoardDto"];
+                };
+            };
+            /** @description `WAITING_ROOM_SCREEN_INACTIVE` «Esta pantalla ya no está activa.»: token malformado, desconocido, de otra clínica, revocado o de una sede retirada (la misma respuesta para todos). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     QuoteFollowUpSettingsController_findAll: {
         parameters: {
             query?: never;
@@ -60407,6 +60963,66 @@ export interface operations {
                 content?: never;
             };
             /** @description Ítem, cita u orden corregida de otro paciente; laboratorio o servicio inactivo */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LabOrdersController_setCost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetLabOrderCostDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabOrderDto"];
+                };
+            };
+            /** @description Costo o moneda inválidos, uno sin el otro, o sin cambios */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración pone el costo del laboratorio. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Orden de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Orden anulada o cambiada a la vez */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La moneda no existe */
             422: {
                 headers: {
                     [name: string]: unknown;

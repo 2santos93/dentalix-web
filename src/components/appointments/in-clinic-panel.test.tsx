@@ -73,6 +73,7 @@ function item(overrides: Partial<InClinicItem> & { appointmentId: string }): InC
     overbooked: false,
     triageFlags: [],
     triageNote: null,
+    turnNumber: null,
     ...overrides,
   };
 }
@@ -112,9 +113,8 @@ const noRunner = { pendingId: null, run: jest.fn() };
 
 describe('InClinicPanel: turno del día (DX-588)', () => {
   it('chip «Turno N» en la tarjeta de quien tiene turno; nada en quien no', () => {
-    // TODO(DX-588): sin el cast cuando `turnNumber` esté en el schema.d.ts.
-    const withTurn = { ...item({ appointmentId: 'a1' }), turnNumber: 7 } as InClinicItem;
-    const withoutTurn = { ...item({ appointmentId: 'a2' }), turnNumber: null } as InClinicItem;
+    const withTurn = item({ appointmentId: 'a1', turnNumber: 7 });
+    const withoutTurn = item({ appointmentId: 'a2', turnNumber: null });
     render(
       <InClinicPanel
         state={staticState({ view: view({ waiting: [withTurn], inChair: [withoutTurn] }) })}
