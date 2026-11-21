@@ -115,9 +115,9 @@ describe('RateIndicator (DX-584)', () => {
   it('DX-585: con BCV, «BCV» y la fecha valor en el nombre y en el popover; una moneda del proveedor, «Automática»', async () => {
     const user = userEvent.setup();
     const bcvUsd = { ...usd, source: 'BCV' as const, perReference: 918.7662, valueDate: '2026-11-20' };
-    // COP no sale del BCV: la API no le da fecha valor y su cifra es la del proveedor.
-    const cop = { ...usd, currency: 'COP', label: null, perReference: 0.2301, source: 'BCV' as const };
-    renderFixed(header({ rates: [bcvUsd, cop] }), 'ADMIN');
+    // BRL no sale del BCV: la API no le da fecha valor y su cifra es la del proveedor.
+    const brl = { ...usd, currency: 'BRL', label: null, perReference: 0.2301, source: 'BCV' as const };
+    renderFixed(header({ rates: [bcvUsd, brl] }), 'ADMIN');
     const button = await screen.findByRole('button', {
       name: 'Tasa de hoy: 1 USD = 918,77 Bs., fuente BCV, fecha valor 20/11/2026, y 1 moneda más',
     });

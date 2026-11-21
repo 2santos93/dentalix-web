@@ -157,7 +157,7 @@ describe('fuente BCV (DX-585)', () => {
     const bcvDay = { source: 'BCV' as const, bcv: { valueDate: '2026-11-20' } };
     expect(bcvValueDateFor(bcvDay, 'VES', 'USD')).toBe('2026-11-20');
     expect(bcvValueDateFor(bcvDay, 'USD', 'EUR')).toBe('2026-11-20');
-    expect(bcvValueDateFor(bcvDay, 'COP', 'USD')).toBeNull();
+    expect(bcvValueDateFor(bcvDay, 'BRL', 'USD')).toBeNull();
     expect(bcvValueDateFor({ source: 'BCV', bcv: null }, 'VES', 'USD')).toBeNull();
     expect(bcvValueDateFor({ source: 'AUTOMATIC' }, 'VES', 'USD')).toBeNull();
   });

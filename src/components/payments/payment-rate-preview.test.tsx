@@ -78,11 +78,11 @@ describe('PaymentRatePreview con la fuente BCV (DX-585)', () => {
       {
         base: 'USD',
         source: 'BCV',
-        rates: { COP: 4000 },
+        rates: { BRL: 4000 },
         rateDate: '2026-11-22',
         bcv: { valueDate: '2026-11-20', fetchedAt: '2026-11-20T21:00:00.000Z' },
       },
-      'COP',
+      'BRL',
     );
     expect(screen.getByText(/· BCV · 22\/11\/2026$/)).toBeInTheDocument();
   });
