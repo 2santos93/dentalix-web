@@ -178,8 +178,12 @@ for (const width of [1440, 390] as const) {
     await loginAs(page, origin, admin.email, password);
     let pending = true;
     await page.route(/\/patient-duplicates\/merge-leftovers\?keptId=/, async (route) => {
-      const response = await route.fetch();
-      expect(response.ok(), await response.text()).toBeTruthy();
+      // La página puede cancelar una lectura (AbortController del efecto) y su
+      // respuesta queda descartada: no se lee el cuerpo para comprobar el
+      // estado y una petición ya cancelada se ignora.
+      const response = await route.fetch().catch(() => null);
+      if (!response) return;
+      expect(response.status(), 'GET merge-leftovers').toBe(200);
       const body = pending
         ? {
             items: [
@@ -201,8 +205,9 @@ for (const width of [1440, 390] as const) {
               },
             ],
           }
-        : await response.json();
-      await route.fulfill({ response, json: body });
+        : await response.json().catch(() => null);
+      if (body === null) return;
+      await route.fulfill({ response, json: body }).catch(() => undefined);
     });
 
     await page.goto(`${origin}/patients/${yusmaryOld}?tab=data`);
