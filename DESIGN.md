@@ -743,7 +743,7 @@ screen it opens; a group with no visible entries disappears.
   accepts a currency other than the reference one, or the ADMIN forced «Siempre»), the shell shows
   the rate as *context of the sede*, right above the sede switcher: «1 USD = 918,77 Bs.» (the
   DX-517 text when the clinic has one), the first accepted currency plus a neutral «+N» counter
-  for the rest. Expanded sidebar: a 36px row (`border` + surface, ink, tabular); rail: a 40px icon
+  for the rest. Expanded sidebar: a 36px row (`border` + surface, ink, tabular); rail: a 40px (44px by touch) icon
   button (name and `title` carry the text); phone: a 44px two-line pill after the sede pill
   («1 USD =» muted / «918,77 Bs.» ink, max 7.5rem). Without a rate: «Sin tasa hoy» in
   `warning-text` with the alert icon — never red, nothing is broken. Every variant opens the same

@@ -185,7 +185,7 @@ describe('PaymentMethodsManager (DX-377)', () => {
     mockedUpdate.mockResolvedValue(card);
     jest.mocked(setPaymentMethodGatewayFee).mockResolvedValue({ ...card, gatewayFeePercent: 3.5 });
     render(<PaymentMethodsManager token="tok" allowed />);
-    const table = await screen.findByRole('table', { name: 'Medios de pago' });
+    const table = await screen.findByRole('table', { name: 'Lista de medios de pago' });
     expect(within(table).getByText('Sin comisión')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Acciones de Tarjeta' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Editar' }));

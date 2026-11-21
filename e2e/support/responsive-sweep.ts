@@ -14,7 +14,7 @@ import { E2E_BROWSER_LOCALE } from './regional';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './api';
 import { loginAs } from './auth';
 import { axeViolations } from './axe';
-import { atSede, sedeWeekdayFromToday } from './clock';
+import { atSede, sedeDayFromToday, sedeWeekdayFromToday } from './clock';
 import { API_URL } from './urls';
 import { ALL_NAV_ITEMS, canSee } from '../../src/components/layouts/nav-config';
 import { SETTINGS_SECTIONS } from '../../src/components/settings/settings-sections';
@@ -163,6 +163,12 @@ export async function seedSweepClinic(request: APIRequestContext, sizeId: string
     },
   });
   expect(schedule.ok(), await schedule.text()).toBeTruthy();
+
+  // Clínica bimoneda (USD y bolívares) con la tasa de hoy: así el indicador de
+  // la tasa (DX-584/DX-586) sale en la barra de cada pantalla y entra en el barrido.
+  await send(request, admin, 'put', '/exchange/settings', { acceptedCurrencies: ['USD', 'VES'] });
+  await send(request, admin, 'put', '/exchange/currency-texts', { entries: [{ currency: 'VES', text: 'Bs.' }] });
+  await apiPost(request, admin, '/exchange/manual-rates', { date: sedeDayFromToday(0), currency: 'VES', rate: 36.5 });
 
   const patient = await apiPost<{ id: string }>(request, admin, '/patients', {
     firstName: 'Ana Gabriela',
