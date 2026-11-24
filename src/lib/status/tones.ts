@@ -438,6 +438,20 @@ const commissionReceipt = {
 } satisfies Presentations<Schemas['CommissionReceiptStatus']>;
 
 /**
+ * DX-053: la exportación de los datos de la clínica. En cola es una espera;
+ * generándose está en curso; lista para descargar es el éxito; descargada y
+ * caducada son cierres sin juicio (un solo uso, 24 h); falló salió mal.
+ */
+const clinicExport = {
+  PENDING: s('warning', 'En cola'),
+  RUNNING: s('info', 'Generándose'),
+  READY: s('success', 'Lista'),
+  DOWNLOADED: s('neutral', 'Descargada'),
+  EXPIRED: s('neutral', 'Caducada'),
+  FAILED: s('danger', 'Falló'),
+} satisfies Presentations<Schemas['ClinicExportState']>;
+
+/**
  * DX-556: la etapa de un prospecto. Nuevo pide el primer contacto; contactado
  * y con cita están en curso; asistió es el éxito (ya es paciente); perdido es
  * un cierre sin juicio (puede reabrirse).
@@ -509,6 +523,7 @@ export const STATUS_PRESENTATION = {
   sedationSheet,
   commissionPayment,
   commissionReceipt,
+  clinicExport,
 } as const;
 
 export type StatusKind = keyof typeof STATUS_PRESENTATION;
