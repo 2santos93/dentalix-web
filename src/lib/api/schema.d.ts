@@ -28665,6 +28665,11 @@ export interface components {
             /** @description Texto con las variables ya resueltas */
             body: string;
             professionalName: string;
+            /**
+             * Format: date-time
+             * @description DX-058: instante del servidor con el que se pintó {{fecha}}; se devuelve tal cual al firmar (`previewedAt`).
+             */
+            previewedAt: string;
         };
         SignPatientConsentDto: {
             /** Format: uuid */
@@ -28673,6 +28678,11 @@ export interface components {
             templateVersion: number;
             /** Format: uuid */
             treatmentPlanId?: string;
+            /**
+             * Format: date-time
+             * @description DX-058: `previewedAt` de la vista previa. Fija la fecha del texto ({{fecha}}) para que coincida con la que se leyó; 409 CONSENT_PREVIEW_EXPIRED si tiene más de 2 h. Sin él, la fecha es la de la firma.
+             */
+            previewedAt?: string;
             /** @enum {string} */
             signerType: "PATIENT" | "GUARDIAN";
             /** @description Obligatorio si signerType=GUARDIAN */
@@ -55769,7 +55779,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description La plantilla cambió desde la vista previa (templateVersion) */
+            /** @description La plantilla cambió desde la vista previa (templateVersion, comprobado también en la transacción del INSERT) o la vista previa caducó (CONSENT_PREVIEW_EXPIRED) */
             409: {
                 headers: {
                     [name: string]: unknown;
