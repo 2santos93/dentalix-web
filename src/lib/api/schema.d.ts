@@ -3595,6 +3595,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/locations/{locationId}/check-in-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** «Ya llegué» de la sede: ventana, retraso, enlace y QR */
+        get: operations["CheckInSettingsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Cambiar la ventana, el umbral de retraso o el enlace */
+        patch: operations["CheckInSettingsController_update"];
+        trace?: never;
+    };
+    "/api/v1/locations/{locationId}/check-in-settings/qr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generar el QR de llegada de la sede
+         * @description Devuelve el token del cartel `/llegada/<token>` UNA sola vez (en la BD, su hash). Si la sede ya tenía uno, deja de valer.
+         */
+        post: operations["CheckInSettingsController_createQr"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{locationId}/check-in-settings/qr/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retirar el QR de llegada de la sede
+         * @description El cartel deja de valer en la siguiente lectura («Este código ya no está activo»). Idempotente.
+         */
+        post: operations["CheckInSettingsController_revokeQr"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment": {
         parameters: {
             query?: never;
@@ -7452,6 +7510,51 @@ export interface paths {
         get: operations["PublicWaitingRoomController_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/appointment-confirmations/{token}/arrival": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * DX-265: ¿puede el paciente marcar «Ya llegué» con este enlace?
+         * @description Solo lee. Vale el día de la cita, aunque el enlace de confirmación ya haya caducado al empezar la cita; un enlace sustituido (recepción emitió otro) o de una sede que no lo ofrece da UNAVAILABLE.
+         */
+        get: operations["PublicAppointmentArrivalController_view"];
+        put?: never;
+        /**
+         * DX-265: el paciente marca «Ya llegué» desde el enlace de su cita
+         * @description Dentro de la ventana de la sede (por defecto de 30 min antes a 30 después del inicio, el día de la cita en la zona de la sede) y con la cita agendada o confirmada: la cita pasa a «Llegó» por el MISMO camino que recepción (turno del día incluido). Idempotente: ya llegado devuelve ARRIVED sin otro evento. Auditoría: UPDATE de APPOINTMENT sin usuario, origen PATIENT_LINK, `reason` PATIENT_SELF_CHECK_IN.
+         */
+        post: operations["PublicAppointmentArrivalController_arrive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/check-in/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** DX-265: la sede del QR de llegada (marca de la clínica y nombre) */
+        get: operations["PublicCheckInController_view"];
+        put?: never;
+        /**
+         * DX-265: el paciente se identifica con el QR de la sede y marca su llegada
+         * @description Busca SOLO las citas de hoy (zona de la sede) en la sede del QR cuyo paciente tenga ese documento y esa fecha de nacimiento; nunca lista nombres. Con una dentro de la ventana, la cita pasa a «Llegó» (MISMO camino que recepción; origen SEDE_QR en la auditoría). Fuera de la ventana devuelve TOO_EARLY o TOO_LATE sin cambiar nada; ya llegado, ARRIVED. Toda respuesta tarda al menos 400 ms. Tras 5 fallos desde la misma IP en la sede, 429 `CHECK_IN_LOCKED` con `retryAfterSeconds` durante 15 minutos (también si los datos no son de nadie).
+         */
+        post: operations["PublicCheckInController_identify"];
         delete?: never;
         options?: never;
         head?: never;
@@ -11579,7 +11682,7 @@ export interface components {
          * @description DX-128: de dónde salió un cambio de canal, opt-in o baja de recordatorios (en persona, enlace, mensaje del paciente o anotado por el personal). DX-361: en la confirmación de cita por enlace, STAFF = recepción generó o reenvió el enlace; LINK = el paciente respondió desde él.
          * @enum {string}
          */
-        AuditOrigin: "IN_PERSON" | "LINK" | "MESSAGE" | "STAFF" | "JOB" | "PUBLIC_LINK" | "ONLINE_BOOKING";
+        AuditOrigin: "IN_PERSON" | "LINK" | "MESSAGE" | "STAFF" | "JOB" | "PUBLIC_LINK" | "ONLINE_BOOKING" | "PATIENT_LINK" | "SEDE_QR";
         AuditSearchDto: {
             /** @example LOT-AB12 */
             lot?: string;
@@ -17510,6 +17613,16 @@ export interface components {
             /** @description DX-263-bis: festivos de la sede (DX-316) dentro del rango. Esos días no dan huecos: la sede está cerrada. */
             holidays: components["schemas"]["OpeningHolidayDto"][];
         };
+        /**
+         * @description DX-265: la llegada la marcó el propio paciente con «Ya llegué»: PATIENT_LINK (enlace de la cita) o SEDE_QR (QR de la sede). null = la marcó el personal.
+         * @enum {string}
+         */
+        AppointmentArrivalSource: "PATIENT_LINK" | "SEDE_QR";
+        /**
+         * @description DX-265: solo para quien llegó por su cuenta y sigue esperando: lo que recepción tiene que resolver (por eso la página le dijo «Pase por recepción»). ANAMNESIS: ausente o caducada (DX-247). CONSENT: sin autorización de datos (general o de salud) o con un consentimiento por firmar a distancia. PATIENT_DATA: falta documento, fecha de nacimiento o teléfono. LATE: llegó más tarde que el umbral de la sede. Vacío en el resto.
+         * @enum {string}
+         */
+        CheckInPending: "ANAMNESIS" | "CONSENT" | "PATIENT_DATA" | "LATE";
         InClinicItemDto: {
             /** Format: uuid */
             appointmentId: string;
@@ -17540,6 +17653,10 @@ export interface components {
             readyForCheckoutAt: string | null;
             /** @description DX-588: turno del día en la sede, dado al marcar «Llegó» (estable mientras dure la visita; el que ve el paciente en la pantalla de sala de espera en modo «Número de turno»). null si llegó antes de DX-588. */
             turnNumber: number | null;
+            /** @description DX-265: la llegada la marcó el propio paciente con «Ya llegué»: PATIENT_LINK (enlace de la cita) o SEDE_QR (QR de la sede). null = la marcó el personal. */
+            arrivalSource: components["schemas"]["AppointmentArrivalSource"] | null;
+            /** @description DX-265: solo para quien llegó por su cuenta y sigue esperando: lo que recepción tiene que resolver (por eso la página le dijo «Pase por recepción»). ANAMNESIS: ausente o caducada (DX-247). CONSENT: sin autorización de datos (general o de salud) o con un consentimiento por firmar a distancia. PATIENT_DATA: falta documento, fecha de nacimiento o teléfono. LATE: llegó más tarde que el umbral de la sede. Vacío en el resto. */
+            checkInPending: components["schemas"]["CheckInPending"][];
             /** @description Minutos (enteros, reloj del servidor) en el grupo actual: esperando desde la llegada, en el sillón desde que se sentó, o por cobrar desde que quedó listo. */
             minutesInStatus: number;
             /** @description Minutos que esperó desde la llegada hasta el sillón (o que lleva esperando). */
@@ -18818,6 +18935,46 @@ export interface components {
             total: number;
             page: number;
             pageSize: number;
+        };
+        CheckInSettingsDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @description La página del enlace de la cita (DX-005) ofrece «Ya llegué». Por defecto, sí. */
+            linkEnabled: boolean;
+            /** @description Se puede marcar la llegada desde estos minutos antes del inicio (por defecto 30), siempre el día de la cita en la zona de la sede. */
+            minutesBefore: number;
+            /** @description …y hasta estos minutos después (por defecto 30). */
+            minutesAfter: number;
+            /** @description Llegar más tarde que esto (minutos tras el inicio) manda al paciente a recepción y queda como pendiente «Llegó tarde» (por defecto 10). */
+            lateMinutes: number;
+            /** @description La sede tiene un QR de llegada activo (el token solo se ve al generarlo). */
+            qrActive: boolean;
+            /** Format: date-time */
+            qrCreatedAt: string | null;
+        };
+        UpdateCheckInSettingsDto: {
+            linkEnabled?: boolean;
+            minutesBefore?: number;
+            minutesAfter?: number;
+            lateMinutes?: number;
+        };
+        CreatedCheckInQrDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @description La página del enlace de la cita (DX-005) ofrece «Ya llegué». Por defecto, sí. */
+            linkEnabled: boolean;
+            /** @description Se puede marcar la llegada desde estos minutos antes del inicio (por defecto 30), siempre el día de la cita en la zona de la sede. */
+            minutesBefore: number;
+            /** @description …y hasta estos minutos después (por defecto 30). */
+            minutesAfter: number;
+            /** @description Llegar más tarde que esto (minutos tras el inicio) manda al paciente a recepción y queda como pendiente «Llegó tarde» (por defecto 10). */
+            lateMinutes: number;
+            /** @description La sede tiene un QR de llegada activo (el token solo se ve al generarlo). */
+            qrActive: boolean;
+            /** Format: date-time */
+            qrCreatedAt: string | null;
+            /** @description Token del QR (`<host>/llegada/<token>`). SOLO en esta respuesta: en la BD queda su hash. Generar otro invalida el anterior. */
+            token: string;
         };
         /** @enum {string} */
         EquipmentCategory: "AUTOCLAVE" | "DENTAL_UNIT" | "XRAY" | "COMPRESSOR" | "CURING_LIGHT" | "ULTRASONIC_SCALER" | "OTHER";
@@ -27733,6 +27890,61 @@ export interface components {
             called: components["schemas"]["PublicWaitingRoomCalledItemDto"][];
             /** @description Cuántos están en el sillón en total. */
             calledTotal: number;
+        };
+        PublicArrivalAppointmentDto: {
+            /** @description Solo el nombre de pila. */
+            patientFirstName: string | null;
+            /** Format: date-time */
+            start: string;
+            locationName: string;
+            timeZone: string | null;
+            locale: string | null;
+            /** @enum {string|null} */
+            hourCycle: "h12" | "h23" | null;
+        };
+        PublicArrivalViewDto: {
+            /**
+             * @description AVAILABLE: se puede marcar ya. TOO_EARLY / TOO_LATE: hoy, fuera de la ventana de la sede. ARRIVED: ya consta la llegada. UNAVAILABLE: no se ofrece (otro día, cancelada, atendida, enlace sustituido, la sede no lo ofrece); la página dice «pasa por recepción» sin explicar por qué.
+             * @enum {string}
+             */
+            state: "AVAILABLE" | "TOO_EARLY" | "TOO_LATE" | "ARRIVED" | "UNAVAILABLE";
+            /** Format: date-time */
+            opensAt: string | null;
+            /** Format: date-time */
+            closesAt: string | null;
+            /**
+             * @description Con la llegada marcada y el paciente en la sala de espera: «Tome asiento» o «Pase por recepción» (algo pendiente: anamnesis, consentimiento, datos o retraso; nunca cuál).
+             * @enum {string|null}
+             */
+            result: "TAKE_SEAT" | "SEE_RECEPTION" | null;
+            /** @description DX-588: turno del día, con la llegada marcada. */
+            turnNumber: number | null;
+            appointment: components["schemas"]["PublicArrivalAppointmentDto"] | null;
+        };
+        PublicClinicBrandingForCheckInDto: {
+            name: string;
+            primaryColor: string;
+            logoUrl: string | null;
+        };
+        PublicCheckInQrViewDto: {
+            clinic: components["schemas"]["PublicClinicBrandingForCheckInDto"] | null;
+            locationName: string;
+            timeZone: string | null;
+            locale: string | null;
+            /** @enum {string|null} */
+            hourCycle: "h12" | "h23" | null;
+        };
+        PublicCheckInIdentifyDto: {
+            /**
+             * @description Número de documento tal como lo escribe el paciente (hasta 40). Se compara sin puntos, guiones ni espacios; «12345678» vale por «V-12345678».
+             * @example V-12345678
+             */
+            documentNumber: string;
+            /**
+             * @description AAAA-MM-DD.
+             * @example 1990-04-15
+             */
+            birthDate: string;
         };
         /**
          * @description PENDING en cola · RUNNING generándose · READY lista (descargable una vez durante 24 h) · DOWNLOADED ya descargada · EXPIRED caducada o fichero borrado · FAILED falló.
@@ -44274,6 +44486,157 @@ export interface operations {
             };
         };
     };
+    CheckInSettingsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckInSettingsDto"];
+                };
+            };
+            /** @description Solo la administración cambia la llegada de pacientes de una sede. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada o retirada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CheckInSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCheckInSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckInSettingsDto"];
+                };
+            };
+            /** @description Minutos fuera de 0–240 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración cambia la llegada de pacientes de una sede. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada o retirada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CheckInSettingsController_createQr: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedCheckInQrDto"];
+                };
+            };
+            /** @description Solo la administración cambia la llegada de pacientes de una sede. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada o retirada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CheckInSettingsController_revokeQr: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckInSettingsDto"];
+                };
+            };
+            /** @description Solo la administración cambia la llegada de pacientes de una sede. (o sede no permitida) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada o retirada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     EquipmentController_list: {
         parameters: {
             query?: {
@@ -54349,6 +54712,164 @@ export interface operations {
                 };
             };
             /** @description `WAITING_ROOM_SCREEN_INACTIVE` «Esta pantalla ya no está activa.»: token malformado, desconocido, de otra clínica, revocado o de una sede retirada (la misma respuesta para todos). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicAppointmentArrivalController_view: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicArrivalViewDto"];
+                };
+            };
+            /** @description Token desconocido o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicAppointmentArrivalController_arrive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicArrivalViewDto"];
+                };
+            };
+            /** @description Token desconocido o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fuera de la ventana o la cita no lo admite (mensaje en español); no cambia nada. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicCheckInController_view: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicCheckInQrViewDto"];
+                };
+            };
+            /** @description `CHECK_IN_QR_INACTIVE`: QR malformado, desconocido, retirado, de otra clínica o de una sede retirada (la misma respuesta). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicCheckInController_identify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublicCheckInIdentifyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicArrivalViewDto"];
+                };
+            };
+            /** @description `CHECK_IN_NO_MATCH`: la MISMA respuesta exista o no el paciente, tenga o no cita hoy en otra sede. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `CHECK_IN_QR_INACTIVE` */
             404: {
                 headers: {
                     [name: string]: unknown;

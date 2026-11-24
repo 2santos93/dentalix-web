@@ -74,6 +74,8 @@ function item(overrides: Partial<InClinicItem> & { appointmentId: string }): InC
     triageFlags: [],
     triageNote: null,
     turnNumber: null,
+    arrivalSource: null,
+    checkInPending: [],
     ...overrides,
   };
 }
@@ -110,6 +112,45 @@ function staticState(overrides: Partial<InClinicState>): InClinicState {
   return { view: null, loading: false, error: null, localeMissing: null, noLocation: false, reload: jest.fn(), ...overrides };
 }
 const noRunner = { pendingId: null, run: jest.fn() };
+
+describe('InClinicPanel: «Ya llegué» del paciente (DX-265)', () => {
+  it('marca distinta y sus pendientes en quien llegó por su cuenta; nada en la llegada de recepción', () => {
+    const self = item({
+      appointmentId: 'a1',
+      arrivalSource: 'SEDE_QR',
+      checkInPending: ['ANAMNESIS', 'LATE'],
+    });
+    const staff = item({ appointmentId: 'a2' });
+    render(
+      <InClinicPanel
+        state={staticState({ view: view({ waiting: [self, staff] }) })}
+        role="RECEPTION"
+        runner={noRunner}
+      />,
+    );
+    const marks = screen.getAllByTestId('in-clinic-self-check-in');
+    expect(marks).toHaveLength(1);
+    expect(marks[0].closest('[data-appointment-id]')).toHaveAttribute('data-appointment-id', 'a1');
+    expect(marks[0]).toHaveTextContent('Llegó por su cuenta · QR');
+    const list = screen.getByRole('list', { name: 'Pendiente con Ana Ríos antes de sentarse' });
+    expect(list).toHaveTextContent('Anamnesis');
+    expect(list).toHaveTextContent('Llegó tarde');
+  });
+
+  it('por el enlace y sin pendientes: solo la marca', () => {
+    render(
+      <InClinicPanel
+        state={staticState({
+          view: view({ waiting: [item({ appointmentId: 'a1', arrivalSource: 'PATIENT_LINK' })] }),
+        })}
+        role="RECEPTION"
+        runner={noRunner}
+      />,
+    );
+    expect(screen.getByTestId('in-clinic-self-check-in')).toHaveTextContent('Llegó por su cuenta · enlace');
+    expect(screen.queryByRole('list', { name: /pendiente con/i })).not.toBeInTheDocument();
+  });
+});
 
 describe('InClinicPanel: turno del día (DX-588)', () => {
   it('chip «Turno N» en la tarjeta de quien tiene turno; nada en quien no', () => {

@@ -372,6 +372,8 @@ export const PUBLIC_ROUTES: readonly string[] = [
   '/receta/RX-0000-0000',
   '/receta/copia/:bogus',
   '/resumen/baja/:bogus',
+  // DX-265: el QR de llegada de la sede (con un token que no existe: «ya no está activo»).
+  '/llegada/:bogus',
 ];
 
 /** La ruta real de una plantilla con los ids sembrados. */

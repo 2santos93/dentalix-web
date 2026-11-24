@@ -86,6 +86,20 @@ export const inClinicCopy = {
   moveToFor: (patient: string) => `Mover a… la cita de ${patient}`,
   // DX-588: el turno del día que sale en el televisor de la sala; se le dice al paciente.
   turn: (n: number) => `Turno ${n}`,
+  // DX-265: llegó por su cuenta («Ya llegué») y lo que recepción tiene que resolver.
+  selfCheckIn: {
+    PATIENT_LINK: 'Llegó por su cuenta · enlace',
+    SEDE_QR: 'Llegó por su cuenta · QR',
+  },
+  selfCheckInHint: 'Lo marcó el paciente al llegar, sin pasar por recepción.',
+  pendingLabel: (patient: string) => `Pendiente con ${patient} antes de sentarse`,
+  pendingTitle: 'Pase por recepción:',
+  pending: {
+    ANAMNESIS: 'Anamnesis',
+    CONSENT: 'Consentimiento',
+    PATIENT_DATA: 'Datos de la ficha',
+    LATE: 'Llegó tarde',
+  },
 };
 
 
@@ -419,6 +433,7 @@ function InClinicGroup({
                             )}
                       </p>
                     ) : null}
+                    <SelfCheckInSummary item={item} patientName={name} />
                     <TriageSummary item={item} patientName={name} />
                     {/* DX-285: la misma marca de ortodoncia que la tarjeta de la agenda. */}
                     <OrthoOverdueChip flag={item.orthoBalance} className="mt-1 max-w-full" />
@@ -463,6 +478,37 @@ function InClinicGroup({
         </ul>
       )}
     </section>
+  );
+}
+
+/**
+ * DX-265: la llegada la marcó el propio paciente («Ya llegué», por el enlace
+ * de su cita o con el QR de la sede): marca propia y, si la página lo mandó a
+ * recepción, qué hay que resolver con él. Nada si la marcó el personal.
+ */
+function SelfCheckInSummary({ item, patientName }: { item: InClinicItem; patientName: string }) {
+  if (!item.arrivalSource) return null;
+  const pending = item.checkInPending ?? [];
+  return (
+    <div className="mt-1 flex min-w-0 flex-col gap-1" data-testid="in-clinic-self-check-in">
+      <p className="flex min-w-0 items-center gap-1">
+        <Badge variant="info" title={inClinicCopy.selfCheckInHint}>
+          {inClinicCopy.selfCheckIn[item.arrivalSource]}
+        </Badge>
+      </p>
+      {pending.length > 0 ? (
+        <div className="flex min-w-0 flex-wrap items-center gap-1">
+          <span className="text-xs text-ink">{inClinicCopy.pendingTitle}</span>
+          <ul className="flex flex-wrap gap-1" aria-label={inClinicCopy.pendingLabel(patientName)}>
+            {pending.map((p) => (
+              <li key={p}>
+                <Badge variant="warning">{inClinicCopy.pending[p]}</Badge>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
