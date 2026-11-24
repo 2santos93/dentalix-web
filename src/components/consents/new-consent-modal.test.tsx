@@ -135,6 +135,7 @@ const preview = {
   title: 'Consentimiento de exodoncia',
   body: 'Yo, Ana Pérez (Documento nacional DOC-1), autorizo a Dra. Laura…',
   professionalName: 'Dra. Laura Gómez',
+  previewedAt: '2026-10-16T21:58:00.000Z',
 };
 
 function renderModal(overrides: Partial<React.ComponentProps<typeof NewConsentModal>> = {}) {
@@ -264,6 +265,9 @@ describe('NewConsentModal', () => {
     expect(mockedSign).toHaveBeenCalledWith('tok', 'p1', {
       templateId: 'tpl-1',
       templateVersion: 3,
+      // DX-058: la firma devuelve el instante de la vista previa: el texto
+      // firmado lleva la fecha que se leyó, aunque se firme tras la medianoche.
+      previewedAt: '2026-10-16T21:58:00.000Z',
       treatmentPlanId: 'plan-1',
       signerType: 'PATIENT',
       patientSignature: 'data:image/png;base64,FIRMA',

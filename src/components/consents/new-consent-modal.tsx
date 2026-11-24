@@ -115,8 +115,10 @@ interface NewConsentModalProps {
  * del tutor); la API vuelve a exigirlo (400).
  *
  * Lo que se firma es exactamente lo que se previsualizó: la firma manda la
- * versión de la plantilla de la vista previa y, si alguien la editó entretanto,
- * la API responde 409 y el modal vuelve a la vista previa con el texto nuevo.
+ * versión de la plantilla y el instante de la vista previa (`previewedAt`, que
+ * fija la fecha del texto, DX-058). Si alguien editó la plantilla entretanto o
+ * la vista previa caducó, la API responde 409 y el modal vuelve a la vista
+ * previa con el texto nuevo.
  *
  * El padre lo monta con una `key` nueva en cada apertura, así que el estado
  * (incluidas las firmas) nunca sobrevive de un paciente a otro.
@@ -253,6 +255,8 @@ export function NewConsentModal({
       const consent = await signPatientConsent(token, patientId, {
         templateId: preview.templateId,
         templateVersion: preview.templateVersion,
+        // DX-058: fija {{fecha}} a la de la vista previa (lo firmado = lo leído).
+        previewedAt: preview.previewedAt,
         ...(planId ? { treatmentPlanId: planId } : {}),
         signerType,
         ...(signerType === 'GUARDIAN'
