@@ -27,6 +27,9 @@ import {
   type PublicConfirmation,
 } from '@/lib/appointments/confirmations-api';
 import { NativeSelect } from '@/components/ui/native-select';
+import { getLinkArrival, postLinkArrival, type PublicArrival } from '@/lib/appointments/arrival-api';
+import { ArrivalCard } from './arrival-card';
+import { ARRIVAL_COPY } from './arrival-copy';
 import { documentFormat, documentTexts, type DocumentFormat } from '@/lib/format/document-format';
 import { PublicNotice as Notice, publicBrandStyle } from '@/components/shared/public-page';
 import { Button } from '@/components/ui/button';
@@ -388,6 +391,45 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
   const [earlierNotice, setEarlierNotice] = useState<string | null>(null);
   const [earlierError, setEarlierError] = useState<string | null>(null);
 
+  // DX-265: «Ya llegué». Va aparte: si falla, la página sigue igual (sin la tarjeta).
+  const [arrival, setArrival] = useState<PublicArrival | null>(null);
+  const [arrivalPending, setArrivalPending] = useState(false);
+  const [arrivalError, setArrivalError] = useState<string | null>(null);
+  const arrivalT = ARRIVAL_COPY[language];
+
+  useEffect(() => {
+    let cancelled = false;
+    getLinkArrival(confirmationToken)
+      .then((data) => {
+        if (!cancelled) setArrival(data);
+      })
+      .catch(() => {
+        if (!cancelled) setArrival(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [confirmationToken, reloadKey]);
+
+  async function handleArrive() {
+    setArrivalPending(true);
+    setArrivalError(null);
+    try {
+      setArrival(await postLinkArrival(confirmationToken));
+      // La cita pasó a «Llegó»: el resto de la página se relee.
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        // Fuera de la ventana o la cita cambió: se relee y se pinta lo vigente.
+        setReloadKey((k) => k + 1);
+      } else {
+        setArrivalError(arrivalT.error);
+      }
+    } finally {
+      setArrivalPending(false);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
     getPublicConfirmation(confirmationToken)
@@ -563,7 +605,18 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
           <>
             <ClinicBrand variant="public" name={clinic?.name ?? t.fallbackClinic} logoUrl={clinic?.logoUrl} />
 
-            {state.data.status === 'EXPIRED' && (
+            {/* DX-265: el día de la cita, aunque el enlace ya no sirva para confirmar. */}
+            {arrival && arrival.state !== 'UNAVAILABLE' ? (
+              <ArrivalCard
+                arrival={arrival}
+                t={arrivalT}
+                pending={arrivalPending}
+                error={arrivalError}
+                onArrive={() => void handleArrive()}
+              />
+            ) : null}
+
+            {state.data.status === 'EXPIRED' && !(arrival && arrival.state !== 'UNAVAILABLE') && (
               <Notice icon={CalendarX} title={t.expiredTitle} message={t.expiredMessage} />
             )}
 

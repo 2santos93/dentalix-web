@@ -79,6 +79,8 @@ function item(overrides: Partial<InClinicItem> = {}): InClinicItem {
     triageFlags: [],
     triageNote: null,
     turnNumber: null,
+    arrivalSource: null,
+    checkInPending: [],
     ...overrides,
   };
 }
