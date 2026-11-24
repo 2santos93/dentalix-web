@@ -65,16 +65,35 @@ const passwordReset = (annotations: Annotation[]): FakeTest => ({
   annotations,
 });
 
-function run(rep: object, env: Record<string, string> = {}, list: object = allowed) {
+/**
+ * DX-419: los flaky de estos casos son de clinical-codes.spec.ts, que está
+ * entero en esta lista de intermitentes de ejemplo (solo esos se reintentan).
+ */
+const flakyList = {
+  entries: [
+    {
+      file: 'e2e/clinical-codes.spec.ts',
+      title: '*',
+      ticket: 'DX-419',
+      clickup: 'https://app.clickup.com/t/1244errrke0',
+      expires: '2026-12-31',
+      reason: 'ejemplo',
+    },
+  ],
+};
+
+function run(rep: object, env: Record<string, string> = {}, list: object = allowed, flakyTests: object = flakyList) {
   const dir = mkdtempSync(path.join(tmpdir(), 'dx252-skips-'));
   const reportPath = path.join(dir, 'report.json');
   const listPath = path.join(dir, 'allowed.json');
+  const flakyPath = path.join(dir, 'flaky-tests.json');
   writeFileSync(reportPath, JSON.stringify(rep));
   writeFileSync(listPath, JSON.stringify(list));
+  writeFileSync(flakyPath, JSON.stringify(flakyTests));
   // Sin las variables del entorno del que corre jest: solo las del caso.
   const childEnv: NodeJS.ProcessEnv = { ...process.env, GITHUB_ACTIONS: '', E2E_MAIL_DIR: '', ...env };
   try {
-    const out = execFileSync('node', [SCRIPT, reportPath, listPath], { env: childEnv, encoding: 'utf8', stdio: 'pipe' });
+    const out = execFileSync('node', [SCRIPT, reportPath, listPath, flakyPath], { env: childEnv, encoding: 'utf8', stdio: 'pipe' });
     return { code: 0, out };
   } catch (err) {
     const e = err as { status: number; stdout: string; stderr: string };
@@ -86,10 +105,10 @@ const ok = (title: string): FakeTest => ({ file: 'agenda.spec.ts', title, status
 const flaky = (title: string): FakeTest => ({ file: 'clinical-codes.spec.ts', title, status: 'flaky' });
 
 /** Corre la guardia con `GITHUB_STEP_SUMMARY` apuntando a un fichero y lo devuelve. */
-function runWithSummary(rep: object, env: Record<string, string> = {}) {
+function runWithSummary(rep: object, env: Record<string, string> = {}, flakyTests: object = flakyList) {
   const summary = path.join(mkdtempSync(path.join(tmpdir(), 'dx292-summary-')), 'summary.md');
   writeFileSync(summary, '');
-  const res = run(rep, { GITHUB_STEP_SUMMARY: summary, ...env });
+  const res = run(rep, { GITHUB_STEP_SUMMARY: summary, ...env }, allowed, flakyTests);
   return { ...res, summary: readFileSync(summary, 'utf8') };
 }
 
@@ -209,6 +228,40 @@ describe('scripts/check-e2e-skips.mjs (DX-252)', () => {
       expect(res.code).toBe(0);
       expect(res.summary).toMatch(/1 passed · 0 failed · 0 flaky · 0 skipped/);
       expect(res.summary).toContain('Sin tests flaky');
+    });
+  });
+
+  describe('lista de intermitentes (DX-419, e2e/flaky-tests.json)', () => {
+    const listed = {
+      entries: [{ ...flakyList.entries[0], title: 'guarda el código' }],
+    };
+
+    it('un flaky que está en la lista se nombra con su ticket en el resumen, y la lista también', () => {
+      const res = runWithSummary(report([ok('crea una cita'), flaky('guarda el código')]), {}, listed);
+      expect(res.code).toBe(0);
+      expect(res.summary).toContain('**Intermitentes conocidos (DX-419, e2e/flaky-tests.json)**');
+      expect(res.summary).toContain(
+        '- `e2e/clinical-codes.spec.ts` «guarda el código» — [DX-419](https://app.clickup.com/t/1244errrke0), caduca 2026-12-31',
+      );
+      expect(res.summary).toContain('Reintentados en esta run (1):');
+      expect(res.summary).toContain(
+        '- `e2e/clinical-codes.spec.ts:7` «guarda el código» — [DX-419](https://app.clickup.com/t/1244errrke0), caduca 2026-12-31',
+      );
+    });
+
+    it('un flaky que NO está en la lista (se reintentó algo que no debía) pone rojo', () => {
+      const res = runWithSummary(report([flaky('valida el código')]), { GITHUB_ACTIONS: 'true' }, listed);
+      expect(res.code).toBe(1);
+      expect(res.out).toContain('1 test(s) reintentados sin estar en e2e/flaky-tests.json (DX-419)');
+      expect(res.out).toContain('::error file=e2e/clinical-codes.spec.ts,line=7,title=Reintento fuera de la lista::');
+      expect(res.summary).toContain('«valida el código» — **fuera de la lista**');
+    });
+
+    it('con la lista vacía y sin flaky lo dice en el resumen', () => {
+      const res = runWithSummary(report([ok('crea una cita')]), {}, { entries: [] });
+      expect(res.code).toBe(0);
+      expect(res.summary).toContain('Lista vacía: ningún test se reintenta.');
+      expect(res.summary).toContain('Ningún test reintentado en esta run.');
     });
   });
 

@@ -28,6 +28,11 @@
 // DX-452 (TST-056): con E2E_FLAKY_OUT deja ahí un JSON pequeño con los flaky de
 // la run ({ runId, sha, total, flaky: [{ file, title }] }), que la CI sube como
 // artefacto para la guardia de tendencia (scripts/check-e2e-flaky-trend.mjs).
+//
+// DX-419 (TST-051): solo se reintentan los tests de e2e/flaky-tests.json
+// (tercer argumento opcional: otra lista). El resumen nombra en cada run esa
+// lista y los reintentados con su ticket, y un «flaky» que NO esté en ella
+// (algo reintentó un test fuera de la lista) pone la E2E en rojo.
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -39,6 +44,7 @@ const CI_DEFINED_VARS = ['E2E_DATABASE_URL', 'E2E_MAIL_DIR'];
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const reportPath = process.argv[2] ?? path.join(root, 'playwright-results.json');
 const allowedPath = process.argv[3] ?? path.join(root, 'e2e', 'allowed-skips.json');
+const flakyListPath = process.argv[4] ?? path.join(root, 'e2e', 'flaky-tests.json');
 
 function fail(message) {
   console.error(message);
@@ -55,6 +61,11 @@ function readJson(file, what) {
 
 const report = readJson(reportPath, 'el informe JSON de Playwright');
 const allowed = validAllowed(readJson(allowedPath, 'la lista de saltos permitidos'));
+/** DX-419: la lista de intermitentes (su validez la comprueba `jest --ci`). */
+const flakyList = readJson(flakyListPath, 'la lista de intermitentes (e2e/flaky-tests.json)').entries ?? [];
+const flakyEntries = new Map(flakyList.map((e) => [`${e.file}${SEP}${e.title}`, e]));
+/** La entrada de la lista que permite reintentar `t` (por título o el fichero entero). */
+const flakyEntryOf = (t) => flakyEntries.get(`${t.file}${SEP}${t.title}`) ?? flakyEntries.get(`${t.file}${SEP}*`);
 
 /**
  * El contrato de e2e/allowed-skips.json, comprobado al cargarla: cada entrada
@@ -135,6 +146,8 @@ const flaky = all.filter((t) => t.test.status === 'flaky');
 const failed = all.filter((t) => t.test.status === 'unexpected');
 const passed = all.filter((t) => t.test.status === 'expected');
 const tooFlaky = flaky.length > MAX_FLAKY;
+/** DX-419: reintentados sin estar en e2e/flaky-tests.json. */
+const unlistedFlaky = flaky.filter((t) => !flakyEntryOf(t));
 
 const name = (t) => `${t.file}:${t.line} «${t.title}»`;
 
@@ -168,12 +181,21 @@ if (offenders.length > 0) {
     '\nUn test saltado no prueba nada: arregla la condición (p. ej. fija el reloj con e2e/support/clock.ts) o, si el salto es legítimo, añádelo a e2e/allowed-skips.json con su motivo exacto y la variable que lo justifica.',
   );
 }
+if (unlistedFlaky.length > 0) {
+  console.error(`\n${unlistedFlaky.length} test(s) reintentados sin estar en e2e/flaky-tests.json (DX-419):`);
+  for (const t of unlistedFlaky) {
+    console.error(`  - ${name(t)}`);
+    if (process.env.GITHUB_ACTIONS) {
+      console.log(`::error file=${t.file},line=${t.line},title=Reintento fuera de la lista::«${t.title}» se reintentó sin estar en e2e/flaky-tests.json.`);
+    }
+  }
+}
 if (tooFlaky) {
   console.error(
     `\nMás de ${MAX_FLAKY} tests flaky en una run: busca la causa de cada uno (traza en el informe de Playwright) en vez de confiar en el reintento.`,
   );
 }
-process.exit(offenders.length > 0 || tooFlaky ? 1 : 0);
+process.exit(offenders.length > 0 || tooFlaky || unlistedFlaky.length > 0 ? 1 : 0);
 
 /**
  * Resumen del job en GitHub Actions (`$GITHUB_STEP_SUMMARY`, Markdown): que
@@ -197,8 +219,33 @@ function writeSummary() {
       'Sin tests flaky',
     ),
     ...(offenders.length > 0 ? section('Saltados sin permiso', offenders, '', (t) => t.why) : []),
+    ...flakySummary(),
   ];
   appendFileSync(file, `${lines.join('\n')}\n`);
+}
+
+/** DX-419: la lista de intermitentes y, de ellos, los reintentados en esta run. */
+function flakySummary() {
+  const ticket = (e) => `[${e.ticket}](${e.clickup}), caduca ${e.expires}`;
+  const lines = ['**Intermitentes conocidos (DX-419, e2e/flaky-tests.json)**', ''];
+  if (flakyList.length === 0) {
+    lines.push('Lista vacía: ningún test se reintenta.', '');
+  } else {
+    lines.push(`${flakyList.length} en la lista (solo estos se reintentan, una vez):`, '');
+    for (const e of flakyList) lines.push(`- \`${e.file}\` «${e.title}» — ${ticket(e)}`);
+    lines.push('');
+  }
+  if (flaky.length === 0) {
+    lines.push('Ningún test reintentado en esta run.', '');
+  } else {
+    lines.push(`Reintentados en esta run (${flaky.length}):`, '');
+    for (const t of flaky) {
+      const e = flakyEntryOf(t);
+      lines.push(`- \`${t.file}:${t.line}\` «${t.title}» — ${e ? ticket(e) : '**fuera de la lista**'}`);
+    }
+    lines.push('');
+  }
+  return lines;
 }
 
 /** DX-452: los flaky de esta run, para la tendencia (ver la cabecera). */

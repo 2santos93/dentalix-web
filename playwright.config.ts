@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 import { E2E_BROWSER_LOCALE } from './e2e/support/regional';
 import { WEB_PORT } from './e2e/support/urls';
 import { SEDE_TODAY_TZ } from './e2e/support/clock';
+import { FLAKY_RETRIES, loadFlakyList, withFlakyRetries } from './e2e/support/flaky-tests';
 
 // DX-449: la zona «de hoy» se elige una vez, en el proceso principal; los
 // workers la heredan por el entorno y todos los specs usan la misma.
@@ -35,6 +36,12 @@ if (webServerMode !== 'none' && !webServerCommand[webServerMode]) {
 const chromiumLaunchOptions = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
   ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE }
   : {};
+// DX-419 (TST-051): solo los tests de e2e/flaky-tests.json (vigentes) se
+// reintentan, una vez y solo en la CI; ver e2e/support/flaky-tests.ts. Una
+// entrada caducada o mal formada no se reintenta (y pone rojo `jest --ci`).
+const flaky = loadFlakyList(__dirname);
+for (const problem of flaky.problems) console.warn(`[DX-419] e2e/flaky-tests.json: ${problem}`);
+
 /** El único spec del proyecto `touch` (DX-485). */
 const TOUCH_SPEC = /touch-targets\.spec\.ts$/;
 
@@ -44,9 +51,10 @@ export default defineConfig({
   globalTeardown: './e2e/support/global-teardown.ts',
   fullyParallel: false,
   forbidOnly: isCI,
-  // Un reintento solo en CI, para no esconder en local un test inestable; el
-  // reporter de CI lo marca como "flaky" igualmente.
-  retries: isCI ? 1 : 0,
+  // DX-419: sin reintentos. Los tests de e2e/flaky-tests.json van en los
+  // proyectos `*-reintento` (abajo), con un reintento solo en la CI; el
+  // reporter los marca «flaky» y scripts/check-e2e-skips.mjs los nombra.
+  retries: 0,
   workers: 1,
   // DX-252: en CI (y con E2E_REPORT_JSON, que pone scripts/e2e-ci.sh) también
   // el informe JSON, que lee scripts/check-e2e-skips.mjs para poner la E2E en
@@ -67,7 +75,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [
+  projects: withFlakyRetries([
     {
       name: 'chromium',
       // DX-485: el spec táctil corre solo en su proyecto (abajo), no dos veces.
@@ -90,7 +98,7 @@ export default defineConfig({
         launchOptions: chromiumLaunchOptions,
       },
     },
-  ],
+  ], flaky.active, { retries: isCI ? FLAKY_RETRIES : 0 }),
   webServer:
     webServerMode === 'none'
       ? undefined
