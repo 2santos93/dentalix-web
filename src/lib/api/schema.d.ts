@@ -11908,6 +11908,8 @@ export interface components {
              * @example UTC
              */
             timeZone: string;
+            /** @description DX-095: el paciente del filtro `patientId` con su nombre (aunque la página no traiga eventos); `null` sin ese filtro o si no es de la clínica. */
+            patient: components["schemas"]["AuditPatientDto"] | null;
         };
         RegisterDto: {
             clinicName: string;
