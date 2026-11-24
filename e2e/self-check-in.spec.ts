@@ -54,7 +54,13 @@ async function patient(request: Parameters<typeof apiPost>[0], firstName: string
   });
 }
 
-/** Cita agendada en 3 días a mediodía de la sede y traída a «dentro de 5 min». */
+/**
+ * Cita agendada en 3 días a mediodía de la sede y traída a «dentro de
+ * 5 + 10·slot min» (5 min de duración): cada slot tiene su franja, así dos
+ * pruebas del mismo profesional no se solapan aunque corran con un minuto de
+ * diferencia (antes 5 + slot: dejaba un minuto entre citas de cinco). Todas
+ * caen dentro de la ventana de «Ya llegué» (30 min antes).
+ */
 async function bookToday(request: Parameters<typeof apiPost>[0], patientId: string, slot: number) {
   const start = atSede(sedeDayFromToday(3), `12:${String(slot * 10).padStart(2, '0')}`, ZONE);
   const appt = await apiPost<{ id: string }>(request, session, '/appointments', {
@@ -65,7 +71,7 @@ async function bookToday(request: Parameters<typeof apiPost>[0], patientId: stri
     reason: 'Control',
   });
   const link = await apiPost<{ url: string }>(request, session, `/appointments/${appt.id}/confirmation-link`, {});
-  moveAppointmentToNow(appt.id, 5 + slot);
+  moveAppointmentToNow(appt.id, 5 + slot * 10);
   return { id: appt.id, token: new URL(link.url).pathname.split('/').pop()! };
 }
 
