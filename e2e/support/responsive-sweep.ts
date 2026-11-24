@@ -314,6 +314,8 @@ function appRoutes(): { path: string; scope: Scope }[] {
     '/prospectos/:lead',
     '/prospectos/informe',
     '/recall',
+    // DX-260: una pestaña de Reportes con su propia vista (el menú solo abre la primera).
+    '/reportes?tab=retencion',
     '/solicitudes-online',
     '/staff/:staff',
     '/settings/equipos/:equipment',

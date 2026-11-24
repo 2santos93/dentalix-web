@@ -742,6 +742,15 @@
       ],
       "permissions": []
     },
+    "GET /reports/retention": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": [
+        "FINANCIAL_REPORTS_VIEW"
+      ]
+    },
     "GET /reports/scheduled-production": {
       "kind": "roles",
       "roles": [

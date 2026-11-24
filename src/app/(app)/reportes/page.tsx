@@ -60,6 +60,12 @@ const AcquisitionView = dynamic(
   { ssr: false, loading: () => <SectionSkeleton /> },
 );
 
+// DX-260: «Retención», igual.
+const RetentionView = dynamic(
+  () => import('@/components/reports/retention-view').then((m) => m.RetentionView),
+  { ssr: false, loading: () => <SectionSkeleton /> },
+);
+
 // «Reportes» (DX-014). Mismo guard de sesión que la Caja; la pestaña va en
 // `?tab=` (la primera del rol, sin parámetro). Cada rol ve las pestañas que
 // su API le deja abrir (DX-423 y DX-558: el odontólogo, «Producción por
@@ -141,6 +147,8 @@ function ReportesRoute() {
       <ReceivablesAgingReportView token={accessToken} isAdmin={role === 'ADMIN'} />
     ) : tab === 'captacion' ? (
       <AcquisitionView token={accessToken} isAdmin={role === 'ADMIN'} />
+    ) : tab === 'retencion' ? (
+      <RetentionView token={accessToken} isAdmin={role === 'ADMIN'} />
     ) : tab === 'sin-imputar' ? (
       <UnallocatedPaymentsView token={accessToken} />
     ) : (
