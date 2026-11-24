@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { ApiError } from '@/lib/api/api-error';
 import {
   createPatient,
   type CreatePatientInput,
@@ -81,6 +82,9 @@ const copy = {
   laterNoteReception:
     'Con estos datos ya puedes crear el paciente. La autorización de datos es opcional aquí: también se registra después desde su ficha.',
   genericError: 'No pudimos crear el paciente. Intenta de nuevo.',
+  // DX-058: 409 PRIVACY_POLICY_OUTDATED. Nada se guardó; el paso ya muestra la versión nueva.
+  policyOutdated:
+    'Mientras llenabas el alta se publicó una versión nueva de la política de tratamiento de datos. No se guardó nada: ya está cargada abajo. Léela con el paciente, marca de nuevo lo que autorice y vuelve a crear el paciente.',
 };
 
 const STEPS: WizardStep[] = [
@@ -199,6 +203,8 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
   // Autorización de tratamiento de datos (DX-037): ninguna casilla empieza marcada.
   const [consentSelection, setConsentSelection] = useState(EMPTY_SELECTION);
   const [consentPolicy, setConsentPolicy] = useState<PrivacyPolicyVersion | null>(null);
+  // DX-058: sube para que el paso vuelva a pedir la política vigente.
+  const [policyReload, setPolicyReload] = useState(0);
 
   const [validationError, setValidationError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -302,6 +308,17 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
       const created = await createPatient(token, input);
       router.push(`/patients/${created.id}`);
     } catch (err) {
+      if (err instanceof ApiError && err.code === 'PRIVACY_POLICY_OUTDATED') {
+        // Las casillas se marcaron sobre el texto anterior: no valen para el
+        // nuevo. Se recarga la política y se vuelve a su paso.
+        setConsentSelection(EMPTY_SELECTION);
+        setConsentPolicy(null);
+        setPolicyReload((n) => n + 1);
+        setError(copy.policyOutdated);
+        const consentStep = steps.findIndex((s) => s.key === 'consentimiento');
+        if (consentStep >= 0) setStep(consentStep);
+        return;
+      }
       setError(apiErrorMessage(err, copy.genericError));
     } finally {
       setSubmitting(false);
@@ -556,6 +573,7 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
               value={consentSelection}
               onChange={setConsentSelection}
               onPolicyChange={setConsentPolicy}
+              reloadSignal={policyReload}
             />
             {error ? <InlineError>{error}</InlineError> : null}
           </div>

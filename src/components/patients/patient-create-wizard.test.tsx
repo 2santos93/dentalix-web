@@ -1,9 +1,10 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PatientCreateWizard } from './patient-create-wizard';
 import { createPatient, listPatients, type Patient } from '@/lib/patients/patients-api';
 import { listPatientSources, type PatientSource } from '@/lib/patients/patient-sources-api';
 import { getPrivacyPolicies } from '@/lib/data-consents/data-consents-api';
+import { ApiError } from '@/lib/api/api-error';
 import { getDocumentTypeNames } from '@/lib/patients/document-type-names-api';
 import { policiesFixture, policyFixture } from '@/lib/test/data-consents';
 import { getPatientLanguages } from '@/lib/patients/patient-languages';
@@ -531,6 +532,55 @@ describe('PatientCreateWizard', () => {
       expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: /crear paciente/i }));
       expect(mockedCreatePatient.mock.calls[0][1]).not.toHaveProperty('dataConsents');
+    });
+
+    // DX-058: se publicó otra versión mientras se llenaba el alta. La API da
+    // 409 PRIVACY_POLICY_OUTDATED; el paso recarga la política, desmarca las
+    // casillas (el paciente no ha leído la nueva) y lo explica en español.
+    it('409 de política cambiada: lo explica, recarga la política vigente y pide marcar de nuevo', async () => {
+      const user = userEvent.setup();
+      const v2 = policyFixture({
+        id: 'pol-2',
+        version: 2,
+        policyText: 'Política de tratamiento de datos, versión 2.',
+      });
+      mockedGetPolicies
+        .mockResolvedValueOnce(policiesFixture())
+        .mockResolvedValue(policiesFixture(v2));
+      mockedCreatePatient
+        .mockRejectedValueOnce(
+          new ApiError(409, 'Conflict', {
+            code: 'PRIVACY_POLICY_OUTDATED',
+            messages: [
+              'La política de tratamiento de datos cambió mientras se registraba la autorización. Recarga para ver la versión vigente.',
+            ],
+          }),
+        )
+        .mockResolvedValue(CREATED);
+      render(<PatientCreateWizard token="tok" canWriteClinicalHistory />);
+      await fillBasicsAndGoToConsent(user);
+      await user.click(await screen.findByRole('checkbox', { name: /comunicaciones comerciales/i }));
+      await user.click(screen.getByRole('button', { name: /crear paciente/i }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        /se publicó una versión nueva de la política de tratamiento de datos/i,
+      );
+      await waitFor(() =>
+        expect(screen.getByRole('region', { name: /texto completo de la política/i })).toHaveTextContent(
+          'Política de tratamiento de datos, versión 2.',
+        ),
+      );
+      expect(mockedGetPolicies).toHaveBeenCalledTimes(2);
+      for (const box of await screen.findAllByRole('checkbox')) expect(box).not.toBeChecked();
+
+      // Con la versión nueva leída y marcada, el alta va con su id.
+      await user.click(screen.getByRole('checkbox', { name: /comunicaciones comerciales/i }));
+      await user.click(screen.getByRole('button', { name: /crear paciente/i }));
+      expect(mockedCreatePatient).toHaveBeenCalledTimes(2);
+      expect(mockedCreatePatient.mock.calls[1][1].dataConsents).toEqual({
+        policyVersionId: 'pol-2',
+        decisions: [{ scope: 'MARKETING', granted: true }],
+      });
     });
 
     it('si la política no carga, ofrece reintentar', async () => {

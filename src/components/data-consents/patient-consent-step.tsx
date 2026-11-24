@@ -33,6 +33,11 @@ interface PatientConsentStepProps {
   onChange: (next: ConsentSelection) => void;
   /** La versión que se está mostrando (o `null` si no hay ninguna publicada). */
   onPolicyChange: (policy: PrivacyPolicyVersion | null) => void;
+  /**
+   * DX-058: cada cambio vuelve a pedir la política vigente (p. ej. tras un 409
+   * `PRIVACY_POLICY_OUTDATED` del alta). El valor inicial no recarga.
+   */
+  reloadSignal?: number;
 }
 
 /** Paso «Autorización de datos» del alta (DX-037). */
@@ -41,10 +46,19 @@ export function PatientConsentStep({
   value,
   onChange,
   onPolicyChange,
+  reloadSignal = 0,
 }: PatientConsentStepProps) {
   const { data, loading, failed, reload } = usePrivacyPolicies(token);
   const current = data?.current ?? null;
   const isAdmin = canPublishPrivacyPolicy(getTokenRole(token));
+
+  // Solo cuando cambia la señal, no al montar (el hook ya carga entonces).
+  const lastSignal = React.useRef(reloadSignal);
+  useEffect(() => {
+    if (lastSignal.current === reloadSignal) return;
+    lastSignal.current = reloadSignal;
+    reload();
+  }, [reloadSignal, reload]);
 
   useEffect(() => {
     onPolicyChange(current);
