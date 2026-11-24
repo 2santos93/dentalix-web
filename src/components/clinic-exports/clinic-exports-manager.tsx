@@ -219,11 +219,11 @@ export function ClinicExportsManager({ token, allowed, openUrl = defaultOpenUrl 
           '—'
         ) : (
           <span className="flex flex-col items-end">
-            <span>{fileSizeLabel(e.sizeBytes)}</span>
+            <span>{stamp.fmt ? fileSizeLabel(e.sizeBytes, stamp.fmt) : null}</span>
             {e.totalRows !== null ? <span className="text-sm text-muted">{copy.rows(e.totalRows)}</span> : null}
           </span>
         ),
-      mobileCell: (e) => (e.sizeBytes === null ? null : fileSizeLabel(e.sizeBytes)),
+      mobileCell: (e) => (e.sizeBytes === null || !stamp.fmt ? null : fileSizeLabel(e.sizeBytes, stamp.fmt)),
     },
     {
       id: 'action',

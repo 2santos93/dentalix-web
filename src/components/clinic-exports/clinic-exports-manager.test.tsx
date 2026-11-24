@@ -2,7 +2,6 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { ClinicExportsManager, POLL_MS, clinicExportsCopy as copy } from './clinic-exports-manager';
 import {
   downloadClinicExport,
-  fileSizeLabel,
   listClinicExports,
   requestClinicExport,
   type ClinicExport,
@@ -18,7 +17,11 @@ jest.mock('../../lib/clinic-exports/clinic-exports-api', () => ({
   downloadClinicExport: jest.fn(),
 }));
 jest.mock('../../lib/locations/sede-stamp', () => ({
-  useSedeStamp: () => ({ dateTime: () => '21/11/2026 9:30 a. m.', notice: null }),
+  useSedeStamp: () => ({
+    dateTime: () => '21/11/2026 9:30 a. m.',
+    notice: null,
+    fmt: jest.requireActual('../../lib/format/regional-format').regionalFormat({ locale: 'es-VE', hourCycle: 'h12' }),
+  }),
 }));
 jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 
@@ -63,7 +66,7 @@ describe('ClinicExportsManager (DX-053)', () => {
     expect(within(table).getByText('Lista')).toBeInTheDocument();
     expect(within(table).getByText('Descargada')).toBeInTheDocument();
     expect(within(table).getAllByText('por Ana Rodríguez')).toHaveLength(2);
-    expect(within(table).getAllByText(fileSizeLabel(2_500_000))).toHaveLength(2);
+    expect(within(table).getAllByText('2,4 MB')).toHaveLength(2);
     expect(within(table).getByText(/Por Luis Pérez el/)).toBeInTheDocument();
     expect(within(table).getAllByRole('button', { name: /Descargar la exportación/ })).toHaveLength(1);
     expect(screen.getByRole('button', { name: copy.exportAll })).toBeEnabled();

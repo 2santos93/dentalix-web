@@ -1,3 +1,4 @@
+import type { RegionalFormat } from '@/lib/format/regional-format';
 import { apiFetch } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
@@ -42,17 +43,11 @@ export function downloadClinicExport(token: string, id: string): Promise<ClinicE
 }
 
 /**
- * Un decimal con coma: no es dinero, así que no pasa por @/lib/money/round
- * (y sin toFixed, que la guarda DX-488-bis trata como redondeo de importes).
+ * «2,4 MB»: tamaño de un fichero con el formato de la sede (no es dinero:
+ * sin @/lib/money/round; un decimal con `fmt.number`).
  */
-const FILE_SIZE_NUMBER = new Intl.NumberFormat('es-VE', {
-  minimumFractionDigits: 1,
-  maximumFractionDigits: 1,
-});
-
-/** «2,4 MB»: tamaño de un fichero (no es dinero ni una fecha). */
-export function fileSizeLabel(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
+export function fileSizeLabel(bytes: number, fmt: RegionalFormat): string {
+  if (bytes < 1024) return `${fmt.number(bytes, { min: 0, max: 0 })} B`;
   const units = ['KB', 'MB', 'GB'];
   let value = bytes / 1024;
   let unit = 0;
@@ -60,5 +55,5 @@ export function fileSizeLabel(bytes: number): string {
     value /= 1024;
     unit += 1;
   }
-  return `${FILE_SIZE_NUMBER.format(value)} ${units[unit]}`;
+  return `${fmt.number(value, { min: 1, max: 1 })} ${units[unit]}`;
 }
