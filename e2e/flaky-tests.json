@@ -1,0 +1,4 @@
+{
+  "$comment": "DX-419 (TST-051): ÚNICOS tests de Playwright que la CI puede reintentar (una vez); el resto corre sin reintentos. Cada entrada: file (e2e/….spec.ts), title (título completo del informe: describe y test unidos por « › », o «*» para todo el fichero), ticket (DX-NNN), clickup (https://app.clickup.com/t/<id>), expires (AAAA-MM-DD, como mucho 90 días) y reason. Una entrada caducada pone la CI en rojo (scripts/flaky-tests.test.ts). Antes de añadir una, intenta arreglar la causa. Detalles en e2e/support/flaky-tests.ts.",
+  "entries": []
+}

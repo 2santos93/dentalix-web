@@ -7561,6 +7561,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/clinic-exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Historial de exportaciones de la clínica (las 20 últimas) */
+        get: operations["ClinicExportsController_list"];
+        put?: never;
+        /**
+         * Pedir una exportación completa (ZIP de CSV)
+         * @description Encola un trabajo que genera un ZIP con un CSV por entidad (UTF-8 con BOM, cabeceras en español). Al terminar avisa por email a todos los ADMIN. Una sola en curso por clínica.
+         */
+        post: operations["ClinicExportsController_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clinic-exports/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Descargar una exportación (un solo uso)
+         * @description Consume el enlace de un solo uso (vale 24 h desde que está lista) y devuelve una URL firmada del almacén de 60 s. Queda auditado con el tamaño.
+         */
+        post: operations["ClinicExportsController_download"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quote-follow-up-settings": {
         parameters: {
             query?: never;
@@ -11591,7 +11632,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE" | "ORTHO_CASE" | "ORTHO_VISIT" | "DENTAL_LAB" | "DENTAL_LAB_ORDER" | "COMMISSION_SETTLEMENT" | "POST_OP_CHECK" | "PATIENT_ACCESS_LINK" | "ONLINE_BOOKING" | "LEAD" | "BANK_ACCOUNT" | "BANK_STATEMENT_IMPORT" | "BANK_RECONCILIATION_MATCH" | "WAITING_ROOM_SCREEN";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "PAYMENT_RECEIPT_SUMMARY" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD" | "CLOSING_QUEUE_DISMISSAL" | "SIGNATURE_REQUEST" | "PATIENT_CREDIT" | "LOCATION_SCHEDULE" | "REMINDER_SETTINGS" | "PRIVACY_POLICY" | "APPOINTMENT_TYPE" | "PAYER" | "CONSENT_TEMPLATE" | "PRESCRIPTION_TEMPLATE" | "INVENTORY_ITEM" | "INVENTORY_MOVEMENT" | "CHAIR" | "EQUIPMENT" | "EQUIPMENT_MAINTENANCE" | "PATIENT_RECALL" | "RECALL_CONTACT" | "RECALL_TYPE" | "PATIENT_CERTIFICATE" | "PAYMENT_LINK" | "PAYMENT_REPORT" | "TREATMENT_PLAN_TEMPLATE" | "EXTERNAL_ORDER" | "EXTERNAL_ORDER_TEMPLATE" | "ORTHO_CASE" | "ORTHO_VISIT" | "DENTAL_LAB" | "DENTAL_LAB_ORDER" | "COMMISSION_SETTLEMENT" | "POST_OP_CHECK" | "PATIENT_ACCESS_LINK" | "ONLINE_BOOKING" | "LEAD" | "BANK_ACCOUNT" | "BANK_STATEMENT_IMPORT" | "BANK_RECONCILIATION_MATCH" | "WAITING_ROOM_SCREEN" | "CLINIC_EXPORT";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -27904,6 +27945,50 @@ export interface components {
              * @example 1990-04-15
              */
             birthDate: string;
+        };
+        /**
+         * @description PENDING en cola · RUNNING generándose · READY lista (descargable una vez durante 24 h) · DOWNLOADED ya descargada · EXPIRED caducada o fichero borrado · FAILED falló.
+         * @enum {string}
+         */
+        ClinicExportState: "PENDING" | "RUNNING" | "READY" | "DOWNLOADED" | "EXPIRED" | "FAILED";
+        ClinicExportDto: {
+            /** Format: uuid */
+            id: string;
+            /** @description PENDING en cola · RUNNING generándose · READY lista (descargable una vez durante 24 h) · DOWNLOADED ya descargada · EXPIRED caducada o fichero borrado · FAILED falló. */
+            state: components["schemas"]["ClinicExportState"];
+            /** @description Quién la pidió (null si ya no es miembro de la clínica). */
+            requestedByName: string | null;
+            /** Format: date-time */
+            requestedAt: string;
+            /** Format: date-time */
+            completedAt: string | null;
+            /** @description Tamaño del ZIP en bytes. */
+            sizeBytes: number | null;
+            /** @description Ficheros del ZIP (CSV y LEEME). */
+            fileCount: number | null;
+            /** @description Filas exportadas entre todos los CSV. */
+            totalRows: number | null;
+            /**
+             * Format: date-time
+             * @description Hasta cuándo se puede descargar.
+             */
+            downloadExpiresAt: string | null;
+            /** Format: date-time */
+            downloadedAt: string | null;
+            downloadedByName: string | null;
+            /** @description Por qué falló: BUILD_FAILED, TOO_LARGE, STALE (se quedó colgada) o LEASE_EXPIRED. */
+            errorCode: string | null;
+            /** @description true solo en READY. */
+            canDownload: boolean;
+        };
+        ClinicExportDownloadDto: {
+            /** @description URL firmada del almacén; vale 60 s y descarga el ZIP como adjunto. */
+            url: string;
+            /** @example 60 */
+            expiresInSeconds: number;
+            /** @example exportacion-dentalix-2026-11-21.zip */
+            fileName: string;
+            sizeBytes: number;
         };
         LocationQuoteFollowUpSettingsDto: {
             /** Format: uuid */
@@ -54776,6 +54861,128 @@ export interface operations {
             };
             /** @description `CHECK_IN_QR_INACTIVE` */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicExportsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicExportDto"][];
+                };
+            };
+            /** @description Solo un administrador de la clínica puede exportar sus datos. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicExportsController_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicExportDto"];
+                };
+            };
+            /** @description Solo un administrador de la clínica puede exportar sus datos. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya hay una exportación en curso. Espera a que termine para pedir otra. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicExportsController_download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicExportDownloadDto"];
+                };
+            };
+            /** @description Solo un administrador de la clínica puede exportar sus datos. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No encontramos esa exportación en esta clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La exportación todavía no está lista para descargar. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Esta exportación ya se descargó: el enlace es de un solo uso. Pide una exportación nueva. / El enlace de esta exportación caducó (vale 24 horas). Pide una exportación nueva. */
+            410: {
                 headers: {
                     [name: string]: unknown;
                 };

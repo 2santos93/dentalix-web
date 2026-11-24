@@ -138,6 +138,13 @@
       ],
       "permissions": []
     },
+    "GET /clinic-exports": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
     "GET /clinic/settings": {
       "kind": "roles",
       "roles": [
@@ -894,6 +901,13 @@
       "permissions": []
     },
     "POST /chairs": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN"
+      ],
+      "permissions": []
+    },
+    "POST /clinic-exports": {
       "kind": "roles",
       "roles": [
         "ADMIN"

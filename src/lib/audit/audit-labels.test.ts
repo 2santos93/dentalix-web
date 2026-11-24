@@ -307,6 +307,7 @@ describe('bankReconciliationDetail (DX-571)', () => {
     expect(AUDIT_RESOURCE_LABELS.BANK_STATEMENT_IMPORT).toBe('Extracto del banco');
     expect(AUDIT_RESOURCE_LABELS.BANK_RECONCILIATION_MATCH).toBe('Emparejado con el banco');
     expect(AUDIT_RESOURCE_LABELS.WAITING_ROOM_SCREEN).toBe('Pantalla de sala de espera');
+    expect(AUDIT_RESOURCE_LABELS.CLINIC_EXPORT).toBe('Exportación de datos');
   });
 
   it('el extracto importado dice sus totales, los conciliados solos y el inicio del hash', () => {

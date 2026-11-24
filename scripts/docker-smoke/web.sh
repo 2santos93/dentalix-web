@@ -32,11 +32,23 @@ trap cleanup EXIT
 
 fail() { echo "FALLO: $*" >&2; exit 1; }
 
+# DX-419: nada de `docker … | grep -q` con `pipefail`. `grep -q` sale en cuanto
+# encuentra la línea; si `docker logs` aún estaba escribiendo, muere por SIGPIPE
+# (141) y el pipeline «falla» aunque la línea esté (así salió una vez «el
+# arranque no registró los plazos» con la línea en el log). Se lee entero y
+# luego se busca.
+logs_have() {
+  local logs
+  logs="$(docker logs "$1" 2>&1)"
+  grep -qF -- "$2" <<<"$logs"
+}
+running() { [[ -n "$(docker ps -q --filter "name=^$1$")" ]]; }
+
 wait_http() {
   local url="$1" name="$2"
   for _ in $(seq 1 60); do
     if curl -fs -o /dev/null "$url"; then return 0; fi
-    if ! docker ps -q --filter "name=^${name}$" | grep -q .; then
+    if ! running "$name"; then
       docker logs "$name" >&2 || true
       fail "$name terminó antes de responder"
     fi
@@ -127,7 +139,6 @@ poll() {
 }
 api_up() { curl -fs -o /dev/null "http://127.0.0.1:${LIFE_API_PORT}/__stats"; }
 poll "la API falsa c responde" 20 api_up
-running() { docker ps -q --filter "name=^$1$" | grep -q .; }
 stopped() { ! running "$1"; }
 start_web() {
   local name="$1"; shift
@@ -170,7 +181,7 @@ echo "Salud: 200 {\"status\":\"ok\"} en cualquier host, sin caché y sin llamar 
 # 4b) Keep-alive por encima de los 60 s del balanceador.
 grep -qi '^keep-alive: timeout=65$' "$TMP/health.h2" || fail "sin Keep-Alive: timeout=65: $(grep -i '^keep-alive' "$TMP/health.h2" || echo ninguno)"
 node "$HERE/keep-alive.mjs" "${WEB}/api/health" 8000
-docker logs "$name" 2>&1 | grep -q 'keep-alive 65000 ms, cabeceras 66000 ms, drenaje 4000 ms, tope de apagado 30000 ms' \
+logs_have "$name" 'keep-alive 65000 ms, cabeceras 66000 ms, drenaje 4000 ms, tope de apagado 30000 ms' \
   || fail "el arranque no registró los plazos: $(docker logs "$name" 2>&1 | tail -5)"
 
 # 4c) SIGTERM con una petición en vuelo (12 s): salud 503 mientras drena,
@@ -199,7 +210,7 @@ grep -q '"slow":"done"' "$TMP/slow.body" || fail "la petición en vuelo no lleg�
 poll "el proceso sale tras la petición en vuelo" 20 stopped "$name"
 status="$(docker inspect -f '{{.State.ExitCode}}' "$name")"
 [[ "$status" == 0 ]] || fail "apagado ordenado salió con ${status}: $(docker logs "$name" 2>&1 | tail -5)"
-docker logs "$name" 2>&1 | grep -q 'sin peticiones en vuelo: sale con 0' || fail "el log no cuenta el apagado"
+logs_have "$name" 'sin peticiones en vuelo: sale con 0' || fail "el log no cuenta el apagado"
 echo "La petición en vuelo terminó con 200 y el proceso salió con 0."
 docker rm -f "$name" >/dev/null
 
@@ -213,7 +224,7 @@ status="$(docker inspect -f '{{.State.ExitCode}}' "$name")"
 [[ "$status" == 1 ]] || fail "con el tope vencido salió con ${status} (se esperaba 1)"
 wait "$SLOW_PID" || true
 [[ "$(cat "$TMP/slow.code")" != 200 ]] || fail "la petición cortada respondió 200"
-docker logs "$name" 2>&1 | grep -q 'vencieron SHUTDOWN_TIMEOUT_MS (2000 ms)' || fail "el log no cuenta el corte"
+logs_have "$name" 'vencieron SHUTDOWN_TIMEOUT_MS (2000 ms)' || fail "el log no cuenta el corte"
 echo "Tope de apagado: corta la petición en vuelo y sale con 1 a los 2 s."
 docker rm -f "$name" >/dev/null
 
@@ -222,7 +233,7 @@ name="dx-web-smoke-sin-api"
 CONTAINERS+=("$name")
 docker run -d --name "$name" --network host -e PORT="$WEB_PORT" "$IMAGE" >/dev/null
 for _ in $(seq 1 30); do
-  if ! docker ps -q --filter "name=^${name}$" | grep -q .; then break; fi
+  if ! running "$name"; then break; fi
   if curl -fs -o /dev/null "http://127.0.0.1:${WEB_PORT}/login"; then
     fail "la web arrancó sin API_URL"
   fi
@@ -230,6 +241,6 @@ for _ in $(seq 1 30); do
 done
 status="$(docker inspect -f '{{.State.ExitCode}}' "$name")"
 [[ "$status" != 0 ]] || fail "sin API_URL la web salió con código 0"
-docker logs "$name" 2>&1 | grep -q 'API_URL' || fail "sin API_URL no se explica el motivo en el log"
+logs_have "$name" 'API_URL' || fail "sin API_URL no se explica el motivo en el log"
 echo "Sin API_URL: no arranca (código $status) y el log dice por qué."
 echo "Humo de la imagen de la web: OK"
