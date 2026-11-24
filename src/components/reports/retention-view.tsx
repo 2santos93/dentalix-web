@@ -186,13 +186,15 @@ function Summary({
   const c = retentionCopy;
   return (
     <StatGroup as="h2" title={c.summaryTitle} className="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
-      {report.definitions.map((d) => {
+      {report.definitions.map((d, i) => {
         const text = figureText(report.totals, d.key, fmt);
         const count = d.key === 'retentionRate' ? null : report.totals[d.key];
         return (
           <Stat
             key={d.key}
             testId={`retention-figure-${d.key}`}
+            // Siete cifras: la última ocupa lo que queda de su fila (sin hueco gris).
+            className={i === report.definitions.length - 1 ? 'col-span-2 sm:col-span-3 lg:col-span-2' : undefined}
             label={d.label}
             value={
               <span className="inline-flex items-center gap-1">

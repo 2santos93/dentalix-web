@@ -192,6 +192,10 @@ test('1440 px ADMIN: las cifras del ticket, cada lista con sus filas, baja de av
   const schedule = page.getByRole('dialog', { name: 'Agendar cita' });
   await expect(schedule).toContainText(`Nora ${LAST}`, { timeout: 30_000 });
   await expect(schedule.getByRole('button', { name: 'Agendar cita' })).toBeVisible();
+  // Con su última sede y profesional puestos.
+  await expect(schedule.getByLabel('Profesional', { exact: true }).locator('option:checked')).toHaveText(
+    admin.fullName,
+  );
   await shot(page, 'retencion-agendar', 1440);
 });
 

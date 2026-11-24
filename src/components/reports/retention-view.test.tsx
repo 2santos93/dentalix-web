@@ -176,9 +176,7 @@ describe('RetentionView (DX-260)', () => {
     expect(flat(screen.getByTestId('retention-figure-lost').textContent)).toContain('2');
     expect(
       within(screen.getByTestId('retention-figure-lost')).getByRole('button', { name: 'Cómo se calcula: Perdidos' }),
-    ).toHaveAccessibleDescription(
-      'Definición de Perdidos.',
-    );
+    ).toHaveAccessibleDescription('Definición de Perdidos.');
     // Cero no abre lista.
     expect(screen.queryByTestId('retention-open-reactivated')).not.toBeInTheDocument();
     const table = screen.getByRole('table', { name: 'Retención por sede y profesional' });
@@ -219,9 +217,11 @@ describe('RetentionView (DX-260)', () => {
     const table = await within(dialog).findByRole('table', { name: 'Pacientes: Perdidos' });
     expect(within(table).getAllByRole('row')).toHaveLength(3); // cabecera + 2
     const ana = within(table).getByText('Ana Rondón').closest('tr') as HTMLElement;
-    expect(within(ana).getByRole('link', { name: /^Escribir a Ana Rondón por WhatsApp/ }).getAttribute('href')).toMatch(
-      /^https:\/\/wa\.me\/584125550101\?text=/,
-    );
+    expect(
+      within(ana)
+        .getByRole('link', { name: /^Escribir a Ana Rondón por WhatsApp/ })
+        .getAttribute('href'),
+    ).toMatch(/^https:\/\/wa\.me\/584125550101\?text=/);
     const luis = within(table).getByText('Luis Guerra').closest('tr') as HTMLElement;
     expect(within(luis).queryByRole('link', { name: /WhatsApp|Llamar/ })).not.toBeInTheDocument();
     expect(within(luis).getByTestId('retention-opted-out')).toHaveTextContent('No quiere avisos');

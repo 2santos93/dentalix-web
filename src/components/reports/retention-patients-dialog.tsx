@@ -358,7 +358,7 @@ export function RetentionPatientsDialog({
                 variant="secondary"
                 onClick={() => void exportCsv()}
                 disabled={exporting || loading || Boolean(error) || !data || data.total === 0}
-                className="self-start max-sm:min-h-11"
+                className="w-fit justify-self-start max-sm:min-h-11"
                 data-testid="retention-list-export"
               >
                 <Download aria-hidden />
