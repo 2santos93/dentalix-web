@@ -194,6 +194,15 @@ export function convertWithRate(amount: number, rate: Pick<RateQuote, 'fromPerBa
 }
 
 /**
+ * DX-398: lo pendiente del plan tras un abono de `equivalent` (ya en su
+ * moneda), a céntimos como el saldo de la API (`balance` del plan menos lo
+ * abonado). Negativo = saldo a favor.
+ */
+export function balanceAfterPayment(balance: number, equivalent: number): number {
+  return roundAmount(balance - equivalent);
+}
+
+/**
  * La tasa que congeló un abono (DX-375), legible: «1 USD = MXN 18,50» con
  * la moneda mayor a la izquierda, sale de las dos tasas por unidad base que
  * guardó, la fuente y el día. Cifra y día con el formato de la sede y el

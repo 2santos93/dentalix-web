@@ -11,6 +11,7 @@ API. La fuente es siempre la API; no se editan aquí.
 | `src/lib/format/regional-format.cases.json` | `src/shared/format/regional-format.cases.json` |
 | `src/lib/locations/iso3166-countries.json` | `prisma/reference/iso3166-countries.json` |
 | `src/lib/locations/phone-regions-list.json` | `prisma/reference/phone-regions-list.json` |
+| `src/lib/payments/payment-rate-vectors.json` | `src/modules/payments/application/payment-rate-vectors.json` |
 
 `scripts/check-api-reference-sync.mjs` los compara (`scripts/e2e-ci.sh sync`,
 paso «Referencias compartidas con la API» de `.github/workflows/e2e.yml`) y la
@@ -31,6 +32,10 @@ Decimales de las monedas (DX-340, README de la API «Redondeo de importes»):
   JPY, EUR y ALL con 123,45 × 7,5 %, límites del descuento, total de líneas
   y, DX-488, el reparto de las cuotas de un plan de pagos en `installmentSplit`);
   `line-rounding.test.ts` los comprueba aquí.
+- **Abono en otra moneda** (DX-398, `src/lib/payments/payment-rate-vectors.json`): tasa congelada
+  (8 decimales; la que redondea a 0 es «sin tasa»), equivalente y lo pendiente tras el abono, con
+  VES, USD, EUR, JPY e importes grandes; `src/lib/payments/payment-rate-vectors.test.ts` los corre con
+  `quoteFromRates`, `convertWithRate` y `balanceAfterPayment` (la API, con `freezePaymentRate` y el saldo).
 - **Cuotas de un plan de pagos** (DX-488): `installmentSplit` (cuota base y última, en O(1); `null` fuera de 1…600 cuotas) reparte como
   `generateSchedule` de la API, en unidades de `roundingDigits` de la moneda y
   el resto en la última (JPY 10 000 en 3 = 3 333, 3 333 y 3 334; en USD y VES,

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import {
+  balanceAfterPayment,
   BCV_CURRENCIES,
   bcvValueDateFor,
   convertWithRate,
@@ -16,7 +17,6 @@ import {
 } from '@/lib/payments/payment-rate';
 import { rateProviderCopy } from './rate-provider-notice';
 import type { ExchangeRatesState } from './use-exchange-rates';
-import { roundAmount } from '@/lib/money/round';
 
 // Copy como constantes (i18n-ready). Solo la fuente BCV (DX-585), que elige la
 // clínica, nombra un banco.
@@ -189,7 +189,7 @@ function PreviewBody({
   }
   const equivalent = convertWithRate(amount, rate);
   const after =
-    typeof planBalance === 'object' ? roundAmount(planBalance.balance - equivalent) : null;
+    typeof planBalance === 'object' ? balanceAfterPayment(planBalance.balance, equivalent) : null;
   return (
     <>
       <dl className="mt-1 grid gap-x-4 gap-y-1 sm:grid-cols-2">
