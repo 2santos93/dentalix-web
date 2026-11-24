@@ -1,7 +1,9 @@
 import { canManageCommissions } from '@/lib/commissions/commissions-api';
 import { canManageWaitingRoomScreens } from '@/lib/waiting-room/waiting-room-api';
+import { canExportClinicData } from '@/lib/clinic-exports/clinic-exports-api';
 import type { ComponentType } from 'react';
 import {
+  Archive,
   Armchair,
   ArrowLeftRight,
   BadgePercent,
@@ -519,6 +521,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Traer pacientes y saldos desde una hoja CSV o Excel.',
         icon: FileUp,
         visible: canImportPatients,
+      },
+      // DX-053: el volcado de toda la clínica (ZIP de CSV), solo ADMIN.
+      {
+        href: '/settings/exportar-datos',
+        label: 'Exportar datos',
+        description: 'Descargar todos los datos de la clínica en un ZIP de hojas CSV.',
+        icon: Archive,
+        visible: canExportClinicData,
       },
       // DX-191.
       {
