@@ -2,8 +2,8 @@ import { render, screen } from '@testing-library/react';
 import { REPORT_TABS, ReportsTabs, reportTabsFor, resolveReportTab } from './reports-tabs';
 
 describe('pestañas de Reportes por rol (DX-423, DX-399, DX-558, DX-567, DX-304)', () => {
-  it('ADMIN ve las trece; DENTIST «Producción por procedimiento», «Presupuestos», «Previsión», «Profesionales» e «Inasistencias»; RECEPTION solo «Cobrado sin imputar»; el resto, la primera (su 403)', () => {
-    expect(reportTabsFor('ADMIN').map((t) => t.key)).toEqual(['comparar-sedes', 'rentabilidad', 'produccion', 'presupuestos', 'prevision', 'profesionales', 'inasistencias', 'cartera', 'captacion', 'sin-imputar', 'huecos-recuperados', 'ocupacion-sillones', 'enlaces-paciente']);
+  it('ADMIN ve las catorce; DENTIST «Producción por procedimiento», «Presupuestos», «Previsión», «Profesionales» e «Inasistencias»; RECEPTION solo «Cobrado sin imputar»; el resto, la primera (su 403)', () => {
+    expect(reportTabsFor('ADMIN').map((t) => t.key)).toEqual(['comparar-sedes', 'rentabilidad', 'produccion', 'presupuestos', 'prevision', 'profesionales', 'inasistencias', 'cartera', 'captacion', 'retencion', 'sin-imputar', 'huecos-recuperados', 'ocupacion-sillones', 'enlaces-paciente']);
     expect(reportTabsFor('DENTIST').map((t) => t.key)).toEqual(['produccion', 'presupuestos', 'prevision', 'profesionales', 'inasistencias']);
     expect(reportTabsFor('RECEPTION').map((t) => t.key)).toEqual(['sin-imputar']);
     expect(reportTabsFor('ASSISTANT').map((t) => t.key)).toEqual(['comparar-sedes']);
@@ -19,6 +19,7 @@ describe('pestañas de Reportes por rol (DX-423, DX-399, DX-558, DX-567, DX-304)
       'profesionales',
       'inasistencias',
       'captacion',
+      'retencion',
       'sin-imputar',
     ]);
     expect(reportTabsFor('DENTIST', ['FINANCIAL_REPORTS_VIEW']).map((t) => t.key)).toEqual([
@@ -30,6 +31,7 @@ describe('pestañas de Reportes por rol (DX-423, DX-399, DX-558, DX-567, DX-304)
       'profesionales',
       'inasistencias',
       'captacion',
+      'retencion',
       'sin-imputar',
     ]);
     expect(reportTabsFor('ASSISTANT', ['PAYMENT_REGISTER']).map((t) => t.key)).toEqual(['comparar-sedes']);
