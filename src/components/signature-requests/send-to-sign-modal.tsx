@@ -11,6 +11,7 @@ import {
 } from '@/lib/signature-requests/signature-requests-api';
 import { PLAN_STATUS_LABELS } from '@/lib/treatment-plans/plan-status';
 import { actorRoleLabel } from '@/lib/audit/audit-labels';
+import { RELATIONSHIPS, RELATIONSHIP_LABELS, type ResponsibleRelationship } from '@/lib/patients/responsible-parties-api';
 import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 import type { SedeClock } from '@/lib/locations/sede-clock';
 import {
@@ -29,6 +30,7 @@ import { InlineError } from '@/components/errors/inline-error';
 import { SectionError } from '@/components/errors/section-error';
 import { Callout } from '@/components/ui/callout';
 import { NativeSelect } from '@/components/ui/native-select';
+import { Input } from '@/components/ui/input';
 
 const copy = {
   title: 'Enviar a firmar',
@@ -70,9 +72,21 @@ const copy = {
   toPatient: (to: string, name: string) => `${to} · firma ${name} (paciente)`,
   toGuardian: (to: string, name: string) => `${to} · firma ${name}, su responsable (la persona es menor de edad)`,
   expiry: 'El enlace caduca a las 72 horas y sirve una sola vez.',
+  // DX-060-bis: con un tutor, el documento enviado abre con la misma cláusula que en la clínica.
+  guardianHeading: 'Quién firma en nombre del paciente',
+  guardianPrefilled: 'Precargado del responsable de la ficha: corrígelo si hace falta.',
+  guardianName: 'Nombre del tutor',
+  guardianDocument: 'Documento del tutor',
+  guardianRelationship: 'Relación con el paciente',
+  guardianRelationshipPlaceholder: 'Elige la relación',
+  guardianClauseHint: 'El documento dirá quién firma en nombre del paciente y su relación con él.',
+  guardianNameRequired: 'Escribe el nombre del tutor.',
+  guardianDocumentRequired: 'Escribe el documento del tutor: el documento lo nombra.',
+  guardianRelationshipRequired: 'Elige la relación del tutor con el paciente.',
   cancel: 'Cancelar',
   send: 'Enviar enlace',
   sendMissing: 'Para enviar, elige el consentimiento y el profesional que firmará.',
+  sendMissingGuardian: 'Para enviar, completa el nombre, el documento y la relación del tutor.',
   sendBlocked: (reason: string) => `No se puede enviar: ${reason}`,
   sendError: 'No pudimos enviar el enlace. Intenta de nuevo.',
 };
@@ -97,7 +111,10 @@ interface SendToSignModalProps {
  * incluidos). Lo que se envía es exactamente el texto de la vista previa en
  * pantalla, resuelto y congelado por la API. Avisa, sin bloquear, si la
  * plantilla ya está completa para el paciente o si sin plan el tratamiento
- * dirá una frase neutra en vez de los procedimientos (DX-060). Si el paciente no puede recibirlo (sin email, menor
+ * dirá una frase neutra en vez de los procedimientos (DX-060). Si firma el
+ * responsable de un menor, pide su nombre, documento y relación (precargados
+ * de la ficha): el texto enviado abre con la cláusula de representación, como
+ * en la clínica (DX-060-bis). Si el paciente no puede recibirlo (sin email, menor
  * sin responsable, baja de envíos) el modal dice por qué y no deja enviar; si
  * falta un campo, lo dice junto a él. El padre lo monta con una `key` nueva en
  * cada apertura.
@@ -106,15 +123,24 @@ export function SendToSignModal({ open, onOpenChange, token, patientId, userId, 
   const ids = useId();
   const templateRef = useRef<HTMLSelectElement>(null);
   const professionalRef = useRef<HTMLSelectElement>(null);
+  const guardianNameRef = useRef<HTMLInputElement>(null);
+  const guardianDocumentRef = useRef<HTMLInputElement>(null);
+  const guardianRelationshipRef = useRef<HTMLSelectElement>(null);
   const [options, setOptions] = useState<SignatureRequestOptions | null>(null);
   const [optionsError, setOptionsError] = useState<string | null>(null);
   const [optionsKey, setOptionsKey] = useState(0);
   const [templateId, setTemplateId] = useState('');
   const [professionalId, setProfessionalId] = useState('');
   const [planId, setPlanId] = useState('');
+  const [guardianName, setGuardianName] = useState('');
+  const [guardianDocument, setGuardianDocument] = useState('');
+  const [guardianRelationship, setGuardianRelationship] = useState<ResponsibleRelationship | ''>('');
   const [fieldErrors, setFieldErrors] = useState<{
     template?: string;
     professional?: string;
+    guardianName?: string;
+    guardianDocument?: string;
+    guardianRelationship?: string;
   }>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -128,6 +154,12 @@ export function SendToSignModal({ open, onOpenChange, token, patientId, userId, 
         setOptions(data);
         setOptionsError(null);
         setProfessionalId((current) => current || data.defaultProfessionalId || '');
+        // DX-060-bis: el tutor, precargado del responsable que recibirá el enlace.
+        if (data.recipient.signerType === 'GUARDIAN') {
+          setGuardianName((v) => v || data.recipient.signerName || '');
+          setGuardianDocument((v) => v || data.recipient.signerDocument || '');
+          setGuardianRelationship((v) => v || data.recipient.signerRelationship || '');
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) setOptionsError(apiErrorMessage(err, copy.optionsError));
@@ -141,12 +173,17 @@ export function SendToSignModal({ open, onOpenChange, token, patientId, userId, 
   const blocked = !!options && !recipient?.allowed;
   const template = options?.templates.find((t) => t.id === templateId) ?? null;
   const selfSigns = !!userId && professionalId === userId;
+  const guardian = !!recipient?.allowed && recipient.signerType === 'GUARDIAN';
+  const guardianMissing =
+    guardian && (guardianName.trim() === '' || guardianDocument.trim() === '' || guardianRelationship === '');
   const sendHintId = `${ids}-send-hint`;
   const sendHint = blocked
     ? copy.sendBlocked(recipient?.reason ?? '')
     : !templateId || !professionalId
       ? copy.sendMissing
-      : null;
+      : guardianMissing
+        ? copy.sendMissingGuardian
+        : null;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -154,9 +191,25 @@ export function SendToSignModal({ open, onOpenChange, token, patientId, userId, 
     const next: typeof fieldErrors = {};
     if (!templateId) next.template = copy.templateRequired;
     if (!professionalId) next.professional = copy.professionalRequired;
+    if (guardian) {
+      if (!guardianName.trim()) next.guardianName = copy.guardianNameRequired;
+      if (!guardianDocument.trim()) next.guardianDocument = copy.guardianDocumentRequired;
+      if (!guardianRelationship) next.guardianRelationship = copy.guardianRelationshipRequired;
+    }
     setFieldErrors(next);
-    if (next.template || next.professional) {
-      (next.template ? templateRef : professionalRef).current?.focus();
+    const firstInvalid = next.template
+      ? templateRef
+      : next.professional
+        ? professionalRef
+        : next.guardianName
+          ? guardianNameRef
+          : next.guardianDocument
+            ? guardianDocumentRef
+            : next.guardianRelationship
+              ? guardianRelationshipRef
+              : null;
+    if (firstInvalid) {
+      firstInvalid.current?.focus();
       return;
     }
     setSubmitting(true);
@@ -168,6 +221,13 @@ export function SendToSignModal({ open, onOpenChange, token, patientId, userId, 
         templateId,
         professionalId,
         ...(planId ? { treatmentPlanId: planId } : {}),
+        ...(guardian && guardianRelationship
+          ? {
+              guardianName: guardianName.trim(),
+              guardianDocument: guardianDocument.trim(),
+              guardianRelationship,
+            }
+          : {}),
       });
       onOpenChange(false);
       onSent(created);
@@ -317,6 +377,84 @@ export function SendToSignModal({ open, onOpenChange, token, patientId, userId, 
                 </Callout>
               )}
             </section>
+
+            {guardian ? (
+              <fieldset className="flex min-w-0 flex-col gap-3">
+                <legend className="mb-1 text-sm font-medium text-ink">{copy.guardianHeading}</legend>
+                <p className="text-xs text-muted">{copy.guardianPrefilled}</p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <FormField htmlFor="sign-guardian-name" label={copy.guardianName} error={fieldErrors.guardianName}>
+                    <Input
+                      ref={guardianNameRef}
+                      id="sign-guardian-name"
+                      value={guardianName}
+                      onChange={(e) => {
+                        setGuardianName(e.target.value);
+                        setFieldErrors((x) => ({ ...x, guardianName: undefined }));
+                      }}
+                      aria-invalid={fieldErrors.guardianName ? true : undefined}
+                      aria-describedby={fieldErrors.guardianName ? fieldErrorId('sign-guardian-name') : undefined}
+                      maxLength={200}
+                      autoComplete="off"
+                      required
+                    />
+                  </FormField>
+                  <FormField
+                    htmlFor="sign-guardian-document"
+                    label={copy.guardianDocument}
+                    error={fieldErrors.guardianDocument}
+                  >
+                    <Input
+                      ref={guardianDocumentRef}
+                      id="sign-guardian-document"
+                      value={guardianDocument}
+                      onChange={(e) => {
+                        setGuardianDocument(e.target.value);
+                        setFieldErrors((x) => ({ ...x, guardianDocument: undefined }));
+                      }}
+                      aria-invalid={fieldErrors.guardianDocument ? true : undefined}
+                      aria-describedby={
+                        fieldErrors.guardianDocument ? fieldErrorId('sign-guardian-document') : undefined
+                      }
+                      maxLength={60}
+                      autoComplete="off"
+                      required
+                    />
+                  </FormField>
+                  <FormField
+                    htmlFor="sign-guardian-relationship"
+                    label={copy.guardianRelationship}
+                    hint={copy.guardianClauseHint}
+                    error={fieldErrors.guardianRelationship}
+                    className="sm:col-span-2"
+                  >
+                    <NativeSelect
+                      ref={guardianRelationshipRef}
+                      id="sign-guardian-relationship"
+                      value={guardianRelationship}
+                      onChange={(e) => {
+                        setGuardianRelationship(e.target.value as ResponsibleRelationship);
+                        setFieldErrors((x) => ({ ...x, guardianRelationship: undefined }));
+                      }}
+                      aria-invalid={fieldErrors.guardianRelationship ? true : undefined}
+                      aria-describedby={
+                        fieldErrors.guardianRelationship ? fieldErrorId('sign-guardian-relationship') : undefined
+                      }
+                      required
+                    >
+                      <option value="" disabled>
+                        {copy.guardianRelationshipPlaceholder}
+                      </option>
+                      {RELATIONSHIPS.map((r) => (
+                        <option key={r} value={r}>
+                          {RELATIONSHIP_LABELS[r]}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                  </FormField>
+                </div>
+              </fieldset>
+            ) : null}
 
             {sendHint ? (
               <p id={sendHintId} className="text-xs text-muted sm:text-right">

@@ -77,6 +77,7 @@ function documentFixture(overrides: Partial<PublicSignatureDocument> = {}): Publ
     signerType: 'PATIENT',
     signerName: 'Laura Castro',
     signerDocumentRequired: false,
+    representedPatientName: null,
     professionalName: 'Dra. Laura Gómez',
     sentAt: '2026-10-30T14:00:00.000Z',
     expiresAt: '2026-11-02T14:00:00.000Z',
@@ -193,6 +194,45 @@ describe('PublicSignatureView (DX-243)', () => {
       await screen.findByText(/^Firmado por el responsable \(Claudia Navarro\) el .*30 de octubre de 2026/),
     ).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Firma de Claudia Navarro' })).toBeInTheDocument();
+  });
+
+  it('DX-060-bis: con tutor, el texto abre con la cláusula y bajo la firma (y en la copia) dice por quién firma', async () => {
+    const user = setupUser();
+    const clause =
+      'Firma en representación del paciente: Claudia Navarro, identificado(a) con V-20111222, otorga este consentimiento en nombre de Sofía Ortiz, como su madre. Lo que este documento dice en primera persona lo declara Claudia Navarro en representación de Sofía Ortiz.';
+    const guardianDoc = documentFixture({
+      signerType: 'GUARDIAN',
+      signerName: 'Claudia Navarro',
+      representedPatientName: 'Sofía Ortiz',
+      body: `${clause}\n\nYo, Sofía Ortiz, autorizo a Dra. Laura Gómez a realizar la exodoncia del 38.`,
+    });
+    mockedDocument.mockResolvedValue(guardianDoc);
+    mockedSign.mockResolvedValue({
+      ...guardianDoc,
+      signerDocument: 'V-20111222',
+      signedAt: '2026-10-30T14:30:00.000Z',
+      contentHash: 'c'.repeat(64),
+    });
+    await toDocument(user);
+    const doc = await screen.findByRole('article', { name: 'Texto del documento' });
+    expect(doc).toHaveTextContent(clause);
+    // El documento ya lo trae: no se lo vuelve a pedir.
+    expect(screen.queryByLabelText('Tu documento de identidad')).not.toBeInTheDocument();
+    expect(screen.getByText('En representación de Sofía Ortiz')).toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: /he leído/i }));
+    draw(screen.getByRole('img', { name: 'Tu firma' }));
+    await user.click(screen.getByRole('button', { name: 'Firmar' }));
+    expect(await screen.findByRole('heading', { name: 'Documento firmado' })).toBeInTheDocument();
+    expect(screen.getByText('Claudia Navarro · V-20111222')).toBeInTheDocument();
+    expect(screen.getByText('En representación de Sofía Ortiz')).toBeInTheDocument();
+  });
+
+  it('DX-060-bis: si firma el paciente, no dice «En representación de»', async () => {
+    const user = setupUser();
+    mockedDocument.mockResolvedValue(documentFixture());
+    await toDocument(user);
+    await screen.findByRole('article', { name: 'Texto del documento' });
+    expect(screen.queryByText(/En representación de/)).not.toBeInTheDocument();
   });
 
   it('código incorrecto: el motivo con los intentos que quedan; el quinto bloquea («Enlace no válido»)', async () => {

@@ -7858,7 +7858,7 @@ export interface paths {
         put?: never;
         /**
          * Enviar un consentimiento a firmar o un presupuesto a aceptar a distancia (email)
-         * @description Congela el texto (plantilla, paciente, plan, profesional) y envía por email un enlace de un solo uso que caduca a las 72 h; el documento solo se ve tras un código de 6 dígitos. Un menor (mayoría de la clínica) firma por medio de su responsable. Anula la solicitud anterior del mismo paciente y plantilla aún sin firmar. BUDGET (DX-415): solo odontólogo o ADMIN; congela la foto del presupuesto de un plan «Presentado» y su hash, y anula el enlace anterior del mismo plan; si el plan cambia después, el enlace deja de servir.
+         * @description Congela el texto (plantilla, paciente, plan, profesional) y envía por email un enlace de un solo uso que caduca a las 72 h; el documento solo se ve tras un código de 6 dígitos. Un menor (mayoría de la clínica) firma por medio de su responsable; DX-060-bis: el texto abre entonces con la cláusula de representación (nombre, documento y relación del tutor, como en la clínica). Anula la solicitud anterior del mismo paciente y plantilla aún sin firmar. BUDGET (DX-415): solo odontólogo o ADMIN; congela la foto del presupuesto de un plan «Presentado» y su hash, y anula el enlace anterior del mismo plan; si el plan cambia después, el enlace deja de servir.
          */
         post: operations["PatientSignatureRequestsController_create"];
         delete?: never;
@@ -28731,6 +28731,10 @@ export interface components {
             destinationMasked: string | null;
             signerType: components["schemas"]["ConsentSignerType"] | null;
             signerName: string | null;
+            /** @description DX-060-bis: documento del responsable que firma (GUARDIAN), tal como lo pinta el texto; null si firma el paciente o no consta */
+            signerDocument: string | null;
+            /** @description DX-060-bis: relación del responsable que firma con el paciente (GUARDIAN); null si firma el paciente */
+            signerRelationship: components["schemas"]["ResponsibleRelationship"] | null;
             /** @description Menor según la mayoría de edad de la clínica: firma su responsable */
             minor: boolean;
         };
@@ -28866,6 +28870,12 @@ export interface components {
             professionalId?: string;
             /** @description DX-560 (solo BUDGET): segunda moneda orientativa del enlace (ISO 4217), que elige quien envía. Regla: (a) esta, si viene: distinta de la moneda del plan (400 «La segunda moneda debe ser distinta de la del presupuesto.») y del catálogo de monedas (400 «La segunda moneda no está en el catálogo de monedas.»); (b) sin ella, la moneda de la sede del envío si es distinta de la del plan; (c) si no, sin segunda moneda. La tasa es la que la clínica ya tiene guardada ese día en la zona de la sede (nunca el proveedor); sin tasa guardada, el enlace va sin segunda moneda. En CONSENT, 400. Los avisos del seguimiento automático (DX-561) solo usan (b)/(c). */
             secondCurrency?: string;
+            /** @description DX-060-bis (CONSENT a un menor, firma su responsable): nombre del tutor que firma. Sin él, el del responsable en la ficha. */
+            guardianName?: string;
+            /** @description DX-060-bis: documento del tutor. Sin él, el del responsable en la ficha; si tampoco consta, 400 «Si firma un tutor, su nombre y su documento son obligatorios». */
+            guardianDocument?: string;
+            /** @description DX-060-bis: relación del tutor con el paciente. Sin ella, la del responsable en la ficha. El texto congelado abre con la cláusula de representación (la misma que en la clínica). */
+            guardianRelationship?: components["schemas"]["ResponsibleRelationship"];
         };
         SignatureRequestCreatedDto: {
             /** Format: uuid */
@@ -29100,6 +29110,8 @@ export interface components {
             signerName: string;
             /** @description Firma un responsable sin documento registrado: debe escribirlo al firmar */
             signerDocumentRequired: boolean;
+            /** @description DX-060-bis: si firma el responsable, el nombre del paciente por quien firma (bajo la firma: «En representación de {paciente}»); null si firma el paciente */
+            representedPatientName: string | null;
             professionalName: string;
             /** Format: date-time */
             sentAt: string;
@@ -29130,6 +29142,8 @@ export interface components {
             signerName: string;
             /** @description Firma un responsable sin documento registrado: debe escribirlo al firmar */
             signerDocumentRequired: boolean;
+            /** @description DX-060-bis: si firma el responsable, el nombre del paciente por quien firma (bajo la firma: «En representación de {paciente}»); null si firma el paciente */
+            representedPatientName: string | null;
             professionalName: string;
             /** Format: date-time */
             sentAt: string;
@@ -56256,7 +56270,7 @@ export interface operations {
                     "application/json": components["schemas"]["SignatureRequestCreatedDto"];
                 };
             };
-            /** @description BUDGET sin plan o sin ítems, sin plantilla, plantilla desactivada, profesional no válido o host no válido */
+            /** @description BUDGET sin plan o sin ítems, sin plantilla, plantilla desactivada, profesional no válido, host no válido o (DX-060-bis) firma un tutor sin nombre o sin documento */
             400: {
                 headers: {
                     [name: string]: unknown;
