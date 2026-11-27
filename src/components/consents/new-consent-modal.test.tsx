@@ -151,14 +151,23 @@ function renderModal(overrides: Partial<React.ComponentProps<typeof NewConsentMo
   return props;
 }
 
-async function goToSignatures(user: ReturnType<typeof setupUser>, withPlan = false) {
+async function chooseTemplate(user: ReturnType<typeof setupUser>, withPlan = false) {
   await user.selectOptions(await screen.findByLabelText('Plantilla'), 'tpl-1');
   if (withPlan) {
     await user.selectOptions(screen.getByLabelText(/plan de tratamiento/i), 'plan-1');
   }
+}
+
+/** Del paso 1 (ya elegido todo) a las firmas, pasando por la vista previa. */
+async function continueToSignatures(user: ReturnType<typeof setupUser>, body = preview.body) {
   await user.click(screen.getByRole('button', { name: 'Continuar' }));
-  expect(await screen.findByText(preview.body)).toBeInTheDocument();
+  expect(await screen.findByText(body)).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Continuar' }));
+}
+
+async function goToSignatures(user: ReturnType<typeof setupUser>, withPlan = false) {
+  await chooseTemplate(user, withPlan);
+  await continueToSignatures(user);
 }
 
 describe('NewConsentModal', () => {
@@ -194,12 +203,22 @@ describe('NewConsentModal', () => {
     const user = setupUser();
     mockedResponsibles.mockResolvedValue(responsibles({ minor: true, parties: [mother] }));
     renderModal();
-    await goToSignatures(user);
-    expect(screen.getByRole('radio', { name: /tutor/i })).toBeChecked();
+    await chooseTemplate(user);
+    // DX-060: quién firma se elige en el paso 1, para que la vista previa lo refleje.
+    expect(await screen.findByRole('radio', { name: /tutor/i })).toBeChecked();
     expect(screen.getByLabelText('Nombre del tutor')).toHaveValue('Claudia Navarro');
     expect(screen.getByLabelText('Documento del tutor')).toHaveValue('ID local 52987654');
+    expect(screen.getByLabelText('Relación con el paciente')).toHaveValue('MOTHER');
     expect(screen.getByText(/su responsable en la ficha/)).toBeInTheDocument();
 
+    await continueToSignatures(user);
+    expect(mockedPreview).toHaveBeenCalledWith('tok', 'p1', {
+      templateId: 'tpl-1',
+      signerType: 'GUARDIAN',
+      guardianName: 'Claudia Navarro',
+      guardianDocument: 'ID local 52987654',
+      guardianRelationship: 'MOTHER',
+    });
     sign(screen.getByRole('img', { name: 'Firma del tutor' }));
     sign(screen.getByRole('img', { name: /firma del profesional/i }));
     await user.click(screen.getByRole('button', { name: 'Firmar' }));
@@ -210,6 +229,7 @@ describe('NewConsentModal', () => {
         signerType: 'GUARDIAN',
         guardianName: 'Claudia Navarro',
         guardianDocument: 'ID local 52987654',
+        guardianRelationship: 'MOTHER',
       }),
     );
   });
@@ -218,7 +238,8 @@ describe('NewConsentModal', () => {
     const user = setupUser();
     mockedResponsibles.mockResolvedValue(responsibles({ minor: true, parties: [mother] }));
     renderModal();
-    await goToSignatures(user);
+    await chooseTemplate(user);
+    await screen.findByLabelText('Nombre del tutor');
     await user.click(screen.getByRole('radio', { name: 'El paciente' }));
     expect(
       screen.getByText('El paciente es menor de 18 años: lo habitual es que firme su responsable.'),
@@ -229,11 +250,13 @@ describe('NewConsentModal', () => {
     const user = setupUser();
     mockedResponsibles.mockResolvedValue(responsibles({ parties: [mother] }));
     renderModal();
-    await goToSignatures(user);
+    await chooseTemplate(user);
+    await waitFor(() => expect(mockedResponsibles).toHaveBeenCalled());
     expect(screen.getByRole('radio', { name: 'El paciente' })).toBeChecked();
     expect(screen.queryByText(/lo habitual es que firme/)).not.toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: /tutor/i }));
     expect(screen.getByLabelText('Nombre del tutor')).toHaveValue('Claudia Navarro');
+    expect(screen.getByLabelText('Relación con el paciente')).toHaveValue('MOTHER');
   });
 
   it('firma en tres pasos: plantilla → vista previa resuelta → firmas', async () => {
@@ -250,6 +273,7 @@ describe('NewConsentModal', () => {
     expect(mockedPreview).toHaveBeenCalledWith('tok', 'p1', {
       templateId: 'tpl-1',
       treatmentPlanId: 'plan-1',
+      signerType: 'PATIENT',
     });
     expect(screen.getByText('Paso 3 de 3')).toBeInTheDocument();
 
@@ -285,23 +309,37 @@ describe('NewConsentModal', () => {
     expect(screen.getByRole('button', { name: 'Firmar' })).toBeDisabled();
   });
 
-  it('si firma un tutor, pide su nombre y documento y descarta la firma previa', async () => {
+  it('DX-060: si firma un tutor, pide nombre, documento y relación antes de la vista previa, que abre con la cláusula', async () => {
     const user = setupUser();
+    const clause =
+      'Firma en representación del paciente: Marta Pérez, identificado(a) con Documento A DOC-999, otorga este consentimiento en nombre de Ana Pérez, como su tutor legal.';
+    mockedPreview.mockResolvedValue({ ...preview, body: `${clause}\n\n${preview.body}` });
     renderModal();
-    await goToSignatures(user);
-    sign(screen.getByRole('img', { name: 'Firma del paciente' }));
-    sign(screen.getByRole('img', { name: /firma del profesional/i }));
-
+    await chooseTemplate(user);
     await user.click(screen.getByRole('radio', { name: /tutor/i }));
-    const firmar = screen.getByRole('button', { name: 'Firmar' });
-    expect(firmar).toBeDisabled();
-
-    sign(screen.getByRole('img', { name: 'Firma del tutor' }));
-    expect(firmar).toBeDisabled();
+    const continuar = screen.getByRole('button', { name: 'Continuar' });
+    expect(continuar).toBeDisabled();
     await user.type(screen.getByLabelText('Nombre del tutor'), 'Marta Pérez');
     await user.type(screen.getByLabelText('Documento del tutor'), 'Documento A DOC-999');
-    expect(firmar).toBeEnabled();
+    expect(continuar).toBeDisabled();
+    await user.selectOptions(screen.getByLabelText('Relación con el paciente'), 'LEGAL_GUARDIAN');
+    expect(continuar).toBeEnabled();
 
+    await user.click(continuar);
+    expect(await screen.findByText(/Firma en representación del paciente: Marta Pérez/)).toBeInTheDocument();
+    expect(mockedPreview).toHaveBeenCalledWith('tok', 'p1', {
+      templateId: 'tpl-1',
+      signerType: 'GUARDIAN',
+      guardianName: 'Marta Pérez',
+      guardianDocument: 'Documento A DOC-999',
+      guardianRelationship: 'LEGAL_GUARDIAN',
+    });
+    await user.click(screen.getByRole('button', { name: 'Continuar' }));
+
+    const firmar = screen.getByRole('button', { name: 'Firmar' });
+    sign(screen.getByRole('img', { name: 'Firma del tutor' }));
+    sign(screen.getByRole('img', { name: /firma del profesional/i }));
+    expect(firmar).toBeEnabled();
     await user.click(firmar);
     expect(mockedSign).toHaveBeenCalledWith(
       'tok',
@@ -310,8 +348,32 @@ describe('NewConsentModal', () => {
         signerType: 'GUARDIAN',
         guardianName: 'Marta Pérez',
         guardianDocument: 'Documento A DOC-999',
+        guardianRelationship: 'LEGAL_GUARDIAN',
       }),
     );
+  });
+
+  it('DX-060: volver a cambiar quién firma descarta las firmas y pide otra vista previa', async () => {
+    const user = setupUser();
+    renderModal();
+    await goToSignatures(user);
+    sign(screen.getByRole('img', { name: 'Firma del paciente' }));
+    sign(screen.getByRole('img', { name: /firma del profesional/i }));
+    await user.click(screen.getByRole('button', { name: 'Atrás' }));
+    await user.click(screen.getByRole('button', { name: 'Atrás' }));
+
+    await user.click(screen.getByRole('radio', { name: /tutor/i }));
+    await user.type(screen.getByLabelText('Nombre del tutor'), 'Marta Pérez');
+    await user.type(screen.getByLabelText('Documento del tutor'), 'DOC-999');
+    await user.selectOptions(screen.getByLabelText('Relación con el paciente'), 'FATHER');
+    await continueToSignatures(user);
+    expect(mockedPreview).toHaveBeenLastCalledWith(
+      'tok',
+      'p1',
+      expect.objectContaining({ signerType: 'GUARDIAN', guardianRelationship: 'FATHER' }),
+    );
+    // Las firmas de antes no pasan: hay que firmar otra vez.
+    expect(screen.getByRole('button', { name: 'Firmar' })).toBeDisabled();
   });
 
   it('si la plantilla cambió (409) vuelve a la vista previa con el texto nuevo', async () => {

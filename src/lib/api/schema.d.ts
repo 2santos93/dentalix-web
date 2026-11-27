@@ -7991,7 +7991,7 @@ export interface paths {
         };
         get: operations["PatientConsentsController_preview"];
         put?: never;
-        post?: never;
+        post: operations["PatientConsentsController_previewWithSigner"];
         delete?: never;
         options?: never;
         head?: never;
@@ -28362,7 +28362,7 @@ export interface components {
             id: string;
             title: string;
             version: number;
-            /** @description El texto usa {{tratamiento}}: sin plan, el documento dirá «No especificado» */
+            /** @description El texto usa {{tratamiento}}: sin plan, el documento dirá «el tratamiento indicado por el profesional en la consulta» (DX-060) */
             usesTreatment: boolean;
             /**
              * Format: date-time
@@ -28912,6 +28912,26 @@ export interface components {
              */
             previewedAt: string;
         };
+        PreviewPatientConsentBodyDto: {
+            /** Format: uuid */
+            templateId: string;
+            /**
+             * Format: uuid
+             * @description Plan del paciente que resuelve {{tratamiento}}
+             */
+            treatmentPlanId?: string;
+            /**
+             * @description Quién firma; sin él, el paciente.
+             * @enum {string}
+             */
+            signerType?: "PATIENT" | "GUARDIAN";
+            /** @description Obligatorio si signerType=GUARDIAN */
+            guardianName?: string;
+            /** @description Obligatorio si signerType=GUARDIAN */
+            guardianDocument?: string;
+            /** @description Relación del tutor con el paciente; sin ella, «representante». */
+            guardianRelationship?: components["schemas"]["ResponsibleRelationship"];
+        };
         SignPatientConsentDto: {
             /** Format: uuid */
             templateId: string;
@@ -28930,6 +28950,8 @@ export interface components {
             guardianName?: string;
             /** @description Obligatorio si signerType=GUARDIAN */
             guardianDocument?: string;
+            /** @description DX-060: relación del tutor con el paciente (signerType=GUARDIAN). El texto firmado abre con la cláusula de representación; sin ella dice «representante». */
+            guardianRelationship?: components["schemas"]["ResponsibleRelationship"];
             /** @description PNG (data:image/png;base64,… o base64), máx. 200 KB. Del paciente o del tutor. */
             patientSignature: string;
             /** @description PNG (data:image/png;base64,… o base64), máx. 200 KB. */
@@ -56293,6 +56315,52 @@ export interface operations {
                 };
             };
             /** @description Plantilla desactivada */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente, plantilla o plan no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientConsentsController_previewWithSigner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewPatientConsentBodyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentPreviewDto"];
+                };
+            };
+            /** @description Plantilla desactivada, o firma un tutor sin nombre o documento */
             400: {
                 headers: {
                     [name: string]: unknown;

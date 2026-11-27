@@ -186,15 +186,16 @@ describe('SendToSignModal (DX-243)', () => {
     );
   });
 
-  it('sin plan, si la plantilla usa el tratamiento, avisa de que dirá «No especificado»; la ayuda no enseña la variable', async () => {
+  it('DX-060: sin plan, si la plantilla usa el tratamiento, avisa de la frase neutra que dirá; la ayuda no enseña la variable', async () => {
     const user = setupUser();
     mockedOptions.mockResolvedValue(options());
     renderModal();
     await user.selectOptions(await screen.findByLabelText('Consentimiento'), 'tpl-1');
     expect(screen.queryByText(/\{\{/)).not.toBeInTheDocument();
-    expect(screen.getByText('Sin plan, el documento dirá «No especificado» en el tratamiento.')).toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText(/plan de tratamiento/i), 'plan-1');
     expect(screen.queryByText(/No especificado/)).not.toBeInTheDocument();
+    expect(screen.getByText('Sin plan, el documento dirá «el tratamiento indicado por el profesional en la consulta» en lugar de los procedimientos.')).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText(/plan de tratamiento/i), 'plan-1');
+    expect(screen.queryByText(/en lugar de los procedimientos/)).not.toBeInTheDocument();
   });
 
   it('si el paciente ya completó esa plantilla, avisa con la fecha de la sede pero deja enviar', async () => {

@@ -83,11 +83,14 @@ describe('PatientConsentsTab', () => {
 
   it('error de carga con reintento (SectionError)', async () => {
     const user = setupUser();
-    mockedList.mockRejectedValueOnce(new ApiError(500, 'Se cayó'));
+    // DX-060 (M-1): el texto crudo de un 500 nunca llega a la pantalla.
+    mockedList.mockRejectedValueOnce(new ApiError(500, 'Internal server error'));
     mockedList.mockResolvedValueOnce([consent]);
     render(<PatientConsentsTab token="tok" patientId="p1" {...CLINICAL} />);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar los consentimientos.');
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('No pudimos cargar los consentimientos.');
+    expect(alert).not.toHaveTextContent(/internal server error/i);
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(
       (await screen.findAllByText('Consentimiento de exodoncia')).length,
