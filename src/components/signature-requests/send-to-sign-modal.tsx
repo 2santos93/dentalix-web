@@ -53,7 +53,9 @@ const copy = {
   planNone: 'Sin plan asociado',
   planHint: 'Los procedimientos del plan aparecen en el apartado de tratamiento del documento.',
   noPlans: 'Este paciente no tiene planes de tratamiento.',
-  noPlanWarning: 'Sin plan, el documento dirá «No especificado» en el tratamiento.',
+  // DX-060: la API rellena el tratamiento con una frase neutra (nunca «No especificado»).
+  noPlanWarning:
+    'Sin plan, el documento dirá «el tratamiento indicado por el profesional en la consulta» en lugar de los procedimientos.',
   // DX-354b: el día de creación (un instante) en la zona y el formato de la sede de la pantalla; sin ella, «—».
   planOption: (plan: SignatureRequestOptions['plans'][number], clock: SedeClock | null) =>
     [
@@ -95,7 +97,7 @@ interface SendToSignModalProps {
  * incluidos). Lo que se envía es exactamente el texto de la vista previa en
  * pantalla, resuelto y congelado por la API. Avisa, sin bloquear, si la
  * plantilla ya está completa para el paciente o si sin plan el tratamiento
- * dirá «No especificado». Si el paciente no puede recibirlo (sin email, menor
+ * dirá una frase neutra en vez de los procedimientos (DX-060). Si el paciente no puede recibirlo (sin email, menor
  * sin responsable, baja de envíos) el modal dice por qué y no deja enviar; si
  * falta un campo, lo dice junto a él. El padre lo monta con una `key` nueva en
  * cada apertura.

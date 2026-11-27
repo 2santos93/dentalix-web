@@ -11,16 +11,20 @@ import {
   type ConsentSignerType,
   type ConsentTemplate,
   type PatientConsent,
+  type PreviewPatientConsentInput,
 } from '@/lib/consents/consents-api';
 import { listPlans, type TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
 import { PLAN_STATUS_LABELS } from '@/lib/treatment-plans/plan-status';
 import { useSedeStamp, type SedeStamp } from '@/lib/locations/sede-stamp';
 import { SedeStampNote } from '@/components/locations/sede-stamp-note';
 import {
+  RELATIONSHIPS,
+  RELATIONSHIP_LABELS,
   consentGuardian,
   getPatientResponsibles,
   partyDocument,
   type PatientResponsibles,
+  type ResponsibleRelationship,
 } from '@/lib/patients/responsible-parties-api';
 import {
   Dialog,
@@ -49,7 +53,7 @@ const copy = {
   steps: ['Plantilla', 'Vista previa', 'Firmas'] as const,
   stepOf: (n: number, total: number) => `Paso ${n} de ${total}`,
   stepsLabel: 'Pasos',
-  chooseDescription: 'Elige la plantilla y, si aplica, el plan de tratamiento.',
+  chooseDescription: 'Elige la plantilla, el plan de tratamiento si aplica y quién firma.',
   previewDescription: 'Lee el documento con el paciente antes de firmar.',
   signDescription: 'El paciente (o su tutor) y el profesional firman en la pantalla.',
   templateLabel: 'Plantilla',
@@ -71,6 +75,10 @@ const copy = {
   signerGuardian: 'Un tutor o representante',
   guardianName: 'Nombre del tutor',
   guardianDocument: 'Documento del tutor',
+  // DX-060: el documento identifica al tutor y su relación con el paciente.
+  guardianRelationship: 'Relación con el paciente',
+  guardianRelationshipPlaceholder: 'Elige la relación',
+  guardianClauseHint: 'El documento dirá quién firma en nombre del paciente y su relación con él.',
   patientSignature: 'Firma del paciente',
   guardianSignature: 'Firma del tutor',
   professionalSignature: (name: string) => `Firma del profesional · ${name}`,
@@ -87,13 +95,13 @@ const copy = {
     `El paciente es menor de ${age} años: lo habitual es que firme su responsable.`,
 };
 
-type GuardianPrefill = { name: string; document: string };
+type GuardianPrefill = { name: string; document: string; relationship: ResponsibleRelationship };
 
-/** Nombre y documento del responsable que firmaría como tutor, o null. */
+/** Nombre, documento y relación del responsable que firmaría como tutor, o null. */
 function guardianPrefill(data: PatientResponsibles | null): GuardianPrefill | null {
   const party = data ? consentGuardian(data.parties) : null;
   if (!party) return null;
-  return { name: party.fullName, document: partyDocument(party) ?? '' };
+  return { name: party.fullName, document: partyDocument(party) ?? '', relationship: party.relationship };
 }
 
 type Step = 0 | 1 | 2;
@@ -109,8 +117,10 @@ interface NewConsentModalProps {
 
 /**
  * «Nuevo consentimiento» (DX-006) en tres pasos dentro del modal: plantilla
- * (+ plan opcional) → vista previa con las variables ya resueltas por la API →
- * firmas. Desde la ficha son cuatro acciones: abrir, continuar, continuar,
+ * (+ plan opcional y quién firma) → vista previa con las variables ya
+ * resueltas por la API → firmas. DX-060: quién firma va en el primer paso
+ * porque cambia el texto: con un tutor, la API abre el documento con la
+ * cláusula de representación (nombre, documento y relación con el paciente). Desde la ficha son cuatro acciones: abrir, continuar, continuar,
  * firmar. «Firmar» queda deshabilitado mientras falte una firma (o los datos
  * del tutor); la API vuelve a exigirlo (400).
  *
@@ -149,6 +159,7 @@ export function NewConsentModal({
   const [signerType, setSignerType] = useState<ConsentSignerType>('PATIENT');
   const [guardianName, setGuardianName] = useState('');
   const [guardianDocument, setGuardianDocument] = useState('');
+  const [guardianRelationship, setGuardianRelationship] = useState<ResponsibleRelationship | ''>('');
   const [patientSignature, setPatientSignature] = useState<string | null>(null);
   const [professionalSignature, setProfessionalSignature] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -171,6 +182,7 @@ export function NewConsentModal({
         if (guardian) {
           setGuardianName((v) => v || guardian.name);
           setGuardianDocument((v) => v || guardian.document);
+          setGuardianRelationship((v) => v || guardian.relationship);
         }
       })
       .catch(() => {
@@ -215,13 +227,24 @@ export function NewConsentModal({
     };
   }, [open, token, patientId, plansKey]);
 
+  // Lo que firma el tutor (recortado), igual en la vista previa y en la firma.
+  const guardianFields =
+    signerType === 'GUARDIAN'
+      ? {
+          guardianName: guardianName.trim(),
+          guardianDocument: guardianDocument.trim(),
+          ...(guardianRelationship ? { guardianRelationship } : {}),
+        }
+      : null;
+
+  // La petición se fija al entrar en la vista previa (goToPreview): la firma
+  // manda luego los mismos datos, así que lo firmado es lo que se leyó.
+  const [previewRequest, setPreviewRequest] = useState<PreviewPatientConsentInput | null>(null);
+
   useEffect(() => {
-    if (step !== 1 || !templateId) return;
+    if (step !== 1 || !previewRequest) return;
     let cancelled = false;
-    previewPatientConsent(token, patientId, {
-      templateId,
-      treatmentPlanId: planId || undefined,
-    })
+    previewPatientConsent(token, patientId, previewRequest)
       .then((data) => {
         if (cancelled) return;
         setPreview(data);
@@ -234,9 +257,15 @@ export function NewConsentModal({
     return () => {
       cancelled = true;
     };
-  }, [step, token, patientId, templateId, planId, previewKey]);
+  }, [step, token, patientId, previewRequest, previewKey]);
 
   function goToPreview() {
+    setPreviewRequest({
+      templateId,
+      ...(planId ? { treatmentPlanId: planId } : {}),
+      signerType,
+      ...(guardianFields ?? {}),
+    });
     setPreview(null);
     setPreviewError(null);
     setPreviewKey((k) => k + 1);
@@ -244,7 +273,8 @@ export function NewConsentModal({
   }
 
   const guardianOk =
-    signerType === 'PATIENT' || (guardianName.trim() !== '' && guardianDocument.trim() !== '');
+    signerType === 'PATIENT' ||
+    (guardianName.trim() !== '' && guardianDocument.trim() !== '' && guardianRelationship !== '');
   const canSign = !!preview && !!patientSignature && !!professionalSignature && guardianOk;
 
   async function sign() {
@@ -259,9 +289,7 @@ export function NewConsentModal({
         previewedAt: preview.previewedAt,
         ...(planId ? { treatmentPlanId: planId } : {}),
         signerType,
-        ...(signerType === 'GUARDIAN'
-          ? { guardianName: guardianName.trim(), guardianDocument: guardianDocument.trim() }
-          : {}),
+        ...(guardianFields ?? {}),
         patientSignature,
         professionalSignature,
       });
@@ -284,7 +312,7 @@ export function NewConsentModal({
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (step === 0) {
-      if (templateId) goToPreview();
+      if (templateId && guardianOk) goToPreview();
       return;
     }
     if (step === 1) {
@@ -299,7 +327,7 @@ export function NewConsentModal({
 
   const primaryLabel = step === 2 ? copy.sign : copy.next;
   const primaryDisabled =
-    step === 0 ? !templateId : step === 1 ? !preview : !canSign;
+    step === 0 ? !templateId || !guardianOk : step === 1 ? !preview : !canSign;
   const description = [copy.chooseDescription, copy.previewDescription, copy.signDescription][step];
 
   return (
@@ -388,38 +416,6 @@ export function NewConsentModal({
                   </NativeSelect>
                 )}
               </FormField>
-              <SedeStampNote stamp={stamp} />
-            </>
-          ) : null}
-
-          {step === 1 ? (
-            previewError ? (
-              <SectionError
-                description={previewError}
-                onRetry={() => {
-                  setPreviewError(null);
-                  setPreviewKey((k) => k + 1);
-                }}
-              />
-            ) : preview ? (
-              <section
-                aria-label={copy.previewRegion}
-                tabIndex={0}
-                className="max-h-[50dvh] overflow-y-auto rounded-lg border border-border bg-surface p-4 text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
-              >
-                <h3 className="t-title">{preview.title}</h3>
-                <p className="mt-3 whitespace-pre-line text-sm leading-relaxed">{preview.body}</p>
-              </section>
-            ) : (
-              <div role="status" aria-label="Cargando vista previa" className="flex flex-col gap-2">
-                <Skeleton className="h-5 w-2/3" />
-                <Skeleton className="h-24 w-full" />
-              </div>
-            )
-          ) : null}
-
-          {step === 2 && preview ? (
-            <>
               <RadioGroup
                 id="consent-signer"
                 name="signerType"
@@ -427,12 +423,12 @@ export function NewConsentModal({
                 value={signerType}
                 onValueChange={(next) => {
                   const value = next as typeof signerType;
-                  // Quien firma cambió: la firma ya trazada era de otra persona.
+                  // Las firmas son del paso 3 y se descartan al volver aquí.
                   setSignerType(value);
-                  setPatientSignature(null);
                   if (value === 'GUARDIAN' && prefill) {
                     setGuardianName((v) => v || prefill.name);
                     setGuardianDocument((v) => v || prefill.document);
+                    setGuardianRelationship((v) => v || prefill.relationship);
                   }
                 }}
                 optionsClassName="gap-1 sm:flex-row sm:gap-6"
@@ -470,8 +466,62 @@ export function NewConsentModal({
                       required
                     />
                   </FormField>
+                  <FormField
+                    htmlFor="guardian-relationship"
+                    label={copy.guardianRelationship}
+                    hint={copy.guardianClauseHint}
+                    className="sm:col-span-2"
+                  >
+                    <NativeSelect
+                      id="guardian-relationship"
+                      value={guardianRelationship}
+                      onChange={(e) => setGuardianRelationship(e.target.value as ResponsibleRelationship)}
+                      required
+                    >
+                      <option value="" disabled>
+                        {copy.guardianRelationshipPlaceholder}
+                      </option>
+                      {RELATIONSHIPS.map((r) => (
+                        <option key={r} value={r}>
+                          {RELATIONSHIP_LABELS[r]}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                  </FormField>
                 </div>
               ) : null}
+              <SedeStampNote stamp={stamp} />
+            </>
+          ) : null}
+
+          {step === 1 ? (
+            previewError ? (
+              <SectionError
+                description={previewError}
+                onRetry={() => {
+                  setPreviewError(null);
+                  setPreviewKey((k) => k + 1);
+                }}
+              />
+            ) : preview ? (
+              <section
+                aria-label={copy.previewRegion}
+                tabIndex={0}
+                className="max-h-[50dvh] overflow-y-auto rounded-lg border border-border bg-surface p-4 text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text"
+              >
+                <h3 className="t-title">{preview.title}</h3>
+                <p className="mt-3 whitespace-pre-line text-sm leading-relaxed">{preview.body}</p>
+              </section>
+            ) : (
+              <div role="status" aria-label="Cargando vista previa" className="flex flex-col gap-2">
+                <Skeleton className="h-5 w-2/3" />
+                <Skeleton className="h-24 w-full" />
+              </div>
+            )
+          ) : null}
+
+          {step === 2 && preview ? (
+            <>
               <SignaturePad
                 key={signerType}
                 label={signerType === 'GUARDIAN' ? copy.guardianSignature : copy.patientSignature}

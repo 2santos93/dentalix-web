@@ -85,6 +85,30 @@ describe('ConsentDocument', () => {
     expect(screen.getByText('Tutor/a · Documento A DOC-9')).toBeInTheDocument();
   });
 
+  it('DX-060: con un tutor, el texto abre con la cláusula de representación y la firma dice por quién firma', () => {
+    const clause =
+      'Firma en representación del paciente: Marta Pérez, identificado(a) con V-12.345.678, otorga este consentimiento en nombre de Ana Pérez, como su madre.';
+    render(
+      <ConsentDocument
+        format={FORMAT_ES}
+        consent={consentFixture({
+          signerType: 'GUARDIAN',
+          signerName: 'Marta Pérez',
+          signerDocument: 'V-12.345.678',
+          body: `${clause}\n\nYo, Ana Pérez, autorizo la exodoncia.`,
+        })}
+      />,
+    );
+    expect(screen.getByText(/^Firma en representación del paciente: Marta Pérez/)).toHaveTextContent(clause);
+    const signatures = screen.getByRole('region', { name: 'Firmas' });
+    expect(within(signatures).getByText('En representación de Ana Pérez')).toBeInTheDocument();
+  });
+
+  it('DX-060: si firma el paciente, la firma no habla de representación', () => {
+    render(<ConsentDocument format={FORMAT_ES} consent={consentFixture()} />);
+    expect(screen.queryByText(/en representación/i)).not.toBeInTheDocument();
+  });
+
   it('prints the docTypeName of the DTO, or the generic name when it is missing', () => {
     const { rerender } = render(<ConsentDocument format={FORMAT_ES} consent={consentFixture()} />);
     const header = () => screen.getByText('Documento').closest('div') as HTMLElement;

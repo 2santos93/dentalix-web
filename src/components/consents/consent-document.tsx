@@ -33,6 +33,8 @@ const copy = {
   remoteSigned: (by: string) => `Firmado ${by}`,
   remoteIp: (guardian: boolean) => (guardian ? 'IP de quien firmó' : 'IP del paciente'),
   professionalSignedAt: 'Firma del profesional',
+  // DX-060: bajo la firma del tutor, por quién firma (la relación va en el texto).
+  onBehalfOf: (patient: string) => `En representación de ${patient}`,
 };
 
 interface ConsentDocumentProps {
@@ -111,6 +113,7 @@ export function ConsentDocument({ consent, format }: ConsentDocumentProps) {
               <span className="text-[#4b5563]">
                 {copy.signerRole(SIGNER_TYPE_LABELS[consent.signerType], consent.signerDocument)}
               </span>
+              {guardian ? <span className="block text-[#4b5563]">{copy.onBehalfOf(patientName)}</span> : null}
             </figcaption>
           </figure>
           <figure className="flex flex-col gap-2">
