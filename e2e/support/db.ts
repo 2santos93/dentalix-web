@@ -132,3 +132,29 @@ export function moveAppointmentToNow(appointmentId: string, minutes: number): vo
     },
   );
 }
+
+/**
+ * DX-260: una cita agendada lejos pasa a ATENDIDA en el pasado (`start` y `end`
+ * en instantes UTC): la API no deja agendar ni atender citas pasadas, y la
+ * retención mide visitas de hasta dos años atrás.
+ */
+export function backdateCompletedAppointment(appointmentId: string, start: Date, end: Date): void {
+  if (!E2E_DATABASE_URL) throw new Error('E2E_DATABASE_URL no definido');
+  execFileSync(
+    'psql',
+    [
+      E2E_DATABASE_URL,
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-v',
+      `id=${appointmentId}`,
+      '-v',
+      `s=${start.toISOString()}`,
+      '-v',
+      `e=${end.toISOString()}`,
+    ],
+    {
+      input: `UPDATE appointments SET "start" = (:'s'::timestamptz AT TIME ZONE 'UTC'), "end" = (:'e'::timestamptz AT TIME ZONE 'UTC'), "status" = 'COMPLETED' WHERE id = :'id';`,
+    },
+  );
+}

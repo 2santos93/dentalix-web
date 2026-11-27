@@ -6715,6 +6715,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/retention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Retención: activos, nuevos, perdidos y nuevos sin regreso por sede y profesional
+         * @description Por sede y profesional (los de la última cita atendida de cada paciente hasta el último día del período): activos al inicio, nuevos, perdidos, activos al final, recuperados, retención = ((activos al final − nuevos) ÷ activos al inicio) × 100 y nuevos sin regreso en 90 días. Solo citas atendidas (canceladas, no asistidas y borradas no cuentan) y pacientes vivos sin historia suprimida (DX-039); los de baja de avisos cuentan. Un paciente con cita futura agendada no es perdido. Activo = alguna atendida en los `activeMonths` meses anteriores (12, 18 o 24; 18 por defecto). Días civiles en la zona de cada sede. Las definiciones van en `definitions`, para mostrarlas tal cual. Solo las sedes que ve quien consulta (DX-089). ADMIN o FINANCIAL_REPORTS_VIEW (DX-090); el resto, 403.
+         */
+        get: operations["RetentionController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/retention.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Retención en CSV (mismos filtros)
+         * @description Por sede y profesional (los de la última cita atendida de cada paciente hasta el último día del período): activos al inicio, nuevos, perdidos, activos al final, recuperados, retención = ((activos al final − nuevos) ÷ activos al inicio) × 100 y nuevos sin regreso en 90 días. Solo citas atendidas (canceladas, no asistidas y borradas no cuentan) y pacientes vivos sin historia suprimida (DX-039); los de baja de avisos cuentan. Un paciente con cita futura agendada no es perdido. Activo = alguna atendida en los `activeMonths` meses anteriores (12, 18 o 24; 18 por defecto). Días civiles en la zona de cada sede. Las definiciones van en `definitions`, para mostrarlas tal cual. Solo las sedes que ve quien consulta (DX-089). ADMIN o FINANCIAL_REPORTS_VIEW (DX-090); el resto, 403. Una fila por sede y profesional, el subtotal de cada sede y el total, con el período, los filtros y las definiciones en la cabecera. Sin datos de pacientes. UTF-8 con BOM; celdas protegidas contra fórmulas. Auditado (EXPORT).
+         */
+        get: operations["RetentionController_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/retention/patients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Retención: los pacientes que forman una cifra (paginado)
+         * @description Los pacientes de la cifra `segment` con los mismos filtros que el informe; `total` es la cifra. Nombre, teléfono y wa.me (los dos null con baja de avisos, DX-128, con `reminderOptedOut` para explicarlo), primera y última visita, sede y profesional de la última y si tiene cita futura. De la última visita más reciente a la más antigua (`page`/`pageSize`, 25 por defecto, máx. 100). Lleva datos de contacto: auditado (VIEW). Por sede y profesional (los de la última cita atendida de cada paciente hasta el último día del período): activos al inicio, nuevos, perdidos, activos al final, recuperados, retención = ((activos al final − nuevos) ÷ activos al inicio) × 100 y nuevos sin regreso en 90 días. Solo citas atendidas (canceladas, no asistidas y borradas no cuentan) y pacientes vivos sin historia suprimida (DX-039); los de baja de avisos cuentan. Un paciente con cita futura agendada no es perdido. Activo = alguna atendida en los `activeMonths` meses anteriores (12, 18 o 24; 18 por defecto). Días civiles en la zona de cada sede. Las definiciones van en `definitions`, para mostrarlas tal cual. Solo las sedes que ve quien consulta (DX-089). ADMIN o FINANCIAL_REPORTS_VIEW (DX-090); el resto, 403.
+         */
+        get: operations["RetentionController_patients"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/retention/patients.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Retención: los pacientes de una cifra en CSV (sin paginar; solo ADMIN)
+         * @description Los pacientes de la cifra `segment` (como mucho 10000, los de visita más reciente; si hay más, lo avisa la cabecera), con nombre, teléfono (vacío con baja de avisos), baja de avisos, primera y última visita (día en la zona de su sede), sede, profesional y cita futura. Lleva datos de contacto: solo ADMIN, y cada descarga deja un evento EXPORT en la auditoría. UTF-8 con BOM; celdas protegidas contra fórmulas.
+         */
+        get: operations["RetentionController_patientsCsv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/closing-queue": {
         parameters: {
             query?: never;
@@ -26786,6 +26866,165 @@ export interface components {
             page: number;
             pageSize: number;
             /** @description Hay más citas después de esta página */
+            truncated: boolean;
+        };
+        RetentionFiltersDto: {
+            /** Format: uuid */
+            locationId: string | null;
+            locationName: string | null;
+            /** Format: uuid */
+            providerId: string | null;
+            providerName: string | null;
+            /** @enum {number} */
+            activeMonths: 12 | 18 | 24;
+        };
+        RetentionOptionsDto: {
+            /** @description Las sedes que ve quien consulta (DX-089) */
+            locations: components["schemas"]["ProductionLocationOptionDto"][];
+            /** @description Quien tiene citas atendidas en esas sedes (también ex-miembros), por nombre */
+            professionals: components["schemas"]["ProductionProfessionalOptionDto"][];
+        };
+        RetentionRowDto: {
+            /** @description Activos al inicio */
+            activeAtStart: number;
+            /** @description Nuevos en el período */
+            newPatients: number;
+            /** @description Perdidos */
+            lost: number;
+            /** @description Activos al final */
+            activeAtEnd: number;
+            /** @description Recuperados */
+            reactivated: number;
+            /** @description Nuevos sin regreso */
+            newNoReturn: number;
+            /** @description ((activos al final − nuevos) ÷ activos al inicio) × 100, 2 decimales; null sin activos al inicio */
+            retentionRate: number | null;
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            /** Format: uuid */
+            providerId: string;
+            providerName: string;
+        };
+        RetentionLocationTotalDto: {
+            /** @description Activos al inicio */
+            activeAtStart: number;
+            /** @description Nuevos en el período */
+            newPatients: number;
+            /** @description Perdidos */
+            lost: number;
+            /** @description Activos al final */
+            activeAtEnd: number;
+            /** @description Recuperados */
+            reactivated: number;
+            /** @description Nuevos sin regreso */
+            newNoReturn: number;
+            /** @description ((activos al final − nuevos) ÷ activos al inicio) × 100, 2 decimales; null sin activos al inicio */
+            retentionRate: number | null;
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+        };
+        RetentionFiguresDto: {
+            /** @description Activos al inicio */
+            activeAtStart: number;
+            /** @description Nuevos en el período */
+            newPatients: number;
+            /** @description Perdidos */
+            lost: number;
+            /** @description Activos al final */
+            activeAtEnd: number;
+            /** @description Recuperados */
+            reactivated: number;
+            /** @description Nuevos sin regreso */
+            newNoReturn: number;
+            /** @description ((activos al final − nuevos) ÷ activos al inicio) × 100, 2 decimales; null sin activos al inicio */
+            retentionRate: number | null;
+        };
+        /**
+         * @description La lista que forma la cifra; null en la retención
+         * @enum {string}
+         */
+        RetentionSegment: "active_start" | "new" | "lost" | "active_end" | "reactivated" | "new_no_return";
+        RetentionDefinitionDto: {
+            /** @enum {string} */
+            key: "activeAtStart" | "newPatients" | "lost" | "activeAtEnd" | "reactivated" | "retentionRate" | "newNoReturn";
+            label: string;
+            /** @enum {string} */
+            unit: "COUNT" | "PERCENT";
+            /** @description La lista que forma la cifra; null en la retención */
+            segment: components["schemas"]["RetentionSegment"] | null;
+            /** @description Texto del tooltip «Cómo se calcula» */
+            howItIsCalculated: string;
+        };
+        RetentionReportDto: {
+            /** @example 2026-01-01 */
+            from: string;
+            /** @example 2026-12-31 */
+            to: string;
+            filters: components["schemas"]["RetentionFiltersDto"];
+            options: components["schemas"]["RetentionOptionsDto"];
+            /** @description Una fila por sede y profesional (los de la última cita atendida de cada paciente) con algún paciente, en el orden de las sedes y por nombre */
+            rows: components["schemas"]["RetentionRowDto"][];
+            /** @description Subtotal por sede (las sedes con filas) */
+            locations: components["schemas"]["RetentionLocationTotalDto"][];
+            totals: components["schemas"]["RetentionFiguresDto"];
+            /** @description Definición fija de cada cifra, para mostrarla tal cual */
+            definitions: components["schemas"]["RetentionDefinitionDto"][];
+            /** @description false = «Sin datos en el periodo» (ninguna cifra con pacientes) */
+            hasData: boolean;
+        };
+        RetentionPatientDto: {
+            /** Format: uuid */
+            patientId: string;
+            patientName: string;
+            /** @description Teléfono de la ficha; null si no tiene o si se dio de baja de los avisos (`reminderOptedOut`, DX-128), como la lista de recall */
+            phone: string | null;
+            /** @description E.164 sin `+` para `https://wa.me/…` (región de la sede); null si el teléfono no sirve o el paciente se dio de baja de los avisos (DX-128) */
+            whatsApp: string | null;
+            /** @description Baja de los avisos (DX-128): cuenta en la cifra, pero sin contacto (`phone` y `whatsApp` a null); la web dice por qué */
+            reminderOptedOut: boolean;
+            /**
+             * Format: date-time
+             * @description Primera cita atendida de su historia
+             */
+            firstVisitAt: string;
+            /**
+             * Format: date-time
+             * @description Última cita atendida hasta el último día del período
+             */
+            lastVisitAt: string;
+            /**
+             * Format: uuid
+             * @description Sede de esa última cita
+             */
+            locationId: string;
+            locationName: string;
+            /** @description Zona IANA de la sede, para pintar las fechas */
+            timeZone: string;
+            /**
+             * Format: uuid
+             * @description Profesional de esa última cita
+             */
+            providerId: string;
+            providerName: string;
+            /** @description Tiene una cita futura agendada (agendada o confirmada que aún no ha empezado, o ya en la clínica) */
+            hasUpcomingAppointment: boolean;
+        };
+        RetentionPatientsReportDto: {
+            /** @example 2026-01-01 */
+            from: string;
+            /** @example 2026-12-31 */
+            to: string;
+            segment: components["schemas"]["RetentionSegment"];
+            filters: components["schemas"]["RetentionFiltersDto"];
+            definition: components["schemas"]["RetentionDefinitionDto"];
+            items: components["schemas"]["RetentionPatientDto"][];
+            /** @description Igual a la cifra del informe con los mismos filtros */
+            total: number;
+            page: number;
+            pageSize: number;
+            /** @description Solo en el CSV: había más filas que el tope */
             truncated: boolean;
         };
         /**
@@ -52577,6 +52816,246 @@ export interface operations {
                 content?: never;
             };
             /** @description LOCATION_TIMEZONE_REQUIRED: una sede con citas o realizados no tiene zona horaria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RetentionController_get: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, días civiles en la zona de cada sede). Como mucho 12 meses por calendario; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo los pacientes atribuidos a esta sede (la de su última cita atendida). 404 si no es una sede viva de la clínica; 403 si es de la clínica pero no de las del usuario (DX-089). Sin él, todas las que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo los pacientes atribuidos a este profesional (el de su última cita atendida). Uno que no atiende en la clínica da un informe vacío. */
+                providerId?: string;
+                /** @description Meses sin cita atendida tras los que un paciente deja de estar activo. */
+                activeMonths?: 12 | 18 | 24;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetentionReportDto"];
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 12 meses. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y quien tenga acceso a los reportes financieros ven la retención de pacientes. / No tienes acceso a esta sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada. (la sede no es de la clínica o está retirada) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con citas no tiene zona horaria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RetentionController_csv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, días civiles en la zona de cada sede). Como mucho 12 meses por calendario; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo los pacientes atribuidos a esta sede (la de su última cita atendida). 404 si no es una sede viva de la clínica; 403 si es de la clínica pero no de las del usuario (DX-089). Sin él, todas las que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo los pacientes atribuidos a este profesional (el de su última cita atendida). Uno que no atiende en la clínica da un informe vacío. */
+                providerId?: string;
+                /** @description Meses sin cita atendida tras los que un paciente deja de estar activo. */
+                activeMonths?: 12 | 18 | 24;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 12 meses. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y quien tenga acceso a los reportes financieros ven la retención de pacientes. / No tienes acceso a esta sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada. (la sede no es de la clínica o está retirada) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con citas no tiene zona horaria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RetentionController_patients: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, días civiles en la zona de cada sede). Como mucho 12 meses por calendario; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo los pacientes atribuidos a esta sede (la de su última cita atendida). 404 si no es una sede viva de la clínica; 403 si es de la clínica pero no de las del usuario (DX-089). Sin él, todas las que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo los pacientes atribuidos a este profesional (el de su última cita atendida). Uno que no atiende en la clínica da un informe vacío. */
+                providerId?: string;
+                /** @description Meses sin cita atendida tras los que un paciente deja de estar activo. */
+                activeMonths?: 12 | 18 | 24;
+                /** @description La cifra cuya lista se pide: active_start (activos al inicio), new (nuevos), lost (perdidos), active_end (activos al final), reactivated (recuperados) o new_no_return (nuevos sin regreso en 90 días). El total coincide con la cifra del informe con los mismos filtros. */
+                segment: components["schemas"]["RetentionSegment"];
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetentionPatientsReportDto"];
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 12 meses. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y quien tenga acceso a los reportes financieros ven la retención de pacientes. / No tienes acceso a esta sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada. (la sede no es de la clínica o está retirada) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con citas no tiene zona horaria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RetentionController_patientsCsv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, días civiles en la zona de cada sede). Como mucho 12 meses por calendario; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo los pacientes atribuidos a esta sede (la de su última cita atendida). 404 si no es una sede viva de la clínica; 403 si es de la clínica pero no de las del usuario (DX-089). Sin él, todas las que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo los pacientes atribuidos a este profesional (el de su última cita atendida). Uno que no atiende en la clínica da un informe vacío. */
+                providerId?: string;
+                /** @description Meses sin cita atendida tras los que un paciente deja de estar activo. */
+                activeMonths?: 12 | 18 | 24;
+                /** @description La cifra cuya lista se pide: active_start (activos al inicio), new (nuevos), lost (perdidos), active_end (activos al final), reactivated (recuperados) o new_no_return (nuevos sin regreso en 90 días). El total coincide con la cifra del informe con los mismos filtros. */
+                segment: components["schemas"]["RetentionSegment"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 12 meses. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración descarga las listas de retención: llevan nombres y teléfonos de pacientes. / No tienes acceso a esta sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada. (la sede no es de la clínica o está retirada) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con citas no tiene zona horaria */
             409: {
                 headers: {
                     [name: string]: unknown;
