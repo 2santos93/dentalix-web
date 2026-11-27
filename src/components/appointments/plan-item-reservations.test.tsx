@@ -97,6 +97,7 @@ function view(waiting: InClinicItem[]): InClinicView {
     waiting,
     inChair: [],
     readyForCheckout: [],
+    completedWithoutTimes: [],
   };
 }
 

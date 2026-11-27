@@ -11,7 +11,7 @@ import { TabBar } from '@/components/ui/tabs';
  * «Enlaces del paciente» (DX-424: ADMIN) y «Presupuestos» (DX-558: ADMIN,
  * DENTIST, que ve los que elaboró, y FINANCIAL_REPORTS_VIEW) y «Previsión» (DX-567: los mismos, el
  * DENTIST con lo suyo) y «Captación» (DX-172: ADMIN y FINANCIAL_REPORTS_VIEW) y «Profesionales»,
- * «Inasistencias» (DX-304: como «Previsión») y «Cartera» (DX-304: ADMIN) y «Retención» (DX-260: como «Captación»). Las siguientes son una línea más en `REPORT_TABS` y su vista en la
+ * «Inasistencias» (DX-304: como «Previsión») y «Cartera» (DX-304: ADMIN) y «Retención» (DX-260: como «Captación») y «Tiempos» (DX-275: ADMIN y DENTIST, con lo suyo). Las siguientes son una línea más en `REPORT_TABS` y su vista en la
  * página. Patrón ARIA de pestañas con activación manual, como la Caja: las
  * flechas mueven el foco y Enter/Espacio (o el clic) eligen.
  */
@@ -49,6 +49,9 @@ export const REPORT_TABS = [
     roles: ['ADMIN', 'DENTIST'],
     permissions: ['FINANCIAL_REPORTS_VIEW'],
   },
+  // DX-275: espera, retraso, duración real frente a la programada y ocupación; ADMIN y DENTIST, que ve lo suyo
+  // (TIMING_REPORT_ROLES, sin FINANCIAL_REPORTS_VIEW: no es dinero y recepción no tiene acceso).
+  { key: 'tiempos', label: 'Tiempos', roles: ['ADMIN', 'DENTIST'] },
   // DX-304: los totales por tramo de la cartera (DX-145, RECEIVABLES_ROLES); aquí, la mirada del dueño.
   { key: 'cartera', label: 'Cartera', roles: ['ADMIN'] },
   // DX-172: pacientes nuevos y lo cobrado por «¿Cómo nos conoció?»; ADMIN y FINANCIAL_REPORTS_VIEW (ACQUISITION_REPORT_ROLES).

@@ -8,6 +8,7 @@ import {
   inClinicFormat,
   punctualityLabel,
   timeInZone,
+  type CompletedWithoutTimesItem,
   type FlowAction,
   type InClinicItem,
   type InClinicView,
@@ -99,6 +100,23 @@ export const inClinicCopy = {
     CONSENT: 'Consentimiento',
     PATIENT_DATA: 'Datos de la ficha',
     LATE: 'Llegó tarde',
+  },
+  // DX-275: atendidas hoy que el informe «Tiempos» no medirá (falta una hora o no cuadran).
+  withoutTimes: {
+    summary: (n: number) => (n === 1 ? '1 cita de hoy sin tiempos' : `${n} citas de hoy sin tiempos`),
+    hint: 'Atendidas sin pasar por todos los pasos del panel: no entran en el informe «Tiempos».',
+    listLabel: 'Citas de hoy sin tiempos',
+    issue: {
+      WITHOUT_TIMES: 'Sin tiempos',
+      INCOHERENT: 'Tiempos incoherentes',
+    },
+    missing: (marks: string) => `Falta: ${marks}`,
+    incoherent: 'Tiene las tres horas, pero no cuadran.',
+    marks: {
+      ARRIVED: 'llegada',
+      IN_CHAIR: 'sillón',
+      READY_FOR_CHECKOUT: 'listo para cobrar',
+    },
   },
 };
 
@@ -326,6 +344,7 @@ export function InClinicPanel({
               onMove={canMove ? setMovingId : undefined}
             />
           ))}
+          <CompletedWithoutTimes items={view.completedWithoutTimes ?? []} timeZone={view.timeZone} fmt={fmt} />
           <p className="text-xs text-muted">{inClinicCopy.refreshHint}</p>
           {movingId && token ? (
             <InClinicMoveDialog
@@ -478,6 +497,63 @@ function InClinicGroup({
         </ul>
       )}
     </section>
+  );
+}
+
+/**
+ * DX-275: las citas de hoy ya atendidas que el informe «Tiempos» no medirá
+ * (se completaron saltándose pasos, o con horas que no cuadran). Plegado
+ * bajo una línea con el recuento; nada si no hay. Va aparte de los grupos:
+ * no son pacientes en la clínica.
+ */
+function CompletedWithoutTimes({
+  items,
+  timeZone,
+  fmt,
+}: {
+  items: CompletedWithoutTimesItem[];
+  timeZone: string;
+  fmt: RegionalFormat;
+}) {
+  if (items.length === 0) return null;
+  const c = inClinicCopy.withoutTimes;
+  return (
+    <details data-testid="in-clinic-without-times" className="min-w-0 rounded-lg border border-border bg-surface">
+      <summary className="flex min-h-11 cursor-pointer flex-wrap items-center gap-2 px-3 py-2 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text">
+        <Badge variant="warning" dot data-testid="in-clinic-without-times-count" className="tabular-nums">
+          {c.summary(items.length)}
+        </Badge>
+      </summary>
+      <div className="flex min-w-0 flex-col gap-2 border-t border-border-subtle px-3 py-2">
+        <p className="text-xs text-muted">{c.hint}</p>
+        <ul className="flex flex-col" aria-label={c.listLabel}>
+          {items.map((item) => (
+            <li
+              key={item.appointmentId}
+              data-testid="in-clinic-without-times-item"
+              data-appointment-id={item.appointmentId}
+              className="flex flex-col gap-1 border-b border-border-subtle py-2 last:border-0"
+            >
+              <p className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-medium text-ink">
+                <span className="min-w-0 break-words">{patientName(item)}</span>
+                <Badge variant={item.timingIssue === 'INCOHERENT' ? 'danger' : 'warning'}>
+                  {c.issue[item.timingIssue]}
+                </Badge>
+              </p>
+              <p className="text-xs tabular-nums text-muted">
+                {inClinicCopy.appointmentAt(timeInZone(item.start, timeZone, fmt))}
+                {item.providerName ? ` · ${item.providerName}` : ''}
+              </p>
+              <p className="text-xs text-ink">
+                {item.timingIssue === 'INCOHERENT'
+                  ? c.incoherent
+                  : c.missing(item.missingMarks.map((m) => c.marks[m]).join(', '))}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </details>
   );
 }
 

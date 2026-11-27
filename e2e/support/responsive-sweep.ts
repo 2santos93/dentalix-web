@@ -283,11 +283,13 @@ const permissionsOf = (role: ClinicRole) =>
  * - `settings`: con `visible` de SETTINGS_SECTIONS (mismo contrato);
  * - `all`: los tres roles (ficha y alta de paciente, subpantallas de agenda);
  * - `admin`: pantallas sin entrada en el menú; las abre ADMIN.
+ * - `gate`: una pestaña con su propia vista que abren varios roles; la abre
+ *   cada rol que la ruta `gate` de la API deja pasar (copia de la matriz DX-208).
  * `/anamnesis-por-revisar/:missing` es el estado «no encontrada» (no hay
  * anamnesis enviada sin pasar por el enlace público del paciente).
  */
-type Scope = 'nav' | 'settings' | 'all' | 'admin';
-function appRoutes(): { path: string; scope: Scope }[] {
+type Scope = 'nav' | 'settings' | 'all' | 'admin' | 'gate';
+function appRoutes(): { path: string; scope: Scope; gate?: string }[] {
   const navPaths = ALL_NAV_ITEMS.map((i) => ({ path: i.href, scope: 'nav' as const }));
   const settingsPaths = [
     { path: '/settings', scope: 'all' as const },
@@ -298,6 +300,10 @@ function appRoutes(): { path: string; scope: Scope }[] {
     { path: '/patients/new', scope: 'all' },
     { path: '/agenda/en-clinica', scope: 'all' },
     { path: '/agenda/controles-postoperatorios', scope: 'all' },
+  ];
+  // DX-275: «Tiempos» la abren ADMIN y DENTIST (este, con lo suyo).
+  const gated: { path: string; scope: Scope; gate: string }[] = [
+    { path: '/reportes?tab=tiempos', scope: 'gate', gate: 'GET /reports/timing' },
   ];
   const adminOnly: string[] = [
     '/anamnesis-por-revisar/:missing',
@@ -324,15 +330,19 @@ function appRoutes(): { path: string; scope: Scope }[] {
     '/settings/presupuestos/seguimiento',
     '/presentar/patients/:patient/treatment-plans/:plan',
   ];
-  return [...navPaths, ...all, ...settingsPaths, ...adminOnly.map((p) => ({ path: p, scope: 'admin' as const }))];
+  return [...navPaths, ...all, ...gated, ...settingsPaths, ...adminOnly.map((p) => ({ path: p, scope: 'admin' as const }))];
 }
 
 /** Las rutas (plantillas) que el barrido abre con `role` (ver `appRoutes`). */
 export function routesFor(role: SweepRole): string[] {
   const entries = SETTINGS_SECTIONS.flatMap((s) => s.entries);
-  const routes = appRoutes().filter(({ path: p, scope }) => {
+  const routes = appRoutes().filter(({ path: p, scope, gate }) => {
     if (scope === 'all') return true;
     if (scope === 'admin') return role === 'ADMIN';
+    if (scope === 'gate') {
+      const access = (routeAccess.routes as Record<string, { kind: string; roles?: string[] }>)[gate!];
+      return access?.kind === 'roles' && (access.roles ?? []).includes(role);
+    }
     if (scope === 'nav') {
       const item = ALL_NAV_ITEMS.find((i) => i.href === p)!;
       return canSee(item, role, permissionsOf(role));
