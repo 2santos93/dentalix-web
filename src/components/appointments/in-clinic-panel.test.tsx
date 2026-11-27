@@ -6,7 +6,13 @@ import { toast } from 'sonner';
 import { InClinicPanel } from './in-clinic-panel';
 import { PatientFlowActions, usePatientFlow } from './patient-flow-actions';
 import { useInClinic, type InClinicState } from './use-in-clinic';
-import { getInClinic, undoArrival, type InClinicItem, type InClinicView } from '@/lib/appointments/patient-flow';
+import {
+  getInClinic,
+  undoArrival,
+  type CompletedWithoutTimesItem,
+  type InClinicItem,
+  type InClinicView,
+} from '@/lib/appointments/patient-flow';
 import { updateAppointment } from '@/lib/appointments/appointments-api';
 import { ApiError, apiErrorFromBody } from '@/lib/api/client';
 import { useAuthStore } from '@/lib/auth/auth-store';
@@ -92,6 +98,7 @@ function view(overrides: Partial<InClinicView> = {}): InClinicView {
     waiting: [],
     inChair: [],
     readyForCheckout: [],
+    completedWithoutTimes: [],
     ...overrides,
   };
 }
@@ -149,6 +156,83 @@ describe('InClinicPanel: «Ya llegué» del paciente (DX-265)', () => {
     );
     expect(screen.getByTestId('in-clinic-self-check-in')).toHaveTextContent('Llegó por su cuenta · enlace');
     expect(screen.queryByRole('list', { name: /pendiente con/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('InClinicPanel: atendidas hoy sin tiempos (DX-275)', () => {
+  const done = (overrides: Partial<CompletedWithoutTimesItem> & { appointmentId: string }): CompletedWithoutTimesItem => ({
+    patientId: `p-${overrides.appointmentId}`,
+    patientFirstName: 'Ana',
+    patientLastName: 'Rondón',
+    providerId: 'dent-1',
+    providerName: 'Dra. Lina',
+    start: '2026-10-19T13:00:00.000Z',
+    end: '2026-10-19T13:30:00.000Z',
+    arrivedAt: null,
+    seatedAt: null,
+    readyForCheckoutAt: null,
+    timingIssue: 'WITHOUT_TIMES',
+    missingMarks: ['ARRIVED', 'IN_CHAIR', 'READY_FOR_CHECKOUT'],
+    ...overrides,
+  });
+
+  it('una línea con el recuento y, al abrirla, cada cita con lo que le falta; sin tocar las marcas de DX-265', async () => {
+    const self = item({ appointmentId: 'a1', arrivalSource: 'SEDE_QR', checkInPending: ['ANAMNESIS'] });
+    render(
+      <InClinicPanel
+        state={staticState({
+          view: view({
+            waiting: [self],
+            completedWithoutTimes: [
+              done({ appointmentId: 'c1' }),
+              done({
+                appointmentId: 'c2',
+                patientFirstName: 'Luis',
+                patientLastName: 'Guerra',
+                timingIssue: 'INCOHERENT',
+                missingMarks: [],
+                arrivedAt: '2026-10-19T08:00:00.000Z',
+                seatedAt: '2026-10-19T13:00:00.000Z',
+                readyForCheckoutAt: '2026-10-19T13:30:00.000Z',
+              }),
+            ],
+          }),
+        })}
+        role="RECEPTION"
+        runner={noRunner}
+      />,
+    );
+    // Las marcas de DX-265 siguen en su sitio.
+    expect(screen.getByTestId('in-clinic-self-check-in')).toHaveTextContent('Llegó por su cuenta · QR');
+    // Las atendidas no cuentan como pacientes en la clínica.
+    expect(screen.getByTestId('in-clinic-count')).toHaveTextContent('1 paciente');
+    const block = screen.getByTestId('in-clinic-without-times');
+    expect(screen.getByTestId('in-clinic-without-times-count')).toHaveTextContent('2 citas de hoy sin tiempos');
+    expect(block).not.toHaveAttribute('open');
+    await userEvent.click(screen.getByText('2 citas de hoy sin tiempos'));
+    expect(block).toHaveAttribute('open');
+    const rows = within(block).getAllByTestId('in-clinic-without-times-item');
+    expect(rows[0]).toHaveTextContent('Ana Rondón');
+    expect(rows[0]).toHaveTextContent('Sin tiempos');
+    expect(rows[0]).toHaveTextContent('Falta: llegada, sillón, listo para cobrar');
+    expect(rows[0]).toHaveTextContent('Dra. Lina');
+    expect(rows[1]).toHaveTextContent('Tiempos incoherentes');
+    expect(rows[1]).toHaveTextContent('Tiene las tres horas, pero no cuadran.');
+  });
+
+  it('una sola: en singular; ninguna: nada', () => {
+    const { unmount } = render(
+      <InClinicPanel
+        state={staticState({ view: view({ completedWithoutTimes: [done({ appointmentId: 'c1', missingMarks: ['READY_FOR_CHECKOUT'] })] }) })}
+        role="DENTIST"
+        runner={noRunner}
+      />,
+    );
+    expect(screen.getByTestId('in-clinic-without-times-count')).toHaveTextContent('1 cita de hoy sin tiempos');
+    expect(screen.getByTestId('in-clinic-without-times-item')).toHaveTextContent('Falta: listo para cobrar');
+    unmount();
+    render(<InClinicPanel state={staticState({ view: view() })} role="RECEPTION" runner={noRunner} />);
+    expect(screen.queryByTestId('in-clinic-without-times')).not.toBeInTheDocument();
   });
 });
 

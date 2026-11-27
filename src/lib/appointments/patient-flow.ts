@@ -14,6 +14,8 @@ import { canExitCompleted } from './plan-item-reservations';
  */
 export type InClinicView = components['schemas']['InClinicViewDto'];
 export type InClinicItem = components['schemas']['InClinicItemDto'];
+/** DX-275: atendidas hoy que el informe «Tiempos» no medirá. */
+export type CompletedWithoutTimesItem = components['schemas']['CompletedWithoutTimesItemDto'];
 export type Punctuality = InClinicItem['punctuality'];
 
 export const IN_CLINIC_STATUSES = ['ARRIVED', 'IN_CHAIR', 'READY_FOR_CHECKOUT'] as const;

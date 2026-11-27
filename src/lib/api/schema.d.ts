@@ -6795,6 +6795,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/timing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tiempos: espera en sala, retraso, duración real frente a la programada y ocupación por profesional
+         * @description Para el período, la sede y el profesional: espera en sala (sillón − máx(llegada, hora programada)), retraso de inicio (sillón − hora programada) y duración real (listo para cobrar − sillón) frente a la programada (fin − inicio), con media y p90, por profesional, por tipo de cita (con el aviso de los tipos que se exceden > 20 % en ≥ 10 citas) y por semana; y la ocupación histórica por profesional y semana (atendidas ÷ disponibles, con citadas, atendidas, no-show y libres; disponibles = horario DX-233 − festivos − bloqueos DX-122). Solo citas completadas y vivas, por su hora programada en la zona de su sede (semanas de lunes a domingo). Las que no tienen las tres horas del panel «En clínica» (`withoutTimes`) o las tienen fuera de los umbrales de `thresholds` (`incoherent`) se excluyen de medias y p90 y se cuentan aparte. Las definiciones van en `definitions`, para mostrarlas tal cual. Solo agregados de agenda, sin pacientes ni datos clínicos. Solo las sedes que ve quien consulta (DX-089). ADMIN ve todo el equipo (scope CLINIC); un DENTIST, solo lo suyo (scope OWN); recepción y asistente, 403.
+         */
+        get: operations["TimingController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/timing.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tiempos en CSV (mismos filtros)
+         * @description Para el período, la sede y el profesional: espera en sala (sillón − máx(llegada, hora programada)), retraso de inicio (sillón − hora programada) y duración real (listo para cobrar − sillón) frente a la programada (fin − inicio), con media y p90, por profesional, por tipo de cita (con el aviso de los tipos que se exceden > 20 % en ≥ 10 citas) y por semana; y la ocupación histórica por profesional y semana (atendidas ÷ disponibles, con citadas, atendidas, no-show y libres; disponibles = horario DX-233 − festivos − bloqueos DX-122). Solo citas completadas y vivas, por su hora programada en la zona de su sede (semanas de lunes a domingo). Las que no tienen las tres horas del panel «En clínica» (`withoutTimes`) o las tienen fuera de los umbrales de `thresholds` (`incoherent`) se excluyen de medias y p90 y se cuentan aparte. Las definiciones van en `definitions`, para mostrarlas tal cual. Solo agregados de agenda, sin pacientes ni datos clínicos. Solo las sedes que ve quien consulta (DX-089). ADMIN ve todo el equipo (scope CLINIC); un DENTIST, solo lo suyo (scope OWN); recepción y asistente, 403. Las mismas tablas que la pantalla (por profesional con el total, por tipo, por semana, ocupación por profesional y por semana), con el período, los filtros y las definiciones en la cabecera. UTF-8 con BOM; celdas protegidas contra fórmulas. Auditado (EXPORT).
+         */
+        get: operations["TimingController_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/closing-queue": {
         parameters: {
             query?: never;
@@ -17765,6 +17805,34 @@ export interface components {
             /** @description DX-470: nota de triaje (≤ 200). */
             triageNote: string | null;
         };
+        CompletedWithoutTimesItemDto: {
+            /** Format: uuid */
+            appointmentId: string;
+            /** Format: uuid */
+            patientId: string;
+            patientFirstName: string | null;
+            patientLastName: string | null;
+            /** Format: uuid */
+            providerId: string;
+            providerName: string | null;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** Format: date-time */
+            arrivedAt: string | null;
+            /** Format: date-time */
+            seatedAt: string | null;
+            /** Format: date-time */
+            readyForCheckoutAt: string | null;
+            /**
+             * @description WITHOUT_TIMES: se completó sin alguna de las tres horas (llegó, en sillón, listo para cobrar). INCOHERENT: tiene las tres pero fuera de los umbrales del informe «Tiempos» (GET /reports/timing, `thresholds`). En los dos casos el informe no la mide.
+             * @enum {string}
+             */
+            timingIssue: "WITHOUT_TIMES" | "INCOHERENT";
+            /** @description Los pasos sin hora, en orden; vacío en INCOHERENT. */
+            missingMarks: ("ARRIVED" | "IN_CHAIR" | "READY_FOR_CHECKOUT")[];
+        };
         InClinicViewDto: {
             /** @example 2026-10-19 */
             date: string;
@@ -17798,6 +17866,8 @@ export interface components {
             inChair: components["schemas"]["InClinicItemDto"][];
             /** @description Listo para cobrar (READY_FOR_CHECKOUT). */
             readyForCheckout: components["schemas"]["InClinicItemDto"][];
+            /** @description DX-275: citas del día ya completadas (en la sede del panel; a un DENTIST, solo las suyas) que el informe «Tiempos» no podrá medir, por hora de la cita: la marca «sin tiempos». Vacío si no hay. */
+            completedWithoutTimes: components["schemas"]["CompletedWithoutTimesItemDto"][];
         };
         CancellationPolicyRefDto: {
             /** Format: uuid */
@@ -27026,6 +27096,268 @@ export interface components {
             pageSize: number;
             /** @description Solo en el CSV: había más filas que el tope */
             truncated: boolean;
+        };
+        TimingFiltersDto: {
+            /** Format: uuid */
+            locationId: string | null;
+            locationName: string | null;
+            /**
+             * Format: uuid
+             * @description El profesional pedido; con un DENTIST, siempre él mismo
+             */
+            providerId: string | null;
+            providerName: string | null;
+        };
+        TimingOptionsDto: {
+            /** @description Las sedes que ve quien consulta (DX-089) */
+            locations: components["schemas"]["ProductionLocationOptionDto"][];
+            /** @description Quien tiene citas u horario en esas sedes (también ex-miembros), por nombre. A un DENTIST, solo él mismo. */
+            professionals: components["schemas"]["ProductionProfessionalOptionDto"][];
+        };
+        TimingFiguresDto: {
+            /** @description Citas atendidas (completadas) del período */
+            completed: number;
+            /** @description Con tiempos válidos: las únicas que entran en medias y p90 (= completed − withoutTimes − incoherent) */
+            measured: number;
+            /** @description Atendidas sin hora de llegada, de sillón o de listo para cobrar («X citas sin tiempos») */
+            withoutTimes: number;
+            /** @description Con las tres horas pero fuera de los umbrales de `thresholds` (excluidas) */
+            incoherent: number;
+            /** @description Espera en sala media, en minutos con 1 decimal; null sin citas con tiempos válidos */
+            waitAvgMinutes: number | null;
+            /** @description Espera en sala p90, en minutos con 1 decimal; null sin citas con tiempos válidos */
+            waitP90Minutes: number | null;
+            /** @description Retraso de inicio medio (negativo = se empezó antes de la hora), en minutos con 1 decimal; null sin citas con tiempos válidos */
+            startDelayAvgMinutes: number | null;
+            /** @description Retraso de inicio p90, en minutos con 1 decimal; null sin citas con tiempos válidos */
+            startDelayP90Minutes: number | null;
+            /** @description Duración real media (sillón → listo para cobrar), en minutos con 1 decimal; null sin citas con tiempos válidos */
+            durationAvgMinutes: number | null;
+            /** @description Duración real p90, en minutos con 1 decimal; null sin citas con tiempos válidos */
+            durationP90Minutes: number | null;
+            /** @description Duración programada media (fin − inicio agendados), en minutos con 1 decimal; null sin citas con tiempos válidos */
+            plannedAvgMinutes: number | null;
+            /** @description (real media − programada media) ÷ programada media × 100, 1 decimal; positivo = duran más de lo agendado */
+            durationVsPlannedPercent: number | null;
+        };
+        TimingProfessionalRowDto: {
+            /** @description Citas atendidas (completadas) del período */
+            completed: number;
+            /** @description Con tiempos válidos: las únicas que entran en medias y p90 (= completed − withoutTimes − incoherent) */
+            measured: number;
+            /** @description Atendidas sin hora de llegada, de sillón o de listo para cobrar («X citas sin tiempos») */
+            withoutTimes: number;
+            /** @description Con las tres horas pero fuera de los umbrales de `thresholds` (excluidas) */
+            incoherent: number;
+            /** @description Espera en sala media, en minutos con 1 decimal; null sin citas con tiempos válidos */
+            waitAvgMinutes: number | null;
+            /** @description Espera en sala p90, en minutos con 1 decimal; null sin citas con tiempos válidos */
+            waitP90Minutes: number | null;
+            /** @description Retraso de inicio medio (negativo = se empezó antes de la hora), en minutos con 1 decimal; null sin citas con tiempos válidos */
+            startDelayAvgMinutes: number | null;
+            /** @description Retraso de inicio p90, en minutos con 1 decimal; null sin citas con tiempos válidos */
+            startDelayP90Minutes: number | null;
+            /** @description Duración real media (sillón → listo para cobrar), en minutos con 1 decimal; null sin citas con tiempos válidos */
+            durationAvgMinutes: number | null;
+            /** @description Duración real p90, en minutos con 1 decimal; null sin citas con tiempos válidos */
+            durationP90Minutes: number | null;
+            /** @description Duración programada media (fin − inicio agendados), en minutos con 1 decimal; null sin citas con tiempos válidos */
+            plannedAvgMinutes: number | null;
+            /** @description (real media − programada media) ÷ programada media × 100, 1 decimal; positivo = duran más de lo agendado */
+            durationVsPlannedPercent: number | null;
+            /** Format: uuid */
+            providerId: string;
+            /** @description «Profesional sin nombre» si falta */
+            providerName: string;
+        };
+        TimingTypeRowDto: {
+            /** @description Citas atendidas (completadas) del período */
+            completed: number;
+            /** @description Con tiempos válidos: las únicas que entran en medias y p90 (= completed − withoutTimes − incoherent) */
+            measured: number;
+            /** @description Atendidas sin hora de llegada, de sillón o de listo para cobrar («X citas sin tiempos») */
+            withoutTimes: number;
+            /** @description Con las tres horas pero fuera de los umbrales de `thresholds` (excluidas) */
+            incoherent: number;
+            /** @description Espera en sala media, en minutos con 1 decimal; null sin citas con tiempos válidos */
+            waitAvgMinutes: number | null;
+            /** @description Espera en sala p90, en minutos con 1 decimal; null sin citas con tiempos válidos */
+            waitP90Minutes: number | null;
+            /** @description Retraso de inicio medio (negativo = se empezó antes de la hora), en minutos con 1 decimal; null sin citas con tiempos válidos */
+            startDelayAvgMinutes: number | null;
+            /** @description Retraso de inicio p90, en minutos con 1 decimal; null sin citas con tiempos válidos */
+            startDelayP90Minutes: number | null;
+            /** @description Duración real media (sillón → listo para cobrar), en minutos con 1 decimal; null sin citas con tiempos válidos */
+            durationAvgMinutes: number | null;
+            /** @description Duración real p90, en minutos con 1 decimal; null sin citas con tiempos válidos */
+            durationP90Minutes: number | null;
+            /** @description Duración programada media (fin − inicio agendados), en minutos con 1 decimal; null sin citas con tiempos válidos */
+            plannedAvgMinutes: number | null;
+            /** @description (real media − programada media) ÷ programada media × 100, 1 decimal; positivo = duran más de lo agendado */
+            durationVsPlannedPercent: number | null;
+            /**
+             * Format: uuid
+             * @description null = las citas sin tipo (fila «Sin tipo de cita», al final)
+             */
+            appointmentTypeId: string | null;
+            appointmentTypeName: string;
+            /** @description Duración del tipo en el catálogo hoy (DX-121); null sin tipo. Referencia para ajustarla. */
+            catalogDurationMinutes: number | null;
+            /** @description Aviso «se excede»: ≥ `thresholds.overrunMinAppointments` citas medidas y real frente a programada > `thresholds.overrunPercent` %. Nunca en «Sin tipo». */
+            exceedsPlanned: boolean;
+        };
+        TimingWeekRowDto: {
+            /** @description Citas atendidas (completadas) del período */
+            completed: number;
+            /** @description Con tiempos válidos: las únicas que entran en medias y p90 (= completed − withoutTimes − incoherent) */
+            measured: number;
+            /** @description Atendidas sin hora de llegada, de sillón o de listo para cobrar («X citas sin tiempos») */
+            withoutTimes: number;
+            /** @description Con las tres horas pero fuera de los umbrales de `thresholds` (excluidas) */
+            incoherent: number;
+            /** @description Espera en sala media, en minutos con 1 decimal; null sin citas con tiempos válidos */
+            waitAvgMinutes: number | null;
+            /** @description Espera en sala p90, en minutos con 1 decimal; null sin citas con tiempos válidos */
+            waitP90Minutes: number | null;
+            /** @description Retraso de inicio medio (negativo = se empezó antes de la hora), en minutos con 1 decimal; null sin citas con tiempos válidos */
+            startDelayAvgMinutes: number | null;
+            /** @description Retraso de inicio p90, en minutos con 1 decimal; null sin citas con tiempos válidos */
+            startDelayP90Minutes: number | null;
+            /** @description Duración real media (sillón → listo para cobrar), en minutos con 1 decimal; null sin citas con tiempos válidos */
+            durationAvgMinutes: number | null;
+            /** @description Duración real p90, en minutos con 1 decimal; null sin citas con tiempos válidos */
+            durationP90Minutes: number | null;
+            /** @description Duración programada media (fin − inicio agendados), en minutos con 1 decimal; null sin citas con tiempos válidos */
+            plannedAvgMinutes: number | null;
+            /** @description (real media − programada media) ÷ programada media × 100, 1 decimal; positivo = duran más de lo agendado */
+            durationVsPlannedPercent: number | null;
+            /**
+             * @description Lunes de la semana (zona de cada sede)
+             * @example 2026-03-02
+             */
+            weekStart: string;
+            /**
+             * @description Primer día de la semana dentro del período
+             * @example 2026-03-02
+             */
+            from: string;
+            /**
+             * @description Último día de la semana dentro del período
+             * @example 2026-03-08
+             */
+            to: string;
+        };
+        TimingOccupancyWeekDto: {
+            /** @description Minutos del horario (DX-233) − festivos de la sede − bloqueos que no admiten citas (DX-122) − cierres de la sede */
+            availableMinutes: number;
+            /** @description Minutos programados de las citas vivas no canceladas */
+            bookedMinutes: number;
+            /** @description Minutos programados de las completadas */
+            attendedMinutes: number;
+            /** @description Minutos programados de las «No asistió» */
+            noShowMinutes: number;
+            /** @description máx(0, disponibles − citadas) de cada semana, sumado (lo citado de más una semana no libera otra) */
+            freeMinutes: number;
+            /** @description atendidas ÷ disponibles × 100, 1 decimal; null sin horario («Sin horario»). Puede pasar de 100. */
+            occupancyPercent: number | null;
+            /** @example 2026-03-02 */
+            weekStart: string;
+            /** @example 2026-03-02 */
+            from: string;
+            /** @example 2026-03-08 */
+            to: string;
+        };
+        TimingOccupancyRowDto: {
+            /** @description Minutos del horario (DX-233) − festivos de la sede − bloqueos que no admiten citas (DX-122) − cierres de la sede */
+            availableMinutes: number;
+            /** @description Minutos programados de las citas vivas no canceladas */
+            bookedMinutes: number;
+            /** @description Minutos programados de las completadas */
+            attendedMinutes: number;
+            /** @description Minutos programados de las «No asistió» */
+            noShowMinutes: number;
+            /** @description máx(0, disponibles − citadas) de cada semana, sumado (lo citado de más una semana no libera otra) */
+            freeMinutes: number;
+            /** @description atendidas ÷ disponibles × 100, 1 decimal; null sin horario («Sin horario»). Puede pasar de 100. */
+            occupancyPercent: number | null;
+            /** Format: uuid */
+            providerId: string;
+            providerName: string;
+            /** @description Tiene horario con días en alguna sede del informe; false = «Sin horario» */
+            hasSchedule: boolean;
+            /** @description Todas las semanas del período, en orden */
+            weeks: components["schemas"]["TimingOccupancyWeekDto"][];
+        };
+        TimingOccupancyFiguresDto: {
+            /** @description Minutos del horario (DX-233) − festivos de la sede − bloqueos que no admiten citas (DX-122) − cierres de la sede */
+            availableMinutes: number;
+            /** @description Minutos programados de las citas vivas no canceladas */
+            bookedMinutes: number;
+            /** @description Minutos programados de las completadas */
+            attendedMinutes: number;
+            /** @description Minutos programados de las «No asistió» */
+            noShowMinutes: number;
+            /** @description máx(0, disponibles − citadas) de cada semana, sumado (lo citado de más una semana no libera otra) */
+            freeMinutes: number;
+            /** @description atendidas ÷ disponibles × 100, 1 decimal; null sin horario («Sin horario»). Puede pasar de 100. */
+            occupancyPercent: number | null;
+        };
+        TimingOccupancyDto: {
+            /** @description Un profesional con horario en las sedes del informe o con citas en el período, por nombre */
+            professionals: components["schemas"]["TimingOccupancyRowDto"][];
+            totals: components["schemas"]["TimingOccupancyFiguresDto"];
+        };
+        TimingThresholdsDto: {
+            /** @example 240 */
+            maxWaitMinutes: number;
+            /** @example 720 */
+            maxStartGapMinutes: number;
+            /** @example 1 */
+            minDurationMinutes: number;
+            /** @example 480 */
+            maxDurationMinutes: number;
+            /** @example 20 */
+            overrunPercent: number;
+            /** @example 10 */
+            overrunMinAppointments: number;
+        };
+        TimingDefinitionDto: {
+            /** @enum {string} */
+            key: "completed" | "withoutTimes" | "incoherent" | "wait" | "startDelay" | "duration" | "planned" | "durationVsPlanned" | "typeOverrun" | "availableMinutes" | "bookedMinutes" | "attendedMinutes" | "noShowMinutes" | "freeMinutes" | "occupancy";
+            label: string;
+            /** @enum {string} */
+            unit: "COUNT" | "MINUTES" | "PERCENT";
+            /** @description Texto del tooltip «Cómo se calcula» */
+            howItIsCalculated: string;
+        };
+        TimingReportDto: {
+            /** @example 2026-01-01 */
+            from: string;
+            /** @example 2026-06-30 */
+            to: string;
+            /**
+             * @description CLINIC: ADMIN, todo el equipo; OWN: un DENTIST, solo lo suyo
+             * @enum {string}
+             */
+            scope: "CLINIC" | "OWN";
+            filters: components["schemas"]["TimingFiltersDto"];
+            options: components["schemas"]["TimingOptionsDto"];
+            totals: components["schemas"]["TimingFiguresDto"];
+            /** @description Una fila por profesional con citas atendidas, por nombre */
+            byProfessional: components["schemas"]["TimingProfessionalRowDto"][];
+            /** @description Una fila por tipo de cita con citas atendidas: primero los que se exceden, luego por nombre; «Sin tipo de cita» al final */
+            byAppointmentType: components["schemas"]["TimingTypeRowDto"][];
+            /** @description Todas las semanas (lunes a domingo) que toca el período, en orden, también sin citas */
+            byWeek: components["schemas"]["TimingWeekRowDto"][];
+            occupancy: components["schemas"]["TimingOccupancyDto"];
+            /** @description Umbrales de coherencia y del aviso por tipo */
+            thresholds: components["schemas"]["TimingThresholdsDto"];
+            /** @description Nota común a todas las cifras (qué citas cuentan, zona horaria, p90) */
+            scopeNote: string;
+            /** @description Definición fija de cada cifra, para mostrarla tal cual */
+            definitions: components["schemas"]["TimingDefinitionDto"][];
+            /** @description false = «Sin datos en el período»: ni citas atendidas ni profesionales con horario o citas */
+            hasData: boolean;
         };
         /**
          * @description Las secciones que ve el rol: ADMIN las tres, DENTIST EVOLUTION y TREATMENT, RECEPTION OUTCOME
@@ -53042,6 +53374,119 @@ export interface operations {
                 content?: never;
             };
             /** @description Solo la administración descarga las listas de retención: llevan nombres y teléfonos de pacientes. / No tienes acceso a esta sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada. (la sede no es de la clínica o está retirada) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con citas no tiene zona horaria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    TimingController_get: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, días civiles en la zona de cada sede). Como mucho 12 meses por calendario; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo las citas y el horario de esta sede. 404 si no es una sede viva de la clínica; 403 si es de la clínica pero no de las del usuario (DX-089). Sin él, todas las que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo las citas y el horario de este profesional. ADMIN: cualquiera (uno que no atiende en la clínica da un informe vacío). DENTIST: siempre él mismo; pedir a otro es 403. */
+                providerId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimingReportDto"];
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 12 meses. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y los odontólogos ven los tiempos de la agenda. / Solo puedes ver tus propios tiempos. / No tienes acceso a esta sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada. (la sede no es de la clínica o está retirada) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LOCATION_TIMEZONE_REQUIRED: una sede con citas no tiene zona horaria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    TimingController_csv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, días civiles en la zona de cada sede). Como mucho 12 meses por calendario; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Solo las citas y el horario de esta sede. 404 si no es una sede viva de la clínica; 403 si es de la clínica pero no de las del usuario (DX-089). Sin él, todas las que ve. La cabecera X-Location-Id no acota. */
+                locationId?: string;
+                /** @description Solo las citas y el horario de este profesional. ADMIN: cualquiera (uno que no atiende en la clínica da un informe vacío). DENTIST: siempre él mismo; pedir a otro es 403. */
+                providerId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description El período no es válido: usa fechas AAAA-MM-DD con «desde» anterior o igual a «hasta». / El período admite como mucho 12 meses. / filtros inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración y los odontólogos ven los tiempos de la agenda. / Solo puedes ver tus propios tiempos. / No tienes acceso a esta sede. */
             403: {
                 headers: {
                     [name: string]: unknown;

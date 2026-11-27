@@ -158,3 +158,41 @@ export function backdateCompletedAppointment(appointmentId: string, start: Date,
     },
   );
 }
+
+/**
+ * DX-275: como `backdateCompletedAppointment`, y además las horas del panel
+ * «En clínica» (llegada, sillón, listo para cobrar). `null` = sin esa hora
+ * (la cita se completó saltándose el paso).
+ */
+export function backdateTimedAppointment(
+  appointmentId: string,
+  start: Date,
+  end: Date,
+  marks: { arrivedAt: Date | null; seatedAt: Date | null; readyForCheckoutAt: Date | null },
+): void {
+  if (!E2E_DATABASE_URL) throw new Error('E2E_DATABASE_URL no definido');
+  const at = (d: Date | null) => (d ? d.toISOString() : '');
+  execFileSync(
+    'psql',
+    [
+      E2E_DATABASE_URL,
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-v',
+      `id=${appointmentId}`,
+      '-v',
+      `s=${start.toISOString()}`,
+      '-v',
+      `e=${end.toISOString()}`,
+      '-v',
+      `a=${at(marks.arrivedAt)}`,
+      '-v',
+      `c=${at(marks.seatedAt)}`,
+      '-v',
+      `r=${at(marks.readyForCheckoutAt)}`,
+    ],
+    {
+      input: `UPDATE appointments SET "start" = (:'s'::timestamptz AT TIME ZONE 'UTC'), "end" = (:'e'::timestamptz AT TIME ZONE 'UTC'), "status" = 'COMPLETED', "arrivedAt" = (NULLIF(:'a', '')::timestamptz AT TIME ZONE 'UTC'), "seatedAt" = (NULLIF(:'c', '')::timestamptz AT TIME ZONE 'UTC'), "readyForCheckoutAt" = (NULLIF(:'r', '')::timestamptz AT TIME ZONE 'UTC') WHERE id = :'id';`,
+    },
+  );
+}
