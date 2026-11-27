@@ -1,4 +1,5 @@
 import {
+  dentitionBasisLabel,
   presetChanges,
   chartLayoutForArch,
   positionOfTooth,
@@ -64,5 +65,38 @@ describe('dentición en la carta (DX-120)', () => {
     expect(mixed).toHaveLength(20);
     expect(mixed).toContain('11');
     expect(mixed).not.toContain('16');
+  });
+});
+
+describe('DX-132: rótulo de la dentición y preajuste que fija la carta', () => {
+  const positions = (source: 'EVENT' | 'AGE' | 'DEFAULT', exceptEvent: string[] = []) =>
+    Array.from({ length: 32 }, (_, i) => ({ source: exceptEvent.includes(String(i)) ? ('EVENT' as const) : source }));
+
+  it('MANUAL → «Ajustada a mano», aunque haya edad', () => {
+    expect(dentitionBasisLabel({ basis: 'MANUAL', ageYears: 4, positions: positions('EVENT') })).toBe('Ajustada a mano');
+  });
+
+  it('AGE sin eventos → «Según la edad (N años)»; con alguno, en parte a mano', () => {
+    expect(dentitionBasisLabel({ basis: 'AGE', ageYears: 4, positions: positions('AGE') })).toBe('Según la edad (4 años)');
+    expect(dentitionBasisLabel({ basis: 'AGE', ageYears: 4, positions: positions('AGE', ['3']) })).toBe(
+      'Ajustada a mano en parte; el resto, por la edad (4 años)',
+    );
+  });
+
+  it('DEFAULT (sin fecha de nacimiento) → permanente por defecto; con eventos, en parte a mano', () => {
+    expect(dentitionBasisLabel({ basis: 'DEFAULT', ageYears: null, positions: positions('DEFAULT') })).toBe(
+      'Permanente por defecto (sin fecha de nacimiento)',
+    );
+    expect(dentitionBasisLabel({ basis: 'DEFAULT', ageYears: null, positions: positions('DEFAULT', ['0']) })).toBe(
+      'Ajustada a mano en parte; el resto, permanente por defecto',
+    );
+  });
+
+  it('el preajuste envía también lo que ya está en esa dentición sin estar fijado a mano', () => {
+    const fixed = new Set(['11']);
+    const sent = presetChanges('PERMANENT', () => 'PERMANENT', (p) => fixed.has(p));
+    expect(sent).toHaveLength(31);
+    expect(sent).not.toContain('11');
+    expect(presetChanges('PERMANENT', () => 'PERMANENT', () => true)).toEqual([]);
   });
 });
