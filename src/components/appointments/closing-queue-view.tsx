@@ -465,6 +465,11 @@ export function ClosingQueueView({ token }: { token: string }) {
           onRetryLocations={locationsState.retry}
           appointmentId={markingDone.row.appointmentId}
           preferredPerformerId={markingDone.row.professionalId}
+          odontogramHref={
+            markingDone.row.toothNumber
+              ? `/patients/${markingDone.row.patientId}?tab=odontogram&tooth=${markingDone.row.toothNumber}`
+              : null
+          }
           onSaved={() => {
             toast.success(copy.itemDone(markingDone.row.patientName));
             setMarkingDone(null);

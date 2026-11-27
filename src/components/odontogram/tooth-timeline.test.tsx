@@ -138,7 +138,7 @@ describe('ToothTimeline', () => {
     );
     await screen.findAllByRole('listitem');
     expect(mockedGetTimeline).toHaveBeenCalledTimes(2);
-    expect(mockedGetTimeline).toHaveBeenLastCalledWith('tok', 'p1', '21');
+    expect(mockedGetTimeline).toHaveBeenLastCalledWith('tok', 'p1', '21', undefined);
   });
 
   it('shows an alert with the API error message when loading fails', async () => {
@@ -291,8 +291,10 @@ describe('ToothTimeline — origen y anulación (DX-120)', () => {
     expect(onVoided).toHaveBeenCalled();
   });
 
-  it('en una carta a una fecha muestra el historial de entonces', async () => {
-    mockedGetTimeline.mockResolvedValue([newer, voided]);
+  it('DX-132: en una carta a una fecha pide el historial con el mismo asOf (el corte lo hace el servidor)', async () => {
+    // Lo que el servidor devuelve para esa fecha: sin lo posterior y con la
+    // anulación posterior ya quitada (`void: null`).
+    mockedGetTimeline.mockResolvedValue([{ ...voided, void: null }]);
     render(
       <ToothTimeline
         token="tok"
@@ -303,9 +305,42 @@ describe('ToothTimeline — origen y anulación (DX-120)', () => {
       />,
     );
     const items = await screen.findAllByRole('listitem');
-    // `newer` es de febrero: no existía. La anulación (10 de enero) tampoco.
+    expect(mockedGetTimeline).toHaveBeenLastCalledWith('tok', 'p1', '11', '2026-01-05');
     expect(items).toHaveLength(1);
     expect(items[0]).not.toHaveAttribute('data-voided');
+  });
+
+  it('DX-132: el web no vuelve a filtrar por el día del navegador lo que el servidor cortó en el día de la sede', async () => {
+    // 02:30Z del 6 de enero: en UTC (el navegador de la suite) ya es el 6; en la
+    // sede de Caracas aún es el 5, y el servidor lo incluye en la carta al 5.
+    const lateOnTheFifth = { ...newer, id: 'rec-late', recordedAt: '2026-01-06T02:30:00.000Z' };
+    mockedGetTimeline.mockResolvedValue([lateOnTheFifth]);
+    render(
+      <ToothTimeline token="tok" patientId="p1" toothNumber="11" catalogById={catalogById} asOf="2026-01-05" />,
+    );
+    expect(await screen.findAllByRole('listitem')).toHaveLength(1);
+  });
+
+  it('DX-132: al cambiar la fecha de la carta vuelve a pedir el historial con la nueva', async () => {
+    mockedGetTimeline.mockResolvedValue([older]);
+    const { rerender } = render(
+      <ToothTimeline token="tok" patientId="p1" toothNumber="11" catalogById={catalogById} asOf="2026-01-05" />,
+    );
+    await screen.findAllByRole('listitem');
+    rerender(<ToothTimeline token="tok" patientId="p1" toothNumber="11" catalogById={catalogById} asOf={null} />);
+    await waitFor(() => expect(mockedGetTimeline).toHaveBeenLastCalledWith('tok', 'p1', '11', undefined));
+  });
+
+  it('DX-132: una fecha futura muestra el mensaje del servidor sin «Reintentar»', async () => {
+    const { ApiError } = jest.requireActual('../../lib/api/client');
+    mockedGetTimeline.mockRejectedValue(
+      new ApiError(400, 'La fecha de la carta no puede ser futura', { code: 'ODONTOGRAM_AS_OF_FUTURE' }),
+    );
+    render(
+      <ToothTimeline token="tok" patientId="p1" toothNumber="11" catalogById={catalogById} asOf="2099-01-01" />,
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent('La fecha de la carta no puede ser futura');
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
   });
 
   it('DX-354b: la fecha de cada registro sale con el formato y la zona de la sede (es-VE, de-DE, en-US)', async () => {
@@ -322,16 +357,5 @@ describe('ToothTimeline — origen y anulación (DX-120)', () => {
     }
     // El 1 de febrero a las 02:30Z: en Caracas y Miami aún es el 31 de enero; en Berlín, el 1.
     expect(dateIn('caracas', instant)).not.toBe(dateIn('berlin', instant));
-  });
-
-  it('DX-354b (E9): el día de la carta es el de la sede, no el del navegador', async () => {
-    // 02:30Z del 6 de enero: en UTC (el navegador de la suite) ya es el 6; en Caracas todavía es el 5.
-    const lateOnTheFifth = { ...newer, id: 'rec-late', recordedAt: '2026-01-06T02:30:00.000Z' };
-    mockedGetTimeline.mockResolvedValue([lateOnTheFifth]);
-    render(
-      <ToothTimeline token="tok" patientId="p1" toothNumber="11" catalogById={catalogById} asOf="2026-01-05" />,
-    );
-    // Con la zona de la sede (Caracas) el registro es del 5: cuenta en la carta al 5.
-    expect(await screen.findAllByRole('listitem')).toHaveLength(1);
   });
 });

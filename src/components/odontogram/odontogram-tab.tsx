@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { asOfErrorMessage } from '@/lib/odontogram/odontogram-errors';
 import { OdontogramChart } from '@/components/odontogram/odontogram-chart';
 import { OdontogramLegend } from '@/components/odontogram/odontogram-legend';
 import { ToothTimeline } from '@/components/odontogram/tooth-timeline';
@@ -21,6 +22,7 @@ import {
   DENTITION_LABELS,
   DENTITION_ORDER,
   chartLayoutForArch,
+  dentitionBasisLabel,
   isPrimaryFdi,
   positionOfTooth,
   presetChanges,
@@ -41,6 +43,8 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { DatePicker } from '@/components/ui/date-picker';
 import { FormModal } from '@/components/shared/form-modal';
 import { SectionError } from '@/components/errors/section-error';
+import { InlineError } from '@/components/errors/inline-error';
+import { fieldErrorId } from '@/components/shared/form-field';
 import { notifyError } from '@/components/errors/notify';
 
 // Copy as constants (i18n-ready) — matches page.tsx's convention until
@@ -48,9 +52,11 @@ import { notifyError } from '@/components/errors/notify';
 const copy = {
   odontogramLoading: 'Cargando odontograma…',
   odontogramRefreshing: 'Actualizando…',
+  // DX-132 (B3): carta y catálogo fallan por separado; un fallo de la carta no
+  // culpa al catálogo ni al revés.
   odontogramGenericError: 'No pudimos cargar el odontograma.',
   odontogramRefreshError: 'No pudimos actualizar el odontograma.',
-  catalogGenericError: 'No pudimos cargar el catálogo.',
+  catalogGenericError: 'No pudimos cargar el catálogo de hallazgos y procedimientos.',
   selectToothPrompt: 'Selecciona un diente para ver su historial y registrar un hallazgo o procedimiento.',
   emptyChartPrompt:
     // Sin registros ≠ boca sana: la carta no puede afirmar un diagnóstico.
@@ -69,7 +75,6 @@ const copy = {
   toothDocumentsFor: (fdi: string) => `Documentos del diente ${fdi}`,
   // DX-120
   dentitionSwitch: 'Dentición de la carta',
-  dentitionByAge: (age: number) => `Según la edad (${age} años)`,
   changeDentition: 'Cambiar dentición',
   asOfLabel: 'Ver la carta al',
   backToToday: 'Volver a hoy',
@@ -83,8 +88,11 @@ const copy = {
   presetMixedNote: 'Los molares no cambian: márcalos con «Cambiar dentición» al erupcionar.',
   presetSubmit: 'Cambiar la carta',
   presetError: 'No pudimos cambiar la dentición. Intenta de nuevo.',
+  // DX-132: registrar (a mano o desde el plan) ya exige que el diente quepa en
+  // la dentición; si un diente con registros no se dibuja es porque su
+  // posición cambió DESPUÉS (p. ej. el temporal se exfolió).
   notDrawn: (fdis: string[]) =>
-    `Con la dentición actual no se dibuja${fdis.length === 1 ? ' el diente' : 'n los dientes'} ${fdis.join(', ')}, que tiene${fdis.length === 1 ? '' : 'n'} registros. Consulta su historial:`,
+    `${fdis.length === 1 ? 'El diente' : 'Los dientes'} ${fdis.join(', ')} tiene${fdis.length === 1 ? '' : 'n'} registros de antes de cambiar la dentición y ya no se dibuja${fdis.length === 1 ? '' : 'n'}. Consulta su historial:`,
   notDrawnTooth: (fdi: string) => `Ver el historial del diente ${fdi}`,
   doesNotFit: (fdi: string, position: string, dentition: DentitionType) =>
     isPrimaryFdi(fdi)
@@ -185,12 +193,16 @@ export function OdontogramTab({
   }
   function handleAsOfChange(next: string | null) {
     setAsOfDraft(next);
+    setAsOfError(null);
     if (next === null) setAsOf(null);
     else if (Number(next.slice(0, 4)) >= 1900) setAsOf(next);
   }
   // Al fallar un cambio de fecha el selector vuelve a la que se ve, sin
   // recargarla (ya está en pantalla).
   const skipNextLoad = useRef(false);
+  // DX-132 (B2): el 400 de la fecha (futura o inexistente) va junto al campo,
+  // sin «Reintentar»: repetir la misma fecha daría el mismo error.
+  const [asOfError, setAsOfError] = useState<string | null>(null);
 
   // Se siembra desde la URL para que el enlace del plan abra en su diente.
   // Sólo es el valor INICIAL: a partir de ahí manda la interacción, y cada
@@ -229,28 +241,50 @@ export function OdontogramTab({
         setRefreshing(true);
       }
       try {
-        const [groups, dentitionView, catalog] = await Promise.all([
-          getOdontogram(token, patientId, asOf ?? undefined),
-          getDentition(token, patientId, asOf ?? undefined),
+        // La carta (odontograma + dentición) y el catálogo se esperan por
+        // separado para decir cuál falló (B3).
+        const [chartResult, catalogResult] = await Promise.allSettled([
+          Promise.all([getOdontogram(token, patientId, asOf ?? undefined), getDentition(token, patientId, asOf ?? undefined)]),
           catalogCache.current?.token === token
-            ? catalogCache.current.items
+            ? Promise.resolve(catalogCache.current.items)
             : listCatalogItems(token, { activeOnly: true }),
         ]);
-        catalogCache.current = { token, items: catalog };
+        if (catalogResult.status === 'fulfilled') catalogCache.current = { token, items: catalogResult.value };
+        if (chartResult.status === 'rejected' || catalogResult.status === 'rejected') {
+          throw new LoadFailure(
+            chartResult.status === 'rejected' ? chartResult.reason : null,
+            catalogResult.status === 'rejected' ? catalogResult.reason : null,
+          );
+        }
+        const [groups, dentitionView] = chartResult.value;
+        const catalog = catalogResult.value;
         if (cancelled) return;
         setToothGroups(groups);
         setDentition(dentitionView);
         setCatalogItems(catalog);
         setShownAsOf(asOf);
+        setAsOfError(null);
         setLoadError(null);
         setHasLoadedOnce(true);
       } catch (err) {
         if (cancelled) return;
-        const message = apiErrorMessage(err, `${copy.odontogramGenericError} ${copy.catalogGenericError}`);
-        if (isInitialLoad) {
-          setLoadError(message);
+        const failure = err instanceof LoadFailure ? err : new LoadFailure(err, null);
+        const dateMessage = asOfErrorMessage(failure.chart);
+        if (dateMessage !== null) {
+          // La fecha pedida no vale: se queda la carta que se ve y lo escrito en
+          // el campo, con el mensaje debajo.
+          setAsOfError(dateMessage);
+          if (asOf !== shownAsOf) {
+            skipNextLoad.current = true;
+            setDraftSource(shownAsOf);
+            setAsOf(shownAsOf);
+          }
+        } else if (isInitialLoad) {
+          setLoadError(loadFailureMessage(failure));
         } else {
-          notifyError(copy.odontogramRefreshError, { onRetry: () => setReloadKey((k) => k + 1) });
+          notifyError(failure.chart !== null ? copy.odontogramRefreshError : copy.catalogGenericError, {
+            onRetry: () => setReloadKey((k) => k + 1),
+          });
           if (asOf !== shownAsOf) {
             skipNextLoad.current = true;
             setAsOf(shownAsOf);
@@ -279,6 +313,9 @@ export function OdontogramTab({
   const states = projectOdontogram(toothGroups, catalogById);
   const dentitionByPosition = new Map(dentition?.positions.map((p) => [p.position, p.dentition]) ?? []);
   const dentitionOf = (position: string): DentitionType => dentitionByPosition.get(position) ?? 'PERMANENT';
+  // DX-132: posiciones ya fijadas a mano (por un evento); el preajuste fija las demás.
+  const fixedPositions = new Set(dentition?.positions.filter((p) => p.source === 'EVENT').map((p) => p.position));
+  const isFixed = (position: string) => fixedPositions.has(position);
 
   // The distinct catalog items actually painted on the chart (from the
   // patient's records), for the color legend — so it explains what's on
@@ -344,7 +381,7 @@ export function OdontogramTab({
   async function applyPreset(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!preset) return;
-    const positions = presetChanges(preset, dentitionOf);
+    const positions = presetChanges(preset, dentitionOf, isFixed);
     if (positions.length === 0) {
       setPreset(null);
       return;
@@ -383,6 +420,7 @@ export function OdontogramTab({
       ? toothFitsDentition(selectedTooth, dentitionOf(selectedPosition)) && drawnTeeth.has(selectedTooth)
       : false;
   const isEmpty = toothGroups.length === 0;
+  const basisLabel = dentition ? dentitionBasisLabel(dentition) : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -413,8 +451,10 @@ export function OdontogramTab({
                 {copy.changeDentition}
               </Button>
             ) : null}
-            {dentition?.basis === 'AGE' && dentition.ageYears !== null ? (
-              <p className="t-label pb-2.5 text-muted">{copy.dentitionByAge(dentition.ageYears)}</p>
+            {basisLabel ? (
+              <p data-testid="odo-dentition-basis" className="t-label pb-2.5 text-muted">
+                {basisLabel}
+              </p>
             ) : null}
           </div>
           <div className="flex flex-wrap items-end gap-2">
@@ -431,16 +471,30 @@ export function OdontogramTab({
                 max={today ?? undefined}
                 value={asOfDraft}
                 onChange={handleAsOfChange}
+                isInvalid={asOfError !== null}
+                aria-describedby={asOfError ? fieldErrorId('odo-as-of') : undefined}
                 className="w-48"
               />
             )}
             {readOnly ? (
-              <Button type="button" variant="ghost" onClick={() => setAsOf(null)}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setAsOfError(null);
+                  setAsOf(null);
+                }}
+              >
                 {copy.backToToday}
               </Button>
             ) : null}
           </div>
         </div>
+        {asOfError ? (
+          <InlineError id={fieldErrorId('odo-as-of')} className="sm:justify-end">
+            {asOfError}
+          </InlineError>
+        ) : null}
 
         {shownAsOf ? (
           <Callout tone="warning" role="status">
@@ -600,7 +654,7 @@ export function OdontogramTab({
             if (!open) setPreset(null);
           }}
           title={copy.presetTitle(DENTITION_LABELS[preset])}
-          description={copy.presetDescription(DENTITION_LABELS[preset], presetChanges(preset, dentitionOf).length)}
+          description={copy.presetDescription(DENTITION_LABELS[preset], presetChanges(preset, dentitionOf, isFixed).length)}
           onSubmit={applyPreset}
           submitLabel={copy.presetSubmit}
           submitting={presetSubmitting}
@@ -611,4 +665,22 @@ export function OdontogramTab({
       ) : null}
     </div>
   );
+}
+
+/** DX-132 (B3): qué parte de la carga falló (la carta, el catálogo o las dos). */
+class LoadFailure extends Error {
+  constructor(
+    readonly chart: unknown,
+    readonly catalog: unknown,
+  ) {
+    super('odontogram load failed');
+  }
+}
+
+function loadFailureMessage(failure: LoadFailure): string {
+  if (failure.chart !== null && failure.catalog !== null) {
+    return `${apiErrorMessage(failure.chart, copy.odontogramGenericError)} ${copy.catalogGenericError}`;
+  }
+  if (failure.chart !== null) return apiErrorMessage(failure.chart, copy.odontogramGenericError);
+  return apiErrorMessage(failure.catalog, copy.catalogGenericError);
 }
