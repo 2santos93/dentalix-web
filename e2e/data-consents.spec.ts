@@ -91,7 +91,9 @@ test('autorización de datos: publicar política → alta con casillas → ficha
   await expect(publishDialog.getByLabel(/datos sensibles de salud/i)).not.toHaveValue('');
   // La plantilla con sus marcadores no se publica.
   await publishDialog.getByRole('button', { name: 'Publicar', exact: true }).click();
-  await expect(publishDialog.getByText('Sustituye los textos entre corchetes')).toBeVisible();
+  // Arriba el detalle de lo que queda; junto al botón, el aviso en vivo (DX-060 m-5).
+  await expect(publishDialog.getByText(/^Sustituye los textos entre corchetes/)).toBeVisible();
+  await expect(publishDialog.getByText(/^Antes de publicar, sustituye los textos entre corchetes/)).toBeVisible();
   const hint = publishDialog.getByText('Conviene que diga que autorizar es voluntario');
   await expect(hint).toBeVisible();
   const violations = await axeInBothThemes(page, publishDialog);
