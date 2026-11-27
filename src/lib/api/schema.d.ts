@@ -2652,6 +2652,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Historial de un diente
+         * @description Más reciente primero; incluye los anulados, con su anulación. DX-132: con asOf, el historial al final de ese día en la zona de la sede (el mismo corte que la carta a esa fecha): lo posterior no sale y lo anulado después sale sin anular.
+         */
         get: operations["OdontogramController_history"];
         put?: never;
         post?: never;
@@ -16652,8 +16656,11 @@ export interface components {
             lastEvent: components["schemas"]["DentitionEventDto"] | null;
         };
         DentitionDto: {
-            /** @enum {string} */
-            basis: "AGE" | "DEFAULT";
+            /**
+             * @description AGE: según la edad; DEFAULT: sin fecha de nacimiento (permanente); MANUAL (DX-132): todas las posiciones vienen de un evento registrado a mano («Ajustada a mano»)
+             * @enum {string}
+             */
+            basis: "AGE" | "DEFAULT" | "MANUAL";
             ageYears: number | null;
             /**
              * @description Resumen de la carta
@@ -41907,7 +41914,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description DX-120: el diente no corresponde a la dentición de su posición (temporal en permanente o al revés). */
+            /** @description DX-120: el diente no corresponde a la dentición de su posición (temporal en permanente o al revés). code TOOTH_DENTITION_MISMATCH. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -42000,7 +42007,7 @@ export interface operations {
                     "application/json": components["schemas"]["DentitionDto"];
                 };
             };
-            /** @description asOf inválido o futuro. */
+            /** @description asOf inválido (code ODONTOGRAM_AS_OF_INVALID) o futuro (code ODONTOGRAM_AS_OF_FUTURE). */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -42053,7 +42060,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Mixta o exfoliación en un molar sin temporal, o exfoliación que no deja la posición en permanente. */
+            /** @description Mixta o exfoliación en un molar sin temporal, exfoliación que no deja la posición en permanente o erupción hacia temporal (DX-132). */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -42084,7 +42091,7 @@ export interface operations {
                     "application/json": components["schemas"]["OdontogramGroupDto"][];
                 };
             };
-            /** @description asOf inválido o futuro. */
+            /** @description asOf inválido (code ODONTOGRAM_AS_OF_INVALID) o futuro (code ODONTOGRAM_AS_OF_FUTURE). */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -42095,7 +42102,10 @@ export interface operations {
     };
     OdontogramController_history: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description DX-120: la carta tal como estaba al final de ese día (zona de la sede). Solo lectura. */
+                asOf?: string;
+            };
             header?: never;
             path: {
                 patientId: string;
@@ -42113,6 +42123,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ToothTimelineEntryDto"][];
                 };
+            };
+            /** @description asOf inválido (code ODONTOGRAM_AS_OF_INVALID) o futuro (code ODONTOGRAM_AS_OF_FUTURE). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
