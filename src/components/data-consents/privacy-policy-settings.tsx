@@ -46,6 +46,9 @@ const copy = {
   marketingText: 'Casilla «Comunicaciones comerciales»',
   sensitiveHint: 'Conviene que diga que autorizar es voluntario, qué datos de salud se tratan y para qué.',
   emptyRequired: 'Completa los cuatro textos antes de publicar.',
+  // DX-060 (m-5): junto a «Publicar», en el pie que en el teléfono queda fijo abajo.
+  pendingPlaceholders: (count: number) =>
+    `Antes de publicar, sustituye los textos entre corchetes ([…]): ${count === 1 ? 'queda 1' : `quedan ${count}`}.`,
   placeholders: (remaining: string[]) =>
     `Sustituye los textos entre corchetes ([…]) por los datos de la clínica antes de publicar. Quedan: ${remaining.join(', ')}.`,
   placeholderIn: (placeholder: string, labels: string[]) =>
@@ -102,6 +105,16 @@ export function PrivacyPolicySettings({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null);
 
   const current = data?.current ?? null;
+  // Lo que aún impide publicar, en vivo, al lado del botón (el detalle sale
+  // arriba al pulsar): a 390 px el banner queda lejos de «Publicar».
+  const pendingCount = open ? unfilledPlaceholderFields(draft).length : 0;
+  const submitHint = !open
+    ? null
+    : Object.values(draft).some((text) => text.trim() === '')
+      ? copy.emptyRequired
+      : pendingCount > 0
+        ? copy.pendingPlaceholders(pendingCount)
+        : null;
   const previous = data?.history.filter((p) => p.id !== current?.id) ?? [];
 
   function openModal() {
@@ -213,6 +226,7 @@ export function PrivacyPolicySettings({ token }: { token: string }) {
         onSubmit={handleSubmit}
         submitLabel={copy.submit}
         submitting={submitting}
+        submitHint={submitHint}
         error={error}
         size="lg"
       >

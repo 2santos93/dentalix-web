@@ -164,19 +164,24 @@ test('consentimiento de un menor: el tutor viene precargado desde la madre y se 
   await page.getByRole('button', { name: 'Nuevo consentimiento' }).click();
   const dialog = page.getByRole('dialog', { name: 'Nuevo consentimiento' });
   await dialog.getByLabel('Plantilla').selectOption({ label: templateTitle });
-  await dialog.getByRole('button', { name: 'Continuar' }).click();
-  await expect(dialog.getByRole('region', { name: 'Texto del consentimiento' })).toContainText(
-    `Yo, Tomás ${lastName}`,
-  );
-  await dialog.getByRole('button', { name: 'Continuar' }).click();
 
+  // DX-060: quién firma se elige en el primer paso; cambia el texto.
   await expect(dialog.getByRole('radio', { name: /tutor/i })).toBeChecked();
   await expect(dialog.getByLabel('Nombre del tutor')).toHaveValue(`Claudia ${lastName}`);
   await expect(dialog.getByLabel('Documento del tutor')).toHaveValue(`Documento nacional ${`RM${suffix}`.slice(0, 20)}`);
+  await expect(dialog.getByLabel('Relación con el paciente')).toHaveValue('MOTHER');
 
   await dialog.getByRole('radio', { name: 'El paciente' }).check();
   await expect(dialog).toContainText('El paciente es menor de 18 años: lo habitual es que firme su responsable.');
   await dialog.getByRole('radio', { name: /tutor/i }).check();
+
+  await dialog.getByRole('button', { name: 'Continuar' }).click();
+  const text = dialog.getByRole('region', { name: 'Texto del consentimiento' });
+  await expect(text).toContainText(`Yo, Tomás ${lastName}`);
+  await expect(text).toContainText(
+    `Firma en representación del paciente: Claudia ${lastName}, identificado(a) con Documento nacional ${`RM${suffix}`.slice(0, 20)}, otorga este consentimiento en nombre de Tomás ${lastName}, como su madre.`,
+  );
+  await dialog.getByRole('button', { name: 'Continuar' }).click();
 
   await signOn(page, dialog.getByRole('img', { name: 'Firma del tutor' }));
   await signOn(page, dialog.getByRole('img', { name: /Firma del profesional/ }));

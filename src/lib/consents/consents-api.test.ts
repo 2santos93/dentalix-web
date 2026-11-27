@@ -61,7 +61,14 @@ describe('consents-api', () => {
     const spy = mockFetch({});
     await listPatientConsents('tok', 'p1');
     await previewPatientConsent('tok', 'p1', { templateId: 't1' });
-    await previewPatientConsent('tok', 'p1', { templateId: 't1', treatmentPlanId: 'plan-1' });
+    await previewPatientConsent('tok', 'p1', {
+      templateId: 't1',
+      treatmentPlanId: 'plan-1',
+      signerType: 'GUARDIAN',
+      guardianName: 'Marta Pérez',
+      guardianDocument: 'V-12.345.678',
+      guardianRelationship: 'MOTHER',
+    });
     await signPatientConsent('tok', 'p1', {
       templateId: 't1',
       templateVersion: 2,
@@ -73,8 +80,21 @@ describe('consents-api', () => {
 
     expect(call(spy, 0).path).toMatch(/\/patients\/p1\/consents$/);
     expect(call(spy, 1).path).toMatch(/\/patients\/p1\/consents\/preview$/);
-    expect(call(spy, 1).query).toEqual({ templateId: 't1' });
-    expect(call(spy, 2).query).toEqual({ templateId: 't1', treatmentPlanId: 'plan-1' });
+    // DX-060: POST, con el tutor en el cuerpo (nunca en la URL).
+    expect(call(spy, 1)).toMatchObject({ method: 'POST', body: { templateId: 't1' } });
+    expect(call(spy, 1).query).toEqual({});
+    expect(call(spy, 2)).toMatchObject({
+      method: 'POST',
+      body: {
+        templateId: 't1',
+        treatmentPlanId: 'plan-1',
+        signerType: 'GUARDIAN',
+        guardianName: 'Marta Pérez',
+        guardianDocument: 'V-12.345.678',
+        guardianRelationship: 'MOTHER',
+      },
+    });
+    expect(call(spy, 2).query).toEqual({});
     expect(call(spy, 3)).toMatchObject({
       method: 'POST',
       body: { templateId: 't1', templateVersion: 2, signerType: 'PATIENT' },

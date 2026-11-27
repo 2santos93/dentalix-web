@@ -60,10 +60,13 @@ describe('ConsentTemplatesManager', () => {
 
   it('estado vacío y error con reintento', async () => {
     const user = setupUser();
-    mockedList.mockRejectedValueOnce(new ApiError(500, 'Caído'));
+    // DX-060 (M-1): el texto crudo de un 500 nunca llega a la pantalla.
+    mockedList.mockRejectedValueOnce(new ApiError(500, 'Internal server error'));
     mockedList.mockResolvedValueOnce([]);
     render(<ConsentTemplatesManager token="tok" allowed />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar las plantillas.');
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('No pudimos cargar las plantillas.');
+    expect(alert).not.toHaveTextContent(/internal server error/i);
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(await screen.findByText(/todavía no hay plantillas/i)).toBeInTheDocument();
   });

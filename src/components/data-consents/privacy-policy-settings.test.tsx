@@ -157,3 +157,47 @@ it('error de carga con reintento', async () => {
   await user.click(screen.getByRole('button', { name: /reintentar/i }));
   expect(await screen.findByText(/versión 1 · publicada/i)).toBeInTheDocument();
 });
+
+describe('DX-060 (m-5): el aviso de lo que falta va junto a «Publicar»', () => {
+  function footerOf(dialog: HTMLElement): HTMLElement {
+    const footer = dialog.querySelector<HTMLElement>('[data-slot="form-modal-footer"]');
+    if (!footer) throw new Error('sin pie');
+    return footer;
+  }
+
+  it('con marcadores sin sustituir, el pie (fijo en el teléfono) lo dice y describe el botón', async () => {
+    const user = userEvent.setup();
+    mockedGet.mockResolvedValue(policiesFixture(null));
+    render(<PrivacyPolicySettings token={ADMIN} />);
+
+    await user.click(await screen.findByRole('button', { name: /publicar la política/i }));
+    const dialog = await screen.findByRole('dialog');
+    const hint = 'Antes de publicar, sustituye los textos entre corchetes ([…]): quedan 4.';
+    expect(within(footerOf(dialog)).getByText(hint)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /^publicar$/i })).toHaveAccessibleDescription(hint);
+
+    // Al pulsar, el detalle sigue arriba y el aviso del pie no desaparece.
+    await user.click(within(dialog).getByRole('button', { name: /^publicar$/i }));
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(/Quedan: \[Nombre de la clínica\]/);
+    expect(within(footerOf(dialog)).getByText(hint)).toBeInTheDocument();
+
+    // Rellenado el texto de la política, el aviso se va.
+    const policy = within(dialog).getByLabelText('Texto completo de la política');
+    await user.clear(policy);
+    await user.type(policy, FILLED_POLICY);
+    expect(within(footerOf(dialog)).queryByText(/sustituye/)).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /^publicar$/i })).not.toHaveAccessibleDescription();
+  });
+
+  it('con un texto vacío, el pie pide completar los cuatro', async () => {
+    const user = userEvent.setup();
+    mockedGet.mockResolvedValue(policiesFixture());
+    render(<PrivacyPolicySettings token={ADMIN} />);
+
+    await user.click(await screen.findByRole('button', { name: /publicar nueva versión/i }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(footerOf(dialog)).queryByText(/completa|sustituye/i)).not.toBeInTheDocument();
+    await user.clear(within(dialog).getByLabelText('Casilla «Comunicaciones comerciales»'));
+    expect(within(footerOf(dialog)).getByText('Completa los cuatro textos antes de publicar.')).toBeInTheDocument();
+  });
+});

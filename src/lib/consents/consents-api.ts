@@ -13,6 +13,7 @@ export type PatientConsent = components['schemas']['PatientConsentDto'];
 export type PatientConsentDocument = components['schemas']['PatientConsentDocumentDto'];
 export type SignPatientConsentInput = components['schemas']['SignPatientConsentDto'];
 export type ConsentSignerType = SignPatientConsentInput['signerType'];
+export type PreviewPatientConsentInput = components['schemas']['PreviewPatientConsentBodyDto'];
 
 /** Variables que admite una plantilla, en el orden en que se ofrecen. */
 export const CONSENT_VARIABLES = [
@@ -86,15 +87,20 @@ export async function listPatientConsents(
   return apiFetch<PatientConsentSummary[]>(consentsPath(patientId), { token });
 }
 
-/** `GET /patients/:id/consents/preview` — el texto con las variables resueltas. */
+/**
+ * `POST /patients/:id/consents/preview` (DX-060) — el texto con las variables
+ * resueltas y, si firma un tutor, con la cláusula de representación al
+ * principio. POST para que el nombre y el documento del tutor no vayan en la
+ * URL. No guarda nada.
+ */
 export async function previewPatientConsent(
   token: string,
   patientId: string,
-  params: { templateId: string; treatmentPlanId?: string },
+  input: PreviewPatientConsentInput,
 ): Promise<ConsentPreview> {
-  const search = new URLSearchParams({ templateId: params.templateId });
-  if (params.treatmentPlanId) search.set('treatmentPlanId', params.treatmentPlanId);
-  return apiFetch<ConsentPreview>(`${consentsPath(patientId)}/preview?${search.toString()}`, {
+  return apiFetch<ConsentPreview>(`${consentsPath(patientId)}/preview`, {
+    method: 'POST',
+    body: input,
     token,
   });
 }
