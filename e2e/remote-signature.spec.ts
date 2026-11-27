@@ -106,7 +106,7 @@ test.describe('Firma a distancia de consentimientos (DX-243)', () => {
     await expect(professional).toHaveValue('');
     await expect(professional.locator('option', { hasText: 'Recepción' })).toHaveCount(0);
     await professional.selectOption({ label: `${DENTIST_NAME} · Odontólogo/a` });
-    // Recepción también puede elegir el plan; sin él, el modal avisa de «No especificado».
+    // Recepción también puede elegir el plan; sin él, el modal avisa de la frase neutra del tratamiento.
     await expect(dialog.getByLabel(/plan de tratamiento/i)).toBeVisible();
     await dialog.getByRole('button', { name: 'Enviar enlace' }).click();
     await expect(dialog).toBeHidden();
