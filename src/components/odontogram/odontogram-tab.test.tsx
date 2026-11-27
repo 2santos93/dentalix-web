@@ -203,7 +203,7 @@ describe('OdontogramTab', () => {
     ]);
     render(<OdontogramTab token="tok" patientId="p1" />);
 
-    const notice = await screen.findByText(/no se dibuja el diente 55/i);
+    const notice = await screen.findByText(/el diente 55 tiene registros de antes de cambiar la dentición y ya no se dibuja/i);
     expect(notice).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Ver el historial del diente 55' }));
     expect(await screen.findByRole('heading', { name: 'Diente 55' })).toBeInTheDocument();
@@ -402,6 +402,197 @@ describe('OdontogramTab', () => {
     expect(screen.getByText(/carta al 05\/10\/2026 · solo lectura/i)).toBeInTheDocument();
     expect(asOfValue()).toBe('2026-10-05');
     expect(screen.queryByRole('form', { name: /registrar en el diente 11/i })).not.toBeInTheDocument();
+  });
+
+  describe('DX-132', () => {
+    /** Dentición con `basis` y `source` a medida. */
+    function withBasis(
+      basis: 'AGE' | 'DEFAULT' | 'MANUAL',
+      ageYears: number | null,
+      sourceOf: (position: string) => 'EVENT' | 'AGE' | 'DEFAULT',
+    ): DentitionView {
+      return {
+        ...child7,
+        basis,
+        ageYears,
+        positions: child7.positions.map((p) => ({ ...p, source: sourceOf(p.position) })),
+      };
+    }
+
+    it('rótulo: «Ajustada a mano» con basis MANUAL, nunca «Según la edad»', async () => {
+      mockedListCatalog.mockResolvedValue(catalog);
+      mockedGetOdontogram.mockResolvedValue([]);
+      mockedGetDentition.mockResolvedValue(withBasis('MANUAL', 7, () => 'EVENT'));
+      render(<OdontogramTab token="tok" patientId="p1" />);
+      expect(await screen.findByText('Ajustada a mano')).toBeInTheDocument();
+      expect(screen.queryByText(/según la edad/i)).not.toBeInTheDocument();
+    });
+
+    it('rótulo: «Según la edad (7 años)» sin eventos; en parte a mano si hay alguno', async () => {
+      mockedListCatalog.mockResolvedValue(catalog);
+      mockedGetOdontogram.mockResolvedValue([]);
+      mockedGetDentition.mockResolvedValue(withBasis('AGE', 7, () => 'AGE'));
+      const { unmount } = render(<OdontogramTab token="tok" patientId="p1" />);
+      expect(await screen.findByText('Según la edad (7 años)')).toBeInTheDocument();
+      unmount();
+
+      mockedGetDentition.mockResolvedValue(withBasis('AGE', 7, (p) => (p === '15' ? 'EVENT' : 'AGE')));
+      render(<OdontogramTab token="tok" patientId="p1" />);
+      expect(
+        await screen.findByText('Ajustada a mano en parte; el resto, por la edad (7 años)'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/^según la edad/i)).not.toBeInTheDocument();
+    });
+
+    it('pasar la carta entera a una dentición fija también las posiciones que ya estaban en ella por la edad', async () => {
+      const user = userEvent.setup();
+      mockedListCatalog.mockResolvedValue(catalog);
+      mockedGetOdontogram.mockResolvedValue([]);
+      // Niño de 7 años: las 6 ya son permanentes por la edad; el 15 se fijó a mano.
+      mockedGetDentition.mockResolvedValue(withBasis('AGE', 7, (p) => (p === '16' ? 'EVENT' : 'AGE')));
+      mockedRecordDentition.mockResolvedValue([]);
+      render(<OdontogramTab token="tok" patientId="p1" />);
+
+      await user.click(await screen.findByRole('radio', { name: 'Permanente' }));
+      const dialog = await screen.findByRole('dialog', { name: /dentición permanente/i });
+      // 32 posiciones menos la 16 (ya permanente y fijada a mano).
+      expect(dialog).toHaveTextContent('Se marcarán 31 posiciones en dentición permanente');
+      await user.click(within(dialog).getByRole('button', { name: 'Cambiar la carta' }));
+      const sent = mockedRecordDentition.mock.calls[0][2].positions;
+      expect(sent).toHaveLength(31);
+      expect(sent).toContain('26');
+      expect(sent).not.toContain('16');
+    });
+
+    it('el conmutador de dentición (radiogroup) se maneja con las flechas: una parada de Tab, flechas, Inicio/Fin y Enter confirma', async () => {
+      const user = userEvent.setup();
+      mockedListCatalog.mockResolvedValue(catalog);
+      mockedGetOdontogram.mockResolvedValue([]);
+      mockedGetDentition.mockResolvedValue(child7);
+      mockedRecordDentition.mockResolvedValue([]);
+      render(<OdontogramTab token="tok" patientId="p1" />);
+
+      const group = await screen.findByRole('radiogroup', { name: 'Dentición de la carta' });
+      const radio = (name: string) => within(group).getByRole('radio', { name });
+      // Roving tabindex: solo el elegido (Mixta) está en el orden de tabulación.
+      expect(radio('Mixta')).toHaveAttribute('tabindex', '0');
+      expect(radio('Permanente')).toHaveAttribute('tabindex', '-1');
+      expect(radio('Temporal')).toHaveAttribute('tabindex', '-1');
+
+      radio('Mixta').focus();
+      await user.keyboard('{ArrowRight}');
+      expect(radio('Temporal')).toHaveFocus();
+      await user.keyboard('{ArrowRight}');
+      expect(radio('Permanente')).toHaveFocus(); // da la vuelta
+      await user.keyboard('{ArrowLeft}');
+      expect(radio('Temporal')).toHaveFocus();
+      await user.keyboard('{Home}');
+      expect(radio('Permanente')).toHaveFocus();
+      await user.keyboard('{End}');
+      expect(radio('Temporal')).toHaveFocus();
+      // Mover el foco no cambia la carta sin confirmar (no abre nada ni envía).
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(mockedRecordDentition).not.toHaveBeenCalled();
+
+      await user.keyboard('{Enter}');
+      const dialog = await screen.findByRole('dialog', { name: /dentición temporal/i });
+      await user.click(within(dialog).getByRole('button', { name: 'Cambiar la carta' }));
+      expect(mockedRecordDentition).toHaveBeenCalledWith(
+        'tok',
+        'p1',
+        expect.objectContaining({ dentition: 'PRIMARY' }),
+      );
+    });
+
+    it('fecha futura: «La fecha de la carta no puede ser futura» junto al campo, sin «Reintentar», y sigue la carta de hoy', async () => {
+      const { ApiError } = jest.requireActual('../../lib/api/client');
+      const user = userEvent.setup();
+      mockedListCatalog.mockResolvedValue(catalog);
+      mockedGetTimeline.mockResolvedValue([]);
+      const future = new ApiError(400, 'La fecha de la carta no puede ser futura', { code: 'ODONTOGRAM_AS_OF_FUTURE' });
+      mockedGetOdontogram.mockImplementation((_t, _p, asOf) =>
+        asOf ? Promise.reject(future) : Promise.resolve(initialGroups),
+      );
+      mockedGetDentition.mockImplementation((_t, _p, asOf) =>
+        asOf ? Promise.reject(future) : Promise.resolve(adult),
+      );
+      render(
+        <>
+          <OdontogramTab token="tok" patientId="p1" initialTooth="11" />
+          <Toaster />
+        </>,
+      );
+      await screen.findByRole('form', { name: /registrar en el diente 11/i });
+      await typeAsOf(user, '2026-10-05');
+
+      const alert = await screen.findByText('La fecha de la carta no puede ser futura');
+      expect(alert.closest('[role="alert"]')).toHaveAttribute('id', 'odo-as-of-error');
+      expect(screen.queryByRole('button', { name: /reintentar/i })).not.toBeInTheDocument();
+      expect(screen.queryByText('No pudimos actualizar el odontograma.')).not.toBeInTheDocument();
+      // Se queda la carta de hoy (editable) y lo escrito en el campo.
+      expect(screen.queryByText(/solo lectura/i)).not.toBeInTheDocument();
+      expect(screen.getByRole('form', { name: /registrar en el diente 11/i })).toBeInTheDocument();
+      expect(asOfValue()).toBe('2026-10-05');
+    });
+
+    it('fecha inexistente (ODONTOGRAM_AS_OF_INVALID): su mensaje, sin «Reintentar»', async () => {
+      const { ApiError } = jest.requireActual('../../lib/api/client');
+      const user = userEvent.setup();
+      mockedListCatalog.mockResolvedValue(catalog);
+      const invalid = new ApiError(
+        400,
+        'La fecha de la carta debe tener el formato AAAA-MM-DD y existir en el calendario',
+        { code: 'ODONTOGRAM_AS_OF_INVALID' },
+      );
+      mockedGetOdontogram.mockImplementation((_t, _p, asOf) => (asOf ? Promise.reject(invalid) : Promise.resolve([])));
+      render(<OdontogramTab token="tok" patientId="p1" />);
+      await screen.findByRole('radiogroup', { name: 'Dentición de la carta' });
+      await typeAsOf(user, '2026-10-05');
+      expect(await screen.findByText(/debe tener el formato AAAA-MM-DD/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /reintentar/i })).not.toBeInTheDocument();
+    });
+
+    it('si solo falla la carta, el mensaje no menciona el catálogo', async () => {
+      const { ApiError } = jest.requireActual('../../lib/api/client');
+      mockedGetOdontogram.mockRejectedValue(new ApiError(500, 'Error del servidor'));
+      mockedListCatalog.mockResolvedValue(catalog);
+      render(<OdontogramTab token="tok" patientId="p1" />);
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('No pudimos cargar el odontograma.');
+      expect(alert).not.toHaveTextContent(/catálogo/i);
+    });
+
+    it('si solo falla el catálogo, el mensaje no culpa a la carta', async () => {
+      const { ApiError } = jest.requireActual('../../lib/api/client');
+      mockedGetOdontogram.mockResolvedValue(initialGroups);
+      mockedListCatalog.mockRejectedValue(new ApiError(500, 'Error del servidor'));
+      render(<OdontogramTab token="tok" patientId="p1" />);
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('No pudimos cargar el catálogo de hallazgos y procedimientos.');
+      expect(alert).not.toHaveTextContent(/odontograma/i);
+    });
+
+    it('si fallan los dos, lo dice de los dos', async () => {
+      const { ApiError } = jest.requireActual('../../lib/api/client');
+      mockedGetOdontogram.mockRejectedValue(new ApiError(500, 'Error del servidor'));
+      mockedListCatalog.mockRejectedValue(new ApiError(500, 'Error del servidor'));
+      render(<OdontogramTab token="tok" patientId="p1" />);
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('No pudimos cargar el odontograma.');
+      expect(alert).toHaveTextContent('No pudimos cargar el catálogo');
+    });
+
+    it('el historial del diente en modo fecha pide el MISMO asOf que la carta', async () => {
+      const user = userEvent.setup();
+      mockedListCatalog.mockResolvedValue(catalog);
+      mockedGetTimeline.mockResolvedValue([]);
+      mockedGetOdontogram.mockResolvedValue(initialGroups);
+      render(<OdontogramTab token="tok" patientId="p1" initialTooth="11" />);
+      await screen.findByRole('form', { name: /registrar en el diente 11/i });
+      await typeAsOf(user, '2026-10-05');
+      await screen.findByText(/carta al 05\/10\/2026 · solo lectura/i);
+      await waitFor(() => expect(mockedGetTimeline).toHaveBeenLastCalledWith('tok', 'p1', '11', '2026-10-05'));
+    });
   });
 
   it('shows an alert with a retry when the initial load fails', async () => {

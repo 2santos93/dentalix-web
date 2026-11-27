@@ -231,6 +231,9 @@ export function TreatmentPlanModals({
           locationName={locations.find((l) => l.id === getActiveLocationId())?.name ?? null}
           locations={locations}
           onRetryLocations={onRetryLocations}
+          odontogramHref={
+            markDoneItem.toothNumber ? `/patients/${patientId}?tab=odontogram&tooth=${markDoneItem.toothNumber}` : null
+          }
           onSaved={onMarkDoneSaved}
         />
       ) : null}

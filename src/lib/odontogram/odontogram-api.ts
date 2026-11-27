@@ -107,12 +107,17 @@ function asOfQuery(asOf?: string): string {
 
 // Returned DESC by `recordedAt` (backend contract) — this is the tooth's
 // history timeline, most recent first.
+// DX-132: con `asOf` (el MISMO YYYY-MM-DD que se mandó a la carta, como texto
+// civil), el servidor corta en el día de la sede de la petición (la misma
+// cabecera `X-Location-Id` que la carta): carta e historial coinciden aunque el
+// navegador esté en otra zona.
 export async function getToothTimeline(
   token: string,
   patientId: string,
   fdi: string,
+  asOf?: string,
 ): Promise<ToothTimelineEntry[]> {
-  return apiFetch<ToothTimelineEntry[]>(`/patients/${patientId}/teeth/${fdi}/history`, { token });
+  return apiFetch<ToothTimelineEntry[]>(`/patients/${patientId}/teeth/${fdi}/history${asOfQuery(asOf)}`, { token });
 }
 
 /** DX-120: dentición de cada posición (por eventos o por la edad). */

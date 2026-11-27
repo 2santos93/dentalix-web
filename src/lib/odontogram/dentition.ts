@@ -103,10 +103,48 @@ export function presetPositions(target: DentitionType): string[] {
   return target === 'MIXED' ? ALL_POSITIONS.filter(hasPrimaryPredecessor) : ALL_POSITIONS;
 }
 
-/** Las posiciones del preajuste que de verdad cambian (las demás no se envían). */
+/**
+ * Las posiciones del preajuste que se envían: las que cambian y, DX-132, las
+ * que ya están en esa dentición solo por la edad o por defecto (`isFixed`
+ * falso). Pasar la carta entera a una dentición la deja AJUSTADA A MANO: si
+ * no se fijaran, la edad las movería más adelante (p. ej. los 17/27 de un
+ * niño de 7 años al pasar a temporal) y la carta seguiría «según la edad».
+ * Sin `isFixed` solo se envían las que cambian.
+ */
 export function presetChanges(
   target: DentitionType,
   dentitionOf: (position: string) => DentitionType,
+  isFixed: (position: string) => boolean = () => true,
 ): string[] {
-  return presetPositions(target).filter((p) => dentitionOf(p) !== target);
+  return presetPositions(target).filter((p) => dentitionOf(p) !== target || !isFixed(p));
+}
+
+/** DX-132: de dónde sale la dentición de la carta (`DentitionDto.basis` de la API). */
+export type DentitionBasis = 'AGE' | 'DEFAULT' | 'MANUAL';
+export type DentitionSource = 'EVENT' | 'AGE' | 'DEFAULT';
+
+/**
+ * DX-132: el rótulo junto al conmutador. MANUAL (las 32 posiciones vienen de un
+ * evento) → «Ajustada a mano», nunca «Según la edad». Con eventos solo en
+ * parte de la boca la API sigue diciendo AGE/DEFAULT: el rótulo lo matiza para
+ * no afirmar que toda la carta sale de la edad.
+ */
+export function dentitionBasisLabel(view: {
+  basis: DentitionBasis;
+  ageYears: number | null;
+  positions: readonly { source: DentitionSource }[];
+}): string | null {
+  if (view.basis === 'MANUAL') return 'Ajustada a mano';
+  const partlyManual = view.positions.some((p) => p.source === 'EVENT');
+  if (view.basis === 'AGE' && view.ageYears !== null) {
+    return partlyManual
+      ? `Ajustada a mano en parte; el resto, por la edad (${view.ageYears} años)`
+      : `Según la edad (${view.ageYears} años)`;
+  }
+  if (view.basis === 'DEFAULT') {
+    return partlyManual
+      ? 'Ajustada a mano en parte; el resto, permanente por defecto'
+      : 'Permanente por defecto (sin fecha de nacimiento)';
+  }
+  return null;
 }

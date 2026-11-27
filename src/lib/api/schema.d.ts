@@ -2652,6 +2652,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Historial de un diente
+         * @description Más reciente primero; incluye los anulados, con su anulación. DX-132: con asOf, el historial al final de ese día en la zona de la sede (el mismo corte que la carta a esa fecha): lo posterior no sale y lo anulado después sale sin anular.
+         */
         get: operations["OdontogramController_history"];
         put?: never;
         post?: never;
@@ -8031,7 +8035,7 @@ export interface paths {
         };
         get: operations["PatientConsentsController_preview"];
         put?: never;
-        post?: never;
+        post: operations["PatientConsentsController_previewWithSigner"];
         delete?: never;
         options?: never;
         head?: never;
@@ -16652,8 +16656,11 @@ export interface components {
             lastEvent: components["schemas"]["DentitionEventDto"] | null;
         };
         DentitionDto: {
-            /** @enum {string} */
-            basis: "AGE" | "DEFAULT";
+            /**
+             * @description AGE: según la edad; DEFAULT: sin fecha de nacimiento (permanente); MANUAL (DX-132): todas las posiciones vienen de un evento registrado a mano («Ajustada a mano»)
+             * @enum {string}
+             */
+            basis: "AGE" | "DEFAULT" | "MANUAL";
             ageYears: number | null;
             /**
              * @description Resumen de la carta
@@ -28694,7 +28701,7 @@ export interface components {
             id: string;
             title: string;
             version: number;
-            /** @description El texto usa {{tratamiento}}: sin plan, el documento dirá «No especificado» */
+            /** @description El texto usa {{tratamiento}}: sin plan, el documento dirá «el tratamiento indicado por el profesional en la consulta» (DX-060) */
             usesTreatment: boolean;
             /**
              * Format: date-time
@@ -29244,6 +29251,26 @@ export interface components {
              */
             previewedAt: string;
         };
+        PreviewPatientConsentBodyDto: {
+            /** Format: uuid */
+            templateId: string;
+            /**
+             * Format: uuid
+             * @description Plan del paciente que resuelve {{tratamiento}}
+             */
+            treatmentPlanId?: string;
+            /**
+             * @description Quién firma; sin él, el paciente.
+             * @enum {string}
+             */
+            signerType?: "PATIENT" | "GUARDIAN";
+            /** @description Obligatorio si signerType=GUARDIAN */
+            guardianName?: string;
+            /** @description Obligatorio si signerType=GUARDIAN */
+            guardianDocument?: string;
+            /** @description Relación del tutor con el paciente; sin ella, «representante». */
+            guardianRelationship?: components["schemas"]["ResponsibleRelationship"];
+        };
         SignPatientConsentDto: {
             /** Format: uuid */
             templateId: string;
@@ -29262,6 +29289,8 @@ export interface components {
             guardianName?: string;
             /** @description Obligatorio si signerType=GUARDIAN */
             guardianDocument?: string;
+            /** @description DX-060: relación del tutor con el paciente (signerType=GUARDIAN). El texto firmado abre con la cláusula de representación; sin ella dice «representante». */
+            guardianRelationship?: components["schemas"]["ResponsibleRelationship"];
             /** @description PNG (data:image/png;base64,… o base64), máx. 200 KB. Del paciente o del tutor. */
             patientSignature: string;
             /** @description PNG (data:image/png;base64,… o base64), máx. 200 KB. */
@@ -41885,7 +41914,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description DX-120: el diente no corresponde a la dentición de su posición (temporal en permanente o al revés). */
+            /** @description DX-120: el diente no corresponde a la dentición de su posición (temporal en permanente o al revés). code TOOTH_DENTITION_MISMATCH. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -41978,7 +42007,7 @@ export interface operations {
                     "application/json": components["schemas"]["DentitionDto"];
                 };
             };
-            /** @description asOf inválido o futuro. */
+            /** @description asOf inválido (code ODONTOGRAM_AS_OF_INVALID) o futuro (code ODONTOGRAM_AS_OF_FUTURE). */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -42031,7 +42060,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Mixta o exfoliación en un molar sin temporal, o exfoliación que no deja la posición en permanente. */
+            /** @description Mixta o exfoliación en un molar sin temporal, exfoliación que no deja la posición en permanente o erupción hacia temporal (DX-132). */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -42062,7 +42091,7 @@ export interface operations {
                     "application/json": components["schemas"]["OdontogramGroupDto"][];
                 };
             };
-            /** @description asOf inválido o futuro. */
+            /** @description asOf inválido (code ODONTOGRAM_AS_OF_INVALID) o futuro (code ODONTOGRAM_AS_OF_FUTURE). */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -42073,7 +42102,10 @@ export interface operations {
     };
     OdontogramController_history: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description DX-120: la carta tal como estaba al final de ese día (zona de la sede). Solo lectura. */
+                asOf?: string;
+            };
             header?: never;
             path: {
                 patientId: string;
@@ -42091,6 +42123,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ToothTimelineEntryDto"][];
                 };
+            };
+            /** @description asOf inválido (code ODONTOGRAM_AS_OF_INVALID) o futuro (code ODONTOGRAM_AS_OF_FUTURE). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -56738,6 +56777,52 @@ export interface operations {
                 };
             };
             /** @description Plantilla desactivada */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente, plantilla o plan no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientConsentsController_previewWithSigner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewPatientConsentBodyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentPreviewDto"];
+                };
+            };
+            /** @description Plantilla desactivada, o firma un tutor sin nombre o documento */
             400: {
                 headers: {
                     [name: string]: unknown;

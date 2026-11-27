@@ -1,8 +1,10 @@
 'use client';
 import * as React from 'react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { dentitionMismatchMessage } from '@/lib/odontogram/odontogram-errors';
 import type { StaffMember } from '@/lib/appointments/staff-api';
 import { loadStaff } from '@/lib/session/session-store';
 import { getTokenUserId } from '@/lib/auth/token-role';
@@ -50,6 +52,9 @@ const copy = {
   dateLabel: 'Fecha en que se realizó',
   dateRequired: 'Indica la fecha en que se realizó (no puede ser futura).',
   attributeError: 'No pudimos atribuir el procedimiento. Intenta de nuevo.',
+  // DX-132: el 422 TOOTH_DENTITION_MISMATCH. El ítem NO quedó realizado.
+  dentitionHint: 'El procedimiento sigue sin marcar. Ajusta la dentición en el odontograma y vuelve a marcarlo.',
+  dentitionLink: (tooth: string) => `Abrir el diente ${tooth} en el odontograma`,
 };
 
 export interface MarkDoneModalProps {
@@ -80,6 +85,11 @@ export interface MarkDoneModalProps {
   appointmentId?: string;
   /** DX-439: quién viene elegido (el profesional de la cita), si atiende allí. */
   preferredPerformerId?: string;
+  /**
+   * DX-132: enlace a la pestaña Odontograma del paciente en el diente del
+   * ítem, para resolver el 422 de dentición (el diente no cabe en la carta).
+   */
+  odontogramHref?: string | null;
   onSaved: (item: TreatmentPlanItem) => void;
 }
 
@@ -106,6 +116,7 @@ export function MarkDoneModal({
   onRetryLocations,
   appointmentId,
   preferredPerformerId,
+  odontogramHref = null,
   onSaved,
 }: MarkDoneModalProps) {
   const selectId = useId();
@@ -136,6 +147,8 @@ export function MarkDoneModal({
     null,
   );
   const [submitting, setSubmitting] = useState(false);
+  // DX-132: el último envío chocó con la dentición de la carta.
+  const [dentitionMismatch, setDentitionMismatch] = useState(false);
   // Reintentar vuelve a la API; abrir el modal otra vez usa la lista de la sesión.
   const freshRef = useRef(false);
 
@@ -212,6 +225,7 @@ export function MarkDoneModal({
     }
     setFieldError(null);
     setError(null);
+    setDentitionMismatch(false);
     setSubmitting(true);
     try {
       const patch =
@@ -230,8 +244,13 @@ export function MarkDoneModal({
       if (recallNotice) toast.success(recallNotice);
       onSaved(saved);
     } catch (err) {
+      // DX-132: el diente no cabe en la dentición de su posición. El mensaje del
+      // servidor nombra diente y posición; debajo, qué hacer y dónde.
+      const mismatch = dentitionMismatchMessage(err);
+      setDentitionMismatch(mismatch !== null);
       setError(
-        apiErrorMessage(err, mode === 'done' ? copy.doneError : attribute ? copy.attributeError : copy.correctError),
+        mismatch ??
+          apiErrorMessage(err, mode === 'done' ? copy.doneError : attribute ? copy.attributeError : copy.correctError),
       );
     } finally {
       setSubmitting(false);
@@ -256,6 +275,19 @@ export function MarkDoneModal({
       error={error}
     >
       <p className="rounded-lg bg-surface-sunken px-3 py-2 text-sm font-medium text-ink">{subject}</p>
+      {dentitionMismatch ? (
+        <div data-testid="mark-done-dentition-hint" className="flex flex-col items-start gap-1 text-sm text-muted">
+          <p>{copy.dentitionHint}</p>
+          {odontogramHref && item.toothNumber ? (
+            <Link
+              href={odontogramHref}
+              className="inline-flex min-h-11 items-center font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-text sm:min-h-0"
+            >
+              {copy.dentitionLink(item.toothNumber)}
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
       {attribute ? (
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex min-w-0 flex-col gap-1.5">

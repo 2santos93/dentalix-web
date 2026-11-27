@@ -190,6 +190,51 @@ describe('MarkDoneModal (DX-050)', () => {
     expect(props.onSaved).not.toHaveBeenCalled();
   });
 
+  it('DX-132: el 422 TOOTH_DENTITION_MISMATCH se explica en el modal, con qué hacer y el enlace al diente en el odontograma', async () => {
+    const user = userEvent.setup();
+    const message =
+      'El diente 55 es temporal, pero la posición 15 está en dentición permanente. Cambia la dentición de esa posición (mixta o temporal) antes de marcarlo como realizado.';
+    mockedUpdate.mockRejectedValue(new ApiError(422, message, { code: 'TOOTH_DENTITION_MISMATCH' }));
+    const props = renderModal({
+      item: { ...item, toothNumber: '55' } as TreatmentPlanItem,
+      odontogramHref: '/patients/p1?tab=odontogram&tooth=55',
+    });
+    const select = await screen.findByRole('combobox', { name: 'Profesional que lo realizó' });
+    await waitFor(() => expect(select).toHaveValue('laura'));
+    await user.click(screen.getByRole('button', { name: 'Marcar realizado' }));
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.getByText(/el procedimiento sigue sin marcar/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Abrir el diente 55 en el odontograma' })).toHaveAttribute(
+      'href',
+      '/patients/p1?tab=odontogram&tooth=55',
+    );
+    expect(props.onSaved).not.toHaveBeenCalled();
+  });
+
+  it('DX-132: sin texto del servidor, el 422 de dentición tiene su propio mensaje en español', async () => {
+    const user = userEvent.setup();
+    mockedUpdate.mockRejectedValue(new ApiError(422, '', { code: 'TOOTH_DENTITION_MISMATCH' }));
+    renderModal({ item: { ...item, toothNumber: '55' } as TreatmentPlanItem });
+    const select = await screen.findByRole('combobox', { name: 'Profesional que lo realizó' });
+    await waitFor(() => expect(select).toHaveValue('laura'));
+    await user.click(screen.getByRole('button', { name: 'Marcar realizado' }));
+    expect(await screen.findByText(/no cabe en la dentición actual de esa posición/i)).toBeInTheDocument();
+    // Sin enlace si quien abre el modal no sabe dónde está la carta.
+    expect(screen.queryByRole('link', { name: /en el odontograma/i })).not.toBeInTheDocument();
+  });
+
+  it('DX-132: otro 422 no muestra la ayuda de la dentición', async () => {
+    const user = userEvent.setup();
+    mockedUpdate.mockRejectedValue(new ApiError(422, 'El plan ya está cerrado y no admite cambios.'));
+    renderModal();
+    const select = await screen.findByRole('combobox', { name: 'Profesional que lo realizó' });
+    await waitFor(() => expect(select).toHaveValue('laura'));
+    await user.click(screen.getByRole('button', { name: 'Marcar realizado' }));
+    expect(await screen.findByText('El plan ya está cerrado y no admite cambios.')).toBeInTheDocument();
+    expect(screen.queryByTestId('mark-done-dentition-hint')).not.toBeInTheDocument();
+  });
+
   it('si la lista no carga, el control se cambia por el error con reintento', async () => {
     const user = userEvent.setup();
     mockedStaff.mockRejectedValueOnce(new Error('red'));

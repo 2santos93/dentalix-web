@@ -7,7 +7,7 @@ import {
   type ToothSurface,
   type ToothTimelineEntry,
 } from '@/lib/odontogram/odontogram-api';
-import { civilDateInZone } from '@/lib/format/date';
+import { asOfErrorMessage } from '@/lib/odontogram/odontogram-errors';
 import { useSedeStamp } from '@/lib/locations/sede-stamp';
 import { ORIGIN_LABELS, recordOrigin } from '@/lib/odontogram/origin';
 import { SectionError } from '@/components/errors/section-error';
@@ -71,18 +71,6 @@ interface ToothTimelineProps {
   onVoided?: () => void;
 }
 
-/**
- * El historial tal como estaba al final del día `asOf`. El día de cada registro
- * es el de la sede (`civilDateInZone`), no el del navegador (DX-354b, E9): un
- * registro de las 22:30 en Caracas es del 4 aunque en UTC o en Tokio ya sea el 5.
- */
-function asOfView(records: ToothTimelineEntry[], asOf: string, timeZone: string): ToothTimelineEntry[] {
-  const dayOf = (iso: string) => civilDateInZone(iso, timeZone) ?? '';
-  return records
-    .filter((r) => dayOf(r.recordedAt) <= asOf)
-    .map((r) => (r.void && dayOf(r.void.recordedAt) > asOf ? { ...r, void: null } : r));
-}
-
 function surfacesLabel(record: ToothRecord): string {
   if (record.surfaces.length === 0) return copy.wholeTooth;
   return record.surfaces.map((s) => SURFACE_LABELS[s]).join(', ');
@@ -107,24 +95,31 @@ export function ToothTimeline({
   const [records, setRecords] = useState<ToothTimelineEntry[]>([]);
   const [voiding, setVoiding] = useState<{ id: string; label: string } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<{ message: string; retry: boolean } | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  // DX-354b: las fechas y el día de la carta son los de la sede de la pantalla (su aviso único lo da el odontograma).
+  // DX-354b: las fechas son las de la sede de la pantalla (su aviso único lo da el odontograma).
   const stamp = useSedeStamp(token);
-  const timeZone = stamp.clock?.timeZone ?? null;
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       setLoading(true);
       try {
-        const data = await getToothTimeline(token, patientId, toothNumber);
+        // DX-132: el corte de la fecha lo hace el servidor, en el día de la sede
+        // (el mismo que la carta), no el navegador.
+        const data = await getToothTimeline(token, patientId, toothNumber, asOf ?? undefined);
         if (cancelled) return;
         setRecords(data);
         setLoadError(null);
       } catch (err) {
         if (cancelled) return;
-        setLoadError(apiErrorMessage(err, copy.genericLoadError));
+        // Una fecha no válida no se arregla reintentando: sin «Reintentar».
+        const dateMessage = asOfErrorMessage(err);
+        setLoadError(
+          dateMessage !== null
+            ? { message: dateMessage, retry: false }
+            : { message: apiErrorMessage(err, copy.genericLoadError), retry: true },
+        );
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -133,10 +128,9 @@ export function ToothTimeline({
     return () => {
       cancelled = true;
     };
-  }, [token, patientId, toothNumber, refreshKey, reloadKey]);
+  }, [token, patientId, toothNumber, refreshKey, reloadKey, asOf]);
 
-  // Sin la zona de la sede no se sabe a qué día pertenece cada registro: la carta a una fecha espera a tenerla.
-  if (loading || (asOf && timeZone === null)) {
+  if (loading) {
     return (
       <p role="status" className="text-sm text-muted">
         {copy.loading}
@@ -145,12 +139,15 @@ export function ToothTimeline({
   }
 
   if (loadError) {
-    return <SectionError description={loadError} onRetry={() => setReloadKey((k) => k + 1)} />;
+    return (
+      <SectionError
+        description={loadError.message}
+        onRetry={loadError.retry ? () => setReloadKey((k) => k + 1) : undefined}
+      />
+    );
   }
 
-  const visible = asOf && timeZone ? asOfView(records, asOf, timeZone) : records;
-
-  if (visible.length === 0) {
+  if (records.length === 0) {
     return (
       <p role="status" className="text-sm text-muted">
         {asOf ? copy.emptyAsOf(stamp.civilDate(asOf)) : copy.empty}
@@ -174,7 +171,7 @@ export function ToothTimeline({
         aria-label={copy.heading(toothNumber)}
         className="divide-y divide-border-subtle border-t border-border-subtle"
       >
-        {visible.map((record) => {
+        {records.map((record) => {
           const catalogEntry = record.catalogItemId ? catalogById?.get(record.catalogItemId) : undefined;
           const label = catalogEntry?.labelEs ?? record.kind;
           const date = stamp.date(record.recordedAt);
