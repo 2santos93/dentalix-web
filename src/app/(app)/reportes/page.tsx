@@ -66,6 +66,12 @@ const RetentionView = dynamic(
   { ssr: false, loading: () => <SectionSkeleton /> },
 );
 
+// DX-275: «Tiempos», igual.
+const TimingView = dynamic(
+  () => import('@/components/reports/timing-view').then((m) => m.TimingView),
+  { ssr: false, loading: () => <SectionSkeleton /> },
+);
+
 // «Reportes» (DX-014). Mismo guard de sesión que la Caja; la pestaña va en
 // `?tab=` (la primera del rol, sin parámetro). Cada rol ve las pestañas que
 // su API le deja abrir (DX-423 y DX-558: el odontólogo, «Producción por
@@ -75,7 +81,7 @@ const copy = {
   title: 'Reportes',
   description: 'Cómo van tus sedes: producción, cobros, rentabilidad, citas y ocupación, y qué procedimientos sostienen la clínica.',
   descriptionOwn:
-    'Solo lo tuyo: qué procedimientos realizaste y a qué honorario frente al de catálogo, qué pasó con los presupuestos que elaboraste, cuánto tienes agendado, tu productividad y las citas a las que no vinieron.',
+    'Solo lo tuyo: qué procedimientos realizaste y a qué honorario frente al de catálogo, qué pasó con los presupuestos que elaboraste, cuánto tienes agendado, tu productividad, las citas a las que no vinieron y tus tiempos en el sillón.',
   // DX-018: los honorarios viven en su pantalla; aquí, el enlace.
   commissions: 'Honorarios',
   descriptionCollections: 'Los abonos con algo sin imputar a ítems del plan: cuánto está imputado y cuánto queda a cuenta, descontado lo ya devuelto o traspasado.',
@@ -113,7 +119,7 @@ function ReportesRoute() {
 
   // El odontólogo sin FINANCIAL_REPORTS_VIEW: solo pestañas con «lo suyo» (scope OWN en la API).
   const ownOnly = tabs.every((t) =>
-    ['produccion', 'presupuestos', 'prevision', 'profesionales', 'inasistencias'].includes(t.key),
+    ['produccion', 'presupuestos', 'prevision', 'profesionales', 'inasistencias', 'tiempos'].includes(t.key),
   );
   const ownByRole = role === 'DENTIST' && !canViewFinancialReports(role, permissions);
   const collectionsOnly = tabs.length === 1 && tabs[0].key === 'sin-imputar';
@@ -143,6 +149,8 @@ function ReportesRoute() {
       <ProfessionalProductivityView token={accessToken} ownByRole={ownByRole} />
     ) : tab === 'inasistencias' ? (
       <NoShowsView token={accessToken} isAdmin={role === 'ADMIN'} ownByRole={ownByRole} />
+    ) : tab === 'tiempos' ? (
+      <TimingView token={accessToken} ownByRole={role === 'DENTIST'} />
     ) : tab === 'cartera' ? (
       <ReceivablesAgingReportView token={accessToken} isAdmin={role === 'ADMIN'} />
     ) : tab === 'captacion' ? (

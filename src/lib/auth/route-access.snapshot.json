@@ -761,6 +761,14 @@
         "FINANCIAL_REPORTS_VIEW"
       ]
     },
+    "GET /reports/timing": {
+      "kind": "roles",
+      "roles": [
+        "ADMIN",
+        "DENTIST"
+      ],
+      "permissions": []
+    },
     "GET /reports/unallocated-payments": {
       "kind": "roles",
       "roles": [

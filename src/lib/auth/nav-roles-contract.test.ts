@@ -110,6 +110,7 @@ const NAV_CONTRACT: Record<string, Contract> = {
     'GET /reports/scheduled-production',
     'GET /reports/professional-productivity',
     'GET /reports/no-shows',
+    'GET /reports/timing',
     'GET /reports/acquisition',
     'GET /reports/retention',
     'GET /reports/unallocated-payments',
@@ -132,6 +133,7 @@ const REPORT_TABS_CONTRACT: Record<string, Contract> = {
   prevision: g('GET /reports/scheduled-production'),
   profesionales: g('GET /reports/professional-productivity'),
   inasistencias: g('GET /reports/no-shows'),
+  tiempos: g('GET /reports/timing'),
   cartera: {
     gate: ['GET /receivables/aging/summary'],
     narrowerOnPurpose:
