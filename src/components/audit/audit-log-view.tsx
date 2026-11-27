@@ -1,11 +1,12 @@
 'use client';
 import * as React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Lock, X } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import {
+  canReadAuditLog,
   listAuditEvents,
   type AuditAction,
   type AuditEvent,
@@ -63,6 +64,7 @@ import {
 import { configChangeItems, type ConfigChangeItem } from '@/lib/audit/config-change';
 import { auditTime, auditZoneHint, type AuditSedeTime, type AuditTime } from '@/lib/audit/audit-time';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
+import { getTokenRole } from '@/lib/auth/token-role';
 import { screenLocation, sedeClockFor, type AgendaClock, type SedeClock, type SedeClockError } from '@/lib/locations/sede-clock';
 import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
 import { useLocationsState } from '@/lib/locations/use-locations-state';
@@ -104,8 +106,9 @@ const copy = {
   invalidRangeOrder: 'La fecha final no puede ser anterior a la inicial.',
   invalidRangeLength: `El período no puede superar ${MAX_RANGE_DAYS} días. Acórtalo e intenta de nuevo.`,
   clearFilters: 'Limpiar filtros',
-  patientChip: (name: string) => `Paciente: ${name}`,
-  patientFallback: 'seleccionado',
+  // DX-095: el nombre lo trae la API con el filtro (aunque no haya eventos);
+  // mientras llega, solo «Paciente», nunca un «seleccionado» genérico.
+  patientChip: (name: string | null) => (name ? `Paciente: ${name}` : 'Paciente'),
   /** DX-360: un texto que la API no guarda (cuerpo, notas): solo que cambió. */
   configHidden: 'cambió',
   clearPatient: 'Quitar el filtro de paciente',
@@ -234,6 +237,10 @@ interface AuditLogViewProps {
  */
 export function AuditLogView({ token, patientId, onClearPatient, initialFilters }: AuditLogViewProps) {
   const locked = Boolean(patientId) && !onClearPatient;
+  // DX-095: sin el rol que lee la auditoría no se pide nada (ni la lista ni el
+  // personal del filtro de usuario) y no se pintan los filtros: solo el aviso.
+  // Solo decide qué se PINTA; la API vuelve a comprobarlo (403).
+  const canRead = canReadAuditLog(getTokenRole(token));
   const [filters, setFilters] = useState<Filters>(() => ({ ...NO_FILTERS, ...initialFilters }));
   // Pila de cursores: el último es la página que se ve; `null` = la primera.
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
@@ -259,14 +266,14 @@ export function AuditLogView({ token, patientId, onClearPatient, initialFilters 
   const locationNames = useMemo(() => (locations ? locationNameMap(locations) : null), [locations]);
   // DX-133-bis: el personal, una sola vez, para el filtro de usuario y para
   // nombrar al profesional de una cita movida (la metadata solo trae ids).
-  const staff = useStaff(token);
+  const [forbidden, setForbidden] = useState(false);
+  const staff = useStaff(token, canRead && !forbidden);
   const staffNames = useMemo(() => (staff.members ? staffNameMap(staff.members) : null), [staff.members]);
   // El desfase de hoy en el aviso de la zona; cada fila dice el suyo.
   const [now] = useState(() => new Date());
   const [data, setData] = useState<AuditEventsPage | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [forbidden, setForbidden] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const rangeErrorId = React.useId();
   const hintId = React.useId();
@@ -306,30 +313,34 @@ export function AuditLogView({ token, patientId, onClearPatient, initialFilters 
     return q;
   }, [invalidRange, timeZone, patientId, filters, fromInstant, toInstant, cursor]);
 
+  // DX-095: la página que se pidió por última vez (token, query e intento).
+  // El doble efecto de StrictMode o un render que no cambia la query no
+  // repiten la petición, y solo la respuesta de la última pedida se pinta.
+  const requested = useRef<string | null>(null);
   useEffect(() => {
-    if (!token || !query) return;
-    let cancelled = false;
+    if (!canRead || !token || !query) return;
+    const key = JSON.stringify([token, query, reloadKey]);
+    if (requested.current === key) return;
+    requested.current = key;
+    const current = () => requested.current === key;
     async function load(q: AuditEventsQuery) {
       setLoading(true);
       try {
         const res = await listAuditEvents(token, q);
-        if (cancelled) return;
+        if (!current()) return;
         setData(res);
         setLoadError(null);
         setForbidden(false);
       } catch (err) {
-        if (cancelled) return;
+        if (!current()) return;
         const status = err instanceof ApiError ? err.status : null;
         setForbidden(status === 403);
         setLoadError(status === 400 ? copy.badRequest : copy.loadError);
       }
-      if (!cancelled) setLoading(false);
+      if (current()) setLoading(false);
     }
     void load(query);
-    return () => {
-      cancelled = true;
-    };
-  }, [token, query, reloadKey]);
+  }, [canRead, token, query, reloadKey]);
 
   // Cada cambio de filtro vuelve a la primera página en el MISMO render.
   function changeFilters(patch: Partial<Filters>) {
@@ -344,7 +355,7 @@ export function AuditLogView({ token, patientId, onClearPatient, initialFilters 
     filters.resourceType !== '' ||
     filters.from !== '' ||
     filters.to !== '';
-  const patientName = items.find((e) => e.patient)?.patient?.fullName ?? copy.patientFallback;
+  const patientName = data?.patient?.fullName ?? items.find((e) => e.patient)?.patient?.fullName ?? null;
   const zoneHint = clock && reference ? auditZoneHint(reference, clock, now) : null;
   // La zona describe las fechas siempre, también junto al error del rango: el
   // día que se corrige se sigue contando en esa zona.
@@ -366,6 +377,19 @@ export function AuditLogView({ token, patientId, onClearPatient, initialFilters 
       }))
     : [];
   const columns = auditColumns(!patientId);
+
+  // DX-095: sin permiso (por el rol o porque la API dijo 403), solo el aviso:
+  // ni filtros (el de usuario listaría al personal) ni el chip del paciente.
+  if (!canRead || forbidden) {
+    return (
+      <EmptyState
+        role="status"
+        icon={<Lock aria-hidden />}
+        title={copy.forbiddenTitle}
+        description={copy.forbiddenHint}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -466,16 +490,7 @@ export function AuditLogView({ token, patientId, onClearPatient, initialFilters 
         </div>
       ) : null}
 
-      {forbidden && !invalidRange ? (
-        <EmptyState
-          role="status"
-          icon={<Lock aria-hidden />}
-          title={copy.forbiddenTitle}
-          description={copy.forbiddenHint}
-        />
-      ) : null}
-
-      {sede?.status === 'error' && !forbidden && !invalidRange ? (
+      {sede?.status === 'error' && !invalidRange ? (
         <SedeConfigError
           kind={sede.kind}
           description={sede.message}
@@ -484,7 +499,7 @@ export function AuditLogView({ token, patientId, onClearPatient, initialFilters 
         />
       ) : null}
 
-      {sede?.status !== 'error' && !forbidden && !invalidRange ? (
+      {sede?.status !== 'error' && !invalidRange ? (
         <AsyncSection
           loading={loading || !clock}
           error={loadError}
@@ -504,7 +519,7 @@ export function AuditLogView({ token, patientId, onClearPatient, initialFilters 
         </AsyncSection>
       ) : null}
 
-      {clock && !forbidden && !invalidRange && !loadError && (cursors.length > 1 || data?.nextCursor) ? (
+      {clock && !invalidRange && !loadError && (cursors.length > 1 || data?.nextCursor) ? (
         <CursorPagination
           page={cursors.length}
           hasNext={Boolean(data?.nextCursor)}
@@ -749,27 +764,32 @@ interface StaffState {
   retry: () => void;
 }
 
-/** El personal de la clínica (`GET /staff`), por nombre; `failed` si no cargó. */
-function useStaff(token: string): StaffState {
+/**
+ * El personal de la clínica (`GET /staff`), por nombre; `failed` si no cargó.
+ * DX-095: solo con `enabled` (quien puede leer la auditoría): a quien no, no
+ * se le lista el personal. Una vez por token e intento (también en StrictMode).
+ */
+function useStaff(token: string, enabled: boolean): StaffState {
   const [members, setMembers] = useState<StaffMember[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const requested = useRef<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    if (!enabled) return;
+    const key = `${token}:${attempt}`;
+    if (requested.current === key) return;
+    requested.current = key;
     listStaff(token)
       .then((list) => {
-        if (cancelled) return;
+        if (requested.current !== key) return;
         setMembers([...list].sort((a, b) => a.fullName.localeCompare(b.fullName, 'es')));
         setFailed(false);
       })
       .catch(() => {
-        if (!cancelled) setFailed(true);
+        if (requested.current === key) setFailed(true);
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [token, attempt]);
+  }, [enabled, token, attempt]);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
   return { members, failed, retry };

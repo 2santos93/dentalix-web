@@ -467,6 +467,8 @@ const STAFF_LOGIN_REASONS: Record<string, string> = {
   MFA_ENROLLED: 'Activó la verificación en dos pasos al entrar',
   INVALID_MFA_CODE: 'Código de verificación incorrecto',
   INVALID_EMAIL_CODE: 'Código del correo incorrecto',
+  // DX-095: el inicio de sesión que abre aceptar una invitación.
+  INVITATION_LOGIN: 'Al aceptar su invitación',
 };
 
 /**

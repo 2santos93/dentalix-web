@@ -17,8 +17,11 @@ import { fillDateRange } from './support/dates';
  *   - filtrar por acción deja solo esa acción; un período sin eventos muestra
  *     el vacío; «Limpiar filtros» vuelve a la lista;
  *   - la ficha del paciente tiene la pestaña «Accesos» con los de esa ficha.
+ *   - DX-095: la carga pide la lista una sola vez y, abierta con un paciente,
+ *     el chip dice su nombre aunque el período no tenga eventos.
  * Además, un rol que no es ADMIN (dentista de la demo) no ve la entrada y, si
- * entra por URL, la pantalla le explica que es solo para administración.
+ * entra por URL, la pantalla le explica que es solo para administración, sin
+ * filtros y sin pedir la lista del personal (DX-095).
  * En escritorio (1440px) y móvil (390px, sin scroll horizontal).
  *
  * Requiere la API con la demo sembrada y la web (ver `playwright.config.ts`).
@@ -111,6 +114,12 @@ for (const viewport of VIEWPORTS) {
 
     // Desde M2 vive en Ajustes (B6: «Herramientas y registros») (la barra lateral ya no
     // cabía a 900 px con «Pendiente de cerrar»), solo para ADMIN.
+    // DX-095: la carga de la pantalla pide la auditoría una sola vez.
+    const auditRequests: string[] = [];
+    page.on('request', (req) => {
+      if (new URL(req.url()).pathname.endsWith('/api/v1/audit-events')) auditRequests.push(req.url());
+    });
+
     await page.goto(`${origin}/patients`);
     await openSection(page, 'Ajustes');
     await expect(page).toHaveURL(/\/settings$/);
@@ -128,6 +137,10 @@ for (const viewport of VIEWPORTS) {
     await expect(table.getByText('Historia clínica').first()).toBeVisible();
     await expect(table.getByRole('link', { name: `Paula ${lastName}` }).first()).toBeVisible();
     await expect(table.getByText('Administrador/a').first()).toBeVisible();
+    // Sin otra petición tras pintar la lista (en `next dev` el StrictMode
+    // repetiría el efecto: la vista no repite la petición).
+    await page.waitForTimeout(500);
+    expect(auditRequests).toHaveLength(1);
     // DX-381: el detalle de la tasa dice moneda · día · tasa con el formato de la sede.
     await expect(table.getByText('EUR · 29/10/2026 · 0,91').first()).toBeVisible();
     // Nunca contenido clínico, solo quién, qué y cuándo.
@@ -148,6 +161,16 @@ for (const viewport of VIEWPORTS) {
     await page.getByRole('button', { name: 'Limpiar filtros' }).click();
     await expect(table).toBeVisible();
     await expect(table.getByText('Inicio de sesión').first()).toBeVisible();
+
+    // DX-095: abierta con un paciente, el chip dice su nombre, también en un
+    // período sin eventos (el nombre lo trae la API, no la primera fila).
+    await page.goto(`${origin}/settings/auditoria?patientId=${patientId}`);
+    const chip = page.getByText(`Paciente: Paula ${lastName}`);
+    await expect(chip).toBeVisible({ timeout: 15_000 });
+    await fillDateRange(page, 'Período', '2020-01-01', '2020-01-02');
+    await expect(page.getByText('No hay eventos con estos filtros.')).toBeVisible();
+    await expect(chip).toBeVisible();
+    await expectNoHorizontalScroll(page);
 
     // Pestaña «Accesos» de la ficha: los de este paciente.
     await page.goto(`${origin}/patients/${patientId}?tab=access-log`);
@@ -173,8 +196,18 @@ test('un rol que no es ADMIN no ve la auditoría (dentista de la demo)', async (
   await expect(page.getByRole('link', { name: 'Pacientes' }).first()).toBeVisible();
   await expect(page.getByRole('link', { name: 'Auditoría' })).toHaveCount(0);
 
+  // DX-095: sin permiso no se lista al personal (filtro de usuario) ni se
+  // pinta ningún filtro.
+  const staffRequests: string[] = [];
+  page.on('request', (req) => {
+    if (new URL(req.url()).pathname.endsWith('/api/v1/staff')) staffRequests.push(req.url());
+  });
   await page.goto(`${origin}/settings/auditoria`);
   await expect(
     page.getByText('Solo la administración de la clínica puede ver la auditoría.'),
   ).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('group', { name: 'Filtros de la auditoría' })).toHaveCount(0);
+  await expect(page.getByLabel('Usuario')).toHaveCount(0);
+  await page.waitForTimeout(500);
+  expect(staffRequests).toEqual([]);
 });

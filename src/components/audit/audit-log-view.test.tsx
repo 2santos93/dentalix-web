@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AuditLogView, auditFiltersFromSearch } from './audit-log-view';
@@ -7,6 +8,7 @@ import { listStaff } from '@/lib/staff/staff-api';
 import { listLocations } from '@/lib/locations/locations-api';
 import { setActiveLocationId } from '@/lib/locations/location-store';
 import { clinicLocation } from '@/lib/test/locations';
+import { tokenForRole } from '@/lib/test/data-consents';
 
 jest.mock('../../lib/audit/audit-api', () => ({
   ...jest.requireActual('../../lib/audit/audit-api'),
@@ -18,6 +20,9 @@ jest.mock('../../lib/staff/staff-api', () => ({
 jest.mock('../../lib/locations/locations-api', () => ({
   listLocations: jest.fn(),
 }));
+
+// La vista lee el rol del token (DX-095): sin ADMIN no pide nada.
+const ADMIN = tokenForRole('ADMIN');
 
 const mockedList = listAuditEvents as jest.MockedFunction<typeof listAuditEvents>;
 const mockedStaff = listStaff as jest.MockedFunction<typeof listStaff>;
@@ -81,6 +86,7 @@ function page(overrides: Partial<AuditEventsPage> = {}): AuditEventsPage {
     items: [view, failedLogin],
     nextCursor: null,
     timeZone: 'America/Caracas',
+    patient: null,
     ...overrides,
   };
 }
@@ -116,7 +122,7 @@ async function typeRange(from: string, to: string) {
 describe('AuditLogView', () => {
   it('pinta cada evento con su hora y su zona, usuario, rol, acción, recurso, paciente e IP', async () => {
     mockedList.mockResolvedValue(page());
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
 
     const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
     const [, first, second] = within(table).getAllByRole('row');
@@ -142,7 +148,7 @@ describe('AuditLogView', () => {
     expect(within(second).queryByText(/^En /)).not.toBeInTheDocument();
     expect(within(second).getByText('Inicio de sesión fallido')).toBeInTheDocument();
     expect(within(second).getByText('Usuario no identificado')).toBeInTheDocument();
-    expect(mockedList).toHaveBeenCalledWith('tok', { limit: 50 });
+    expect(mockedList).toHaveBeenCalledWith(ADMIN, { limit: 50 });
   });
 
   // DX-128: cambios de comunicación con su origen; la baja por enlace no
@@ -171,7 +177,7 @@ describe('AuditLogView', () => {
         ],
       }),
     );
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
     const [, staff, patient] = within(table).getAllByRole('row');
     expect(within(staff).getByText('Comunicaciones · en persona')).toBeInTheDocument();
@@ -198,7 +204,7 @@ describe('AuditLogView', () => {
         ],
       }),
     );
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
     const [, row] = within(table).getAllByRole('row');
     expect(within(row).getByText('Seguimiento automático')).toBeInTheDocument();
@@ -231,7 +237,7 @@ describe('AuditLogView', () => {
         ],
       }),
     );
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
     const [, unlocked, refused] = within(table).getAllByRole('row');
     expect(within(unlocked).getByText('Desbloqueo del inicio de sesión')).toBeInTheDocument();
@@ -264,7 +270,7 @@ describe('AuditLogView', () => {
         ],
       }),
     );
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
     const [, corrected] = within(table).getAllByRole('row');
     expect(within(corrected).getByText('Corrección de quién lo realizó · Otro profesional')).toBeInTheDocument();
@@ -288,7 +294,7 @@ describe('AuditLogView', () => {
         ],
       }),
     );
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
     const [, changed] = within(table).getAllByRole('row');
     expect(within(changed).getByText('Ajustes de la clínica')).toBeInTheDocument();
@@ -311,7 +317,7 @@ describe('AuditLogView', () => {
         ],
       }),
     );
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
     const [, imported] = within(table).getAllByRole('row');
     expect(within(imported).getByText('Calendario de la sede')).toBeInTheDocument();
@@ -347,7 +353,7 @@ describe('AuditLogView', () => {
         ],
       }),
     );
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
     const [, updated, password] = within(table).getAllByRole('row');
     expect(within(updated).getByText('Miembro del personal')).toBeInTheDocument();
@@ -380,7 +386,7 @@ describe('AuditLogView', () => {
   it('DX-359: las sedes de los accesos van por su nombre; una borrada se cuenta, sin su id', async () => {
     mockedLocations.mockResolvedValue([clinicLocation({ id: CENTRO, name: 'Centro' })]);
     mockedList.mockResolvedValue(page({ items: [accepted] }));
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
     expect(
       await within(table).findByText(
@@ -395,7 +401,7 @@ describe('AuditLogView', () => {
   it('DX-362: si las sedes no cargan, «Falta un dato de la sede» con reintento: nunca otra zona ni otro formato', async () => {
     mockedLocations.mockRejectedValueOnce(new ApiError(500, 'boom')).mockResolvedValue(SEDES);
     mockedList.mockResolvedValue(page({ items: [accepted] }));
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Falta un dato de la sede');
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
@@ -412,7 +418,7 @@ describe('AuditLogView', () => {
   it('DX-362: a la sede de la pantalla le falta el formato: aviso de la sede, sin ninguna hora', async () => {
     mockedLocations.mockResolvedValue([clinicLocation({ id: 'caracas', hourCycle: null })]);
     mockedList.mockResolvedValue(page());
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     expect(await screen.findByRole('alert')).toHaveTextContent('Falta un dato de la sede');
     expect(screen.queryByText(/UTC/)).not.toBeInTheDocument();
   });
@@ -420,7 +426,7 @@ describe('AuditLogView', () => {
   it('DX-362: mientras carga el reloj de la sede, esqueleto y ninguna consulta', async () => {
     mockedLocations.mockReturnValue(new Promise(() => {}));
     mockedList.mockResolvedValue(page());
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     await waitFor(() => expect(mockedLocations).toHaveBeenCalled());
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(screen.getByRole('status', { name: 'Cargando' })).toBeInTheDocument();
@@ -439,7 +445,7 @@ describe('AuditLogView', () => {
         ],
       }),
     );
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
     const [, ccs, ber, ny] = within(table).getAllByRole('row');
     for (const row of [ccs, ber, ny]) {
@@ -463,7 +469,7 @@ describe('AuditLogView', () => {
         ],
       }),
     );
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
     const times = within(table)
       .getAllByRole('row')
@@ -474,7 +480,7 @@ describe('AuditLogView', () => {
 
   it('DX-362: junto a los filtros dice con qué zona se leen las horas y los días, y el orden', async () => {
     mockedList.mockResolvedValue(page());
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     await screen.findByRole('table');
     const hint = screen.getByText(/^Horas y días en la hora de Caracas \(America\/Caracas, UTC−4\)\. Lo más reciente, arriba\.$/);
     // El campo del periodo (el grupo de react-aria) lleva la descripción.
@@ -483,13 +489,13 @@ describe('AuditLogView', () => {
 
   it('vacío: lo dice y sugiere cambiar los filtros', async () => {
     mockedList.mockResolvedValue(page({ items: [] }));
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     expect(await screen.findByText('No hay eventos con estos filtros.')).toBeInTheDocument();
   });
 
   it('error: SectionError con reintento que vuelve a cargar', async () => {
     mockedList.mockRejectedValueOnce(new Error('red')).mockResolvedValueOnce(page());
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('No pudimos cargar la auditoría.');
     await userEvent.click(within(alert).getByRole('button'));
@@ -499,7 +505,7 @@ describe('AuditLogView', () => {
 
   it('403: aviso sin reintento (no es un fallo que se arregle reintentando)', async () => {
     mockedList.mockRejectedValue(new ApiError(403, 'Insufficient role'));
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     expect(
       await screen.findByText('Solo la administración de la clínica puede ver la auditoría.'),
     ).toBeInTheDocument();
@@ -508,21 +514,21 @@ describe('AuditLogView', () => {
 
   it('filtrar por acción, recurso y usuario vuelve a pedir desde la primera página', async () => {
     mockedList.mockResolvedValue(page({ nextCursor: 'c-2' }));
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     await screen.findByRole('table');
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
     await waitFor(() =>
-      expect(mockedList).toHaveBeenLastCalledWith('tok', { limit: 50, cursor: 'c-2' }),
+      expect(mockedList).toHaveBeenLastCalledWith(ADMIN, { limit: 50, cursor: 'c-2' }),
     );
 
     await userEvent.selectOptions(screen.getByLabelText('Acción'), 'SIGN');
     await waitFor(() =>
-      expect(mockedList).toHaveBeenLastCalledWith('tok', { limit: 50, action: 'SIGN' }),
+      expect(mockedList).toHaveBeenLastCalledWith(ADMIN, { limit: 50, action: 'SIGN' }),
     );
     await userEvent.selectOptions(screen.getByLabelText('Recurso'), 'PAYMENT');
     await userEvent.selectOptions(await screen.findByLabelText('Usuario'), 'u-rec');
     await waitFor(() =>
-      expect(mockedList).toHaveBeenLastCalledWith('tok', {
+      expect(mockedList).toHaveBeenLastCalledWith(ADMIN, {
         limit: 50,
         action: 'SIGN',
         resourceType: 'PAYMENT',
@@ -533,11 +539,11 @@ describe('AuditLogView', () => {
 
   it('las fechas se interpretan en la zona de la pantalla (días completos, ambos incluidos)', async () => {
     mockedList.mockResolvedValue(page());
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     await screen.findByRole('table');
     await typeRange('2026-10-01', '2026-10-16');
     await waitFor(() =>
-      expect(mockedList).toHaveBeenLastCalledWith('tok', {
+      expect(mockedList).toHaveBeenLastCalledWith(ADMIN, {
         limit: 50,
         from: '2026-10-01T04:00:00.000Z',
         to: '2026-10-17T04:00:00.000Z',
@@ -551,9 +557,9 @@ describe('AuditLogView', () => {
     const initial = auditFiltersFromSearch(
       new URLSearchParams({ actorUserId: actor, resourceType: 'PAYMENT_RECEIPT', from: '2026-10-01', to: '2026-10-01' }),
     );
-    render(<AuditLogView token="tok" initialFilters={initial} />);
+    render(<AuditLogView token={ADMIN} initialFilters={initial} />);
     await waitFor(() =>
-      expect(mockedList).toHaveBeenLastCalledWith('tok', {
+      expect(mockedList).toHaveBeenLastCalledWith(ADMIN, {
         limit: 50,
         actorUserId: actor,
         resourceType: 'PAYMENT_RECEIPT',
@@ -573,7 +579,7 @@ describe('AuditLogView', () => {
   it('SEC-043-bis: un usuario de la URL que ya no está en el personal sale como «Persona ya no activa»', async () => {
     mockedList.mockResolvedValue(page());
     render(
-      <AuditLogView token="tok" initialFilters={{ actorUserId: '0193f2a0-1b2c-7d3e-8f40-5a6b7c8d9e0f' }} />,
+      <AuditLogView token={ADMIN} initialFilters={{ actorUserId: '0193f2a0-1b2c-7d3e-8f40-5a6b7c8d9e0f' }} />,
     );
     const select = await screen.findByLabelText('Usuario');
     await waitFor(() => expect(select).toBeEnabled());
@@ -592,7 +598,7 @@ describe('AuditLogView', () => {
   it('DX-362: con otra sede activa, las horas y los días van en su zona (Berlín)', async () => {
     setActiveLocationId('berlin');
     mockedList.mockResolvedValue(page({ items: [{ ...view, locationId: 'caracas' }] }));
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
     expect(within(table).getByText('16/10/2026 05:30')).toBeInTheDocument();
     expect(within(table).getByText('UTC+2')).toBeInTheDocument();
@@ -602,32 +608,32 @@ describe('AuditLogView', () => {
     // Berlín pasa a UTC+1 el 25/10: cada día se cuenta con su propio desfase.
     await typeRange('2026-10-24', '2026-10-25');
     await waitFor(() =>
-      expect(mockedList).toHaveBeenLastCalledWith('tok', {
+      expect(mockedList).toHaveBeenLastCalledWith(ADMIN, {
         limit: 50,
         from: '2026-10-23T22:00:00.000Z',
         to: '2026-10-25T23:00:00.000Z',
       }),
     );
     // Nunca con otra zona: ninguna consulta con el día contado en la sede.
-    expect(mockedList).not.toHaveBeenCalledWith('tok', expect.objectContaining({ from: '2026-10-24T04:00:00.000Z' }));
+    expect(mockedList).not.toHaveBeenCalledWith(ADMIN, expect.objectContaining({ from: '2026-10-24T04:00:00.000Z' }));
   });
 
   it('DX-362: al cambiar de sede activa sigue su zona y vuelve a la primera página', async () => {
     mockedList.mockResolvedValue(page({ nextCursor: 'c-2' }));
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     await screen.findByRole('table');
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
-    await waitFor(() => expect(mockedList).toHaveBeenLastCalledWith('tok', { limit: 50, cursor: 'c-2' }));
+    await waitFor(() => expect(mockedList).toHaveBeenLastCalledWith(ADMIN, { limit: 50, cursor: 'c-2' }));
 
     act(() => setActiveLocationId('berlin'));
     expect(await screen.findByText(/^Horas y días en la hora de Berlín/)).toBeInTheDocument();
-    await waitFor(() => expect(mockedList).toHaveBeenLastCalledWith('tok', { limit: 50 }));
+    await waitFor(() => expect(mockedList).toHaveBeenLastCalledWith(ADMIN, { limit: 50 }));
     expect(await screen.findAllByText('16/10/2026 05:30')).not.toHaveLength(0);
   });
 
   it('un rango invertido se explica junto a las fechas y no se consulta', async () => {
     mockedList.mockResolvedValue(page());
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     await screen.findByRole('table');
     const calls = mockedList.mock.calls.length;
     await typeRangeEnd('Hasta', '2026-10-01');
@@ -642,7 +648,7 @@ describe('AuditLogView', () => {
     expect(ids).toEqual(expect.arrayContaining([error.closest('[id]')!.id, hint.id]));
     expect(mockedList.mock.calls.length).toBeLessThanOrEqual(calls + 1);
     expect(mockedList).not.toHaveBeenLastCalledWith(
-      'tok',
+      ADMIN,
       expect.objectContaining({ from: expect.any(String), to: expect.any(String) }),
     );
   });
@@ -652,7 +658,7 @@ describe('AuditLogView', () => {
       .mockResolvedValueOnce(page({ nextCursor: 'c-2' }))
       .mockResolvedValueOnce(page({ items: [failedLogin], nextCursor: null }))
       .mockResolvedValueOnce(page({ nextCursor: 'c-2' }));
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     await screen.findByRole('table');
     expect(screen.getByRole('button', { name: 'Anterior' })).toBeDisabled();
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
@@ -660,16 +666,82 @@ describe('AuditLogView', () => {
     expect(screen.getByRole('button', { name: 'Siguiente' })).toBeDisabled();
     await userEvent.click(screen.getByRole('button', { name: 'Anterior' }));
     await waitFor(() =>
-      expect(mockedList).toHaveBeenLastCalledWith('tok', { limit: 50 }),
+      expect(mockedList).toHaveBeenLastCalledWith(ADMIN, { limit: 50 }),
     );
   });
 
   it('en la ficha: fija el paciente y no repite su columna ni su filtro', async () => {
     mockedList.mockResolvedValue(page({ items: [view] }));
-    render(<AuditLogView token="tok" patientId="pat-1" />);
+    render(<AuditLogView token={ADMIN} patientId="pat-1" />);
     const table = await screen.findByRole('table', { name: 'Accesos a la ficha' });
     expect(within(table).queryByRole('columnheader', { name: 'Paciente' })).not.toBeInTheDocument();
-    expect(mockedList).toHaveBeenCalledWith('tok', { limit: 50, patientId: 'pat-1' });
+    expect(mockedList).toHaveBeenCalledWith(ADMIN, { limit: 50, patientId: 'pat-1' });
+  });
+
+  describe('DX-095', () => {
+    it('la carga pide la auditoría y el personal UNA vez cada uno (también con el doble efecto de StrictMode)', async () => {
+      mockedList.mockResolvedValue(page());
+      render(
+        <StrictMode>
+          <AuditLogView token={ADMIN} />
+        </StrictMode>,
+      );
+      await screen.findByRole('table');
+      // Deja correr los efectos que quedaran (un segundo pedido llegaría aquí).
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+      expect(mockedList).toHaveBeenCalledTimes(1);
+      expect(mockedStaff).toHaveBeenCalledTimes(1);
+    });
+
+    it('filtrando por paciente: una sola petición y el chip con su nombre, aunque no haya eventos', async () => {
+      mockedList.mockResolvedValue(page({ items: [], patient: { id: 'pat-1', fullName: 'Ana Gómez' } }));
+      render(
+        <StrictMode>
+          <AuditLogView token={ADMIN} patientId="pat-1" onClearPatient={() => undefined} />
+        </StrictMode>,
+      );
+      expect(await screen.findByText('Paciente: Ana Gómez')).toBeInTheDocument();
+      expect(screen.queryByText(/seleccionado/)).not.toBeInTheDocument();
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+      expect(mockedList).toHaveBeenCalledTimes(1);
+    });
+
+    it('el chip no dice «seleccionado» mientras carga: solo «Paciente»', async () => {
+      mockedList.mockReturnValue(new Promise(() => undefined));
+      render(<AuditLogView token={ADMIN} patientId="pat-1" onClearPatient={() => undefined} />);
+      expect(await screen.findByText('Paciente')).toBeInTheDocument();
+      expect(screen.queryByText(/seleccionado/)).not.toBeInTheDocument();
+    });
+
+    it.each(['DENTIST', 'ASSISTANT', 'RECEPTION'])(
+      '%s: solo el aviso; ni filtros ni se pide el personal ni la auditoría',
+      async (role) => {
+        render(<AuditLogView token={tokenForRole(role)} />);
+        expect(
+          await screen.findByText('Solo la administración de la clínica puede ver la auditoría.'),
+        ).toBeInTheDocument();
+        expect(screen.queryByRole('group', { name: 'Filtros de la auditoría' })).not.toBeInTheDocument();
+        expect(screen.queryByLabelText('Usuario')).not.toBeInTheDocument();
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        });
+        expect(mockedStaff).not.toHaveBeenCalled();
+        expect(mockedList).not.toHaveBeenCalled();
+      },
+    );
+
+    it('un 403 de la API (el rol cambió) también oculta los filtros', async () => {
+      mockedList.mockRejectedValue(new ApiError(403, 'Insufficient role'));
+      render(<AuditLogView token={ADMIN} />);
+      expect(
+        await screen.findByText('Solo la administración de la clínica puede ver la auditoría.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('group', { name: 'Filtros de la auditoría' })).not.toBeInTheDocument();
+    });
   });
 
   it('si el personal no carga, el filtro de usuario se sustituye por un error con reintento', async () => {
@@ -680,7 +752,7 @@ describe('AuditLogView', () => {
       .mockResolvedValueOnce([
         { userId: 'u-rec', fullName: 'Rosa Recepción', email: 'r@x.co', role: 'RECEPTION', locationIds: null },
       ]);
-    render(<AuditLogView token="tok" />);
+    render(<AuditLogView token={ADMIN} />);
     const status = await screen.findByText('Usuarios no disponibles');
     await userEvent.click(within(status.closest('[role="status"]') as HTMLElement).getByRole('button'));
     expect(await screen.findByRole('combobox', { name: 'Usuario' })).toBeInTheDocument();
@@ -735,7 +807,7 @@ describe('AuditLogView', () => {
 
     it('edición: el recurso y cada campo con su antes y su después, en una lista de definición', async () => {
       mockedList.mockResolvedValue(page({ items: [typeEdit] }));
-      render(<AuditLogView token="tok" />);
+      render(<AuditLogView token={ADMIN} />);
       const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
       const [, row] = within(table).getAllByRole('row');
       expect(within(row).getByText('Tipo de cita')).toBeInTheDocument();
@@ -753,7 +825,7 @@ describe('AuditLogView', () => {
 
     it('alta: solo los valores nuevos; retiro: los anteriores; null como «—»', async () => {
       mockedList.mockResolvedValue(page({ items: [payerCreate, itemDelete] }));
-      render(<AuditLogView token="tok" />);
+      render(<AuditLogView token={ADMIN} />);
       const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
       const [, created, deleted] = within(table).getAllByRole('row');
       expect(pairs(created)).toEqual([
@@ -769,7 +841,7 @@ describe('AuditLogView', () => {
 
     it('un evento sin cambio de configuración no añade lista', async () => {
       mockedList.mockResolvedValue(page());
-      render(<AuditLogView token="tok" />);
+      render(<AuditLogView token={ADMIN} />);
       const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
       expect(table.querySelector('dl')).toBeNull();
       expect(within(table).queryByRole('term')).not.toBeInTheDocument();
@@ -789,7 +861,7 @@ describe('AuditLogView', () => {
       })) as unknown as typeof window.matchMedia;
       try {
         mockedList.mockResolvedValue(page({ items: [typeEdit] }));
-        render(<AuditLogView token="tok" />);
+        render(<AuditLogView token={ADMIN} />);
         const cards = await screen.findByRole('list', { name: 'Registro de auditoría' });
         const [card] = within(cards).getAllByRole('listitem');
         expect(pairs(card)).toEqual([

@@ -150,6 +150,8 @@ describe('implantSearchDetail (DX-191)', () => {
     expect(staffLoginDetail({ reason: 'LOGIN_UNLOCK_REFUSED' })).toBe(
       'Desbloqueo del inicio de sesión rechazado (sin cambios)',
     );
+    // DX-095: aceptar una invitación abre la primera sesión del miembro.
+    expect(staffLoginDetail({ reason: 'INVITATION_LOGIN' })).toBe('Al aceptar su invitación');
     expect(staffLoginDetail({ reason: 'REMINDER_OPT_OUT' })).toBeNull();
     expect(staffLoginDetail({})).toBeNull();
   });
