@@ -125,6 +125,8 @@ const OPTIONS: SignatureRequestOptions = {
     destinationMasked: 'ma***@example.com',
     signerType: 'PATIENT',
     signerName: 'Marta Ríos',
+    signerDocument: null,
+    signerRelationship: null,
     minor: false,
   },
 };

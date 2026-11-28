@@ -52,6 +52,8 @@ function options(overrides: Partial<SignatureRequestOptions> = {}): SignatureReq
       destinationMasked: 'la***@example.com',
       signerType: 'PATIENT',
       signerName: 'Laura Castro',
+      signerDocument: null,
+      signerRelationship: null,
       minor: false,
     },
     ...overrides,
@@ -232,6 +234,8 @@ describe('SendToSignModal (DX-243)', () => {
           destinationMasked: 'cl***@example.com',
           signerType: 'GUARDIAN',
           signerName: 'Claudia Navarro',
+          signerDocument: 'V-20111222',
+          signerRelationship: 'MOTHER',
           minor: true,
         },
       }),
@@ -240,6 +244,67 @@ describe('SendToSignModal (DX-243)', () => {
     expect(await screen.findByRole('region', { name: 'Destinatario' })).toHaveTextContent(
       'cl***@example.com · firma Claudia Navarro, su responsable (la persona es menor de edad)',
     );
+  });
+
+  it('DX-060-bis: un menor: pide nombre, documento y relación del tutor, precargados de la ficha, y los envía', async () => {
+    const user = setupUser();
+    mockedOptions.mockResolvedValue(
+      options({
+        defaultProfessionalId: 'u-dentist',
+        recipient: {
+          allowed: true,
+          reason: null,
+          destinationMasked: 'cl***@example.com',
+          signerType: 'GUARDIAN',
+          signerName: 'Claudia Navarro',
+          signerDocument: 'V-20111222',
+          signerRelationship: 'MOTHER',
+          minor: true,
+        },
+      }),
+    );
+    mockedCreate.mockResolvedValue(created);
+    renderModal({ userId: 'u-dentist' });
+    const group = await screen.findByRole('group', { name: 'Quién firma en nombre del paciente' });
+    expect(within(group).getByLabelText('Nombre del tutor')).toHaveValue('Claudia Navarro');
+    expect(within(group).getByLabelText('Documento del tutor')).toHaveValue('V-20111222');
+    expect(within(group).getByLabelText(/Relación con el paciente/)).toHaveValue('MOTHER');
+    expect(
+      within(group).getByText('El documento dirá quién firma en nombre del paciente y su relación con él.'),
+    ).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Consentimiento'), 'tpl-1');
+    await user.clear(within(group).getByLabelText('Documento del tutor'));
+    expect(
+      screen.getByText('Para enviar, completa el nombre, el documento y la relación del tutor.'),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Enviar enlace' }));
+    expect(screen.getByText('Escribe el documento del tutor: el documento lo nombra.')).toBeInTheDocument();
+    expect(within(group).getByLabelText('Documento del tutor')).toHaveFocus();
+    expect(within(group).getByLabelText('Documento del tutor')).toHaveAttribute('aria-invalid', 'true');
+    expect(mockedCreate).not.toHaveBeenCalled();
+
+    await user.type(within(group).getByLabelText('Documento del tutor'), ' V-20.111.222 ');
+    await user.selectOptions(within(group).getByLabelText(/Relación con el paciente/), 'LEGAL_GUARDIAN');
+    await user.click(screen.getByRole('button', { name: 'Enviar enlace' }));
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith('tok', 'p1', {
+        type: 'CONSENT',
+        channel: 'EMAIL',
+        templateId: 'tpl-1',
+        professionalId: 'u-dentist',
+        guardianName: 'Claudia Navarro',
+        guardianDocument: 'V-20.111.222',
+        guardianRelationship: 'LEGAL_GUARDIAN',
+      }),
+    );
+  });
+
+  it('DX-060-bis: si firma el paciente, no pide datos de tutor ni los envía', async () => {
+    mockedOptions.mockResolvedValue(options());
+    renderModal();
+    await screen.findByLabelText('Consentimiento');
+    expect(screen.queryByLabelText('Nombre del tutor')).not.toBeInTheDocument();
   });
 
   it('si no se puede enviar, dice por qué y el botón deshabilitado apunta al motivo', async () => {
@@ -252,6 +317,8 @@ describe('SendToSignModal (DX-243)', () => {
           destinationMasked: null,
           signerType: null,
           signerName: null,
+          signerDocument: null,
+          signerRelationship: null,
           minor: false,
         },
       }),

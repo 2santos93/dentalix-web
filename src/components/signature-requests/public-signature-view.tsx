@@ -77,6 +77,8 @@ export const publicSignatureCopy = {
     `${clinic} ya tiene tu firma. El documento queda completo cuando lo firme el profesional.`,
   signedAt: (when: string) => `Firmado el ${when}.`,
   signedByGuardian: (name: string, when: string) => `Firmado por el responsable (${name}) el ${when}.`,
+  // DX-060-bis: bajo la firma del tutor, por quién firma (como la vista imprimible).
+  onBehalfOf: (patient: string) => `En representación de ${patient}`,
   signatureAlt: (name: string) => `Firma de ${name}`,
   hash: 'Huella del documento (SHA-256)',
   print: 'Imprimir o guardar en PDF',
@@ -604,6 +606,9 @@ function DocumentStep({
           errorId={errors.signature ? `${ids}-signature-error` : undefined}
         />
         {errors.signature ? <InlineError id={`${ids}-signature-error`}>{errors.signature}</InlineError> : null}
+        {!doc.budget && doc.representedPatientName ? (
+          <p className="text-sm text-muted">{copy.onBehalfOf(doc.representedPatientName)}</p>
+        ) : null}
       </div>
 
       {submitError ? <InlineError variant="summary">{submitError}</InlineError> : null}
@@ -671,6 +676,9 @@ function DoneStep({
           {signed.signerName}
           {signed.signerDocument ? ` · ${signed.signerDocument}` : ''}
         </p>
+        {!budget && signed.representedPatientName ? (
+          <p className="text-sm text-[#4b5563]">{copy.onBehalfOf(signed.representedPatientName)}</p>
+        ) : null}
         <p className="text-sm tabular-nums">
           {budget
             ? copy.budgetAcceptedAt(signedAt)
