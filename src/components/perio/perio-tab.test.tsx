@@ -47,6 +47,8 @@ function summary(id: string, examDate: string, status: 'DRAFT' | 'FINAL', bop: n
       plaquePercent: 12.5,
       sites4mmOrMore: 18,
       sites6mmOrMore: 4,
+      sitesAlertOrMore: 18,
+      sitesSevereOrMore: 4,
     },
   };
 }
@@ -164,7 +166,7 @@ describe('PerioTab', () => {
       summary('e1', '2026-04-15', 'FINAL', 62.5),
     ]);
     mockedGet.mockImplementation((_t, _p, id) =>
-      Promise.resolve({ ...summary(id, '2026-10-10', 'DRAFT', 10), sites: [], teeth: [] }),
+      Promise.resolve({ ...summary(id, '2026-10-10', 'DRAFT', 10), sites: [], teeth: [], thresholds: { pdAlertMm: 4, pdSevereMm: 6 } }),
     );
     render(<PerioTab token="tok" patientId="p1" />);
     const table = await screen.findByRole('table', { name: /histórico/i });

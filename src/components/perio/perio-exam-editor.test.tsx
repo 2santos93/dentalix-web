@@ -50,6 +50,8 @@ const INDICES = {
   plaquePercent: 0,
   sites4mmOrMore: 0,
   sites6mmOrMore: 0,
+  sitesAlertOrMore: 0,
+  sitesSevereOrMore: 0,
 };
 
 function exam(overrides: Partial<PerioExamDetail> = {}): PerioExamDetail {
@@ -68,6 +70,7 @@ function exam(overrides: Partial<PerioExamDetail> = {}): PerioExamDetail {
     indices: INDICES,
     sites: [],
     teeth: [],
+    thresholds: { pdAlertMm: 4, pdSevereMm: 6 },
     ...overrides,
   };
 }

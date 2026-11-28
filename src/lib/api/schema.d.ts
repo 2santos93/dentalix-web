@@ -9306,6 +9306,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/perio-exams/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Compara de 2 a 4 exámenes FINAL del paciente (DX-066)
+         * @description Índices de cada examen con los umbrales de la clínica y, por sitio, sondaje y NIC en cada examen con el Δ frente al anterior y el Δ total (último − primero). `worsened` = algún Δ total ≥ 2 mm.
+         */
+        get: operations["PerioExamsController_compare"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/perio-exams/{id}": {
         parameters: {
             query?: never;
@@ -9319,7 +9339,8 @@ export interface paths {
         delete: operations["PerioExamsController_remove"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Cambia las notas de un examen en DRAFT (DX-066) */
+        patch: operations["PerioExamsController_patchNotes"];
         trace?: never;
     };
     "/api/v1/patients/{patientId}/perio-exams/{id}/measures": {
@@ -9348,6 +9369,27 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["PerioExamsController_finalize"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/perio/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Umbrales de sondaje del periodontograma de la clínica (DX-066) */
+        get: operations["PerioSettingsController_settings"];
+        /**
+         * Cambia los umbrales de alerta y severo (solo ADMIN, auditado; DX-066)
+         * @description Un campo ausente conserva su valor. Alerta 2–10 mm, severo 3–12 mm y alerta < severo. Aplica al leer cualquier examen (también los FINAL: colorean, no se congelan). Si nada cambia, 200 sin evento de auditoría.
+         */
+        put: operations["PerioSettingsController_update"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -31291,6 +31333,10 @@ export interface components {
             sites4mmOrMore: number;
             /** @description Sitios con sondaje ≥ 6 mm */
             sites6mmOrMore: number;
+            /** @description DX-066: sitios con sondaje ≥ el umbral de alerta de la clínica (pdAlertMm) */
+            sitesAlertOrMore: number;
+            /** @description DX-066: sitios con sondaje ≥ el umbral severo de la clínica (pdSevereMm) */
+            sitesSevereOrMore: number;
         };
         PerioExamSummaryDto: {
             /** Format: uuid */
@@ -31337,16 +31383,30 @@ export interface components {
             recessionMm: number | null;
             /** @description NIC (CAL) calculado = sondaje + recesión; no se persiste */
             calMm: number | null;
+            /** @description Grado de furca 0–3. Solo en molares: superiores en B, ML (= MP, mesiopalatina) y DL (= DP, distopalatina); inferiores en B y L. */
             furcation: number | null;
             bleeding: boolean;
             suppuration: boolean;
             plaque: boolean;
+            /** @description Cálculo (CALC) */
             calculus: boolean;
         };
         PerioToothMeasureDto: {
             toothFdi: number;
             mobility: number | null;
             skipped: boolean;
+        };
+        PerioThresholdsDto: {
+            /**
+             * @description Alerta: sondaje ≥ este valor (mm)
+             * @example 4
+             */
+            pdAlertMm: number;
+            /**
+             * @description Severo: sondaje ≥ este valor (mm)
+             * @example 6
+             */
+            pdSevereMm: number;
         };
         PerioExamDetailDto: {
             /** Format: uuid */
@@ -31374,6 +31434,61 @@ export interface components {
             indices: components["schemas"]["PerioIndicesDto"];
             sites: components["schemas"]["PerioSiteMeasureDto"][];
             teeth: components["schemas"]["PerioToothMeasureDto"][];
+            /** @description DX-066: umbrales actuales de la clínica (también para un FINAL: colorean, no se congelan). */
+            thresholds: components["schemas"]["PerioThresholdsDto"];
+        };
+        PerioComparisonExamDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description YYYY-MM-DD
+             * @example 2026-04-10
+             */
+            examDate: string;
+            /** Format: uuid */
+            providerId: string;
+            providerName: string;
+            /** Format: date-time */
+            finalizedAt: string | null;
+            indices: components["schemas"]["PerioIndicesDto"];
+        };
+        PerioComparisonValueDto: {
+            probingMm: number | null;
+            /** @description NIC (CAL) */
+            calMm: number | null;
+            bleeding: boolean;
+            /** @description Diente omitido en ese examen: sin sondaje ni NIC y fuera de los Δ */
+            skipped: boolean;
+            /** @description Δ sondaje frente al examen anterior de la selección (null en el primero o sin los dos datos). Positivo = empeora. */
+            deltaProbingMm: number | null;
+            /** @description Δ NIC frente al examen anterior de la selección */
+            deltaCalMm: number | null;
+        };
+        PerioComparisonSiteDto: {
+            toothFdi: number;
+            site: components["schemas"]["PerioSite"];
+            /** @description Un valor por examen, en el orden de `exams` */
+            values: components["schemas"]["PerioComparisonValueDto"][];
+            /** @description Δ sondaje del último examen frente al primero */
+            deltaProbingMm: number | null;
+            /** @description Δ NIC del último examen frente al primero */
+            deltaCalMm: number | null;
+            /** @description Δ sondaje o Δ NIC (último − primero) ≥ worseningMm */
+            worsened: boolean;
+            /** @description Δ sondaje o Δ NIC (último − primero) ≤ −worseningMm */
+            improved: boolean;
+        };
+        PerioComparisonDto: {
+            thresholds: components["schemas"]["PerioThresholdsDto"];
+            /**
+             * @description Cambio relevante (mm)
+             * @example 2
+             */
+            worseningMm: number;
+            /** @description Por fecha de examen ascendente (el más antiguo primero) */
+            exams: components["schemas"]["PerioComparisonExamDto"][];
+            /** @description Sitios con algún dato en alguno de los exámenes, por diente y sitio (MB, B, DB, ML, L, DL) */
+            sites: components["schemas"]["PerioComparisonSiteDto"][];
         };
         PerioSiteMeasureInputDto: {
             /**
@@ -31409,6 +31524,31 @@ export interface components {
             teeth: components["schemas"]["PerioToothMeasureInputDto"][];
             /** @description Ausente = no tocar las notas; null o vacío = borrarlas. */
             notes?: string | null;
+        };
+        UpdatePerioNotesDto: {
+            /**
+             * @description Texto nuevo de las notas. null o vacío las borra. Solo en un examen en DRAFT (FINAL: 409).
+             * @example Control a los 3 meses tras el raspado. Reforzar higiene interproximal.
+             */
+            notes: string | null;
+        };
+        PerioSettingsDto: {
+            /**
+             * @description Sondaje (mm) desde el que un sitio está en alerta. 4 de fábrica.
+             * @example 4
+             */
+            pdAlertMm: number;
+            /**
+             * @description Sondaje (mm) desde el que un sitio es severo. 6 de fábrica. Siempre mayor que el de alerta.
+             * @example 6
+             */
+            pdSevereMm: number;
+        };
+        UpdatePerioSettingsDto: {
+            /** @example 4 */
+            pdAlertMm?: number;
+            /** @example 6 */
+            pdSevereMm?: number;
         };
         /**
          * @description Plantilla con la que se emitió una receta anterior a la receta única; null en la receta única
@@ -60218,6 +60358,51 @@ export interface operations {
             };
         };
     };
+    PerioExamsController_compare: {
+        parameters: {
+            query: {
+                /** @description De 2 a 4 exámenes FINAL del paciente, separados por comas (?examIds=a,b,c) o repitiendo el parámetro. El orden no importa: la respuesta va por fecha de examen. */
+                examIds: string[];
+            };
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PerioComparisonDto"];
+                };
+            };
+            /** @description Menos de 2 o más de 4 exámenes, ids repetidos o inválidos, o algún borrador */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o examen no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PerioExamsController_get: {
         parameters: {
             query?: never;
@@ -60268,6 +60453,60 @@ export interface operations {
         responses: {
             /** @description Borrador eliminado */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o examen no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El examen está finalizado (inmutable) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PerioExamsController_patchNotes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePerioNotesDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PerioExamDetailDto"];
+                };
+            };
+            /** @description Faltan las notas, no son texto o pasan de 2000 caracteres */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -60386,6 +60625,69 @@ export interface operations {
             };
             /** @description El examen ya estaba finalizado */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PerioSettingsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PerioSettingsDto"];
+                };
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PerioSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePerioSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PerioSettingsDto"];
+                };
+            };
+            /** @description Fuera de rango, no enteros o alerta ≥ severo */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar los umbrales del periodontograma. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
